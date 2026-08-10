@@ -2,7 +2,7 @@
 
 Regression guard for the PG-only recall failure (2026-06-23): the PG
 store returns ``numpy.float32`` scores and ``datetime`` timestamps where
-the SQLite store returns ``float``/``str``. FastMCP can only build
+the SQLite store returns ``float``/``str``. The MCP SDK can only build
 ``structuredContent`` from JSON-native values, so a non-native field made
 recall fail on PG ("outputSchema defined but no structured output
 returned") while passing on SQLite. These tests pin the contract that the

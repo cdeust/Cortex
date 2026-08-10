@@ -204,9 +204,10 @@ class TestToolErrorHandler:
     2026-07-14 fix: safe_handler no longer RETURNS an error dict on
     failure -- that dict violates every tool's outputSchema (recall
     requires "memories", remember requires "stored"/"action", etc.),
-    so FastMCP's own output validation discarded our classified
+    so the MCP SDK's own output validation discarded our classified
     message and substituted a generic "'<field>' is a required
-    property" error. safe_handler now RAISES fastmcp.exceptions.ToolError
+    property" error. safe_handler now RAISES
+    mcp.server.mcpserver.exceptions.ToolError
     with the classified message; the MCP low-level server builds the
     isError=True result from str(exc) directly, bypassing outputSchema
     validation entirely (that check only runs on the non-error branch).
@@ -215,7 +216,7 @@ class TestToolErrorHandler:
     @pytest.mark.asyncio
     async def test_db_connection_error_returns_setup_guide(self):
         """Database connection errors should raise with setup instructions."""
-        from fastmcp.exceptions import ToolError
+        from mcp.server.mcpserver.exceptions import ToolError
 
         from mcp_server.tool_error_handler import safe_handler
 
@@ -233,7 +234,7 @@ class TestToolErrorHandler:
     @pytest.mark.asyncio
     async def test_missing_extension_error(self):
         """Missing pgvector/pg_trgm should show extension install guide."""
-        from fastmcp.exceptions import ToolError
+        from mcp.server.mcpserver.exceptions import ToolError
 
         from mcp_server.tool_error_handler import safe_handler
 
@@ -250,7 +251,7 @@ class TestToolErrorHandler:
     @pytest.mark.asyncio
     async def test_generic_error_no_traceback(self):
         """Generic errors should not leak Python tracebacks."""
-        from fastmcp.exceptions import ToolError
+        from mcp.server.mcpserver.exceptions import ToolError
 
         from mcp_server.tool_error_handler import safe_handler
 

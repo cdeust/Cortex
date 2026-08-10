@@ -262,7 +262,7 @@ class TestNoMisleadingDatabaseUrlHintOnNonDbErrors:
 
     @pytest.mark.asyncio
     async def test_safe_handler_omits_hint_for_filenotfounderror(self):
-        from fastmcp.exceptions import ToolError
+        from mcp.server.mcpserver.exceptions import ToolError
         from mcp_server.tool_error_handler import safe_handler
 
         async def failing_handler(_args):

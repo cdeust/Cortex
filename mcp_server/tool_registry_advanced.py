@@ -5,7 +5,9 @@ Registers automation, rules, narrative, and coverage tools.
 
 from __future__ import annotations
 
-from fastmcp import FastMCP
+from typing import Any
+
+from mcp.server.mcpserver import MCPServer
 
 from mcp_server.handlers import (
     add_rule,
@@ -37,7 +39,7 @@ SCHEMAS: dict[str, dict] = {
 }
 
 
-def register(mcp: FastMCP) -> None:
+def register(mcp: MCPServer) -> None:
     """Register Tier 3 advanced tools."""
     _register_sync_instructions(mcp)
     _register_create_trigger(mcp)
@@ -50,7 +52,7 @@ def register(mcp: FastMCP) -> None:
     _register_curate_distill(mcp)
 
 
-def _register_curate_wiki(mcp: FastMCP) -> None:
+def _register_curate_wiki(mcp: MCPServer) -> None:
     @mcp.tool(
         name="curate_wiki",
         **tool_kwargs(curate_wiki.schema),
@@ -62,7 +64,7 @@ def _register_curate_wiki(mcp: FastMCP) -> None:
         min_avg_heat: float = 0.3,
         recent_only: bool = True,
         memory_pool_size: int = 500,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Return structured authoring jobs for the in-session LLM to author."""
         return await safe_handler(
             curate_wiki.handler,
@@ -78,12 +80,12 @@ def _register_curate_wiki(mcp: FastMCP) -> None:
         )
 
 
-def _register_lesson_promotion(mcp: FastMCP) -> None:
+def _register_lesson_promotion(mcp: MCPServer) -> None:
     @mcp.tool(
         name="lesson_promotion",
         **tool_kwargs(lesson_promotion.schema),
     )
-    async def tool_lesson_promotion(limit: int = 10) -> dict:
+    async def tool_lesson_promotion(limit: int = 10) -> dict[str, Any]:
         """Propose promotion jobs for validated lessons — never promotes itself."""
         return await safe_handler(
             lesson_promotion.handler,
@@ -92,7 +94,7 @@ def _register_lesson_promotion(mcp: FastMCP) -> None:
         )
 
 
-def _register_curate_distill(mcp: FastMCP) -> None:
+def _register_curate_distill(mcp: MCPServer) -> None:
     @mcp.tool(
         name="curate_distill",
         **tool_kwargs(curate_distill.schema),
@@ -107,7 +109,7 @@ def _register_curate_distill(mcp: FastMCP) -> None:
         min_memories: int = 4,
         min_avg_heat: float = 0.3,
         memory_pool_size: int = 500,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Return distillation dossiers for the in-session LLM to author
         lessons from."""
         return await safe_handler(
@@ -127,7 +129,7 @@ def _register_curate_distill(mcp: FastMCP) -> None:
         )
 
 
-def _register_sync_instructions(mcp: FastMCP) -> None:
+def _register_sync_instructions(mcp: MCPServer) -> None:
     @mcp.tool(
         name="sync_instructions",
         **tool_kwargs(sync_instructions.schema),
@@ -137,7 +139,7 @@ def _register_sync_instructions(mcp: FastMCP) -> None:
         max_insights: int = 10,
         min_heat: float = 0.3,
         dry_run: bool = False,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Push top memory insights into CLAUDE.md."""
         return await safe_handler(
             sync_instructions.handler,
@@ -151,7 +153,7 @@ def _register_sync_instructions(mcp: FastMCP) -> None:
         )
 
 
-def _register_create_trigger(mcp: FastMCP) -> None:
+def _register_create_trigger(mcp: MCPServer) -> None:
     @mcp.tool(
         name="create_trigger",
         **tool_kwargs(create_trigger.schema),
@@ -162,7 +164,7 @@ def _register_create_trigger(mcp: FastMCP) -> None:
         trigger_type: str = "keyword",
         target_directory: str | None = None,
         source_memory_id: int | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Create a prospective memory trigger."""
         return await safe_handler(
             create_trigger.handler,
@@ -177,7 +179,7 @@ def _register_create_trigger(mcp: FastMCP) -> None:
         )
 
 
-def _register_add_rule(mcp: FastMCP) -> None:
+def _register_add_rule(mcp: MCPServer) -> None:
     @mcp.tool(
         name="add_rule",
         **tool_kwargs(add_rule.schema),
@@ -190,7 +192,7 @@ def _register_add_rule(mcp: FastMCP) -> None:
         scope_value: str | None = None,
         priority: int = 0,
         source_memory_id: int | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Add a neuro-symbolic rule to the memory store."""
         return await safe_handler(
             add_rule.handler,
@@ -207,7 +209,7 @@ def _register_add_rule(mcp: FastMCP) -> None:
         )
 
 
-def _register_get_rules(mcp: FastMCP) -> None:
+def _register_get_rules(mcp: MCPServer) -> None:
     @mcp.tool(
         name="get_rules",
         **tool_kwargs(get_rules.schema),
@@ -216,7 +218,7 @@ def _register_get_rules(mcp: FastMCP) -> None:
         scope: str | None = None,
         rule_type: str | None = None,
         include_inactive: bool = False,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """List active neuro-symbolic rules."""
         return await safe_handler(
             get_rules.handler,
@@ -229,7 +231,7 @@ def _register_get_rules(mcp: FastMCP) -> None:
         )
 
 
-def _register_get_project_story(mcp: FastMCP) -> None:
+def _register_get_project_story(mcp: MCPServer) -> None:
     @mcp.tool(
         name="get_project_story",
         **tool_kwargs(get_project_story.schema),
@@ -239,7 +241,7 @@ def _register_get_project_story(mcp: FastMCP) -> None:
         domain: str | None = None,
         period: str = "week",
         max_chapters: int = 5,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Generate a period-based autobiographical narrative."""
         return await safe_handler(
             get_project_story.handler,
@@ -253,7 +255,7 @@ def _register_get_project_story(mcp: FastMCP) -> None:
         )
 
 
-def _register_assess_coverage(mcp: FastMCP) -> None:
+def _register_assess_coverage(mcp: MCPServer) -> None:
     @mcp.tool(
         name="assess_coverage",
         **tool_kwargs(assess_coverage.schema),
@@ -262,7 +264,7 @@ def _register_assess_coverage(mcp: FastMCP) -> None:
         directory: str | None = None,
         domain: str | None = None,
         stale_days: int = 14,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Evaluate knowledge coverage completeness."""
         return await safe_handler(
             assess_coverage.handler,

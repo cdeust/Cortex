@@ -25,7 +25,9 @@ from __future__ import annotations
 import asyncio
 import functools
 
-from fastmcp import Context, FastMCP
+from typing import Any
+
+from mcp.server.mcpserver import Context, MCPServer
 
 from mcp_server.handlers import (
     change_impact,
@@ -52,7 +54,7 @@ SCHEMAS: dict[str, dict] = {
 }
 
 
-def register(mcp: FastMCP, *, codebase: bool = True, prd: bool = True) -> None:
+def register(mcp: MCPServer, *, codebase: bool = True, prd: bool = True) -> None:
     """Register the upstream-integration tools, gated by upstream availability.
 
     ``codebase`` registers ingest_codebase + change_impact (both consume the
@@ -75,7 +77,7 @@ def register(mcp: FastMCP, *, codebase: bool = True, prd: bool = True) -> None:
     _register_ingest_document(mcp)
 
 
-def _register_ingest_codebase(mcp: FastMCP) -> None:
+def _register_ingest_codebase(mcp: MCPServer) -> None:
     @mcp.tool(
         name="ingest_codebase",
         **tool_kwargs(ingest_codebase.schema),
@@ -86,13 +88,13 @@ def _register_ingest_codebase(mcp: FastMCP) -> None:
         language: str = "auto",
         force_reindex: bool = False,
         ctx: Context | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Ingest upstream codebase analysis into Cortex.
 
         No caps. Pulls every Function/Method/Struct/process the upstream
         graph holds, projects them all into Cortex memories + KG.
 
-        ctx is injected by FastMCP when the client supports progress reporting.
+        ctx is injected by MCPServer when the client supports progress reporting.
         Progress dispatches to the main loop via run_coroutine_threadsafe because
         the handler body runs on a worker thread (asyncio.to_thread in safe_handler).
         """
@@ -119,7 +121,7 @@ def _register_ingest_codebase(mcp: FastMCP) -> None:
         )
 
 
-def _register_change_impact(mcp: FastMCP) -> None:
+def _register_change_impact(mcp: MCPServer) -> None:
     @mcp.tool(
         name="change_impact",
         **tool_kwargs(change_impact.schema),
@@ -129,7 +131,7 @@ def _register_change_impact(mcp: FastMCP) -> None:
         head: str = "HEAD",
         expand_impact: bool = False,
         apply_heat_bump: bool = False,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Report memories affected by a commit's code changes (ADR-0046 P4)."""
         return await safe_handler(
             change_impact.handler,
@@ -143,7 +145,7 @@ def _register_change_impact(mcp: FastMCP) -> None:
         )
 
 
-def _register_ingest_prd(mcp: FastMCP) -> None:
+def _register_ingest_prd(mcp: MCPServer) -> None:
     @mcp.tool(
         name="ingest_prd",
         **tool_kwargs(ingest_prd.schema),
@@ -155,7 +157,7 @@ def _register_ingest_prd(mcp: FastMCP) -> None:
         title: str | None = None,
         validate: bool = False,
         domain: str | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Ingest a PRD document into Cortex."""
         return await safe_handler(
             ingest_prd.handler,
@@ -171,7 +173,7 @@ def _register_ingest_prd(mcp: FastMCP) -> None:
         )
 
 
-def _register_ingest_findings(mcp: FastMCP) -> None:
+def _register_ingest_findings(mcp: MCPServer) -> None:
     @mcp.tool(
         name="ingest_findings",
         **tool_kwargs(ingest_findings.schema),
@@ -180,7 +182,7 @@ def _register_ingest_findings(mcp: FastMCP) -> None:
         run_id: str,
         output_dir: str | None = None,
         graph_key: str | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Ingest an AP findings run (runs/<run_id>/) into Cortex."""
         return await safe_handler(
             ingest_findings.handler,
@@ -193,7 +195,7 @@ def _register_ingest_findings(mcp: FastMCP) -> None:
         )
 
 
-def _register_ingest_document(mcp: FastMCP) -> None:
+def _register_ingest_document(mcp: MCPServer) -> None:
     @mcp.tool(
         name="ingest_document",
         **tool_kwargs(ingest_document.schema),
@@ -203,7 +205,7 @@ def _register_ingest_document(mcp: FastMCP) -> None:
         format: str = "auto",
         title: str | None = None,
         domain: str | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Ingest a .docx or Confluence export into Cortex (issue #192)."""
         return await safe_handler(
             ingest_document.handler,

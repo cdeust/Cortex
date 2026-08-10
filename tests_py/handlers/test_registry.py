@@ -1,4 +1,4 @@
-"""Tests for tool registration — verify tier-1 tools are registered via FastMCP."""
+"""Tests for tool registration — verify tier-1 tools are registered via the MCP SDK."""
 
 import asyncio
 

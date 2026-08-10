@@ -29,12 +29,14 @@ prompt-level ``title`` IS emitted.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
+
+from pydantic import Field
 
 from mcp_server.tool_profiles import ToolProfile, allows
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
-    from fastmcp import FastMCP
+    from mcp.server.mcpserver import MCPServer
 
 
 @dataclass(frozen=True)
@@ -198,7 +200,7 @@ def _render_body(schemas: dict[str, dict], spec: _Spec, intro: str) -> str:
     return "\n".join(lines)
 
 
-def register_prompts(mcp: FastMCP, schemas: dict[str, dict]) -> None:
+def register_prompts(mcp: MCPServer, schemas: dict[str, dict]) -> None:
     """Register every prompt on ``mcp``, rendering bodies from ``schemas``.
 
     Prompts are registered unconditionally; ``ToolProfileMiddleware`` hides and
@@ -209,52 +211,76 @@ def register_prompts(mcp: FastMCP, schemas: dict[str, dict]) -> None:
     _register_curate_wiki(mcp, schemas)
 
 
-def _register_session_recall(mcp: FastMCP, schemas: dict[str, dict]) -> None:
+def _register_session_recall(mcp: MCPServer, schemas: dict[str, dict]) -> None:
     @mcp.prompt(
         name=SESSION_RECALL.name,
         title=SESSION_RECALL.title,
         description=SESSION_RECALL.description,
     )
-    def session_recall(project: str, focus: str = "") -> str:
+    def session_recall(
+        project: Annotated[
+            str,
+            Field(description="Project — absolute path or project id to onboard onto."),
+        ],
+        focus: Annotated[
+            str,
+            Field(description="Optional focus — a topic or question to steer recall."),
+        ] = "",
+    ) -> str:
         """Guide a recall/onboarding session.
 
-        Args:
-            project: Project — absolute path or project id to onboard onto.
-            focus: Optional focus — a topic or question to steer recall.
+        mcp 2.0.0 migration (PR #331): argument descriptions moved from this
+        docstring's Args: section into Annotated[..., Field(description=...)]
+        on each parameter — mcp 2.0.0's func_metadata no longer parses
+        Google-style docstrings for per-parameter descriptions the way
+        FastMCP did (verified: no docstring-parsing logic anywhere in
+        mcp.server.mcpserver.utilities.func_metadata, 2026-08-10). The
+        docstring itself still supplies the prompt's own description.
         """
         intro = f'Onboard onto project "{project}" and recall what Cortex already knows'
         intro += f" about: {focus}." if focus else "."
         return _render_body(schemas, SESSION_RECALL, intro)
 
 
-def _register_promote_memories(mcp: FastMCP, schemas: dict[str, dict]) -> None:
+def _register_promote_memories(mcp: MCPServer, schemas: dict[str, dict]) -> None:
     @mcp.prompt(
         name=PROMOTE_MEMORIES.name,
         title=PROMOTE_MEMORIES.title,
         description=PROMOTE_MEMORIES.description,
     )
-    def promote_memories(scope: str = "") -> str:
+    def promote_memories(
+        scope: Annotated[
+            str,
+            Field(
+                description="Optional scope — a domain or project to bound promotion."
+            ),
+        ] = "",
+    ) -> str:
         """Guide episodic→semantic promotion.
 
-        Args:
-            scope: Optional scope — a domain or project to bound the promotion.
+        See session_recall's docstring above for why argument descriptions
+        live in Annotated[..., Field(...)] rather than an Args: section.
         """
         intro = "Promote episodic memories into consolidated semantic knowledge"
         intro += f' for scope "{scope}".' if scope else "."
         return _render_body(schemas, PROMOTE_MEMORIES, intro)
 
 
-def _register_curate_wiki(mcp: FastMCP, schemas: dict[str, dict]) -> None:
+def _register_curate_wiki(mcp: MCPServer, schemas: dict[str, dict]) -> None:
     @mcp.prompt(
         name=CURATE_WIKI.name,
         title=CURATE_WIKI.title,
         description=CURATE_WIKI.description,
     )
-    def curate_wiki(topic: str) -> str:
+    def curate_wiki(
+        topic: Annotated[
+            str, Field(description="Topic — the subject the wiki page should cover.")
+        ],
+    ) -> str:
         """Guide a wiki curation kickoff.
 
-        Args:
-            topic: Topic — the subject the wiki page should cover.
+        See session_recall's docstring above for why argument descriptions
+        live in Annotated[..., Field(...)] rather than an Args: section.
         """
         intro = f'Kick off wiki curation for "{topic}".'
         return _render_body(schemas, CURATE_WIKI, intro)

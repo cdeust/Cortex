@@ -1,7 +1,7 @@
 """Input-schema parity between handler schemas and registered MCP wrappers
 (#98 regression guard).
 
-The client-visible input schema is whatever FastMCP derives from the
+The client-visible input schema is whatever the MCP SDK derives from the
 REGISTERED WRAPPER's signature (``tool_registry_*.py``), not from the
 handler's own ``schema["inputSchema"]`` dict. If a handler gains a new
 parameter (or an enum value) but the wrapper signature is never updated
@@ -35,12 +35,15 @@ _ROOTED_OMISSIONS: set[str] = (
 
 
 def _live_wrapper_params(tool_name: str) -> set[str]:
-    """Return the parameter names FastMCP actually derived for `tool_name`
-    from the registered wrapper's signature — the client-visible truth."""
+    """Return the parameter names the MCP SDK actually derived for
+    `tool_name` from the registered wrapper's signature — the
+    client-visible truth. Reads ``.input_schema`` (the wire-level
+    ``mcp.types.Tool`` field mcp 2.0.0 uses — was ``.parameters`` under
+    FastMCP; verified against the installed mcp==2.0.0, 2026-08-10)."""
     tools = asyncio.run(mcp.list_tools())
     matches = [t for t in tools if t.name == tool_name]
     assert matches, f"tool {tool_name!r} not registered"
-    return set(matches[0].parameters.get("properties", {}).keys())
+    return set(matches[0].input_schema.get("properties", {}).keys())
 
 
 def _assert_handler_properties_are_subset(
