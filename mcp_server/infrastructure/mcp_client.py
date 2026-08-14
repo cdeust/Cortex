@@ -10,6 +10,7 @@ import asyncio
 import json
 import logging
 import sys
+import time
 
 from mcp_server.infrastructure.upstream_identity import ALLOWED_UPSTREAM_COMMANDS
 from typing import Any
@@ -42,8 +43,10 @@ class MCPClient:
         # servers whose binaries the default list cannot know.
         self._extra_allowed_commands: set[str] = set()
         self._connect_timeout_ms = config.get("connectTimeoutMs") or 10000
-        # callTimeoutMs: positive int = ms, 0 or None = no per-call timeout
-        # (used for long-running upstream indexing).
+        # callTimeoutMs: positive int = hard per-call cap in ms; 0 = NO
+        # wall-clock cap (long-running upstream indexing — liveness is then
+        # governed by the child-silence watchdog, see _await_until_wedged);
+        # absent = the 120s default cap for ordinary tools.
         raw_call_timeout = config.get("callTimeoutMs")
         if raw_call_timeout is None:
             self._call_timeout_ms: int | None = 120000
@@ -53,6 +56,14 @@ class MCPClient:
             self._call_timeout_ms = int(raw_call_timeout)
         self._idle_timeout_ms = config.get("idleTimeoutMs") or 300000
         self._last_activity = 0.0
+        # Last time the CHILD produced any output (stdout or stderr line),
+        # on the time.monotonic() clock (loop-independent — read/stderr
+        # loops and callers may not share a loop). This is the liveness
+        # signal the no-cap wedge watchdog keys on: a live indexer keeps
+        # emitting progress on stderr, a wedged child emits nothing.
+        # source: ingest stdio-deadlock RCA 2026-06-11 (wedged = 4.5h of
+        # total silence at 0% CPU).
+        self._last_child_output = time.monotonic()
         self._idle_task: asyncio.Task | None = None
         self._reader_task: asyncio.Task | None = None
         # The event loop that owns this client's stdout reader, stdin
@@ -302,6 +313,17 @@ class MCPClient:
 
     @property
     def idle(self) -> bool:
+        """True when the connection has been unused past the idle window.
+
+        An in-flight request is never idle: ``_touch_activity`` fires only
+        at call START, so a single long call (analyze of a large repo)
+        crossed the 5-min window mid-flight and ``_idle_loop`` closed the
+        transport under it — every pending future failed with
+        ``McpConnectionError("Client closed")``. source: ingest kill
+        measured 2026-08-06 (harness-comparison INCIDENTS.md §4).
+        """
+        if self._pending:
+            return False
         loop = asyncio.get_running_loop()
         return (loop.time() - self._last_activity) > (self._idle_timeout_ms / 1000)
 
@@ -351,21 +373,20 @@ class MCPClient:
         self._proc.stdin.write((msg + "\n").encode())  # type: ignore
         await self._proc.stdin.drain()  # type: ignore
 
-        # Even when the operator opted into "no per-call timeout"
-        # (callTimeoutMs == 0), enforce a hard ceiling so a wedged
-        # upstream — or a client bound to a now-dead event loop whose
-        # reader can no longer drain stdout — cannot deadlock the caller
-        # forever. The ceiling is CORTEX_MCP_CALL_TIMEOUT_S (default 600s
-        # = 10x the measured 32s analyze latency). source: ingest
-        # stdio-deadlock RCA 2026-06-11 (4.5h hang at 0% CPU on both
-        # sides; reader's owning loop had closed, ``await future`` was
-        # unbounded).
+        # callTimeoutMs == 0 is a real opt-out, honoured as written: no
+        # wall-clock ceiling on the call. The former 600s hard ceiling
+        # here overrode the opt-out and killed live ingestions of large
+        # repos mid-flight (an actively-progressing analyze exceeds any
+        # fixed bound — measured 2026-08-06 on a 1.1 GB tree). The wedged
+        # child the ceiling guarded against (RCA 2026-06-11: 4.5h hang,
+        # 0% CPU, no output) is instead caught by the silence watchdog:
+        # it fails only after CORTEX_MCP_CALL_TIMEOUT_S of total child
+        # silence, which a wedged child always exhibits and a live one
+        # never does.
+        if self._call_timeout_ms is None:
+            return await self._await_until_wedged(future, method, req_id)
         loop = asyncio.get_running_loop()
-        effective_timeout = (
-            self._call_timeout_ms / 1000
-            if self._call_timeout_ms
-            else default_call_timeout_s()
-        )
+        effective_timeout = self._call_timeout_ms / 1000
         start = loop.time()
         try:
             return await asyncio.wait_for(future, timeout=effective_timeout)
@@ -381,6 +402,54 @@ class MCPClient:
                 f"draining its stdout.",
                 {"method": method, "elapsed_s": round(elapsed, 1)},
             ) from exc
+
+    async def _await_until_wedged(
+        self, future: asyncio.Future, method: str, req_id: int
+    ) -> Any:
+        """Await ``future`` with no wall-clock cap (callTimeoutMs == 0).
+
+        Precondition:  the caller opted out of the per-call ceiling
+                       (ingestion path: ap_bridge / pipeline_discovery).
+        Postcondition: returns the response however long the call runs,
+                       as long as the child keeps producing output on
+                       stdout or stderr. Raises McpConnectionError only
+                       after ``default_call_timeout_s()`` of TOTAL child
+                       silence — the wedge signature (RCA 2026-06-11) —
+                       never on elapsed time alone.
+        """
+        window = default_call_timeout_s()
+        start = time.monotonic()
+        while True:
+            silent_for = time.monotonic() - self._last_child_output
+            remaining = window - silent_for
+            if remaining <= 0:
+                self._pending.pop(req_id, None)
+                future.cancel()
+                elapsed = time.monotonic() - start
+                raise McpConnectionError(
+                    f"MCP call '{method}' to '{self._config.get('command')}' "
+                    f"declared wedged: the upstream child produced no output "
+                    f"for {silent_for:.0f}s (silence limit {window:.0f}s, "
+                    f"call elapsed {elapsed:.1f}s). A live call is never "
+                    f"interrupted on duration; only total silence fails it.",
+                    {
+                        "method": method,
+                        "elapsed_s": round(elapsed, 1),
+                        "silent_s": round(silent_for, 1),
+                    },
+                )
+            try:
+                # shield: wait_for cancels its awaitable on timeout, and the
+                # in-flight request must survive the probe slice.
+                return await asyncio.wait_for(asyncio.shield(future), remaining)
+            except asyncio.TimeoutError:
+                continue  # re-check silence; output during the slice resets it
+            except asyncio.CancelledError:
+                # Caller cancelled — the shield kept the inner future alive;
+                # release it so the reader doesn't resolve a dead request.
+                self._pending.pop(req_id, None)
+                future.cancel()
+                raise
 
     def _notify(self, method: str, params: dict | None = None) -> None:
         msg: dict[str, Any] = {"jsonrpc": "2.0", "method": method}
@@ -407,6 +476,7 @@ class MCPClient:
                     # EOF — child closed stdout. Fall through to fail
                     # pending futures so callers do not block forever.
                     break
+                self._last_child_output = time.monotonic()
                 decoded = line.decode("utf-8").strip()
                 if not decoded or decoded.startswith("Content-Length"):
                     continue
@@ -486,6 +556,7 @@ class MCPClient:
                 line = await self._proc.stderr.readline()  # type: ignore
                 if not line:
                     break
+                self._last_child_output = time.monotonic()
                 decoded = line.decode("utf-8", errors="replace").rstrip()
                 print(
                     f"[mcp-client] {self._config['command']}: {decoded}",

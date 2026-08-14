@@ -1406,3 +1406,108 @@ class TestModuleConstants:
 
     def test_protocol_version(self):
         assert PROTOCOL_VERSION == "2025-11-25"
+
+
+# ── No-cap ingestion calls: silence watchdog, not wall-clock (2026-08-14) ────
+
+
+class TestNoCapSilenceWatchdog:
+    """callTimeoutMs == 0 must mean what it says: no wall-clock ceiling.
+
+    The former 600s hard ceiling overrode the opt-out and killed live
+    ingestions mid-flight. Only total child SILENCE (the wedge signature,
+    RCA 2026-06-11) may fail an opted-out call.
+    """
+
+    def test_live_child_survives_past_silence_window(self):
+        """A call outliving several silence windows completes as long as
+        the child keeps producing output."""
+        _, client = _make_client(callTimeoutMs=0)
+        client._proc = _mock_proc()
+
+        async def scenario():
+            import time as _time
+
+            with patch(
+                "mcp_server.infrastructure.mcp_client.default_call_timeout_s",
+                return_value=0.25,
+            ):
+                task = asyncio.create_task(client._send("tools/call", {}))
+                # Outlive the window 2x while the child stays chatty.
+                for _ in range(8):
+                    await asyncio.sleep(0.06)
+                    client._last_child_output = _time.monotonic()
+                client._pending[1].set_result({"ok": True})
+                return await task
+
+        assert _run(scenario()) == {"ok": True}
+
+    def test_silent_child_fails_after_window(self):
+        """Total silence for the whole window is the wedge signature and
+        must still fail loudly (the RCA protection is kept)."""
+        _, client = _make_client(callTimeoutMs=0)
+        client._proc = _mock_proc()
+
+        async def scenario():
+            with patch(
+                "mcp_server.infrastructure.mcp_client.default_call_timeout_s",
+                return_value=0.15,
+            ):
+                with pytest.raises(McpConnectionError) as exc_info:
+                    await client._send("tools/call", {})
+            assert "no output" in str(exc_info.value)
+            assert 1 not in client._pending
+
+        _run(scenario())
+
+    def test_positive_cap_is_still_a_hard_ceiling(self):
+        """An explicit positive callTimeoutMs keeps its wall-clock
+        semantics — the opt-out is 0, not any value."""
+        _, client = _make_client(callTimeoutMs=100)
+        client._proc = _mock_proc()
+
+        async def scenario():
+            with pytest.raises(McpConnectionError) as exc_info:
+                await client._send("tools/call", {})
+            assert "timed out" in str(exc_info.value)
+
+        _run(scenario())
+
+    def test_caller_cancellation_releases_the_request(self):
+        """Cancelling the caller must not leave the shielded future
+        pending (the reader would resolve a dead request)."""
+        _, client = _make_client(callTimeoutMs=0)
+        client._proc = _mock_proc()
+
+        async def scenario():
+            with patch(
+                "mcp_server.infrastructure.mcp_client.default_call_timeout_s",
+                return_value=5.0,
+            ):
+                task = asyncio.create_task(client._send("tools/call", {}))
+                await asyncio.sleep(0.05)
+                task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await task
+            assert 1 not in client._pending
+
+        _run(scenario())
+
+
+class TestIdleNeverReapsInFlightCall:
+    def test_idle_false_while_pending(self):
+        """A single long call must not be idle-reaped mid-flight — the
+        'Client closed' ingest kill measured 2026-08-06."""
+        _, client = _make_client()
+
+        async def scenario():
+            loop = asyncio.get_running_loop()
+            client._last_activity = loop.time() - 10_000  # far past window
+            fut: asyncio.Future = loop.create_future()
+            client._pending[99] = fut
+            assert client.idle is False
+            client._pending.clear()
+            assert client.idle is True
+            fut.cancel()
+
+        _run(scenario())

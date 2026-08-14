@@ -185,6 +185,21 @@ def ensure_pipeline_connection() -> dict:
             and Path(configured_cmd).exists()
             and os.access(configured_cmd, os.X_OK)
         ):
+            # Backfill a MISSING callTimeoutMs on a valid pre-existing
+            # entry. Entries written before the field existed inherited
+            # the client's 120s default cap, which kills any analyze of a
+            # large repo mid-flight. Adding an absent field is not an
+            # overwrite — an explicit operator value (any int, including a
+            # positive cap) is left untouched.
+            if "callTimeoutMs" not in existing_codebase:
+                servers = dict(existing.get("servers") or {})
+                servers["codebase"] = {**existing_codebase, "callTimeoutMs": 0}
+                try:
+                    write_json(path, {**existing, "servers": servers})
+                except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
+                    logger.warning(
+                        "Failed to backfill callTimeoutMs in %s: %s", path, exc
+                    )
             return {
                 "action": "already_configured",
                 "path": str(path),
