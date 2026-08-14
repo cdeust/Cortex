@@ -39,9 +39,8 @@ def _resolve_call_timeout_ms(raw: Any) -> int | None:
     """
     if raw is None:
         return 120000
-    if raw == 0:
-        return None
-    return int(raw)
+    value = int(raw)
+    return None if value == 0 else value
 
 
 class MCPClient:
@@ -388,8 +387,7 @@ class MCPClient:
         msg = json.dumps(
             {"jsonrpc": "2.0", "id": req_id, "method": method, "params": params}
         )
-        self._proc.stdin.write((msg + "\n").encode())  # type: ignore
-        await self._proc.stdin.drain()  # type: ignore
+        await self._write_frame(req_id, msg)
 
         # callTimeoutMs == 0 is a real opt-out, honoured as written: no
         # wall-clock ceiling on the call. The former 600s hard ceiling
@@ -403,8 +401,59 @@ class MCPClient:
         # never does.
         cap_ms = self._call_timeout_ms
         if cap_ms is None:
-            return await self._await_until_wedged(future, method, req_id)
-        return await self._await_capped(future, method, req_id, cap_ms / 1000)
+            result = await self._await_until_wedged(future, method, req_id)
+        else:
+            result = await self._await_capped(future, method, req_id, cap_ms / 1000)
+        # Touch activity again on completion, not only at call start: `idle`
+        # (see its docstring) only ever tests the gap since the LAST touch,
+        # so a call that starts just before the idle window and runs long
+        # left `_last_activity` stale from call start once it finished —
+        # the very next `_idle_loop` tick then closed a connection that had
+        # just gone quiet, not one that had been quiet for the full window.
+        # source: review round 2 finding P3.
+        self._touch_activity()
+        return result
+
+    async def _write_frame(self, req_id: int, msg: str) -> None:
+        """Write one JSON-RPC frame and wait for the OS to accept it.
+
+        Any failure here — a write error, a drain that never completes, or
+        caller cancellation — must release ``self._pending[req_id]``: a
+        request whose frame was never fully written is never answered by
+        ``_read_loop``, so a leaked entry keeps ``busy`` True / ``idle``
+        False forever (see ``idle``'s docstring) — a permanent connection
+        leak, not a transient one. source: review round 2 finding P1,
+        reinforced independently by the official code-review synthesis
+        (same root cause as the `idle`/`_pending` interaction).
+
+        ``drain()`` itself is bounded by the connect-timeout budget: a live
+        child continuously reads its stdin, so any write+drain failing to
+        complete within that window means the child is wedged or its
+        stdout pipe is full (and it has stopped reading stdin to write
+        more), not legitimate slow work — the write never waits on the
+        child's processing of the message. Reuses ``_connect_timeout_ms``
+        (already the bound on the initial handshake round-trip, see
+        ``connect()``) rather than a new invented constant.
+        source: review round 2 finding (``drain()`` previously unbounded).
+        """
+        try:
+            self._proc.stdin.write((msg + "\n").encode())  # type: ignore
+            await asyncio.wait_for(
+                self._proc.stdin.drain(),  # type: ignore
+                timeout=self._connect_timeout_ms / 1000,
+            )
+        except asyncio.TimeoutError as exc:
+            self._pending.pop(req_id, None)
+            raise McpConnectionError(
+                f"Write to '{self._config.get('command')}' timed out after "
+                f"{self._connect_timeout_ms}ms — the child is not reading "
+                f"its stdin (wedged, or its stdout pipe is full and it has "
+                f"stopped consuming input).",
+                {"command": self._config.get("command")},
+            ) from exc
+        except BaseException:
+            self._pending.pop(req_id, None)
+            raise
 
     async def _await_capped(
         self, future: asyncio.Future, method: str, req_id: int, timeout_s: float

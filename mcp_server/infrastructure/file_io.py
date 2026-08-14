@@ -26,10 +26,22 @@ def read_json(file_path: str | Path) -> Any | None:
 
 
 def write_json(file_path: str | Path, data: Any) -> None:
-    """Write an object as JSON, creating parent directories as needed."""
+    """Write an object as JSON, creating parent directories as needed.
+
+    Atomic: writes to a sibling temp file in the same directory, then
+    ``os.replace``s it over the target — a reader (or a concurrent writer,
+    e.g. two SessionStart hooks racing on mcp-connections.json) always
+    sees either the old complete content or the new complete content,
+    never a partially-written file. ``os.replace`` is atomic on the same
+    filesystem on both POSIX and Windows. source: review round 2 finding
+    (pipeline_discovery.py's config write was a plain, non-atomic
+    ``p.write_text``).
+    """
     p = Path(file_path)
     ensure_dir(p.parent)
-    p.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    tmp = p.with_suffix(f"{p.suffix}.tmp-{os.getpid()}")
+    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    os.replace(tmp, p)
 
 
 def read_text_file(file_path: str | Path) -> str | None:

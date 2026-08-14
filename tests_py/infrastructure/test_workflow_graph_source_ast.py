@@ -189,7 +189,7 @@ def _close_quietly(loop_owner) -> None:
         gc.collect()
 
 
-class TestBoundedWaitTimeout:
+class TestDeadLoopThreadDetection:
     """The cross-loop wait has NO wall-clock ceiling (PR #431): a live call
     outlives any probe interval, and only a dead pinned-loop THREAD fails
     the wait (a wedged AP child is failed in-loop by mcp_client's silence
@@ -513,6 +513,45 @@ class TestSyncLoopCloseRealLoop:
         assert loop.is_closed()
         assert loop_owner._loop is None
         assert loop_owner._thread is None
+
+    def test_close_on_alive_loop_with_pending_task_logs_no_gc_warning(self, capfd):
+        """End-to-end regression test for issue #258, restored (round-1
+        review flagged its removal in commit b617d64d — see
+        ``TestDrainPendingTasks`` for the direct unit coverage this
+        complements, and the removal was: the OLD version of this test
+        wedged via a wall-clock ceiling that no longer exists post-F3, so
+        it was rewritten to kill the loop THREAD first, at which point
+        ``_drain_pending_tasks`` is a guaranteed no-op by its own
+        ``_loop_is_drainable`` guard — leaving nothing that exercises
+        ``close()`` draining a task on a loop whose thread is still ALIVE,
+        the actual #258 shape (task cancelled scheduled via
+        ``loop.stop()``, delivery needs one more iteration the stopped
+        loop never reaches, GC finds it PENDING).
+
+        Reproduced directly here instead: schedule a genuinely
+        long-running task on the pinned loop (bypassing ``run()``, whose
+        wait has no ceiling of its own post-F3 — nothing there would ever
+        time out and trigger a drain), then close() the STILL-ALIVE loop.
+        If ``_drain_pending_tasks()`` were ever removed from ``close()``,
+        this reproduces the exact GC warning on stderr."""
+        import asyncio
+        import gc
+        import time
+
+        loop_owner = _SyncLoop()
+        loop = loop_owner._ensure_loop()
+
+        async def _long_running():
+            await asyncio.sleep(30)
+
+        task_future = asyncio.run_coroutine_threadsafe(_long_running(), loop)
+        time.sleep(0.05)  # let the task actually start on the loop thread
+
+        loop_owner.close()
+
+        assert task_future.cancelled()
+        gc.collect()  # force the finalizer of any still-PENDING task now
+        assert "Task was destroyed but it is pending" not in capfd.readouterr().err
 
 
 class TestSingleReaderOwnership:
