@@ -223,25 +223,14 @@ class MemorySettings(BaseSettings):
     # MCP config.
     AP_ENABLED: bool = True
 
-    # Cross-loop wait ceiling (seconds) for the single AP reader thread in
-    # workflow_graph_source_ast._SyncLoop. The reader owns one event loop and
-    # blocks the caller on future.result(timeout=AP_SYNC_RESULT_TIMEOUT_S).
-    # Without it, a wedged AP subprocess (JSON-RPC pipe stalled below the
-    # in-loop await) hangs the calling worker forever (Lamport H4: "concurrent
-    # reads" over one pipe is an illusion; an untimed .result() never returns).
-    #
-    # Floor rationale: ap_bridge deliberately sets callTimeoutMs=0, so each AP
-    # query runs under mcp_client's no-timeout fallback of 3600 s
-    # (mcp_client.py:319 effective_timeout = 3600.0). The CROSS-loop wait must
-    # be >= that IN-loop ceiling, or it false-fires on a query the loop still
-    # considers alive. We add a 300 s drain margin (mcp_client idle timeout is
-    # 300 s, mcp_client.py:41) for the cancellation/error to propagate back
-    # across the loop boundary after the in-loop bound trips.
-    # source: mcp_client.py:319 (3600 s AP-call ceiling) + mcp_client.py:41
-    #   (300 s idle/drain). ENGINEERING DEFAULT pending measurement: calibrate
-    #   by measuring p99 wall time of a full load_ast_edges() sweep (89 queries)
-    #   on the largest production graph and setting this to p99 + drain margin.
-    AP_SYNC_RESULT_TIMEOUT_S: float = 3900.0
+    # AP_SYNC_RESULT_TIMEOUT_S (removed): the former 3900 s cross-loop wait
+    # ceiling for the AP reader thread was floored at mcp_client's in-loop
+    # AP-call cap. callTimeoutMs=0 made that in-loop bound infinite for a
+    # live child, so no finite cross-loop ceiling could satisfy the floor
+    # invariant anymore, and keeping one killed live >65 min analyze sweeps
+    # on wall-clock. Replaced by ap_sync_loop._AP_SYNC_PROBE_INTERVAL_S
+    # (dead-thread probe cadence, not a ceiling) + mcp_client's in-loop
+    # child-silence watchdog. source: PR #431.
 
     model_config = {"env_prefix": "CORTEX_MEMORY_"}
 

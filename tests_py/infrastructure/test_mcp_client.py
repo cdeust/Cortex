@@ -1421,7 +1421,10 @@ class TestNoCapSilenceWatchdog:
 
     def test_live_child_survives_past_silence_window(self):
         """A call outliving several silence windows completes as long as
-        the child keeps producing output."""
+        the child keeps producing output. Poke/window ratio is 1:20 (0.05s
+        pokes under a 1.0s window) so a routine scheduler stall on a
+        loaded CI runner (~hundreds of ms) cannot spuriously cross the
+        window between event-loop turns."""
         _, client = _make_client(callTimeoutMs=0)
         client._proc = _mock_proc()
 
@@ -1430,12 +1433,12 @@ class TestNoCapSilenceWatchdog:
 
             with patch(
                 "mcp_server.infrastructure.mcp_client.default_call_timeout_s",
-                return_value=0.25,
+                return_value=1.0,
             ):
                 task = asyncio.create_task(client._send("tools/call", {}))
                 # Outlive the window 2x while the child stays chatty.
-                for _ in range(8):
-                    await asyncio.sleep(0.06)
+                for _ in range(40):
+                    await asyncio.sleep(0.05)
                     client._last_child_output = _time.monotonic()
                 client._pending[1].set_result({"ok": True})
                 return await task
@@ -1492,6 +1495,71 @@ class TestNoCapSilenceWatchdog:
             assert 1 not in client._pending
 
         _run(scenario())
+
+    def test_capped_cancellation_releases_the_request(self):
+        """The CAPPED path must release _pending on caller cancellation
+        too. A leaked entry against a child that never answers keeps
+        ``idle`` False and ``busy`` True forever — the connection is never
+        reaped, never evicted, and the pool eventually exhausts."""
+        _, client = _make_client(callTimeoutMs=60000)
+        client._proc = _mock_proc()
+
+        async def scenario():
+            task = asyncio.create_task(client._send("tools/call", {}))
+            await asyncio.sleep(0.05)
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+            assert 1 not in client._pending
+
+        _run(scenario())
+
+    def test_preexisting_quiet_gap_does_not_count_as_silence(self):
+        """Silence is measured from call START at the earliest: a child
+        that was legitimately quiet BEFORE the request (idle gap between
+        ingest steps) must not be declared wedged on iteration one."""
+        _, client = _make_client(callTimeoutMs=0)
+        client._proc = _mock_proc()
+
+        async def scenario():
+            import time as _time
+
+            client._last_child_output = _time.monotonic() - 100.0
+            with patch(
+                "mcp_server.infrastructure.mcp_client.default_call_timeout_s",
+                return_value=0.5,
+            ):
+                task = asyncio.create_task(client._send("tools/call", {}))
+                await asyncio.sleep(0.1)
+                client._pending[1].set_result({"ok": True})
+                return await task
+
+        assert _run(scenario()) == {"ok": True}
+
+    def test_response_arriving_during_drain_is_returned_not_discarded(self):
+        """A response landing while ``_send`` still awaits stdin.drain()
+        resolves the future before the watchdog's first check; even with
+        the silence window already exhausted it must be returned, not
+        discarded by a wedge declaration."""
+        _, client = _make_client(callTimeoutMs=0)
+        client._proc = _mock_proc()
+
+        async def _drain_and_answer():
+            client._pending[1].set_result({"ok": True})
+
+        client._proc.stdin.drain = _drain_and_answer
+
+        async def scenario():
+            import time as _time
+
+            client._last_child_output = _time.monotonic() - 100.0
+            with patch(
+                "mcp_server.infrastructure.mcp_client.default_call_timeout_s",
+                return_value=0.0,
+            ):
+                return await client._send("tools/call", {})
+
+        assert _run(scenario()) == {"ok": True}
 
 
 class TestIdleNeverReapsInFlightCall:

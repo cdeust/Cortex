@@ -5040,11 +5040,6 @@
     {
       "file": "mcp_server/infrastructure/mcp_client.py",
       "kind": "method-size",
-      "detail": "MCPClient._send"
-    },
-    {
-      "file": "mcp_server/infrastructure/mcp_client.py",
-      "kind": "method-size",
       "detail": "MCPClient._spawn_process"
     },
     {

@@ -20,20 +20,17 @@ from concurrent.futures import TimeoutError as FutureTimeoutError
 from typing import Any, Iterator
 
 from mcp_server.errors import McpConnectionError
-from mcp_server.infrastructure.memory_config import get_memory_settings
 
 logger = logging.getLogger(__name__)
 
-
-def _ap_sync_timeout_s() -> float:
-    """Cross-loop wait ceiling for AP reader-thread calls.
-
-    source: memory_config.AP_SYNC_RESULT_TIMEOUT_S (see that field's
-    derivation comment — floored at the in-loop 3600 s AP-call ceiling
-    plus a drain margin). Read lazily so env overrides apply per-process.
-    """
-
-    return float(get_memory_settings().AP_SYNC_RESULT_TIMEOUT_S)
+# Cross-loop probe cadence for the reader-thread wait. NOT a wall-clock
+# ceiling: each expiry only re-checks that the pinned loop thread is
+# still alive, then keeps waiting (the former AP_SYNC_RESULT_TIMEOUT_S
+# ceiling was floored at an in-loop cap that callTimeoutMs=0 made
+# infinite, and it killed live >65 min sweeps — see memory_config).
+# source: mcp_client._idle_loop's existing 30 s liveness-poll cadence;
+#   correctness-neutral — bounds only dead-loop-thread detection latency.
+_AP_SYNC_PROBE_INTERVAL_S = 30.0
 
 
 # Shutdown-drain ceiling for ``_SyncLoop.close()``: bounds how long we wait
@@ -110,21 +107,15 @@ class _SyncLoop:
         that one loop. No other thread drives the loop, so the JSON-RPC
         pipe has a single reader (Lamport H4 satisfied by construction).
 
-        The wait is bounded: if the loop thread wedges (e.g. the AP
-        subprocess stalls below the in-loop await), ``.result(timeout=…)``
-        raises rather than hanging this worker forever. On timeout we never
-        return partial data — we raise ``McpConnectionError``.
+        The wait has no wall-clock ceiling — a live call is never killed
+        on elapsed time. A wedged AP child fails in-loop (mcp_client's
+        silence watchdog); a dead loop THREAD is caught by the probe in
+        ``_result_or_wedged``. On failure we never return partial data —
+        we raise ``McpConnectionError``.
         """
         loop = self._ensure_loop()
         future = asyncio.run_coroutine_threadsafe(coro, loop)
-        try:
-            return future.result(timeout=_ap_sync_timeout_s())
-        except FutureTimeoutError as exc:
-            future.cancel()
-            raise McpConnectionError(
-                "AP reader-thread call exceeded "
-                f"{_ap_sync_timeout_s():.0f}s — subprocess presumed wedged"
-            ) from exc
+        return self._result_or_wedged(future, "call")
 
     def run_iter(self, agen) -> Iterator[Any]:
         """Drive an async generator one step per bounded cross-loop call,
@@ -132,15 +123,15 @@ class _SyncLoop:
 
         This is the streaming primitive: ``agen`` (an async generator that
         yields one batch per AP query) is advanced one ``__anext__`` at a
-        time, each on the pinned loop with a bounded ``.result(timeout=…)``.
-        The caller therefore receives batch *N* (and may process/discard it)
-        BEFORE batch *N+1*'s query is ever issued — peak retained inside the
-        source is one batch, not the union across all queries.
+        time, each on the pinned loop. The caller therefore receives batch
+        *N* (and may process/discard it) BEFORE batch *N+1*'s query is ever
+        issued — peak retained inside the source is one batch, not the
+        union across all queries.
 
-        On a wedged loop thread, each step raises ``McpConnectionError``
-        rather than hanging. Partial batches already yielded are real data;
-        the generator stops at the failed step (it does not silently return
-        a truncated full list).
+        A wedged step raises ``McpConnectionError`` rather than hanging
+        (see ``_result_or_wedged``). Partial batches already yielded are
+        real data; the generator stops at the failed step (it does not
+        silently return a truncated full list).
         """
         loop = self._ensure_loop()
         _sentinel = object()
@@ -153,17 +144,32 @@ class _SyncLoop:
 
         while True:
             future = asyncio.run_coroutine_threadsafe(_step(), loop)
-            try:
-                item = future.result(timeout=_ap_sync_timeout_s())
-            except FutureTimeoutError as exc:
-                future.cancel()
-                raise McpConnectionError(
-                    "AP reader-thread step exceeded "
-                    f"{_ap_sync_timeout_s():.0f}s — subprocess presumed wedged"
-                ) from exc
+            item = self._result_or_wedged(future, "step")
             if item is _sentinel:
                 return
             yield item
+
+    def _result_or_wedged(self, future, what: str):
+        """Block until ``future`` resolves — no wall-clock ceiling.
+
+        A wedged AP child is failed in-loop by mcp_client's silence
+        watchdog (its ``McpConnectionError`` propagates via
+        ``future.result()``). What that cannot surface is the pinned loop
+        THREAD dying (nothing left to resolve the future), so each probe
+        expiry re-checks the thread and raises instead of hanging forever.
+        A live call is never killed on elapsed time.
+        """
+        while True:
+            try:
+                return future.result(timeout=_AP_SYNC_PROBE_INTERVAL_S)
+            except FutureTimeoutError:
+                if _loop_is_drainable(self._loop, self._thread):
+                    continue  # loop thread still alive — keep waiting
+                future.cancel()
+                raise McpConnectionError(
+                    f"AP reader-thread {what} abandoned: the pinned loop thread "
+                    "is no longer running, so the call can never complete"
+                ) from None
 
     def close(self) -> None:
         if self._loop and not self._loop.is_closed():
@@ -289,4 +295,4 @@ def _run_task_drain(loop: "asyncio.AbstractEventLoop") -> None:
         pass  # loop closed between the check above and this call
 
 
-__all__ = ["_SyncLoop", "_ap_sync_timeout_s", "_SHUTDOWN_DRAIN_TIMEOUT_S"]
+__all__ = ["_SyncLoop", "_AP_SYNC_PROBE_INTERVAL_S", "_SHUTDOWN_DRAIN_TIMEOUT_S"]
