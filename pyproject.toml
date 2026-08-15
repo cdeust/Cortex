@@ -636,7 +636,7 @@ dev = [
 # to dependencies: a lint job that drags in pyright pays for it in cold-start
 # time and in supply-chain surface).
 lint = [
-    "ruff==0.16.0",
+    "ruff==0.16.2",
 ]
 typecheck = [
     "pyright==1.1.411",
