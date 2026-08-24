@@ -68,6 +68,7 @@ import json
 import os
 import re
 import sys
+from datetime import datetime, timezone
 from typing import Any
 
 from mcp_server.handlers.injection_receipts import (
@@ -76,6 +77,7 @@ from mcp_server.handlers.injection_receipts import (
     receipt_marker,
     session_id_from_transcript,
 )
+from mcp_server.shared.freshness import provenance_suffix
 
 _LOG_PREFIX = "[cortex-auto-recall]"
 _DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://localhost:5432/cortex")
@@ -173,6 +175,7 @@ def _recall_memories(conn, query: str) -> list[dict]:
             SELECT m.id, m.content,
                    effective_heat(m, NOW()) AS heat,
                    m.domain, m.agent_context, m.is_protected,
+                   m.created_at, m.source_attribution, m.is_stale,
                    ts_rank_cd(m.content_tsv, q) AS rank
             -- JOIN current_memories: auto-recall injects content into the
             -- session context — supersession chain heads only. The join
@@ -201,6 +204,9 @@ def _recall_memories(conn, query: str) -> list[dict]:
                     "domain": r.get("domain", ""),
                     "agent": r.get("agent_context", ""),
                     "protected": bool(r.get("is_protected")),
+                    "created_at": r.get("created_at"),
+                    "source_attribution": r.get("source_attribution", ""),
+                    "is_stale": bool(r.get("is_stale")),
                 }
             )
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
@@ -276,6 +282,9 @@ def _recall_memories_sqlite(store, query: str) -> list[dict]:
                 "domain": m.get("domain", "") or "",
                 "agent": m.get("agent_context", "") or "",
                 "protected": bool(m.get("is_protected")),
+                "created_at": m.get("created_at"),
+                "source_attribution": m.get("source_attribution", ""),
+                "is_stale": bool(m.get("is_stale")),
             }
         )
     # Protected (decision) memories first; stable sort keeps FTS rank
@@ -316,7 +325,9 @@ def _process_event_sqlite(event: dict[str, Any], query: str) -> None:
     sys.exit(0)
 
 
-def _format_injection(memories: list[dict]) -> tuple[str, list[dict]]:
+def _format_injection(
+    memories: list[dict], now: datetime | None = None
+) -> tuple[str, list[dict]]:
     """Format memories as a compact context block for injection.
 
     Keeps total injection under _MAX_INJECTION_CHARS to avoid flooding
@@ -325,7 +336,14 @@ def _format_injection(memories: list[dict]) -> tuple[str, list[dict]]:
     was fetched (parity invariant, decision 4255039 correction 11):
     entries dropped by the budget were never in context; entries printed
     truncated keep their id and ARE in context.
+
+    Each memory carries a freshness suffix (age · provenance grade · stale
+    marker; fleet-watch #110) so a months-old fact is distinguishable from a
+    fresh one in context — the failure the harness-comparison rev.2 measured.
+    The suffix counts toward the budget, so a memory is dropped on the full
+    rendered line and the receipt still mirrors exactly what is printed.
     """
+    now = now or datetime.now(timezone.utc)
     lines = ["**Cortex context:**"]
     total_chars = len(lines[0])
     included: list[dict] = []
@@ -339,8 +357,10 @@ def _format_injection(memories: list[dict]) -> tuple[str, list[dict]]:
         agent = m.get("agent", "")
         prefix = f"[{agent}] " if agent else ""
         protected = " (decision)" if m.get("protected") else ""
+        suffix = provenance_suffix(m, now)
+        freshness = f"  ·  {suffix}" if suffix else ""
 
-        line = f"- {prefix}{content}{protected}"
+        line = f"- {prefix}{content}{protected}{freshness}"
 
         if total_chars + len(line) > _MAX_INJECTION_CHARS:
             break

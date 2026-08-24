@@ -15,6 +15,8 @@ the branches those tests cannot reach deterministically:
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 from mcp_server.hooks.auto_recall import _MAX_INJECTION_CHARS, _format_injection
 from mcp_server.hooks.session_start import _build_context
 
@@ -59,6 +61,29 @@ def test_nothing_fits_returns_empty_and_no_items() -> None:
     text, included = _format_injection([_mem(1, agent="x" * 900)])
     assert text == ""
     assert included == []
+
+
+def test_freshness_suffix_rendered_when_fields_present() -> None:
+    # A memory carrying created_at / grade / stale gets an age·grade·stale
+    # suffix (fleet-watch #110) — the harness-comparison "no age signal" fix.
+    now = datetime(2026, 8, 24, 12, 0, 0, tzinfo=timezone.utc)
+    mem = _mem(1, content_len=20)
+    mem["created_at"] = now - timedelta(days=90)
+    mem["source_attribution"] = "verified"
+    mem["is_stale"] = True
+    text, included = _format_injection([mem], now=now)
+    assert "3mo ago" in text
+    assert "src=verified" in text
+    assert "⚠stale" in text
+    assert [m["id"] for m in included] == [1]
+
+
+def test_bare_memory_has_no_suffix() -> None:
+    # Memories without freshness fields render exactly as before (no suffix),
+    # so existing call sites and budgets are unaffected.
+    now = datetime(2026, 8, 24, 12, 0, 0, tzinfo=timezone.utc)
+    text, _ = _format_injection([_mem(1, content_len=20)], now=now)
+    assert " · " not in text
 
 
 def test_banner_renders_marker_only_with_receipt() -> None:
