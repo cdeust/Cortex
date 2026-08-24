@@ -21,7 +21,11 @@ from __future__ import annotations
 import logging
 from typing import Callable, Protocol
 
-from mcp_server.core.change_remediation import Remediation, classify_remediation
+from mcp_server.core.change_remediation import (
+    Remediation,
+    build_impacted,
+    classify_remediation,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -56,3 +60,20 @@ def remediate_impacted(
     counts["reingest_paths"] = len(reingest_paths)
     logger.info("change remediation: %s", counts)
     return counts
+
+
+def remediate_from_impact(
+    matches: list,
+    memory_by_id: dict[int, dict],
+    store: _RemediationStore,
+    reingest_fn: ReingestFn,
+) -> dict[str, int]:
+    """Drive remediation straight from ``change_impact``'s match output.
+
+    ``matches`` is the ``ImpactMatch`` list from ``handlers/change_impact.py``
+    (each carrying ``memory_id`` + the changed ``matched_files``); ``memory_by_id``
+    resolves those ids to memory dicts. This is the one composition the caller
+    needs — supply the real ``reingest_fn`` (an incremental ``codebase_analyze``
+    over the changed paths), validated against AP + a real codebase.
+    """
+    return remediate_impacted(build_impacted(matches, memory_by_id), store, reingest_fn)

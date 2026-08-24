@@ -7,9 +7,20 @@ hand-authored→flag-stale split, path dedup, and the no-op case.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from mcp_server.handlers.consolidation.change_remediation_pass import (
+    remediate_from_impact,
     remediate_impacted,
 )
+
+
+@dataclass
+class _Match:
+    """Stand-in for change_impact_matcher.ImpactMatch (duck-typed)."""
+
+    memory_id: int
+    matched_files: list[str]
 
 
 class _FakeStore:
@@ -71,3 +82,21 @@ def test_empty_impacted_is_noop() -> None:
     assert counts == {"reingest_memories": 0, "flagged_stale": 0, "reingest_paths": 0}
     assert calls == []
     assert store.marked == []
+
+
+def test_remediate_from_impact_glues_change_impact_output() -> None:
+    # ImpactMatches straight from change_impact: id 1 code-derived → reingest its
+    # changed file; id 2 hand-authored → flag; id 9 has no memory row → dropped.
+    matches = [_Match(1, ["src/a.py"]), _Match(2, ["src/a.py"]), _Match(9, ["x.py"])]
+    memory_by_id = {
+        1: {"id": 1, "agent_context": "codebase"},
+        2: {"id": 2, "agent_context": "", "tags": ["lesson"]},
+    }
+    store = _FakeStore()
+    calls, reingest = _recorder()
+
+    counts = remediate_from_impact(matches, memory_by_id, store, reingest)
+
+    assert counts == {"reingest_memories": 1, "flagged_stale": 1, "reingest_paths": 1}
+    assert calls == [["src/a.py"]]  # only the code-derived memory's changed ref
+    assert store.marked == [(2, True)]  # only the hand-authored memory flagged
