@@ -119,10 +119,13 @@ class TestQueryErrorsAreNotMaskedAsDbNotConnected:
             "connection refused",
             "could not connect to server",
             "could not translate host name",
+            "no such host",
+            "connection reset",
             "server closed the connection unexpectedly",
             "the database system is starting up",
             "password authentication failed for user",
             "connection timed out",
+            "timeout expired",
         ]:
             error_type, message = _classify_error(RuntimeError(msg))
             assert error_type == "database_not_connected", msg
