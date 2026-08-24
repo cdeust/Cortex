@@ -325,6 +325,25 @@ def _process_event_sqlite(event: dict[str, Any], query: str) -> None:
     sys.exit(0)
 
 
+def _render_memory_line(m: dict, now: datetime) -> str:
+    """Render one memory as a bullet with a freshness suffix.
+
+    The suffix (age · provenance grade · stale marker; fleet-watch #110) makes
+    a months-old fact distinguishable from a fresh one — the failure the
+    harness-comparison rev.2 measured. Empty for memories lacking those fields,
+    so bare-memory call sites render exactly as before.
+    """
+    content = m["content"].replace("\n", " ").strip()
+    if len(content) > _MAX_MEMORY_CHARS:
+        content = content[: _MAX_MEMORY_CHARS - 3] + "..."
+    agent = m.get("agent", "")
+    prefix = f"[{agent}] " if agent else ""
+    protected = " (decision)" if m.get("protected") else ""
+    suffix = provenance_suffix(m, now)
+    freshness = f"  ·  {suffix}" if suffix else ""
+    return f"- {prefix}{content}{protected}{freshness}"
+
+
 def _format_injection(
     memories: list[dict], now: datetime | None = None
 ) -> tuple[str, list[dict]]:
@@ -333,15 +352,9 @@ def _format_injection(
     Keeps total injection under _MAX_INJECTION_CHARS to avoid flooding
     the context window. Returns the block AND the memories that actually
     fit — the injection receipt must mirror what is printed, never what
-    was fetched (parity invariant, decision 4255039 correction 11):
-    entries dropped by the budget were never in context; entries printed
-    truncated keep their id and ARE in context.
-
-    Each memory carries a freshness suffix (age · provenance grade · stale
-    marker; fleet-watch #110) so a months-old fact is distinguishable from a
-    fresh one in context — the failure the harness-comparison rev.2 measured.
-    The suffix counts toward the budget, so a memory is dropped on the full
-    rendered line and the receipt still mirrors exactly what is printed.
+    was fetched (parity invariant, decision 4255039 correction 11): a memory
+    is dropped on its full rendered line (freshness suffix included), so the
+    receipt mirrors exactly what is printed.
     """
     now = now or datetime.now(timezone.utc)
     lines = ["**Cortex context:**"]
@@ -349,22 +362,9 @@ def _format_injection(
     included: list[dict] = []
 
     for m in memories:
-        content = m["content"].replace("\n", " ").strip()
-        # Truncate individual memories
-        if len(content) > _MAX_MEMORY_CHARS:
-            content = content[: _MAX_MEMORY_CHARS - 3] + "..."
-
-        agent = m.get("agent", "")
-        prefix = f"[{agent}] " if agent else ""
-        protected = " (decision)" if m.get("protected") else ""
-        suffix = provenance_suffix(m, now)
-        freshness = f"  ·  {suffix}" if suffix else ""
-
-        line = f"- {prefix}{content}{protected}{freshness}"
-
+        line = _render_memory_line(m, now)
         if total_chars + len(line) > _MAX_INJECTION_CHARS:
             break
-
         lines.append(line)
         total_chars += len(line)
         included.append(m)
