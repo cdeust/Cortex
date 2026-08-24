@@ -2,11 +2,35 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from mcp_server.core.change_remediation import (
     Remediation,
+    build_impacted,
     classify_remediation,
     is_code_derived,
 )
+
+
+@dataclass
+class _Match:
+    memory_id: int
+    matched_files: list[str]
+
+
+def test_build_impacted_attaches_changed_refs() -> None:
+    matches = [_Match(1, ["src/a.py", "src/b.py"]), _Match(2, ["src/c.py"])]
+    memory_by_id = {1: {"id": 1, "content": "x"}, 2: {"id": 2, "content": "y"}}
+    impacted = build_impacted(matches, memory_by_id)
+    assert impacted[0]["changed_refs"] == ["src/a.py", "src/b.py"]
+    assert impacted[0]["content"] == "x"  # memory fields preserved
+    assert impacted[1]["changed_refs"] == ["src/c.py"]
+
+
+def test_build_impacted_drops_unknown_memory() -> None:
+    matches = [_Match(1, ["src/a.py"]), _Match(99, ["src/z.py"])]
+    impacted = build_impacted(matches, {1: {"id": 1}})
+    assert [m["id"] for m in impacted] == [1]  # id 99 has no memory → dropped
 
 
 def test_code_derived_by_agent_context() -> None:

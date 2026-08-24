@@ -24,11 +24,41 @@ scope code-derived rows, reused here — not a new classification signal.
 from __future__ import annotations
 
 from enum import Enum
+from typing import Protocol
 
 
 class Remediation(str, Enum):
     REINGEST = "reingest"
     FLAG_STALE = "flag_stale"
+
+
+class _ImpactMatch(Protocol):
+    """The subset of ``core.change_impact_matcher.ImpactMatch`` this needs.
+
+    Duck-typed (not imported) so this policy module stays a leaf.
+    """
+
+    memory_id: int
+    matched_files: list[str]
+
+
+def build_impacted(
+    matches: list[_ImpactMatch], memory_by_id: dict[int, dict]
+) -> list[dict]:
+    """Glue ``change_impact`` output onto ``remediate_impacted`` input.
+
+    ``change_impact`` yields one ``ImpactMatch`` per impacted memory, whose
+    ``matched_files`` is exactly the subset of that memory's file references the
+    commit changed. Attach it to the memory dict as ``changed_refs`` — the shape
+    ``handlers/consolidation/change_remediation_pass.remediate_impacted``
+    consumes. Matches with no known memory are dropped.
+    """
+    impacted: list[dict] = []
+    for m in matches:
+        mem = memory_by_id.get(m.memory_id)
+        if mem is not None:
+            impacted.append({**mem, "changed_refs": list(m.matched_files)})
+    return impacted
 
 
 def is_code_derived(memory: dict) -> bool:
