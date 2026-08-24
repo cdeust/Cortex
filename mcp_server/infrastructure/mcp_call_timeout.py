@@ -29,6 +29,22 @@ import os
 _DEFAULT_CALL_TIMEOUT_S = 600.0
 _ENV_VAR = "CORTEX_MCP_CALL_TIMEOUT_S"
 
+# Wall-clock ceiling (seconds) for INTERACTIVE AP read-path calls
+# (search_codebase, get_symbol, get_context, get_impact, get_processes,
+# query_graph, health_check). Unlike indexing, a read/lookup is not
+# legitimately long-running: an AP that connects but then wedges on such a
+# call must degrade to graceful Cortex-only results, not stall the tool.
+# The unbounded wedge window above (600s of SILENCE) is reserved for
+# ingestion and is far too slow here — unified_search / get_causal_chain
+# would hang for up to 10 minutes before falling back.
+# source: interactive read-path ceiling. AP read tools are documented
+# interactive (unified_search / get_causal_chain target <200ms,
+# docs/mcp-tools.md); 30s is a wide margin over that interactive target yet
+# 20x below the 600s indexing wedge window, so a wedged AP degrades in
+# seconds instead of minutes.
+_DEFAULT_INTERACTIVE_CALL_TIMEOUT_S = 30.0
+_INTERACTIVE_ENV_VAR = "CORTEX_AP_INTERACTIVE_TIMEOUT_S"
+
 
 def default_call_timeout_s() -> float:
     """Return the configured wedge silence window in seconds.
@@ -48,3 +64,22 @@ def default_call_timeout_s() -> float:
         except (TypeError, ValueError):
             pass
     return _DEFAULT_CALL_TIMEOUT_S
+
+
+def interactive_call_timeout_s() -> float:
+    """Return the wall-clock ceiling for interactive AP read-path calls.
+
+    Reads ``CORTEX_AP_INTERACTIVE_TIMEOUT_S`` (positive float) when set and
+    valid; otherwise returns the documented default. A non-positive or
+    malformed override falls back to the default — an unbounded interactive
+    call is exactly the hang this ceiling exists to prevent.
+    """
+    raw = os.environ.get(_INTERACTIVE_ENV_VAR)
+    if raw:
+        try:
+            val = float(raw)
+            if val > 0:
+                return val
+        except (TypeError, ValueError):
+            pass
+    return _DEFAULT_INTERACTIVE_CALL_TIMEOUT_S

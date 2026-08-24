@@ -30,6 +30,7 @@ from mcp_server.infrastructure.upstream_identity import (
 from typing import Any
 
 from mcp_server.errors import McpConnectionError
+from mcp_server.infrastructure.mcp_call_timeout import interactive_call_timeout_s
 from mcp_server.infrastructure.mcp_client import MCPClient
 from mcp_server.observability import silent_failure
 from mcp_server.infrastructure.memory_config import get_memory_settings
@@ -288,8 +289,21 @@ class APBridge:
                 )
                 return False
 
-    async def call(self, tool: str, args: dict | None = None) -> Any:
-        """Call an AP tool. Returns ``None`` if AP is unavailable."""
+    async def call(
+        self, tool: str, args: dict | None = None, *, timeout_s: float | None = None
+    ) -> Any:
+        """Call an AP tool. Returns ``None`` if AP is unavailable.
+
+        ``timeout_s`` bounds this single call with a wall-clock ceiling.
+        The client itself runs AP with ``callTimeoutMs=0`` (indexing may
+        legitimately exceed any fixed bound), so without this the only
+        backstop is the 600s wedge-silence window — far too slow for an
+        interactive read/lookup. Interactive wrappers pass
+        ``interactive_call_timeout_s()``; the indexing wrappers leave it
+        ``None`` (unbounded). A timeout degrades exactly like any other AP
+        failure: reason recorded, stderr note, ``None`` returned so callers
+        fall back to Cortex-only results.
+        """
         if tool not in _AP_TOOLS:
             raise ValueError(f"AP tool not in allowlist: {tool!r}")
         if not await self.connect():
@@ -297,7 +311,20 @@ class APBridge:
         if self._client is None:  # connect() success guarantees a client; defensive
             return None
         try:
-            return await self._client.call(tool, args or {})
+            coro = self._client.call(tool, args or {})
+            if timeout_s is not None:
+                return await asyncio.wait_for(coro, timeout=timeout_s)
+            return await coro
+        except asyncio.TimeoutError:  # interactive ceiling hit — degrade, don't hang
+            self._unavailable_reason = (
+                f"TimeoutError: AP call {tool} exceeded {timeout_s:.0f}s"
+            )
+            print(
+                f"[cortex] AP call {tool} timed out after {timeout_s:.0f}s "
+                f"(interactive ceiling); degrading to Cortex-only.",
+                file=sys.stderr,
+            )
+            return None
         except Exception as exc:  # noqa: BLE001 — failure is reported to stderr; execution degrades, never crashes
             self._unavailable_reason = f"{type(exc).__name__}: {exc}"
             print(
@@ -309,8 +336,15 @@ class APBridge:
     # ── Convenience wrappers matching AP's MCP schema (src/tool_schemas.rs).
     # All Stage-3a tools are scoped to a ``graph_path`` returned by
     # index_codebase; callers pass it through or rely on the cached one.
+    # ── Interactive read-path tools carry a wall-clock ceiling
+    # (interactive_call_timeout_s) so a wedged-but-connected AP degrades to
+    # Cortex-only in seconds instead of stalling for the 600s wedge window.
+    # The indexing/write tools below (index_codebase, analyze_codebase,
+    # resolve_graph, cluster_graph, detect_changes) stay unbounded on purpose.
     async def health_check(self) -> Any:
-        return await self.call("health_check", {})
+        return await self.call(
+            "health_check", {}, timeout_s=interactive_call_timeout_s()
+        )
 
     async def index_codebase(
         self,
@@ -331,7 +365,15 @@ class APBridge:
         )
 
     async def query_graph(self, graph_path: str, query: str) -> Any:
-        """Execute a Cypher ``query`` against the graph at ``graph_path``."""
+        """Execute a Cypher ``query`` against the graph at ``graph_path``.
+
+        Left UNBOUNDED: query_graph drives the AST symbol/edge build loop
+        (iter_symbols / iter_edges, ~21 label + ~89 rel-table queries per
+        graph), which is part of the ingestion path where a single query
+        over a large graph may legitimately run long. Only the terminal
+        interactive lookups (get_symbol / get_context / search_codebase /
+        …) carry the interactive ceiling.
+        """
         return await self.call(
             "query_graph",
             {"graph_path": graph_path, "query": query},
@@ -342,6 +384,7 @@ class APBridge:
         return await self.call(
             "get_symbol",
             {"graph_path": graph_path, "qualified_name": qualified_name},
+            timeout_s=interactive_call_timeout_s(),
         )
 
     async def get_context(self, graph_path: str, qualified_name: str) -> Any:
@@ -354,6 +397,7 @@ class APBridge:
         return await self.call(
             "get_context",
             {"graph_path": graph_path, "qualified_name": qualified_name},
+            timeout_s=interactive_call_timeout_s(),
         )
 
     async def get_processes(self, graph_path: str) -> Any:
@@ -362,7 +406,11 @@ class APBridge:
         Each process: entry_point, entry_kind (main/test/handler/lib_entry),
         depth, node_count. Requires cluster_graph to have run.
         """
-        return await self.call("get_processes", {"graph_path": graph_path})
+        return await self.call(
+            "get_processes",
+            {"graph_path": graph_path},
+            timeout_s=interactive_call_timeout_s(),
+        )
 
     async def resolve_graph(self, graph_path: str) -> Any:
         """Stage 3b — resolve cross-file edges (Imports/Calls/Implements/
@@ -389,6 +437,7 @@ class APBridge:
         return await self.call(
             "search_codebase",
             {"graph_path": graph_path, "query": query, "limit": limit},
+            timeout_s=interactive_call_timeout_s(),
         )
 
     async def detect_changes(
@@ -425,6 +474,7 @@ class APBridge:
         return await self.call(
             "get_impact",
             {"graph_path": graph_path, "qualified_name": qualified_name},
+            timeout_s=interactive_call_timeout_s(),
         )
 
     async def analyze_codebase(
