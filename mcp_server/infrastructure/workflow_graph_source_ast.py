@@ -61,6 +61,17 @@ class WorkflowGraphASTSource:
     def enabled(self) -> bool:
         return is_enabled()
 
+    @property
+    def last_search_degraded_reason(self) -> str | None:
+        """Why the most recent ``search_codebase`` call degraded, or
+        ``None`` if it either succeeded or was never attempted (AP
+        disabled / no graph configured). Read after ``search_codebase``
+        returns — the bridge records the reason on its own call path
+        (``APBridge._unavailable_reason``), so this is a read of state
+        already captured, not a second network round-trip.
+        """
+        return self._bridge.unavailable_reason
+
     def close(self) -> None:
         """Close the underlying bridge + pinned loop. Idempotent."""
         try:
@@ -213,7 +224,13 @@ class WorkflowGraphASTSource:
 
         Phase 3 (ADR-0046). When AP is disabled OR no graph_path is
         configured, returns ``[]`` so the unified-search fusion
-        gracefully falls back to Cortex-only results.
+        gracefully falls back to Cortex-only results. In BOTH of those
+        cases ``last_search_degraded_reason`` reads ``None`` afterwards —
+        an empty result here is the documented "AP not in play" contract,
+        not a call failure. Only a genuine per-call failure (timeout,
+        transport error) sets it, so a caller can tell "AP found nothing"
+        apart from "AP could not be reached this call" — see
+        ``last_search_degraded_reason``.
         """
         if not is_enabled() or not query or not query.strip():
             return []
