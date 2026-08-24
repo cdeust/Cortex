@@ -86,6 +86,28 @@ def test_bare_memory_has_no_suffix() -> None:
     assert " · " not in text
 
 
+def test_banner_stamps_freshness_on_stale_anchor() -> None:
+    # SessionStart banner: a stale anchor carries age + grade + stale marker
+    # (fleet-watch #110). created_at is 120 days back so the age bucket is
+    # stable regardless of the wall clock at test time.
+    old = datetime.now(timezone.utc) - timedelta(days=120)
+    anchors = [
+        {
+            "id": 1,
+            "content": "PostgreSQL is the default store",
+            "domain": "",
+            "is_global": False,
+            "created_at": old,
+            "source_attribution": "verified",
+            "is_stale": True,
+        }
+    ]
+    text = _build_context(anchors, [], None)
+    assert "mo ago" in text or "y ago" in text
+    assert "src=verified" in text
+    assert "⚠stale" in text
+
+
 def test_banner_renders_marker_only_with_receipt() -> None:
     anchors = [{"id": 1, "content": "a fact", "domain": "", "is_global": False}]
 
