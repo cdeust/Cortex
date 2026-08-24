@@ -316,6 +316,7 @@ class APBridge:
         """
         if tool not in _AP_TOOLS:
             raise ValueError(f"AP tool not in allowlist: {tool!r}")
+        self._unavailable_reason = None  # this call's outcome is authoritative
         if not await self.connect():
             return None
         if self._client is None:  # connect() success guarantees a client; defensive
