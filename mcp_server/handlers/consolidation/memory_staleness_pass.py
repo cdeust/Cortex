@@ -35,9 +35,11 @@ from mcp_server.core.staleness import assess_staleness, extract_file_references
 
 logger = logging.getLogger(__name__)
 
-# Per-run scan cap — bounds one run's FS+DB cost; mirrors the backfill passes'
-# DEFAULT_*_LIMIT rationale (memory_domain_backfill_pass.py). A run that hits the
-# cap resumes from the id cursor on the next invocation.
+# Per-run scan cap — bounds one run's FS+DB cost. A run that hits the cap
+# resumes from the id cursor on the next invocation.
+# source: mirrors DEFAULT_MEMORY_DOMAIN_BACKFILL_LIMIT = 5000
+#   (memory_domain_backfill_pass.py) — a chosen per-run bound, not a measured
+#   value; adjust with the corpus size.
 DEFAULT_STALENESS_SCAN_LIMIT = 5000
 # Page size for the id-cursor scan.
 # source: get_all_memories_for_validation default page (pg_store_queries.py:94)
