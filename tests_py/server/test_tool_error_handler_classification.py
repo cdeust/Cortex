@@ -69,6 +69,66 @@ class TestGenericClassification:
         assert message == "some unrelated application error"
 
 
+class TestQueryErrorsAreNotMaskedAsDbNotConnected:
+    """Regression: SQLite query-level OperationalErrors were classified as
+    'database_not_connected' (PostgreSQL setup guide) because the exception
+    CLASS name is 'OperationalError' and the old keyword list matched
+    'operationalerror'. A FTS5 syntax error in get_causal_chain surfaced this
+    way — the real error was buried under a 'brew install postgresql' guide,
+    doubly wrong on the SQLite backend. Query errors must fall through to
+    their honest '<Type>: <message>'."""
+
+    def test_fts5_syntax_error_not_masked(self):
+        import sqlite3
+
+        exc = sqlite3.OperationalError('fts5: syntax error near ""__main__""')
+        error_type, message = _classify_error(exc)
+        assert error_type == "OperationalError"
+        assert "fts5: syntax error" in message
+
+    def test_no_such_table_not_masked(self):
+        import sqlite3
+
+        exc = sqlite3.OperationalError("no such table: memories")
+        error_type, message = _classify_error(exc)
+        assert error_type == "OperationalError"
+        assert "no such table" in message
+
+    def test_column_does_not_exist_not_masked(self):
+        # bare "does not exist" used to route a query bug to the DB guide.
+        exc = Exception('column "heat" does not exist')
+        error_type, _ = _classify_error(exc)
+        assert error_type == "Exception"
+
+    def test_word_containing_role_not_masked(self):
+        # bare "role" matched substrings like "control"/"payroll" — gone.
+        exc = ValueError("invalid role assignment in access control policy")
+        error_type, _ = _classify_error(exc)
+        assert error_type == "ValueError"
+
+    def test_statement_timeout_not_masked(self):
+        # a lock/statement timeout is not a connection failure.
+        import sqlite3
+
+        exc = sqlite3.OperationalError("database is locked")
+        error_type, _ = _classify_error(exc)
+        assert error_type == "OperationalError"
+
+    def test_genuine_connection_failures_still_classified(self):
+        for msg in [
+            "connection refused",
+            "could not connect to server",
+            "could not translate host name",
+            "server closed the connection unexpectedly",
+            "the database system is starting up",
+            "password authentication failed for user",
+            "connection timed out",
+        ]:
+            error_type, message = _classify_error(RuntimeError(msg))
+            assert error_type == "database_not_connected", msg
+            assert "PostgreSQL" in message
+
+
 class TestSafeHandlerErrorPath:
     """safe_handler must raise ToolError, not return an error dict, and
     must log the underlying exception (with traceback) before
