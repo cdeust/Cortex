@@ -289,6 +289,16 @@ class APBridge:
                 )
                 return False
 
+    def _degrade(self, reason: str, note: str) -> None:
+        """Record why the last AP call failed and emit the stderr note.
+
+        Shared by both ``call()`` except-branches (timeout, other
+        exception) — the caller always gets ``None`` back and
+        ``unavailable_reason`` always names why.
+        """
+        self._unavailable_reason = reason
+        print(note, file=sys.stderr)
+
     async def call(
         self, tool: str, args: dict | None = None, *, timeout_s: float | None = None
     ) -> Any:
@@ -316,20 +326,16 @@ class APBridge:
                 return await asyncio.wait_for(coro, timeout=timeout_s)
             return await coro
         except asyncio.TimeoutError:  # interactive ceiling hit — degrade, don't hang
-            self._unavailable_reason = (
-                f"TimeoutError: AP call {tool} exceeded {timeout_s:.0f}s"
-            )
-            print(
+            self._degrade(
+                f"TimeoutError: AP call {tool} exceeded {timeout_s:.0f}s",
                 f"[cortex] AP call {tool} timed out after {timeout_s:.0f}s "
                 f"(interactive ceiling); degrading to Cortex-only.",
-                file=sys.stderr,
             )
             return None
         except Exception as exc:  # noqa: BLE001 — failure is reported to stderr; execution degrades, never crashes
-            self._unavailable_reason = f"{type(exc).__name__}: {exc}"
-            print(
+            self._degrade(
+                f"{type(exc).__name__}: {exc}",
                 f"[cortex] AP call {tool} failed: {exc}",
-                file=sys.stderr,
             )
             return None
 
