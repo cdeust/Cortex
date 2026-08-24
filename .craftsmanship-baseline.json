@@ -5520,11 +5520,6 @@
     {
       "file": "mcp_server/tool_error_handler.py",
       "kind": "method-size",
-      "detail": "_classify_error"
-    },
-    {
-      "file": "mcp_server/tool_error_handler.py",
-      "kind": "method-size",
       "detail": "safe_handler"
     },
     {
