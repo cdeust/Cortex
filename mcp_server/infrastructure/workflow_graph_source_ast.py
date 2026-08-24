@@ -40,7 +40,7 @@ from mcp_server.infrastructure.ap_sync_loop import (
     _SyncLoop,
 )
 from mcp_server.infrastructure.workflow_graph_ast_edges import edge_batches_async
-from mcp_server.infrastructure.workflow_graph_ast_response import as_list
+from mcp_server.infrastructure.workflow_graph_ast_response import normalize_search_hits
 from mcp_server.infrastructure.workflow_graph_ast_symbols import (
     _SYMBOL_LABELS,
     symbol_batches_async,
@@ -63,13 +63,9 @@ class WorkflowGraphASTSource:
 
     @property
     def last_search_degraded_reason(self) -> str | None:
-        """Why the most recent ``search_codebase`` call degraded, or
-        ``None`` if it either succeeded or was never attempted (AP
-        disabled / no graph configured). Read after ``search_codebase``
-        returns — the bridge records the reason on its own call path
-        (``APBridge._unavailable_reason``), so this is a read of state
-        already captured, not a second network round-trip.
-        """
+        """Why the last ``search_codebase`` call degraded, or ``None`` if
+        it succeeded or was never attempted. Reads the bridge's own
+        recorded outcome — no second round-trip."""
         return self._bridge.unavailable_reason
 
     def close(self) -> None:
@@ -222,16 +218,10 @@ class WorkflowGraphASTSource:
         """Forward ``search_codebase`` to AP and normalize to a flat
         list of ``{id, qualified_name, file_path, score, snippet}``.
 
-        Phase 3 (ADR-0046). When AP is disabled OR no graph_path is
-        configured, returns ``[]`` so the unified-search fusion
-        gracefully falls back to Cortex-only results. In BOTH of those
-        cases ``last_search_degraded_reason`` reads ``None`` afterwards —
-        an empty result here is the documented "AP not in play" contract,
-        not a call failure. Only a genuine per-call failure (timeout,
-        transport error) sets it, so a caller can tell "AP found nothing"
-        apart from "AP could not be reached this call" — see
-        ``last_search_degraded_reason``.
-        """
+        Phase 3 (ADR-0046). Returns ``[]`` when AP is disabled, no
+        graph_path is configured, or the call itself failed — check
+        ``last_search_degraded_reason`` afterwards to tell "AP found
+        nothing" (``None``) apart from "AP call failed" (set)."""
         if not is_enabled() or not query or not query.strip():
             return []
         gp = resolve_graph_path()
@@ -240,25 +230,7 @@ class WorkflowGraphASTSource:
         resp = self._loop_owner.run(
             self._bridge.search_codebase(gp, query, limit=int(limit))
         )
-        out: list[dict[str, Any]] = []
-        for r in as_list(resp):
-            qname = r.get("qualified_name") or r.get("name") or ""
-            fpath = r.get("file_path") or r.get("abs_path") or ""
-            if not qname:
-                continue
-            out.append(
-                {
-                    # Deterministic id so RRF fusion can dedupe with
-                    # the same scheme used for SYMBOL graph nodes.
-                    "id": f"symbol:{fpath}::{qname}",
-                    "qualified_name": str(qname),
-                    "file_path": str(fpath),
-                    "score": float(r.get("score") or 0.0),
-                    "snippet": r.get("snippet") or r.get("signature") or "",
-                    "source": "ap",
-                }
-            )
-        return out
+        return normalize_search_hits(resp)
 
     def verify_symbols(self, qualnames: list[str]) -> dict[str, bool]:
         """Return ``{qualname: exists_in_ap}`` for each candidate.
