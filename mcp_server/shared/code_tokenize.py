@@ -116,11 +116,20 @@ def expand_fts_query(query: str) -> str:
 
     precondition: ``query`` is a str.
     postcondition: returns an FTS5 MATCH expression that preserves the original
-    implicit-AND-across-words semantics (each source word becomes one required
-    group) while adding OR-alternatives for the sub-tokens of any camelCase /
+    AND-across-words semantics (each source word becomes one required group)
+    while adding OR-alternatives for the sub-tokens of any camelCase /
     snake_case word. Every term is quoted, so FTS5 operator keywords and
     punctuation in the input become harmless literals. Returns ``""`` when the
     query contains no indexable word (callers already guard the empty MATCH).
+
+    Groups are joined with an explicit ``AND``, not whitespace: FTS5's grammar
+    rejects a parenthesized ``(a OR b)`` group immediately followed by a bare
+    phrase via implicit-AND (``(a OR b) "c"`` → "fts5: syntax error"), which
+    fired whenever a multi-token word (→ group) preceded a single-token word
+    (→ bare phrase) — e.g. an entity named ``cortex_viz/__main__.py`` crashed
+    get_causal_chain's entity-mention lookup on the SQLite backend. Explicit
+    ``AND`` is semantically identical (FTS5 ``a b`` ≡ ``a AND b``) and valid for
+    every group shape.
     """
     groups: list[str] = []
     for word in _WORD_RE.findall(query):
@@ -133,4 +142,4 @@ def expand_fts_query(query: str) -> str:
             seen: set[str] = set()
             uniq = [a for a in alts if not (a in seen or seen.add(a))]
             groups.append("(" + " OR ".join(_fts_quote(a) for a in uniq) + ")")
-    return " ".join(groups)
+    return " AND ".join(groups)
