@@ -35,13 +35,14 @@ _ENV_VAR = "CORTEX_MCP_CALL_TIMEOUT_S"
 # legitimately long-running: an AP that connects but then wedges on such a
 # call must degrade to graceful Cortex-only results, not stall the tool.
 # The unbounded wedge window above (600s of SILENCE) is reserved for
-# ingestion and is far too slow here — unified_search / get_causal_chain
-# would hang for up to 10 minutes before falling back.
+# ingestion and is far too slow here — unified_search would hang for up to
+# 10 minutes before falling back. (get_causal_chain has no AP dependency —
+# it is pure knowledge-graph BFS over MemoryStore — and cannot hang on AP;
+# do not conflate the two.)
 # source: interactive read-path ceiling. AP read tools are documented
-# interactive (unified_search / get_causal_chain target <200ms,
-# docs/mcp-tools.md); 30s is a wide margin over that interactive target yet
-# 20x below the 600s indexing wedge window, so a wedged AP degrades in
-# seconds instead of minutes.
+# interactive (unified_search target <200ms, docs/mcp-tools.md); 30s is a
+# wide margin over that interactive target yet 20x below the 600s indexing
+# wedge window, so a wedged AP degrades in seconds instead of minutes.
 _DEFAULT_INTERACTIVE_CALL_TIMEOUT_S = 30.0
 _INTERACTIVE_ENV_VAR = "CORTEX_AP_INTERACTIVE_TIMEOUT_S"
 

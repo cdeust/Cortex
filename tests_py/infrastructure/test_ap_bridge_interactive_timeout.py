@@ -3,9 +3,9 @@
 Bug: the AP client runs with ``callTimeoutMs=0`` (indexing may legitimately
 exceed any fixed bound), so a connected-but-wedged AP had only the 600s
 wedge-silence window as a backstop. Interactive read-path calls
-(search_codebase, get_symbol, …) inherited that 600s, so unified_search /
-get_causal_chain would hang for up to 10 minutes instead of degrading to
-Cortex-only.
+(search_codebase, get_symbol, …) inherited that 600s, so unified_search
+would hang for up to 10 minutes instead of degrading to Cortex-only.
+(get_causal_chain has no AP dependency and is unaffected.)
 
 Fix: ``call(tool, args, timeout_s=...)`` wraps the client call in
 ``asyncio.wait_for`` and degrades a timeout to ``None`` (→ Cortex-only). The
