@@ -12,14 +12,17 @@ import sqlite3
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from mcp_server.infrastructure.sqlite_compat import PsycopgCompatConnection
+    from mcp_server.infrastructure.sqlite_compat import (
+        PsycopgCompatConnection,
+        SqliteConnectionLike,
+    )
 
 
 class SqliteReceiptsMixin:
     """Append-only injection receipts (blame path T1)."""
 
     _conn: PsycopgCompatConnection
-    _raw_conn: sqlite3.Connection
+    _raw_conn: SqliteConnectionLike
 
     def insert_injection_receipt(
         self,

@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import sqlite3
 from datetime import datetime
-from typing import Any
+from typing import Any, Protocol
 
 from mcp_server.infrastructure.sqlite_sql_translate import (
     _returning_was_stripped,
@@ -63,6 +63,28 @@ def _adapt_datetime_iso(value: datetime) -> str:
 # `PsycopgCompatConnection` imports this module first (there is no other way
 # to obtain the class), so that ordering is guaranteed.
 sqlite3.register_adapter(datetime, _adapt_datetime_iso)
+
+
+class SqliteConnectionLike(Protocol):
+    """Native or thread-local connection surface used by the SQL adapter."""
+
+    row_factory: Any
+
+    def execute(self, sql: str, parameters: Any = (), /) -> sqlite3.Cursor: ...
+
+    def executemany(self, sql: str, parameters: Any, /) -> sqlite3.Cursor: ...
+
+    def cursor(self, /) -> sqlite3.Cursor: ...
+
+    def executescript(self, sql: str, /) -> Any: ...
+
+    def commit(self) -> None: ...
+
+    def rollback(self) -> None: ...
+
+    def close(self) -> None: ...
+
+    def enable_load_extension(self, enabled: bool) -> None: ...
 
 
 class _CompatCursor:
@@ -169,7 +191,7 @@ class PsycopgCompatConnection:
     will work transparently with this wrapper.
     """
 
-    def __init__(self, conn: sqlite3.Connection) -> None:
+    def __init__(self, conn: SqliteConnectionLike) -> None:
         self._real = conn
 
     def execute(

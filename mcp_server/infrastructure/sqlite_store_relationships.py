@@ -2,17 +2,19 @@
 
 from __future__ import annotations
 
-import sqlite3
-
-from mcp_server.infrastructure.sqlite_compat import PsycopgCompatConnection
 from typing import Any
+
+from mcp_server.infrastructure.sqlite_compat import (
+    PsycopgCompatConnection,
+    SqliteConnectionLike,
+)
 
 
 class SqliteRelationshipMixin:
     """Relationship persistence operations on SQLite."""
 
     _conn: PsycopgCompatConnection
-    _raw_conn: sqlite3.Connection
+    _raw_conn: SqliteConnectionLike
 
     def update_relationships_weight_batch(
         self, updates: list[tuple[int, float]]

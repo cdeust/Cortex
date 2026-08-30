@@ -25,7 +25,14 @@ from typing import Any
 import numpy as np
 
 from mcp_server.shared.temporal_normalize import normalize_date_to_iso
-from mcp_server.infrastructure.sqlite_compat import PsycopgCompatConnection
+from mcp_server.infrastructure.sqlite_compat import (
+    PsycopgCompatConnection,
+    SqliteConnectionLike,
+)
+from mcp_server.infrastructure.sqlite_connection_registry import (
+    SqliteConnectionRegistry,
+    ThreadLocalSqliteConnection,
+)
 from mcp_server.infrastructure.sqlite_schema import (
     COLUMN_BACKFILLS,
     CURRENT_MEMORIES_VIEW_DDL,
@@ -119,6 +126,8 @@ class SqliteMemoryStore(
 ):
     """SQLite + FTS5 + sqlite-vec storage engine for Cortex memory system."""
 
+    _raw_conn: SqliteConnectionLike
+
     def __init__(self, db_path: str = "", embedding_dim: int = 384) -> None:
         self._embedding_dim = embedding_dim
         self._has_vec = False
@@ -126,16 +135,9 @@ class SqliteMemoryStore(
         if path != ":memory:":
             Path(path).parent.mkdir(parents=True, exist_ok=True)
         _register_json_codec()
-        raw = sqlite3.connect(
-            path,
-            check_same_thread=False,
-            detect_types=sqlite3.PARSE_DECLTYPES,
-        )
-        raw.row_factory = sqlite3.Row
-        raw.execute("PRAGMA journal_mode=WAL")
-        raw.execute("PRAGMA foreign_keys=ON")
-        self._raw_conn = raw
-        self._conn = PsycopgCompatConnection(raw)
+        self._connection_registry = SqliteConnectionRegistry(path)
+        self._raw_conn = ThreadLocalSqliteConnection(self._connection_registry)
+        self._conn = PsycopgCompatConnection(self._raw_conn)
         self._init_schema()
 
     def _init_schema(self) -> None:
@@ -317,9 +319,7 @@ class SqliteMemoryStore(
         try:
             import sqlite_vec  # noqa: PLC0415, F401 — optional dependency ([sqlite] extra); imported where used so environments without it keep working
 
-            self._raw_conn.enable_load_extension(True)
-            sqlite_vec.load(self._raw_conn)
-            self._raw_conn.enable_load_extension(False)
+            self._connection_registry.enable_vector_extension(sqlite_vec.load)
             self._conn.execute(MEMORIES_VEC_DDL)
             self._conn.commit()
             self._has_vec = True
@@ -494,12 +494,12 @@ class SqliteMemoryStore(
         """Insert ``data`` as the supersessor of ``target_id``'s head, atomically.
 
         SQLite parity for PgMemoryStore.supersede_atomic. One transaction on the
-        single connection inserts the new row (supersedes_id = the walked head)
-        and stamps that head's ``superseded_by_id`` — a compare-and-set that
-        lands only while the head is still open. On a lost CAS the transaction
-        rolls back (the insert, its FTS and vec rows all undone — no orphan is
-        ever committed) and we rebase onto the moved head, bounded by
-        _SUPERSEDE_REBASE_ATTEMPTS.
+        current execution thread's connection inserts the new row
+        (supersedes_id = the walked head) and stamps that head's
+        ``superseded_by_id`` — a compare-and-set that lands only while the head
+        is still open. On a lost CAS the transaction rolls back (the insert,
+        its FTS and vec rows all undone — no orphan is ever committed) and we
+        rebase onto the moved head, bounded by _SUPERSEDE_REBASE_ATTEMPTS.
 
         Returns ``(new_id, head_id)`` on success (``head_id`` == ``target_id``
         unless a race rebased us), ``(None, last_head_id)`` when the bounded
@@ -720,12 +720,10 @@ class SqliteMemoryStore(
     # ── Connection acquisition (PgMemoryStore parity) ─────────────────
     #
     # PgMemoryStore splits connections across an interactive pool and a batch
-    # pool so long-running jobs cannot starve the hot path. SQLite has no
-    # such split to make: the store owns exactly one WAL-mode connection, and
-    # a second competing connection is what produces `database is locked` /
-    # stale-read failures under WAL. Both accessors therefore yield the same
-    # persistent connection — the identical shape PgMemoryStore itself yields
-    # when POOL_DISABLED is set (pg_store.py acquire_* kill-switch path).
+    # pool so long-running jobs cannot starve the hot path. SQLite instead
+    # binds each transaction to its execution thread's persistent connection;
+    # both accessors expose the same stable facade, which resolves that native
+    # connection at every call.
     #
     # These exist so handlers stay backend-agnostic: anchor.py, get_rules.py,
     # the codebase_analyze/backfill/consolidation writers all call

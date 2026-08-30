@@ -9,6 +9,12 @@ Phase 5 adds two transparent safety nets on top of error handling:
     DB methods) run on a worker thread instead of blocking the event
     loop
 
+HC-CORTEX-002 adds a transaction-finalization boundary around every handler:
+unfinished SQLite work is rolled back on failure, while apparent success with
+an open transaction is rejected instead of emitting a false acknowledgement.
+Registered PostgreSQL MCP tools already used the named offload path and retain
+that behavior; unnamed compatibility calls now use the same offload boundary.
+
 Issue #17 (PSGSupport): handlers that declare ``output_schema`` were
 rejected by FastMCP with ``structured_content must be a dict or None.
 Got str: '{...}'`` because this wrapper used to ``json.dumps`` the
@@ -54,6 +60,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from mcp_server.shared.json_native import to_json_native
 from mcp_server.handlers.admission import admit
+from mcp_server.handlers.request_transaction import handler_transaction_scope
 from mcp_server.observability import metrics
 
 logger = logging.getLogger(__name__)
@@ -156,7 +163,8 @@ def _run_coroutine_on_thread(
     """
     loop = asyncio.new_event_loop()
     try:
-        return loop.run_until_complete(handler_fn(args))
+        with handler_transaction_scope():
+            return loop.run_until_complete(handler_fn(args))
     finally:
         try:
             loop.close()
@@ -173,19 +181,16 @@ async def safe_handler(
 ) -> dict[str, Any]:
     """Call a handler and return its dict, catching errors gracefully.
 
-    When ``tool_name`` is provided:
+    Every handler runs on a worker thread via ``asyncio.to_thread``. When
+    ``tool_name`` is provided:
       * The call is gated by the per-tool admission semaphore (Phase 5
         step 5). Bounds concurrency so one client cannot DoS a tool by
         hammering it.
-      * The handler runs on a worker thread via ``asyncio.to_thread``
-        (Phase 5 step 4). The handler body — which calls sync DB
-        methods — no longer blocks the event loop, and two concurrent
-        tool invocations genuinely run in parallel (the pool gives each
-        worker its own DB connection).
+      * Duration and outcome metrics include the tool name.
 
-    When ``tool_name`` is omitted the call runs in-line on the caller's
-    event loop without admission (backward-compat for code paths not
-    yet migrated).
+    When ``tool_name`` is omitted, admission and named metrics remain disabled,
+    but offload and transaction isolation are preserved. This keeps concurrent
+    compatibility calls from sharing the event-loop thread's SQLite handle.
 
     Contract (issue #17 — Liskov enforcement across all MCP handlers):
       precondition: ``handler_fn`` is an async callable returning a dict.
@@ -221,7 +226,7 @@ async def safe_handler(
                 {"tool": tool_name, "status": "ok"},
             )
         else:
-            result = await handler_fn(args)
+            result = await asyncio.to_thread(_run_coroutine_on_thread, handler_fn, args)
         # Defensive: every handler must already return a dict per its
         # ``output_schema``. If a handler regresses to None we surface
         # an empty dict so the MCP SDK's structured-content validator

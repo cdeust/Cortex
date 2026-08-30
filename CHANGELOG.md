@@ -6,6 +6,28 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **SQLite requests no longer share transaction ownership across concurrent
+  MCP workers (HC-CORTEX-002).** The fallback store previously exposed one
+  process-wide connection with `check_same_thread=False`, so an acknowledged
+  request could commit unfinished writes from a rejected request. Each
+  active execution thread now owns the native connection it uses, while the
+  handler boundary tracks exact handles propagated through
+  `asyncio.to_thread`, rolls back
+  unfinished request work, rejects false success, and quarantines a connection
+  when rollback fails. An unrecoverable rollback failure on the in-memory
+  lifetime anchor now invalidates the registry instead of silently exposing a
+  fresh empty database. Non-anchor request handles are released after
+  finalization, and relative database paths are frozen at construction so
+  worker opens cannot drift after a process `cwd` change. Nested request scopes
+  fail closed. Deterministic regressions cover the original supersede/insert
+  store-path interference, reused workers, nested offload, unnamed handlers,
+  cleanup failure, close/reopen persistence, FTS, vectors, foreign keys, and
+  integrity checks. The
+  fresh-process, cross-backend load ladder is tracked separately and is not
+  claimed by this correction.
+
 ## [4.18.0] - 2026-08-25
 
 ### Security
