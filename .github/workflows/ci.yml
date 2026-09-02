@@ -35,7 +35,8 @@ jobs:
     # source: measured 2026-09-03 over the last 12 green `main` runs of this
     # workflow (gh run list --status success): the slowest leg, Test (Python
     # 3.12, the only one running the extended checks), took 15-22 min
-    # (max 22 min at e8ae24c8); the other three legs took 7-10 min. 45 min is
+    # (max 22 min 32 s at e8ae24c8, run 31411417950); the other three legs
+    # took 7-11 min (max 10 min 59 s, Python 3.11, run 33678125783). 45 min is
     # about twice that measured maximum, so a slow runner still passes while a
     # stalled job is cut within one ordinary run's wall time.
     timeout-minutes: 45
