@@ -72,6 +72,35 @@ def _from_legacy_shape(payload: dict) -> list[dict]:
     return [r for r in inner if isinstance(r, dict)]
 
 
+def normalize_search_hits(resp: Any) -> list[dict[str, Any]]:
+    """Normalize a raw AP ``search_codebase`` response into
+    ``[{id, qualified_name, file_path, score, snippet, source}, ...]``.
+
+    Split out of ``workflow_graph_source_ast.WorkflowGraphASTSource
+    .search_codebase`` (over the 300-line file cap) — this module already
+    owns "normalize an AP response shape", the same seam. Rows with no
+    ``qualified_name`` are dropped; ``id`` is deterministic so RRF fusion
+    can dedupe with the same scheme used for SYMBOL graph nodes.
+    """
+    out: list[dict[str, Any]] = []
+    for r in as_list(resp):
+        qname = r.get("qualified_name") or r.get("name") or ""
+        fpath = r.get("file_path") or r.get("abs_path") or ""
+        if not qname:
+            continue
+        out.append(
+            {
+                "id": f"symbol:{fpath}::{qname}",
+                "qualified_name": str(qname),
+                "file_path": str(fpath),
+                "score": float(r.get("score") or 0.0),
+                "snippet": r.get("snippet") or r.get("signature") or "",
+                "source": "ap",
+            }
+        )
+    return out
+
+
 def build_path_tails(paths: list[str]) -> set[str]:
     """Expand each path into itself + every ``/``-boundary suffix ("tail").
 
@@ -97,4 +126,4 @@ def build_path_tails(paths: list[str]) -> set[str]:
     return path_tails
 
 
-__all__ = ["as_list", "build_path_tails"]
+__all__ = ["as_list", "build_path_tails", "normalize_search_hits"]

@@ -68,6 +68,7 @@ import json
 import os
 import re
 import sys
+from datetime import datetime, timezone
 from typing import Any
 
 from mcp_server.handlers.injection_receipts import (
@@ -76,6 +77,7 @@ from mcp_server.handlers.injection_receipts import (
     receipt_marker,
     session_id_from_transcript,
 )
+from mcp_server.shared.freshness import provenance_suffix
 
 _LOG_PREFIX = "[cortex-auto-recall]"
 _DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://localhost:5432/cortex")
@@ -173,6 +175,7 @@ def _recall_memories(conn, query: str) -> list[dict]:
             SELECT m.id, m.content,
                    effective_heat(m, NOW()) AS heat,
                    m.domain, m.agent_context, m.is_protected,
+                   m.created_at, m.source_attribution, m.is_stale,
                    ts_rank_cd(m.content_tsv, q) AS rank
             -- JOIN current_memories: auto-recall injects content into the
             -- session context — supersession chain heads only. The join
@@ -201,6 +204,9 @@ def _recall_memories(conn, query: str) -> list[dict]:
                     "domain": r.get("domain", ""),
                     "agent": r.get("agent_context", ""),
                     "protected": bool(r.get("is_protected")),
+                    "created_at": r.get("created_at"),
+                    "source_attribution": r.get("source_attribution", ""),
+                    "is_stale": bool(r.get("is_stale")),
                 }
             )
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
@@ -276,6 +282,9 @@ def _recall_memories_sqlite(store, query: str) -> list[dict]:
                 "domain": m.get("domain", "") or "",
                 "agent": m.get("agent_context", "") or "",
                 "protected": bool(m.get("is_protected")),
+                "created_at": m.get("created_at"),
+                "source_attribution": m.get("source_attribution", ""),
+                "is_stale": bool(m.get("is_stale")),
             }
         )
     # Protected (decision) memories first; stable sort keeps FTS rank
@@ -316,35 +325,46 @@ def _process_event_sqlite(event: dict[str, Any], query: str) -> None:
     sys.exit(0)
 
 
-def _format_injection(memories: list[dict]) -> tuple[str, list[dict]]:
+def _render_memory_line(m: dict, now: datetime) -> str:
+    """Render one memory as a bullet with a freshness suffix.
+
+    The suffix (age · provenance grade · stale marker; fleet-watch #110) makes
+    a months-old fact distinguishable from a fresh one — the failure the
+    harness-comparison rev.2 measured. Empty for memories lacking those fields,
+    so bare-memory call sites render exactly as before.
+    """
+    content = m["content"].replace("\n", " ").strip()
+    if len(content) > _MAX_MEMORY_CHARS:
+        content = content[: _MAX_MEMORY_CHARS - 3] + "..."
+    agent = m.get("agent", "")
+    prefix = f"[{agent}] " if agent else ""
+    protected = " (decision)" if m.get("protected") else ""
+    suffix = provenance_suffix(m, now)
+    freshness = f"  ·  {suffix}" if suffix else ""
+    return f"- {prefix}{content}{protected}{freshness}"
+
+
+def _format_injection(
+    memories: list[dict], now: datetime | None = None
+) -> tuple[str, list[dict]]:
     """Format memories as a compact context block for injection.
 
     Keeps total injection under _MAX_INJECTION_CHARS to avoid flooding
     the context window. Returns the block AND the memories that actually
     fit — the injection receipt must mirror what is printed, never what
-    was fetched (parity invariant, decision 4255039 correction 11):
-    entries dropped by the budget were never in context; entries printed
-    truncated keep their id and ARE in context.
+    was fetched (parity invariant, decision 4255039 correction 11): a memory
+    is dropped on its full rendered line (freshness suffix included), so the
+    receipt mirrors exactly what is printed.
     """
+    now = now or datetime.now(timezone.utc)
     lines = ["**Cortex context:**"]
     total_chars = len(lines[0])
     included: list[dict] = []
 
     for m in memories:
-        content = m["content"].replace("\n", " ").strip()
-        # Truncate individual memories
-        if len(content) > _MAX_MEMORY_CHARS:
-            content = content[: _MAX_MEMORY_CHARS - 3] + "..."
-
-        agent = m.get("agent", "")
-        prefix = f"[{agent}] " if agent else ""
-        protected = " (decision)" if m.get("protected") else ""
-
-        line = f"- {prefix}{content}{protected}"
-
+        line = _render_memory_line(m, now)
         if total_chars + len(line) > _MAX_INJECTION_CHARS:
             break
-
         lines.append(line)
         total_chars += len(line)
         included.append(m)
