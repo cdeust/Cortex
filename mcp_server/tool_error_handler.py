@@ -80,6 +80,41 @@ _EXTENSION_GUIDE = (
     "Then restart Claude Code."
 )
 
+_MISSING_EXTENSION_PHRASES = [
+    'type "vector" does not exist',
+    "extension",
+    "pg_trgm",
+]
+
+# Connection/auth failures ONLY — each phrase below is unambiguous about a
+# server that is unreachable, still starting, or refusing credentials.
+#
+# Deliberately NOT here (issue: SQLite query errors masked as
+# "PostgreSQL not connected"): the exception CLASS name "operationalerror",
+# a bare "does not exist", a bare "role", and a bare "timeout". Those match
+# ordinary query-level failures — a FTS5 "syntax error", "no such table",
+# a column that "does not exist", a statement/lock "timeout" — none of
+# which are connection problems. On the SQLite backend they are never
+# connection problems, yet the base class ``sqlite3.OperationalError`` set
+# ``type(exc).__name__.lower() == "operationalerror"`` and every one of
+# them got the PostgreSQL ``brew install`` guide, burying the real error
+# (a FTS5 syntax error in get_causal_chain surfaced exactly this way).
+# An error that is genuinely a create-db/create-role setup step is still
+# fully actionable from its own honest ``OperationalError: ... FATAL:
+# database "cortex" does not exist`` text, which the fall-through returns.
+_CONNECTION_FAILURE_PHRASES = [
+    "connection refused",
+    "could not connect",
+    "could not translate host name",
+    "no such host",
+    "connection reset",
+    "server closed the connection",
+    "the database system is starting up",
+    "password authentication failed",
+    "connection timed out",
+    "timeout expired",  # psycopg connect-timeout wording
+]
+
 
 def _classify_error(exc: Exception) -> tuple[str, str]:
     """Classify an exception into a user-friendly category and message."""
@@ -96,30 +131,10 @@ def _classify_error(exc: Exception) -> tuple[str, str]:
     if "explicit database_url unreachable" in exc_lower:
         return "explicit_database_url_unreachable", str(exc)
 
-    if any(
-        kw in exc_lower
-        for kw in [
-            'type "vector" does not exist',
-            "extension",
-            "pg_trgm",
-        ]
-    ):
+    if any(kw in exc_lower for kw in _MISSING_EXTENSION_PHRASES):
         return "missing_extension", _EXTENSION_GUIDE
 
-    if any(
-        kw in exc_lower
-        for kw in [
-            "connection refused",
-            "could not connect",
-            "no such host",
-            "connection reset",
-            "does not exist",
-            "operationalerror",
-            "role",
-            "password authentication",
-            "timeout",
-        ]
-    ):
+    if any(kw in exc_lower for kw in _CONNECTION_FAILURE_PHRASES):
         return "database_not_connected", _DB_SETUP_GUIDE
 
     return type(exc).__name__, str(exc)

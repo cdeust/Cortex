@@ -9,6 +9,10 @@ Contract assertions (each must fail on regression):
 
 from __future__ import annotations
 
+import sqlite3
+
+import pytest
+
 from mcp_server.shared.code_tokenize import (
     augment_content,
     expand_fts_query,
@@ -78,8 +82,10 @@ def test_expand_query_quotes_and_expands():
 
 def test_expand_query_preserves_and_across_words():
     q = expand_fts_query("payment amount")
-    # two required groups, whitespace-joined (FTS5 implicit AND)
-    assert q == '"payment" "amount"'
+    # two required groups, joined with an explicit AND (FTS5 grammar rejects
+    # implicit-AND when either side is a parenthesized group — see regression
+    # test below).
+    assert q == '"payment" AND "amount"'
 
 
 def test_expand_query_fts5_keyword_is_literal():
@@ -89,3 +95,63 @@ def test_expand_query_fts5_keyword_is_literal():
 
 def test_expand_query_empty():
     assert expand_fts_query("!!!") == ""
+
+
+# --- Regression: FTS5 grammar acceptance (get_causal_chain crash) -----------
+# The bug: expand_fts_query joined its groups with whitespace, so a query
+# mixing a multi-token word (→ "(a OR b)" group) with a single-token word
+# (→ bare "c" phrase) produced "(a OR b) \"c\"", which FTS5 rejects with
+# 'fts5: syntax error near ...'. An entity named cortex_viz/__main__.py hit
+# exactly this on the SQLite backend and crashed get_causal_chain.
+
+
+def _fts5_available() -> bool:
+    try:
+        con = sqlite3.connect(":memory:")
+        con.execute("CREATE VIRTUAL TABLE t USING fts5(x)")
+        con.close()
+        return True
+    except sqlite3.OperationalError:
+        return False
+
+
+@pytest.mark.skipif(not _fts5_available(), reason="sqlite3 built without FTS5")
+@pytest.mark.parametrize(
+    "query",
+    [
+        "cortex_viz/__main__.py",  # group then bare phrase — the original crash
+        "__main__ cortex_viz",  # bare phrase then group — the mirror case
+        "normalizePaymentAmount rounds the total",  # group amid plain words
+        "utf8 payment snake_case_id",  # multiple groups and phrases interleaved
+    ],
+)
+def test_expanded_query_is_accepted_by_real_fts5(query: str) -> None:
+    match = expand_fts_query(query)
+    assert match  # each query has at least one indexable word
+    con = sqlite3.connect(":memory:")
+    try:
+        con.execute("CREATE VIRTUAL TABLE t USING fts5(x)")
+        con.execute("INSERT INTO t(x) VALUES (?)", ("cortex viz main payment",))
+        # The assertion is that MATCH parses at all — no OperationalError.
+        con.execute("SELECT rowid FROM t WHERE t MATCH ?", (match,)).fetchall()
+    finally:
+        con.close()
+
+
+@pytest.mark.skipif(not _fts5_available(), reason="sqlite3 built without FTS5")
+def test_group_and_phrase_are_and_joined() -> None:
+    # A group followed by a bare phrase must be joined so both are REQUIRED:
+    # the row matches only when it contains a sub-token of the group AND the
+    # phrase — proving the join is a conjunction, not a dropped/broken clause.
+    match = expand_fts_query("cortex_viz rounds")
+    con = sqlite3.connect(":memory:")
+    try:
+        con.execute("CREATE VIRTUAL TABLE t USING fts5(x)")
+        con.execute("INSERT INTO t(x) VALUES (?)", ("cortex rounds the total",))
+        con.execute("INSERT INTO t(x) VALUES (?)", ("cortex only",))  # no 'rounds'
+        rows = con.execute(
+            "SELECT x FROM t WHERE t MATCH ? ORDER BY rowid", (match,)
+        ).fetchall()
+        assert rows == [("cortex rounds the total",)]
+    finally:
+        con.close()
