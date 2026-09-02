@@ -30,6 +30,7 @@ from mcp_server.handlers.injection_receipts import (
     receipt_marker,
     session_id_from_transcript,
 )
+from mcp_server.shared.freshness import provenance_suffix
 from mcp_server.shared.platform import python_executable
 import sqlite3
 import asyncio
@@ -140,7 +141,8 @@ def _fetch_anchors(conn) -> list[dict]:
             # `memories.heat` is not a stored column; use effective_heat()
             # to match production recall semantics (lazy A3 decay).
             # Source: pg_schema.py EFFECTIVE_HEAT_FN.
-            "SELECT m.id, m.content, m.tags, m.domain, m.is_global "
+            "SELECT m.id, m.content, m.tags, m.domain, m.is_global, "
+            "m.created_at, m.source_attribution, m.is_stale "
             # JOIN current_memories (not FROM the view): effective_heat()
             # takes the `memories` composite type and a view row is not
             # coercible to it; the join keeps m table-typed while the
@@ -181,6 +183,9 @@ def _fetch_anchors(conn) -> list[dict]:
                     "content": r.get("content", ""),
                     "domain": r.get("domain", ""),
                     "is_global": bool(r.get("is_global", False)),
+                    "created_at": r.get("created_at"),
+                    "source_attribution": r.get("source_attribution", ""),
+                    "is_stale": bool(r.get("is_stale")),
                 }
             )
     return anchors
@@ -202,6 +207,7 @@ def _fetch_team_decisions(conn, exclude_ids: set) -> list[dict]:
             # matches production lazy A3 decay semantics.
             # Source: pg_schema.py EFFECTIVE_HEAT_FN.
             "SELECT m.id, m.content, m.domain, m.agent_context, "
+            "m.created_at, m.source_attribution, m.is_stale, "
             # JOIN current_memories: same pattern as _fetch_anchors —
             # supersession exclusion via the view, m stays table-typed
             # for effective_heat().
@@ -228,6 +234,9 @@ def _fetch_team_decisions(conn, exclude_ids: set) -> list[dict]:
                     "domain": r.get("domain", ""),
                     "agent": r.get("agent_context", ""),
                     "heat": r.get("heat", 0.0),
+                    "created_at": r.get("created_at"),
+                    "source_attribution": r.get("source_attribution", ""),
+                    "is_stale": bool(r.get("is_stale")),
                 }
             )
     return decisions[:3]  # Keep injection compact
@@ -243,7 +252,8 @@ def _fetch_hot_memories(conn, exclude_ids: set) -> list[dict]:
     """
     try:
         rows = conn.execute(
-            "SELECT id, content, domain, heat_base AS heat, tags, is_global "
+            "SELECT id, content, domain, heat_base AS heat, tags, is_global, "
+            "created_at, source_attribution, is_stale "
             # current_memories: hot-pool content injected into the session
             # banner — supersession chain heads only.
             "FROM current_memories "
@@ -273,6 +283,9 @@ def _fetch_hot_memories(conn, exclude_ids: set) -> list[dict]:
                     "domain": r.get("domain", ""),
                     "heat": r.get("heat", 0.0),
                     "is_global": bool(r.get("is_global", False)),
+                    "created_at": r.get("created_at"),
+                    "source_attribution": r.get("source_attribution", ""),
+                    "is_stale": bool(r.get("is_stale")),
                 }
             )
     return hot[:_HOT_LIMIT]
@@ -584,6 +597,13 @@ def _emit_banner_receipt(
     )
 
 
+def _freshness(memory: dict, now: _dt) -> str:
+    """Rendered freshness suffix (age · grade · stale; fleet-watch #110), or ""
+    for memories that carry none of those signals."""
+    suffix = provenance_suffix(memory, now)
+    return f"  ·  {suffix}" if suffix else ""
+
+
 def _build_context(
     anchors: list[dict],
     hot: list[dict],
@@ -614,6 +634,7 @@ def _build_context(
     if receipt_id is not None:
         header += f" {receipt_marker(receipt_id)}"
     lines = [header + "\n"]
+    now = _dt.now(_tz.utc)
 
     if checkpoint and checkpoint.get("current_task"):
         lines.extend(_format_checkpoint_section(checkpoint))
@@ -621,7 +642,7 @@ def _build_context(
     if anchors:
         lines.append("### Anchored Memories (critical)")
         for a in anchors:
-            lines.append(f"- {_short(a['content'])}")
+            lines.append(f"- {_short(a['content'])}{_freshness(a, now)}")
         lines.append("")
 
     # Team decisions from other agents (TMS directory layer, Wegner 1987)
@@ -630,7 +651,7 @@ def _build_context(
         for d in team_decisions:
             agent = d.get("agent", "")
             prefix = f"[{agent}] " if agent else ""
-            lines.append(f"- {prefix}{_short(d['content'])}")
+            lines.append(f"- {prefix}{_short(d['content'])}{_freshness(d, now)}")
         lines.append("")
 
     if hot:
@@ -638,7 +659,8 @@ def _build_context(
         for m in hot:
             heat_bar = "+" * min(5, int(m["heat"] * 5))
             domain_hint = f" [{m['domain']}]" if m.get("domain") else ""
-            lines.append(f"- [{heat_bar}]{domain_hint} {_short(m['content'])}")
+            bullet = f"- [{heat_bar}]{domain_hint} {_short(m['content'])}"
+            lines.append(f"{bullet}{_freshness(m, now)}")
         lines.append("")
 
     # 2026-05-17: surface pending wiki authoring work to the in-session
@@ -1084,6 +1106,9 @@ def _partition_banner_rows(rows: list[dict]) -> tuple[list[dict], list[dict]]:
             "domain": r.get("domain", "") or "",
             "heat": float(r.get("heat") or 0.0),
             "is_global": bool(r.get("is_global", False)),
+            "created_at": r.get("created_at"),
+            "source_attribution": r.get("source_attribution", ""),
+            "is_stale": bool(r.get("is_stale")),
         }
         is_anchor = bool(r.get("is_protected")) and any(
             t == "_anchor" or t.startswith("_anchor:") for t in tags

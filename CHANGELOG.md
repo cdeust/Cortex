@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [4.18.0] - 2026-08-25
+
 ### Security
 
 - **Capture and write-gate bypass are decided by the channel, not the content

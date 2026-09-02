@@ -319,7 +319,7 @@ Run the measurement command in the header to get a current file listing.
 - `ap_sync_loop.py` — `_SyncLoop`, the cross-loop sync/drain primitive pinning one event loop across an `APBridge` caller's lifetime (issue #258: drains cancelled tasks before stopping the loop, closing the "Task was destroyed but it is pending!" GC-warning race)
 - `workflow_graph_ast_symbols.py` — AST *symbol* loading: the AP label set, the symbol-type mapping, and the per-label batched query + WHERE-clause construction
 - `workflow_graph_ast_edges.py` — AST *edge* loading: the ~89 AP rel-table (CALLS/IMPORTS/MEMBER_OF/USES) batched queries
-- `workflow_graph_ast_response.py` — `as_list`, normalizes AP's `query_graph` `{columns, rows}` response shape into plain dicts (shared by the symbols + edges modules)
+- `workflow_graph_ast_response.py` — `as_list`, normalizes AP's `query_graph` `{columns, rows}` response shape into plain dicts (shared by the symbols + edges modules); `normalize_search_hits`, the same normalization seam applied to `search_codebase` hits (split out of `workflow_graph_source_ast.py::WorkflowGraphASTSource.search_codebase`, over the 300-line cap, PR #449 review round 2)
 
 Note: `pg_store.py` persists to PostgreSQL when configured (the
 `install-plugin.sh --postgres` opt-in or an explicit `DATABASE_URL`);
