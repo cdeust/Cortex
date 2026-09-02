@@ -31,10 +31,18 @@
       "Memory inspection"
     ],
     "websiteURL": "https://github.com/cdeust/Cortex",
+    "privacyPolicyURL": "https://github.com/cdeust/Cortex/blob/main/PRIVACY.md",
+    "termsOfServiceURL": "https://github.com/cdeust/Cortex/blob/main/LICENSE",
     "defaultPrompt": [
       "Recall the decisions relevant to this repository.",
       "Show what Cortex remembers about this project.",
       "Store the durable lesson from this task."
+    ],
+    "composerIcon": "./assets/icon.svg",
+    "logo": "./assets/icon.svg",
+    "screenshots": [
+      "./assets/screenshot-overview.png",
+      "./assets/screenshot-benchmarks.png"
     ]
   }
 }

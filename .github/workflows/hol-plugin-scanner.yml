@@ -1,0 +1,60 @@
+name: HOL plugin scanner
+
+# The HOL Plugin Registry (hol.org/registry/plugins/cdeust%2Fcortex) scans
+# this repository independently and applies a 10% trust-score reduction to
+# projects that do not run the scanner in their own CI (source:
+# hashgraph-online/awesome-ai-plugins SCANNER_GUIDE.md, "Scanner CI",
+# read 2026-09-02). Beyond the score, the scan is a useful supply-chain
+# check in its own right: committed secrets, dangerous hooks or MCP
+# commands, unpinned actions, over-broad workflow permissions, and
+# malformed plugin metadata — evaluated against the same rules the
+# registry applies, so a regression is caught here before it is published
+# there.
+#
+# The action installs an exact `plugin-scanner` PyPI release and verifies
+# its provenance before running; the default scan reads local repository
+# content only (no live network probing, no submission automation).
+# Non-blocking for merges (not in ci.yml's `CI Green` gate): the registry's
+# rule set evolves on its own schedule, and a new upstream rule must not
+# freeze unrelated PRs. The severity/score gates below still make the job
+# red on a real regression.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "30 7 * * 2"   # Tuesdays 07:30 UTC — rule sets drift by inaction
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    name: HOL plugin scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write   # SARIF upload to code scanning
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Scan the plugin repository
+        uses: hashgraph-online/ai-plugin-scanner-action@5943e732726b177c9a46baa57f6df5b493ca3429 # v1.2.576
+        with:
+          plugin_dir: "."
+          format: sarif
+          output: hol-plugin-scan.sarif
+          upload_sarif: "true"
+          sarif_category: hol-plugin-scanner
+          # source: measured 2026-09-02 on a `git archive HEAD` export of
+          # a093c7ef with plugin-scanner 3.0.48 — repository score 83/100
+          # (grade B) before this workflow's sibling fixes, 0 critical/high
+          # findings. The floor sits under the measured value so it catches
+          # a regression, not routine rule churn.
+          min_score: "80"
+          fail_on_severity: high
+          cisco_skill_scan: "off"

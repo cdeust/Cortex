@@ -85,6 +85,9 @@ source = {{ registry = "https://pypi.org/simple" }}
 OK_FILES: dict[str, str] = {
     "pyproject.toml": f'[project]\nname = "hypermnesia-mcp"\nversion = "{_V}"\n',
     "package.json": f'{{"version": "{_V}"}}',
+    "package-lock.json": (
+        f'{{"version": "{_V}", "packages": {{"": {{"version": "{_V}"}}}}}}'
+    ),
     "server.json": (f'{{"version": "{_V}", "packages": [{{"version": "{_V}"}}]}}'),
     "manifest.json": f'{{"version": "{_V}"}}',
     "gemini-extension.json": f'{{"version": "{_V}"}}',
@@ -123,12 +126,12 @@ class NominalTests(_GateTestCase):
         self._install()
         self.assertEqual(self._failures(), [])
 
-    def test_fourteen_surfaces_are_registered(self):
-        # source: the task's own site inventory — 11 files, 2 of them (server.json,
-        # marketplace.json) carrying 2 keys each, plus the badge's 4 occurrences:
-        # 9 JSON/uv.lock sites - 2 double-counted files + 2 extra keys + 3 extra
-        # badge occurrences = 14.
-        self.assertEqual(len(gate.SURFACES), 14)
+    def test_sixteen_surfaces_are_registered(self):
+        # source: the task's own site inventory — 12 files, 3 of them (server.json,
+        # marketplace.json, package-lock.json) carrying 2 keys each, plus the
+        # badge's 4 occurrences: 10 JSON/uv.lock sites - 3 double-counted files
+        # + 3 extra keys + 3 extra badge occurrences = 16.
+        self.assertEqual(len(gate.SURFACES), 16)
 
 
 class PerSurfaceDesyncTests(_GateTestCase):
@@ -137,6 +140,18 @@ class PerSurfaceDesyncTests(_GateTestCase):
     def test_package_json_version_desync_is_reported(self):
         self._install(**{"package.json": '{"version": "9.9.9"}'})
         self._assert_single_failure_about("package.json")
+
+    def test_package_lock_root_version_desync_is_reported(self):
+        stale = f'{{"version": "9.9.9", "packages": {{"": {{"version": "{_V}"}}}}}}'
+        self._install(**{"package-lock.json": stale})
+        failure = self._assert_single_failure_about("package-lock.json")
+        self.assertNotIn("packages", failure)
+
+    def test_package_lock_root_package_entry_desync_is_reported(self):
+        stale = f'{{"version": "{_V}", "packages": {{"": {{"version": "9.9.9"}}}}}}'
+        self._install(**{"package-lock.json": stale})
+        failure = self._assert_single_failure_about("package-lock.json")
+        self.assertIn('packages[""].version', failure)
 
     def test_server_json_version_desync_is_reported(self):
         stale = f'{{"version": "9.9.9", "packages": [{{"version": "{_V}"}}]}}'
@@ -317,7 +332,7 @@ class MainTests(unittest.TestCase):
         code, out, err = self._run()
         self.assertEqual(code, 0)
         self.assertEqual(err, "")
-        self.assertIn("version surfaces OK (14 site(s) checked", out)
+        self.assertIn("version surfaces OK (16 site(s) checked", out)
 
     def test_a_diverged_tree_exits_one_and_names_the_surface(self):
         files = dict(OK_FILES)

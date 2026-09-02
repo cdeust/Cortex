@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Cortex">
+  <title>Cortex</title>
+  <rect x="8" y="8" width="240" height="240" rx="48" fill="#F3EFE6"/>
+  <rect x="64" y="64" width="128" height="128" rx="10" fill="none" stroke="#C0592B" stroke-width="14"/>
+  <path d="M128 92 L164 128 L128 164 L92 128 Z" fill="none" stroke="#C0592B" stroke-width="14" stroke-linejoin="round"/>
+  <circle cx="128" cy="128" r="11" fill="#C0592B"/>
+</svg>

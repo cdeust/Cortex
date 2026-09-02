@@ -18,6 +18,7 @@ or leak state into any other test).
 from __future__ import annotations
 
 import os
+import secrets
 import warnings
 from urllib.parse import urlsplit, urlunsplit
 
@@ -96,7 +97,10 @@ def lowpriv_role_url():
     """
     maint_url = _pg_throwaway_db.maintenance_url(_TEST_DB_URL)
     role = f"cortex_312_lowpriv_{os.getpid()}"
-    password = "lowpriv312"
+    # A throwaway credential minted per run: the role exists only for the
+    # duration of this fixture, and a literal in source reads as a committed
+    # secret to supply-chain scanners even though it guards nothing.
+    password = secrets.token_urlsafe(16)
     try:
         with psycopg.connect(maint_url, autocommit=True, connect_timeout=3) as conn:
             conn.execute(f'DROP ROLE IF EXISTS "{role}"')
