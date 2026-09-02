@@ -33,13 +33,16 @@ jobs:
     # timeout-less `requests.get` until pytest-timeout fired, and only that
     # per-test guard, not the job, ever bounded the suite.
     # source: measured 2026-09-03 over the last 12 green `main` runs of this
-    # workflow (gh run list --status success): the slowest leg, Test (Python
-    # 3.12, the only one running the extended checks), took 15-22 min
-    # (max 22 min 32 s at e8ae24c8, run 31411417950); the other three legs
-    # took 7-11 min (max 10 min 59 s, Python 3.11, run 33678125783). 45 min is
-    # about twice that measured maximum, so a slow runner still passes while a
-    # stalled job is cut within one ordinary run's wall time.
-    timeout-minutes: 45
+    # workflow (gh run list --status success, runs 31417063954 to
+    # 33688337476, 48 legs, started_at to completed_at per job): Test (Python
+    # 3.12, the only leg running the extended checks) took 15-20 min (max
+    # 19 min 36 s, run 32747742631); the other three legs took 8-11 min in 11
+    # of the 12 runs, but in run 33688337476 (c5ec018a) Python 3.10 took
+    # 15 min 06 s and Python 3.13 took 27 min 17 s, the slowest green leg in
+    # the window. 60 min is about twice that maximum (60 / 27.3 = 2.2), so a
+    # slow runner still passes while a stalled job is cut within one ordinary
+    # run's wall time.
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
