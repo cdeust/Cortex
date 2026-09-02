@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [4.19.0] - 2026-09-03
+
 ### Added
 
 - **HOL plugin scanner in CI** (`.github/workflows/hol-plugin-scanner.yml`).

@@ -1102,7 +1102,7 @@ wheels = [
 
 [[package]]
 name = "hypermnesia-mcp"
-version = "4.18.0"
+version = "4.19.0"
 source = { editable = "." }
 dependencies = [
     { name = "anyio" },
