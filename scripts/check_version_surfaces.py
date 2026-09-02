@@ -186,12 +186,22 @@ def _uv_lock_check(read_fn: ReadFn, expected: str) -> list[str]:
     return []
 
 
-# One row per version site (14 sites across 11 files). Adding a 15th JSON
+# One row per version site (16 sites across 12 files). Adding a 17th JSON
 # site or badge occurrence is a one-line addition here; only a genuinely new
 # FILE FORMAT (neither JSON, regex-matchable text, nor uv.lock's own shape)
 # would need a new `_..._check` function alongside it.
 SURFACES: tuple[SurfaceCheck, ...] = (
     partial(_json_check, "package.json", ("version",), "version"),
+    # package-lock.json is npm's pinned snapshot of package.json (committed so
+    # supply-chain scanners see a lockfile next to the manifest); npm writes the
+    # root version twice, and both copies must follow a release bump.
+    partial(_json_check, "package-lock.json", ("version",), "version"),
+    partial(
+        _json_check,
+        "package-lock.json",
+        ("packages", "", "version"),
+        'packages[""].version',
+    ),
     partial(_json_check, "server.json", ("version",), "version"),
     partial(
         _json_check, "server.json", ("packages", 0, "version"), "packages[0].version"

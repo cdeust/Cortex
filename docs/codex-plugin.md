@@ -13,7 +13,10 @@ the two packages deliberately offer different host integrations:
   package.
 
 The Codex `.mcp.json` lives under `plugins/hypermnesia-mcp-codex/`, never at
-the repository root. This preserves Cortex's Claude contract: Claude Code
+the repository root. The package directory also carries its own `README.md`,
+`SECURITY.md`, `LICENSE`, `.codexignore` and `assets/` (icon, screenshots):
+plugin registries score each package on what is inside that directory, not
+on the repository root, so those files are duplicated there on purpose. This preserves Cortex's Claude contract: Claude Code
 must not discover a second project-scoped MCP server when this repository is
 the active working directory.
 

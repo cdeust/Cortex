@@ -1,0 +1,9 @@
+# Files Codex must never bundle from this plugin directory. The package is
+# manifest + .mcp.json + docs + assets; everything below is local residue.
+.DS_Store
+__pycache__/
+*.pyc
+*.log
+.env
+.env.*
+node_modules/

@@ -6,6 +6,33 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **HOL plugin scanner in CI** (`.github/workflows/hol-plugin-scanner.yml`).
+  The HOL Plugin Registry scans this repository independently and applies a
+  10% trust-score reduction to projects without maintainer-owned scanner CI
+  (hashgraph-online/awesome-ai-plugins `SCANNER_GUIDE.md`, read 2026-09-02).
+  The workflow runs the same `plugin-scanner` release the registry uses,
+  pinned by commit SHA, on push/PR/weekly, uploads SARIF to code scanning
+  and goes red on a high finding or a score under 80 — measured 83/100 on
+  the clean tree before the fixes below. It is not part of the `CI Green`
+  merge gate: the registry's rule set evolves on its own schedule.
+- **Codex package is registry-complete** (`plugins/hypermnesia-mcp-codex/`).
+  The registry's per-package trust score was 59.09/100 on this package
+  because it shipped only the manifest and `.mcp.json`: no `README.md`,
+  `SECURITY.md`, `LICENSE` or `.codexignore`, and an `interface` block with
+  no `privacyPolicyURL`, `termsOfServiceURL`, `composerIcon`, `logo` or
+  `screenshots`. All eight are now present (icon as a 500-byte SVG, the two
+  screenshots the registry listing already uses), reproduced locally with
+  `plugin-scanner scan plugins/hypermnesia-mcp-codex --ecosystem codex`.
+  The two frozen migration shims (`plugins/cortex-deprecated/`,
+  `plugins/cortex-viz-deprecated/`) gain the same `LICENSE` + `SECURITY.md`
+  pair, which were the last four `low` findings of a whole-repository scan.
+- **`package-lock.json`** next to `package.json` (no dependencies; npm's
+  pinned snapshot of the manifest), and both of its version fields join
+  `scripts/check_version_surfaces.py` (16 surfaces across 12 files) so a
+  release bump cannot leave the lock stale.
+
 ### Fixed
 
 - **SQLite requests no longer share transaction ownership across concurrent
@@ -27,6 +54,12 @@ adheres to [Semantic Versioning](https://semver.org/).
   integrity checks. The
   fresh-process, cross-backend load ladder is tracked separately and is not
   claimed by this correction.
+- `tests_py/invariants/test_pg_schema_provision_live.py` minted its
+  throwaway low-privilege PostgreSQL role with a literal password. It now
+  uses `secrets.token_urlsafe(16)` per run — the role never outlives the
+  fixture, so nothing was exposed, but a literal in source reads as a
+  committed secret to every supply-chain scanner (it was the one `high`
+  finding in the HOL scan of this repository).
 
 ## [4.18.0] - 2026-08-25
 
