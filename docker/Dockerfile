@@ -25,7 +25,7 @@
 #           docker-content-digest header, fetched 2026-08-10.
 # Refresh: Dependabot's `docker` ecosystem (.github/dependabot.yml) opens a
 # PR when the tag moves; do not hand-edit without re-fetching the header.
-FROM python:3.14-slim-bookworm@sha256:23c59390fc717bf09f9336908199a0ae75d9c4264bf296123f94ad772fea3b52 AS builder
+FROM python:3.14-slim-bookworm@sha256:416f0db2a2b561945630cef9877a7ea0581b27449eb9fd9df42f03e1b74b5b63 AS builder
 
 # Node.js 22 LTS.
 #
@@ -119,7 +119,7 @@ RUN for attempt in 1 2 3 4 5; do \
 
 # ── Runtime ───────────────────────────────────────────────────────────────
 
-FROM python:3.14-slim-bookworm@sha256:23c59390fc717bf09f9336908199a0ae75d9c4264bf296123f94ad772fea3b52
+FROM python:3.14-slim-bookworm@sha256:416f0db2a2b561945630cef9877a7ea0581b27449eb9fd9df42f03e1b74b5b63
 
 # System: PostgreSQL 17 + pgvector + git + ripgrep
 RUN apt-get update && apt-get install -y --no-install-recommends \

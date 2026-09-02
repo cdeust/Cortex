@@ -1,6 +1,6 @@
 {
   "name": "cortex",
-  "version": "4.17.2",
+  "version": "4.18.0",
   "description": "Persistent local-first memory MCP server: remember/recall with thermodynamic heat and decay, knowledge graph, autonomous wiki, local SQLite store by default. Requires uv (uvx) on PATH; hooks-based auto-capture is Claude Code-only — on Gemini CLI memory is manual-tool-driven.",
   "mcpServers": {
     "cortex": {

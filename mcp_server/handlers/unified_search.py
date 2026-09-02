@@ -7,6 +7,10 @@ Composition root: cortex.recall (semantic memory) + ap.search_codebase
 When AP is off, the handler returns Cortex-only results marked
 ``status: partial, sources: [cortex]`` — never fails. When Cortex
 returns nothing and AP is on, the response is the AP-only hits.
+When AP is on but the per-call attempt itself fails (timeout, transport
+error, not installed), ``status`` is also ``partial`` and ``degraded``
+names the source and reason — this is distinct from AP genuinely
+returning zero hits, which stays ``status: ok, degraded: null``.
 
 The fusion contract: each input list must present unique string ids.
 - Memories use ``memory:<memory_id>`` (added by this handler).
@@ -119,9 +123,11 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
     sources = ["cortex"]
     ap_hits: list[dict] = []
+    ap_degraded_reason: str | None = None
     if is_enabled():
         ast_source = WorkflowGraphASTSource()
         ap_hits = ast_source.search_codebase(query, limit=max(top_n * 2, top_n))
+        ap_degraded_reason = ast_source.last_search_degraded_reason
         sources.append("ap")
 
     fused = fuse(
@@ -129,8 +135,21 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         k=k,
         top_n=top_n,
     )
+    # status/degraded reflect the ACTUAL per-call outcome, not just the
+    # static is_enabled() config flag: an AP that is enabled but timed out
+    # or errored on this call must not read the same as "AP found nothing"
+    # (both would otherwise be counts.ap=0, status=ok, sources=[...,"ap"]).
+    degraded: dict[str, str] | None = None
+    if not is_enabled():
+        status = "partial"
+    elif ap_degraded_reason:
+        status = "partial"
+        degraded = {"source": "ap", "reason": ap_degraded_reason}
+    else:
+        status = "ok"
     resp = {
-        "status": "ok" if is_enabled() else "partial",
+        "status": status,
+        "degraded": degraded,
         "query": query,
         "sources": sources,
         "counts": {
