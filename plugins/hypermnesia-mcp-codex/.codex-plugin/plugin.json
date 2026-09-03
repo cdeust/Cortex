@@ -1,6 +1,6 @@
 {
   "name": "hypermnesia-mcp-codex",
-  "version": "4.19.0",
+  "version": "4.19.1",
   "description": "Cortex persistent local-first memory for Codex, with Claude Code remaining the primary automatic integration.",
   "author": {
     "name": "Clement Deust",

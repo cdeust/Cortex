@@ -6,6 +6,21 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [4.19.1] - 2026-09-03
+
+### Fixed
+
+- **SessionStart banner: checkpoint fields now truncated like every other
+  section** (#457). `_format_checkpoint_section` was the one part of the
+  Claude Code SessionStart hook writing raw, untruncated text
+  (`current_task`, `next_steps`, `active_errors`, `open_questions`), while
+  anchors/team-decisions/hot-memories already went through the file's own
+  `_short()` cap. Since this banner is re-injected on every turn of a
+  session, an unbounded field had no ceiling on per-turn token cost — and,
+  independently, could inject raw markdown structure (e.g. a `\n### `
+  sequence) into the banner. Both close with the same fix: every checkpoint
+  field now passes through `_short(str(...))`.
+
 ## [4.19.0] - 2026-09-03
 
 ### Added
