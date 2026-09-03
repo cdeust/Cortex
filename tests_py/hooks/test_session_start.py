@@ -347,6 +347,26 @@ def test_build_context_empty_inputs_yield_empty_banner():
     assert hook._build_context([], [], None) == ""
 
 
+def test_checkpoint_section_truncates_long_fields_like_every_other_section():
+    """Checkpoint fields must respect the same _short() cap already applied
+    to anchors/team-decisions/hot memories — otherwise this is the one
+    section of the per-turn-repeated banner that can grow unbounded."""
+    long_task = "x" * 500
+    cp = {
+        "current_task": long_task,
+        "next_steps": ["y" * 500],
+        "open_questions": [],
+        "active_errors": [],
+        "key_decisions": [],
+        "directory": "",
+    }
+    lines = hook._format_checkpoint_section(cp)
+    text = "\n".join(lines)
+    assert long_task not in text
+    assert "y" * 500 not in text
+    assert "..." in text
+
+
 def test_build_context_renders_all_sections_and_receipt_marker():
     anchors = [{"id": 1, "content": "anchored fact", "domain": "", "is_global": False}]
     hot = [{"id": 2, "content": "hot fact", "domain": "cortex", "heat": 0.9}]

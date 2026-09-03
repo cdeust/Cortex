@@ -556,23 +556,31 @@ def _auto_backfill() -> int:
 
 
 def _format_checkpoint_section(checkpoint: dict) -> list[str]:
-    """Format the checkpoint into markdown lines."""
+    """Format the checkpoint into markdown lines.
+
+    Every field is passed through ``_short()`` — the same per-item cap
+    already applied to anchors/team-decisions/hot memories below. Before
+    this, checkpoint fields were the one banner section written raw: a
+    long ``current_task`` or a verbose ``next_steps``/``active_errors``/
+    ``open_questions`` entry could inflate this per-turn-repeated banner
+    with no bound, unlike every other section in this file.
+    """
     lines = ["### Last Session State"]
-    lines.append(f"**Task:** {checkpoint['current_task']}")
+    lines.append(f"**Task:** {_short(str(checkpoint['current_task']))}")
     if checkpoint.get("directory"):
         lines.append(f"**Directory:** `{checkpoint['directory']}`")
     if checkpoint.get("next_steps"):
         lines.append("**Next steps:**")
         for step in checkpoint["next_steps"][:3]:
-            lines.append(f"- {step}")
+            lines.append(f"- {_short(str(step))}")
     if checkpoint.get("active_errors"):
         lines.append("**Active errors:**")
         for err in checkpoint["active_errors"][:2]:
-            lines.append(f"- {err}")
+            lines.append(f"- {_short(str(err))}")
     if checkpoint.get("open_questions"):
         lines.append("**Open questions:**")
         for q in checkpoint["open_questions"][:2]:
-            lines.append(f"- {q}")
+            lines.append(f"- {_short(str(q))}")
     lines.append("")
     return lines
 
