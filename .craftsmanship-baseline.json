@@ -2808,11 +2808,6 @@
       "detail": "pathlib"
     },
     {
-      "file": "mcp_server/core/telemetry.py",
-      "kind": "method-size",
-      "detail": "record"
-    },
-    {
       "file": "mcp_server/core/thermodynamics.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"

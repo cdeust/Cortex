@@ -43,6 +43,7 @@ from mcp_server.core.reranker_scoring import (
     _compute_retrieval_confidence,
 )
 from mcp_server.observability import silent_failure
+from mcp_server.shared.telemetry_context import count_reranked
 
 logger = logging.getLogger(__name__)
 
@@ -192,6 +193,7 @@ def rerank_results(
             for i, (mid, _) in enumerate(candidates)
         ]
         results = ranker.rerank(RerankRequest(query=query, passages=passages))
+        count_reranked(len(passages))
         ce_scores = {r["id"]: r["score"] for r in results}
         return _blend_scores(
             candidates, ce_scores, alpha, adaptive=adaptive, apply_platt=apply_platt

@@ -77,6 +77,7 @@ from mcp_server.handlers.injection_receipts import (
     receipt_marker,
     session_id_from_transcript,
 )
+from mcp_server.hooks._telemetry import observe_hook
 from mcp_server.shared.freshness import provenance_suffix
 
 _LOG_PREFIX = "[cortex-auto-recall]"
@@ -453,6 +454,7 @@ def process_event(event: dict[str, Any]) -> None:
     sys.exit(0)
 
 
+@observe_hook("auto_recall")
 def main() -> None:
     """Entry point — read JSON event from stdin."""
     if sys.stdin.isatty():

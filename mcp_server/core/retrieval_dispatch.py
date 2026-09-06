@@ -17,6 +17,7 @@ from mcp_server.core.query_decomposition import decompose_query
 from mcp_server.core.query_intent import QueryIntent
 from mcp_server.core.reranker import rerank_results
 from mcp_server.observability import silent_failure
+from mcp_server.shared.telemetry_context import set_retrieval_tier
 
 # ── Tier Classification ──────────────────────────────────────────────────
 
@@ -237,6 +238,7 @@ def dispatch_retrieval(
     """Run 3-tier retrieval dispatch. Returns (results, tier_name)."""
     intent = intent_info.get("intent", QueryIntent.GENERAL)
     tier = classify_tier(intent)
+    set_retrieval_tier(tier)
     weights = compute_signal_weights(
         tier,
         intent_info.get("weights", {}),

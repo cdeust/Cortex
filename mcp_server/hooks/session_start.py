@@ -30,6 +30,7 @@ from mcp_server.handlers.injection_receipts import (
     receipt_marker,
     session_id_from_transcript,
 )
+from mcp_server.hooks._telemetry import observe_hook
 from mcp_server.shared.freshness import provenance_suffix
 from mcp_server.shared.platform import python_executable
 import sqlite3
@@ -1188,6 +1189,7 @@ def _sqlite_context(event: dict) -> None:
     _print_external_sources()
 
 
+@observe_hook("session_start")
 def main() -> None:
     """Entry point — print context block to stdout."""
 

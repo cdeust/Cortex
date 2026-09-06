@@ -1,9 +1,9 @@
 """Telemetry wrapping helper for handler entry points.
 
 Wrap a handler's ``handler(args)`` coroutine with this and the call is
-timed + recorded against the telemetry counters. Negligible overhead
-(<1ms measured): one ``perf_counter`` pair, one JSON-len, one dispatch
-to ``telemetry.record``.
+timed + recorded against the telemetry counters. Response byte volume uses
+the SDK's UTF-8 text-content serialization, after JSON-native normalization;
+it excludes the MCP transport envelope and structured-content duplication.
 
 Usage:
 
@@ -16,20 +16,40 @@ Usage:
 from __future__ import annotations
 
 import json
+import logging
 import time
 from typing import Any, Awaitable, Callable
 
+from pydantic_core import to_json
+
 from mcp_server.core import telemetry
+from mcp_server.shared.json_native import to_json_native
+from mcp_server.shared.telemetry_context import operation_metrics
 
 HandlerFn = Callable[[dict[str, Any] | None], Awaitable[dict[str, Any]]]
+logger = logging.getLogger(__name__)
 
 
 def _safe_json_len(args: dict[str, Any] | None) -> int:
     if not args:
         return 0
     try:
-        return len(json.dumps(args, default=str))
+        return len(json.dumps(args, default=str).encode("utf-8"))
     except (TypeError, ValueError):
+        logger.warning("Cannot serialize telemetry input", exc_info=True)
+        return 0
+
+
+def _response_bytes(result: dict[str, Any] | None) -> int:
+    """UTF-8 bytes of the MCP text response, excluding the transport envelope."""
+    if result is None:
+        return 0
+    try:
+        # source: MCP SDK utilities/func_metadata.py::_convert_to_content;
+        # safe_handler normalizes JSON-native values before SDK serialization.
+        return len(to_json(to_json_native(result), fallback=str, indent=2))
+    except (TypeError, ValueError):
+        logger.warning("Cannot serialize telemetry output", exc_info=True)
         return 0
 
 
@@ -55,32 +75,31 @@ def instrument(
     precondition: ``fn`` is an async callable accepting a single
                   ``args`` dict and returning a dict.
     postcondition: every call to the returned wrapper records exactly
-                   one telemetry sample (op, latency_ms, bytes_in,
-                   result_count, ok) and re-raises any exception
+                   one telemetry sample (op, latency_ms, bytes_in/out,
+                   result_count, retrieval work, ok) and re-raises any exception
                    unchanged after marking ok=False.
     """
 
     async def wrapped(args: dict[str, Any] | None = None) -> dict[str, Any]:
         t0 = time.perf_counter()
         ok = True
-        result: dict[str, Any] = {}
-        try:
-            result = await fn(args)
-            # The assignment above is not redundant: `result` also feeds
-            # `finally`'s `_result_count(result, ...)` telemetry sample.
-            # Inlining this into `return await fn(args)` would leave
-            # `result` at its pre-declared `{}` for that read.
-            return result  # noqa: RET504 — read by finally's telemetry sample
-        except Exception:
-            ok = False
-            raise
-        finally:
-            telemetry.record(
-                op,
-                latency_ms=(time.perf_counter() - t0) * 1000.0,
-                bytes_in=_safe_json_len(args),
-                result_count=_result_count(result, result_count_key),
-                ok=ok,
-            )
+        result: dict[str, Any] | None = None
+        with operation_metrics():
+            try:
+                result = await fn(args)
+                return result  # noqa: RET504 — read by finally's telemetry sample
+            except BaseException:
+                ok = False
+                raise
+            finally:
+                telemetry.record(
+                    op,
+                    # source: SI prefix milli; perf_counter returns seconds.
+                    latency_ms=(time.perf_counter() - t0) * 1000.0,
+                    bytes_in=_safe_json_len(args),
+                    bytes_out=_response_bytes(result),
+                    result_count=_result_count(result, result_count_key),
+                    ok=ok,
+                )
 
     return wrapped

@@ -39,11 +39,9 @@ Layer:
 Contract (record):
   precondition: ``op`` is a non-empty string; ``latency_ms`` >= 0;
                 byte / count fields are non-negative ints.
-  postcondition: counters[op] is updated atomically; one JSONL line is
-                appended on success or silently dropped on OSError; the
-                registered exporter (if any) is invoked with the same
-                sample and any exception it raises is swallowed; no
-                exception escapes to the handler.
+  postcondition: a sample is published immediately, or captured until the
+                MCP response exists. Publication updates counters atomically
+                and writes JSONL/exporter best-effort, without failing callers.
 """
 
 from __future__ import annotations
@@ -53,8 +51,14 @@ import logging
 import os
 import threading
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, TypedDict, runtime_checkable
+
+from mcp_server.shared.telemetry_context import retrieval_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +70,7 @@ class TelemetryExporter(Protocol):
     Contract:
       - ``export`` receives the same dict shape written to the JSONL log
         (``ts``, ``op``, ``latency_ms``, ``bytes_in``, ``bytes_out``,
-        ``result_count``, ``ok``).
+        ``result_count``, ``ok``, ``tier``, ``reranked_count``).
       - ``export`` MUST NOT raise for control flow that reaches the
         caller -- ``record()`` catches any exception defensively, but a
         well-behaved implementation handles its own I/O errors.
@@ -93,16 +97,60 @@ def set_exporter(exporter: TelemetryExporter | None) -> None:
     _exporter = exporter
 
 
-_LOG_PATH = Path.home() / ".claude" / "methodology" / "telemetry.jsonl"
+# source: infrastructure/config.py — CORTEX_CLAUDE_DIR isolates all local data.
+# Existing filesystem ownership in this module is unchanged; no infrastructure
+# import is introduced into core to resolve the same configuration root.
+_root_override = os.environ.get("CORTEX_CLAUDE_DIR", "").strip()
+_LOG_PATH = (
+    (Path(_root_override).expanduser() if _root_override else Path.home() / ".claude")
+    / "methodology"
+    / "telemetry.jsonl"
+)
 try:
     _LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 except OSError:
-    # Directory creation may fail under sandbox; record() is still
-    # safe -- the OSError on open() will be swallowed there too.
-    pass
+    logger.warning("Cannot create telemetry directory: %s", _LOG_PATH.parent)
 
 _lock = threading.Lock()
 _counters: dict[str, dict[str, float | int]] = {}
+
+
+class TelemetrySample(TypedDict):
+    """One operation, finalized with the concrete MCP response when available."""
+
+    ts: float
+    op: str
+    latency_ms: float
+    bytes_in: int
+    bytes_out: int
+    result_count: int
+    ok: bool
+    tier: str | None
+    reranked_count: int
+
+
+@dataclass
+class _Capture:
+    samples: list[TelemetrySample] = field(default_factory=list)
+    closed: bool = False
+
+
+_capture: ContextVar[_Capture | None] = ContextVar("telemetry_capture", default=None)
+
+
+@contextmanager
+def capture_records() -> Iterator[list[TelemetrySample]]:
+    """Defer publication; copied worker contexts publish directly after closure."""
+    captured = _Capture()
+    token = _capture.set(captured)
+    try:
+        yield captured.samples
+    finally:
+        # asyncio.to_thread copies context; a cancelled caller can finish first.
+        # Lock closure against late worker appends so no sample is stranded.
+        with _lock:
+            captured.closed = True
+        _capture.reset(token)
 
 
 def _disabled() -> bool:
@@ -119,18 +167,34 @@ def record(
     result_count: int = 0,
     ok: bool = True,
 ) -> None:
-    """Record one operation.
-
-    ``op`` is the canonical handler name, e.g. ``recall``, ``remember``,
-    ``forget``, ``recall_hierarchical``. Cheap by design: one dict
-    update + one short JSONL line. Target overhead < 1 ms (smoke-tested).
-    """
+    """Capture one operation, or publish immediately outside an MCP request."""
     if _disabled():
         return
-    record_line: dict[str, Any]
+    retrieval = retrieval_metrics()
+    sample: TelemetrySample = {
+        "ts": time.time(),
+        "op": op,
+        "latency_ms": latency_ms,
+        "bytes_in": bytes_in,
+        "bytes_out": bytes_out,
+        "result_count": result_count,
+        "ok": ok,
+        "tier": retrieval.tier,
+        "reranked_count": retrieval.reranked_count,
+    }
+    captured = _capture.get()
+    with _lock:
+        if captured is not None and not captured.closed:
+            captured.samples.append(sample)
+            return
+    publish_record(sample)
+
+
+def _update_counters(sample: TelemetrySample) -> None:
+    """Keep full-precision latency in counters, as before JSONL rounding."""
     with _lock:
         c = _counters.setdefault(
-            op,
+            sample["op"],
             {
                 "count": 0,
                 "ok": 0,
@@ -143,32 +207,26 @@ def record(
             },
         )
         c["count"] += 1
-        c["ok" if ok else "fail"] += 1
-        c["bytes_in"] += bytes_in
-        c["bytes_out"] += bytes_out
-        c["result_count"] += result_count
-        c["latency_ms_sum"] += latency_ms
-        if latency_ms > c["latency_ms_max"]:
-            c["latency_ms_max"] = latency_ms
-        record_line = {
-            "ts": time.time(),
-            "op": op,
-            "latency_ms": round(latency_ms, 3),
-            "bytes_in": bytes_in,
-            "bytes_out": bytes_out,
-            "result_count": result_count,
-            "ok": ok,
-        }
-    # JSONL append is best-effort: a full disk or permission error must
-    # never break the handler. The in-memory counters are already updated.
+        c["ok" if sample["ok"] else "fail"] += 1
+        c["bytes_in"] += sample["bytes_in"]
+        c["bytes_out"] += sample["bytes_out"]
+        c["result_count"] += sample["result_count"]
+        c["latency_ms_sum"] += sample["latency_ms"]
+        c["latency_ms_max"] = max(c["latency_ms_max"], sample["latency_ms"])
+
+
+def publish_record(sample: TelemetrySample) -> None:
+    """Publish one finalized sample to counters, JSONL and the optional exporter."""
+    if _disabled():
+        return
+    _update_counters(sample)
+    # source: existing JSONL contract rounds latency_ms to three decimal places.
+    record_line = {**sample, "latency_ms": round(sample["latency_ms"], 3)}
     try:
-        with _LOG_PATH.open("a") as f:
+        with _LOG_PATH.open("a", encoding="utf-8") as f:
             f.write(json.dumps(record_line) + "\n")
     except OSError:
-        pass
-    # Optional external export (issue #122): best-effort, never breaks the
-    # caller. Reads the module-level reference once so a concurrent
-    # set_exporter(None) mid-call degrades to a no-op rather than racing.
+        logger.warning("Cannot append telemetry sample: %s", _LOG_PATH, exc_info=True)
     exporter = _exporter
     if exporter is not None:
         try:
@@ -189,6 +247,9 @@ _READ_OPS = {
     "navigate_memory",
     "get_causal_chain",
     "drill_down",
+    "query_methodology",
+    "session_start",
+    "auto_recall",
 }
 _WRITE_OPS = {"remember", "forget", "validate_memory", "rate_memory"}
 

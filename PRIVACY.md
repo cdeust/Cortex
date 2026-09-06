@@ -54,6 +54,22 @@ reports **local** performance statistics only, and every recorded sample is
 appended to a local, no-egress JSONL file
 (`~/.claude/methodology/telemetry.jsonl`).
 
+`CORTEX_CLAUDE_DIR` redirects that file to the selected configuration root.
+Samples contain operation names, durations, byte counts, result counts and
+completion status, without prompt or response content. `query_methodology`,
+`session_start` and `auto_recall` are included. `tier` records the retrieval
+route actually executed (`pg` for the current memory-store pipeline, or the
+legacy dispatch tier); it is null when no retrieval route ran.
+`reranked_count` counts passages successfully processed by the reranker,
+including candidates later filtered out of the response.
+For MCP calls, `bytes_out` measures the SDK's final UTF-8 text payload, including
+error messages and excluding the transport envelope and structured-content
+duplicate. Direct handler calls measure their serialized response (zero when
+they raise without returning a response). Hook `bytes_out` measures stdout
+after encoding and newline conversion. A silent hook records zero bytes.
+Hook `ok` describes normal completion or exit code zero; it does not certify
+that every optional retrieval source was available.
+
 The only outbound network activity is:
 
 1. **One-time model download.** On first use, the open-source embedding model
