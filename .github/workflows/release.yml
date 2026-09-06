@@ -95,6 +95,8 @@ jobs:
     # form; this one was the exception.
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
+    # source: run 32889444672 (2026-08-25), max 39s; ceil(2 * 39 / 60).
+    timeout-minutes: 2
     permissions:
       contents: write  # create the release + attach auto-generated notes
     steps:
@@ -134,6 +136,8 @@ jobs:
     # thing they all used to wait on) is gone (issue #392).
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
+    # source: run 33725153709 (2026-09-03), max 31s; ceil(2 * 31 / 60).
+    timeout-minutes: 2
     permissions:
       contents: write       # upload attested wheel/sdist + checksums to release
       id-token: write       # OIDC token Sigstore exchanges for a signing cert
@@ -218,6 +222,8 @@ jobs:
     # nothing (see `build`'s identical comment for why there is no `needs:`).
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
+    # source: run 32889444672 (2026-08-25), max 32s; ceil(2 * 32 / 60).
+    timeout-minutes: 2
     permissions:
       contents: write       # upload SBOM + checksum to the release
       id-token: write       # OIDC for attestation
@@ -288,6 +294,8 @@ jobs:
     # identical comment for why there is no `needs:`).
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
+    # source: run 32889444672 (2026-08-25), max 25s; ceil(2 * 25 / 60).
+    timeout-minutes: 1
     permissions:
       contents: write       # upload bundle + checksum + server.json to release
       id-token: write       # OIDC token Sigstore exchanges for a signing cert
@@ -398,6 +406,8 @@ jobs:
     # tag-only contract survives a future edit to `build`'s condition.
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
+    # source: run 33809450915 (2026-09-03), max 23s; ceil(2 * 23 / 60).
+    timeout-minutes: 1
     # OIDC Trusted Publishing — no stored secret. Verified by PyPI against
     # the trusted-publisher entry for (cdeust/Cortex, release.yml,
     # environment=pypi). This is the same entry that published <= 3.14.7.
@@ -471,6 +481,8 @@ jobs:
     needs: publish-pypi
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
+    # source: run 32889444672 (2026-08-25), max 14s; ceil(2 * 14 / 60).
+    timeout-minutes: 1
     permissions:
       id-token: write   # OIDC — mcp-publisher login github-oidc
       contents: read

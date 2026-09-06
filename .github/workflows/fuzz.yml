@@ -34,11 +34,18 @@ on:
 
 permissions: read-all
 
+# source: W1-7 in tasks/codex-green-remediation-plan.md; superseded PR checks.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   pr-batch:
     name: Fuzz (PR batch)
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    # source: run 34030977934 (2026-09-06), max 363s; ceil(2 * 363 / 60).
+    timeout-minutes: 13
     strategy:
       fail-fast: false
       matrix:
@@ -67,6 +74,8 @@ jobs:
     name: Fuzz (scheduled batch)
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    # source: run 33384194242 (2026-08-31), max 1144s; ceil(2 * 1144 / 60).
+    timeout-minutes: 39
     strategy:
       fail-fast: false
       matrix:
