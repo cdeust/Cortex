@@ -53,7 +53,7 @@ return, a raised exception, or ``sys.exit()`` (which raises ``SystemExit``,
 still caught by a ``finally``) — closes the store before the process ends.
 
 This module has zero dependencies beyond the standard library at import
-time (the store import is deferred inside the context manager), matching
+time and teardown never imports a store that was not loaded, matching
 ``_headless_guard.py``'s contract that importing a hook helper can never
 fail for a missing third-party package.
 """
@@ -61,6 +61,7 @@ fail for a missing third-party package.
 from __future__ import annotations
 
 import logging
+import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
 
@@ -83,12 +84,12 @@ def close_shared_store_on_exit() -> Iterator[None]:
     try:
         yield
     finally:
-        from mcp_server.infrastructure.memory_store import (  # noqa: PLC0415 — deferred: keep this module import-safe with zero third-party deps
-            reset_shared_store,
-        )
-
         try:
-            reset_shared_store()
+            # No loaded factory means no process-wide store cache to close.
+            # source: Python import reference §5.3.1 (sys.modules cache).
+            module = sys.modules.get("mcp_server.infrastructure.memory_store")
+            if module is not None:
+                module.reset_shared_store()
         except Exception:  # noqa: BLE001 — teardown boundary: must never mask the hook's own outcome
             logger.debug(
                 "reset_shared_store failed during hook teardown", exc_info=True

@@ -212,7 +212,11 @@ def process_event(event: dict[str, Any]) -> None:
 
     project_root = os.environ.get("CLAUDE_PROJECT_ROOT") or os.getcwd()
     try:
-        symbols = asyncio.run(_pipeline_detect_changes(project_root, file_path))
+        from mcp_server.hooks._store_lifecycle import close_shared_store_on_exit  # noqa: PLC0415 — rejected events must not import the store teardown path
+
+        # issue #398: close cached stores on success, exception and SystemExit.
+        with close_shared_store_on_exit():
+            symbols = asyncio.run(_pipeline_detect_changes(project_root, file_path))
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"pipeline call failed: {exc}")
         return
@@ -246,13 +250,6 @@ if __name__ == "__main__":
     from mcp_server.hooks._headless_guard import (
         exit_if_headless_authoring_child,
     )
-    from mcp_server.hooks._store_lifecycle import close_shared_store_on_exit
 
     exit_if_headless_authoring_child()
-    # issue #398: closes the store before this one-shot process exits
-    # (see _store_lifecycle.py for the verified mechanism -- psycopg pool
-    # threads are daemon threads; the fragile path is __del__'s
-    # finalization-time join, which close() pre-empts by setting
-    # _closed=True while the interpreter is still alive).
-    with close_shared_store_on_exit():
-        main()
+    main()
