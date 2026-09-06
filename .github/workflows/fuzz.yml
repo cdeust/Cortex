@@ -1,5 +1,7 @@
 name: Fuzz
 
+# W1-7 temporary cancellation acceptance probe: first revision; never merge.
+
 # Coverage-guided fuzzing of the pure parsers in fuzz/, via ClusterFuzzLite.
 #
 # Two cadences, because they answer different questions:
