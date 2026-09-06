@@ -73,8 +73,8 @@ jobs:
     if: github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true')
     name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
-    # source: W1-7 review runs 33990473565, 33951959734, 33951905125,
-    # 33806380625; each matrix limit is twice that leg's maximum elapsed time.
+    # source: W1-7 review and successful W2 runs cited per matrix leg.
+    # Each limit is ceil(twice that leg's maximum elapsed seconds / 60).
     timeout-minutes: ${{ matrix.timeout-minutes }}
     strategy:
       fail-fast: false
@@ -82,14 +82,14 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
         include:
           - python-version: "3.10"
-            # source: run 33951959734 (2026-09-05), max 545s; ceil(2 * 545 / 60).
-            timeout-minutes: 19
+            # source: run 34047249647 (2026-09-06), max 980s; ceil(2 * 980 / 60).
+            timeout-minutes: 33
           - python-version: "3.11"
             # source: run 33806380625 (2026-09-03), max 1931s; ceil(2 * 1931 / 60).
             timeout-minutes: 65
           - python-version: "3.12"
-            # source: run 33951959734 (2026-09-05), max 1143s; ceil(2 * 1143 / 60).
-            timeout-minutes: 39
+            # source: run 34046091095 (2026-09-06), max 1197s; ceil(2 * 1197 / 60).
+            timeout-minutes: 40
           - python-version: "3.13"
             # source: run 33951959734 (2026-09-05), max 577s; ceil(2 * 577 / 60).
             timeout-minutes: 20
