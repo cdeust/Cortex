@@ -64,6 +64,7 @@ from mcp_server import (
     tool_registry_wiki,
 )
 from mcp_server.core import telemetry
+from mcp_server.telemetry_middleware import TelemetryMiddleware
 from mcp_server.tool_profile_middleware import ToolProfileMiddleware
 from mcp_server.core.wiki_axis_registry import configure_default_wiki_root
 from mcp_server.core.wiki_classifier import configure_user_rules_provider
@@ -120,7 +121,7 @@ mcp = MCPServer(
     # started in (issue #177 criterion 3). FULL keeps the historical onboarding
     # line ("Call query_methodology…").
     instructions=tool_profiles.instructions(ACTIVE_PROFILE),
-    middleware=[ToolProfileMiddleware(ACTIVE_PROFILE)],
+    middleware=[TelemetryMiddleware(), ToolProfileMiddleware(ACTIVE_PROFILE)],
 )
 
 # ── Tool Registration ──────────────────────────────────────────────────────
