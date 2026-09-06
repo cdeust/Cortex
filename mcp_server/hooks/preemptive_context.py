@@ -64,11 +64,13 @@ import time
 from pathlib import Path
 from typing import Any
 
+from mcp_server.shared.hook_state_paths import cooldown_path
+
 _LOG_PREFIX = "[cortex-preemptive]"
 _DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://localhost:5432/cortex")
 _HEAT_BOOST = 0.1  # Small boost — primes without dominating
 _COOLDOWN_SECONDS = 60
-_COOLDOWN_FILE = Path("/tmp/cortex_preemptive_cooldown.json")
+_COOLDOWN_FILE = cooldown_path("cortex_preemptive_cooldown.json")
 
 # Tools that indicate file interaction worth priming for
 _FILE_TOOLS = {"Edit", "Write", "Read"}
@@ -99,7 +101,7 @@ _MAX_COOLDOWN_ENTRIES = 50
 
 
 def _update_cooldown(file_path: str) -> None:
-    """Record that we primed memories for this file."""
+    """Record that we scanned this file, including a miss."""
     try:
         data = {}
         if _COOLDOWN_FILE.exists():
@@ -109,6 +111,7 @@ def _update_cooldown(file_path: str) -> None:
         if len(data) > _MAX_COOLDOWN_ENTRIES:
             sorted_items = sorted(data.items(), key=lambda x: x[1], reverse=True)
             data = dict(sorted_items[:_MAX_COOLDOWN_ENTRIES])
+        _COOLDOWN_FILE.parent.mkdir(parents=True, exist_ok=True)
         _COOLDOWN_FILE.write_text(json.dumps(data))
     except (OSError, ValueError, TypeError):
         # Cooldown cache is disposable: a failed write only means the next
@@ -177,8 +180,8 @@ def process_event(event: dict[str, Any]) -> None:
         return
 
     count = _prime_file_memories(file_path)
+    _update_cooldown(file_path)
     if count > 0:
-        _update_cooldown(file_path)
         _log(f"primed {count} memories for {Path(file_path).name}")
 
 

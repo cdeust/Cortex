@@ -25,6 +25,7 @@ from mcp_server.core.gist_extraction import (
     format_artifact_pointer,
     needs_gist,
 )
+from mcp_server.infrastructure.hook_cascade_counter import advance_after_tool
 from mcp_server.shared.redaction import scrub_secrets
 
 _LOG_PREFIX = "[cortex-post-tool-capture]"
@@ -347,30 +348,29 @@ def _store_memory(tool_name: str, content: str, tags: list[str], cwd: str) -> No
 # Biological basis: consolidation occurs during waking rest periods
 # (Dewar et al. 2012), not only during sleep.
 
-_CASCADE_INTERVAL = 20  # Run cascade every 20 tool calls
-_tool_call_counter = 0
+
+def _run_cascade() -> None:
+    """Advance existing consolidation stages after a reserved interval."""
+    from mcp_server.handlers.consolidation.cascade import (  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
+        run_cascade_advancement,
+    )
+    from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
+
+    store = get_shared_store()
+    result = run_cascade_advancement(store)
+    if "error" in result:
+        raise RuntimeError(str(result["error"]))
+    advanced = result.get("advanced", 0)
+    if advanced > 0:
+        _log(f"cascade: {advanced} memories advanced")
 
 
-def _maybe_run_cascade() -> None:
-    """Run cascade advancement if enough tool calls have accumulated."""
-    global _tool_call_counter
-    _tool_call_counter += 1
-    if _tool_call_counter < _CASCADE_INTERVAL:
-        return
-    _tool_call_counter = 0
-
+def _maybe_run_cascade(event: dict[str, Any]) -> None:
+    """Count every tool call across hook processes; preserve pending work."""
     try:
-        from mcp_server.handlers.consolidation.cascade import (  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
-            run_cascade_advancement,
-        )
-        from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
-
-        store = get_shared_store()
-        result = run_cascade_advancement(store)
-        advanced = result.get("advanced", 0)
-        if advanced > 0:
-            _log(f"cascade: {advanced} memories advanced")
-    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
+        if advance_after_tool(event.get("transcript_path"), _run_cascade) == "pending":
+            _log("cascade pending: execution lock busy or unavailable")
+    except Exception as exc:  # noqa: BLE001 — hook boundary; the cause is logged and capture continues
         _log(f"cascade failed (non-fatal): {exc}")
 
 
@@ -382,7 +382,7 @@ def process_event(event: dict[str, Any]) -> None:
     output = _normalize_output(event.get("tool_response") or "")
 
     # Periodic cascade check
-    _maybe_run_cascade()
+    _maybe_run_cascade(event)
 
     should, reason = _should_capture(tool_name, tool_input, output)
     if not should:
