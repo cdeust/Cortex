@@ -27,6 +27,11 @@ _SCRIPTS_DIR = str(Path(__file__).resolve().parent)
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 import launcher_deps_fs as _fs  # noqa: E402
+import launcher_pip as _pip  # noqa: E402
+import launcher_torch_cpu as _cpu  # noqa: E402
+
+# source: pre-W2-5 pip_install retained the last 2000 characters of pip errors.
+_PIP_ERROR_TAIL_CHARS = 2000
 
 
 def constraint_without_extras(spec: str) -> str:
@@ -178,119 +183,52 @@ def _commit_resolved_entries(tmp_dir: str, deps_dir: str) -> tuple[bool, str | N
     return True, None
 
 
+def _cleanup_scratch(tmp_dir: str) -> None:
+    try:
+        shutil.rmtree(tmp_dir)
+    except FileNotFoundError:
+        return  # A download failure can precede creation of the install target.
+    except OSError as exc:
+        print(f"[cortex-launcher] scratch cleanup failed: {exc}", file=sys.stderr)
+
+
+def _report_failure(process: subprocess.CompletedProcess[str]) -> None:
+    error = (process.stderr or "") + (process.stdout or "")
+    print(
+        f"[cortex-launcher] dependency install failed:\n"
+        f"{error.strip()[-_PIP_ERROR_TAIL_CHARS:]}",
+        file=sys.stderr,
+    )
+
+
 def pip_install(
     deps_dir: str, packages: list[str], constraints: list[str] | None = None
 ) -> bool:
-    """Install ``packages`` into ``deps_dir``, surfacing failures.
+    """Resolve into scratch, then retain the existing per-entry rollback policy.
 
-    Returns True iff every resolved top-level entry was either already
-    satisfied (idempotence guard, issue #97 suggestion 1) or committed
-    without error. On any commit failure, ``tmp_dir`` is deliberately
-    NOT removed (issue #97 suggestion 2: the old ``finally:
-    shutil.rmtree(tmp_dir)`` is exactly what made a failed commit
-    unrecoverable — it deleted the freshly-installed replacement too).
-
-    PEP 668 interpreters refuse ``pip install`` with an
-    ``externally-managed-environment`` error; the explicit
-    user-requested override is ``--break-system-packages``. Installing
-    with ``--target`` into the plugin's own deps dir never touches
-    system site-packages, so the override is safe here.
-
-    Supply-chain safety: ``--index-url`` pins the official PyPI index;
-    the sanitized env below strips any inherited PIP_INDEX_URL /
-    PIP_EXTRA_INDEX_URL / PIP_CONFIG_FILE so a caller can't reopen the
-    dependency-confusion vector this closes.
-
-    ``constraints``, when given, is a list of pip specs written to a ``-c``
-    constraints file for this install only — each one normalized through
-    ``constraint_without_extras`` first, because a constraints file may not
-    carry an ``[extra]`` clause (issue
-    #97 residue 3, reporter mbe14, "the substantial one"): without it, a
-    package pip pulls in as a TRANSITIVE (e.g. numpy via
-    sentence-transformers for the ML install) resolves freely and can
-    land on a different version than the pin the base install already
-    committed, splitting deps_dir's numpy across two callers. Passing
-    the base pins as constraints on the ML install forces pip to solve
-    within them, so a shared transitive agrees with the base pin instead
-    of "whatever pip's resolver happens to pick this time."
-
-    # source: rules/coding-standards.md §4.2, §10 — this function is
-    # ~100 lines, over the 50-line / Medium-stakes-flexed 60-line budget.
-    # Pre-existing (137 lines before issue #149's fix; the fix already
-    # extracted the commit loop into `_commit_resolved_entries` and cut
-    # this by ~30 lines). The remainder is the PEP-668-retry + pip
-    # subprocess-invocation concern, unrelated to #149's bug and out of
-    # this change's blast radius; further splitting it is deferred to a
-    # dedicated structural pass rather than risked inside a flake fix.
+    Linux ML resolves a hash-checked CPU torch wheel even for partial installs.
+    A failed commit preserves scratch entries for recovery; no success stamp is
+    allowed by the caller when this function returns False.
     """
     tmp_dir = f"{deps_dir}.tmp-{os.getpid()}"
-    clean_env = dict(os.environ)
-    for _var in (
-        "PIP_INDEX_URL",
-        "PIP_EXTRA_INDEX_URL",
-        "PIP_CONFIG_FILE",
-        "PIP_FIND_LINKS",
-        "PIP_TRUSTED_HOST",
-    ):
-        clean_env.pop(_var, None)
-    constraints_file = None
-    if constraints:
-        constraints_file = f"{deps_dir}.constraints-{os.getpid()}.txt"
-        with open(constraints_file, "w", encoding="utf-8") as fh:
-            fh.write("\n".join(map(constraint_without_extras, constraints)) + "\n")
-    base = [
-        sys.executable,
-        "-m",
-        "pip",
-        "install",
-        "-q",
-        "--index-url",
-        "https://pypi.org/simple/",
-        *(["-c", constraints_file] if constraints_file else []),
-        "--target",
-        tmp_dir,
-        *packages,
-    ]
-    proc = subprocess.run(base, capture_output=True, text=True, env=clean_env)
-    err = (proc.stderr or "") + (proc.stdout or "")
-    if proc.returncode != 0 and "externally-managed-environment" in err:
+    normalized = [constraint_without_extras(spec) for spec in constraints or []]
+    try:
+        process = _pip.resolve(deps_dir, packages, normalized)
+    except (OSError, _cpu.CpuWheelError) as exc:
         print(
-            "[cortex-launcher] WARNING: pip reports an externally-managed "
-            "Python environment (PEP 668). The Cortex plugin installs "
-            "dependencies into its own private directory (not system "
-            "site-packages), so --break-system-packages is safe here. "
-            "Retrying with that flag now. If you want to suppress this "
-            f"retry, pre-install the packages yourself: {', '.join(packages)}",
+            f"[cortex-launcher] dependency resolution failed: "
+            f"{str(exc)[-_PIP_ERROR_TAIL_CHARS:]}",
             file=sys.stderr,
         )
-        proc = subprocess.run(
-            base + ["--break-system-packages"],
-            capture_output=True,
-            text=True,
-            env=clean_env,
-        )
-        err = (proc.stderr or "") + (proc.stdout or "")
-    if constraints_file is not None:
-        # Only a resolution hint for THIS pip invocation — not needed
-        # past this point regardless of outcome.
-        with contextlib.suppress(OSError):
-            os.remove(constraints_file)
-    if proc.returncode != 0:
-        print(
-            "[cortex-launcher] dependency install failed for "
-            f"{', '.join(packages)} (python {sys.executable}).\n"
-            f"[cortex-launcher] pip said:\n{err.strip()[-2000:]}\n"
-            "[cortex-launcher] Fix the pip failure above (network/proxy/"
-            "permissions), or pre-install the packages, then reconnect "
-            "the cortex MCP server.",
-            file=sys.stderr,
-        )
-        shutil.rmtree(tmp_dir, ignore_errors=True)
+        _cleanup_scratch(tmp_dir)
         return False
-
+    if process.returncode:
+        _report_failure(process)
+        _cleanup_scratch(tmp_dir)
+        return False
     ok, failed_entry = _commit_resolved_entries(tmp_dir, deps_dir)
     if ok:
-        shutil.rmtree(tmp_dir, ignore_errors=True)
+        _cleanup_scratch(tmp_dir)
     else:
         print(
             f"[cortex-launcher] dependency commit stopped at {failed_entry}; "
