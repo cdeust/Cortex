@@ -7,9 +7,9 @@ not assertion (Popper C6).
 
 Storage:
   * In-memory dict (per process) for fast snapshot/inspection.
-  * Append-only JSONL at ~/.claude/methodology/telemetry.jsonl as the
-    durable artifact for offline analysis. Restart-loss of the in-memory
-    counters is acceptable because every call is captured in the JSONL.
+  * Size-rotated JSONL at ~/.claude/methodology/telemetry.jsonl, with one
+    previous segment (.1) for offline analysis. In-memory counters span the
+    process lifetime; the files retain only the current and previous segments.
 
 Threading:
   Counter increments are guarded by a Lock so the MCP-thread + any
@@ -59,6 +59,7 @@ from pathlib import Path
 from typing import Any, Protocol, TypedDict, runtime_checkable
 
 from mcp_server.shared.telemetry_context import retrieval_metrics
+from mcp_server.shared.log_rotation import open_rotating_log
 
 logger = logging.getLogger(__name__)
 
@@ -223,8 +224,9 @@ def publish_record(sample: TelemetrySample) -> None:
     # source: existing JSONL contract rounds latency_ms to three decimal places.
     record_line = {**sample, "latency_ms": round(sample["latency_ms"], 3)}
     try:
-        with _LOG_PATH.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(record_line) + "\n")
+        line = json.dumps(record_line) + "\n"
+        with open_rotating_log(_LOG_PATH, len(line.encode("utf-8"))) as f:
+            f.write(line)
     except OSError:
         logger.warning("Cannot append telemetry sample: %s", _LOG_PATH, exc_info=True)
     exporter = _exporter
