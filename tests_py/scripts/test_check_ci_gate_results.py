@@ -39,23 +39,23 @@ class JustifiedSkips(unittest.TestCase):
     def test_docker_only_requires_docker_jobs(self) -> None:
         needs = _skip(_needs("docker"), gate.CODE_JOBS)
         self.assertEqual(gate.check(needs, "pull_request", _event()), [])
-        for job in gate.DOCKER_JOBS:
+        for job in gate.DOCKER_BUILD_JOBS | {"docker-smoke"}:
             with self.subTest(job=job):
                 needs[job]["result"] = "skipped"
                 self.assertTrue(gate.check(needs, "pull_request", _event()))
                 needs[job]["result"] = "success"
 
-    def test_code_deps_workflows_require_every_job(self) -> None:
+    def test_code_deps_workflows_require_code_and_smoke(self) -> None:
         for changed in (("code",), ("docs", "code"), ("deps",), ("workflows",)):
-            needs = _needs(*changed)
+            needs = _skip(_needs(*changed), gate.DOCKER_BUILD_JOBS)
             self.assertEqual(gate.check(needs, "pull_request", _event()), [])
-            for job in gate.CONDITIONAL_JOBS:
+            for job in gate.CODE_JOBS | {"docker-smoke"}:
                 with self.subTest(changed=changed, job=job):
                     needs[job]["result"] = "skipped"
                     self.assertTrue(gate.check(needs, "pull_request", _event()))
                     needs[job]["result"] = "success"
 
-    def test_non_pr_runs_require_full_matrix_even_for_docs(self) -> None:
+    def test_push_and_dispatch_require_code_even_for_docs(self) -> None:
         for event_name in ("push", "workflow_dispatch"):
             needs = _needs("docs")
             self.assertEqual(gate.check(needs, event_name, {}), [])
@@ -69,6 +69,48 @@ class JustifiedSkips(unittest.TestCase):
         self.assertTrue(gate.check(needs, "pull_request", _event(False)))
         needs["test"]["result"] = "skipped"
         self.assertTrue(gate.check(needs, "pull_request", _event(True)))
+
+
+class DockerBuildPolicy(unittest.TestCase):
+    def test_push_without_docker_changes_skips_only_docker_builds(self) -> None:
+        for changed in (("docs",), ("code",), ("workflows",), ("deps",), ()):
+            needs = _skip(_needs(*changed), gate.DOCKER_BUILD_JOBS)
+            self.assertEqual(gate.check(needs, "push", {}), [])
+            needs["docker-smoke"]["result"] = "skipped"
+            self.assertTrue(gate.check(needs, "push", {}))
+
+    def test_push_with_docker_changes_requires_every_job(self) -> None:
+        needs = _needs("docker")
+        self.assertEqual(gate.check(needs, "push", {}), [])
+        for job in gate.CONDITIONAL_JOBS:
+            needs[job]["result"] = "skipped"
+            self.assertTrue(gate.check(needs, "push", {}))
+            needs[job]["result"] = "success"
+
+    def test_dispatch_requires_builds_even_without_docker_changes(self) -> None:
+        needs = _needs("docs")
+        self.assertEqual(gate.check(needs, "workflow_dispatch", {}), [])
+        for job in gate.DOCKER_BUILD_JOBS:
+            needs[job]["result"] = "skipped"
+            self.assertTrue(gate.check(needs, "workflow_dispatch", {}))
+            needs[job]["result"] = "success"
+
+    def test_schedule_skips_code_jobs_regardless_of_changed_paths(self) -> None:
+        for changed in ((), ("code",), ("docker",), ("docs",)):
+            needs = _skip(_needs(*changed), gate.CODE_JOBS)
+            self.assertEqual(gate.check(needs, "schedule", {}), [])
+            for job in gate.DOCKER_BUILD_JOBS | {"docker-smoke"} | gate.ALWAYS_JOBS:
+                with self.subTest(changed=changed, job=job):
+                    needs[job]["result"] = "skipped"
+                    self.assertTrue(gate.check(needs, "schedule", {}))
+                    needs[job]["result"] = "success"
+
+    def test_schedule_rejects_failed_and_cancelled_jobs_even_if_optional(self) -> None:
+        for job in gate.EXPECTED_JOBS:
+            for result in ("failure", "cancelled"):
+                needs = _skip(_needs("docs"), gate.CODE_JOBS)
+                needs[job]["result"] = result
+                self.assertTrue(gate.check(needs, "schedule", {}))
 
 
 class FailClosed(unittest.TestCase):

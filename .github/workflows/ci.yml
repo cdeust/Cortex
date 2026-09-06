@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  schedule:
+    # source: W1-4 in tasks/codex-green-remediation-plan.md requires weekly
+    # builds; reuse fuzz.yml's Monday 04:17 UTC window as a config choice.
+    - cron: "17 4 * * 1"
 
 permissions:
   contents: read
@@ -64,7 +68,7 @@ jobs:
   # installed unconditionally inside the action rather than passed in.
   test:
     needs: [changes, lint]
-    if: github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true'
+    if: github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true')
     name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     # Bound a hung leg instead of inheriting GitHub's 360-minute default:
@@ -104,7 +108,7 @@ jobs:
 
   test-sqlite:
     needs: [changes, lint]
-    if: github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true'
+    if: github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true')
     name: Test (SQLite backend)
     runs-on: ubuntu-latest
 
@@ -246,7 +250,7 @@ jobs:
 
   mcp-host-config:
     needs: [changes, lint]
-    if: (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false)
+    if: github.event_name != 'schedule' && ((github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false))
     name: Validate MCP host configurations
     # The pinned Claude package requires its postinstall to select the native
     # validator. Never execute install scripts from a lockfile modified by an
@@ -327,7 +331,7 @@ jobs:
 
   test-windows:
     needs: [changes, lint]
-    if: github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true'
+    if: github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true')
     name: Test (Windows, SQLite backend)
     runs-on: windows-latest
 
@@ -451,7 +455,7 @@ jobs:
   # (`--storage-selection sqlite` is the default).
   release-deps:
     needs: [changes, lint]
-    if: github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true'
+    if: github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true')
     name: Release dependency set (requirements/release.txt)
     runs-on: ubuntu-latest
     steps:
@@ -647,7 +651,7 @@ jobs:
   # in .craftsmanship-baseline.json) does not retroactively block.
   craftsmanship:
     needs: [changes, lint]
-    if: github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true'
+    if: github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true')
     name: Craftsmanship Gate
     runs-on: ubuntu-latest
     steps:
@@ -672,7 +676,7 @@ jobs:
 
   typecheck:
     needs: [changes, lint]
-    if: github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true'
+    if: github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true')
     name: Type Check
     runs-on: ubuntu-latest
     steps:
@@ -730,7 +734,7 @@ jobs:
 
   build:
     needs: [changes, lint]
-    if: github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true'
+    if: github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true')
     name: Build Package
     runs-on: ubuntu-latest
     steps:
@@ -762,7 +766,7 @@ jobs:
   # the image still builds, and its hash-pinned installs still resolve.
   docker-runtime-build:
     needs: [changes, lint]
-    if: github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true' || needs.changes.outputs.docker == 'true'
+    if: needs.changes.outputs.docker == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     name: Docker Build (runtime image)
     runs-on: ubuntu-latest
     steps:
@@ -789,11 +793,13 @@ jobs:
           tags: cortex-runtime:ci
           load: false
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # source: https://docs.docker.com/build/cache/backends/#cache-mode
+          # min exports image layers; intermediate build layers are omitted.
+          cache-to: type=gha,mode=min
 
   devcontainer-build:
     needs: [changes, lint]
-    if: github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true' || needs.changes.outputs.docker == 'true'
+    if: needs.changes.outputs.docker == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     name: Docker Build (devcontainer image)
     runs-on: ubuntu-latest
     steps:
@@ -816,7 +822,9 @@ jobs:
           tags: cortex-devcontainer:ci
           load: false
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # source: https://docs.docker.com/build/cache/backends/#cache-mode
+          # min exports image layers; intermediate build layers are omitted.
+          cache-to: type=gha,mode=min
 
   docker-smoke:
     needs: [changes, lint]
