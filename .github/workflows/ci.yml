@@ -271,6 +271,10 @@ jobs:
           # @anthropic-ai/claude-code 2.1.220 declares Node >=22; Node 24 is
           # the repository's existing release-toolchain pin.
           node-version: "24"
+          # source: https://github.com/actions/setup-node/tree/v7.0.0#caching-global-packages-data
+          # Cache downloads, not node_modules.
+          cache: npm
+          cache-dependency-path: tests_js/mcp-host-clis/package-lock.json
 
       - name: Install uv (pinned)
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
@@ -329,6 +333,9 @@ jobs:
               --storage-selection auto \
               -- "${plugin_command[@]}"
 
+  # source: https://github.com/actions/setup-python/tree/v7.0.0#caching-packages-dependencies
+  # pip caches below hash each job's exact exported constraints. Requirement
+  # installs still use --require-hashes; no installed environment is restored.
   test-windows:
     needs: [changes, lint]
     if: github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true')
@@ -350,6 +357,8 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements/ci-sqlite-min.txt
 
       - name: Cache HuggingFace models
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -465,6 +474,8 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements/release.txt
 
       - name: Cache HuggingFace models
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -509,6 +520,8 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements/lint.txt
 
       - name: Install ruff
         # Pinned: ruff's formatter output changes across minor versions
@@ -624,12 +637,28 @@ jobs:
       # curl|bash), matching this repo's supply-chain-hardening stance (release.yml).
       # source: https://github.com/rhysd/actionlint/releases/tag/v1.7.12,
       # actionlint_1.7.12_checksums.txt, linux_amd64 entry, verified 2026-07-29.
+      # Cache only the release archive; verify its checksum on every run.
+      # source: https://github.com/actions/cache/tree/v6.1.0#usage
+      - name: Cache actionlint archive
+        id: actionlint-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/cortex-actionlint/actionlint_1.7.12_linux_amd64.tar.gz
+          key: ${{ runner.os }}-${{ runner.arch }}-actionlint-1.7.12-8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+
       - name: Install actionlint (pinned, checksum-verified)
+        env:
+          CACHE_HIT: ${{ steps.actionlint-cache.outputs.cache-hit }}
+          ACTIONLINT_CACHE_DIR: ${{ runner.temp }}/cortex-actionlint
         run: |
           set -euxo pipefail
           VERSION="1.7.12"
           ARCHIVE="actionlint_${VERSION}_linux_amd64.tar.gz"
-          curl -fsSLO "https://github.com/rhysd/actionlint/releases/download/v${VERSION}/${ARCHIVE}"
+          mkdir -p "$ACTIONLINT_CACHE_DIR"
+          cd "$ACTIONLINT_CACHE_DIR"
+          if [ "$CACHE_HIT" != "true" ]; then
+            curl -fsSLO "https://github.com/rhysd/actionlint/releases/download/v${VERSION}/${ARCHIVE}"
+          fi
           echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  ${ARCHIVE}" | sha256sum -c -
           tar -xzf "${ARCHIVE}" actionlint
           sudo install -m 0755 actionlint /usr/local/bin/actionlint
@@ -686,6 +715,10 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            requirements/ci-typecheck.txt
+            requirements/typecheck-tool.txt
 
       # Pyright resolves third-party imports from ./.venv (pinned in
       # pyrightconfig.json: venvPath="."/venv=".venv"). The full stub set MUST
@@ -744,6 +777,8 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements/packaging.txt
 
       - name: Install build tools
         # --no-deps: the file is the complete, uv-resolved dependency graph
