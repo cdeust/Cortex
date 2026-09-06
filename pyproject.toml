@@ -184,6 +184,19 @@ dev = [
 [tool.hatch.build.targets.wheel]
 packages = ["mcp_server"]
 
+# W1-6: benchmark output, media and paper bundles dominate the source archive;
+# retain application source, tests, fixtures and packaging inputs.
+# source: https://hatch.pypa.io/latest/config/build/#patterns
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "/benchmarks/beam/variance/*.txt",
+    "/video/captures",
+    "/video/output",
+    "/docs/**/*.png",
+    "/docs/arxiv-*/**",
+    "/docs/campaigns/*.json",
+]
+
 # ── Resolver constraints ─────────────────────────────────────────────────
 #
 # This table is declared before the `[[tool.uv.index]]` / `[tool.uv.sources]`

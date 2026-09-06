@@ -37,6 +37,8 @@ jobs:
   analysis:
     name: Scorecard analysis
     runs-on: ubuntu-latest
+    # source: run 33806380608 (2026-09-03), max 40s; ceil(2 * 40 / 60).
+    timeout-minutes: 2
     permissions:
       security-events: write   # upload SARIF to code scanning
       id-token: write          # publish signed results to the OpenSSF API

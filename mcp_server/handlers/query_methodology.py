@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+from functools import partial
 from typing import Any
 
 from mcp_server.core.context_generator import generate_context
@@ -17,6 +18,7 @@ from mcp_server.core.prospective import check_trigger
 from mcp_server.core.response_budget import ListTarget, TextTarget, bound_payload
 from mcp_server.infrastructure.profile_store import load_profiles
 from mcp_server.handlers._tool_meta import READ_ONLY
+from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import get_shared_store
 
@@ -292,6 +294,7 @@ def _bounded(resp: dict) -> dict:
     )
 
 
+@partial(instrument, "query_methodology", result_count_key="hotMemories")
 async def handler(args: dict | None = None) -> dict:
     args = args or {}
     cwd = args.get("cwd", "")

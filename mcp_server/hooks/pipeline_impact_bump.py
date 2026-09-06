@@ -43,12 +43,13 @@ import json
 import os
 import sys
 import time
-from pathlib import Path
 from typing import Any, cast
+
+from mcp_server.shared.hook_state_paths import cooldown_path
 
 _LOG_PREFIX = "[pipeline-impact-bump]"
 _COOLDOWN_SECONDS = 30
-_COOLDOWN_FILE = Path("/tmp/cortex_pipeline_impact_cooldown.json")
+_COOLDOWN_FILE = cooldown_path("cortex_pipeline_impact_cooldown.json")
 _FILE_TOOLS = {"Edit", "Write", "MultiEdit"}
 _IMPACT_BOOST = 0.15  # Slightly higher than preemptive — graph precision earns it.
 _MAX_BUMPS = 20  # Don't over-boost on massive impact sets.
@@ -88,6 +89,7 @@ def _update_cooldown(file_path: str) -> None:
             # Prune oldest entries.
             sorted_items = sorted(data.items(), key=lambda x: x[1], reverse=True)
             data = dict(sorted_items[:_MAX_COOLDOWN_ENTRIES])
+        _COOLDOWN_FILE.parent.mkdir(parents=True, exist_ok=True)
         _COOLDOWN_FILE.write_text(json.dumps(data))
     except (OSError, ValueError, TypeError):
         # Cooldown cache is disposable: a failed write only means the next
@@ -212,17 +214,22 @@ def process_event(event: dict[str, Any]) -> None:
 
     project_root = os.environ.get("CLAUDE_PROJECT_ROOT") or os.getcwd()
     try:
-        symbols = asyncio.run(_pipeline_detect_changes(project_root, file_path))
+        from mcp_server.hooks._store_lifecycle import close_shared_store_on_exit  # noqa: PLC0415 — rejected events must not import the store teardown path
+
+        # issue #398: close cached stores on success, exception and SystemExit.
+        with close_shared_store_on_exit():
+            symbols = asyncio.run(_pipeline_detect_changes(project_root, file_path))
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"pipeline call failed: {exc}")
         return
+    finally:
+        _update_cooldown(file_path)
 
     if not symbols:
         return
 
     count = _bump_heat_for_symbols(symbols)
     if count > 0:
-        _update_cooldown(file_path)
         _log(f"bumped {count} memories for {len(symbols)} impacted symbols")
 
 
@@ -246,13 +253,6 @@ if __name__ == "__main__":
     from mcp_server.hooks._headless_guard import (
         exit_if_headless_authoring_child,
     )
-    from mcp_server.hooks._store_lifecycle import close_shared_store_on_exit
 
     exit_if_headless_authoring_child()
-    # issue #398: closes the store before this one-shot process exits
-    # (see _store_lifecycle.py for the verified mechanism -- psycopg pool
-    # threads are daemon threads; the fragile path is __del__'s
-    # finalization-time join, which close() pre-empts by setting
-    # _closed=True while the interpreter is still alive).
-    with close_shared_store_on_exit():
-        main()
+    main()

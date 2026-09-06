@@ -71,22 +71,38 @@
     ],
     "PostToolUse": [
       {
+        "matcher": "*",
         "hooks": [
           {
             "type": "command",
             "command": "bash -c 'PY=$(command -v python3 || command -v python) && if [ -z \"${CLAUDE_PLUGIN_ROOT:-}\" ]; then echo \"cortex hook: CLAUDE_PLUGIN_ROOT is unset; refusing to guess the plugin root\" >&2; exit 1; fi; ROOT=\"$CLAUDE_PLUGIN_ROOT\" && \"$PY\" \"$ROOT/scripts/launcher.py\" mcp_server.hooks.post_tool_capture'",
             "timeout": 10
-          },
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|Read",
+        "hooks": [
           {
             "type": "command",
             "command": "bash -c 'PY=$(command -v python3 || command -v python) && if [ -z \"${CLAUDE_PLUGIN_ROOT:-}\" ]; then echo \"cortex hook: CLAUDE_PLUGIN_ROOT is unset; refusing to guess the plugin root\" >&2; exit 1; fi; ROOT=\"$CLAUDE_PLUGIN_ROOT\" && \"$PY\" \"$ROOT/scripts/launcher.py\" mcp_server.hooks.preemptive_context'",
             "timeout": 5
-          },
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
           {
             "type": "command",
             "command": "bash -c 'PY=$(command -v python3 || command -v python) && if [ -z \"${CLAUDE_PLUGIN_ROOT:-}\" ]; then echo \"cortex hook: CLAUDE_PLUGIN_ROOT is unset; refusing to guess the plugin root\" >&2; exit 1; fi; ROOT=\"$CLAUDE_PLUGIN_ROOT\" && \"$PY\" \"$ROOT/scripts/launcher.py\" mcp_server.hooks.pipeline_impact_bump'",
             "timeout": 5
-          },
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
           {
             "type": "command",
             "command": "bash -c 'PY=$(command -v python3 || command -v python) && if [ -z \"${CLAUDE_PLUGIN_ROOT:-}\" ]; then echo \"cortex hook: CLAUDE_PLUGIN_ROOT is unset; refusing to guess the plugin root\" >&2; exit 1; fi; ROOT=\"$CLAUDE_PLUGIN_ROOT\" && \"$PY\" \"$ROOT/scripts/launcher.py\" mcp_server.hooks.post_commit_reindex'",

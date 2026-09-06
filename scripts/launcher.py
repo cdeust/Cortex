@@ -177,5 +177,29 @@ def main() -> None:
         sys.exit(1)
 
 
-if __name__ == "__main__":
+def entrypoint() -> None:
+    """Keep cleanup imports and registry I/O out of per-tool hook launches."""
+    arguments = sys.argv[1:]
+    if arguments and arguments[0].partition("=")[0] in {
+        "--cleanup-deps",
+        "--dry-run",
+        "--apply",
+        "--plugin-id",
+    }:
+        from launcher_cleanup import cli  # noqa: PLC0415 — explicit maintenance only
+
+        _reconfigure_streams_utf8()
+        sys.exit(cli(arguments))
+    if (
+        arguments
+        and arguments[0] == "mcp_server"
+        and os.environ.get("CORTEX_CLAUDE_DIR")
+    ):
+        from launcher_cleanup import audit_startup  # noqa: PLC0415 — server startup only
+
+        audit_startup()
     main()
+
+
+if __name__ == "__main__":
+    entrypoint()

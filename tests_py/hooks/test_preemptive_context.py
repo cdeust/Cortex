@@ -94,12 +94,12 @@ def test_expired_cooldown_primes_again():
     prime.assert_called_once()
 
 
-def test_priming_nothing_leaves_the_cooldown_unset():
-    """A no-op prime must stay retryable — no cooldown, no log line."""
+def test_priming_nothing_sets_the_cooldown():
+    """A miss is a completed scan and must respect the same cooldown."""
     with patch.object(hook, "_prime_file_memories", return_value=0):
         hook.process_event({"tool_name": "Edit", "tool_input": {"file_path": "/a.py"}})
 
-    assert not hook._COOLDOWN_FILE.exists()
+    assert hook._COOLDOWN_FILE.exists()
 
 
 def test_successful_prime_reports_the_file_it_primed(capsys):

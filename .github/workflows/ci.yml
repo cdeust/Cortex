@@ -4,8 +4,11 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
   workflow_dispatch:
+  schedule:
+    # source: W1-4 in tasks/codex-green-remediation-plan.md requires weekly
+    # builds; reuse fuzz.yml's Monday 04:17 UTC window as a config choice.
+    - cron: "17 4 * * 1"
 
 permissions:
   contents: read
@@ -15,6 +18,46 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Changed paths
+    runs-on: ubuntu-latest
+    # source: run 34035713474 (2026-09-06), max 9s; ceil(2 * 9 / 60).
+    timeout-minutes: 1
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+      docs: ${{ steps.filter.outputs.docs }}
+      docker: ${{ steps.filter.outputs.docker }}
+      workflows: ${{ steps.filter.outputs.workflows }}
+      deps: ${{ steps.filter.outputs.deps }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Verify pull request file-list completeness
+        if: github.event_name == 'pull_request'
+        run: python3 scripts/check_ci_file_count.py
+      # Classify each file independently. Unknown paths conservatively count
+      # as code; a docs file cannot hide code changed in the same PR.
+      # source: https://github.com/dorny/paths-filter/tree/v4.0.1#usage
+      # `every` applies all code exclusions to each file, not to the PR.
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+        id: filter
+        with:
+          predicate-quantifier: every
+          filters: |
+            code:
+              - '**'
+              - '!{*.md,docs/**/*.md,tasks/**/*.md,Dockerfile,.dockerignore,docker/**,.devcontainer/**,.github/**,pyproject.toml,uv.lock,requirements/**,**/package.json,**/package-lock.json}'
+            docs:
+              - '{*.md,docs/**/*.md,tasks/**/*.md}'
+            docker:
+              - '{Dockerfile,.dockerignore,docker/**,.devcontainer/**}'
+            workflows:
+              - '.github/**'
+            deps:
+              - '{pyproject.toml,uv.lock,requirements/**,**/package.json,**/package-lock.json}'
+
   # Uses the composite action at .github/actions/test-suite/action.yml for
   # the step-level rationale, including why the shared unit is a composite
   # action and not a reusable workflow: a job delegating via `uses:` reports
@@ -26,27 +69,30 @@ jobs:
   # `requirements/ci-postgresql.txt` and tree-sitter grammars are now
   # installed unconditionally inside the action rather than passed in.
   test:
+    needs: [changes, lint]
+    if: github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true')
     name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
-    # Bound a hung leg instead of inheriting GitHub's 360-minute default:
-    # release run 30741657854 (v4.17.0, CHANGELOG 4.17.1) sat in FlashRank's
-    # timeout-less `requests.get` until pytest-timeout fired, and only that
-    # per-test guard, not the job, ever bounded the suite.
-    # source: measured 2026-09-03 over the last 12 green `main` runs of this
-    # workflow (gh run list --status success, runs 31417063954 to
-    # 33688337476, 48 legs, started_at to completed_at per job): Test (Python
-    # 3.12, the only leg running the extended checks) took 15-20 min (max
-    # 19 min 36 s, run 32747742631); the other three legs took 8-11 min in 11
-    # of the 12 runs, but in run 33688337476 (c5ec018a) Python 3.10 took
-    # 15 min 06 s and Python 3.13 took 27 min 17 s, the slowest green leg in
-    # the window. 60 min is about twice that maximum (60 / 27.3 = 2.2), so a
-    # slow runner still passes while a stalled job is cut within one ordinary
-    # run's wall time.
-    timeout-minutes: 60
+    # source: W1-7 review and successful W2 runs cited per matrix leg.
+    # Each limit is ceil(twice that leg's maximum elapsed seconds / 60).
+    timeout-minutes: ${{ matrix.timeout-minutes }}
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
+        include:
+          - python-version: "3.10"
+            # source: run 34047249647 (2026-09-06), max 980s; ceil(2 * 980 / 60).
+            timeout-minutes: 33
+          - python-version: "3.11"
+            # source: run 33806380625 (2026-09-03), max 1931s; ceil(2 * 1931 / 60).
+            timeout-minutes: 65
+          - python-version: "3.12"
+            # source: run 34046091095 (2026-09-06), max 1197s; ceil(2 * 1197 / 60).
+            timeout-minutes: 40
+          - python-version: "3.13"
+            # source: run 33688337476 (2026-09-02), max 1637s; ceil(2 * 1637 / 60).
+            timeout-minutes: 55
 
     steps:
       # A local `uses: ./...` is resolved from the checked-out tree, so the
@@ -64,8 +110,12 @@ jobs:
           run-extended-checks: ${{ matrix.python-version == '3.12' }}
 
   test-sqlite:
+    needs: [changes, lint]
+    if: github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true')
     name: Test (SQLite backend)
     runs-on: ubuntu-latest
+    # source: run 33806380625 (2026-09-03), max 292s; ceil(2 * 292 / 60).
+    timeout-minutes: 10
 
     # Force the SQLite fallback path — no PostgreSQL installed or started.
     # The conftest detects PG-unreachable and sets CORTEX_MEMORY_STORE_BACKEND=sqlite
@@ -204,13 +254,16 @@ jobs:
         run: python scripts/verify_mcp_hosts.py -- hypermnesia-mcp
 
   mcp-host-config:
+    needs: [changes, lint]
+    if: github.event_name != 'schedule' && ((github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false))
     name: Validate MCP host configurations
     # The pinned Claude package requires its postinstall to select the native
     # validator. Never execute install scripts from a lockfile modified by an
     # untrusted fork; same-repository PRs and main/workflow_dispatch remain
     # covered by this vendor-parser contract.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false
     runs-on: ubuntu-latest
+    # source: run 33951959734 (2026-09-05), max 61s; ceil(2 * 61 / 60).
+    timeout-minutes: 3
     permissions:
       contents: read
 
@@ -225,6 +278,10 @@ jobs:
           # @anthropic-ai/claude-code 2.1.220 declares Node >=22; Node 24 is
           # the repository's existing release-toolchain pin.
           node-version: "24"
+          # source: https://github.com/actions/setup-node/tree/v7.0.0#caching-global-packages-data
+          # Cache downloads, not node_modules.
+          cache: npm
+          cache-dependency-path: tests_js/mcp-host-clis/package-lock.json
 
       - name: Install uv (pinned)
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
@@ -283,9 +340,16 @@ jobs:
               --storage-selection auto \
               -- "${plugin_command[@]}"
 
+  # source: https://github.com/actions/setup-python/tree/v7.0.0#caching-packages-dependencies
+  # pip caches below hash each job's exact exported constraints. Requirement
+  # installs still use --require-hashes; no installed environment is restored.
   test-windows:
+    needs: [changes, lint]
+    if: github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true')
     name: Test (Windows, SQLite backend)
     runs-on: windows-latest
+    # source: run 33990473565 (2026-09-05), max 426s; ceil(2 * 426 / 60).
+    timeout-minutes: 15
 
     # Real NT proof for the cross-platform fixes (fcntl→msvcrt, sys.executable,
     # NTFS exec bits, $HOME override, path separators). We use the SQLite
@@ -302,6 +366,8 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements/ci-sqlite-min.txt
 
       - name: Cache HuggingFace models
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -406,8 +472,12 @@ jobs:
   # under this narrower dependency set, with no PostgreSQL service needed
   # (`--storage-selection sqlite` is the default).
   release-deps:
+    needs: [changes, lint]
+    if: github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true')
     name: Release dependency set (requirements/release.txt)
     runs-on: ubuntu-latest
+    # source: run 33806380625 (2026-09-03), max 109s; ceil(2 * 109 / 60).
+    timeout-minutes: 4
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -415,6 +485,8 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements/release.txt
 
       - name: Cache HuggingFace models
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -452,6 +524,8 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    # source: run 33951959734 (2026-09-05), max 17s; ceil(2 * 17 / 60).
+    timeout-minutes: 1
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -459,6 +533,8 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements/lint.txt
 
       - name: Install ruff
         # Pinned: ruff's formatter output changes across minor versions
@@ -574,12 +650,28 @@ jobs:
       # curl|bash), matching this repo's supply-chain-hardening stance (release.yml).
       # source: https://github.com/rhysd/actionlint/releases/tag/v1.7.12,
       # actionlint_1.7.12_checksums.txt, linux_amd64 entry, verified 2026-07-29.
+      # Cache only the release archive; verify its checksum on every run.
+      # source: https://github.com/actions/cache/tree/v6.1.0#usage
+      - name: Cache actionlint archive
+        id: actionlint-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/cortex-actionlint/actionlint_1.7.12_linux_amd64.tar.gz
+          key: ${{ runner.os }}-${{ runner.arch }}-actionlint-1.7.12-8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+
       - name: Install actionlint (pinned, checksum-verified)
+        env:
+          CACHE_HIT: ${{ steps.actionlint-cache.outputs.cache-hit }}
+          ACTIONLINT_CACHE_DIR: ${{ runner.temp }}/cortex-actionlint
         run: |
           set -euxo pipefail
           VERSION="1.7.12"
           ARCHIVE="actionlint_${VERSION}_linux_amd64.tar.gz"
-          curl -fsSLO "https://github.com/rhysd/actionlint/releases/download/v${VERSION}/${ARCHIVE}"
+          mkdir -p "$ACTIONLINT_CACHE_DIR"
+          cd "$ACTIONLINT_CACHE_DIR"
+          if [ "$CACHE_HIT" != "true" ]; then
+            curl -fsSLO "https://github.com/rhysd/actionlint/releases/download/v${VERSION}/${ARCHIVE}"
+          fi
           echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  ${ARCHIVE}" | sha256sum -c -
           tar -xzf "${ARCHIVE}" actionlint
           sudo install -m 0755 actionlint /usr/local/bin/actionlint
@@ -600,8 +692,12 @@ jobs:
   # scripts/craftsmanship_baseline.py for why pre-existing debt (recorded
   # in .craftsmanship-baseline.json) does not retroactively block.
   craftsmanship:
+    needs: [changes, lint]
+    if: github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true')
     name: Craftsmanship Gate
     runs-on: ubuntu-latest
+    # source: run 33951959734 (2026-09-05), max 9s; ceil(2 * 9 / 60).
+    timeout-minutes: 1
     steps:
       # fetch-depth: 0 so `origin/main` — the diff base the gate compares
       # the PR's changed files against — is resolvable locally, not just
@@ -623,8 +719,12 @@ jobs:
         run: python scripts/check_craftsmanship.py
 
   typecheck:
+    needs: [changes, lint]
+    if: github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true')
     name: Type Check
     runs-on: ubuntu-latest
+    # source: run 33990473565 (2026-09-05), max 94s; ceil(2 * 94 / 60).
+    timeout-minutes: 4
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -632,6 +732,10 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            requirements/ci-typecheck.txt
+            requirements/typecheck-tool.txt
 
       # Pyright resolves third-party imports from ./.venv (pinned in
       # pyrightconfig.json: venvPath="."/venv=".venv"). The full stub set MUST
@@ -679,8 +783,12 @@ jobs:
         run: .venv/bin/python -m pyright mcp_server/
 
   build:
+    needs: [changes, lint]
+    if: github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true')
     name: Build Package
     runs-on: ubuntu-latest
+    # source: run 33951905125 (2026-09-05), max 19s; ceil(2 * 19 / 60).
+    timeout-minutes: 1
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -688,6 +796,8 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements/packaging.txt
 
       - name: Install build tools
         # --no-deps: the file is the complete, uv-resolved dependency graph
@@ -697,12 +807,6 @@ jobs:
 
       - name: Build sdist and wheel
         run: python -m build
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: dist
-          path: dist/
 
   # The two images below had NO CI build at all until this change, so a
   # regression in either was invisible until someone built it by hand. That
@@ -715,8 +819,12 @@ jobs:
   # separate services. The claim here is narrow and worth making on its own:
   # the image still builds, and its hash-pinned installs still resolve.
   docker-runtime-build:
+    needs: [changes, lint]
+    if: needs.changes.outputs.docker == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     name: Docker Build (runtime image)
     runs-on: ubuntu-latest
+    # source: run 33951905125 (2026-09-05), max 514s; ceil(2 * 514 / 60).
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -741,11 +849,17 @@ jobs:
           tags: cortex-runtime:ci
           load: false
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # source: https://docs.docker.com/build/cache/backends/#cache-mode
+          # min exports image layers; intermediate build layers are omitted.
+          cache-to: type=gha,mode=min
 
   devcontainer-build:
+    needs: [changes, lint]
+    if: needs.changes.outputs.docker == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     name: Docker Build (devcontainer image)
     runs-on: ubuntu-latest
+    # source: run 33951905125 (2026-09-05), max 349s; ceil(2 * 349 / 60).
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -766,11 +880,17 @@ jobs:
           tags: cortex-devcontainer:ci
           load: false
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # source: https://docs.docker.com/build/cache/backends/#cache-mode
+          # min exports image layers; intermediate build layers are omitted.
+          cache-to: type=gha,mode=min
 
   docker-smoke:
+    needs: [changes, lint]
+    if: github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true' || needs.changes.outputs.docker == 'true'
     name: Docker Smoke (bare-container DB-less contract)
     runs-on: ubuntu-latest
+    # source: run 33951959734 (2026-09-05), max 369s; ceil(2 * 369 / 60).
+    timeout-minutes: 13
     # BLOCKING: this job asserts the exact contract that silently broke for
     # two months (fix/bare-container-contract, commit 5d71069c) — third-party
     # registry indexers (Glama et al.) `docker build` the bare repo, then
@@ -813,8 +933,9 @@ jobs:
         env:
           CORTEX_SMOKE_IMAGE: cortex-smoke:local
 
-  # The one status check branch protection on `main` names. Everything else
-  # in this workflow is reached through its `needs:` list, so renaming a job,
+  # The aggregate required check for this workflow. CodeQL remains an
+  # independent required check outside ci.yml. Everything else here is reached
+  # through its `needs:` list, so renaming a job,
   # resizing the matrix, or delegating steps to a reusable workflow (which
   # rewrites check names to "<caller> / <callee>", issue #336) no longer
   # touches the protection settings — the contract is this file, in git,
@@ -832,7 +953,10 @@ jobs:
     name: CI Green
     if: always()
     runs-on: ubuntu-latest
+    # source: run 33806380625 (2026-09-03), max 4s; ceil(2 * 4 / 60).
+    timeout-minutes: 1
     needs:
+      - changes
       - test
       - test-sqlite
       - mcp-host-config
@@ -846,30 +970,15 @@ jobs:
       - devcontainer-build
       - docker-smoke
     steps:
-      - name: Require every job above to have succeeded
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Require successful jobs or justified skips
         env:
           NEEDS: ${{ toJSON(needs) }}
-          # Jobs permitted to report `skipped`, with the reason. ONLY jobs
-          # carrying a job-level `if:` belong here; anything else that skips
-          # is a gap, not an exemption.
-          #   mcp-host-config — `if: github.event_name != 'pull_request' ||
-          #   github.event.pull_request.head.repo.fork == false`: a fork PR
-          #   has no access to the secrets it needs, so it cannot run there.
-          ALLOWED_SKIPS: mcp-host-config
-        run: |
-          set -euo pipefail
-          echo "$NEEDS"
-          failed=$(printf '%s' "$NEEDS" | jq -r --arg allowed "$ALLOWED_SKIPS" '
-            ($allowed | split(",") | map(ltrimstr(" ") | rtrimstr(" "))) as $ok
-            | to_entries[]
-            | select(.value.result != "success")
-            | select(.value.result != "skipped" or ([.key] | inside($ok) | not))
-            | "\(.key)=\(.value.result)"')
-          if [ -n "$failed" ]; then
-            echo "::error::CI Green refuses the merge — $(echo "$failed" | tr '\n' ' ')"
-            exit 1
-          fi
-          echo "every required job succeeded"
+          # Path skips are valid only for irrelevant PRs. mcp-host-config
+          # additionally skips fork PRs to avoid untrusted npm postinstall.
+          # The checker verifies these reasons against this run's inputs.
+          ALLOWED_SKIPS: test,test-sqlite,mcp-host-config,test-windows,release-deps,craftsmanship,typecheck,build,docker-runtime-build,devcontainer-build,docker-smoke
+        run: python3 scripts/check_ci_gate_results.py
 
   # The tag-as-output half of issue #392: a green push to `main` tags the
   # exact SHA that just passed CI Green, instead of a human hand-picking
@@ -891,6 +1000,8 @@ jobs:
     # has already merged — see the job comment above.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    # source: run 33990473565 (2026-09-05), max 12s; ceil(2 * 12 / 60).
+    timeout-minutes: 1
     # `contents: read`, NOT write, and that is deliberate. The tag is pushed
     # with the RELEASE_TAG_SSH_KEY deploy key (persisted by the checkout step
     # below), never

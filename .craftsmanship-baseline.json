@@ -2808,11 +2808,6 @@
       "detail": "pathlib"
     },
     {
-      "file": "mcp_server/core/telemetry.py",
-      "kind": "method-size",
-      "detail": "record"
-    },
-    {
       "file": "mcp_server/core/thermodynamics.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"
@@ -4845,11 +4840,6 @@
     {
       "file": "mcp_server/hooks/post_tool_capture.py",
       "kind": "unsourced-constant",
-      "detail": "_CASCADE_INTERVAL"
-    },
-    {
-      "file": "mcp_server/hooks/post_tool_capture.py",
-      "kind": "unsourced-constant",
       "detail": "_MIN_OUTPUT_LENGTH"
     },
     {
@@ -5626,11 +5616,6 @@
       "file": "scripts/launcher_deps.py",
       "kind": "unsourced-constant",
       "detail": "_STALE_LOCK_SECONDS"
-    },
-    {
-      "file": "scripts/launcher_deps_install.py",
-      "kind": "method-size",
-      "detail": "pip_install"
     },
     {
       "file": "scripts/mcp_toplist_ranking.py",

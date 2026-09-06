@@ -30,8 +30,10 @@ from mcp_server.handlers.injection_receipts import (
     receipt_marker,
     session_id_from_transcript,
 )
+from mcp_server.hooks._telemetry import observe_hook
 from mcp_server.shared.freshness import provenance_suffix
 from mcp_server.shared.platform import python_executable
+from mcp_server.shared.log_rotation import methodology_log_path, open_rotating_log
 import sqlite3
 import asyncio
 from datetime import datetime as _dt, timezone as _tz
@@ -847,15 +849,15 @@ def _spawn_consolidate_cycle() -> int | None:
         # Fall back to direct -m invocation (dev source is the package root).
         cmd = [py, "-m", "mcp_server.hooks.consolidate_background"]
 
-    log_path = Path.home() / ".claude" / "methodology" / "consolidate.log"
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    proc = subprocess.Popen(  # noqa: S603 — cmd built from trusted sources
-        cmd,
-        stdin=subprocess.DEVNULL,
-        stdout=open(log_path, "a"),
-        stderr=subprocess.STDOUT,
-        start_new_session=True,
-    )
+    log_path = methodology_log_path("consolidate.log")
+    with open_rotating_log(log_path) as log:
+        proc = subprocess.Popen(  # noqa: S603 — cmd built from trusted sources
+            cmd,
+            stdin=subprocess.DEVNULL,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
     _log(f"background consolidate spawned → {log_path}")
     return proc.pid
 
@@ -981,17 +983,16 @@ def _maybe_background_reanalyze() -> None:
             "mcp_server.hooks.ingest_codebase_background",
             project_root,
         ]
-        # Detach: no stdin, redirect stdout/stderr to a log file so we
-        # can diagnose later.
-        log_path = Path.home() / ".claude" / "methodology" / "pipeline_reanalyze.log"
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-        subprocess.Popen(  # noqa: S603 — cmd built from trusted sources
-            cmd,
-            stdin=subprocess.DEVNULL,
-            stdout=open(log_path, "a"),
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-        )
+        # Rotate before spawn; the inherited fd stays open for the worker.
+        log_path = methodology_log_path("pipeline_reanalyze.log")
+        with open_rotating_log(log_path) as log:
+            subprocess.Popen(  # noqa: S603 — cmd built from trusted sources
+                cmd,
+                stdin=subprocess.DEVNULL,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
         _log(f"background pipeline reanalysis spawned → {log_path}")
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"background pipeline reanalysis skipped: {exc}")
@@ -1188,6 +1189,7 @@ def _sqlite_context(event: dict) -> None:
     _print_external_sources()
 
 
+@observe_hook("session_start")
 def main() -> None:
     """Entry point — print context block to stdout."""
 

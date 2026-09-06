@@ -32,10 +32,12 @@ from mcp_server.handlers.backfill_helpers import (
     mark_backfilled,
     slug_to_domain,
 )
+from mcp_server.infrastructure.embedding_engine import get_embedding_engine
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.scanner import read_head_tail
 from mcp_server.observability import silent_failure
+from mcp_server.shared.content_hardening import harden_content
 from mcp_server.handlers._tool_meta import NON_IDEMPOTENT_WRITE
 from mcp_server.handlers.backfill_helpers import gist_oversized_content
 from mcp_server.handlers.remember import handler as remember_handler
@@ -150,20 +152,34 @@ def _parse_args(args: dict[str, Any] | None) -> dict[str, Any]:
 _MIN_CONTENT_CHARS = 20
 
 
+def _prepare_item_content(item: dict) -> str | None:
+    """Length-filter and gist one extracted item's raw content.
+
+    Split out of ``_import_single_item`` so ``_import_file`` can collect
+    every item's final content and warm the embedding cache with a single
+    ``encode_batch()`` call before the sequential ``remember()`` loop
+    below -- each ``remember()`` call used to trigger its own single-text
+    ``encode()`` (issue: green-software review 2026-09-04, Low severity).
+    """
+    content = item.get("content", "")
+    if not content or len(content) < _MIN_CONTENT_CHARS:
+        return None
+    return gist_oversized_content(content)
+
+
 async def _import_single_item(
     store: MemoryStore,
     item: dict,
+    content: str,
     cwd: str,
     domain: str,
     project_slug: str,
 ) -> int | None:
-    """Store one extracted item. Returns memory_id if stored, else None."""
+    """Store one extracted item's already-gisted content.
 
-    content = item.get("content", "")
-    if not content or len(content) < _MIN_CONTENT_CHARS:
-        return None
+    Returns memory_id if stored, else None.
+    """
 
-    content = gist_oversized_content(content)
     tags = item.get("tags", []) + ["_backfill", f"project:{project_slug[:30]}"]
     remember_args = {
         "content": content,
@@ -193,6 +209,40 @@ async def _import_single_item(
     return result.get("memory_id")
 
 
+def _warm_embedding_cache(prepared: list[tuple[dict, str | None]]) -> None:
+    """One encode_batch() call for every prepared item's content.
+
+    remember()'s own encode() call in ``_store_prepared_items`` then hits
+    this warmed cache instead of invoking the model per item -- see
+    harden_content note on EmbeddingEngine.warm_cache's cache-key
+    alignment.
+    """
+    contents = [content for _, content in prepared if content is not None]
+    if contents:
+        get_embedding_engine().warm_cache([harden_content(c) for c in contents])
+
+
+async def _store_prepared_items(
+    store: MemoryStore,
+    prepared: list[tuple[dict, str | None]],
+    cwd: str,
+    domain: str,
+    project_slug: str,
+) -> int:
+    """Sequentially remember() every prepared item. Returns count imported."""
+    imported = 0
+    for item, content in prepared:
+        if content is None:
+            continue
+        mid = await _import_single_item(store, item, content, cwd, domain, project_slug)
+        if mid is not None:
+            imported += 1
+            concepts = find_concepts(item.get("content", ""))
+            if concepts:
+                link_concepts(store, mid, concepts)
+    return imported
+
+
 async def _import_file(
     store: MemoryStore,
     path: Path,
@@ -217,14 +267,9 @@ async def _import_file(
     cwd = summary.get("cwd", "")
     domain = slug_to_domain(project_slug)
 
-    imported = 0
-    for item in items:
-        mid = await _import_single_item(store, item, cwd, domain, project_slug)
-        if mid is not None:
-            imported += 1
-            concepts = find_concepts(item.get("content", ""))
-            if concepts:
-                link_concepts(store, mid, concepts)
+    prepared = [(item, _prepare_item_content(item)) for item in items]
+    _warm_embedding_cache(prepared)
+    imported = await _store_prepared_items(store, prepared, cwd, domain, project_slug)
 
     return imported, len(items) - imported
 

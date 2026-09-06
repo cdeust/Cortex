@@ -15,6 +15,7 @@ one object rather than passed as 8-13 positional parameters
 
 from __future__ import annotations
 
+from mcp_server.shared.telemetry_context import set_retrieval_tier
 from mcp_server.core.pg_recall_context import RecallContext, fetch_and_triage
 from mcp_server.core.pg_recall_signals import (
     _get_active_goal,
@@ -235,6 +236,7 @@ def run_recall_pipeline(ctx: RecallContext) -> list[dict]:
     pg_recall_context.py's ``RecallContext``/``fetch_and_triage`` for the
     per-parameter rationale and citations.
     """
+    set_retrieval_tier("pg")
     top_k = ctx.top_k
     candidates, ctx, early_return = fetch_and_triage(ctx)
     if early_return:

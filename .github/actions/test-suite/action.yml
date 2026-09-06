@@ -257,26 +257,21 @@ runs:
         HF_HUB_OFFLINE: "1"
         TRANSFORMERS_OFFLINE: "1"
         CORTEX_RERANKER_OFFLINE: "1"
-      run: pytest --tb=short -q
-
-    # The four steps below are CI-only: they run on the single matrix leg
-    # the ci.yml caller marks run-extended-checks: true (Python 3.12).
-    # release.yml never sets run-extended-checks — its test job is a
-    # pass/fail gate before publishing, not the leg that owns coverage, the
-    # MCP host contract check, or the advertised-test-count/badge check.
-    - name: Run tests with coverage
-      if: inputs.run-extended-checks == 'true'
-      shell: bash
-      env:
-        HF_HUB_OFFLINE: "1"
-        TRANSFORMERS_OFFLINE: "1"
-        CORTEX_RERANKER_OFFLINE: "1"
+        RUN_EXTENDED_CHECKS: ${{ inputs.run-extended-checks }}
       # --cov-fail-under is the statement-coverage floor (issue #196
       # criterion 4): seeded at the number this job itself achieved
       # (82.02% — 30,229 of 36,854 statements, run 30316539703,
       # coverage.py 7.15.2) so the figure can only ratchet up, never
       # silently fall back. Raise the floor when coverage rises.
-      run: pytest --cov=mcp_server --cov-report=xml --cov-report=term-missing --cov-fail-under=82
+      # W1-3: collect coverage during this same suite execution on the
+      # extended leg, preserving both reports and the existing floor.
+      run: |
+        set -euo pipefail
+        pytest_args=(--tb=short -q)
+        if [ "$RUN_EXTENDED_CHECKS" = "true" ]; then
+          pytest_args+=(--cov=mcp_server --cov-report=xml --cov-report=term-missing --cov-fail-under=82)
+        fi
+        pytest "${pytest_args[@]}"
 
     # Match the primary Claude and additive Codex client identities against
     # a real, explicitly configured PostgreSQL instance. Explicit targets
@@ -300,6 +295,8 @@ runs:
     # without collecting the suite, so it is checked in the job that already
     # has the suite installed. `--collect-only` re-collects (~seconds) rather
     # than parsing the run above, so the number is the collector's own.
+    # W1-3 retains this separate assertion: it executes no tests and keeps
+    # the advertised count and badge independent of coverage/run summaries.
     - name: Check advertised test count
       if: inputs.run-extended-checks == 'true'
       shell: bash

@@ -1,54 +1,12 @@
-"""CI-gate completeness: every ci.yml job must be behind the aggregate gate.
+"""Static CI-gate coverage and prerequisite checks without YAML dependencies.
 
-Branch protection on ``main`` names required status checks as strings, in
-GitHub settings — outside git, invisible in review, and unversioned. Naming
-individual jobs there makes the contract break on every rename: extracting
-the test steps into a reusable workflow (issue #336) renamed the four matrix
-legs to ``Test (Python X.Y) / Test (Python X.Y)``, so the four bare contexts
-``main`` required were never reported again and a fully green PR sat BLOCKED
-(PR #387, run 31250898534). Renaming the contexts fixes that one PR and
-leaves the next rename to rediscover it.
+Every job must be a direct CI Green dependency or declare a conditional
+post-merge exemption. Every conditional gated job belongs to ALLOWED_SKIPS;
+the runtime checker independently verifies the reason for each actual skip.
+CI Green must always run to report failures and rejected skips.
 
-So protection names ONE ci.yml context — ``CI Green`` — and the real list
-lives here, in git, where a diff shows it. That moves the failure mode: the
-gate is only as good as its ``needs:`` list, and a job added later that
-nobody adds to it is silently ungated. That is what this script refuses.
-
-It also refuses the second escape hatch. The gate treats any result other
-than ``success`` as failure, EXCEPT for jobs named in its ``ALLOWED_SKIPS``
-env — because a job carrying a job-level ``if:`` legitimately reports
-``skipped``. An unlisted conditional would therefore let a job skip its way
-past the gate, so every job with an ``if:`` must be declared, and every
-declared exemption must correspond to a job that actually has one (a stale
-exemption is a hole nobody is watching).
-
-A third case exists that ``needs:``/``ALLOWED_SKIPS`` cannot express:
-``release-gate`` (issue #392) runs ONLY on a push to ``main`` — after the PR
-it belongs to has already merged. There is nothing for it to gate: it cannot
-block a PR that is already closed, and putting it in ``ci-green.needs`` would
-make the branch-protection context depend on a job that never runs on a PR
-in the first place, permanently blocking every PR. Such a job declares itself
-with a ``# ci-gate-exempt: <reason>`` marker line in its body instead of
-appearing in ``needs:``. The marker is not a blank check: it is refused
-unless the job ALSO carries a job-level ``if:`` — an exempt job with no
-condition would run ungated on every push and PR, which is exactly the hole
-this script exists to close.
-
-Checks, all of them fatal:
-
-1. the gate job exists;
-2. every other ci.yml job appears in the gate's ``needs:`` OR carries a
-   ``# ci-gate-exempt:`` marker;
-3. every name in ``needs:`` is a real job;
-4. every job carrying a job-level ``if:`` and not exempt is listed in
-   ``ALLOWED_SKIPS``;
-5. every name in ``ALLOWED_SKIPS`` is a job that carries an ``if:``;
-6. every ``# ci-gate-exempt:`` job carries a job-level ``if:`` — an exemption
-   with no condition is not a narrower gate, it is no gate.
-
-Static only — regex over the workflow text, no PyYAML. The Lint job installs
-ruff and nothing else, and this script runs there alongside
-``check_doc_claims.py``, which is static for the same reason.
+Source: tasks/codex-green-remediation-plan.md W1-2 and GitHub workflow syntax:
+https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idneeds
 """
 
 from __future__ import annotations
@@ -60,12 +18,18 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ci.yml"
 
-# The single job branch protection points at. Renaming it is a protection
-# change, not a refactor — hence a named constant rather than a literal.
+_SCRIPTS_DIR = str(Path(__file__).resolve().parent)
+if _SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPTS_DIR)
+from check_ci_gate_results import check_policy  # noqa: E402
+
+# The aggregate context for this workflow. Renaming it requires updating
+# branch protection, hence a named constant rather than a literal.
 GATE_JOB = "ci-green"
 
 _JOB_RE = re.compile(r"^  ([A-Za-z0-9_-]+):\s*$")
 _JOB_IF_RE = re.compile(r"^    if:\s*(\S.*)$")
+_NEEDS_INLINE_RE = re.compile(r"^    needs:\s*\[([^]]*)\]\s*$")
 _NEEDS_BLOCK_RE = re.compile(r"^    needs:\s*$")
 _NEEDS_ITEM_RE = re.compile(r"^      - ([A-Za-z0-9_-]+)\s*$")
 _ALLOWED_SKIPS_RE = re.compile(r"^\s*ALLOWED_SKIPS:\s*(\S.*?)\s*$")
@@ -114,6 +78,10 @@ def _parse_needs(body: list[str]) -> list[str]:
     collecting = False
 
     for line in body:
+        inline = _NEEDS_INLINE_RE.match(line)
+        if inline:
+            needs.extend(name.strip() for name in inline.group(1).split(","))
+            continue
         if _NEEDS_BLOCK_RE.match(line):
             collecting = True
             continue
@@ -205,7 +173,7 @@ def _check_allowed_skips(
 ) -> list[str]:
     """Checks 4 and 5: ALLOWED_SKIPS and the set of conditional jobs agree.
 
-    Exempt jobs never appear in ``needs:``, so ci-green's jq never evaluates
+    Exempt jobs never appear in ``needs:``, so CI Green never evaluates
     their result — ALLOWED_SKIPS governs skip results INSIDE the gate only,
     and does not apply to a job structurally outside it.
     """
@@ -242,6 +210,32 @@ def _check_exempt_jobs_are_conditional(
     ]
 
 
+def _check_gate_execution(bodies: dict[str, list[str]], needs: list[str]) -> list[str]:
+    conditions = [
+        match.group(1) for line in bodies[GATE_JOB] if (match := _JOB_IF_RE.match(line))
+    ]
+    if conditions != ["always()"]:
+        return [f"{GATE_JOB} must have exactly 'if: always()'"]
+    if len(needs) != len(set(needs)) or GATE_JOB in needs:
+        return [f"{GATE_JOB}.needs has a duplicate or self dependency"]
+    return []
+
+
+def check_runtime_contract(text: str) -> list[str]:
+    """Check production workflow policy and lint-before-matrix dependencies."""
+    _, needs, allowed, _ = parse_workflow(text)
+    failures = check_policy(needs, allowed)
+    bodies = _job_bodies(text)
+    for job in allowed:
+        if set(_parse_needs(bodies.get(job, []))) != {"changes", "lint"}:
+            failures.append(f"{job} must depend on exactly changes and lint")
+    for job in ("changes", "lint"):
+        body = bodies.get(job, [])
+        if _parse_needs(body) or any(_JOB_IF_RE.match(line) for line in body):
+            failures.append(f"{job} must always run without prerequisites")
+    return failures
+
+
 def check(text: str) -> list[str]:
     """Return the list of failures; empty means the gate is complete."""
     jobs, needs, allowed_skips, exempt = parse_workflow(text)
@@ -257,7 +251,8 @@ def check(text: str) -> list[str]:
         ]
 
     return (
-        _check_every_job_is_gated(jobs, set(needs) | exempt)
+        _check_gate_execution(_job_bodies(text), needs)
+        + _check_every_job_is_gated(jobs, set(needs) | exempt)
         + _check_needs_are_real_jobs(jobs, needs)
         + _check_allowed_skips(jobs, allowed_skips, exempt)
         + _check_exempt_jobs_are_conditional(jobs, exempt)
@@ -269,7 +264,8 @@ def main() -> int:
         print(f"FAIL: {CI_WORKFLOW} not found", file=sys.stderr)
         return 1
 
-    failures = check(CI_WORKFLOW.read_text(encoding="utf-8"))
+    text = CI_WORKFLOW.read_text(encoding="utf-8")
+    failures = check(text) + check_runtime_contract(text)
     if failures:
         print("CI gate completeness: FAIL", file=sys.stderr)
         for failure in failures:

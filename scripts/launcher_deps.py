@@ -282,18 +282,14 @@ def ensure_deps(deps_dir: str) -> None:
 def ensure_all_deps(deps_dir: str) -> None:
     """Install base + ML dependencies (SessionStart hook only).
 
-    Precondition/postcondition: same shape as ``ensure_deps``, extended
-    to ``_ML_PACKAGES``. Kept out of the hot path for every OTHER hook
+    Same contract as ``ensure_deps``, extended to ``_ML_PACKAGES``.
+    Kept out of the hot path for every OTHER hook
     (issue #97 suggestion 3) — only SessionStart and explicit
     ``--install-deps`` invoke this.
 
-    The ML install passes the base pins as pip constraints (residue 3,
-    second half): without them, an ML transitive dependency shared with
-    the base stack (numpy, via sentence-transformers) resolves freely
-    and can disagree with the version the base install already
-    committed. Constraining the ML resolve to the base pins keeps a
-    shared transitive on the SAME pinned version regardless of install
-    order.
+    Base constraints keep shared ML transitives (notably numpy) on the same
+    pinned version as the base install (residue 3). Failed installs cannot
+    receive a success stamp, even when an older ML stack remains importable.
     """
     ensure_deps(deps_dir)
     ml_pins = [spec for _name, spec in _ML_PACKAGES]
@@ -315,7 +311,8 @@ def ensure_all_deps(deps_dir: str) -> None:
         ]
         if missing:
             base_pins = [spec for _name, spec in _BASE_PACKAGES]
-            _pip_install(deps_dir, missing, constraints=base_pins)
+            if not _pip_install(deps_dir, missing, constraints=base_pins):
+                return  # A failed CPU upgrade must never receive a success stamp.
         if _importable("sentence_transformers", deps_dir) and _importable(
             "flashrank", deps_dir
         ):

@@ -24,6 +24,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from mcp_server.hooks import session_start as hook
+from mcp_server.shared import log_rotation
 
 # ── Event reading ─────────────────────────────────────────────────────
 
@@ -692,19 +693,15 @@ def test_auto_backfill_failure_is_logged_and_returns_zero(capsys, monkeypatch):
 
 
 # ── Background spawn: interpreter resolution (issue #315) ─────────────
-#
 # Both spawn helpers must resolve the interpreter via python_executable()
 # (== sys.executable), never by resolving "python3"/"python" on PATH
-# first — on Windows that hits the Microsoft Store stub, which exits
-# without running anything and silently disables the spawn.
+# first — on Windows that hits the Microsoft Store stub and disables spawning.
 
 
-def _tracking_open(monkeypatch, target):
-    """Patch ``target.open`` (a hook module) to record every path opened,
-    while still delegating to the real ``open`` — string equality on the
-    recorded path is case-sensitive on every host OS, unlike
-    ``Path.exists()`` (macOS APFS is case-insensitive by default, so it
-    cannot distinguish ``.claude`` from ``.CLAUDE``).
+def _tracking_open(monkeypatch):
+    """Record rotating-writer log paths, delegating to the real open.
+    String comparisons remain case-sensitive on every OS; Path.exists cannot
+    distinguish .claude from .CLAUDE on default case-insensitive macOS APFS.
     """
     opened: list[str] = []
     real_open = open
@@ -713,7 +710,7 @@ def _tracking_open(monkeypatch, target):
         opened.append(str(path))
         return real_open(path, *args, **kwargs)
 
-    monkeypatch.setattr(target, "open", _open, raising=False)
+    monkeypatch.setattr(log_rotation, "open", _open, raising=False)
     return opened
 
 
@@ -723,6 +720,7 @@ class TestSpawnConsolidateCycleInterpreterResolution:
         (plugin_root / "scripts").mkdir(parents=True)
         (plugin_root / "scripts" / "launcher.py").write_text("# stub\n")
         monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(plugin_root))
+        monkeypatch.delenv("CORTEX_CLAUDE_DIR", raising=False)
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         return plugin_root
 
@@ -735,7 +733,7 @@ class TestSpawnConsolidateCycleInterpreterResolution:
         """
         plugin_root = self._write_launcher(tmp_path, monkeypatch)
         monkeypatch.setattr("shutil.which", lambda name: f"/fake/store-stub/{name}")
-        opened = _tracking_open(monkeypatch, hook)
+        opened = _tracking_open(monkeypatch)
         captured = {}
 
         def _fake_popen(cmd, **kwargs):
@@ -769,6 +767,7 @@ class TestSpawnConsolidateCycleInterpreterResolution:
         self, tmp_path, monkeypatch
     ):
         monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(tmp_path / "no-scripts-here"))
+        monkeypatch.delenv("CORTEX_CLAUDE_DIR", raising=False)
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
         captured = {}
@@ -791,6 +790,7 @@ class TestSpawnConsolidateCycleInterpreterResolution:
         self, tmp_path, monkeypatch
     ):
         monkeypatch.delenv("CLAUDE_PLUGIN_ROOT", raising=False)
+        monkeypatch.delenv("CORTEX_CLAUDE_DIR", raising=False)
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         captured = {}
 
@@ -836,6 +836,7 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
         (plugin_root / "scripts" / "launcher.py").write_text("# stub\n")
         monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(plugin_root))
         monkeypatch.setenv("CLAUDE_PROJECT_ROOT", "/the/project")
+        monkeypatch.delenv("CORTEX_CLAUDE_DIR", raising=False)
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         return plugin_root
 
@@ -845,7 +846,7 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
         plugin_root = self._write_launcher(tmp_path, monkeypatch)
         stale_mock, lookup_mock = self._mock_pipeline(monkeypatch)
         monkeypatch.setattr("shutil.which", lambda name: f"/fake/store-stub/{name}")
-        opened = _tracking_open(monkeypatch, hook)
+        opened = _tracking_open(monkeypatch)
         captured = {}
 
         def _fake_popen(cmd, **kwargs):
@@ -891,6 +892,7 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
     ):
         monkeypatch.delenv("CLAUDE_PLUGIN_ROOT", raising=False)
         monkeypatch.setenv("CLAUDE_PROJECT_ROOT", "/the/project")
+        monkeypatch.delenv("CORTEX_CLAUDE_DIR", raising=False)
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         self._mock_pipeline(monkeypatch)
         captured = {}

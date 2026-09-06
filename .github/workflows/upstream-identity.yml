@@ -27,10 +27,17 @@ on:
 permissions:
   contents: read
 
+# source: W1-7 in tasks/codex-green-remediation-plan.md; superseded PR checks.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   contract:
     name: agree with the upstream identity contract
     runs-on: ubuntu-latest
+    # source: run 34034615566 (2026-09-06), max 9s; ceil(2 * 9 / 60).
+    timeout-minutes: 1
     env:
       CONTRACT_URL: https://raw.githubusercontent.com/cdeust/ai-architect-mcp-codebase/37728cc5747cebe39ea9d4011b7424de90f0a57b/mcp-contract.json
     steps:

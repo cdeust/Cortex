@@ -254,6 +254,39 @@ class EmbeddingEngine(_EmbeddingLifecycleMixin, _EmbeddingMathMixin):
             results.append(arr.tobytes())
         return results
 
+    def warm_cache(self, texts: list[str]) -> None:
+        """Pre-populate the LRU cache for ``texts`` via one ``encode_batch()`` call.
+
+        Lets a caller about to make many individual ``encode()`` calls for
+        already-known text (e.g. backfill importing a session file's items
+        one ``remember()`` at a time -- issue: green-software review
+        2026-09-04) pay one batched model inference instead of
+        ``len(texts)`` sequential ones: each subsequent ``encode()`` call
+        for a warmed text becomes a cache hit. Already-cached and duplicate
+        texts are skipped/deduped before encoding.
+
+        LRU eviction (``_cache_max``) still applies -- if ``texts`` exceeds
+        the cache size, the earliest-warmed entries may be evicted before
+        their ``encode()`` call runs, which only forgoes the optimization
+        for those; ``encode()`` still returns a correct vector via its own
+        per-text fallback path.
+        """
+        to_encode = list(
+            dict.fromkeys(
+                t for t in texts if t and self._cache_key(t) not in self._cache
+            )
+        )
+        if not to_encode:
+            return
+        vecs = self.encode_batch(to_encode)
+        for text, vec in zip(to_encode, vecs, strict=True):
+            if vec is None:
+                continue
+            key = self._cache_key(text)
+            if len(self._cache) >= self._cache_max:
+                self._cache.popitem(last=False)  # evict LRU entry
+            self._cache[key] = vec
+
     def _fallback_encode(self, text: str) -> bytes:
         """Delegate to the algorithmic fallback provider (issue #169).
 
