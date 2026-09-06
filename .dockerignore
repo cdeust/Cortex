@@ -12,3 +12,17 @@ build
 .DS_Store
 benchmarks/longmemeval/*.json
 benchmarks/locomo/*.json
+
+# Local installs and generated state; preserve tracked project policy.
+.venv
+deps
+.claude/*
+!.claude/settings.json
+graphify-out
+**/node_modules
+**/__pycache__
+**/*.pyc
+
+# Generated benchmark stdout; retain scripts, inputs and summaries.
+benchmarks/beam/variance/*.txt
+benchmarks/results/**/*.log
