@@ -91,8 +91,8 @@ jobs:
             # source: run 34046091095 (2026-09-06), max 1197s; ceil(2 * 1197 / 60).
             timeout-minutes: 40
           - python-version: "3.13"
-            # source: run 33951959734 (2026-09-05), max 577s; ceil(2 * 577 / 60).
-            timeout-minutes: 20
+            # source: run 33688337476 (2026-09-02), max 1637s; ceil(2 * 1637 / 60).
+            timeout-minutes: 55
 
     steps:
       # A local `uses: ./...` is resolved from the checked-out tree, so the
