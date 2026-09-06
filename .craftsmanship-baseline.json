@@ -5618,11 +5618,6 @@
       "detail": "_STALE_LOCK_SECONDS"
     },
     {
-      "file": "scripts/launcher_deps_install.py",
-      "kind": "method-size",
-      "detail": "pip_install"
-    },
-    {
       "file": "scripts/mcp_toplist_ranking.py",
       "kind": "unsourced-constant",
       "detail": "_MIN_PRINTABLE_PCT"

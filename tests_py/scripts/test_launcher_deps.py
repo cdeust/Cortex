@@ -1407,6 +1407,7 @@ def test_pip_install_writes_and_cleans_constraints_file(
 ):
     deps_dir = tmp_path / "deps"
     deps_dir.mkdir()
+    monkeypatch.setattr(deps_mod._install._cpu, "required", lambda packages: False)
     captured_cmd = {}
 
     def fake_run(cmd, **kwargs):
