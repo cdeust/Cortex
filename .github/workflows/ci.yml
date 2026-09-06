@@ -4,7 +4,6 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -15,6 +14,44 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Changed paths
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+      docs: ${{ steps.filter.outputs.docs }}
+      docker: ${{ steps.filter.outputs.docker }}
+      workflows: ${{ steps.filter.outputs.workflows }}
+      deps: ${{ steps.filter.outputs.deps }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Verify pull request file-list completeness
+        if: github.event_name == 'pull_request'
+        run: python3 scripts/check_ci_file_count.py
+      # Classify each file independently. Unknown paths conservatively count
+      # as code; a docs file cannot hide code changed in the same PR.
+      # source: https://github.com/dorny/paths-filter/tree/v4.0.1#usage
+      # `every` applies all code exclusions to each file, not to the PR.
+      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+        id: filter
+        with:
+          predicate-quantifier: every
+          filters: |
+            code:
+              - '**'
+              - '!{*.md,docs/**/*.md,tasks/**/*.md,Dockerfile,.dockerignore,docker/**,.devcontainer/**,.github/**,pyproject.toml,uv.lock,requirements/**,**/package.json,**/package-lock.json}'
+            docs:
+              - '{*.md,docs/**/*.md,tasks/**/*.md}'
+            docker:
+              - '{Dockerfile,.dockerignore,docker/**,.devcontainer/**}'
+            workflows:
+              - '.github/**'
+            deps:
+              - '{pyproject.toml,uv.lock,requirements/**,**/package.json,**/package-lock.json}'
+
   # Uses the composite action at .github/actions/test-suite/action.yml for
   # the step-level rationale, including why the shared unit is a composite
   # action and not a reusable workflow: a job delegating via `uses:` reports
@@ -26,6 +63,8 @@ jobs:
   # `requirements/ci-postgresql.txt` and tree-sitter grammars are now
   # installed unconditionally inside the action rather than passed in.
   test:
+    needs: [changes, lint]
+    if: github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true'
     name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     # Bound a hung leg instead of inheriting GitHub's 360-minute default:
@@ -64,6 +103,8 @@ jobs:
           run-extended-checks: ${{ matrix.python-version == '3.12' }}
 
   test-sqlite:
+    needs: [changes, lint]
+    if: github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true'
     name: Test (SQLite backend)
     runs-on: ubuntu-latest
 
@@ -204,12 +245,13 @@ jobs:
         run: python scripts/verify_mcp_hosts.py -- hypermnesia-mcp
 
   mcp-host-config:
+    needs: [changes, lint]
+    if: (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false)
     name: Validate MCP host configurations
     # The pinned Claude package requires its postinstall to select the native
     # validator. Never execute install scripts from a lockfile modified by an
     # untrusted fork; same-repository PRs and main/workflow_dispatch remain
     # covered by this vendor-parser contract.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -284,6 +326,8 @@ jobs:
               -- "${plugin_command[@]}"
 
   test-windows:
+    needs: [changes, lint]
+    if: github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true'
     name: Test (Windows, SQLite backend)
     runs-on: windows-latest
 
@@ -406,6 +450,8 @@ jobs:
   # under this narrower dependency set, with no PostgreSQL service needed
   # (`--storage-selection sqlite` is the default).
   release-deps:
+    needs: [changes, lint]
+    if: github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true'
     name: Release dependency set (requirements/release.txt)
     runs-on: ubuntu-latest
     steps:
@@ -600,6 +646,8 @@ jobs:
   # scripts/craftsmanship_baseline.py for why pre-existing debt (recorded
   # in .craftsmanship-baseline.json) does not retroactively block.
   craftsmanship:
+    needs: [changes, lint]
+    if: github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true'
     name: Craftsmanship Gate
     runs-on: ubuntu-latest
     steps:
@@ -623,6 +671,8 @@ jobs:
         run: python scripts/check_craftsmanship.py
 
   typecheck:
+    needs: [changes, lint]
+    if: github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true'
     name: Type Check
     runs-on: ubuntu-latest
     steps:
@@ -679,6 +729,8 @@ jobs:
         run: .venv/bin/python -m pyright mcp_server/
 
   build:
+    needs: [changes, lint]
+    if: github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true'
     name: Build Package
     runs-on: ubuntu-latest
     steps:
@@ -709,6 +761,8 @@ jobs:
   # separate services. The claim here is narrow and worth making on its own:
   # the image still builds, and its hash-pinned installs still resolve.
   docker-runtime-build:
+    needs: [changes, lint]
+    if: github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true' || needs.changes.outputs.docker == 'true'
     name: Docker Build (runtime image)
     runs-on: ubuntu-latest
     steps:
@@ -738,6 +792,8 @@ jobs:
           cache-to: type=gha,mode=max
 
   devcontainer-build:
+    needs: [changes, lint]
+    if: github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true' || needs.changes.outputs.docker == 'true'
     name: Docker Build (devcontainer image)
     runs-on: ubuntu-latest
     steps:
@@ -763,6 +819,8 @@ jobs:
           cache-to: type=gha,mode=max
 
   docker-smoke:
+    needs: [changes, lint]
+    if: github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true' || needs.changes.outputs.docker == 'true'
     name: Docker Smoke (bare-container DB-less contract)
     runs-on: ubuntu-latest
     # BLOCKING: this job asserts the exact contract that silently broke for
@@ -807,8 +865,9 @@ jobs:
         env:
           CORTEX_SMOKE_IMAGE: cortex-smoke:local
 
-  # The one status check branch protection on `main` names. Everything else
-  # in this workflow is reached through its `needs:` list, so renaming a job,
+  # The aggregate required check for this workflow. CodeQL remains an
+  # independent required check outside ci.yml. Everything else here is reached
+  # through its `needs:` list, so renaming a job,
   # resizing the matrix, or delegating steps to a reusable workflow (which
   # rewrites check names to "<caller> / <callee>", issue #336) no longer
   # touches the protection settings — the contract is this file, in git,
@@ -827,6 +886,7 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     needs:
+      - changes
       - test
       - test-sqlite
       - mcp-host-config
@@ -840,30 +900,15 @@ jobs:
       - devcontainer-build
       - docker-smoke
     steps:
-      - name: Require every job above to have succeeded
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Require successful jobs or justified skips
         env:
           NEEDS: ${{ toJSON(needs) }}
-          # Jobs permitted to report `skipped`, with the reason. ONLY jobs
-          # carrying a job-level `if:` belong here; anything else that skips
-          # is a gap, not an exemption.
-          #   mcp-host-config — `if: github.event_name != 'pull_request' ||
-          #   github.event.pull_request.head.repo.fork == false`: a fork PR
-          #   has no access to the secrets it needs, so it cannot run there.
-          ALLOWED_SKIPS: mcp-host-config
-        run: |
-          set -euo pipefail
-          echo "$NEEDS"
-          failed=$(printf '%s' "$NEEDS" | jq -r --arg allowed "$ALLOWED_SKIPS" '
-            ($allowed | split(",") | map(ltrimstr(" ") | rtrimstr(" "))) as $ok
-            | to_entries[]
-            | select(.value.result != "success")
-            | select(.value.result != "skipped" or ([.key] | inside($ok) | not))
-            | "\(.key)=\(.value.result)"')
-          if [ -n "$failed" ]; then
-            echo "::error::CI Green refuses the merge — $(echo "$failed" | tr '\n' ' ')"
-            exit 1
-          fi
-          echo "every required job succeeded"
+          # Path skips are valid only for irrelevant PRs. mcp-host-config
+          # additionally skips fork PRs to avoid untrusted npm postinstall.
+          # The checker verifies these reasons against this run's inputs.
+          ALLOWED_SKIPS: test,test-sqlite,mcp-host-config,test-windows,release-deps,craftsmanship,typecheck,build,docker-runtime-build,devcontainer-build,docker-smoke
+        run: python3 scripts/check_ci_gate_results.py
 
   # The tag-as-output half of issue #392: a green push to `main` tags the
   # exact SHA that just passed CI Green, instead of a human hand-picking

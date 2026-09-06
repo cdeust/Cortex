@@ -114,6 +114,18 @@ class RefusesIncompleteGate(unittest.TestCase):
         )
         self.assertIn("'lint'", self._only_failure(workflow))
 
+    def test_gate_must_always_run(self) -> None:
+        for condition in ("", "    if: success()\n"):
+            workflow = _COMPLETE.replace("    if: always()\n", condition)
+            self.assertIn("always()", self._only_failure(workflow))
+
+    def test_duplicate_or_self_needs_fail(self) -> None:
+        for job in ("lint", "ci-green"):
+            workflow = _COMPLETE.replace(
+                "      - lint\n", f"      - lint\n      - {job}\n"
+            )
+            self.assertIn("dependency", self._only_failure(workflow))
+
 
 _WITH_EXEMPT_JOB = _workflow(
     """  lint:
@@ -199,6 +211,30 @@ class RepositoryWorkflowIsGated(unittest.TestCase):
             gate.check(gate.CI_WORKFLOW.read_text(encoding="utf-8")),
             [],
         )
+
+    def test_runtime_policy_matches_live_workflow(self) -> None:
+        self.assertEqual(gate.check_runtime_contract(gate.CI_WORKFLOW.read_text()), [])
+
+    def test_costly_jobs_must_wait_for_lint_and_changes(self) -> None:
+        workflow = gate.CI_WORKFLOW.read_text()
+        for prerequisites in ("[changes]", "[lint]", "[changes, lint, test]"):
+            changed = workflow.replace("[changes, lint]", prerequisites, 1)
+            failures = gate.check_runtime_contract(changed)
+            self.assertTrue(any("depend on exactly" in f for f in failures))
+
+    def test_lint_and_changes_cannot_be_conditional(self) -> None:
+        workflow = gate.CI_WORKFLOW.read_text()
+        for job in ("changes", "lint"):
+            changed = workflow.replace(f"  {job}:\n", f"  {job}:\n    if: false\n")
+            self.assertTrue(gate.check_runtime_contract(changed))
+
+    def test_new_skip_needs_an_executable_policy(self) -> None:
+        workflow = gate.CI_WORKFLOW.read_text()
+        workflow = workflow.replace(
+            "ALLOWED_SKIPS: test,", "ALLOWED_SKIPS: unknown-job,test,"
+        )
+        failures = gate.check_runtime_contract(workflow)
+        self.assertTrue(any("runtime skip policy" in f for f in failures))
 
 
 if __name__ == "__main__":
