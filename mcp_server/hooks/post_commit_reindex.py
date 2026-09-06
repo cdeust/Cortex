@@ -44,6 +44,7 @@ from pathlib import Path
 from typing import Any
 
 from mcp_server.shared.platform import python_executable
+from mcp_server.shared.log_rotation import methodology_log_path, open_rotating_log
 
 _LOG_PREFIX = "[post-commit-reindex]"
 _COOLDOWN_FILE = Path("/tmp/cortex_reindex_cooldown.json")
@@ -232,10 +233,9 @@ def _spawn_reanalyze(root: str) -> bool:
         root,
         "--reindex",
     ]
-    log_path = Path.home() / ".claude" / "methodology" / "pipeline_reanalyze.log"
+    log_path = methodology_log_path("pipeline_reanalyze.log")
     try:
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(log_path, "a") as log:
+        with open_rotating_log(log_path) as log:
             subprocess.Popen(  # noqa: S603 — cmd built from trusted sources
                 cmd,
                 stdin=subprocess.DEVNULL,

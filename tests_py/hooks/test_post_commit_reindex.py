@@ -21,6 +21,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from mcp_server.hooks import post_commit_reindex as hook
+from mcp_server.shared import log_rotation
 
 
 @pytest.fixture(autouse=True)
@@ -126,6 +127,7 @@ class TestSpawnReanalyzeInterpreterResolution:
         (plugin_root / "scripts").mkdir(parents=True)
         (plugin_root / "scripts" / "launcher.py").write_text("# stub\n")
         monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(plugin_root))
+        monkeypatch.delenv("CORTEX_CLAUDE_DIR", raising=False)
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         return plugin_root
 
@@ -166,7 +168,7 @@ class TestSpawnReanalyzeInterpreterResolution:
             return real_open(path, *args, **kwargs)
 
         monkeypatch.setattr(hook.subprocess, "Popen", _fake_popen)
-        monkeypatch.setattr(hook, "open", _tracking_open, raising=False)
+        monkeypatch.setattr(log_rotation, "open", _tracking_open, raising=False)
 
         assert hook._spawn_reanalyze("/some/repo") is True
         launcher = plugin_root / "scripts" / "launcher.py"
@@ -195,6 +197,7 @@ class TestSpawnReanalyzeInterpreterResolution:
         self, tmp_path, monkeypatch
     ):
         monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(tmp_path / "no-scripts-dir"))
+        monkeypatch.delenv("CORTEX_CLAUDE_DIR", raising=False)
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         with patch.object(hook.subprocess, "Popen") as popen:
             assert hook._spawn_reanalyze("/some/repo") is False
@@ -208,6 +211,7 @@ class TestSpawnReanalyzeInterpreterResolution:
         root shipping this very hook's scripts/launcher.py.
         """
         monkeypatch.delenv("CLAUDE_PLUGIN_ROOT", raising=False)
+        monkeypatch.delenv("CORTEX_CLAUDE_DIR", raising=False)
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         captured = {}
 
