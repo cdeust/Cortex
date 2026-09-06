@@ -86,7 +86,7 @@ BASE_PACKAGES: list[tuple[str, str]] = [
     ("pydantic", "pydantic==2.13.4"),
     ("pydantic_settings", "pydantic-settings==2.14.2"),
     ("numpy", f"numpy=={numpy_version(sys.version_info[:2])}"),
-    ("psycopg", "psycopg[binary]==3.3.4"),
+    ("psycopg", "psycopg[binary]==3.3.5"),
     ("psycopg_pool", "psycopg_pool==3.3.1"),
     ("pgvector", "pgvector==0.5.0"),
 ]
