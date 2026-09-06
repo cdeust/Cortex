@@ -1,7 +1,5 @@
 """Shared helpers for ingest_codebase and ingest_prd handlers.
 
-Two concerns live here:
-
 1. Graph-path memoisation — after a codebase analysis, the returned
    graph_path is stored as a protected Cortex memory tagged
    ``_code_graph:<project-id>`` so subsequent ingest runs can reuse
@@ -22,8 +20,6 @@ import os
 from pathlib import Path
 from typing import Any
 
-from mcp_server.infrastructure.mcp_client_pool import get_client
-from mcp_server.infrastructure.upstream_governor import govern
 from mcp_server.observability import silent_failure
 
 CODE_GRAPH_TAG_PREFIX = "_code_graph:"
@@ -265,6 +261,9 @@ async def call_upstream(
     Raises McpConnectionError on connection/transport failure. Returns
     the tool result as a plain dict when the server answers successfully.
     """
+    from mcp_server.infrastructure.mcp_client_pool import get_client  # noqa: PLC0415 — graph memo lookups do not need the upstream client
+    from mcp_server.infrastructure.upstream_governor import govern  # noqa: PLC0415 — create admission machinery only for an upstream call
+
     client = await get_client(server_name)
     # Bound concurrent in-flight calls to this single-process upstream child
     # across every Cortex handler. Without this, two batch tools (distinct
