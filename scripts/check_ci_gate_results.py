@@ -1,11 +1,12 @@
 """Fail CI Green unless every job succeeded or has a verified skip reason.
 
-The policy mirrors ci.yml: non-PR runs execute the full matrix; code,
-dependency or workflow changes do so on PRs. Docker changes also run Docker
-jobs. The vendor CLI job skips fork PRs because it executes npm postinstall.
-Missing classifications and unknown jobs fail closed.
+The policy mirrors ci.yml: code, dependency or workflow PR changes run code
+jobs and Docker smoke. Pushes and dispatches also run those jobs; schedules
+run smoke but skip code jobs. Runtime/devcontainer builds require Docker
+changes, a schedule or a dispatch. The vendor CLI job skips fork PRs because
+it executes npm postinstall. Missing classifications and unknown jobs fail closed.
 
-Source: tasks/codex-green-remediation-plan.md W1-2 and ci.yml job predicates.
+Source: tasks/codex-green-remediation-plan.md W1-2/W1-4 and ci.yml predicates.
 GitHub's needs context exposes result and outputs for direct dependencies:
 https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#needs-context
 """
@@ -30,13 +31,13 @@ CODE_JOBS = frozenset(
         "build",
     }
 )
-DOCKER_JOBS = frozenset({"docker-runtime-build", "devcontainer-build", "docker-smoke"})
+DOCKER_BUILD_JOBS = frozenset({"docker-runtime-build", "devcontainer-build"})
 ALWAYS_JOBS = frozenset({"changes", "lint"})
-CONDITIONAL_JOBS = CODE_JOBS | DOCKER_JOBS
+CONDITIONAL_JOBS = CODE_JOBS | DOCKER_BUILD_JOBS | {"docker-smoke"}
 EXPECTED_JOBS = ALWAYS_JOBS | CONDITIONAL_JOBS
 # source: .github/workflows/ci.yml changes.outputs and on triggers.
 FILTERS = frozenset({"code", "docs", "docker", "workflows", "deps"})
-EVENTS = frozenset({"pull_request", "push", "workflow_dispatch"})
+EVENTS = frozenset({"pull_request", "push", "workflow_dispatch", "schedule"})
 
 
 def check_policy(needs: list[str], allowed: list[str]) -> list[str]:
@@ -75,10 +76,12 @@ def _required_jobs(flags: dict[str, bool], event_name: str, fork: bool) -> set[s
         flags[name] for name in ("code", "deps", "workflows")
     )
     required = set(ALWAYS_JOBS)
-    if full:
+    if full and event_name != "schedule":
         required.update(CODE_JOBS)
     if full or flags["docker"]:
-        required.update(DOCKER_JOBS)
+        required.add("docker-smoke")
+    if flags["docker"] or event_name in ("schedule", "workflow_dispatch"):
+        required.update(DOCKER_BUILD_JOBS)
     if fork:
         required.discard("mcp-host-config")
     return required
