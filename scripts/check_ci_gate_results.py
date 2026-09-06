@@ -10,6 +10,8 @@ GitHub's needs context exposes result and outputs for direct dependencies:
 https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#needs-context
 """
 
+# Temporary code-path acceptance probe for W1-2; this test PR will be closed.
+
 from __future__ import annotations
 
 import json
