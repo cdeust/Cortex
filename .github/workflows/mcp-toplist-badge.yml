@@ -27,6 +27,8 @@ jobs:
   refresh:
     name: refresh rank badge from upstream
     runs-on: ubuntu-latest
+    # source: run 30692957797 (2026-08-01), max 32s; ceil(2 * 32 / 60).
+    timeout-minutes: 2
     permissions:
       contents: write
       pull-requests: write

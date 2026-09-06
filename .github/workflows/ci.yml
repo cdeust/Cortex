@@ -21,6 +21,8 @@ jobs:
   changes:
     name: Changed paths
     runs-on: ubuntu-latest
+    # source: run 34035713474 (2026-09-06), max 9s; ceil(2 * 9 / 60).
+    timeout-minutes: 1
     permissions:
       contents: read
       pull-requests: read
@@ -71,25 +73,26 @@ jobs:
     if: github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true')
     name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
-    # Bound a hung leg instead of inheriting GitHub's 360-minute default:
-    # release run 30741657854 (v4.17.0, CHANGELOG 4.17.1) sat in FlashRank's
-    # timeout-less `requests.get` until pytest-timeout fired, and only that
-    # per-test guard, not the job, ever bounded the suite.
-    # source: measured 2026-09-03 over the last 12 green `main` runs of this
-    # workflow (gh run list --status success, runs 31417063954 to
-    # 33688337476, 48 legs, started_at to completed_at per job): Test (Python
-    # 3.12, the only leg running the extended checks) took 15-20 min (max
-    # 19 min 36 s, run 32747742631); the other three legs took 8-11 min in 11
-    # of the 12 runs, but in run 33688337476 (c5ec018a) Python 3.10 took
-    # 15 min 06 s and Python 3.13 took 27 min 17 s, the slowest green leg in
-    # the window. 60 min is about twice that maximum (60 / 27.3 = 2.2), so a
-    # slow runner still passes while a stalled job is cut within one ordinary
-    # run's wall time.
-    timeout-minutes: 60
+    # source: W1-7 review and successful W2 runs cited per matrix leg.
+    # Each limit is ceil(twice that leg's maximum elapsed seconds / 60).
+    timeout-minutes: ${{ matrix.timeout-minutes }}
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
+        include:
+          - python-version: "3.10"
+            # source: run 34047249647 (2026-09-06), max 980s; ceil(2 * 980 / 60).
+            timeout-minutes: 33
+          - python-version: "3.11"
+            # source: run 33806380625 (2026-09-03), max 1931s; ceil(2 * 1931 / 60).
+            timeout-minutes: 65
+          - python-version: "3.12"
+            # source: run 34046091095 (2026-09-06), max 1197s; ceil(2 * 1197 / 60).
+            timeout-minutes: 40
+          - python-version: "3.13"
+            # source: run 33688337476 (2026-09-02), max 1637s; ceil(2 * 1637 / 60).
+            timeout-minutes: 55
 
     steps:
       # A local `uses: ./...` is resolved from the checked-out tree, so the
@@ -111,6 +114,8 @@ jobs:
     if: github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true')
     name: Test (SQLite backend)
     runs-on: ubuntu-latest
+    # source: run 33806380625 (2026-09-03), max 292s; ceil(2 * 292 / 60).
+    timeout-minutes: 10
 
     # Force the SQLite fallback path — no PostgreSQL installed or started.
     # The conftest detects PG-unreachable and sets CORTEX_MEMORY_STORE_BACKEND=sqlite
@@ -257,6 +262,8 @@ jobs:
     # untrusted fork; same-repository PRs and main/workflow_dispatch remain
     # covered by this vendor-parser contract.
     runs-on: ubuntu-latest
+    # source: run 33951959734 (2026-09-05), max 61s; ceil(2 * 61 / 60).
+    timeout-minutes: 3
     permissions:
       contents: read
 
@@ -341,6 +348,8 @@ jobs:
     if: github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true')
     name: Test (Windows, SQLite backend)
     runs-on: windows-latest
+    # source: run 33990473565 (2026-09-05), max 426s; ceil(2 * 426 / 60).
+    timeout-minutes: 15
 
     # Real NT proof for the cross-platform fixes (fcntl→msvcrt, sys.executable,
     # NTFS exec bits, $HOME override, path separators). We use the SQLite
@@ -467,6 +476,8 @@ jobs:
     if: github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true')
     name: Release dependency set (requirements/release.txt)
     runs-on: ubuntu-latest
+    # source: run 33806380625 (2026-09-03), max 109s; ceil(2 * 109 / 60).
+    timeout-minutes: 4
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -513,6 +524,8 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    # source: run 33951959734 (2026-09-05), max 17s; ceil(2 * 17 / 60).
+    timeout-minutes: 1
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -683,6 +696,8 @@ jobs:
     if: github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true')
     name: Craftsmanship Gate
     runs-on: ubuntu-latest
+    # source: run 33951959734 (2026-09-05), max 9s; ceil(2 * 9 / 60).
+    timeout-minutes: 1
     steps:
       # fetch-depth: 0 so `origin/main` — the diff base the gate compares
       # the PR's changed files against — is resolvable locally, not just
@@ -708,6 +723,8 @@ jobs:
     if: github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true')
     name: Type Check
     runs-on: ubuntu-latest
+    # source: run 33990473565 (2026-09-05), max 94s; ceil(2 * 94 / 60).
+    timeout-minutes: 4
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -770,6 +787,8 @@ jobs:
     if: github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true')
     name: Build Package
     runs-on: ubuntu-latest
+    # source: run 33951905125 (2026-09-05), max 19s; ceil(2 * 19 / 60).
+    timeout-minutes: 1
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -804,6 +823,8 @@ jobs:
     if: needs.changes.outputs.docker == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     name: Docker Build (runtime image)
     runs-on: ubuntu-latest
+    # source: run 33951905125 (2026-09-05), max 514s; ceil(2 * 514 / 60).
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -837,6 +858,8 @@ jobs:
     if: needs.changes.outputs.docker == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     name: Docker Build (devcontainer image)
     runs-on: ubuntu-latest
+    # source: run 33951905125 (2026-09-05), max 349s; ceil(2 * 349 / 60).
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -866,6 +889,8 @@ jobs:
     if: github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true' || needs.changes.outputs.docker == 'true'
     name: Docker Smoke (bare-container DB-less contract)
     runs-on: ubuntu-latest
+    # source: run 33951959734 (2026-09-05), max 369s; ceil(2 * 369 / 60).
+    timeout-minutes: 13
     # BLOCKING: this job asserts the exact contract that silently broke for
     # two months (fix/bare-container-contract, commit 5d71069c) — third-party
     # registry indexers (Glama et al.) `docker build` the bare repo, then
@@ -928,6 +953,8 @@ jobs:
     name: CI Green
     if: always()
     runs-on: ubuntu-latest
+    # source: run 33806380625 (2026-09-03), max 4s; ceil(2 * 4 / 60).
+    timeout-minutes: 1
     needs:
       - changes
       - test
@@ -973,6 +1000,8 @@ jobs:
     # has already merged — see the job comment above.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    # source: run 33990473565 (2026-09-05), max 12s; ceil(2 * 12 / 60).
+    timeout-minutes: 1
     # `contents: read`, NOT write, and that is deliberate. The tag is pushed
     # with the RELEASE_TAG_SSH_KEY deploy key (persisted by the checkout step
     # below), never

@@ -30,6 +30,8 @@ jobs:
   check-pins:
     name: pins current vs latest releases
     runs-on: ubuntu-latest
+    # source: run 33723724819 (2026-09-03), max 13s; ceil(2 * 13 / 60).
+    timeout-minutes: 1
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Check marketplace pins

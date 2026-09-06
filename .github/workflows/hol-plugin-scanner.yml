@@ -30,10 +30,17 @@ on:
 permissions:
   contents: read
 
+# source: W1-7 in tasks/codex-green-remediation-plan.md; superseded PR checks.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   scan:
     name: HOL plugin scan
     runs-on: ubuntu-latest
+    # source: run 34030977899 (2026-09-06), max 59s; ceil(2 * 59 / 60).
+    timeout-minutes: 2
     permissions:
       contents: read
       security-events: write   # SARIF upload to code scanning
