@@ -170,7 +170,7 @@ class TestCSharpImports:
             b"using System.Collections.Generic;\n"
             b"using Alias = Some.Thing;\n"
         )
-        assert _imports("c_sharp", source, extract_csharp_imports) == [
+        assert _imports("csharp", source, extract_csharp_imports) == [
             ("System", False),
             ("System.Collections.Generic", False),
             # Rough edge, pinned: an alias directive is captured verbatim,
@@ -270,7 +270,7 @@ class TestEmptyAndUnparseable:
             ("kotlin", "mcp_server.core.ast_extractors_jvm", "extract_kotlin_imports"),
             ("c", "mcp_server.core.ast_extractors_clike", "extract_c_imports"),
             (
-                "c_sharp",
+                "csharp",
                 "mcp_server.core.ast_extractors_clike",
                 "extract_csharp_imports",
             ),

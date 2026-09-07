@@ -247,7 +247,7 @@ class TestModuleStringCleanup:
         from mcp_server.core.ast_extractors_clike import extract_csharp_imports
 
         source = b"using Some.usingX;\n"
-        assert _full_imports("c_sharp", source, extract_csharp_imports) == [
+        assert _full_imports("csharp", source, extract_csharp_imports) == [
             ("Some.usingX", [], False)
         ]
 

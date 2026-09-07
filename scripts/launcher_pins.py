@@ -82,9 +82,9 @@ def numpy_version(version_info: tuple[int, int]) -> str:
 # module load): (import_name, pip_spec).
 # source: requirements/setup.txt (every version below).
 BASE_PACKAGES: list[tuple[str, str]] = [
-    ("mcp", "mcp==2.0.0"),
-    ("pydantic", "pydantic==2.13.4"),
-    ("pydantic_settings", "pydantic-settings==2.14.2"),
+    ("mcp", "mcp==2.1.1"),
+    ("pydantic", "pydantic==2.13.5"),
+    ("pydantic_settings", "pydantic-settings==2.15.0"),
     ("numpy", f"numpy=={numpy_version(sys.version_info[:2])}"),
     ("psycopg", "psycopg[binary]==3.3.5"),
     ("psycopg_pool", "psycopg_pool==3.3.1"),

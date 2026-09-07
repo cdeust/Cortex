@@ -195,7 +195,7 @@ class TestCSharp:
     def test_full_definition_set_in_document_order(self) -> None:
         from mcp_server.core.ast_extractors_clike import extract_csharp_definitions
 
-        assert _defs("c_sharp", CSHARP_SOURCE, extract_csharp_definitions) == [
+        assert _defs("csharp", CSHARP_SOURCE, extract_csharp_definitions) == [
             ("I", "interface"),
             ("I.X", "method"),
             ("E", "enum"),
@@ -211,7 +211,7 @@ class TestCSharp:
     def test_struct_and_record_both_report_class(self) -> None:
         from mcp_server.core.ast_extractors_clike import extract_csharp_definitions
 
-        kinds = dict(_defs("c_sharp", CSHARP_SOURCE, extract_csharp_definitions))
+        kinds = dict(_defs("csharp", CSHARP_SOURCE, extract_csharp_definitions))
         assert kinds["S"] == "class"
         assert kinds["R"] == "class"
 
@@ -223,7 +223,7 @@ class TestCSharp:
         from mcp_server.core.ast_extractors_clike import extract_csharp_definitions
 
         assert _defs(
-            "c_sharp", b"namespace N { void M(){} }", extract_csharp_definitions
+            "csharp", b"namespace N { void M(){} }", extract_csharp_definitions
         ) == [("M", "function")]
 
 
@@ -389,7 +389,7 @@ class TestScopeQualification:
                 ("Inner.deep", "Outer.Inner.deep"),
             ),
             (
-                "c_sharp",
+                "csharp",
                 CSHARP_SOURCE,
                 "mcp_server.core.ast_extractors_clike",
                 "extract_csharp_definitions",
@@ -403,7 +403,7 @@ class TestScopeQualification:
                 ("B.deep", "A.B.deep"),
             ),
         ],
-        ids=["java", "c_sharp", "ruby"],
+        ids=["java", "csharp", "ruby"],
     )
     def test_nested_type_resets_the_qualifier(
         self,

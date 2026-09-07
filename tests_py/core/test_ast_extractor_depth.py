@@ -72,7 +72,7 @@ _CASES = [
         "extract_kotlin_definitions",
     ),
     (
-        "c_sharp",
+        "csharp",
         b"class A { int X = " + _OPEN + b"1" + _CLOSE + b"; }",
         "mcp_server.core.ast_extractors_clike",
         "extract_csharp_definitions",

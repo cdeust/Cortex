@@ -118,7 +118,7 @@ codebase = [
     # of builtins.Parser" — except the pin it annotated said `<1.14`, so the
     # broken window was admitted rather than excluded. The window is real and
     # now excluded; the version numbers are measured rather than recalled.
-    "tree-sitter-language-pack>=1.12.5,<1.15",
+    "tree-sitter-language-pack>=1.12.5,<1.17",
     "networkx>=3.0",
     # Leiden community detection (Traag et al. 2019) — strict improvement
     # over Louvain. igraph supplies the graph backend leidenalg runs on.
@@ -649,7 +649,7 @@ dev = [
 # to dependencies: a lint job that drags in pyright pays for it in cold-start
 # time and in supply-chain surface).
 lint = [
-    "ruff==0.16.2",
+    "ruff==0.16.6",
 ]
 typecheck = [
     "pyright==1.1.411",
