@@ -93,6 +93,9 @@ SCANNED_FILES = (
     "CONTRIBUTING.md",
     "SECURITY.md",
     "CLAUDE.md",
+    # The former CLAUDE.md body (moved 2026-09-08 so it is read on demand);
+    # its tool and module counts describe the present exactly as before.
+    "docs/agent-guidance.md",
     "GOVERNANCE.md",
     "manifest.json",
     "docs/ROADMAP.md",
