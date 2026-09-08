@@ -149,6 +149,14 @@ separate **cortex-viz** MCP (reads this same store read-only).
 - Do NOT write model caches under `/tmp` — the FlashRank incident (silently
   absent re-ranker, 6 benchmarks invalidated) came from exactly this.
   `HF_HOME`/`cache_dir` must be persistent.
+- Do NOT create git worktrees outside this repository — no `/private/tmp/cortex-*`,
+  no `../Cortex-wt-*` sibling, no `~/.claude/worktrees/`. The only location is
+  `.claude/worktrees/<name>/` (already gitignored via `.claude/*`): it is where
+  Claude Code's own worktree tooling (`isolation: worktree`, `EnterWorktree`,
+  `--worktree`) puts them and the only directory its cleanup sweep looks at.
+  Owner correction 2026-09-08, after 76 outside worktrees (43 detached + 33 on
+  branches, all under `/private/tmp/cortex-green-*`) had to be removed by hand.
+  `scripts/spawn-agent.sh` and `benchmarks/lib/bench_regression.sh` follow this.
 
 ## Scientific Implementation Standard (Zetetic Principle)
 

@@ -10,7 +10,9 @@
 #
 # What it does:
 #   1. Resolves the agent file (.claude/agents/<name>.md) and strips YAML frontmatter.
-#   2. Creates a git worktree at ../<repo>-<agent>-<timestamp> on a new branch.
+#   2. Creates a git worktree at <target-repo>/.claude/worktrees/<agent>-<timestamp>
+#      on a new branch — inside the repo, where Claude Code's own worktree sweep
+#      can see it (never a sibling directory or /tmp; owner correction 2026-09-08).
 #   3. Launches `claude` there with:
 #        --append-system-prompt  <agent body>   (installs the agent persona)
 #        --permission-mode bypassPermissions    (no interactive approval prompts)
@@ -54,11 +56,14 @@ AGENT_BODY="$(awk 'BEGIN{f=0} /^---$/{f++; next} f>=2{print}' "$AGENT_FILE")"
 # Target project = current working directory's git root (the repo you want the
 # agent to work ON), not this subagents repo.
 TARGET_REPO="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-TARGET_NAME="$(basename "$TARGET_REPO")"
 STAMP="$(date +%Y%m%d-%H%M%S)"
-WORKTREE="$TARGET_REPO/../${TARGET_NAME}-${AGENT}-${STAMP}"
+WORKTREE="$TARGET_REPO/.claude/worktrees/${AGENT}-${STAMP}"
 BRANCH="agent/${AGENT}/${STAMP}"
 
+mkdir -p "$TARGET_REPO/.claude/worktrees"
+if ! git -C "$TARGET_REPO" check-ignore -q .claude/worktrees; then
+  echo "warning: .claude/worktrees/ is not gitignored in $TARGET_REPO; add it so the worktree does not show up as untracked content" >&2
+fi
 echo "→ creating worktree: $WORKTREE (branch $BRANCH)"
 git -C "$TARGET_REPO" worktree add -b "$BRANCH" "$WORKTREE"
 

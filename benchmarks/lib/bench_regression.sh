@@ -63,7 +63,11 @@ run_baseline_benchmarks() {
     BASELINE_RESULTS_DIR="$RESULTS_DIR/baseline"
     mkdir -p "$BASELINE_RESULTS_DIR"
 
-    local wt_dir; wt_dir="$(mktemp -d "${TMPDIR:-/tmp}/cortex-bench-baseline-XXXXXX")"
+    # Inside the repo, under the directory Claude Code's own worktree tooling
+    # uses (gitignored via .claude/*) — never /tmp or a sibling directory, where
+    # a killed run leaves a worktree nothing reclaims (owner correction 2026-09-08).
+    mkdir -p "$REPO_ROOT/.claude/worktrees"
+    local wt_dir; wt_dir="$(mktemp -d "$REPO_ROOT/.claude/worktrees/bench-baseline-XXXXXX")"
     echo
     echo "════════════════════════════════════════════════════════════════════"
     echo "  NO-REGRESSION BASELINE: $BASELINE_REF (${baseline_sha:0:12}) in $wt_dir"
