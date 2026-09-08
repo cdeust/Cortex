@@ -140,8 +140,8 @@ def reranker_fields() -> dict:
 
 def _environment_fields() -> dict:
     """Package/model/reranker identity fields — split out of `build_manifest`
-    to keep that function under the 40-line method cap (CLAUDE.md § Code
-    Style)."""
+    to keep that function under the 40-line method cap
+    (docs/agent-guidance.md § Code Style)."""
     return {
         "python": platform.python_version(),
         "packages": {

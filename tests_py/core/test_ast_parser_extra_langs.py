@@ -8,7 +8,7 @@ gap — `_extract_swift`/`_extract_rust` were never exercised through
 own wrapper by calling `extract_go_definitions` directly
 (`TestGoExtractors` in `test_ast_extractors.py`) — and pushed
 test_ast_parser.py to 405 lines, over this repo's 300-line/file cap
-(CLAUDE.md, Code Style). Zero behavior change: same fixtures, same
+(docs/agent-guidance.md, Code Style). Zero behavior change: same fixtures, same
 assertions, same test names, moved as a unit.
 """
 

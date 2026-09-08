@@ -8,7 +8,7 @@ The fake-Node direct unit tests for `_extract_module_doc`/`_node_text`
 (`TestExtractModuleDoc`, `TestNodeText`, `_FakeNode`) live in the sibling
 `test_ast_parser_node_extraction.py` — split out to keep this file, which
 grew with the Go/Swift/Rust wrapper classes below, under the repo's
-300-line/file cap (CLAUDE.md, Code Style).
+300-line/file cap (docs/agent-guidance.md, Code Style).
 """
 
 from __future__ import annotations

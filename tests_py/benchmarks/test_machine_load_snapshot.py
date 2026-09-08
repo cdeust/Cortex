@@ -1,6 +1,7 @@
 """benchmarks.lib.machine_load_snapshot (2026-08-10 fix, split out of
-write_manifest.py to satisfy the 40-line method cap — CLAUDE.md § Code
-Style). See that module's docstring for the incident motivating it.
+write_manifest.py to satisfy the 40-line method cap —
+docs/agent-guidance.md § Code Style). See that module's docstring for the
+incident motivating it.
 """
 
 from __future__ import annotations

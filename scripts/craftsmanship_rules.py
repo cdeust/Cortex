@@ -1,5 +1,5 @@
 """Craftsmanship detectors: file size, method size, layer imports, magic
-numbers — the four rules ``CLAUDE.md`` § Code Style states but nothing
+numbers — the four rules ``docs/agent-guidance.md`` § Code Style states but nothing
 checks (issue: no automated pre-commit hook exists, admitted in that
 section before this gate).
 
@@ -27,10 +27,10 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-# source: CLAUDE.md § Code Style — "300 lines max per file" — a local
+# source: docs/agent-guidance.md § Code Style — "300 lines max per file" — a local
 # tightening of coding-standards.md §4.1 (500).
 FILE_LINE_LIMIT = 300
-# source: CLAUDE.md § Code Style — "40 lines max per method" — a local
+# source: docs/agent-guidance.md § Code Style — "40 lines max per method" — a local
 # tightening of coding-standards.md §4.2 (50).
 METHOD_LINE_LIMIT = 40
 

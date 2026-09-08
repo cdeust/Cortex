@@ -7,7 +7,7 @@ instances rather than through `parse_file_ast`, so they belong with the
 other direct-unit-test group, not the parse_file_ast integration classes
 that make up the rest of test_ast_parser.py. Growing that file with the
 Go/Swift/Rust wrapper classes (issue #249 mutation-testing pass) pushed it
-to 405 lines, over this repo's 300-line/file cap (CLAUDE.md, Code Style);
+to 405 lines, over this repo's 300-line/file cap (docs/agent-guidance.md, Code Style);
 this split is the fix, not a rename — zero behavior change, same fake-Node
 fixtures, same assertions, same test names, moved as a unit.
 """

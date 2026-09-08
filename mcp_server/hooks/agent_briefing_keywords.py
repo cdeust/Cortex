@@ -1,7 +1,7 @@
 """Task-prompt keyword extraction for the agent_briefing hook's FTS query.
 
 Split out of ``agent_briefing.py`` (issue #401 — that file exceeded the
-project's 300-line cap, CLAUDE.md § Code Style) to isolate pure text
+project's 300-line cap, docs/agent-guidance.md § Code Style) to isolate pure text
 processing (no I/O, no dependency on the rest of the hook) from prompt
 parsing/event control flow and the PG query.
 """

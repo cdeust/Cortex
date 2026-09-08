@@ -1,7 +1,7 @@
 """PostgreSQL connection + the two-pass briefing query for agent_briefing.
 
 Split out of ``agent_briefing.py`` (issue #401 — that file exceeded the
-project's 300-line cap, CLAUDE.md § Code Style) to isolate the hook's only
+project's 300-line cap, docs/agent-guidance.md § Code Style) to isolate the hook's only
 I/O (PG connect + the two SELECT passes) from prompt parsing and
 event-processing control flow.
 """

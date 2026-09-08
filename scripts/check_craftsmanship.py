@@ -1,5 +1,5 @@
 """Craftsmanship gate: a deterministic pass/fail check for the rules
-``CLAUDE.md`` § Code Style states but — until this script — nothing
+``docs/agent-guidance.md`` § Code Style states but — until this script — nothing
 verified. See ``craftsmanship_rules.py`` for what each rule checks and why
 its violation identifier is stable; see ``craftsmanship_baseline.py`` for
 the ratchet that lets pre-existing debt through without blocking new debt,

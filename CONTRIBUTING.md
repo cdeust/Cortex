@@ -196,7 +196,7 @@ project-specific rules:
   (2026-07-28) and the ratchet retired. History:
   [`docs/provenance/pyright-remediation-plan.md`](docs/provenance/pyright-remediation-plan.md).
 - **File ≤300 lines, function ≤40 lines** — this repo's local tightening of
-  coding-standards.md §4.1/§4.2 (≤500/≤50); see CLAUDE.md § Code Style for
+  coding-standards.md §4.1/§4.2 (≤500/≤50); see docs/agent-guidance.md § Code Style for
   the authoritative numbers (issue #276).
 
 The full standard lives in

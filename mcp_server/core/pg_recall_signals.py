@@ -3,7 +3,8 @@
 Split from pg_recall.py (continuing the two documented seams cut at #368 —
 pg_recall_weights.py / pg_recall_assembly.py — with a third) to bring
 pg_recall.py under this repo's local 300-line file cap and 40-line method
-cap (CLAUDE.md § Code Style; a tightening of coding-standards.md §4.1/§4.2).
+cap (docs/agent-guidance.md § Code Style; a tightening of
+coding-standards.md §4.1/§4.2).
 
 Every reader here is defensive: it duck-types against an optional method on
 ``store`` and returns the neutral "no signal" value (``EMPTY_GOAL`` / ``None``)

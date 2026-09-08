@@ -3,9 +3,9 @@
 Split from pg_recall.py (continuing the two documented seams cut at #368 —
 pg_recall_weights.py / pg_recall_assembly.py — with two more:
 pg_recall_context.py and this file) to bring pg_recall.py under this
-repo's local 300-line file cap and 40-line method cap (CLAUDE.md § Code
-Style; a tightening of coding-standards.md §4.1/§4.2). Every value moved
-unchanged — this re-homes code, it retunes nothing.
+repo's local 300-line file cap and 40-line method cap
+(docs/agent-guidance.md § Code Style; a tightening of coding-standards.md
+§4.1/§4.2). Every value moved unchanged — this re-homes code, it retunes nothing.
 
 Every stage function takes exactly ``(candidates, ctx: RecallContext)`` —
 see pg_recall_context.py for why the call-site invariants are bundled into
