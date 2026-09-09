@@ -1,0 +1,49 @@
+---
+created: 2026-09-09T11:00:52Z
+kind: adr
+number: 1060
+status: accepted
+tags: [hooks, governance, wiki, enforcement]
+title: Refuse a decision written into code at edit time, in the distributed hook
+---
+# ADR-1060: Refuse a decision written into code at edit time, in the distributed hook
+
+## Status
+
+accepted
+
+## Context
+
+The wiki is the only decision index and code carries a pointer, never the decision itself. Nothing enforced it. `scripts/craftsmanship_decisions.py` verifies the converse property, that a `source:` citation resolves to a real decision, so it catches a dangling pointer and never a decision written as prose where a pointer belongs.
+
+The gap was demonstrated, not theorised. While fixing the plugin installer's dependency step (ADR-1059), ten and twelve line comment blocks explaining two flag choices were written into `scripts/setup.sh` and passed every gate. A reviewer caught one; the owner caught the convention breach. Both are after the fact.
+
+CI is the wrong layer. A gate in `ci.yml` reports the violation once it is already written, committed and pushed, so the cost is paid and the fix is a second commit. Hooks exist to refuse the action instead.
+
+Placement matters as much as the rule. `.claude/hooks/` is excluded by `.gitignore` (`.claude/*`, with only `settings.json` excepted), so a hook written there is local configuration on one machine, versioned nowhere and distributed to nobody. Cortex's own hooks are declared in `.claude-plugin/plugin.json` and implemented under `mcp_server/hooks/`, invoked through `scripts/launcher.py`. That is the only placement where the rule ships with the plugin.
+
+Detecting a decision in general is not possible; detecting its shape is. A decision is prose, and prose in code appears as a long run of consecutive comment lines. Measuring the tracked tree gives the threshold rather than taste: excluding headers and tests, only a handful of files reach eight, and the blocks that motivated this were ten and twelve.
+
+Two exemptions are needed or the rule is unusable. A file's opening block orients the reader and is not a decision; defining it as "nothing executable precedes it" avoids a line-number threshold, which would be a number to tune and a place for a decision to hide just inside. Tests narrate scenarios at length, which is why the repository already exempts them from the file-size cap.
+
+## Decision
+
+`mcp_server/hooks/decision_gate.py` runs as a `PreToolUse` hook on `Edit` and `Write`, declared in `.claude-plugin/plugin.json` alongside the other Cortex hooks, and exits 2 to block the call when the edit would introduce a run of eight or more consecutive comment lines into a code file.
+
+A line carrying a `source:` pointer never counts toward a run: that is the sanctioned way to reference a decision, and the refusal message names `wiki_adr` as where the prose belongs and the pointer form to leave behind.
+
+Exempt: the file's header block, defined as a run preceded by nothing executable; test files; and any block already present in the file, so editing an unrelated part of a legacy file is never refused. Only what the call introduces is judged.
+
+`CORTEX_DECISION_GATE=off` overrides for a single call, for genuine non-decision prose such as a worked example or a data table, and requires saying why.
+
+## Consequences
+
+Easier: the convention becomes a processing obligation rather than something a reader must remember. The failure that produced this ADR cannot recur silently, because the write is refused before the file changes.
+
+Easier: the refusal carries its own remedy. It names the tool that records the decision and the pointer to leave, so the correction is mechanical rather than a research task.
+
+Harder: a handful of existing files carry a body block over the threshold. The ratchet grandfathers them, so nothing breaks, but they are now visibly on the wrong side of a stated rule and are candidates for migration to the wiki.
+
+Risk accepted: the threshold is a shape heuristic. A decision written in seven lines passes, and a long data table written as comments is refused. The override covers the second; the first is a smaller failure than the one this closes.
+
+Risk accepted: an agent can set the override. That is deliberate. A gate with no escape hatch gets disabled wholesale, and requiring a stated reason keeps the choice visible in the transcript.

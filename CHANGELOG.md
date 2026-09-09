@@ -6,6 +6,24 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **A decision written into code is now refused at edit time, not reported
+  after the fact.** The wiki is the only decision index and code carries a
+  pointer, but nothing enforced it: `scripts/craftsmanship_decisions.py`
+  checks the converse, that a `source:` citation resolves, so prose written
+  where a pointer belongs passed every gate. It just did, twice, in
+  `scripts/setup.sh`. A CI check would report the violation only once it was
+  committed and pushed, so the new `mcp_server/hooks/decision_gate.py` runs
+  as a `PreToolUse` hook on `Edit` and `Write` and exits 2, blocking the
+  call, when the edit would add eight or more consecutive comment lines to a
+  code file. A `source:` line never counts toward a run, and the refusal
+  names `wiki_adr` and the pointer form to leave behind. Exempt: the file
+  header, defined as a run with nothing executable before it rather than by
+  a line number; test files; and any block already in the file, so a legacy
+  file stays editable elsewhere. `CORTEX_DECISION_GATE=off` overrides one
+  call. See ADR-1060.
+
 ### Fixed
 
 - **The plugin installer could not install its dependencies (PR #539).**

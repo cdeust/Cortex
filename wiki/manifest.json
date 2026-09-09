@@ -3407,6 +3407,10 @@
     "ADR-1059": {
       "mirror": "ADR-1059-install-the-generated-constraint-file-with---no-deps-and-never-with---upgrade.md",
       "path": "adr/cortex/1059-install-the-generated-constraint-file-with---no-deps-and-never-with---upgrade.md"
+    },
+    "ADR-1060": {
+      "mirror": "ADR-1060-refuse-a-decision-written-into-code-at-edit-time-in-the-distributed-hook.md",
+      "path": "adr/cortex/1060-refuse-a-decision-written-into-code-at-edit-time-in-the-distributed-hook.md"
     }
   },
   "project": "cortex",
