@@ -55,7 +55,7 @@ def python_comment_lines_and_header(content: str) -> tuple[set[int], int]:
     """
     try:
         tokens = list(tokenize.generate_tokens(io.StringIO(content).readline))
-    except (tokenize.TokenizeError, SyntaxError, IndentationError, ValueError):
+    except (tokenize.TokenError, SyntaxError, IndentationError, ValueError):
         return set(), 0  # unparsable: no comment lines, no header exemption
     comment_lines: set[int] = set()
     header_boundary = len(content.splitlines()) + 1

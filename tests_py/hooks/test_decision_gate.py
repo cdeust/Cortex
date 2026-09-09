@@ -227,3 +227,24 @@ def test_entrypoint_never_crashes_on_an_unreadable_file(tmp_path: Path) -> None:
     )
     assert done.returncode == ALLOW
     assert done.stderr == ""
+
+
+def test_unparsable_python_fails_open_through_the_lexer(tmp_path: Path) -> None:
+    """The tokenizer's own failure path, which no other test reaches.
+
+    An unterminated bracket makes ``tokenize`` raise ``TokenError``. The
+    handler naming that exception is only evaluated when it fires, so a
+    wrong attribute name there raises ``AttributeError`` at that moment and
+    turns the fail-open path into a crash. It shipped misspelled and the
+    suite stayed green, so this drives the path rather than the outcome.
+    """
+    path = tmp_path / "broken.py"
+    path.write_text("y = 0\nx = (\n", "utf-8")
+    assert gate.evaluate(_edit(str(path), "y = 0", _prose(20))) == ALLOW
+
+
+def test_lexer_returns_no_comments_for_unparsable_python() -> None:
+    """Same path, asserted at the unit it belongs to."""
+    from mcp_server.hooks import _decision_gate_lex as lex
+
+    assert lex.python_comment_lines_and_header("x = (\n") == (set(), 0)
