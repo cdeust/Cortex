@@ -3411,6 +3411,10 @@
     "ADR-1060": {
       "mirror": "ADR-1060-refuse-a-decision-written-into-code-at-edit-time-in-the-distributed-hook.md",
       "path": "adr/cortex/1060-refuse-a-decision-written-into-code-at-edit-time-in-the-distributed-hook.md"
+    },
+    "ADR-1061": {
+      "mirror": "ADR-1061-make-the-launcher-deps-idempotence-guard-abi-aware.md",
+      "path": "adr/cortex/1061-make-the-launcher-deps-idempotence-guard-abi-aware.md"
     }
   },
   "project": "cortex",

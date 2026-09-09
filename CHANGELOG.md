@@ -34,6 +34,25 @@ adheres to [Semantic Versioning](https://semver.org/).
   installs, with `--no-deps --require-hashes` and never `--upgrade`, for
   the same reasons recorded in ADR-1059. The hand list is deleted.
 
+- **`scripts/launcher_deps_install.py`'s idempotence guard was ABI-blind
+  (#540).** `_entry_already_satisfied` decided a `deps/` entry needed no
+  commit by comparing dist-info versions alone. A version match survives an
+  interpreter upgrade even though the compiled artifact does not: an
+  extension module's filename carries an interpreter ABI tag
+  (`*.cpython-313-darwin.so`), and the guard never looked at it, so a
+  package whose PyPI version was unchanged kept the previous interpreter's
+  build after `deps/` moved to a new Python. Reproduced on this machine
+  after a 3.13→3.14 move: `deps/websockets/speedups.cpython-313-darwin.so`
+  survived every subsequent run, and `_cffi_backend.cpython-313-darwin.so`
+  sat as an orphan beside the fresh `...cpython-314-darwin.so` build with no
+  `.dist-info` of its own to prune it. The guard now also treats a
+  version-matched entry as unsatisfied when it (recursively) contains a
+  foreign-ABI extension, forcing the normal atomic-commit path to replace
+  it, and a new sweep prunes orphaned top-level foreign-ABI files once a
+  commit batch succeeds. ADR-0749's original protection — a locked,
+  already-correct transitive dependency never enters the rmtree/replace
+  path — is unchanged. Decision recorded in ADR-1061.
+
 - **The plugin installer could not install its dependencies (PR #539).**
   `scripts/setup.sh` step 3/7 installs `requirements/setup.txt`, the hashed
   graph exported from `uv.lock`, and it was the last consumer of a generated
