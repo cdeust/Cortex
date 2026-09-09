@@ -52,7 +52,7 @@ def _merge_continuations(text: str) -> list[tuple[int, str]]:
         result.append((start, " ".join(buf)))
         buf = []
         start = None
-    if buf:
+    if buf and start is not None:
         result.append((start, " ".join(buf)))
     return result
 
