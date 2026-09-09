@@ -1792,9 +1792,9 @@ scipy==1.18.0 ; python_full_version >= '3.12' \
     # via
     #   scikit-learn
     #   sentence-transformers
-sentence-transformers==5.6.1 \
-    --hash=sha256:16af5d682ef66672b076d58599a23905800e850ec2bfb1865938306bf684ad72 \
-    --hash=sha256:cefbb17b6325a982a4732c8c49fb013375392687049d1de3d435c4b04060680b
+sentence-transformers==6.0.1 \
+    --hash=sha256:1c3b8d9403f87ad0c879638554f36cc85744f38a6a70d150fd7e964ca0e9935b \
+    --hash=sha256:b8888d72c707ba33c63aa30845850702dd5acadf1dd0d051436380bcebe4fd0f
     # via hypermnesia-mcp
 setuptools==84.0.0 \
     --hash=sha256:51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670 \
