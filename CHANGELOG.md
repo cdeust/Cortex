@@ -33,6 +33,19 @@ adheres to [Semantic Versioning](https://semver.org/).
   `requirements/setup.txt`, the same hashed closure `scripts/setup.sh`
   installs, with `--no-deps --require-hashes` and never `--upgrade`, for
   the same reasons recorded in ADR-1059. The hand list is deleted.
+- **`scripts/setup.sh` step 5/7 reported `[ok]` even when the embedding
+  model was never cached (issue #537).** The pre-cache ran inside a
+  `try/except` that printed a warning and then fell off the end of the
+  block, so the subprocess always exited 0 — the `[ok]` label was driven
+  by reaching the end of the step, not by the step succeeding. The
+  try/except is gone; a failed import or load now raises, so the label is
+  derived from the pre-cache subprocess's real exit code
+  (`scripts/lib/precache_embedding_model.sh`, extracted from `setup.sh` so
+  the two outcomes are drivable in isolation —
+  `tests_py/scripts/test_precache_embedding_model_step.py`). The step
+  still isn't fatal: a real failure now prints `[!!] Model not pre-cached,
+  will download on first use` plus the captured traceback, instead of
+  scrolling past unread under a false `[ok]`.
 
 - **The plugin installer could not install its dependencies (PR #539).**
   `scripts/setup.sh` step 3/7 installs `requirements/setup.txt`, the hashed

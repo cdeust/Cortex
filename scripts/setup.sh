@@ -43,6 +43,10 @@ spinner() {
     return $spin_exit
 }
 
+# source: issue #537 — extracted so the [ok]/[!!] outcome can be driven
+# and asserted in isolation; see scripts/lib/precache_embedding_model.sh.
+source "$SCRIPT_DIR/lib/precache_embedding_model.sh"
+
 # ── OS Detection ────────────────────────────────────────────────────────
 
 detect_os() {
@@ -250,21 +254,10 @@ fi
 
 step "Embedding model"
 
-echo "  Pre-caching sentence-transformers model (one-time ~100MB download)..."
-PYTHONPATH="${PROJECT_DIR}:${DEPS_DIR}" python3 -c "
-try:
-    from sentence_transformers import SentenceTransformer
-    model = SentenceTransformer('all-MiniLM-L6-v2')
-    emb = model.encode(['test'])
-    print(f'Model loaded: {emb.shape[1]}D embeddings')
-except Exception as e:
-    print(f'Warning: model cache failed ({e}). Will download on first use.')
-" 2>/dev/null &
-if spinner $!; then
-    ok "Embedding model cached"
-else
-    warn "Embedding model cache step failed — will download on first use"
-fi
+# Non-fatal by design: precache_embedding_model_step already reports the
+# honest [ok]/[!!] label itself; `|| true` only keeps this step from
+# aborting the run under `set -e` on a cache miss.
+precache_embedding_model_step "$PROJECT_DIR" "$DEPS_DIR" || true
 
 # ── Step 6: Verify ──────────────────────────────────────────────────────
 
