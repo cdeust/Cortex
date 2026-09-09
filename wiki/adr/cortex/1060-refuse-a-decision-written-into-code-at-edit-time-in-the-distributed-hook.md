@@ -36,6 +36,18 @@ Exempt: the file's header block, defined as a run preceded by nothing executable
 
 `CORTEX_DECISION_GATE=off` overrides for a single call, for genuine non-decision prose such as a worked example or a data table, and requires saying why.
 
+### Revision 2026-09-09 — a first review caught three ways the shape heuristic misfired
+
+A review of the first cut found the hook crashing on unreadable input, misreading string and heredoc bodies as comments, and losing grandfathering on a pure reflow. All three are fixed at the source, not patched at the throw site:
+
+**Read failures fail open.** `candidate_content` and `introduced_block` only caught `OSError` around `Path.read_text`; a `UnicodeDecodeError` (a `ValueError`, not an `OSError` — a null byte in the path raises the same way) crashed the hook and, with it, every edit to that file. Both call sites now go through one `_read_text` helper that catches `(OSError, ValueError)` and treats "cannot read" and "does not exist yet" the same way: judge the fragment alone rather than crash.
+
+**Comment detection is lexical, not prefix-matched.** The original scan treated any line whose stripped text started with the marker as a comment, with no notion of string literals or heredocs. Two shapes misfired: a module docstring followed by a licence block was blocked (the docstring disqualified the header scan, even though it isn't code), and a `cat <<'CFG' ... CFG` heredoc body containing commented example lines was blocked (that body is data being written, not prose about the script). Python now scans via `tokenize.COMMENT`, which cannot confuse a string body for a comment, and a leading module docstring is tolerated as header material the same way a shebang or `set` line is. The shell-family scanner (`.sh`/`.bash`/`.zsh`/`.rb`) skips heredoc bodies between a `<<DELIM` opener and the matching closing line.
+
+**Grandfathering compares content, not position.** The original ratchet keyed a run by its exact joined text; inserting or removing a single bare marker line inside an existing block changed the key, so a pure rewrap of a block already in the file was reported as newly introduced. Grandfathering now compares the set of body-comment line texts already in the file against the candidate run's lines: a run is refused only when the count of lines *not* already present anywhere in the file's body prose reaches the threshold, so reflowing an existing block is never treated as new.
+
+**Two further findings changed what's enforced, not just how it's checked.** `is_test_path` recognised only `tests`/`tests_py`/`test`/`fuzz` and the Python `test_*.py`/`*_test.py` shapes; `tests_js` — the repo's actual JS test root — and the `.spec.ts`/`.test.ts` filename shapes were unrecognised, so JS test files were scanned while their Python equivalents were exempt. The test-path check now also matches `tests_js` by name and any `*.test.*`/`*.spec.*` filename, uniformly across languages. Separately, `//` and `/* */` markers were never actually measured: the tracked tree (excluding `deps/`) holds 1418 `.py` files and 18 `.sh` files, but zero non-test files using `//` or `/* */` comments. `COMMENT_MARKERS` now covers only the `#`-comment languages the threshold was measured against — `.py`, `.sh`, `.bash`, `.zsh`, `.rb` — and drops `.js`/`.ts`/`.tsx`/`.jsx`/`.swift`/`.go`/`.rs`/`.java`/`.c`/`.h`/`.cpp` until there is tracked-tree evidence for them. This is a narrowing of enforcement, not a threshold change: `PROSE_RUN_LIMIT` is unchanged, and the hook still refuses the ten- and twelve-line rationale blocks it was built to catch.
+
 ## Consequences
 
 Easier: the convention becomes a processing obligation rather than something a reader must remember. The failure that produced this ADR cannot recur silently, because the write is refused before the file changes.
@@ -44,6 +56,10 @@ Easier: the refusal carries its own remedy. It names the tool that records the d
 
 Harder: a handful of existing files carry a body block over the threshold. The ratchet grandfathers them, so nothing breaks, but they are now visibly on the wrong side of a stated rule and are candidates for migration to the wiki.
 
+Harder: `//` and `/* */` comment languages are unenforced until they have their own measured evidence. A ten-line C-style licence header written into a `.go` or `.java` file today passes silently. This is the accepted cost of not shipping an unverified threshold, not an oversight.
+
 Risk accepted: the threshold is a shape heuristic. A decision written in seven lines passes, and a long data table written as comments is refused. The override covers the second; the first is a smaller failure than the one this closes.
 
 Risk accepted: an agent can set the override. That is deliberate. A gate with no escape hatch gets disabled wholesale, and requiring a stated reason keeps the choice visible in the transcript.
+
+Risk accepted: grandfathering by line-text set, not exact position, can under-block a new decision that happens to reuse phrasing already present elsewhere in the file. This trade was made deliberately to fix the reflow false-positive; the alternative (position-based keying) is what broke on a pure rewrap.
