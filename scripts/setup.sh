@@ -215,9 +215,20 @@ ok "Python $PY_VERSION"
 echo "Installing Python packages..."
 mkdir -p "$DEPS_DIR"
 
+# --no-deps: requirements/setup.txt is the complete, uv-resolved dependency
+# graph exported from uv.lock, so pip must not re-derive it. Without it, pip
+# re-validates every listed package's declared metadata against the rest of
+# the file — which breaks the moment pyproject.toml's [tool.uv]
+# override-dependencies steers a package (mpmath) past a bound another
+# package's metadata still declares (sympy's `mpmath<1.4`): uv's resolver
+# honours the override, but the requirements.txt format cannot carry it, so
+# pip's own re-derivation sees only the unresolved conflict
+# (`ResolutionImpossible`). Every other consumer of a generated constraint
+# file already passes --no-deps; this call site was the last one missing it.
 # source: ADR-0783
+# source: ADR-0800
 if ! python3 -m pip install -q --target "$DEPS_DIR" \
-    --require-hashes -r "$PROJECT_DIR/requirements/setup.txt"; then
+    --no-deps --require-hashes -r "$PROJECT_DIR/requirements/setup.txt"; then
     fail "Dependency install failed (see pip output above)"
 fi
 
