@@ -3403,6 +3403,10 @@
     "ADR-1058": {
       "mirror": "ADR-1058-python-decorator-call-attribution.md",
       "path": "adr/cortex/1058-python-decorator-call-attribution.md"
+    },
+    "ADR-1059": {
+      "mirror": "ADR-1059-install-the-generated-constraint-file-with---no-deps-and-never-with---upgrade.md",
+      "path": "adr/cortex/1059-install-the-generated-constraint-file-with---no-deps-and-never-with---upgrade.md"
     }
   },
   "project": "cortex",
