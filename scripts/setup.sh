@@ -227,7 +227,16 @@ mkdir -p "$DEPS_DIR"
 # file already passes --no-deps; this call site was the last one missing it.
 # source: ADR-0783
 # source: ADR-0800
-if ! python3 -m pip install -q --target "$DEPS_DIR" \
+# --upgrade: without it, `pip install --target` SKIPS every package whose
+# directory already exists, printing "already exists. Specify --upgrade to
+# force replacement" and then reporting success. Two consequences, both
+# observed: a re-run after the lock moves never updates anything, and a
+# re-run under a different Python keeps ABI-specific extension modules built
+# for the old interpreter (numpy's _multiarray_umath.cpython-313-darwin.so
+# survived a switch to Python 3.14 and broke steps 5 and 6). The pinned,
+# hashed file makes the reinstall deterministic, so replacing is always
+# correct here.
+if ! python3 -m pip install -q --target "$DEPS_DIR" --upgrade \
     --no-deps --require-hashes -r "$PROJECT_DIR/requirements/setup.txt"; then
     fail "Dependency install failed (see pip output above)"
 fi
