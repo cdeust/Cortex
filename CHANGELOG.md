@@ -20,11 +20,37 @@ adheres to [Semantic Versioning](https://semver.org/).
   code file. A `source:` line never counts toward a run, and the refusal
   names `wiki_adr` and the pointer form to leave behind. Exempt: the file
   header, defined as a run with nothing executable before it rather than by
-  a line number; test files; and any block already in the file, so a legacy
-  file stays editable elsewhere. `CORTEX_DECISION_GATE=off` overrides one
-  call. See ADR-1060.
+  a line number; test files (now including `tests_js` and `*.test.*`/
+  `*.spec.*` filenames, not just the Python shapes); and any block already
+  in the file, compared by its set of comment-line texts rather than exact
+  position, so a rewrap of an existing block is never mistaken for new
+  prose. Enforced only for the `#`-comment languages the eight-line
+  threshold was actually measured against on the tracked tree — `.py`,
+  `.sh`, `.bash`, `.zsh`, `.rb` (1418 and 18 tracked files respectively for
+  the two with volume); `//` and `/* */` languages have no tracked
+  instances yet and are not enforced. `CORTEX_DECISION_GATE=off` overrides
+  one call. See ADR-1060.
 
 ### Fixed
+
+- **The decision-gate hook crashed on unreadable input and misread strings,
+  docstrings and heredoc bodies as prose (review of the change above,
+  ADR-1060).** `Path.read_text` around a file's current content caught only
+  `OSError`; a `UnicodeDecodeError` (a `ValueError`, not an `OSError`) or a
+  null byte in the path crashed the hook and blocked every edit to that
+  file rather than allowing or refusing it — both read sites now go through
+  one helper catching `(OSError, ValueError)`. Comment detection was a
+  prefix match with no notion of string or heredoc bodies, so a module
+  docstring followed by a licence block was blocked (the docstring broke
+  the header scan) and a `cat <<'CFG' ... CFG` body containing commented
+  example data was blocked; Python comment lines are now found via
+  `tokenize.COMMENT` (never confuses a string for a comment) with a leading
+  docstring tolerated as header material, and the shell scanner skips
+  heredoc bodies. Grandfathering keyed a run by its exact joined text, so
+  inserting or removing one bare marker line inside a block already in the
+  file changed the key and was reported as newly introduced; it now
+  compares the set of body-comment line texts, so a pure reflow of existing
+  rationale is not.
 
 - **The plugin installer could not install its dependencies (PR #539).**
   `scripts/setup.sh` step 3/7 installs `requirements/setup.txt`, the hashed
