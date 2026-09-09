@@ -16,20 +16,86 @@
 </p>
 
 <p align="center">
-  <strong>Give your AI coding agent a memory that survives the session.</strong><br>
+  <strong>Memory for AI coding agents that you can hold accountable.</strong><br>
   Runs entirely on your machine. No account, no API key, no server.
 </p>
 
 ---
 
-## Why
+## The problem with agent memory
 
-Your agent solves a problem, you close the session, and the solution is gone. Next week you
-debug the same thing, re-explain the same architecture, re-litigate the same decision.
+Storing everything is easy. Three months in, that is the problem: a store full of half-truths
+from sessions where the agent was confidently wrong, stale decisions that were reversed, and
+duplicates of the same fact worded five ways. Retrieval gets worse as the store grows, and
+you cannot tell which memories to trust.
 
-Cortex stores what happened and brings it back when it is relevant. In Claude Code that is
-automatic: decisions and fixes are captured as you work and injected at the start of the next
-session. In any other stdio MCP host you call the same tools yourself.
+Cortex is built around the opposite constraint. Most of it is quality control: what is allowed
+in, whether a memory can be checked, what happens when one turns out wrong, and what is
+allowed to fade.
+
+### What gets in
+
+A write passes a predictive-coding gate that scores it against what is already stored. Novel
+content is written; a near-duplicate is merged into the memory it restates rather than filed
+beside it.
+
+```js
+remember({ content: "The installer must pass --no-deps: the constraint file is the complete uv-resolved closure." })
+// → { stored: true, memory_id: 4360412, action: "stored",
+//     novelty: { embedding: 0.23, entity: 0.11, structural: 0.33 } }
+```
+
+Deliberate writes are never rejected for being unsurprising. Unattended capture is, which is
+what keeps automatic capture from burying the memories you meant to keep.
+
+### Whether it can be checked
+
+Every memory is graded at write time, locally, with no network call. The grade is not a
+confidence score: it is whether the claims carry references that resolve on this machine.
+
+```js
+// → provenance: { grade: "unverifiable",
+//                 reason: "dead_refs: deps/numpy/_core/_multiarray_umath.cpython-313-darwin.so",
+//                 hint: "1 of 9 checkable reference(s) could not be resolved" }
+```
+
+That memory named a file that no longer existed, so it was stored and graded honestly instead
+of being returned later as fact. Rewritten against paths that resolve, the same memory grades
+`verified`. A recalled memory tells you which kind it is.
+
+### When it turns out wrong
+
+Corrections supersede rather than overwrite. The new memory records what it replaces, the old
+one is demoted in recall, and the chain stays readable.
+
+```js
+remember({ content: "...", supersedes_id: 4360411 })
+// → { action: "superseded", memory_id: 4360412, superseded_id: 4360411 }
+```
+
+### What fades
+
+Memories carry heat that decays unless replay reinforces them, and episodic traces consolidate
+into semantic ones. A specific debugging session compresses to the principle it taught; the
+commands fade, the lesson survives. The store curates itself instead of growing without bound.
+
+## What it feels like in use
+
+**Monday.** An hour debugging a webhook handler ends in a race condition: TTL expiry firing
+between the auth check and the permission lookup. You agree on a fix, implement it, close the
+session.
+
+**Thursday.** Different project, a user reports intermittent logouts. Before you have finished
+describing the bug, Cortex has surfaced Monday's analysis, the older decision to keep all
+session state in Redis, and a lesson about TTL edge cases in distributed caches.
+
+**Three weeks later.** Those sessions have consolidated into one pattern about authentication
+and TTL-based caches. The Redis specifics are gone. The principle is what comes back.
+
+In Claude Code that is automatic: nine lifecycle hooks inject context at session start, recall
+per prompt, capture as you work, checkpoint before compaction, and run a per-project wiki that
+curates itself. In any other stdio MCP host you call the same 52 tools yourself, or 55 when
+the optional `ai-architect-mcp-codebase` and `ai-architect-mcp-spec` integrations are present.
 
 ## Install
 
@@ -42,17 +108,17 @@ claude plugin install hypermnesia-mcp
 
 **Claude Desktop** — download `hypermnesia-mcp.mcpb` from
 [Releases](https://github.com/cdeust/Cortex/releases) and open it, or use
-**Settings → Extensions**.
+**Settings → Extensions**. The bundle carries the tools but no hooks; the MCPB format has none.
 
 **Any other stdio MCP host** (Codex, Gemini CLI, Cursor, Windsurf, VS Code) launches the same
 server and gets the same tools. Codex has a native package:
 [docs/codex-plugin.md](docs/codex-plugin.md). WSL, TLS client certificates and corporate
 proxies are covered in [docs/deployment-scenarios.md](docs/deployment-scenarios.md).
 
-That is the whole install. It runs on a local SQLite file under `~/.claude/methodology/`,
-with no database to provision. The embedding model is not downloaded at install time; it
-fetches once on first use (about 100 MB) and runs offline afterwards. See
-[PRIVACY.md](PRIVACY.md) for exactly what touches the network.
+It runs on a local SQLite file under `~/.claude/methodology/`, with no database to provision.
+The embedding model is not downloaded at install time; it fetches once on first use, about
+100 MB, and runs offline afterwards. [PRIVACY.md](PRIVACY.md) says exactly what touches the
+network, and it is a short list.
 
 <details>
 <summary><strong>Upgrading from an older plugin identity</strong></summary>
@@ -85,23 +151,10 @@ Allowlists, hooks, skills and agents must migrate both composed tool names:
 
 </details>
 
-## What you get
+## Does the retrieval work
 
-**Automatic, in Claude Code.** Nine lifecycle hooks do the work you would otherwise have to
-remember to do: context injected at session start, relevant memories recalled per prompt,
-decisions and fixes captured as you work, a checkpoint written before compaction, and a
-per-project wiki that curates itself.
-
-**On demand, everywhere.** 52 memory tools (55 when the optional `ai-architect-mcp-codebase`
-and `ai-architect-mcp-spec` integrations are installed):
-`remember` and `recall`, wiki authoring, graph navigation, consolidation, triggers and rules.
-The hooks are Claude Code plugin machinery; the tools are not, and the server never requires
-them to start.
-
-## Does the retrieval actually work
-
-Measured against published benchmarks, retrieval only. No LLM reader in the evaluation loop:
-we measure whether the right memory surfaces, not whether a model can write a good answer
+Measured against a published benchmark, retrieval only. No LLM reader in the loop: the
+question is whether the right memory surfaces, not whether a model can write a good answer
 from it.
 
 **LongMemEval** (Wu et al., ICLR 2025). 500 human-curated questions buried in about 40
@@ -118,13 +171,12 @@ which runs in an isolated ephemeral container, never against a live store.</sub>
 
 Retrieval fuses five signals through weighted reciprocal-rank fusion, then reranks with a
 cross-encoder: vector similarity, full-text search, trigram match, heat and recency. LoCoMo
-and BEAM results, the ablations, and the floor gates live in
-[benchmarks/](benchmarks/).
+and BEAM results, the ablations and the floor gates are in [benchmarks/](benchmarks/).
 
 ## Storage
 
-SQLite by default. PostgreSQL is a single configuration field, worth it for very large stores
-or a database shared across a team.
+SQLite by default. PostgreSQL is one configuration field, worth it for very large stores or a
+database shared across a team.
 
 ```bash
 bash <plugin-dir>/scripts/install-plugin.sh --postgres
@@ -143,32 +195,30 @@ keeps it across updates.
 | ANN index | none | pgvector HNSW |
 | Cross-agent team decisions, preemptive context, pipeline heat bumps | no-op | active |
 
-The honest version of that last row: three hook enrichments are PostgreSQL-only and degrade
-to silent no-ops on SQLite. Session banners, auto-recall, auto-capture, checkpoints and every
-memory tool work on both.
+Three hook enrichments are PostgreSQL-only and degrade to silent no-ops on SQLite. Session
+banners, auto-recall, auto-capture, checkpoints and every memory tool work on both.
 
 ## Under the hood
 
-Memory is modelled on how memory is understood to work, not on a vector store with a
-timestamp: 36 mechanisms spanning encoding, consolidation, retrieval and forgetting, each
-cited to published work and exposed as a live system vital. Writes pass a predictive-coding
-novelty gate, memories decay thermodynamically unless replayed, and episodic traces
-consolidate into semantic ones the way complementary learning systems describe.
-
-If that sounds like decoration, the [bibliography](docs/papers/bibliography.md) is the check.
-Its entry count is what the references badge above reports, and a gate fails the build if the
-two disagree.
+The mechanisms above are not metaphors borrowed from neuroscience after the fact. There are 36
+of them spanning encoding, consolidation, retrieval and forgetting, each cited to published
+work and exposed as a live system vital. The [bibliography](docs/papers/bibliography.md) is
+the check: its entry count is what the references badge reports, and a gate fails the build if
+the two disagree.
 
 Clean Architecture, concentric layers: `server → handlers → core ← shared`, and
-`infrastructure → shared`. Core is pure and testable without mocks. See
-[docs/agent-guidance.md](docs/agent-guidance.md) for the map.
+`infrastructure → shared`. Core is pure and testable without mocks.
+[docs/agent-guidance.md](docs/agent-guidance.md) is the map;
+[docs/mcp-tools.md](docs/mcp-tools.md) is the tool reference.
 
 ## Limits worth knowing before you install
 
-- The Claude Code plugin is where the automatic behaviour lives. Elsewhere you call the tools
-  yourself, and the `.mcpb` bundle carries no hooks because the format has none.
+- The automatic behaviour is Claude Code plugin machinery. Elsewhere you call the tools
+  yourself.
 - SQLite fusion is in-process and unindexed. Fine at personal scale, slower at very large one.
-- Retrieval scores above are retrieval-only. They say nothing about answer quality.
+- The retrieval scores above are retrieval-only. They say nothing about answer quality.
+- Provenance grading is local and structural. It checks that a reference resolves, not that a
+  claim is true; a DOI or arXiv link is never auto-verified.
 - The embedding model download is the one network call at first use.
 
 ## Project
