@@ -3415,6 +3415,10 @@
     "ADR-1061": {
       "mirror": "ADR-1061-make-the-launcher-deps-idempotence-guard-abi-aware.md",
       "path": "adr/cortex/1061-make-the-launcher-deps-idempotence-guard-abi-aware.md"
+    },
+    "ADR-1062": {
+      "mirror": "ADR-1062-enforce-the---no-deps-hashed-install-invariant-at-the-hook-and-the-ci-gate.md",
+      "path": "adr/cortex/1062-enforce-the---no-deps-hashed-install-invariant-at-the-hook-and-the-ci-gate.md"
     }
   },
   "project": "cortex",

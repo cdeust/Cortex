@@ -746,6 +746,9 @@ jobs:
       - name: Verify generated decision mirrors
         run: python scripts/check_project_wiki.py
 
+      - name: Verify every hashed constraint install passes --no-deps
+        run: python scripts/check_no_deps_invariant.py
+
   typecheck:
     needs: [changes, lint]
     if: github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true')

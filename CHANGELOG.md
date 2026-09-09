@@ -31,6 +31,26 @@ adheres to [Semantic Versioning](https://semver.org/).
   instances yet and are not enforced. `CORTEX_DECISION_GATE=off` overrides
   one call. See ADR-1060.
 
+- **Every hashed-requirements install is now checked for `--no-deps`, at
+  edit time and in CI.** `pyproject.toml`'s `[tool.uv] override-dependencies`
+  steers `mpmath` past the `mpmath<1.4` bound `sympy`'s own metadata still
+  declares; `uv`'s resolver honours the override, but the exported
+  `requirements/*.txt` format cannot carry it, so a `pip install
+  --require-hashes -r requirements/*.txt` without `--no-deps` re-derives the
+  graph and aborts with `ResolutionImpossible`. PR #332 fixed this across
+  CI, the Dockerfiles and `scripts/launcher_torch_cpu.py` (ADR-0800), but
+  missed `scripts/setup.sh`, which stayed broken for months (fixed in
+  PR #539, ADR-1059) — nothing enforced the invariant itself. The new
+  `mcp_server/hooks/no_deps_gate.py` runs as a `PreToolUse` hook on `Edit`
+  and `Write`, scoped to `scripts/`, `.github/workflows/`,
+  `.github/actions/`, `Dockerfile*`, and `.devcontainer/`, and blocks any
+  write that pairs `--require-hashes` with a `-r <...requirements...txt>`
+  install lacking `--no-deps` in the same shell command. `scripts/
+  check_no_deps_invariant.py` runs the identical detector
+  (`mcp_server/hooks/_no_deps_lex.py`) over every tracked file in that scope
+  in CI, catching commits the hook never saw. `CORTEX_NO_DEPS_GATE=off`
+  overrides one hook call. See ADR-1062.
+
 ### Fixed
 
 - **`scripts/setup.py` installed an unpinned, hand-written package list

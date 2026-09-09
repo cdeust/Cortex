@@ -54,6 +54,10 @@
           {
             "type": "command",
             "command": "bash -c 'PY=$(command -v python3 || command -v python) && if [ -z \"${CLAUDE_PLUGIN_ROOT:-}\" ]; then echo \"cortex hook: CLAUDE_PLUGIN_ROOT is unset; refusing to guess the plugin root\" >&2; exit 1; fi; ROOT=\"$CLAUDE_PLUGIN_ROOT\" && \"$PY\" \"$ROOT/scripts/launcher.py\" mcp_server.hooks.decision_gate'"
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'PY=$(command -v python3 || command -v python) && if [ -z \"${CLAUDE_PLUGIN_ROOT:-}\" ]; then echo \"cortex hook: CLAUDE_PLUGIN_ROOT is unset; refusing to guess the plugin root\" >&2; exit 1; fi; ROOT=\"$CLAUDE_PLUGIN_ROOT\" && \"$PY\" \"$ROOT/scripts/launcher.py\" mcp_server.hooks.no_deps_gate'"
           }
         ]
       }
