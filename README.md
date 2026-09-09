@@ -28,9 +28,10 @@ default, or PostgreSQL + pgvector if you prefer. No LLM in the retrieval loop, a
 leaves localhost unless you configure an integration that does. Your project's memory is a
 file you own and can delete.
 
-**Cross-platform is how it is built.** One stdio MCP server, the same 52 tools on Claude Code,
-Claude Desktop, Claude Cowork, Codex, ChatGPT desktop, Gemini CLI, Cursor, Windsurf and VS
-Code. What differs per host is stated in a table below, not discovered after install.
+**Cross-platform is how it is built.** One stdio MCP server and the same 52 tools on Claude
+Code, in the Claude Desktop bundle, under Claude Cowork, and on every local stdio MCP host
+listed in the table below. What differs per host is stated there, not discovered after
+install.
 
 **Eco-responsible is what we are aiming at.** Work that never reaches a datacenter is work
 nobody has to power, and an agent that finds the right context first time re-reads fewer
@@ -282,46 +283,50 @@ deliberately does not claim are in [docs/codex-plugin.md](docs/codex-plugin.md).
 
 ## Green software engineering
 
-Cortex runs a standing efficiency programme, gated by the same evidence rule as the retrieval
-work: **no unsourced efficiency claim ships.** Waste is treated as a defect with a
-reproduction, not as a virtue to advertise.
+Cortex runs a standing efficiency programme, gated by the same evidence rule as
+the retrieval work: **no unsourced efficiency claim ships.** Waste is treated as
+a defect with a reproduction, not as a virtue to advertise.
 
-### The measurement harness, and what it does not establish
+### The measurement harness — and what it does not establish
 
-`benchmarks/energy/` implements the
-[Green Software Foundation SCI specification](https://sci.greensoftware.foundation/):
-operational emissions `O = E × I`, embodied allocation `M = TE × TS × RS`, reported per
-functional unit. For the embedding path the functional unit is **1000 model input tokens**,
-counted from the tokenizer's own `attention_mask`, never estimated from characters.
+`benchmarks/energy/` implements the [Green Software Foundation SCI
+specification](https://sci.greensoftware.foundation/): operational emissions
+`O = E × I`, embodied allocation `M = TE × TS × RS`, reported per functional
+unit. For the embedding path the functional unit is **1000 model input tokens**,
+counted from the tokenizer's own `attention_mask` — never estimated from
+characters.
 
-Read [benchmarks/energy/README.md](benchmarks/energy/README.md) before quoting anything from
-it. Its first paragraph is the important one: the automated fixtures exercise arithmetic and
-failure paths, they **do not measure device energy and do not establish an energy
-improvement.** By design:
+Read `benchmarks/energy/README.md` before quoting anything from it. Its own
+first paragraph is the important one: the automated fixtures exercise arithmetic
+and failure paths, they **do not measure device energy and do not establish an
+energy improvement.** Further, by design:
 
-- **No default carbon factors.** `--carbon-intensity` (gCO2eq/kWh) and `--embodied`
-  (gCO2eq/s, an already allocated rate) are mandatory operator inputs, validated before any
-  model import. The harness records the values and their units; it does not vouch for their
-  provenance.
-- **A stated boundary.** `raw_system_energy_j` is the sensor's combined CPU+GPU+ANE estimate.
-  It is neither wall-plug energy nor a complete device SCI score: memory, storage, screen,
-  power-supply losses, model warm-up and token counting are all excluded.
-- **Artifacts or it did not happen.** A successful run preserves `results.json`, a
-  `MANIFEST.json` of commit and source hashes, and the exact analyzed `powermetrics.txt`
-  snapshot.
+- **No default carbon factors.** `--carbon-intensity` (gCO2eq/kWh) and
+  `--embodied` (gCO2eq/s, an *already allocated* rate) are mandatory operator
+  inputs, validated before any model import. The harness records the values and
+  their units; it does not vouch for their provenance. You supply the region,
+  observation period, lifecycle assessment and reservation assumptions.
+- **A stated boundary.** `raw_system_energy_j` is the sensor's combined
+  CPU+GPU+ANE estimate. It is neither wall-plug energy nor a complete device SCI
+  score: memory, storage, screen, power-supply losses, model warm-up and token
+  counting are all excluded.
+- **Artifacts or it did not happen.** A successful run preserves `results.json`,
+  a `MANIFEST.json` of commit and source hashes, and the exact analyzed
+  `powermetrics.txt` snapshot.
 
-No energy results are committed to this repository. A figure measured on one operator's
-machine, region and duty cycle is not a property of the software, and publishing it as one
-would be the drift this programme exists to prevent.
+No energy results are committed to this repository. That is deliberate: a
+figure measured on one operator's machine, region and duty cycle is not a
+property of the software, and publishing it as one would be the drift this
+programme exists to prevent.
 
 ### What has actually shipped
 
-Efficiency work lands as ordinary reviewed PRs.
+Efficiency work lands as ordinary reviewed PRs. Two workstreams are merged:
 
 | Workstream | Change | PR |
 |---|---|---|
 | **CI / build** | run pytest once, on the coverage leg, instead of twice | [#475](https://github.com/cdeust/Cortex/pull/475) |
-| | build runtime images only on Docker changes, plus a weekly validation | [#476](https://github.com/cdeust/Cortex/pull/476) |
+| | build runtime images only on Docker changes + a weekly validation | [#476](https://github.com/cdeust/Cortex/pull/476) |
 | | cache pinned dependency and actionlint downloads | [#477](https://github.com/cdeust/Cortex/pull/477) |
 | | sdist under 5 MB, with a byte-identical wheel | [#478](https://github.com/cdeust/Cortex/pull/478) |
 | | measured job timeouts; cancel superseded PR runs | [#479](https://github.com/cdeust/Cortex/pull/479) |
@@ -332,21 +337,40 @@ Efficiency work lands as ordinary reviewed PRs.
 | | audit and clean orphan plugin dependencies | [#484](https://github.com/cdeust/Cortex/pull/484) |
 | | rotate telemetry and detached-worker logs | [#485](https://github.com/cdeust/Cortex/pull/485) |
 | | persist hook cascade cadence; cool down misses | [#486](https://github.com/cdeust/Cortex/pull/486) |
-| | pinned CPU-only Torch on Linux, no CUDA payload pulled | [#487](https://github.com/cdeust/Cortex/pull/487) |
+| | pinned CPU-only Torch on Linux — no CUDA payload pulled | [#487](https://github.com/cdeust/Cortex/pull/487) |
 
-The hook work is the load-bearing one, because hooks run on every tool event. Deferring the
-handler/store stack keeps hook boot at **~0.05 s** against **~0.6 s** for the full registry
-import (measured 2026-07-28; the constant is cited in `mcp_server/hooks/auto_recall.py` at its
-call sites, per the no-invented-constants rule).
+The hook work is the load-bearing one, because hooks run on *every* tool event.
+Deferring the handler/store stack keeps hook boot at **~0.05 s** against
+**~0.6 s** for the full registry import (measured 2026-07-28; the constant is
+cited in `mcp_server/hooks/auto_recall.py` at its call sites, per the
+no-invented-constants rule).
 
 ### Demand reduction is the primary lever
 
-The largest efficiency term in an LLM-assisted workflow is not this server's own CPU. It is
-the tokens a model must process because the right context was not found the first time. That
-makes retrieval quality an energy property, and it is why the benchmark table above and this
-section are the same programme: `response_budget.py` bounds a payload and keeps ids so
-truncation stays resumable, the reranker degrades to first-stage scores rather than fetching
-a model, and `CORTEX_RERANKER_OFFLINE=1` refuses the download outright.
+The largest efficiency term in an LLM-assisted workflow is not this server's own
+CPU — it is the tokens a model must process because the right context was not
+found the first time. That makes retrieval quality an energy property, and it is
+why the benchmark tables above and this section are the same programme:
+`response_budget.py` bounds a payload and keeps ids so truncation stays
+resumable, the reranker degrades to first-stage scores rather than fetching a
+model, and `CORTEX_RERANKER_OFFLINE=1` refuses the download outright.
+
+This paragraph is a design rationale, not a measurement. Cortex publishes no
+token-savings or CO2 figure for end-to-end agent sessions, because it has not
+measured one.
+
+---
+
+## Verification
+
+Every benchmark headline above is backed by a per-mechanism ablation campaign — full *n*, single-seed, with code SHAs, dirty flags, manifests, and per-row JSON preserved:
+
+- **LongMemEval-S, 17 rows, n=500** — `docs/benchmarks/e1-v3-results.md`. Per-mechanism deltas at the calibrated equilibrium + category-specialization analysis.
+- **LoCoMo, 14 rows, n=1986** — `docs/benchmarks/e1-v3-locomo-results.md` (pre-fix) and `docs/benchmarks/e1-v3-locomo-results-post-fix.md` (post plasticity result-shape fix). Two-baseline design (NO_CONSOLIDATION / WITH_CONSOLIDATION).
+
+The full per-mechanism evidence lives in the thermodynamic paper (§6.3); the BEAM decay dose-response (§6.4) documents a re-scoped negative result after a dirty-store confound was caught and traced. **[Thermodynamic Memory vs. Flat-Importance Stores (PDF, 34 pages)](docs/arxiv-thermodynamic/main.pdf)** · **[Stage-Aware Context Assembly (PDF, 39 pages)](docs/arxiv-context-assembly/main.pdf)**.
+
+---
 
 ## Under the hood
 
@@ -374,22 +398,17 @@ Clean Architecture, concentric layers: `server → handlers → core ← shared`
   PostgreSQL and OTLP telemetry add network activity only when explicitly configured; see
   [PRIVACY.md](PRIVACY.md).
 
+## Security
+
+Runs **100% locally** — MCP over stdio, the storage backend (SQLite file or PostgreSQL on localhost) never leaves your machine (the optional [hypermnesia-mcp-viz](https://github.com/cdeust/cortex-viz) companion binds its server to 127.0.0.1). No data leaves your machine. SafeSkill scan: **94/100** (code 97, content 88 — [docs/safeskill-report.json](docs/safeskill-report.json)).
+
 ## Privacy Policy
 
-Cortex is **local-first**: your memories, conversations and profiles stay on your machine,
-stored in a local SQLite database (`~/.claude/methodology/memory.db`) by default, or in a
-PostgreSQL database you control. Cortex sends **no** memories, content or telemetry to the
-author, to Anthropic, or to any third party. The only outbound network activity is a one-time
-download of open-source embedding and reranking models from Hugging Face (model files only),
-plus any integrations you explicitly configure. The optional
-[hypermnesia-mcp-viz](https://github.com/cdeust/cortex-viz) companion binds its server to
-127.0.0.1. SafeSkill scan: **94/100** (code 97, content 88,
-[docs/safeskill-report.json](docs/safeskill-report.json)). Full policy:
-**[PRIVACY.md](PRIVACY.md)**.
+Cortex is **local-first**: your memories, conversations, and profiles stay on your machine — stored in a local SQLite database (`~/.claude/methodology/memory.db`) by default, or in a PostgreSQL database you control. Cortex sends **no** memories, content, or telemetry to the author, Anthropic, or any third party. The only outbound network activity is a one-time download of open-source embedding/reranking models from Hugging Face (model files only), plus any integrations you explicitly configure. Full policy: **[PRIVACY.md](PRIVACY.md)**.
 
 ## Support
 
-- **Issues and bug reports:** [GitHub Issues](https://github.com/cdeust/Cortex/issues)
+- **Issues & bug reports:** [GitHub Issues](https://github.com/cdeust/Cortex/issues)
 - **Security disclosures:** see [SECURITY.md](SECURITY.md)
 - **Contact:** [admin@ai-architect.tools](mailto:admin@ai-architect.tools)
 
@@ -410,7 +429,7 @@ python scripts/check_craftsmanship.py # file and method caps, layer whitelist, s
 
 ## License
 
-MIT, see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE).
 
 This software is the independent work of Clément Deust. It was developed outside any
 employment relationship and is not affiliated with, endorsed by, or owned by any past or
