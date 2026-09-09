@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [4.20.0] - 2026-09-09
+
 ### Added
 
 - **A decision written into code is now refused at edit time, not reported
