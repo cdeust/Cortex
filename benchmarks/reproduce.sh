@@ -161,6 +161,8 @@ started_container=0
 
 # shellcheck source=benchmarks/lib/bench_regression.sh
 . "$REPO_ROOT/benchmarks/lib/bench_regression.sh"
+# shellcheck source=benchmarks/lib/bench_only.sh
+. "$REPO_ROOT/benchmarks/lib/bench_only.sh"
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 need_cmd() {
@@ -193,6 +195,7 @@ parse_args() {
             *)               PASSTHROUGH+=("$1"); shift ;;
         esac
     done
+    validate_only || exit 2
     check_reranker_cell
 }
 

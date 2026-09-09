@@ -6,6 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`benchmarks/reproduce.sh --only` no longer accepts a selector that runs nothing.**
+  `--only` was compared token for token against `longmemeval`, `locomo`, `beam`
+  and `decision-ids`, while the script itself prints the artifact names
+  `longmemeval-s` and `beam-100K`. Passing one of those, or any typo, matched
+  no benchmark: the script built the package, started and stopped an ephemeral
+  container, wrote `MANIFEST.json` and `START_SNAPSHOT.json`, measured nothing
+  and exited 0. Observed on 2026-09-09 while re-measuring v4.20.0. A new
+  sourced library, `benchmarks/lib/bench_only.sh`, normalises the two aliases to
+  the tokens `want_bench` matches and fails closed on an unknown or empty token
+  with exit 2 and the accepted list, before any `uv run` or container start.
+
 ## [4.20.0] - 2026-09-09
 
 ### Added
