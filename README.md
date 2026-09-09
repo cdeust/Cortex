@@ -200,8 +200,8 @@ v4.14.1, 2026-07-14: [artifact JSON](benchmarks/results/repro/20260714-v4.14.1-p
 This is the run the ablation campaign in [Verification](#verification) was built around.
 
 v4.20.0, 2026-09-09: [artifact JSON](benchmarks/results/repro/20260909-v4.20.0-longmemeval-s/longmemeval-s.json) and its
-[manifest](benchmarks/results/repro/20260909-v4.20.0-longmemeval-s/MANIFEST.json); [code SHA](https://github.com/cdeust/Cortex/commit/86251ab8fc27a18f80f9b09b99a75f3b60edd9cb).
-A single run of the LongMemEval-S leg alone (`benchmarks/reproduce.sh --only longmemeval
+[manifest](benchmarks/results/repro/20260909-v4.20.0-longmemeval-s/MANIFEST.json); [code SHA](https://github.com/cdeust/Cortex/commit/86251ab8fc27a18f80f9b09b99a75f3b60edd9cb),
+dirty=false. A single run of the LongMemEval-S leg alone (`benchmarks/reproduce.sh --only longmemeval
 --no-ablation`) in an isolated ephemeral PostgreSQL container, reranker loaded, consolidation
 disabled. Against v4.14.1 the change is 0.4 points of Recall@10 and 0.012 of MRR. The run's own
 floor check reports Recall@10 within the 0.005 tolerance of the July floor (0.982) and MRR
