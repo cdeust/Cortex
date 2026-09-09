@@ -188,14 +188,28 @@ from it.
 
 **LongMemEval**: 500 human-curated questions buried in about 40 sessions of history.
 
-| Historical Cortex run (v4.14.1) | Result |
-|---|---|
-| Recall@10 | **98.2%** |
-| MRR | **0.9167** |
+| | v4.14.1 (historical) | v4.20.0 (current release) |
+|---|---|---|
+| Recall@10 | **98.2%** | **97.8%** |
+| MRR | **0.9167** | **0.905** |
 
-Historical single run from v4.14.1, not a v4.20.0 performance result: n=500, clean database,
-consolidation disabled. [Artifact JSON](benchmarks/results/repro/20260714-v4.14.1-pretag/longmemeval-s.json);
+Both are single runs: n=500, clean database, consolidation disabled, retrieval only.
+
+v4.14.1, 2026-07-14: [artifact JSON](benchmarks/results/repro/20260714-v4.14.1-pretag/longmemeval-s.json);
 [code SHA](https://github.com/cdeust/Cortex/commit/28145f0b7a113fc06e22568de6feea7f8444eaf5).
+This is the run the ablation campaign in [Verification](#verification) was built around.
+
+v4.20.0, 2026-09-09: [artifact JSON](benchmarks/results/repro/20260909-v4.20.0-longmemeval-s/longmemeval-s.json) and its
+[manifest](benchmarks/results/repro/20260909-v4.20.0-longmemeval-s/MANIFEST.json); [code SHA](https://github.com/cdeust/Cortex/commit/86251ab8fc27a18f80f9b09b99a75f3b60edd9cb).
+A single run of the LongMemEval-S leg alone (`benchmarks/reproduce.sh --only longmemeval
+--no-ablation`) in an isolated ephemeral PostgreSQL container, reranker loaded, consolidation
+disabled. Against v4.14.1 the change is 0.4 points of Recall@10 and 0.012 of MRR. The run's own
+floor check reports Recall@10 within the 0.005 tolerance of the July floor (0.982) and MRR
+0.0093 below its floor (0.914), which the script treats as non-blocking by design;
+[docs/agent-guidance.md](docs/agent-guidance.md) records that `main` no longer clears those
+floors and that the release gate is `--no-regression` against `origin/main`. The same tree has
+no LoCoMo or BEAM figure yet.
+
 Reproduce with `benchmarks/reproduce.sh`, which runs in an isolated ephemeral container, never
 against a live store.
 
@@ -363,7 +377,7 @@ measured one.
 
 ## Verification
 
-Every benchmark headline above is backed by a per-mechanism ablation campaign — full *n*, single-seed, with code SHAs, dirty flags, manifests, and per-row JSON preserved:
+The v4.14.1 figures above are backed by a per-mechanism ablation campaign — full *n*, single-seed, with code SHAs, dirty flags, manifests, and per-row JSON preserved; the v4.20.0 figures are a single measurement without one:
 
 - **LongMemEval-S, 17 rows, n=500** — `docs/benchmarks/e1-v3-results.md`. Per-mechanism deltas at the calibrated equilibrium + category-specialization analysis.
 - **LoCoMo, 14 rows, n=1986** — `docs/benchmarks/e1-v3-locomo-results.md` (pre-fix) and `docs/benchmarks/e1-v3-locomo-results-post-fix.md` (post plasticity result-shape fix). Two-baseline design (NO_CONSOLIDATION / WITH_CONSOLIDATION).

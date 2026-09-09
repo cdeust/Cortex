@@ -1,0 +1,54 @@
+{
+  "overall_mrr": 0.9046547619047619,
+  "overall_recall10": 0.978,
+  "category_mrr": {
+    "Single-session (user)": 0.8347789115646259,
+    "Multi-session reasoning": 0.9563492063492063,
+    "Single-session (preference)": 0.6692592592592593,
+    "Temporal reasoning": 0.9001969208736127,
+    "Knowledge updates": 0.9089031339031339,
+    "Single-session (assistant)": 1.0
+  },
+  "category_recall10": {
+    "Single-session (user)": 0.9571428571428572,
+    "Multi-session reasoning": 0.9924812030075187,
+    "Single-session (preference)": 0.9,
+    "Temporal reasoning": 0.9774436090225563,
+    "Knowledge updates": 0.9871794871794872,
+    "Single-session (assistant)": 1.0
+  },
+  "elapsed_s": 1903.5971871659858,
+  "consolidation_total_wall_s": 0.0,
+  "consolidation_call_count": 0,
+  "manifest": {
+    "with_consolidation": false,
+    "with_consolidation_note": "Scores collected with consolidation=False do NOT reflect production behaviour.  Consolidation-only mechanisms (CASCADE, INTERFERENCE, HOMEOSTATIC_PLASTICITY, SYNAPTIC_PLASTICITY, MICROGLIAL_PRUNING, TWO_STAGE_MODEL, EMOTIONAL_DECAY, TRIPARTITE_SYNAPSE, SCHEMA_ENGINE) are exercised only when with_consolidation=True.  Delta between the two conditions is unmeasured in this run.",
+    "ablate_mechanism": null,
+    "ablate_env_var": null,
+    "n_questions": 500,
+    "n_runs": 1,
+    "consolidation_call_count": 0,
+    "consolidation_total_wall_s": 0.0,
+    "repro": {
+      "git_commit": "86251ab8fc27a18f80f9b09b99a75f3b60edd9cb",
+      "git_dirty": false,
+      "python_version": "3.12.11 (main, Sep 18 2025, 19:41:45) [Clang 20.1.4 ]",
+      "platform_system": "Darwin",
+      "platform_machine": "arm64",
+      "platform_node": "mac-1.home",
+      "timestamp_utc": "2026-09-09T18:20:23.150679+00:00",
+      "lib_versions": {
+        "sentence-transformers": "5.6.1",
+        "torch": "2.13.0",
+        "numpy": "2.5.1",
+        "psycopg": "3.3.5",
+        "pgvector": "0.5.0",
+        "flashrank": "0.2.10"
+      },
+      "reranker_active": true,
+      "reranker_state": "loaded",
+      "reranker_model_path": "/Users/cdeust/.cache/flashrank/ms-marco-MiniLM-L-12-v2/flashrank-MiniLM-L-12-v2_Q.onnx",
+      "reranker_model_sha256": "d3dd7b09fcf06b0c070081d6819b5effbb40b667bcad78b2d7543400271141d1"
+    }
+  }
+}
