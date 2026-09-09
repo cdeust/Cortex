@@ -8,6 +8,14 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **`scripts/setup.py` installed an unpinned, hand-written package list
+  instead of the generated constraint file (#538).** This is the path taken
+  by the SQLite backend on every OS and by the PostgreSQL backend on
+  Windows — the default zero-config install. `install_deps()` now resolves
+  `requirements/setup.txt`, the same hashed closure `scripts/setup.sh`
+  installs, with `--no-deps --require-hashes` and never `--upgrade`, for
+  the same reasons recorded in ADR-1059. The hand list is deleted.
+
 - **The plugin installer could not install its dependencies (PR #539).**
   `scripts/setup.sh` step 3/7 installs `requirements/setup.txt`, the hashed
   graph exported from `uv.lock`, and it was the last consumer of a generated
