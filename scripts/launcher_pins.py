@@ -59,7 +59,7 @@ BASE_PACKAGES: list[tuple[str, str]] = [
 
 # source: ADR-0750
 _ML_COMMON: list[tuple[str, str]] = [
-    ("sentence_transformers", "sentence-transformers==5.6.1"),
+    ("sentence_transformers", "sentence-transformers==6.0.1"),
     ("flashrank", "flashrank==0.2.10"),
 ]
 

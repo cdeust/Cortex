@@ -1848,6 +1848,7 @@ tokenizers==0.23.2 \
     --hash=sha256:f486f402f6f9abee5bb032553736813af0c710a86b2e0ca592634c55cea1f835
     # via
     #   flashrank
+    #   sentence-transformers
     #   transformers
 torch==2.13.0 ; sys_platform != 'linux' \
     --hash=sha256:024c6cc0c1b085f2f91f20a3dc27b0471d021c31ce84b81be3afdc39f791fd9d \

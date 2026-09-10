@@ -2014,6 +2014,7 @@ tokenizers==0.23.2 \
     --hash=sha256:f486f402f6f9abee5bb032553736813af0c710a86b2e0ca592634c55cea1f835
     # via
     #   flashrank
+    #   sentence-transformers
     #   transformers
 tomli==2.4.1 ; python_full_version <= '3.11' \
     --hash=sha256:01f520d4f53ef97964a240a035ec2a869fe1a37dde002b57ebc4417a27ccd853 \
