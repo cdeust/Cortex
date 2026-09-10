@@ -1,7 +1,9 @@
 """The decision gate refuses prose where a pointer belongs.
 
-Each test states the shape it protects, because the gate is a heuristic and
-its exemptions are the part most likely to be loosened by accident.
+Each test states the shape it protects, because the gate is a heuristic.
+Since the owner ruling of 2026-09-10 (ADR-1060, revision "no exception") no
+path, header or language is exempt; the tests below pin that as firmly as
+they pin the refusals the gate was built for.
 """
 
 from __future__ import annotations
@@ -29,8 +31,6 @@ def _edit(path: Path, old: str, new: str) -> dict:
 
 def _script(tmp_path: Path, body: str) -> Path:
     path = tmp_path / "thing.sh"
-    # `echo "start"` matters: it makes the body a body. A run with nothing
-    # executable before it is the file header, which is exempt by design.
     path.write_text(
         f'#!/usr/bin/env bash\nset -euo pipefail\n\necho "start"\n{body}\n', "utf-8"
     )
@@ -58,15 +58,23 @@ def test_allows_the_sanctioned_pointer_form(tmp_path: Path) -> None:
     assert gate.evaluate(_edit(path, 'echo "anchor"', pointers)) == ALLOW
 
 
-def test_allows_a_long_header_on_a_new_file(tmp_path: Path) -> None:
-    """A header is orientation. It is exempt because nothing executable
-    precedes it, not because of where its line number falls."""
+def test_refuses_a_long_header_on_a_new_file(tmp_path: Path) -> None:
+    """The header used to be exempt as orientation; the owner ruled that a
+    decision hides there as easily as anywhere else. Refused like a body."""
     content = "#!/usr/bin/env bash\nset -e\n\n" + _prose(30) + "\necho hi\n"
     event = {
         "tool_name": "Write",
         "tool_input": {"file_path": str(tmp_path / "new.sh"), "content": content},
     }
-    assert gate.evaluate(event) == ALLOW
+    assert gate.evaluate(event) == BLOCK
+
+
+def test_grandfathers_a_long_header_already_in_the_file(tmp_path: Path) -> None:
+    """Removing the header exemption must not make legacy files uneditable:
+    the header is grandfathered like any block already present."""
+    path = tmp_path / "legacy.sh"
+    path.write_text("#!/usr/bin/env bash\n" + _prose(30) + "\necho anchor\n", "utf-8")
+    assert gate.evaluate(_edit(path, "echo anchor", "echo changed")) == ALLOW
 
 
 def test_grandfathers_a_block_already_in_the_file(tmp_path: Path) -> None:
@@ -75,10 +83,12 @@ def test_grandfathers_a_block_already_in_the_file(tmp_path: Path) -> None:
     assert gate.evaluate(_edit(legacy, 'echo "anchor"', 'echo "changed"')) == ALLOW
 
 
-def test_exempts_tests(tmp_path: Path) -> None:
+def test_judges_a_test_file_like_any_other(tmp_path: Path) -> None:
+    """Tests used to be exempt because they narrate scenarios; the ruling
+    is that a decision narrated in a test is still a decision."""
     path = tmp_path / "test_thing.py"
     path.write_text("y = 0\nx = 1\n", "utf-8")
-    assert gate.evaluate(_edit(path, "x = 1", _prose(20))) == ALLOW
+    assert gate.evaluate(_edit(path, "x = 1", _prose(20))) == BLOCK
 
 
 def test_ignores_file_types_with_no_comment_marker(tmp_path: Path) -> None:
@@ -96,15 +106,15 @@ def test_override_releases_the_gate(tmp_path: Path, monkeypatch) -> None:
     assert gate.evaluate(event) == ALLOW
 
 
-def test_slash_slash_languages_are_not_enforced(tmp_path: Path) -> None:
-    """The marker table only covers ``#`` languages actually measured in the
-    tracked tree (``.py``, ``.sh``, ``.bash``, ``.zsh``, ``.rb``); a zero-
-    file threshold claim is not a threshold, it is a guess. ``//`` and
-    ``/* */`` markers are dropped until they have tracked-tree evidence."""
+def test_slash_slash_languages_are_enforced(tmp_path: Path) -> None:
+    """``//`` markers were deferred "until measured"; that deferral is what
+    let a Rust ``///`` block through on 2026-09-10. The threshold is the
+    same eight lines for every marker (``test_decision_gate_languages.py``
+    covers each suffix)."""
     path = tmp_path / "thing.ts"
     path.write_text("const first = 0;\nconst anchor = 1;\n", "utf-8")
     event = _edit(path, "const anchor = 1;", _prose(20, "//"))
-    assert gate.evaluate(event) == ALLOW
+    assert gate.evaluate(event) == BLOCK
 
 
 def test_malformed_event_never_blocks() -> None:
@@ -124,11 +134,9 @@ def test_unreadable_current_file_never_crashes(tmp_path: Path) -> None:
     assert gate.evaluate(event) == ALLOW  # must not raise
 
 
-def test_a_leading_docstring_is_still_header(tmp_path: Path) -> None:
-    """A module docstring followed by a licence block must not be blocked:
-    nothing executable precedes either. Reproduced pre-fix: BLOCKED at
-    line 3, because the docstring line disqualified the header scan even
-    though it is not code."""
+def test_a_block_after_the_module_docstring_is_refused(tmp_path: Path) -> None:
+    """Formerly allowed as header material. A docstring is not a comment
+    and does not count; the eight ``#`` lines after it do."""
     content = (
         '"""Module docstring."""\n\n'
         + _prose(gate.PROSE_RUN_LIMIT)
@@ -138,7 +146,7 @@ def test_a_leading_docstring_is_still_header(tmp_path: Path) -> None:
         "tool_name": "Write",
         "tool_input": {"file_path": str(tmp_path / "new_mod.py"), "content": content},
     }
-    assert gate.evaluate(event) == ALLOW
+    assert gate.evaluate(event) == BLOCK
 
 
 def test_a_heredoc_body_is_data_not_comments(tmp_path: Path) -> None:
@@ -176,24 +184,20 @@ def test_still_blocks_a_ten_to_twelve_line_rationale(tmp_path: Path) -> None:
         assert gate.evaluate(event) == BLOCK, f"a {length}-line rationale must block"
 
 
-def test_exempts_the_js_test_root(tmp_path: Path) -> None:
-    """``tests_js`` is this repo's JS-equivalent of ``tests_py``; a Python
-    test file was exempt while the same content under a JS test root was
-    not, which is the inconsistency this closes."""
+def test_judges_the_js_test_root(tmp_path: Path) -> None:
+    """``tests_js`` and the ``*.test.js``/``*.spec.ts`` shapes were the
+    last test exemptions added; they go with the rest."""
     root = tmp_path / "tests_js"
     root.mkdir()
     path = root / "spatial_hash.test.js"
     path.write_text("const x = 1;\n", "utf-8")
-    assert gate.evaluate(_edit(path, "const x = 1;", _prose(20))) == ALLOW
+    assert gate.evaluate(_edit(path, "const x = 1;", _prose(20, "//"))) == BLOCK
 
 
-def test_exempts_dot_spec_and_dot_test_filenames(tmp_path: Path) -> None:
-    """A ``.spec.ts``/``.test.ts`` file narrates scenarios like a
-    ``test_*.py`` file and must be exempt on that shape alone, independent
-    of which directory it lives under."""
+def test_judges_dot_spec_filenames(tmp_path: Path) -> None:
     path = tmp_path / "widget.spec.ts"
     path.write_text("const x = 1;\n", "utf-8")
-    assert gate.evaluate(_edit(path, "const x = 1;", _prose(20))) == ALLOW
+    assert gate.evaluate(_edit(path, "const x = 1;", _prose(20, "//"))) == BLOCK
 
 
 def test_entrypoint_exits_two_on_a_blocked_write(tmp_path: Path) -> None:
@@ -247,4 +251,4 @@ def test_lexer_returns_no_comments_for_unparsable_python() -> None:
     """Same path, asserted at the unit it belongs to."""
     from mcp_server.hooks import _decision_gate_lex as lex
 
-    assert lex.python_comment_lines_and_header("x = (\n") == (set(), 0)
+    assert lex.python_comment_lines("x = (\n") == set()
