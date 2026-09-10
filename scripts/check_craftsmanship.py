@@ -1,20 +1,6 @@
 """Craftsmanship gate: a deterministic pass/fail check for the rules
 ``docs/agent-guidance.md`` § Code Style states but — until this script — nothing
-verified. See ``craftsmanship_rules.py`` for what each rule checks and why
-its violation identifier is stable; see ``craftsmanship_baseline.py`` for
-the ratchet that lets pre-existing debt through without blocking new debt,
-and for why the comparison source is the PR's BASE ref, never the working
-tree — a working-tree baseline can be tampered with in either direction
-(add a violation and self-regenerate; or hand-delete an entry and leave
-the violation in place), both reproduced and closed, see that module's
-docstring. Git plumbing (resolving the base ref, reading the baseline as
-committed there) lives in ``craftsmanship_git.py``.
-
-Scope: by default, only the files a PR's diff touches (never the whole
-repository) — a file untouched by this change is not this change's
-problem. ``--write-baseline`` is the one mode that scans everything, because
-regenerating the baseline is exactly the operation that must see the whole
-tree.
+verified.
 
 Usage::
 
@@ -26,7 +12,8 @@ Usage::
 Exit codes: 0 clean, 1 new/stale/added/falsified-removal violations found,
 2 could not determine which files to check (git diff failed and no files
 were given explicitly) or could not resolve the base ref in diff mode.
-"""
+
+source: ADR-0712"""
 
 from __future__ import annotations
 

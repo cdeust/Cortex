@@ -1,0 +1,16 @@
+# ADR-0373: mcp_server/handlers/consolidation/pruning.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `mcp_server/handlers/consolidation/pruning.py`; original SHA-256 `2b3a52670978b91392ab3f6f0bf366c0e9a92bee0bc1b09900b86546f9740bdf`.
+
+## Original docstring, lines 71–74
+
+````text
+"""Delete prunable edges in a single batched DELETE.
+
+    Source: issue #13 — was per-row DELETE inside a loop.
+    """
+````
+

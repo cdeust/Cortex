@@ -1,0 +1,22 @@
+# ADR-0891: tests_py/benchmarks/test_disk_space_snapshot.py design and historical evidence
+
+Status: accepted; existing test/harness evidence preserved during issue #514.
+
+Source `tests_py/benchmarks/test_disk_space_snapshot.py`, original SHA-256 `bca8feb27c9086900e58cbffe1aca149be45bc678cbf668e8808e9f0bf4ee261`.
+Assertions and runtime fixture literals remain unchanged.
+
+## Original docstring, lines 1–10
+
+````text
+"""benchmarks.lib.disk_space_snapshot (2026-08-10 fix).
+
+Contract under test: `disk_space_snapshot()` reports free/total bytes on
+the repo-root filesystem (where benchmark datasets, throwaway test
+databases, and HF cache land) and, best-effort, on Docker's storage root —
+never raising, matching every other probe in this codebase's manifest
+tooling. See the module's own docstring for the disk-exhaustion incident
+motivating this (leaked test databases filled a shared machine's disk to
+100% mid-benchmark, taking PostgreSQL down with no trace in the artifact).
+"""
+````
+

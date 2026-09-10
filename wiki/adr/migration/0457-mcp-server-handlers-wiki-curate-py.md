@@ -1,0 +1,47 @@
+# ADR-0457: mcp_server/handlers/wiki_curate.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `mcp_server/handlers/wiki_curate.py`; original SHA-256 `70e167dedf5f78603ced61f90064bc77aa860e9c038e28a57d81ad943bfdd9a9`.
+
+## Original docstring, lines 1–15
+
+````text
+"""Wiki Phase 2.4 — Curate pending drafts.
+
+Two modes:
+
+  Auto-sweep (default): scan all pending drafts, evaluate each via
+  draft_curator, transition status (pending → approved / rejected),
+  leave 'hold' drafts untouched for refinement.
+
+  Manual decision: wiki_curate({draft_id: 42, decision: "approved"})
+  forces a verdict regardless of the rule gate. Used when the user
+  has reviewed a draft personally.
+
+Composition root — wires draft_curator (pure logic) + pg_store_wiki
+(status update + memo). Never raises per-draft; collects errors.
+"""
+````
+
+## Original comment, lines 102–104
+
+````text
+# Cap on the held-draft examples included in the response payload.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+````
+
+## Original comment, lines 119–119
+
+````text
+# Manual decision path
+````
+
+## Original schema-example, interim lines 70–70
+
+````text
+Reviewed against ADR-0042; matches the canonical decision
+````
+

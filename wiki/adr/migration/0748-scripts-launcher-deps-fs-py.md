@@ -1,0 +1,114 @@
+# ADR-0748: scripts/launcher_deps_fs.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `scripts/launcher_deps_fs.py`; original SHA-256 `107ff267401dfa9d695a7e55554f11dacda60080c61ef7fb3df1915f2bf3ae6d`.
+
+## Original docstring, lines 2–15
+
+````text
+"""Filesystem primitives for the deps-dir bootstrap — stdlib only.
+
+Split out of ``scripts/launcher_deps.py`` for SRP (issue #97 residues
+1-3, reporter mbe14) and the 500-line file-size rule: this module owns
+pure filesystem READS/WRITES about ``deps_dir``'s own contents —
+dist-info version parsing, backup-husk sweeping, superseded-metadata
+pruning — with zero pip/subprocess/lock concerns. ``launcher_deps.py``
+owns install ORCHESTRATION (locking, pip invocation, commit) and calls
+into this module as its filesystem source of truth.
+
+Like ``launcher_deps.py`` and ``launcher.py``, this module runs before
+the plugin's own dependencies exist on ``sys.path`` and may import only
+the Python standard library.
+"""
+````
+
+## Original docstring, lines 107–129
+
+````text
+"""True iff ``deps_dir``'s OWN ``.dist-info`` already matches ``spec``.
+
+    Precondition: ``spec`` is a pip spec (``name==version``, optionally
+    with ``[extras]``). Postcondition: pure filesystem read of
+    ``deps_dir`` — never consults ``sys.path``, ``sys.modules``, or does
+    any import. A package satisfied only by something ELSE on the
+    process's ``sys.path`` (the host interpreter's own global
+    site-packages, another PYTHONPATH entry) does not count.
+
+    Source: issue #97 residue 3 (reporter mbe14, "the substantial one").
+    The prior missing-package decision used an import-based probe, which
+    searches the WHOLE ``sys.path`` — on the reporter's box a base pin
+    (numpy) already satisfied by the HOST's global site-packages was
+    dropped from the install set, so it only ever entered ``deps_dir``
+    later as an UNPINNED transitive (pulled in by
+    pgvector/sentence-transformers), landing on whatever version pip's
+    resolver happened to pick for that transitive edge rather than the
+    declared pin. ``deps_dir`` content then depended on "resolution
+    luck" from the host's unrelated global packages. Basing the
+    decision on ``deps_dir``'s own dist-info — the same source of truth
+    the stamp check already trusts — makes the bootstrap hermetic
+    regardless of what else is importable on the machine.
+    """
+````
+
+## Original docstring, lines 135–155
+
+````text
+"""Best-effort removal of ``*.bak-<pid>`` husks left by a prior commit.
+
+    Precondition: none — a missing/unreadable ``deps_dir`` is a silent
+    no-op. Postcondition: every top-level ``<entry>.bak-<pid>`` child of
+    ``deps_dir`` whose ``<pid>`` no longer identifies a live process has
+    been best-effort removed; a backup whose owning process is still
+    alive, or whose name doesn't parse as ``<entry>.bak-<digits>``, is
+    left untouched.
+
+    Source: issue #97 residue 1 (reporter mbe14, verified on real
+    Windows locks). When a locked file lives inside the rename-aside
+    backup the commit step creates, its own success-path
+    ``shutil.rmtree(backup, ignore_errors=True)`` silently keeps
+    whatever it could not delete (there: ``numpy.bak-<pid>`` reduced to
+    the still-mapped ``.pyd`` files). Once the locking process exits the
+    remainder is pure dead weight. Mirrors the pid-parse-then-liveness
+    pattern of ``benchmarks/reproduce.sh``'s
+    ``sweep_orphaned_containers`` — run opportunistically at the start
+    of every bootstrap rather than at commit time, since the lock is
+    typically still held by another live process at that exact moment.
+    """
+````
+
+## Original docstring, lines 175–192
+
+````text
+"""Best-effort removal of stale ``dist-info`` siblings after a commit.
+
+    Precondition: ``committed_entry`` is a ``*.dist-info`` basename that
+    was JUST successfully committed into ``deps_dir`` (else a no-op).
+    Postcondition: every OTHER top-level ``*.dist-info`` child of
+    ``deps_dir`` whose normalized dist key matches ``committed_entry``'s
+    has been best-effort removed. Non-destructive in the same spirit as
+    the commit itself: a sibling this can't remove (e.g. still locked)
+    is silently left — this is metadata hygiene, not correctness-
+    critical, so it never raises.
+
+    Source: issue #97 residue 2 (reporter mbe14). A cross-version commit
+    (e.g. numpy 2.4.4 -> 2.5.1) only ever iterates ``tmp_dir``'s
+    entries — the OLD ``numpy-2.4.4.dist-info`` isn't one of them, so it
+    was never touched and survived next to the new one, leaving
+    duplicate metadata for a single distribution (importlib.metadata and
+    pip both see two records for "numpy").
+    """
+````
+
+## Reviewed remaining docstring (scripts/launcher_deps_fs.py, interim lines 67–73)
+
+````text
+Map normalized dist key -> version for every ``*.dist-info`` child.
+
+Precondition: none — a missing/unreadable dir yields an empty map.
+Postcondition: pure read, no side effects. Used both for the
+idempotence guard (issue #97 suggestion 1) and the stamp-free
+presence check.
+````
+

@@ -1,0 +1,145 @@
+---
+title: "ADR-0643 — mcp_server/shared/algorithmic_embedding.py rationale"
+status: accepted
+source: mcp_server/shared/algorithmic_embedding.py
+---
+
+# ADR-0643 — mcp_server/shared/algorithmic_embedding.py
+
+Migrated source rationale. The excerpts below are preserved verbatim from the source snapshot; historical identifiers inside quotations are not current identities.
+
+## module — original line 3 (docstring)
+
+````text
+The zero-model fallback for ``EmbeddingEngine``: when sentence-transformers is
+unavailable (import fails, or the model weights are absent and cannot be
+downloaded), this module produces a fixed-dimension dense vector for any text
+with no network, no model files, and no learned parameters — only arithmetic
+seeded by the token strings themselves. The same input always yields the same
+vector, on any platform (all hashing is ``hashlib``-based, never Python's
+salted ``hash()``).
+````
+
+## module — original line 11 (docstring)
+
+````text
+Signal selection (adapted from the codebase-memory-mcp 11-signal embedder,
+``src/semantic/semantic.{c,h}``). Cortex memories are conversational / decision
+prose, not code symbol tables, so only the signals that transfer to prose are
+kept:
+````
+
+## module — original line 16 (docstring)
+
+````text
+  INCLUDED
+  * Sublinear term-frequency weighting — ``1 + log(tf)`` (Manning, Raghavan &
+    Schütze, *Introduction to Information Retrieval*, 2008, §6.4 "sublinear tf
+    scaling"). Dampens repeated tokens without a corpus.
+  * Random Indexing — each token maps to a sparse ternary index vector; the
+    document vector is the tf-weighted sum. Deterministic, corpus-free, and
+    projects an unbounded vocabulary into ``dim`` dimensions (Kanerva,
+    Kristofersson & Holst 2000; Sahlgren, "An Introduction to Random Indexing",
+    2005). Sparse ternary projections are near-orthogonal in expectation
+    (Achlioptas, "Database-friendly random projections", 2003).
+  * Co-occurrence bridging — each token's contribution is enriched by the index
+    vectors of its neighbours within a symmetric window, distance-weighted
+    ``1/d``. Two texts that use different but co-occurring vocabulary move
+    closer, the synonym-bridging effect Sahlgren (2005) describes.
+  * Frequent-token subsampling — a token whose within-document occurrence
+    count exceeds ``_MAX_OCCUR`` has *only its co-occurrence contribution*
+    stride-subsampled; its first-order term is always complete. This mirrors
+    CBM's ``cooccur_sparse_one_target`` (semantic.c:874): the trigger is the
+    per-token occurrence count and the scope is the co-occurrence pass alone.
+    It is *inspired by* word2vec/GloVe frequent-word subsampling (Mikolov et
+    al. 2013) — the motivation, dampening dominant tokens — but does NOT
+    implement their ``P(discard) = 1 - sqrt(t/f(w))`` formula: that needs a
+    corpus-relative frequency ``f(w)``, which this stateless per-text seam does
+    not have (same reason IDF is excluded below). Inert for normal memories: a
+    token must repeat >``_MAX_OCCUR`` times in ONE memory to trigger, which
+    conversational prose effectively never does.
+````
+
+## module — original line 43 (docstring)
+
+````text
+  EXCLUDED (with reason)
+  * IDF — needs a persistent corpus. The ``encode(text)`` seam is stateless and
+    per-text; a global IDF table would couple every call to mutable cross-call
+    state and break determinism. Omitted, not faked.
+  * MinHash, API/type signatures, AST profile, graph diffusion, Halstead-lite —
+    all consume code structure (call graphs, type signatures, ASTs) that
+    conversational memories do not carry. Not applicable to prose.
+````
+
+## module — original line 51 (docstring)
+
+````text
+Pure utility — no I/O. Shared layer (numpy only, like ``shared.linear_algebra``
+and ``shared.minhash``).
+
+````
+
+## _token_seed — original line 86 (docstring)
+
+````text
+    source: mirrors CBM's ``XXH3_64bits(token)`` seed (semantic.c:459); uses
+    ``hashlib.blake2b`` (stdlib) so the value is stable across processes and
+    platforms, unlike Python's salted ``hash()``.
+    
+````
+
+## index_vector — original line 103 (docstring)
+
+````text
+    source: CBM ``cbm_sem_random_index`` (semantic.c:437) — for i in
+    0..NONZERO: h = hash(i, seed); pos = h % dim; sign = bit(h) ? +1 : -1;
+    v[pos] += sign.
+    
+````
+
+## _tf_weights — original line 137 (docstring)
+
+````text
+    source: Manning et al. 2008 §6.4 (sublinear tf scaling).
+    
+````
+
+## _cooccurrence_pass — original line 193 (mixed-contract-rationale)
+
+````text
+    precondition: ``acc`` is the caller's live accumulator (owner:
+    ``embed_text``); ``tf`` and ``cache`` are keyed by every distinct token.
+    postcondition: for each distinct token, its occurrence positions contribute
+    a windowed sum; a token occurring more than ``_MAX_OCCUR`` times has its
+    positions strided to ~``_MAX_OCCUR`` samples (its first-order term, added by
+    the caller, is untouched). source: CBM ``cooccur_sparse_one_target``
+    (semantic.c:874) — per-token trigger, co-occurrence scope only.
+    
+````
+
+## module — original line 65 (comment)
+
+````text
+# source: CBM_SEM_SPARSE_NNZE = 8 (semantic.h:39) — non-zero entries per sparse
+# random index vector. 8 keeps index vectors near-orthogonal at 256–768 dims
+# (Achlioptas 2003) while staying cheap.
+````
+
+## module — original line 70 (comment)
+
+````text
+# source: CBM_SEM_WINDOW = 5 (semantic.h:42) — co-occurrence window half-width.
+````
+
+## module — original line 73 (comment)
+
+````text
+# source: CBM_SEM_MAX_OCCUR = 512 (semantic.h:52, applied in semantic.c:874
+# cooccur_sparse_one_target) — frequent-token subsampling cap. Trigger: a token
+# whose within-document occurrence count exceeds this. Scope: that token's
+# co-occurrence pass only (its occurrence positions are strided to ~this count);
+# the first-order term is untouched. Direction is preserved by the final L2
+# normalize. Verified equal-or-better to no-subsampling on LongMemEval-S:
+# source: benchmark benchmarks/results/subsample-fidelity-184/MANIFEST.md.
+````

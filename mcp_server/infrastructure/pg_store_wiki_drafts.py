@@ -1,11 +1,8 @@
 """wiki.drafts DB operations.
 
-Split out of ``pg_store_wiki.py`` (originally 890 lines, over the
-300-line file limit — CLAUDE.md "Code Quality Rules") purely for size
-compliance; no logic changed.
-
 Pure infrastructure — no core imports, no handler imports.
-"""
+
+source: ADR-0577"""
 
 from __future__ import annotations
 
@@ -26,10 +23,7 @@ from mcp_server.infrastructure.pg_store_wiki_common import _returning_id
 def insert_draft(conn: StoreConnection, draft: dict[str, Any]) -> int:
     """Insert a draft row. Returns the new wiki.drafts.id.
 
-    Required: title, kind. Optional: concept_id, memory_id, lead,
-    sections (list of dicts), frontmatter, provenance, synth_prompt,
-    synth_model, confidence, status.
-    """
+    source: ADR-0577"""
     sql = """
     INSERT INTO wiki.drafts (
         concept_id, memory_id, title, kind, lead, sections,
@@ -173,7 +167,9 @@ def find_draft_for_source(
     memory_id: int | None = None,
     concept_id: int | None = None,
 ) -> dict | None:
-    """Return the most recent draft for a given source, or None."""
+    """Return the most recent draft for a given source, or None.
+
+    source: ADR-0577"""
     if not memory_id and not concept_id:
         return None
     if memory_id is not None:

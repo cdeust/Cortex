@@ -1,0 +1,29 @@
+# ADR-0465: mcp_server/handlers/wiki_purge.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `mcp_server/handlers/wiki_purge.py`; original SHA-256 `a946c60f73e4dd847370c4e76040909965eda09a0b5cc8d495257ae31e2c5ec5`.
+
+## Original docstring, lines 1–11
+
+````text
+"""Handler: wiki_purge — remove wiki pages that fail the current classifier.
+
+Re-evaluates every authored wiki page against the current classifier rules
+and deletes the ones that would no longer be admitted. Memories in the
+PostgreSQL/SQLite store are left untouched — only the markdown files in
+~/.claude/methodology/wiki/ are removed.
+
+Use this after tightening classifier rules, after a backfill that
+polluted the wiki, or whenever the wiki has drifted away from curated
+knowledge toward session audit artefacts.
+"""
+````
+
+## Original schema description, interim lines 105–108
+
+````text
+Fraction of content lines that must be placeholder markers for the page to be classified as a stub. Default 0.5 — calibrated on the 2026-05-18 stub audit; lower values catch mixed pages too.
+````
+

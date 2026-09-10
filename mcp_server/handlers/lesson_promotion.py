@@ -1,21 +1,6 @@
 """Handler: lesson_promotion — propose promotion jobs for validated lessons.
 
-M-D6 (INC 7.6): the lesson (a memory tagged ``lesson`` or
-``lesson-candidate``) is the canonical form; ``memory_rules``,
-``prospective_memories``, and wiki pages are traced projections of it.
-This handler is the read-only planner — it never calls ``add_rule``,
-``create_trigger``, or ``wiki_write`` itself. Same architecture as
-``curate_wiki``: the server assembles candidates and a structured prompt;
-the in-session LLM reads each job, decides whether and how to promote,
-and executes the promotion via the existing handlers (passing
-``source_memory_id`` / ``memory_ids`` so the pointer is queryable both
-ways), then closes the loop with a ``remember(supersedes_id=...,
-tags=[..., 'promoted:<kind>'])`` call on the lesson itself.
-
-No auto-promotion, ever: a rule reshapes every future recall (high
-stakes — Move 7), so the decision stays with the LLM/user reading the
-job, exactly like ``curate_wiki`` never authors a page on its own.
-"""
+source: ADR-0419"""
 
 from __future__ import annotations
 
@@ -43,14 +28,7 @@ logger = logging.getLogger(__name__)
 def _list_candidates(store: Any, limit: int) -> list[dict[str, Any]]:
     """Backend dispatch for the candidate query.
 
-    Same composition-root concern, and the same shape, as
-    `get_grooming_health._count_promotion_candidates`: the eligibility
-    query exists in two SQL dialects because `@>` and
-    `jsonb_array_elements_text` have no SQLite translation, and the
-    psycopg-compat wrapper translates lexical conventions only, never
-    jsonb operators. Dispatching on the store type is what keeps this
-    handler working on the plugin's default backend (issue #220).
-    """
+    source: ADR-0419"""
     if isinstance(store, SqliteMemoryStore):
         return list_candidates_sqlite(store._conn, limit=limit)
     return list_lesson_promotion_candidates(store._conn, limit=limit)
@@ -95,10 +73,7 @@ schema = {
 async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Build lesson-promotion jobs from validated lesson/lesson-candidate memories.
 
-    Best-effort: any DB failure degrades to an empty job list rather than
-    raising — this is a planning aid, not a load-bearing write path (same
-    contract as ``curate_wiki_uncited.report_uncited_deliberate``).
-    """
+    source: ADR-0419"""
     args = args or {}
     limit = int(args.get("limit") or 10)
 
@@ -107,17 +82,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         store = get_shared_store()
         candidates = _list_candidates(store, limit)
     except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure + the log below
-        # Was a bare swallow. The SQLite backend (the plugin DEFAULT) raised
-        # `unrecognized token: "@"` here on every call because the PG dialect
-        # ran unconditionally, and this handler reported an empty backlog
-        # instead of an error — the failure was invisible for as long as
-        # nobody compared it against the store (issue #220). The fallback
-        # stays (callers rely on the empty-list contract) but it is no longer
-        # silent: §13.1 F1 — every failure mode emits an actionable signal.
-        # Two signals, deliberately: `silent_failure` is the repo-wide
-        # machine-readable channel (#197 family 2), while the log names the
-        # BACKEND, which is the one fact that distinguishes this dialect bug
-        # from a genuinely empty store.
+        # source: ADR-0419
         silent_failure.note("lesson_promotion.candidates", exc)
         logger.warning(
             "lesson-promotion candidate query failed on %s; reporting an "

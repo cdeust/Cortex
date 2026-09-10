@@ -32,15 +32,7 @@ already classified explicitly to something other than ``deliberate``
 (the SQL UPDATE re-guards ``write_class = 'deliberate'`` at write time,
 not just at scan time — see ``pg_store_memory_write_class.py``).
 
-Known residual risk (documented, not silently assumed away): a row
-explicitly written as ``write_class='deliberate'`` via a source string
-this module's taxonomy maps to a DIFFERENT class (e.g. an operator
-deliberately overriding a `post_tool_capture`-sourced write to
-`deliberate`) is indistinguishable from an unclassified historical row
-and WILL be reclassified by this pass. Bounded to the window between the
-schema migration landing and this script's first run — run this script
-promptly after deploying the migration to minimize it.
-"""
+source: ADR-0705"""
 
 from __future__ import annotations
 

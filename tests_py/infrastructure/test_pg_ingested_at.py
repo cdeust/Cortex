@@ -13,6 +13,7 @@ requiring a live PostgreSQL connection.
 
 from __future__ import annotations
 
+from mcp_server.infrastructure import pg_schema
 from mcp_server.infrastructure.pg_schema import MEMORIES_DDL, MIGRATIONS_DDL
 
 
@@ -59,14 +60,15 @@ def test_migration_comment_has_no_semicolons() -> None:
     as a single statement; this test guards the invariant in case the
     block structure ever changes.
     """
-    # Find the ingested_at migration block.
-    needle = "Migration: add ingested_at"
-    start = MIGRATIONS_DDL.find(needle)
-    assert start != -1, "ingested_at migration block not found"
-    # Read forward to the end of the comment header (the DO block).
-    end = MIGRATIONS_DDL.find("DO $$", start)
-    comment_block = MIGRATIONS_DDL[start:end]
-    assert ";" not in comment_block, (
-        f"ingested_at migration comment contains a semicolon (would break "
-        f"_split_statements if $$ guards are removed): {comment_block!r}"
+    comments = [
+        (name, line_number, line)
+        for name, ddl in vars(pg_schema).items()
+        if name.endswith("_DDL") and isinstance(ddl, str)
+        for line_number, line in enumerate(ddl.splitlines(), 1)
+        if line.lstrip().startswith("--")
+    ]
+    assert comments, "expected generated source-reference comments in DDL"
+    offenders = [item for item in comments if ";" in item[2]]
+    assert not offenders, (
+        f"DDL comment semicolons would break statement splitting: {offenders!r}"
     )

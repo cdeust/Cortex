@@ -105,8 +105,9 @@ def _resolve_domain(event: dict[str, Any], profiles: dict) -> str:
     return "unknown"
 
 
-# source: session-length gates documented in _run_consolidation docstring
-# ("engineering heuristics — thresholds not paper-prescribed")  # noqa: ERA001
+# source: ADR-0497
+# source: ADR-0497
+# noqa: ERA001
 _SHORT_SESSION_TURNS = 5
 _LONG_SESSION_TURNS = 20
 
@@ -114,22 +115,18 @@ _LONG_SESSION_TURNS = 20
 def _run_consolidation(turn_count: int = 0) -> None:
     """Run memory consolidation ("dream" cycle) at session end.
 
-    Implements automatic consolidation inspired by:
-      - Borbely 1982: two-process model — consolidation pressure accumulates
-        with new memories, fires when threshold exceeded.
-      - Tononi & Cirelli 2003 (SHY): wakefulness (session activity) builds
-        synaptic weight; consolidation restores homeostasis.
-      - Dewar et al. 2012: rest after encoding boosts long-term retention.
-      - McClelland et al. 1995 (CLS): interleaved replay for hippocampal →
-        cortical transfer.
+        Implements automatic consolidation inspired by:
+          - Borbely 1982: two-process model — consolidation pressure accumulates
+            with new memories, fires when threshold exceeded.
+          - Tononi & Cirelli 2003 (SHY): wakefulness (session activity) builds
+            synaptic weight; consolidation restores homeostasis.
+          - Dewar et al. 2012: rest after encoding boosts long-term retention.
+          - McClelland et al. 1995 (CLS): interleaved replay for hippocampal →
+            cortical transfer.
 
-    Time/activity gates (engineering heuristics — thresholds not paper-prescribed):
-      - Short sessions (<5 turns): skip full consolidation, only decay.
-      - Medium sessions (5-20 turns): decay + compression.
-      - Long sessions (>20 turns): full dream cycle (decay + compress + CLS).
+        Non-blocking: logs errors but never raises.
 
-    Non-blocking: logs errors but never raises.
-    """
+    source: ADR-0497"""
     try:
         from mcp_server.handlers.consolidate import handler as consolidate_handler  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
 
@@ -165,15 +162,16 @@ def _build_session_entry(event: dict[str, Any], domain_id: str) -> dict[str, Any
 
     precondition: ``event["session_id"]`` is present (enforced by
     ``process_event``'s guard before this is called). postcondition:
-    ``sessionId`` is the transcript-stem canonical identity (Q2 alignment,
-    decision 4255039 correction 7) when ``event["transcript_path"]`` is a
+    ``sessionId`` is the transcript-stem canonical identity when
+    ``event["transcript_path"]`` is a
     non-empty string; otherwise it degrades to the raw
     ``event["session_id"]`` — the documented divergence window (no
     transcript_path in the SessionEnd payload, e.g. synthetic/test
-    events). No historical rows are rewritten; readers of session-log.json
-    (profile_builder, procedural_skill_writer) key on domain/tools/
+    events). No historical rows are rewritten; readers of session-log.json key on
+    domain/tools/
     duration, not sessionId, so old-vs-new rows are read-compatible.
-    """
+
+    source: ADR-0497"""
     keywords = event.get("keywords") or []
     return {
         "sessionId": session_id_from_transcript(event.get("transcript_path"))
@@ -334,10 +332,6 @@ if __name__ == "__main__":
     from mcp_server.hooks._store_lifecycle import close_shared_store_on_exit
 
     exit_if_headless_authoring_child()
-    # issue #398: closes the store before this one-shot process exits
-    # (see _store_lifecycle.py for the verified mechanism -- psycopg pool
-    # threads are daemon threads; the fragile path is __del__'s
-    # finalization-time join, which close() pre-empts by setting
-    # _closed=True while the interpreter is still alive).
+    # source: ADR-0497
     with close_shared_store_on_exit():
         main()

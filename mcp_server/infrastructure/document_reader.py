@@ -3,13 +3,7 @@ expects. This is the ONLY layer that touches the filesystem / zip container
 for document ingestion — the parsing (``core.docx_parser`` /
 ``core.confluence_parser``) is pure and receives strings from here.
 
-A docx is an OOXML zip whose main part is ``word/document.xml`` (source:
-ECMA-376 Part 2 "Open Packaging Conventions"); a Confluence export leg is a
-storage-format XHTML file read as UTF-8 text. Both entry points raise
-:class:`DocumentReadError` on a container/decoding failure — loud, so the
-handler writes nothing (issue #192: malformed zip → hard error, no partial
-silent write).
-"""
+source: ADR-0516"""
 
 from __future__ import annotations
 
@@ -19,23 +13,17 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# The OOXML main document part. source: ECMA-376 Part 1 §11.3.10 (Main
-# Document Part), located via the package relationships; for every
-# Word-authored .docx this is the fixed path below (Word never relocates it).
+# source: ADR-0516
 _DOCX_MAIN_PART = "word/document.xml"
 
-# Cap mirrors ingest_docs_content_writers.MAX_DOC_BYTES (the AP per-file parse
-# cap, ai-architect-mcp-codebase/src/indexer/mod.rs:48 `MAX_PARSE_BYTES =
-# 1_048_576`) applied to the UNCOMPRESSED main part / export text: a document
-# body larger than 1 MB of XML is a pathological dump, not a realistic doc —
-# reusing the same bound rather than inventing a second one (§8).
+# source: ADR-0516
 MAX_DOCUMENT_BYTES: int = 1_048_576
 
 
 class DocumentReadError(Exception):
-    """Raised when a document cannot be read from disk: missing file, not a
-    valid zip, missing main part, oversized, or undecodable bytes. Loud by
-    design so ingestion aborts before any write."""
+    """Signal a missing, invalid, oversized, or undecodable input document.
+
+    source: ADR-0516"""
 
 
 def read_docx_xml(path: str | Path, *, max_bytes: int = MAX_DOCUMENT_BYTES) -> str:
@@ -69,8 +57,7 @@ def read_docx_xml(path: str | Path, *, max_bytes: int = MAX_DOCUMENT_BYTES) -> s
         raise DocumentReadError(f"cannot open docx {p}: {exc}") from exc
 
     try:
-        # §12 note: the ``"utf-8"`` → ``"UTF-8"`` mutant is EQUIVALENT (codec
-        # names are case-insensitive).
+        # source: ADR-0516
         return raw.decode("utf-8")
     except UnicodeDecodeError as exc:
         raise DocumentReadError(f"{p} main part is not valid UTF-8: {exc}") from exc
@@ -82,13 +69,14 @@ def read_confluence_export(
     """Read a Confluence storage-format XHTML export file as UTF-8 text.
 
     Precondition:  ``path`` points at a single storage-format XHTML export
-                   file (offline export leg — the live REST connector,
-                   enterprise-backlog#28, fetches this same string over the
-                   network instead and never touches this function).
-    Postcondition: returns the file's UTF-8 text.
-    Raises:        :class:`DocumentReadError` on a missing/oversized file or
-                   undecodable bytes.
-    """
+                       file (offline export leg — the live REST connector,
+                       enterprise-backlog#28, fetches this same string over the
+                       network instead and never touches this function). Postcondition:
+                       returns the file's UTF-8 text. Raises:
+                       :class:`DocumentReadError` on a missing/oversized file or
+                       undecodable bytes.
+
+    source: ADR-0516"""
     p = Path(path).expanduser()
     try:
         size = p.stat().st_size
@@ -96,15 +84,13 @@ def read_confluence_export(
         raise DocumentReadError(f"confluence export not found: {p}") from exc
     if size > max_bytes:
         raise DocumentReadError(f"{p} is {size} bytes, exceeds {max_bytes}-byte cap")
-    # Read bytes then decode EXPLICITLY as UTF-8 (rather than read_text, whose
-    # default encoding follows the platform locale) so the decoding is
-    # locale-independent — the same explicit contract read_docx_xml uses.
+    # source: ADR-0516
     try:
         raw = p.read_bytes()
     except OSError as exc:
         raise DocumentReadError(f"cannot read confluence export {p}: {exc}") from exc
     try:
-        # §12 note: ``"utf-8"`` → ``"UTF-8"`` is EQUIVALENT (case-insensitive).
+        # source: ADR-0516
         return raw.decode("utf-8")
     except UnicodeDecodeError as exc:
         raise DocumentReadError(f"{p} is not valid UTF-8: {exc}") from exc

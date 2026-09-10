@@ -1,0 +1,113 @@
+# ADR-0791: scripts/wiki_bulk_migrate.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `scripts/wiki_bulk_migrate.py`; original SHA-256 `58f877d8e5de877d619cb03e30f4ed866ac243ee53695c863f644c769679a709`.
+
+## Original docstring, lines 2–33
+
+````text
+"""Bulk-rename the known wiki pollution patterns — Phase 4 of ADR-2244.
+
+The 2026-05-12 audit found three deterministic-rename pollution classes
+that this script targets:
+
+  Pattern                     Audit count   Target rename
+  ─────────────────────────────────────────────────────────────────────
+  ``*.md.md``                 58            strip the duplicate extension
+  ``*-decision-created-       10            derive slug from frontmatter
+   YYYY-MM-DDtHH-MM-SSz.md``                title or first body heading
+  ``*users-cdeust-... .md``   10            derive slug from frontmatter
+   (path-leak in slug)                      title; reject path-shaped
+                                            content
+
+Operation per page:
+
+  1. Read source; require a valid frontmatter ``id`` (Phase 3 invariant).
+     Run ``scripts/wiki_backfill_ids.py --apply`` first if missing.
+  2. Compute a clean destination path.
+  3. Call the ``wiki_rename`` handler, which (a) writes the content at
+     the new path, (b) replaces the old path with a redirect stub
+     (path-based + id-based) so inbound links keep resolving.
+
+Dry-run by default. ``--apply`` commits the moves. The script is
+idempotent: a second ``--apply`` run finds zero pollution paths to
+rename (the renames are gone; their stubs are detected and skipped).
+
+Out of scope for this script: the 7820-page ``notes/<domain>/<id>-file-*.md``
+→ ``reference/<domain>/<file-slug>.md`` re-bucket. That operation
+changes the *kind directory* and needs frontmatter rewrite (kind /
+provenance), not just a rename — separate Phase 4 follow-up.
+"""
+````
+
+## Original comment, lines 61–62
+
+````text
+# Timestamp shape found in the 10 polluted ADRs (Audit 2026-05-12):
+# ``<num>-decision-created-2026-04-15t09-29-10z.md``.
+````
+
+## Original comment, lines 102–103
+
+````text
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+````
+
+## Original docstring, lines 108–121
+
+````text
+"""True iff a title is suitable to drive a slug.
+
+    Rejects: empty / very short / path-shaped / timestamp-shaped /
+    obviously synthetic ("memory-…").
+
+    Bug found 2026-05-13 during live apply: some titles carry the
+    timestamp pattern with spaces instead of hyphens (e.g.
+    ``Decision created 2026 04 15t09 29 10z`` — a de-slugified
+    artefact of the original slug bug). The literal-hyphen regex
+    missed those, the title passed as "clean", slugify converted the
+    spaces back to hyphens, and the proposed slug ended up identical
+    to the source. Reject the *slugified* form against the timestamp
+    pattern so both spacings are caught.
+    """
+````
+
+## Original comment, lines 240–244
+
+````text
+# Disambiguate slug collisions (multiple sources deriving the same
+    # H1-based target slug; e.g. dcp-wealth-android pages whose H1 is
+    # ``# Context`` all map to ``context.md``). When two proposals
+    # collide, append ``-<memory-id>`` to the second. Live apply on
+    # 2026-05-13 surfaced 7 such cases.
+````
+
+## Original comment, lines 311–317
+
+````text
+# Disambiguate if the target is already taken — either by an
+        # earlier item in this same plan, or by a page on disk left
+        # over from a previous apply run. The suffix uses the source
+        # page's stable id (UUID prefix), which is guaranteed unique
+        # and unaffected by directory-name coincidences (e.g. a
+        # ``/2026/`` year directory was being captured as a "memory id"
+        # by the prior regex-based approach).
+````
+
+## Reviewed remaining docstring (scripts/wiki_bulk_migrate.py, interim lines 2–10)
+
+````text
+Bulk-rename the known wiki pollution patterns — Phase 4 of ADR-0791.
+
+Operation per page:
+
+Dry-run by default. ``--apply`` commits the moves. The script is
+idempotent: a second ``--apply`` run finds zero pollution paths to
+rename (the renames are gone; their stubs are detected and skipped).
+
+source: ADR-0791
+````
+

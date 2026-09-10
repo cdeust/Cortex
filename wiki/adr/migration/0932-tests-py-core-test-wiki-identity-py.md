@@ -1,0 +1,13 @@
+# ADR-0932: tests_py/core/test_wiki_identity.py design and historical evidence
+
+Status: accepted; existing test/harness evidence preserved during issue #514.
+
+Source `tests_py/core/test_wiki_identity.py`, original SHA-256 `92c9b403626763a711e1e419238b29646e474b2c396436c81d1a74644f7ef4ed`.
+Assertions and runtime fixture literals remain unchanged.
+
+## Original docstring, lines 1–1
+
+````text
+"""Tests for wiki_identity — stable page IDs (Phase 3 of ADR-2244)."""
+````
+

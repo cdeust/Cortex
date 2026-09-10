@@ -21,3 +21,19 @@ Source rationale preserved verbatim. Identifiers inside historical quotations ar
 ````text
 -- Disable autovacuum on this table to avoid contaminating measurements.
 ````
+
+## Final non-Python residual audit
+
+### benchmarks/hnsw_probe/setup.sql — pre-cleanup line 18
+
+````text
+-- Helper: generate an L2-normalized random 384-dim vector as text "[v1,v2,...]".
+-- L2 normalization matches sentence-transformers all-MiniLM-L6-v2 output.
+````
+
+### benchmarks/hnsw_probe/setup.sql — pre-cleanup line 50
+
+````text
+-- Build the HNSW index AFTER seeding (matches Cortex production init order).
+-- Note: initial build cost is separate from per-UPDATE maintenance cost.
+````

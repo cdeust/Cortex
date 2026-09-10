@@ -1,15 +1,6 @@
 """Public MCP registry cross-check for the marketplace pin-staleness gate.
 
-Split out of check_marketplace_pins.py (issue: that file crossed the
-300-line §4.1 cap once this module was added). The public MCP registry
-(registry.modelcontextprotocol.io) is a THIRD version surface — independent
-of the marketplace pin and PyPI — that server.json's own "name" field
-names an entry for. Measured 2026-08-10: io.github.cdeust/hypermnesia-mcp
-was published at 4.17.1 while the tag/server.json/PyPI were already at
-4.17.2, invisible until queried directly (same failure shape as #179 and
-PIN_VERSION_UNPUBLISHED — a mandatory per-release step that lived only in
-prose, with nothing committed to run it or verify it happened).
-"""
+source: ADR-0756"""
 
 from __future__ import annotations
 
@@ -28,22 +19,7 @@ from marketplace_pins_http import HTTP_NOT_FOUND, API_TIMEOUT_S, api_headers  # 
 
 REGISTRY_API = "https://registry.modelcontextprotocol.io/v0/servers"
 
-# Same contract as PENDING_PINS (marketplace_pins_github.py): an entry
-# here degrades a real REGISTRY_VERSION_STALE finding to a named NOTICE
-# while a committed, tracked fix is in flight — never a placeholder,
-# never silent.
-#
-# One entry, not empty: the automated publish job
-# (.github/workflows/release.yml::publish-mcp-registry, added in the same
-# change as this check) only runs on a `v*` tag push. Merging this PR does
-# not push a new tag, so the registry stays at 4.17.1 — a real, currently
-# true gap, not a hypothetical one — until the next release tag runs that
-# job. Publishing the missing 4.17.2 entry out of band requires a
-# credential this agent does not hold (`mcp-publisher login` needs either
-# an interactive GitHub OAuth browser flow or a personal access token) and
-# was correctly refused when attempted; a maintainer with real
-# credentials, or the next tagged release, closes this. Remove this entry
-# once the registry serves >= the repo's authoritative version.
+# source: ADR-0756
 PENDING_REGISTRY: dict[str, str] = {
     "io.github.cdeust/hypermnesia-mcp": (
         "release.yml::publish-mcp-registry (this PR) resolves it on the next "
@@ -54,12 +30,9 @@ PENDING_REGISTRY: dict[str, str] = {
 
 def list_registry_versions(search_term: str) -> list[tuple[str, str, bool]] | None:
     """[(name, version, is_latest), ...] for every registry entry matching
-    `search_term`; None when the registry has nothing for it.
+        `search_term`; None when the registry has nothing for it.
 
-    The registry API has no exact-name lookup (verified 2026-08-10: a
-    `name=` query parameter is silently ignored, not a filter), so this
-    fetches by `search=` and the caller filters to the exact name it wants.
-    """
+    source: ADR-0756"""
     url = f"{REGISTRY_API}?search={urllib.parse.quote(search_term)}"
     req = urllib.request.Request(url, headers=api_headers())
     try:
@@ -146,32 +119,19 @@ def check_registry_version(
     )
 
 
-# source: https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json
-# definitions.ServerDetail.properties.description.{minLength,maxLength} —
-# fetched and read directly 2026-08-10, not copied from a report of it.
-# Real incident: ai-architect-mcp-codebase attempted to publish v0.9.1 with a
-# 144-char description and got a live 422 from the registry — the tag that
-# carries the violation can never be published; only a NEW tag with a
-# shortened description is a way out (the fix existed on `main` but not in
-# the tagged tree, so it published nothing). This offline check exists to
-# catch the same defect before a tag is ever cut, not after.
+# source: ADR-0756
 SERVER_JSON_DESCRIPTION_MIN_LENGTH = 1
 SERVER_JSON_DESCRIPTION_MAX_LENGTH = 100
 
 
 def check_server_json_schema(root: Path) -> list[str]:
     """Offline, schema-derived validity checks on server.json's own fields
-    — distinct from check_registry_version's cross-repo VERSION check.
-    Catches the class of defect that produces a 422 at publish time (schema
-    violation), which a version-only comparison cannot see: a server.json
-    can have the exactly-correct version and still be unpublishable.
+        — distinct from check_registry_version's cross-repo VERSION check.
+        Catches the class of defect that produces a 422 at publish time (schema
+        violation), which a version-only comparison cannot see: a server.json
+        can have the exactly-correct version and still be unpublishable.
 
-    Reads whatever server.json is on disk for the ref this gate is running
-    against (the PR branch, or `main` on push/cron) — the tree a FUTURE tag
-    will be cut from, which is the only tree this offline check can affect.
-    An already-tagged historical commit is immutable; this cannot and does
-    not claim to fix one, only to stop the next one from repeating it.
-    """
+    source: ADR-0756"""
     server_json = root / "server.json"
     if not server_json.is_file():
         return []
@@ -196,12 +156,10 @@ def check_server_json_schema(root: Path) -> list[str]:
 
 def check_registry_surface(root: Path, primary_pin: str):
     """Cross-check server.json's own registry `name` against what the
-    public MCP registry actually serves, AND server.json's own schema
-    validity (description length). Returns (failures, notices). Absent
-    server.json or a missing `name` field skips the version check — not
-    every repo on this marketplace publishes to the MCP registry — but the
-    schema check still runs whenever server.json exists, name or not.
-    """
+        public MCP registry actually serves, AND server.json's own schema
+        validity (description length).
+
+    source: ADR-0756"""
     server_json = root / "server.json"
     if not server_json.is_file():
         return [], []

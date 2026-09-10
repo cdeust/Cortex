@@ -100,10 +100,7 @@ schema = {
 class _ProceduralSkillsStore(Protocol):
     """Capability contract for the procedural-skills subsystem (PG-only).
 
-    The SQLite backend has no procedural_skills table; the empty result is
-    the named degraded mode, decided by a static member check rather than
-    an AttributeError swallowed by the broad except below.
-    """
+    source: ADR-0433"""
 
     def get_procedural_skills(
         self, min_proficiency: float = ..., limit: int = ...

@@ -78,12 +78,7 @@ schema = {
 async def _safe_call(label: str, coro) -> tuple[str, dict]:
     """Run a handler coroutine; return its summary or an error dict.
 
-    The stage error is LOGGED as well as returned. Returning it alone made
-    a wholly dead pipeline indistinguishable from an idle one: on SQLite
-    every stage raised, each error became a string in the summary, and the
-    payload still looked like success (issue #206). The log line is the
-    signal an operator can actually see.
-    """
+    source: ADR-0464"""
     try:
         result = await coro
     except Exception as e:

@@ -1,4 +1,7 @@
-"""Keep explicit Claude roots independent from legacy global hook state."""
+"""Keep explicit Claude roots independent from legacy global hook state.
+
+source: ADR-0651
+"""
 
 from __future__ import annotations
 

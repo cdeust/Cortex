@@ -2,11 +2,6 @@
 """Raise ``heat_base`` for active deliberate memories below the measured
 retrieval cliff — I6-D5, INC6.6.
 
-Runs ``handlers.consolidation.memory_reheat_pass`` against the shared
-store and writes a campaign journal artifact (id, heat_base before/after,
-effective_heat before, outcome per row — the same journalisation shape as
-``memory_dedup_exact.py``, I6-D1).
-
 Usage
 -----
 
@@ -23,7 +18,8 @@ recalibrated row now at or above the target (``effective_heat >= 0.25``),
 so it is excluded from the next scan's ``WHERE effective_heat < target``
 filter — zero rows reheated on immediate re-run (confirmed by the
 campaign's idempotence test).
-"""
+
+source: ADR-0767"""
 
 from __future__ import annotations
 

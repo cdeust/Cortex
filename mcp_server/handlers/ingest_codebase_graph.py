@@ -1,9 +1,6 @@
 """Graph-path resolution for ingest_codebase.
 
-Encapsulates the "do we already have a Kuzu graph for this project?"
-decision and the upstream ``analyze_codebase`` call that builds one
-when we don't.
-"""
+source: ADR-0401"""
 
 from __future__ import annotations
 
@@ -64,19 +61,10 @@ async def ensure_graph(
 ) -> tuple[str, dict[str, Any]]:
     """Return (graph_path, analyze_stats).
 
-    Reuses the cached graph when available; otherwise calls upstream
-    analyze_codebase and memoises the resulting graph path.
+        Reuses the cached graph when available; otherwise calls upstream
+        analyze_codebase and memoises the resulting graph path.
 
-    Every call checks AP client-path version parity (ADR-0052 sec 2,
-    INC5.2) exactly once, regardless of whether the graph is reused or
-    freshly built — the parity check is a property of the two Cortex->AP
-    client paths, not of any one ingestion run. The result rides in
-    ``analyze_stats["ap_client_parity"]`` (the handler forwards this dict
-    verbatim into the tool response's "analyze" field), satisfying the
-    "surface in the response" half of D5's acceptance criterion; a
-    genuine mismatch is additionally logged once by
-    ``ingest_provenance.check_version_parity``.
-    """
+    source: ADR-0401"""
     parity = await ingest_provenance.check_version_parity()
     parity_dict = dataclasses.asdict(parity)
 
@@ -104,10 +92,7 @@ async def ensure_graph(
         silent_clean_stale_graph_slot(output_dir)
         payload = await _call_analyze(project_path, output_dir, language)
         result = normalise_mcp_payload(payload)
-    # Refuse to memoise a synthesised path on persistent upstream
-    # error — that would poison the cache, since subsequent ingests
-    # would skip analyze_codebase entirely and silently project an
-    # empty graph (Liskov audit Apr-2026, Dijkstra audit #6).
+    # source: ADR-0401
     if isinstance(result, dict) and result.get("status") == "error":
         raise McpConnectionError(
             f"upstream analyze_codebase failed: {result.get('message', '<no message>')}"

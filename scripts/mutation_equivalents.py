@@ -1,16 +1,6 @@
 #!/usr/bin/env python3
 """Registered-equivalent gate for mutation testing — coding-standards §12.4.
 
-The standard is "0 surviving non-equivalent mutants, or each survivor
-documented as equivalent". `scripts/mutation_check.sh` could express the first
-half and not the second: it failed on any survivor, so a module where every
-survivor carries a written rationale looked exactly like one nobody had
-examined. That makes the blocking per-commit tier unusable on such a module
-for even a one-line change, which in practice means it gets bypassed.
-
-This adds the missing half without reopening the hole the gate exists to
-close. Three properties, in order of importance:
-
 **Fail-closed on drift.** mutmut names mutants positionally
 (`x__walk_type__mutmut_16`), so the same name means a *different* mutation
 after the function changes. Registering a name alone would silently absolve
@@ -22,12 +12,9 @@ matches. A changed mutation is an unregistered survivor and fails.
 wildcard, no per-file suppression and no "ignore this module" — those are how
 a suppression mechanism becomes the next false green.
 
-**No silent rot.** An entry that no longer corresponds to a produced mutant is
-an error, not a shrug: either the code moved (so the rationale is unverified)
-or a test now kills it (so the entry is dead weight). Both need a human.
-
 Registry: `memory/mutation-equivalents.json`.
-"""
+
+source: ADR-0771"""
 
 from __future__ import annotations
 
@@ -41,11 +28,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 REGISTRY_PATH = REPO_ROOT / "memory" / "mutation-equivalents.json"
 
-# An entry states *why* it can never be killed, and the two kinds age
-# differently. `equivalent-by-construction` is a claim about the code's
-# semantics and cannot become false. `unreachable-branch` is a claim about the
-# current callers or grammar and CAN become false when either changes — which
-# is exactly when the diff-pinning above forces a re-read.
+# source: ADR-0771
 KINDS = frozenset(
     {
         "equivalent-by-construction",
@@ -93,7 +76,7 @@ def _require(entry: dict, field: str, index: int) -> str:
 
 
 def parse_registry(text: str) -> list[Equivalent]:
-    """Parse and validate the registry. Raises rather than skipping bad rows."""
+    """Validate registry; raise for invalid rows. source: ADR-0771"""
     try:
         data = json.loads(text)
     except json.JSONDecodeError as exc:  # noqa: TRY003 — message carries the position
@@ -267,17 +250,14 @@ def format_report(v: Verdict) -> str:
 def main(argv: list[str]) -> int:
     """stdin: `mutmut results` output. argv: the mutated source paths.
 
-    stdout carries the UNREGISTERED survivor names, one per line, so the caller
-    can hand exactly those to `mutation_recheck_survivors.py` — the order
-    matters. The registry must filter first: a mutant the recheck would
-    reclassify as RECOVERED is not in the registry, and running the registry
-    check second would report it as an unjustified survivor. Filtering known
-    equivalents first, then re-verifying only what is left, composes correctly.
+        stdout carries the UNREGISTERED survivor names, one per line, so the caller
+        can hand exactly those to `mutation_recheck_survivors.py` — the order
+        matters. The registry must filter first: a mutant the recheck would
+        reclassify as RECOVERED is not in the registry, and running the registry
+        check second would report it as an unjustified survivor. Filtering known
+        equivalents first, then re-verifying only what is left, composes correctly.
 
-    stderr carries the human report. The exit code covers only the failures
-    this script alone can judge — a drifted or stale entry — because whether an
-    unregistered survivor is real is the recheck's call, not ours.
-    """
+    source: ADR-0771"""
     if not argv:
         print("usage: mutation_equivalents.py <mutated_source.py> ...", file=sys.stderr)
         return 2

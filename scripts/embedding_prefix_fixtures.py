@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-# source: green-remediation W3-3 acceptance explicitly includes 10,000 chars.
+# source: ADR-0735
 FIXTURE_CHARS = 10_000
 
 

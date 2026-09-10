@@ -1,18 +1,6 @@
 """Canonical truth-readers for scripts/check_doc_claims.py.
 
-Extracted (issue #293, Extract Function/Move Function) so check_doc_claims.py
-stays under the repo's 300-line file cap (docs/agent-guidance.md, Code Style) — it had
-already crossed it (420 lines) before this change added the floor-check
-machinery check_doc_claims.py needed.
-
-Each function here answers ONE question: "what does the repository itself
-say tool/reference/mechanism/version counts are?" They take `read_fn` as an
-explicit parameter (constructor injection, coding-standards.md §5) rather
-than importing a module-level `read` — check_doc_claims.py keeps a thin
-wrapper of the same name that passes ITS OWN (test-patchable) `read`
-through, so `gate.read = fake` in tests_py/scripts/test_check_doc_claims.py
-still reaches these bodies exactly as it did before the split.
-"""
+source: ADR-0730"""
 
 from __future__ import annotations
 
@@ -21,8 +9,7 @@ from collections.abc import Callable
 
 ReadFn = Callable[[str], str]
 
-# str.split(marker, 1) yields exactly (before, after) when the marker is
-# present — source: structural, not measured.
+# source: ADR-0730
 _MARKER_SPLIT_PARTS = 2
 
 

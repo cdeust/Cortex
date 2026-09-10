@@ -1,10 +1,6 @@
 """Entity co-access / shared-entity JOIN-query mixin for PgMemoryStore.
 
-Split out of pg_store_queries.py (issue #407: 401 lines over the
-300-line §4.1 cap) — Phase 2 JOIN-based replacements for what used to
-be Python-side substring scans (plasticity/write_post_store); their
-own concern, distinct from the plain filtered-read queries.
-"""
+source: ADR-0542"""
 
 from __future__ import annotations
 
@@ -17,18 +13,10 @@ class PgCoAccessMixin(PgStoreHost):
     def find_co_accessed_pairs(self, memory_ids: list[int]) -> list[tuple[int, int]]:
         """Entity pairs that co-occur in any of the sampled memories.
 
-        Replaces the Python O(N_mem × N_ent) substring scan in
-        ``plasticity._find_co_accessed_pairs`` with a SQL self-join on
-        ``memory_entities``. Cost: O(pairs) via the composite PK
-        (memory_id, entity_id). Returns sorted-tuple form (a < b) to
-        match the pre-Phase-2 caller contract.
+        Precondition: Phase 0.4.5 backfill complete . Without it, the JOIN misses pairs
+        the substring scan would find.
 
-        Precondition: Phase 0.4.5 backfill complete (I4 coverage ≥ 99%).
-        Without it, the JOIN misses pairs the substring scan would find.
-
-        Source: docs/program/phase-5-pool-admission-design.md (Phase 2
-        B1 JOIN replacement); docs/invariants/cortex-invariants.md §I4.
-        """
+        source: ADR-0542"""
         if not memory_ids:
             return []
         rows = self._execute(
@@ -49,16 +37,15 @@ class PgCoAccessMixin(PgStoreHost):
     def find_shared_entities(self, memory_id: int, entity_ids: list[int]) -> list[int]:
         """Entity IDs from the candidate set that are linked to this memory.
 
-        Replaces the Python substring scan in
-        ``write_post_store._find_shared_entities`` with a SQL lookup
-        on ``memory_entities``. Used by synaptic tagging (Frey & Morris
-        1997) to decide which weak memories share entities with a new
-        strong event.
+                Replaces the Python substring scan in
+                ``write_post_store._find_shared_entities`` with a SQL lookup
+                on ``memory_entities``. Used by synaptic tagging (Frey & Morris
+                1997) to decide which weak memories share entities with a new
+                strong event.
 
         Precondition: Phase 0.4.5 backfill; I4 coverage ≥ 99%.
 
-        Source: Phase 2 B2 JOIN replacement.
-        """
+        source: ADR-0542"""
         if not entity_ids:
             return []
         rows = self._execute(

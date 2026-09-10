@@ -8,17 +8,6 @@ it provisioned in a small JSON marker::
     {"backend": "postgresql"}    # --postgres opt-in, or a protected
                                  # pre-existing PostgreSQL install
 
-At launch, ``scripts/launcher.py`` — the single entry point for the MCP
-server and every hook — calls :func:`apply_backend_resolution` to
-translate that persisted choice into the ``CORTEX_MEMORY_STORE_BACKEND``
-environment variable that ``memory_store._construct_store`` already
-understands. The engine's backend-selection contract is unchanged; this
-module only decides which env var to hand it.
-
-Precedence (first match wins). An operator's explicit configuration is
-never overridden, so an existing PostgreSQL install can never be
-silently downgraded to SQLite by a plugin update:
-
 1. ``CORTEX_MEMORY_STORE_BACKEND`` already set  -> untouched
 2. ``CORTEX_BACKEND`` = postgres|postgresql|sqlite -> mapped to (1)
 3. ``DATABASE_URL`` / ``CORTEX_MEMORY_DATABASE_URL`` non-empty ->
@@ -27,11 +16,7 @@ silently downgraded to SQLite by a plugin update:
 4. marker file backend -> applied
 5. nothing -> untouched (engine default: ``auto``)
 
-The marker stores the backend NAME only — never a connection URL — so
-no credentials are ever written to disk by this path; the PostgreSQL
-URL keeps coming from ``DATABASE_URL`` / plugin user config /
-``memory_config.MemorySettings.DATABASE_URL`` exactly as before.
-"""
+source: ADR-0505"""
 
 from __future__ import annotations
 
@@ -62,12 +47,7 @@ _BACKEND_ALIASES = {
 def read_backend_marker(path: Path | None = None) -> dict | None:
     """Read the installer's backend marker; ``None`` when absent/invalid.
 
-    Pre:  ``path`` is a marker location or ``None`` (default location).
-    Post: returns the parsed dict only when it carries a valid
-          ``backend`` value; any I/O or parse failure degrades to
-          ``None`` (the engine's ``auto`` default) with a log line —
-          a corrupt marker must never block server/hook startup.
-    """
+    source: ADR-0505"""
     marker_path = path or BACKEND_MARKER_PATH
     try:
         data = json.loads(marker_path.read_text(encoding="utf-8"))
@@ -87,13 +67,7 @@ def resolve_backend_env(
 ) -> dict[str, str]:
     """Pure resolution: env additions implementing the module precedence.
 
-    Pre:  ``environ`` is a string mapping; ``marker`` is a validated
-          marker dict (see :func:`read_backend_marker`) or ``None``.
-    Post: returns either ``{}`` (explicit operator configuration wins,
-          or nothing to apply) or
-          ``{"CORTEX_MEMORY_STORE_BACKEND": <backend>}``. Never mutates
-          ``environ``.
-    """
+    source: ADR-0505"""
     if environ.get("CORTEX_MEMORY_STORE_BACKEND", "").strip():
         return {}
     requested = _BACKEND_ALIASES.get(environ.get("CORTEX_BACKEND", "").strip().lower())

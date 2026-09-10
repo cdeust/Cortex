@@ -1,0 +1,49 @@
+---
+kind: adr
+number: 0627
+title: Preserve wiki_pages_listing design decisions
+status: accepted
+---
+
+# ADR-0627: wiki_pages_listing design decisions
+
+## Context
+
+Canonical migration of decision evidence from `mcp_server/infrastructure/wiki_pages_listing.py` under ADR-0056.
+The excerpts below preserve historical claims and citations verbatim; original ADR numbers are historical quotations, not current identity bindings.
+
+## Decision
+
+Keep the source implementation linked to this versioned decision record. Operational API documentation remains with the implementation.
+
+## Preserved decision evidence
+
+### module, original line 1
+
+````text
+Split out of wiki_store.py (issue: 439 lines over the 300-line §4.1
+cap, pre-existing before the layer-violation fix that also touched
+that file) — enumerating/appending to already-written pages is a
+distinct concern from the create/replace write path
+(``wiki_store.write_page``) and from reindex housekeeping
+(``wiki_reindex_io``).
+
+````
+
+### next_adr_number, original line 95
+
+````text
+Allocate above canonical IDs and published ADRs 0001–0055 (issue #514).
+````
+
+### comment, original line 56
+
+````text
+# Append at the end of the file — simplest semantics; the heading is
+        # reused, not duplicated, but the new content goes after whatever is
+        # already there.
+````
+
+## Consequences
+
+Review rationale and source changes together. Historical evidence is preserved rather than silently rewritten; executable Python structure is unchanged after removing docstrings.

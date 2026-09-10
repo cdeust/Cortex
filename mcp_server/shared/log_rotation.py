@@ -1,15 +1,6 @@
 """Size rotation for JSONL appends and detached-worker log opens.
 
-Retain the active file plus one previous segment (.1), the minimum rotating
-history in Python's RotatingFileHandler contract. This helper adds a process
-lock because separate hook processes cannot share that handler's thread lock.
-Source: https://docs.python.org/3/library/logging.handlers.html#rotatingfilehandler
-
-Telemetry checks before every append and preserves complete records, including
-an oversized record. Workers check before spawn: an inherited stdout descriptor
-continues to reference its opened file and can exceed the threshold while the
-worker runs. This is not a hard quota and adds no collector process.
-"""
+source: ADR-0655"""
 
 from __future__ import annotations
 
@@ -22,8 +13,8 @@ from typing import TextIO
 
 from mcp_server.shared.log_file_lock import log_file_lock
 
-# source: F9, tasks/codex-green-remediation-plan.md W2-3 — 196 kB/day
-# measured 2026-09-06; 30 days = 5,880,000 decimal bytes (approximately 6 MB).
+# source: ADR-0655
+
 MAX_LOG_BYTES = 196_000 * 30
 
 

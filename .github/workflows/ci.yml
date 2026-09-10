@@ -255,13 +255,8 @@ jobs:
 
         run: pytest --tb=short -q -p no:randomly
 
-      # Protocol-level, hook-free proof for representative local client
-      # identities. This starts the installed production console entry point,
-      # under a SOCKS-proxy environment with no socks extra, then requires a
-      # full initialize/discovery round-trip for both full and lean profiles,
-      # plus a real SQLite memory_stats call. It is intentionally on the
-      # SQLite job: that is the zero-config backend used by Gemini/Codex
-      # installs, and all Python dependencies are already present here.
+      # Exercise installed production entry points with full/lean discovery and a SQLite memory_stats call.
+      # source: ADR-0802
       - name: Verify hook-free MCP host contract
         env:
           HF_HUB_OFFLINE: "1"
@@ -273,10 +268,8 @@ jobs:
     needs: [changes, lint]
     if: github.event_name != 'schedule' && ((github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false))
     name: Validate MCP host configurations
-    # The pinned Claude package requires its postinstall to select the native
-    # validator. Never execute install scripts from a lockfile modified by an
-    # untrusted fork; same-repository PRs and main/workflow_dispatch remain
-    # covered by this vendor-parser contract.
+    # Run the native vendor validator only for trusted repository workflows.
+    # source: ADR-0802
     runs-on: ubuntu-latest
     # source: ADR-0802
 
@@ -308,8 +301,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          # @anthropic-ai/claude-code 2.1.220 declares Node >=22; Node 24 is
-          # the repository's existing release-toolchain pin.
+          # source: ADR-0802
           node-version: "24"
           # source: ADR-0802
 
@@ -754,6 +746,9 @@ jobs:
       - name: Verify generated decision mirrors
         run: python scripts/check_project_wiki.py
 
+      - name: Verify every hashed constraint install passes --no-deps
+        run: python scripts/check_no_deps_invariant.py
+
   typecheck:
     needs: [changes, lint]
     if: github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true')
@@ -849,11 +844,8 @@ jobs:
 
 
   #
-  # These build only — no smoke run. docker/Dockerfile brings up PostgreSQL
-  # and pre-caches models, and .devcontainer/Dockerfile is opened by the Dev
-  # Containers CLI; asserting their runtime behaviour is a separate job with
-  # separate services. The claim here is narrow and worth making on its own:
-  # the image still builds, and its hash-pinned installs still resolve.
+  # Build these images without running their services.
+  # source: ADR-0802
   docker-runtime-build:
     needs: [changes, lint]
     if: needs.changes.outputs.docker == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
@@ -864,10 +856,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # This image carries PostgreSQL 17, Node 22, torch and a pre-cached
-      # embedding model. A stock runner has ~14GB free, which the build can
-      # exhaust; the preinstalled toolchains below are worth ~10GB and are
-      # not used by it.
+      # Free runner disk space before building the full runtime image.
+      # source: ADR-0802
       - name: Free runner disk
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc

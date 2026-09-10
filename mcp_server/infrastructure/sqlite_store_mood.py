@@ -8,11 +8,7 @@ equivalent, causing silent no-ops under the advertised fallback backend:
     set_user_mood(valence, arousal, user_id) -> None
     get_embeddings_for_memories(memory_ids) -> dict[int, bytes]
 
-The supersession write path lives in SqliteMemoryStore.supersede_atomic (the
-atomic insert+edge primitive), mirroring PgMemoryStore.
-
-All signatures mirror PgMemoryStore exactly (duck-type compatibility).
-"""
+source: ADR-0611"""
 
 from __future__ import annotations
 
@@ -24,29 +20,21 @@ from mcp_server.infrastructure.sqlite_compat import PsycopgCompatConnection
 class SqliteMoodMixin:
     """Mood state, memory supersession, and bulk-embedding methods on SQLite.
 
-    Source references are on each method below.
-    """
+    source: ADR-0611"""
 
     _conn: PsycopgCompatConnection
     _has_vec: bool
 
-    # ── User mood (Bower 1981 mood-congruent recall) ──────────────────
-    # Mirrors PgMemoryStore: pg_recall._get_user_mood() duck-types against
-    # get_user_mood() and consumes a scalar valence in [-1, +1].
-    # Source: Bower, G.H. (1981). "Mood and Memory." Am. Psychologist 36(2).
+    # source: ADR-0611
 
     def get_user_mood(self, user_id: str = "default") -> float | None:
         """Return the user's current mood valence in [-1, +1], or None.
 
-        Precondition: user_id is a non-empty string.
-        Postcondition: returns a float in [-1, +1] if a row exists for
-          user_id, else None (semantics: "no signal — do not rerank").
+                Precondition: user_id is a non-empty string.
+                Postcondition: returns a float in [-1, +1] if a row exists for
+                  user_id, else None (semantics: "no signal — do not rerank").
 
-        Mirrors PgMemoryStore.get_user_mood. None means the mood
-        MOOD_CONGRUENT_RERANK stage should no-op (Bower 1981 requires a
-        real mood; we never fabricate one).
-        Source: Bower, G.H. (1981). "Mood and Memory." Am. Psychologist 36(2).
-        """
+        source: ADR-0611"""
         try:
             row = self._conn.execute(
                 "SELECT valence FROM user_mood WHERE user_id = ?",
@@ -66,16 +54,11 @@ class SqliteMoodMixin:
     def get_user_mood_state(self, user_id: str = "default") -> dict[str, float] | None:
         """Return the full mood state ``{valence, arousal}`` or None.
 
-        Precondition: user_id is a non-empty string.
-        Postcondition: returns dict with keys 'valence' and 'arousal', both
-          floats in [-1, +1], or None if no row exists.
+                Precondition: user_id is a non-empty string.
+                Postcondition: returns dict with keys 'valence' and 'arousal', both
+                  floats in [-1, +1], or None if no row exists.
 
-        Mirrors PgMemoryStore.get_user_mood_state. Reserved for future
-        stages that consume arousal (Russell 1980 circumplex). The
-        MOOD_CONGRUENT_RERANK stage only uses valence via get_user_mood().
-        Source: Russell, J.A. (1980). "A circumplex model of affect."
-          J. Personality & Social Psychology 39(6), 1161-1178.
-        """
+        source: ADR-0611"""
         try:
             row = self._conn.execute(
                 "SELECT valence, arousal FROM user_mood WHERE user_id = ?",
@@ -99,17 +82,12 @@ class SqliteMoodMixin:
     ) -> None:
         """Upsert the user's mood state. Clamps both dims to [-1, +1].
 
-        Precondition: valence, arousal are numeric; user_id is a non-empty
-          string.
-        Postcondition: a row for user_id exists in user_mood with the clamped
-          valence and arousal; updated_at is refreshed.
+                Precondition: valence, arousal are numeric; user_id is a non-empty
+                  string.
+                Postcondition: a row for user_id exists in user_mood with the clamped
+                  valence and arousal; updated_at is refreshed.
 
-        Idempotent — repeated writes with the same value bump updated_at,
-        which is the correct semantics for a "freshness of last observed
-        mood" signal.
-        Mirrors PgMemoryStore.set_user_mood.
-        Source: Bower, G.H. (1981). "Mood and Memory." Am. Psychologist 36(2).
-        """
+        source: ADR-0611"""
         v = max(-1.0, min(1.0, float(valence)))
         a = max(-1.0, min(1.0, float(arousal)))
         try:
@@ -132,24 +110,12 @@ class SqliteMoodMixin:
     def get_embeddings_for_memories(self, memory_ids: list[int]) -> dict[int, bytes]:
         """Bulk fetch embeddings for a known set of memory IDs.
 
-        Precondition: memory_ids is a list of valid integer IDs (may be empty).
-        Postcondition: returns a dict mapping memory_id -> embedding_bytes for
-          every ID that has a non-NULL embedding in memories_vec; IDs with no
-          embedding are absent from the dict (not None values).
+                Precondition: memory_ids is a list of valid integer IDs (may be empty).
+                Postcondition: returns a dict mapping memory_id -> embedding_bytes for
+                  every ID that has a non-NULL embedding in memories_vec; IDs with no
+                  embedding are absent from the dict (not None values).
 
-        Mirrors PgMemoryStore.get_embeddings_for_memories.
-        Used by recall_pipeline.hopfield_complete to avoid per-ID round trips.
-
-        SQLite note: memories_vec is the sqlite-vec virtual table. When
-        _has_vec is False the table does not exist and we return an empty
-        dict (matching PG returning zero rows for embeddings that are NULL).
-        We fetch one row at a time because sqlite-vec does not support WHERE
-        rowid IN (...) batch queries in the versions available at fallback
-        scale; the loop is bounded by len(memory_ids) which is capped by the
-        recall pool size (typically <= 300).
-        Engineering choice: individual rowid lookups are O(1) in sqlite-vec
-        B-tree index — the loop is therefore O(N) with a small constant.
-        """
+        source: ADR-0611"""
         if not memory_ids or not self._has_vec:
             return {}
         result: dict[int, bytes] = {}

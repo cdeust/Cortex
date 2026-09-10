@@ -7,13 +7,7 @@ protected memory. The graph is stale when:
   * the path no longer exists (someone cleaned /tmp), OR
   * the mtime is older than ``CORTEX_PIPELINE_GRAPH_TTL_HOURS`` (default 24h).
 
-Stale graphs trigger a background re-analysis on the next SessionStart
-so the following session has a fresh graph — without blocking the
-current session.
-
-Source: user directive "codebase analysis feeding the memory and wiki"
-— runs automatically, off the hot path.
-"""
+source: ADR-0585"""
 
 from __future__ import annotations
 

@@ -20,12 +20,8 @@ sweep_orphaned_containers() {
     done <<< "$names"
 }
 
-# Discover the kernel-assigned host port docker bound for the container's
-# 5432/tcp. `docker port` output is "0.0.0.0:PORT" (one line per binding);
-# take the numeric suffix of the last line. Preferred over scanning for a
-# free port ourselves: asking the kernel for port 0 and reading back what it
-# bound is atomic — a manual scan-then-bind has a TOCTOU race another
-# process (or another concurrent reproduce.sh run) can win in between.
+# Read the host port from the final docker port binding.
+# source: ADR-0065
 discover_assigned_port() {
     docker port "$CONTAINER" 5432/tcp | tail -1 | awk -F: '{print $NF}'
 }
@@ -54,9 +50,8 @@ start_db() {
     sweep_orphaned_containers
     local publish
     if [ -n "${CORTEX_BENCH_PORT:-}" ]; then
-        # Explicit override: caller takes responsibility for the port being
-        # free and for any cross-run collision it may cause (mirrors
-        # conftest.py's CORTEX_TEST_DATABASE_URL override — respected verbatim).
+        # Use the explicit caller-supplied port override.
+        # source: ADR-0065
         PG_PORT="$CORTEX_BENCH_PORT"
         publish="${PG_PORT}:5432"
     else

@@ -1,0 +1,42 @@
+# ADR-0773: scripts/near_dup_calibrate.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `scripts/near_dup_calibrate.py`; original SHA-256 `bcb11552af643bf36643c8646daffdad46792fa39d795aeaca87cb688a713c1e`.
+
+## Original docstring, lines 2–31
+
+````text
+"""Near-duplicate calibration + treatment CLI (I6-D2, INC6.4 campaign).
+
+Three subcommands:
+
+``sample``
+    Scan candidate pairs (cosine similarity >= 0.75, approximated via
+    per-row HNSW top-K — see ``pg_store_near_dup.py``), stratify around
+    the write-path's 0.85 hypothesis, deterministically sub-sample ~100
+    pairs, fetch contents, write a to-label artifact. Read-only.
+
+``calibrate``
+    Given a labels file (produced by hand/LLM judgment against the
+    ``sample`` artifact — see ``docs/campaigns/i6d2_*_labels.json``),
+    compute precision per threshold and select S. Writes a calibration
+    report artifact. Read-only against the DB (uses only the labels file).
+
+``apply``
+    Given a calibrated threshold S, auto-supersede components >= S
+    (reusing the I6-D1 supersede-to-existing mechanism) and write the
+    review queue for [0.75, S). Dry-run by default; ``--apply`` writes.
+
+Usage
+-----
+
+    uv run python scripts/near_dup_calibrate.py sample
+    uv run python scripts/near_dup_calibrate.py calibrate \
+        --labels docs/campaigns/i6d2_labels.json
+    uv run python scripts/near_dup_calibrate.py apply --threshold 0.90
+    uv run python scripts/near_dup_calibrate.py apply --threshold 0.90 --apply
+"""
+````
+

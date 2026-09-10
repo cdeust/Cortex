@@ -1,0 +1,52 @@
+---
+kind: adr
+number: 0518
+title: Preserve embedding_cache design decisions
+status: accepted
+---
+
+# ADR-0518: embedding_cache design decisions
+
+## Context
+
+Canonical migration of decision evidence from `mcp_server/infrastructure/embedding_cache.py` under ADR-0056.
+The excerpts below preserve historical claims and citations verbatim; original ADR numbers are historical quotations, not current identity bindings.
+
+## Decision
+
+Keep the source implementation linked to this versioned decision record. Operational API documentation remains with the implementation.
+
+## Preserved decision evidence
+
+### module, original line 1
+
+````text
+Batch calls neither consume nor populate the scalar cache. The recorded neural
+counterexamples in docs/provenance/embedding-cache-capacity.md forbid sharing
+these contexts under the strict vector-identity requirement.
+
+````
+
+### _cache_key, original line 24
+
+````text
+Provided by the existing embedding math mixin (ADR-0045 R5).
+````
+
+### cache_info, original line 38
+
+````text
+Content-free cumulative observations; no capacity decision implied.
+````
+
+### comment, original line 27
+
+````text
+# source: Python's OrderedDict LRU recipe:
+        # https://docs.python.org/3.13/library/collections.html#ordereddict-examples-and-recipes
+        # Zero capacity is the no-cache control for the W3-4 measurement.
+````
+
+## Consequences
+
+Review rationale and source changes together. Historical evidence is preserved rather than silently rewritten; executable Python structure is unchanged after removing docstrings.

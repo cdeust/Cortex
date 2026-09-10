@@ -1,0 +1,50 @@
+# ADR-1020: tests_py/invariants/test_pg_schema_provision_ready.py design and historical evidence
+
+Status: accepted; existing test/harness evidence preserved during issue #514.
+
+Source `tests_py/invariants/test_pg_schema_provision_ready.py`, original SHA-256 `fb3c5c490178a34325bc230936f4f9350c5a8a02acafdf0c59260727fa1bd3ad`.
+Assertions and runtime fixture literals remain unchanged.
+
+## Original docstring, lines 1–38
+
+````text
+"""Hermetic, mocked unit tests for tests_py/_pg_schema_provision.py's
+schema-provisioning and top-level orchestration (issue #312).
+
+Split from `test_pg_schema_provision.py` (which covers `_can_connect`,
+`_database_name`, and `_create_database`) to stay under
+coding-standards.md §4.1's 300-line cap — see that file's docstring for
+the full mocking-strategy rationale shared by both.
+
+`TestProvisionSchema` pins that `_provision_schema` reuses the exact
+production migration path (`PgMemoryStore.__init__` -> `_init_schema`)
+rather than a hand-copied one, and that a construction failure escalates
+via `pytest.exit`, never a swallowed exception. `TestEnsurePgReady` pins
+the top-level branching contract: which of the three inputs (server
+reachable directly / reachable only via maintenance / not reachable at
+all) leads to which of (schema provisioned silently, database created
+then provisioned, `PostgresUnavailableWarning` + False) — the exact
+issue #312 decision table.
+
+`TestProvisionSchema` alone needs the real `psycopg`/`pgvector` driver
+importable (`@requires_psycopg`, the same marker `tests_py/conftest.py`
+already exports and 3 other test files already use): its
+`mock.patch("mcp_server.infrastructure.pg_store.PgMemoryStore", ...)`
+calls are STRING-targeted, so `mock.patch` must import
+`mcp_server.infrastructure.pg_store` to resolve the attribute —
+and that module hard-imports `psycopg`/`pgvector`/`psycopg_pool` at its
+own top level (`pg_store.py`'s module docstring: "Requires:
+psycopg[binary]>=3.1..."), unconditionally, regardless of which backend
+a given test session selects. On a SQLite-only install (no
+`[postgresql]` extra) that import raises `ModuleNotFoundError`, which
+`mock.patch`'s string-target resolution surfaces as `AttributeError:
+module 'mcp_server.infrastructure' has no attribute 'pg_store'` instead
+of a clean skip (reproduced against a disposable venv built from
+`requirements/ci-sqlite.txt`, CI run 30626458304's "Test (SQLite
+backend)" job). `TestEnsurePgReady` and the standalone warning test
+below need no such guard: they mock `_can_connect`/`_create_database`/
+`_provision_schema` at the `provision` MODULE level, never triggering a
+real import of `pg_store`.
+"""
+````
+

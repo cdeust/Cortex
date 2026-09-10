@@ -17,11 +17,7 @@ The stamp is at ``~/.claude/methodology/.last_consolidate`` and carries
 the ISO timestamp of the last successful run. Updated on every successful
 exit. SessionStart reads it to decide whether to spawn this worker.
 
-User direction 2026-05-18: "Consolidate cycle I shouldn't have to run
-manually. It should be completely automatic." This module is the
-mechanism that makes that true — no cron, no daemon required; every
-session opens against a recently-consolidated store.
-"""
+source: ADR-0491"""
 
 from __future__ import annotations
 
@@ -71,10 +67,9 @@ def _load_handler():  # noqa: ANN201 -- returns the lazily-imported async handle
 
 def _build_args(deep: bool) -> dict[str, Any]:
     """Standard knobs from the handler schema; deep=False is the default
-    so the cycle stays cheap enough to run every 6 hours. Wiki maintenance
-    ON by default — purge stubs + classifier rejects, audit coverage; the
-    handler's own defaults match this autonomous policy (both axes apply,
-    cap 500/cycle)."""
+        so the cycle stays cheap enough to run every 6 hours.
+
+    source: ADR-0491"""
     return {
         "decay": True,
         "compress": True,
@@ -147,10 +142,6 @@ if __name__ == "__main__":
     from mcp_server.hooks._store_lifecycle import close_shared_store_on_exit
 
     exit_if_headless_authoring_child()
-    # issue #398: main() calls sys.exit() on every path; wrapping the whole
-    # call in this context manager guarantees the store is closed before
-    # the process actually ends (see _store_lifecycle.py for the verified
-    # mechanism -- psycopg pool threads are daemon threads; the fragile
-    # path is __del__'s finalization-time join, which close() pre-empts).
+    # source: ADR-0491
     with close_shared_store_on_exit():
         main()

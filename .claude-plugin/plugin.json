@@ -1,7 +1,7 @@
 {
   "name": "hypermnesia-mcp",
   "description": "Cortex — persistent memory for Claude Code that remembers across sessions automatically. Install and forget. Scientific retrieval backed by 97 published references. (Renamed from the 'cortex' plugin to match the PyPI/MCP-registry identity.)",
-  "version": "4.19.1",
+  "version": "4.21.0",
   "author": {
     "name": "Clement Deust",
     "email": "admin@ai-architect.tools"
@@ -47,6 +47,21 @@
     "message": "Installing Cortex (Python deps + zero-config SQLite memory; existing PostgreSQL installs are detected and kept). Upgrade anytime: bash <plugin>/scripts/install-plugin.sh --postgres"
   },
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'PY=$(command -v python3 || command -v python) && if [ -z \"${CLAUDE_PLUGIN_ROOT:-}\" ]; then echo \"cortex hook: CLAUDE_PLUGIN_ROOT is unset; refusing to guess the plugin root\" >&2; exit 1; fi; ROOT=\"$CLAUDE_PLUGIN_ROOT\" && \"$PY\" \"$ROOT/scripts/launcher.py\" mcp_server.hooks.decision_gate'"
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'PY=$(command -v python3 || command -v python) && if [ -z \"${CLAUDE_PLUGIN_ROOT:-}\" ]; then echo \"cortex hook: CLAUDE_PLUGIN_ROOT is unset; refusing to guess the plugin root\" >&2; exit 1; fi; ROOT=\"$CLAUDE_PLUGIN_ROOT\" && \"$PY\" \"$ROOT/scripts/launcher.py\" mcp_server.hooks.no_deps_gate'"
+          }
+        ]
+      }
+    ],
     "SessionStart": [
       {
         "hooks": [

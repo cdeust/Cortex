@@ -1,0 +1,26 @@
+# ADR-0962: tests_py/handlers/test_wiki_redirect_handlers.py design and historical evidence
+
+Status: accepted; existing test/harness evidence preserved during issue #514.
+
+Source `tests_py/handlers/test_wiki_redirect_handlers.py`, original SHA-256 `f1ae0b4de261e1c820570e7294e43236a41977eb3ece298db892406b8aa681fe`.
+Assertions and runtime fixture literals remain unchanged.
+
+## Original docstring, lines 1–6
+
+````text
+"""Handler-layer tests for redirect mechanics (ADR-2244 Phase 3.2).
+
+Exercises wiki_read (transparent follow), wiki_list / wiki_reindex
+(stub filtering), and wiki_rename (atomic move + stub creation) against
+a temporary wiki root.
+"""
+````
+
+## Original docstring, lines 196–198
+
+````text
+"""Phase 5 of ADR-2244: ``provenance: auto-generated`` pages are
+    hidden from the default listing — at ~8,700 pages they would
+    dominate any view."""
+````
+

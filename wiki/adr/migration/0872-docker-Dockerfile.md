@@ -118,3 +118,39 @@ Source rationale preserved verbatim. Identifiers inside historical quotations ar
 ````text
 # Fix ownership of cached models
 ````
+
+## Final non-Python residual audit
+
+### docker/Dockerfile — pre-cleanup line 5
+
+````text
+# Claude Code runs INSIDE the container with Cortex MCP pre-configured via
+# stdio. No HTTP bridge needed — same architecture as ai-architect-feedback-loop.
+````
+
+### docker/Dockerfile — pre-cleanup line 39
+
+````text
+# Replaced by what the script itself does, spelled out: fetch the signing
+# key, register the signed apt source, install the signed package. curl now
+# feeds `gpg --dearmor`, which is not an interpreter — nothing is executed.
+# apt then verifies the package signature against that key.
+````
+
+### docker/Dockerfile — pre-cleanup line 73
+
+````text
+# Python dependencies, hash-pinned. Every requirement in this file carries a
+# hash from uv.lock (scripts/generate_pip_constraints.py), including the
+# CPU-only torch build that keeps ~2GB of nvidia-cu13-* wheels out of the
+# image — that used to be a bare `--index-url` flag whose artifact no
+# lockfile described. `--require-hashes` makes pip refuse anything whose
+# bytes do not match.
+````
+
+### docker/Dockerfile — pre-cleanup line 135
+
+````text
+# Copy Node.js + Claude CLI from builder. The CLI now lives in the project
+# directory `npm ci` installed it into, not in the global prefix.
+````

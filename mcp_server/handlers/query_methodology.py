@@ -24,7 +24,7 @@ from mcp_server.infrastructure.memory_store import get_shared_store
 
 logger = logging.getLogger(__name__)
 
-# source: hooks/session_start.py::_SQLITE_NOISE_TAGS, memory contract §8b.
+# source: ADR-0427
 _CONTEXT_NOISE_TAGS = frozenset({"auto-captured", "memory-replica"})
 
 schema = {
@@ -80,7 +80,7 @@ schema = {
     },
 }
 
-# ── Memory helpers (lazy import to avoid circular deps at module level) ──
+# source: ADR-0427
 
 _memory_store = None
 _memory_available = None
@@ -167,12 +167,7 @@ def _get_fired_triggers(directory: str, first_message: str) -> list[dict[str, An
     try:
         active_triggers = store.get_active_prospective_memories()
         fired = []
-        # Dedupe by content: trigger extraction at remember-time accumulates
-        # byte-identical reminders (measured 4-7 copies of the same content
-        # in one response; firedTriggers alone was 55.6% of a 262KB
-        # query_methodology payload — 2026-06-09 bounded-I/O audit). Every
-        # fired trigger still gets its triggered_count bumped; only one
-        # copy of each distinct content ships in the response.
+        # source: ADR-0427
         seen_contents: set[str] = set()
         for trigger in active_triggers:
             if check_trigger(trigger, directory=directory, content=first_message):
@@ -288,10 +283,7 @@ def _inject_memories(
 def _bounded(resp: dict) -> dict:
     """Fit the response to the host's tool-result budget.
 
-    Hot-memory / trigger contents are cut first (they carry ids for full
-    retrieval via recall); the assembled ``context`` string is the other
-    unbounded text (core/response_budget.py for the measured budget).
-    """
+    source: ADR-0427"""
 
     return bound_payload(
         resp,

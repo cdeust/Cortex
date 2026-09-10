@@ -1,0 +1,43 @@
+# ADR-0999: tests_py/infrastructure/test_schema_integrity.py design and historical evidence
+
+Status: accepted; existing test/harness evidence preserved during issue #514.
+
+Source `tests_py/infrastructure/test_schema_integrity.py`, original SHA-256 `4ce424eca4fcb516f1f19ae309f8ef427862717f6921cfb0c42d0b1c0ca639c6`.
+Assertions and runtime fixture literals remain unchanged.
+
+## Original docstring, lines 1–31
+
+````text
+"""Schema-integrity audit across hooks/ and handlers/.
+
+Issue #20 root cause: a SELECT against ``memories.heat`` shipped to
+production. ``heat`` is not a stored column — it is a derived field
+computed by ``effective_heat()``. The error silently broke the
+UserPromptSubmit hook on every fire because the hook's ``except
+Exception`` swallowed the PG error.
+
+This test is the abstraction barrier preventing recurrence: it
+extracts every SQL string literal that targets the ``memories`` table
+from hooks/handlers and runs ``EXPLAIN`` against the live schema.
+``EXPLAIN`` does not execute the query but it *does* validate every
+column reference — the planner rejects unknown columns with the same
+``column "X" does not exist`` error that broke production.
+
+Method: lightweight regex finds string blobs that contain
+``FROM memories`` / ``UPDATE memories`` / ``INTO memories``.
+Parameter placeholders (``%s``) are substituted with safe NULL casts
+so the planner can resolve types. Queries that reference columns
+from other tables (joins to ``wiki.pages``, etc.) still work because
+``EXPLAIN`` validates *all* referenced columns.
+
+False positives are possible (split-line SQL not concatenated, format
+strings, dynamic SQL). When found, add the offending blob hash to
+``_KNOWN_BENIGN_BLOBS`` and document the reason.
+
+Pre/post:
+- pre: PG reachable; ``memories`` table created via PgMemoryStore init.
+- post: every memories-touching SQL blob in hooks/ and handlers/
+  parses cleanly under ``EXPLAIN``.
+"""
+````
+

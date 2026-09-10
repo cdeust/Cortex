@@ -1,23 +1,9 @@
-"""Wiki schema DB operations (Phase 1 of redesign).
-
-Upserts and queries over wiki.pages / wiki.concepts / wiki.claim_events /
+"""Upserts and queries over wiki.pages / wiki.concepts / wiki.claim_events /
 wiki.drafts / wiki.links / wiki.citations / wiki.memos.
-
-Files on disk remain the source of truth for wiki.pages; this module
-maintains the query index. All writes are idempotent (UPSERT by rel_path
-or body_hash). Triggers on wiki.links and wiki.citations maintain the
-denormalised counters on wiki.pages.
 
 Pure infrastructure — no core imports, no handler imports.
 
-This module is now a thin re-export facade: the implementation was split
-across sibling ``pg_store_wiki_*`` modules (pages / links / claims /
-thermo / concepts / drafts / notes / common) to satisfy the 300-line
-file limit (CLAUDE.md "Code Quality Rules") — originally 890 lines.
-Every name below is re-exported verbatim so existing importers
-(``from mcp_server.infrastructure.pg_store_wiki import X``) keep working
-unchanged. No logic changed.
-"""
+source: ADR-0571"""
 
 from __future__ import annotations
 

@@ -1,4 +1,6 @@
-"""Tests for wiki_identity — stable page IDs (Phase 3 of ADR-2244)."""
+"""Tests for stable wiki page identities.
+
+source: ADR-0932"""
 
 from __future__ import annotations
 

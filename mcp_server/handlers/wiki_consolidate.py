@@ -2,16 +2,6 @@
 
 Runs three passes over wiki.pages:
 
-  1. Heat decay + lifecycle transitions (active → area → archived,
-     archived → active on revival).
-  2. Staleness brake — pages whose file references no longer exist
-     get is_stale=True; pages whose refs all came back get
-     is_stale=False (auto-recovery). Also persists the harvested refs
-     as wiki.page_sources rows (link_kind='references', ADR-0051 STEP 4)
-     so the file <-> wiki graph exposes not just the one 'documents'
-     primary but every file a page cites.
-  3. Memo every transition for the audit trail.
-
 Modes:
   full sweep:   wiki_consolidate({})
   dry-run:      wiki_consolidate({"dry_run": true})
@@ -20,7 +10,8 @@ Modes:
 
 Composition root only — wires core/wiki_thermodynamics + core/
 wiki_staleness against pg_store_wiki + filesystem.
-"""
+
+source: ADR-0455"""
 
 from __future__ import annotations
 

@@ -6,7 +6,163 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [4.21.0] - 2026-09-10
+
 ### Fixed
+
+- **The decision gate no longer exempts a language, a test file or a file
+  header (#555).** Owner ruling of 2026-09-10 on ADR-1060, no exception. On
+  that day six lines of `///` rationale written into a `tests/*.rs` file
+  passed `mcp_server/hooks/decision_gate.py` because each of its three
+  exemptions sufficed alone: `//` and `/* */` languages were deferred "until
+  measured", the path was under a test root, and the run sat before anything
+  executable. All three are removed. `mcp_server/hooks/_decision_gate_lex.py`
+  now reads `//` and `/* */` (`.rs .js .jsx .ts .tsx .go .java .c .h .cpp
+  .hpp .cc .swift .kt .kts .cs .scala .m .mm .dart .php`), `--` (`.sql .lua
+  .hs`) and `;` (`.el .clj .lisp`) through one scanner that tracks string
+  literals and block comments, alongside the `#` family (`.py .sh .bash .zsh
+  .rb .pl .toml .yaml .yml .r .cfg .ini`), so a `//` inside a string literal
+  is never a comment; a Python comment after code on the same line no longer
+  counts as a comment line. Unchanged: the eight-line threshold,
+  grandfathering of blocks already in the file (only what the call introduces
+  is judged, so the ten tracked files with a long header stay editable), the
+  `source:` pointer line, fail-open on unreadable input and the explicit
+  `CORTEX_DECISION_GATE=off` override. The refusal states the new scope. The
+  measurement behind the header ruling is in the ADR's revision section.
+
+- **`benchmarks/reproduce.sh --only` no longer accepts a selector that runs nothing.**
+  `--only` was compared token for token against `longmemeval`, `locomo`, `beam`
+  and `decision-ids`, while the script itself prints the artifact names
+  `longmemeval-s` and `beam-100K`. Passing one of those, or any typo, matched
+  no benchmark: the script built the package, started and stopped an ephemeral
+  container, wrote `MANIFEST.json` and `START_SNAPSHOT.json`, measured nothing
+  and exited 0. Observed on 2026-09-09 while re-measuring v4.20.0. A new
+  sourced library, `benchmarks/lib/bench_only.sh`, normalises the two aliases to
+  the tokens `want_bench` matches and fails closed on an unknown or empty token
+  with exit 2 and the accepted list, before any `uv run` or container start.
+
+## [4.20.0] - 2026-09-09
+
+### Added
+
+- **A decision written into code is now refused at edit time, not reported
+  after the fact.** The wiki is the only decision index and code carries a
+  pointer, but nothing enforced it: `scripts/craftsmanship_decisions.py`
+  checks the converse, that a `source:` citation resolves, so prose written
+  where a pointer belongs passed every gate. It just did, twice, in
+  `scripts/setup.sh`. A CI check would report the violation only once it was
+  committed and pushed, so the new `mcp_server/hooks/decision_gate.py` runs
+  as a `PreToolUse` hook on `Edit` and `Write` and exits 2, blocking the
+  call, when the edit would add eight or more consecutive comment lines to a
+  code file. A `source:` line never counts toward a run, and the refusal
+  names `wiki_adr` and the pointer form to leave behind. Exempt: the file
+  header, defined as a run with nothing executable before it rather than by
+  a line number; test files (now including `tests_js` and `*.test.*`/
+  `*.spec.*` filenames, not just the Python shapes); and any block already
+  in the file, compared by its set of comment-line texts rather than exact
+  position, so a rewrap of an existing block is never mistaken for new
+  prose. Enforced only for the `#`-comment languages the eight-line
+  threshold was actually measured against on the tracked tree — `.py`,
+  `.sh`, `.bash`, `.zsh`, `.rb` (1418 and 18 tracked files respectively for
+  the two with volume); `//` and `/* */` languages have no tracked
+  instances yet and are not enforced. `CORTEX_DECISION_GATE=off` overrides
+  one call. See ADR-1060.
+
+- **Every hashed-requirements install is now checked for `--no-deps`, at
+  edit time and in CI.** `pyproject.toml`'s `[tool.uv] override-dependencies`
+  steers `mpmath` past the `mpmath<1.4` bound `sympy`'s own metadata still
+  declares; `uv`'s resolver honours the override, but the exported
+  `requirements/*.txt` format cannot carry it, so a `pip install
+  --require-hashes -r requirements/*.txt` without `--no-deps` re-derives the
+  graph and aborts with `ResolutionImpossible`. PR #332 fixed this across
+  CI, the Dockerfiles and `scripts/launcher_torch_cpu.py` (ADR-0800), but
+  missed `scripts/setup.sh`, which stayed broken for months (fixed in
+  PR #539, ADR-1059) — nothing enforced the invariant itself. The new
+  `mcp_server/hooks/no_deps_gate.py` runs as a `PreToolUse` hook on `Edit`
+  and `Write`, scoped to `scripts/`, `.github/workflows/`,
+  `.github/actions/`, `Dockerfile*`, and `.devcontainer/`, and blocks any
+  write that pairs `--require-hashes` with a `-r <...requirements...txt>`
+  install lacking `--no-deps` in the same shell command. `scripts/
+  check_no_deps_invariant.py` runs the identical detector
+  (`mcp_server/hooks/_no_deps_lex.py`) over every tracked file in that scope
+  in CI, catching commits the hook never saw. `CORTEX_NO_DEPS_GATE=off`
+  overrides one hook call. See ADR-1062.
+
+### Fixed
+
+- **`scripts/setup.py` installed an unpinned, hand-written package list
+  instead of the generated constraint file (#538).** This is the path taken
+  by the SQLite backend on every OS and by the PostgreSQL backend on
+  Windows, the default zero-config install. `install_deps()` now resolves
+  `requirements/setup.txt`, the same hashed closure `scripts/setup.sh`
+  installs, with `--no-deps --require-hashes` and never `--upgrade`, for
+  the same reasons recorded in ADR-1059. The hand list is deleted.
+- **`scripts/setup.sh` step 5/7 reported `[ok]` even when the embedding
+  model was never cached (issue #537).** The pre-cache ran inside a
+  `try/except` that printed a warning and then fell off the end of the
+  block, so the subprocess always exited 0 — the `[ok]` label was driven
+  by reaching the end of the step, not by the step succeeding. The
+  try/except is gone; a failed import or load now raises, so the label is
+  derived from the pre-cache subprocess's real exit code
+  (`scripts/lib/precache_embedding_model.sh`, extracted from `setup.sh` so
+  the two outcomes are drivable in isolation —
+  `tests_py/scripts/test_precache_embedding_model_step.py`). The step
+  still isn't fatal: a real failure now prints `[!!] Model not pre-cached,
+  will download on first use` plus the captured traceback, instead of
+  scrolling past unread under a false `[ok]`.
+
+- **`scripts/launcher_deps_install.py`'s idempotence guard was ABI-blind
+  (#540).** `_entry_already_satisfied` decided a `deps/` entry needed no
+  commit by comparing dist-info versions alone. A version match survives an
+  interpreter upgrade even though the compiled artifact does not: an
+  extension module's filename carries an interpreter ABI tag
+  (`*.cpython-313-darwin.so`), and the guard never looked at it, so a
+  package whose PyPI version was unchanged kept the previous interpreter's
+  build after `deps/` moved to a new Python. Reproduced on this machine
+  after a 3.13→3.14 move: `deps/websockets/speedups.cpython-313-darwin.so`
+  survived every subsequent run, and `_cffi_backend.cpython-313-darwin.so`
+  sat as an orphan beside the fresh `...cpython-314-darwin.so` build with no
+  `.dist-info` of its own to prune it. The guard now also treats a
+  version-matched entry as unsatisfied when it (recursively) contains a
+  foreign-ABI extension, forcing the normal atomic-commit path to replace
+  it, and a new sweep prunes orphaned top-level foreign-ABI files once a
+  commit batch succeeds. ADR-0749's original protection — a locked,
+  already-correct transitive dependency never enters the rmtree/replace
+  path — is unchanged. Decision recorded in ADR-1061.
+
+- **The decision-gate hook crashed on unreadable input and misread strings,
+  docstrings and heredoc bodies as prose (review of the change above,
+  ADR-1060).** `Path.read_text` around a file's current content caught only
+  `OSError`; a `UnicodeDecodeError` (a `ValueError`, not an `OSError`) or a
+  null byte in the path crashed the hook and blocked every edit to that
+  file rather than allowing or refusing it — both read sites now go through
+  one helper catching `(OSError, ValueError)`. Comment detection was a
+  prefix match with no notion of string or heredoc bodies, so a module
+  docstring followed by a licence block was blocked (the docstring broke
+  the header scan) and a `cat <<'CFG' ... CFG` body containing commented
+  example data was blocked; Python comment lines are now found via
+  `tokenize.COMMENT` (never confuses a string for a comment) with a leading
+  docstring tolerated as header material, and the shell scanner skips
+  heredoc bodies. Grandfathering keyed a run by its exact joined text, so
+  inserting or removing one bare marker line inside a block already in the
+  file changed the key and was reported as newly introduced; it now
+  compares the set of body-comment line texts, so a pure reflow of existing
+  rationale is not.
+
+- **The plugin installer could not install its dependencies (PR #539).**
+  `scripts/setup.sh` step 3/7 installs `requirements/setup.txt`, the hashed
+  graph exported from `uv.lock`, and it was the last consumer of a generated
+  constraint file that let pip re-derive that graph. `pyproject.toml`'s
+  `[tool.uv] override-dependencies` steers `mpmath` past the `mpmath<1.4`
+  bound `sympy` still declares in its metadata; uv's resolver honours the
+  override, the requirements.txt format cannot carry it, so pip saw only the
+  conflict and aborted with `ResolutionImpossible`. Every other consumer
+  already passed `--no-deps` after PR #332 recorded this same failure in
+  ADR-0800; this call site was missed, and now passes it too. The step still
+  cannot refresh a stale `deps/`, which is deliberate: `--upgrade` would hand
+  pip's delete-then-rewrite to a directory a live MCP server may be reading,
+  bypassing the atomic commit path of ADR-0749. That half of the problem is
+  tracked in #540. Both flags are decided in ADR-1059.
 
 - **Docker Smoke no longer times out on pull requests.** The job wrote its
   buildx layer cache with `cache-to: type=gha,mode=max` on every event. On
@@ -48,6 +204,42 @@ adheres to [Semantic Versioning](https://semver.org/).
   `--baseline-ref`: the blocking gate a PR should use instead of lowering
   `FLOOR_*`, comparing HEAD against a baseline ref's own measured scores
   rather than a fixed number.
+
+- **`mcp_server/core/provenance.py`'s 43 surviving mutants, closed** (#389). A
+  scoped `scripts/mutation_check.sh` run left 43 genuine survivors out of 232
+  mutants (188 killed). That count was filed on 2026-08-08 and re-measured
+  unchanged on 2026-09-09. 29 of the 43 were real gaps, and
+  `tests_py/core/test_provenance.py` closes every one. `_build_reason` held 13
+  of them: no test asserted the wording it produces, because
+  `grade_provenance`'s empty-outcome path hardcodes its own reason string
+  rather than calling the helper. Its four branches are now pinned by direct
+  unit tests carrying the boundary inputs, notably the three-ref join cap.
+  One of the four, `grade == UNVERIFIABLE` with `dead` empty, is unreachable
+  through `grade_provenance`, since every path that appends an UNVERIFIABLE
+  outcome also appends to `dead`; the other three are reachable and are also
+  pinned end-to-end by `TestGradeReportFields`.
+  `grade_provenance` held 12: every field of the returned `ProvenanceReport`
+  other than `grade` (`memory_id`, `ref_counts`, `dead_refs`,
+  `uncheckable_refs`, `reason`) went unread by the existing tests, and the
+  documented least-favorable case, a ref absent from its verdicts dict, was
+  never exercised. Extraction held 3: the `continue` that skips a non-path
+  token could become a `break` unnoticed, the `rstrip` cut set could widen and
+  eat a real path character, and a repeated artifact path was never deduped.
+  `_ref_counts` held 1: the citation count was only ever asserted with a
+  citation present, so the zero arm was free. 12 further survivors are
+  **documented equivalents**, registered in `memory/mutation-equivalents.json`
+  (13 for this module in total, counting the one already on file), each pinned
+  to its exact removed/added pair as ADR-0771 requires. The last 2 had no
+  third disposition available: `dead_refs=[]` and `uncheckable_refs=[]` on the
+  empty-outcome `ProvenanceReport` restate the dataclass defaults verbatim,
+  and a pure-deletion mutant of a line like that carries no `added` text,
+  which the registry rejects, so both arguments are deleted with a comment at
+  the site saying why. Every constructed report stays field-for-field
+  identical, and both values stay pinned by `TestGradeReportFields`.
+  Re-running the reproduction after the fix: `scripts/mutation_check.sh`
+  reports 0 unregistered survivors, the full suite passes, and ruff, the
+  craftsmanship gate and pyright are clean. No absolute test total is stated
+  here, per #293/#294.
 
 ## [4.19.1] - 2026-09-03
 

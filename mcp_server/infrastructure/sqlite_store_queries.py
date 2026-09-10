@@ -111,9 +111,7 @@ class SqliteQueryMixin:
     ) -> list[dict[str, Any]]:
         """Page through memories for validation, ``id`` order (I6-D6).
 
-        Mirrors PgQueryMixin.get_all_memories_for_validation — see there
-        for the cursor/include_stale rationale.
-        """
+        source: ADR-0612"""
         rows = self._conn.execute(
             "SELECT * FROM memories WHERE id > ? AND (NOT is_stale OR ?) "
             "ORDER BY id ASC LIMIT ?",
@@ -171,13 +169,7 @@ class SqliteQueryMixin:
     ) -> Iterator[list[dict[str, Any]]]:
         """Stream active memories for decay — PgMemoryStore parity.
 
-        PG streams chunks through a server-side cursor because its corpora
-        reach 500k+ rows; SQLite serves the local plugin install, where the
-        corpus fits in memory and the store already materializes it for
-        every other decay path. One yielded chunk therefore matches
-        PgMemoryStore's own ``POOL_DISABLED`` compatibility path exactly.
-        ``chunk_size`` is accepted for signature parity and unused.
-        """
+        source: ADR-0612"""
         del chunk_size  # signature parity with PgMemoryStore
         yield self.get_all_memories_for_decay()
 
@@ -209,12 +201,13 @@ class SqliteQueryMixin:
         """Delete memories with the given tag, optionally scoped to a domain.
 
         precondition: tag is a non-empty string; domain is None or a non-empty string.
-        postcondition: returns the number of memory rows removed; rows removed
-            iff their tags list contains tag AND (domain is None OR row.domain
-            matches). domain=None preserves the legacy global-purge behavior.
+                postcondition: returns the number of memory rows removed; rows removed
+                    iff their tags list contains tag AND (domain is None OR row.domain
+                    matches). domain=None preserves the legacy global-purge behavior.
 
-        SQLite lacks jsonb operators — filter in Python then delete by ID.
-        """
+                SQLite lacks jsonb operators — filter in Python then delete by ID.
+
+        source: ADR-0612"""
         if domain is None:
             rows = self._conn.execute("SELECT id, tags FROM memories").fetchall()
         else:

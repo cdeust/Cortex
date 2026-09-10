@@ -138,14 +138,6 @@
       "issue": "#369"
     },
     {
-      "mutant": "mcp_server.core.ast_extractors.x__walk_for_calls__mutmut_16",
-      "removed": "body = child.child_by_field_name(\"body\") or child",
-      "added": "body = child.child_by_field_name(\"body\") and child",
-      "kind": "equivalent-by-construction",
-      "rationale": "The body node is itself a child of the class node, so descending child.children reaches it via the catch-all arm and finds the same definitions in the same order. The `or child` fallback stays for grammars whose class node exposes no body field.",
-      "issue": "#369"
-    },
-    {
       "mutant": "mcp_server.core.ast_extractors.x__walk_for_calls__mutmut_18",
       "removed": "body = child.child_by_field_name(\"body\") or child",
       "added": "body = child.child_by_field_name(\"XXbodyXX\") or child",
@@ -162,23 +154,7 @@
       "issue": "#369"
     },
     {
-      "mutant": "mcp_server.core.ast_extractors.x__walk_for_calls__mutmut_25",
-      "removed": "elif ntype == \"decorated_definition\":",
-      "added": "elif ntype == \"XXdecorated_definitionXX\":",
-      "kind": "seam-pending-implementation",
-      "rationale": "The decorated_definition arm is byte-identical to the else that follows it, so mutating its node-type string is undetectable. Kept, not deleted: it mirrors _extract_python_children's dispatch (where the same branch IS load-bearing) and is the seam for decorator-call attribution, which produces no graph edge today. See #372.",
-      "issue": "#369"
-    },
-    {
-      "mutant": "mcp_server.core.ast_extractors.x__walk_for_calls__mutmut_26",
-      "removed": "elif ntype == \"decorated_definition\":",
-      "added": "elif ntype == \"DECORATED_DEFINITION\":",
-      "kind": "seam-pending-implementation",
-      "rationale": "The decorated_definition arm is byte-identical to the else that follows it, so mutating its node-type string is undetectable. Kept, not deleted: it mirrors _extract_python_children's dispatch (where the same branch IS load-bearing) and is the seam for decorator-call attribution, which produces no graph edge today. See #372.",
-      "issue": "#369"
-    },
-    {
-      "mutant": "mcp_server.core.ast_extractors.x__walk_for_calls__mutmut_39",
+      "mutant": "mcp_server.core.ast_extractors.x__walk_for_calls__mutmut_57",
       "removed": "fn_name = _text(name_node, source) if name_node else \"\"",
       "added": "fn_name = _text(name_node, source) if name_node else \"XXXX\"",
       "kind": "unreachable-branch",
@@ -400,6 +376,102 @@
       "kind": "equivalent-by-construction",
       "rationale": "Passing None instead of \"\" as the initial scope is unobservable: every use of that parameter is a truthiness test (`if scope` / `f\"{scope}.\" if scope else ...`), and both values are falsy.",
       "issue": "#369"
+    },
+    {
+      "mutant": "mcp_server.core.provenance.x_extract_commit_refs__mutmut_5",
+      "removed": "for m in _COMMIT_RE.finditer(content or \"\"):",
+      "added": "for m in _COMMIT_RE.finditer(content or \"XXXX\"):",
+      "kind": "equivalent-by-construction",
+      "rationale": "The empty-string fallback is only reached when `content` is falsy, and _COMMIT_RE (`\\b[0-9a-f]{7,40}\\b`) cannot match \"XXXX\": 'X' is outside the character class and the token is 4 characters, under the 7-character minimum. Both the original and the mutant therefore iterate over a subject with zero matches and return the same empty result, so no input distinguishes them.",
+      "issue": "#389"
+    },
+    {
+      "mutant": "mcp_server.core.provenance.x_extract_url_refs__mutmut_5",
+      "removed": "for m in _URL_RE.finditer(content or \"\"):",
+      "added": "for m in _URL_RE.finditer(content or \"XXXX\"):",
+      "kind": "equivalent-by-construction",
+      "rationale": "The empty-string fallback is only reached when `content` is falsy, and _URL_RE (`https?://\\S+`) cannot match \"XXXX\": the marker carries no scheme prefix. Both the original and the mutant therefore iterate over a subject with zero matches and return the same empty result, so no input distinguishes them.",
+      "issue": "#389"
+    },
+    {
+      "mutant": "mcp_server.core.provenance.x_extract_artifact_refs__mutmut_5",
+      "removed": "for m in _ARTIFACT_RE.finditer(content or \"\"):",
+      "added": "for m in _ARTIFACT_RE.finditer(content or \"XXXX\"):",
+      "kind": "equivalent-by-construction",
+      "rationale": "The empty-string fallback is only reached when `content` is falsy, and _ARTIFACT_RE cannot match \"XXXX\": it requires the literal 'artifacts/', a yyyy-mm segment, 16 hex digits and a '.md' suffix. Both the original and the mutant therefore iterate over a subject with zero matches and return the same empty result, so no input distinguishes them.",
+      "issue": "#389"
+    },
+    {
+      "mutant": "mcp_server.core.provenance.x_has_citation_ref__mutmut_4",
+      "removed": "return bool(_CITATION_RE.search(content or \"\"))",
+      "added": "return bool(_CITATION_RE.search(content or \"XXXX\"))",
+      "kind": "equivalent-by-construction",
+      "rationale": "The empty-string fallback is only reached when `content` is falsy, and _CITATION_RE cannot match \"XXXX\": it requires a '10.NNNN/' DOI stem or an 'arXiv:NNNN.NNNN' identifier. Both the original and the mutant therefore iterate over a subject with zero matches and return the same empty result, so no input distinguishes them.",
+      "issue": "#389"
+    },
+    {
+      "mutant": "mcp_server.core.provenance.x_grade_provenance__mutmut_9",
+      "removed": "if commit_verdicts.get(sha, False):",
+      "added": "if commit_verdicts.get(sha, None):",
+      "kind": "equivalent-by-construction",
+      "rationale": "The looked-up value is consumed by nothing but the enclosing `if`, so only its truthiness is observable, and the original default False is falsy exactly like None. Every ref, present or absent from the verdicts dict, takes the same branch in both versions; the absent-ref behaviour itself is pinned by TestGradeMissingVerdictEntries.",
+      "issue": "#389"
+    },
+    {
+      "mutant": "mcp_server.core.provenance.x_grade_provenance__mutmut_11",
+      "removed": "if commit_verdicts.get(sha, False):",
+      "added": "if commit_verdicts.get(sha, ):",
+      "kind": "equivalent-by-construction",
+      "rationale": "The looked-up value is consumed by nothing but the enclosing `if`, so only its truthiness is observable, and the original default False is falsy exactly like the implicit None of a one-argument .get(). Every ref, present or absent from the verdicts dict, takes the same branch in both versions; the absent-ref behaviour itself is pinned by TestGradeMissingVerdictEntries.",
+      "issue": "#389"
+    },
+    {
+      "mutant": "mcp_server.core.provenance.x_grade_provenance__mutmut_26",
+      "removed": "if artifact_verdicts.get(path, False):",
+      "added": "if artifact_verdicts.get(path, None):",
+      "kind": "equivalent-by-construction",
+      "rationale": "The looked-up value is consumed by nothing but the enclosing `if`, so only its truthiness is observable, and the original default False is falsy exactly like None. Every ref, present or absent from the verdicts dict, takes the same branch in both versions; the absent-ref behaviour itself is pinned by TestGradeMissingVerdictEntries.",
+      "issue": "#389"
+    },
+    {
+      "mutant": "mcp_server.core.provenance.x_grade_provenance__mutmut_28",
+      "removed": "if artifact_verdicts.get(path, False):",
+      "added": "if artifact_verdicts.get(path, ):",
+      "kind": "equivalent-by-construction",
+      "rationale": "The looked-up value is consumed by nothing but the enclosing `if`, so only its truthiness is observable, and the original default False is falsy exactly like the implicit None of a one-argument .get(). Every ref, present or absent from the verdicts dict, takes the same branch in both versions; the absent-ref behaviour itself is pinned by TestGradeMissingVerdictEntries.",
+      "issue": "#389"
+    },
+    {
+      "mutant": "mcp_server.core.provenance.x_grade_provenance__mutmut_42",
+      "removed": "reason=\"no_extractable_reference\",",
+      "added": ")",
+      "kind": "equivalent-by-construction",
+      "rationale": "Dropping the keyword falls back to the ProvenanceReport field default, which is the very same literal \"no_extractable_reference\", so the constructed report is identical field for field. The value is pinned by TestGradeNoRefs; only the redundancy, not the behaviour, differs.",
+      "issue": "#389"
+    },
+    {
+      "mutant": "mcp_server.core.provenance.x_grade_provenance__mutmut_47",
+      "removed": "file_refs, commit_refs, url_refs, artifact_refs, has_citation",
+      "added": "file_refs, commit_refs, url_refs, artifact_refs, None",
+      "kind": "unreachable-branch",
+      "rationale": "This call site sits inside `if not outcomes:`, and the statement just above appends VERIFIABLE to outcomes whenever has_citation is true. The branch is therefore reachable only with has_citation False, and `1 if False else 0` and `1 if None else 0` both yield the 0 that TestGradeReportFields pins.",
+      "issue": "#389"
+    },
+    {
+      "mutant": "mcp_server.core.provenance.x_grade_provenance__mutmut_57",
+      "removed": "grade = min(outcomes, key=lambda g: _RANK[g])",
+      "added": "grade = min(outcomes, key=None)",
+      "kind": "equivalent-by-construction",
+      "rationale": "The only values ever placed in `outcomes` are the three grade literals, and their lexicographic order (\"unverifiable\" < \"verifiable\" < \"verified\") coincides element for element with the _RANK order (0 < 1 < 2), so natural-order min selects the same worst grade for every possible combination. Should a grade ever be renamed out of that coincidence the mutant becomes killable and this entry fails as stale, which is the intended alarm.",
+      "issue": "#389"
+    },
+    {
+      "mutant": "mcp_server.core.provenance.x_grade_provenance__mutmut_59",
+      "removed": "grade = min(outcomes, key=lambda g: _RANK[g])",
+      "added": "grade = min(outcomes, )",
+      "kind": "equivalent-by-construction",
+      "rationale": "The only values ever placed in `outcomes` are the three grade literals, and their lexicographic order (\"unverifiable\" < \"verifiable\" < \"verified\") coincides element for element with the _RANK order (0 < 1 < 2), so key-less min selects the same worst grade for every possible combination. Should a grade ever be renamed out of that coincidence the mutant becomes killable and this entry fails as stale, which is the intended alarm.",
+      "issue": "#389"
     },
     {
       "mutant": "mcp_server.core.provenance.x_write_time_hint__mutmut_1",

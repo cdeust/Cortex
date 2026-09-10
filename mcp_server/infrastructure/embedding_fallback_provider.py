@@ -1,18 +1,4 @@
-"""Download-free algorithmic embedding provider (issue #169).
-
-The SECOND ``EmbeddingProvider`` implementation (the first is the neural
-``EmbeddingEngine``). It produces deterministic vectors with no model download,
-no network, and no learned parameters — only arithmetic seeded by the token
-strings — in the SAME dimension contract as the neural encoder. Used whenever
-the neural model is not loadable (``ModelState`` PACKAGE_ABSENT /
-MODEL_FILES_ABSENT / LOAD_RAISED); the factory maps those states here.
-
-The vectors live in a DIFFERENT geometry from the neural space, so the store
-tags each stored vector with the producing provider and never cross-ranks the
-two (see ``sqlite_store``). Pure delegation to
-``shared.algorithmic_embedding`` — see that module for the signal selection
-(TF + Random Indexing + co-occurrence bridging) and its sources.
-"""
+"""source: ADR-0522"""
 
 from __future__ import annotations
 
@@ -25,11 +11,7 @@ from mcp_server.shared.algorithmic_embedding import embed_text
 class AlgorithmicEmbeddingProvider(_EmbeddingMathMixin):
     """Deterministic, download-free ``EmbeddingProvider`` implementation.
 
-    Stateless apart from its fixed dimension; safe to share across threads
-    (``embed_text`` allocates its own arrays). Inherits the shared vector math
-    (``similarity`` / ``to_list`` / ``from_list`` / ``_normalize`` / ``_cache_key``)
-    so it satisfies the provider surface identically to the neural engine.
-    """
+    source: ADR-0522"""
 
     def __init__(self, dim: int) -> None:
         self._dim = dim

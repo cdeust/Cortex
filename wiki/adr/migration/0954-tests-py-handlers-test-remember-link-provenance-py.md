@@ -1,0 +1,24 @@
+# ADR-0954: tests_py/handlers/test_remember_link_provenance.py design and historical evidence
+
+Status: accepted; existing test/harness evidence preserved during issue #514.
+
+Source `tests_py/handlers/test_remember_link_provenance.py`, original SHA-256 `a120e96cc0785d2f1bf63cefaede41b4bb99eda96b9907456ca92b6a22c81b0b`.
+Assertions and runtime fixture literals remain unchanged.
+
+## Original docstring, lines 1–12
+
+````text
+"""Tests for the 'link' curation action's provenance tag
+(fix/memory-link-fk-violation).
+
+Root cause: `_link_if_needed` (removed) passed the NEW memory's id and the
+similar-candidate's id into `store.insert_relationship`, whose
+`source_entity_id`/`target_entity_id` columns are `NOT NULL REFERENCES
+entities(id)` -- every "link" write violated the FK and was swallowed by a
+bare `except Exception: pass`, so no link was ever persisted. The fix embeds
+provenance in the new row's own `tags` at insert time instead
+(`derived-src:<memory_id>`), reusing the convention
+`handlers/consolidation/memify_derive.py` already established.
+"""
+````
+

@@ -1,11 +1,6 @@
 """Memory-metadata mutator mixin for PgMemoryStore.
 
-Split out of pg_store.py (issue: 1384-line file over the 300-line §4.1
-cap) — the single-row UPDATE writers that mutate a memory's non-heat
-metadata (importance, access stats, value, extinction, protection,
-staleness, provenance, compression, mood) share one concern: simple
-targeted column writes with no cross-row coordination.
-"""
+source: ADR-0554"""
 
 from __future__ import annotations
 
@@ -42,14 +37,9 @@ class PgMemoryMetaMixin(PgStoreHost):
         self._conn.commit()
 
     def update_memory_value(self, memory_id: int, value: float) -> None:
-        """Persist a memory's learned RL value (B2). Defensive on stores whose
-        `value` column predates this migration — a failed UPDATE is swallowed so
-        rating/credit never breaks on an un-migrated store.
+        """Persist a memory's learned RL value.
 
-        The pre-migration case is now rare (the migration is current-schema
-        baseline); an UPDATE failing today is more likely a real regression
-        than a stale column, so the first such failure is logged rather than
-        silently absorbed forever (see silent_failure module docstring)."""
+        source: ADR-0554"""
         try:
             self._execute(
                 "UPDATE memories SET value = %s WHERE id = %s",
@@ -64,16 +54,7 @@ class PgMemoryMetaMixin(PgStoreHost):
     ) -> None:
         """Persist a memory's reversible inhibitory extinction tag (E2).
 
-        Writes ONLY the ``extinction_strength`` scalar in [0,1]; the memory's
-        content and heat_base are left untouched — extinction suppresses the
-        effective retrieval weight without erasing the trace, so decaying
-        (spontaneous recovery) or clearing (reinstatement) the tag restores the
-        original association (Bouton 2004). Defensive on stores whose
-        ``extinction_strength`` column predates this migration — a failed UPDATE
-        is swallowed so deprecation never breaks on an un-migrated store.
-
-        See ``update_memory_value`` docstring: the same rare-pre-migration
-        reasoning applies, so the first failure is logged, not just swallowed."""
+        source: ADR-0554"""
         try:
             e = max(0.0, min(1.0, float(extinction_strength)))
             self._execute(
@@ -84,27 +65,12 @@ class PgMemoryMetaMixin(PgStoreHost):
         except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("pg_store.update_memory_extinction")
             silent_failure.note("pg_store.update_memory_extinction", exc)
 
-    # ── User mood (Bower 1981 mood-congruent recall) ──────────────────
-    # The pg_recall._get_user_mood(store) bridge duck-types against
-    # ``get_user_mood()`` and consumes a scalar valence in [-1, +1].
-    # We expose:
-    #   - get_user_mood()       → scalar float (the bridge contract)
-    #   - get_user_mood_state() → {valence, arousal} dict (richer reads)
-    #   - set_user_mood(v, a)   → upsert (writers / emotion classifier)
-    # Returns ``None`` from get_user_mood() iff the row is genuinely
-    # absent — defensive; the schema seeds a 'default' neutral row, but
-    # an in-flight migration or a manually deleted row should still
-    # no-op the rerank rather than crash.
-    # Source: Bower, G.H. (1981). "Mood and Memory." Am. Psychologist 36(2).
+    # source: ADR-0554
 
     def get_user_mood(self, user_id: str = "default") -> float | None:
         """Return the user's current mood valence in [-1, +1], or None.
 
-        Scalar contract matches ``mcp_server/core/pg_recall.py:_get_user_mood``
-        which clamps and floats the returned value. None means "no signal" —
-        the MOOD_CONGRUENT_RERANK stage no-ops in that case (Bower 1981
-        requires a real mood; we never fabricate one).
-        """
+        source: ADR-0554"""
         row = self._execute(
             "SELECT valence FROM user_mood WHERE user_id = %s",
             (user_id,),
@@ -145,11 +111,7 @@ class PgMemoryMetaMixin(PgStoreHost):
     ) -> None:
         """Upsert the user's mood state. Clamps both dims to [-1, +1].
 
-        Refreshes ``updated_at`` automatically. Idempotent — repeated
-        writes with the same value still bump the timestamp, which is
-        the correct semantics for a "freshness of last observed mood"
-        signal that downstream EMA aggregators may consult.
-        """
+        source: ADR-0554"""
         v = max(-1.0, min(1.0, float(valence)))
         a = max(-1.0, min(1.0, float(arousal)))
         self._execute(
@@ -194,11 +156,7 @@ class PgMemoryMetaMixin(PgStoreHost):
     def update_forgetting_pressure_accum(self, memory_id: int, accum: float) -> None:
         """Persist the permanent-circuit leaky-integrator state for one memory.
 
-        Written every forgetting cycle (including leak-down when interference
-        abates), so the accumulator carries sustained-pressure history across
-        cycles — the faithful discretization of gradual Rac1 erosion.
-        source: mcp_server/core/active_forgetting.py (update_pressure_accum).
-        """
+        source: ADR-0554"""
         self._execute(
             "UPDATE memories SET forgetting_pressure_accum = %s WHERE id = %s",
             (accum, memory_id),

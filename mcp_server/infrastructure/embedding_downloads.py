@@ -1,17 +1,6 @@
-"""Best-effort background fetches for the embedding subsystem (issue #169).
+"""Pure I/O (subprocess). Infrastructure layer.
 
-Non-blocking helpers the model lifecycle uses when it engages the download-free
-fallback: kick off the package install (PACKAGE_ABSENT) or the model-weight
-download (MODEL_FILES_ABSENT) in a detached subprocess so the current session
-serves fallback embeddings immediately and the neural model becomes available
-for the NEXT session — the "no first-run cliff" behaviour of #169.
-
-Both helpers honour ``CORTEX_EMBEDDING_ZERO_DOWNLOAD``: when set, no network
-fetch is started at all (sandboxed / offline / test use). All failures are
-swallowed — a background fetch that cannot start must never affect the caller.
-
-Pure I/O (subprocess). Infrastructure layer.
-"""
+source: ADR-0519"""
 
 from __future__ import annotations
 
@@ -26,10 +15,7 @@ logger = logging.getLogger(__name__)
 def zero_download_requested() -> bool:
     """Whether the operator opted out of any embedding network fetch (#169).
 
-    source: opt-in env contract — ``CORTEX_EMBEDDING_ZERO_DOWNLOAD`` in
-    {``1``, ``true``} suppresses both the background package install and the
-    background model download, forcing pure download-free operation.
-    """
+    source: ADR-0519"""
     return os.environ.get("CORTEX_EMBEDDING_ZERO_DOWNLOAD", "").lower() in ("1", "true")
 
 
@@ -78,11 +64,7 @@ def trigger_background_model_download(
 ) -> None:
     """Download the embedding model weights in the background (MODEL_FILES_ABSENT).
 
-    Populates the local HF cache so the NEXT session loads the neural model.
-    No-op under ``CORTEX_EMBEDDING_ZERO_DOWNLOAD``. The child imports
-    sentence-transformers itself; a failure (offline) is silently dropped —
-    this session already serves fallback.
-    """
+    source: ADR-0519"""
     if zero_download_requested():
         return
 

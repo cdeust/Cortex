@@ -6,23 +6,11 @@ Two MCP tools:
                              and the kind's autofill prompt + section
                              contract. Claude reads this to do its work.
 
-  wiki_refine_draft(draft_id, ...) — Claude submits a refined lead,
-                                     sections, and optionally a new
-                                     title. Updates wiki.drafts in place.
-                                     Records a memo with the prompt
-                                     hash so the audit trail can
-                                     differentiate template vs LLM
-                                     synthesis.
-
-Path A (template synthesizer) populates wiki.drafts at scale.
-Path B is the per-draft refinement that turns a routed-claim skeleton
-into prose. Caller (Claude) owns the writing; the server enforces
-schema and audit.
-
 Composition root only — no synthesis logic lives here. The LLM IS
 the synthesis logic in Path B; the server just brokers inputs and
 records outputs.
-"""
+
+source: ADR-0467"""
 
 from __future__ import annotations
 

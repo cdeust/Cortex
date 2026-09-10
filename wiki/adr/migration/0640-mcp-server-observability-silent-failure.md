@@ -1,0 +1,64 @@
+---
+title: "ADR-0640 — mcp_server/observability/silent_failure.py rationale"
+status: accepted
+source: mcp_server/observability/silent_failure.py
+---
+
+# ADR-0640 — mcp_server/observability/silent_failure.py
+
+Migrated source rationale. The excerpts below are preserved verbatim from the source snapshot; historical identifiers inside quotations are not current identities.
+
+## module — original line 3 (docstring)
+
+````text
+Context (audit 2026-07-11, docs/audits/silent-except-audit-2026-07-11.md):
+Two production incidents in one night were both the same shape — a broad
+``except Exception`` guarding a component that has a real, intentional
+fallback (skip re-ranking, skip a graph expansion) caught a bug in the
+*mechanism itself* and silently disabled it for the rest of the process,
+with zero log signal:
+````
+
+## module — original line 10 (docstring)
+
+````text
+  1. FlashRank reranker (fix bb1c581f): ``_ensure_reranker()`` swallowed a
+     ``NoSuchFile`` from an unset ``cache_dir`` default; re-ranking was
+     skipped for months.
+  2. Spreading activation (recall_pipeline.py, fixed on a concurrent
+     branch): a non-recursive ``WITH`` in the PL/pgSQL body raised a SQL
+     error on every call since the query was introduced; masked by
+     ``except Exception: return candidates``.
+````
+
+## module — original line 18 (docstring)
+
+````text
+This module is the reusable half of the fix pattern both incidents ended
+up needing independently: log the FIRST failure of a named component
+(so operators see it once, not once per call), keep every subsequent
+failure silent (anti-spam — the fallback is legitimate and must not spam
+logs), always bump a Prometheus counter (so failure RATE is visible even
+after the anti-spam gate closes), and expose the last-seen state via
+``status()`` so a health check or doctor command can ask "is X currently
+degraded?" without grepping logs.
+````
+
+## module — original line 27 (docstring)
+
+````text
+Precondition on every call to ``note()``: the caller is already INSIDE an
+``except`` block whose fallback is intentional and behavior-preserving —
+this module never changes what the caller returns, only whether the
+failure is observable.
+Postcondition: ``note()`` never raises (Move 3: instrumentation must not
+itself become a new failure mode) and never blocks past a few microseconds
+(single dict lookup + counter increment under a lock).
+
+````
+
+## inline — original line 78 (directive-rationale)
+
+````text
+# noqa: BLE001, S110 — instrumentation must never break the caller
+````

@@ -1,30 +1,12 @@
 """Edit-distance and prefix-weighted string similarity — dependency-free.
 
-Used by the entity-graph fuzzy deduplicator (``core.entity_dedup``) to verify
-MinHash/LSH candidate pairs. ``rapidfuzz`` is intentionally NOT a dependency of
-Cortex (graphify used it; we re-implement faithfully with stdlib only), so these
-are hand-rolled to the published algorithms.
-
-Sources:
-    - Jaro similarity: Jaro, M. A. (1989). "Advances in record linkage
-      methodology." J. Amer. Statist. Assoc. 84(406), 414-420.
-    - Winkler prefix boost: Winkler, W. E. (1990). "String comparator metrics
-      and enhanced decision rules in the Fellegi-Sunter model of record
-      linkage." Proc. Section on Survey Research Methods, ASA, 354-359.
-      Standard scaling factor p = 0.1, prefix capped at l = 4.
-    - Optimal String Alignment (restricted Damerau-Levenshtein, allows a single
-      adjacent transposition per substring): Damerau, F. J. (1964); standard DP
-      formulation. Sufficient for the "single-edit" guard in entity_dedup.
-
-Pure utility — no I/O. Returns are in [0, 1] for similarities, non-negative ints
-for distances.
-"""
+source: ADR-0666"""
 
 from __future__ import annotations
 
-# Winkler 1990 standard parameters.
-_WINKLER_SCALING = 0.1  # source: Winkler 1990, p; rapidfuzz prefix_weight default
-_WINKLER_MAX_PREFIX = 4  # source: Winkler 1990, l capped at 4
+# source: ADR-0666
+_WINKLER_SCALING = 0.1  # source: ADR-0666
+_WINKLER_MAX_PREFIX = 4  # source: ADR-0666
 
 
 def _jaro_matches(s1: str, s2: str, window: int) -> tuple[list[bool], list[bool], int]:
@@ -61,7 +43,9 @@ def _jaro_transpositions(
 
 
 def jaro_similarity(s1: str, s2: str) -> float:
-    """Jaro similarity in [0, 1] (Jaro 1989).
+    """Jaro similarity in [0, 1].
+
+    source: ADR-0666
 
     jaro = 0 if no matches, else (1/3)(m/|s1| + m/|s2| + (m - t)/m), where m is
     the count of matching characters (same char within a window of
@@ -81,7 +65,9 @@ def jaro_similarity(s1: str, s2: str) -> float:
 
 
 def jaro_winkler_similarity(s1: str, s2: str) -> float:
-    """Jaro-Winkler similarity in [0, 1] (Winkler 1990).
+    """Jaro-Winkler similarity in [0, 1].
+
+    source: ADR-0666
 
     jw = jaro + l * p * (1 - jaro), where l is the common-prefix length capped
     at 4 and p = 0.1. The prefix boost is applied unconditionally (matching
@@ -89,8 +75,8 @@ def jaro_winkler_similarity(s1: str, s2: str) -> float:
     """
     jaro = jaro_similarity(s1, s2)
     prefix = 0
-    # strict=False: Jaro-Winkler's common-prefix scan is defined for strings
-    # of differing length (it stops at the shorter one).
+    # source: ADR-0666
+
     for c1, c2 in zip(s1, s2, strict=False):
         if c1 != c2:
             break
@@ -102,6 +88,8 @@ def jaro_winkler_similarity(s1: str, s2: str) -> float:
 
 def osa_distance(s1: str, s2: str) -> int:
     """Optimal String Alignment distance (restricted Damerau-Levenshtein).
+
+    source: ADR-0666
 
     Counts insertions, deletions, substitutions, and adjacent transpositions
     (each substring edited at most once). Used only for the bounded

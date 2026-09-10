@@ -1,13 +1,7 @@
 name: Keep ccplugins fork in sync
 
-# Keeps cdeust/awesome-claude-code-plugins fork's main in step with
-# ccplugins/awesome-claude-code-plugins main. Runs on:
-#   - every push to Cortex main (piggyback — cheap, stays fresh)
-#   - a daily cron (catches upstream activity when Cortex is quiet)
-#   - manual dispatch
-# This way, when publish-ccplugins.yml fires on a Cortex release, the
-# fork is already up-to-date and the sync/cortex-<tag> branch is
-# always rooted at a clean upstream HEAD.
+# Synchronize the fork on pushes to main, a daily schedule, and manual dispatch.
+# source: ADR-0810
 
 on:
   push:

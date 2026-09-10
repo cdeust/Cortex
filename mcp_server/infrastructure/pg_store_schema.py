@@ -1,13 +1,6 @@
 """Connection + pool lifecycle mixin for PgMemoryStore.
 
-Split out of pg_store.py (issue: 1384-line file over the 300-line §4.1
-cap) — this module owns the psycopg connection and both Phase 5
-connection pools (docs/program/phase-5-pool-admission-design.md):
-    * ``_interactive_pool`` — hot-path tools (recall, remember, etc.)
-    * ``_batch_pool`` — long-running writers (consolidate, wiki_pipeline)
-DDL/schema-migration (compute_ddl_hash, _init_schema) lives in the
-sibling ``pg_store_ddl`` module — this one is connection plumbing only.
-"""
+source: ADR-0565"""
 
 from __future__ import annotations
 
@@ -24,14 +17,14 @@ from mcp_server.infrastructure.memory_config import get_memory_settings
 
 import logging
 
-# Explicit name (not __name__): _deallocate_all/_reconnect log under the
-# pg_store.py facade's logger namespace, unchanged by the module split —
-# preserves observable log output for any external log-name filter.
+# source: ADR-0565
 logger = logging.getLogger("mcp_server.infrastructure.pg_store")
 
 
 class PgSchemaMixin(PgStoreHost):
-    """Connection creation and Phase 5 connection-pool lifecycle."""
+    """Connection creation and Phase 5 connection-pool lifecycle.
+
+    source: ADR-0565"""
 
     def _create_connection(self) -> psycopg.Connection[DictRow]:
         """Create a new database connection."""
@@ -39,15 +32,12 @@ class PgSchemaMixin(PgStoreHost):
             self._url, row_factory=dict_row, autocommit=True
         )
 
-    # ── Phase 5: connection pools ────────────────────────────────────────
+    # source: ADR-0565
 
     def _configure_pool_connection(self, conn: psycopg.Connection[DictRow]) -> None:
         """Pool callback: set up each checked-out connection.
 
-        Registers the pgvector adapter so callers can bind `vector` params.
-        Idempotent across checkouts because the pool holds a dedicated
-        connection per worker thread.
-        """
+        source: ADR-0565"""
         register_vector(conn)
 
     def _open_interactive_pool(self) -> ConnectionPool[psycopg.Connection[DictRow]]:
@@ -84,9 +74,7 @@ class PgSchemaMixin(PgStoreHost):
     def interactive_pool(self) -> ConnectionPool[psycopg.Connection[DictRow]]:
         """Hot-path ConnectionPool for recall / remember / anchor / etc.
 
-        See docs/program/phase-5-pool-admission-design.md §1.1 for the
-        full tool-class table.
-        """
+        source: ADR-0565"""
         if self._interactive_pool is None:
             self._interactive_pool = self._open_interactive_pool()
         return self._interactive_pool
@@ -106,11 +94,7 @@ class PgSchemaMixin(PgStoreHost):
     def acquire_interactive(self) -> Iterator[psycopg.Connection[DictRow]]:
         """Context manager borrowing a connection from the interactive pool.
 
-        Use this for short-lived hot-path operations. For long-running
-        batch work (consolidate, wiki_pipeline) use ``acquire_batch``.
-        When ``POOL_DISABLED=true`` the store's persistent ``_conn`` is
-        yielded instead (pre-Phase-5 behavior, kill switch per §6).
-        """
+        source: ADR-0565"""
 
         if get_memory_settings().POOL_DISABLED:
             yield self._conn
@@ -131,10 +115,7 @@ class PgSchemaMixin(PgStoreHost):
     def _deallocate_all(self) -> None:
         """Invalidate all prepared statements on the current connection.
 
-        Called after schema initialization because CREATE OR REPLACE FUNCTION
-        can change stored procedure signatures, making psycopg's auto-prepared
-        plans stale (error: "cached plan must not change result type").
-        """
+        source: ADR-0565"""
         try:
             self._conn.execute("DEALLOCATE ALL")
         except Exception as exc:  # noqa: BLE001 — stale-plan flush is best-effort

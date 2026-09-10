@@ -1,19 +1,6 @@
 """Ensure the resolved test-database URL is reachable AND schema-provisioned
 before any PostgreSQL-gated test in this session runs (issue #312).
 
-ROOT CAUSE: `tests_py/_pg_throwaway_db.py`'s per-process throwaway database
-(and, equally, an explicit `CORTEX_TEST_DATABASE_URL` pointed at a database
-that was never migrated) is a bare `CREATE DATABASE` — zero tables. Before
-the #219 store-isolation work, these tests ran against the real `cortex`
-database, which already carried a full schema; isolation redirected them to
-a throwaway target without ever provisioning it. In CI's shared, persistent
-`cortex` database, the gap is invisible: SOME earlier test in the same
-session constructs a `PgMemoryStore()` first and incidentally provisions
-the schema for everyone after it. Standalone or narrowly-scoped local runs
-have no such earlier test, so the very first raw-SQL query against e.g.
-`memory_entities` dies with `psycopg.errors.UndefinedTable` — accidental,
-execution-order-dependent provisioning, not deterministic isolation.
-
 PR #319 proposed detecting this condition and skipping. That is the wrong
 fix (issue #312, maintainer directive): a skip converts thousands of real
 assertions into a silent pass and permanently enshrines the local-vs-CI
@@ -52,7 +39,8 @@ exactly once per session, here, rather than once per PG-gated test module
 — fourteen-plus files in this suite skip on the shared `_USE_PG` flag
 (`tests_py/conftest.py`), so a per-module warning would be fourteen-plus
 near-duplicate lines for one underlying condition.
-"""
+
+source: ADR-0884"""
 
 from __future__ import annotations
 

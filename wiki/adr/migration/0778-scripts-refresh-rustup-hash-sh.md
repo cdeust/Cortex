@@ -1,0 +1,22 @@
+# ADR-0778: scripts/refresh_rustup_hash.sh implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `scripts/refresh_rustup_hash.sh`; original SHA-256 `ca352c1d274bb33a2a3ed6a07e3c1ac25421644026d00b057b3f8c7e8558f6d0`.
+
+## Original shell-comment, lines 2–10
+
+````text
+# Refresh scripts/rustup-init.sha256 with the current SHA256 of the
+# rustup bootstrap installer at https://sh.rustup.rs.
+#
+# Run AFTER manually auditing the upstream script. The hash is the
+# trust anchor for every fresh Cortex install — never refresh
+# blindly. Diff the bootstrap against the previous known-good copy
+# before committing the new digest.
+#
+# Usage:  bash scripts/refresh_rustup_hash.sh
+
+````
+

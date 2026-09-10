@@ -10,12 +10,14 @@ from __future__ import annotations
 from typing import Any
 from mcp_server.infrastructure.sqlite_compat import PsycopgCompatConnection
 
-# source: structural — the id-lookup fetches exactly the survivor + alias pair
+# source: ADR-0608
 _MERGE_PAIR_COUNT = 2
 
 
 class SqliteEntityMergeMixin:
-    """Atomic entity collapse on SQLite."""
+    """Atomic entity collapse on SQLite.
+
+    source: ADR-0608"""
 
     _conn: PsycopgCompatConnection
 

@@ -1,22 +1,7 @@
-"""Encoder-provider seam for the embedding subsystem (Cortex#173).
-
-This module defines the interface the rest of the system consumes to turn text
+"""This module defines the interface the rest of the system consumes to turn text
 into vectors, decoupled from *which* encoder produces them:
 
-  * ``EmbeddingProvider`` — the ``Protocol`` the store, handlers, and hooks
-    depend on. ``EmbeddingEngine`` (the neural encoder in
-    ``embedding_engine.py``) is its first and, today, only implementation. A
-    future download-free encoder (issue #169) plugs in here as a second
-    implementation without any consumer change.
-  * ``_EmbeddingMathMixin`` — the stateless vector arithmetic shared by any
-    provider (cache key, L2 normalize, cosine similarity, blob⇄list). Kept as a
-    mixin so ``EmbeddingEngine`` exposes these on the class exactly as before
-    (``EmbeddingEngine._cache_key`` etc. — the tests pin them there).
-
-Pure infrastructure: no model, no I/O. Split out of ``embedding_engine.py`` to
-bring that file under the 300-line cap and to make the provider boundary
-explicit. Behaviour is unchanged — the methods below are moved verbatim.
-"""
+source: ADR-0525"""
 
 from __future__ import annotations
 
@@ -28,13 +13,12 @@ import numpy as np
 
 @runtime_checkable
 class EmbeddingProvider(Protocol):
-    """The text→vector interface consumers depend on (Cortex#173 seam).
+    """Any implementation returns L2-normalized ``float32`` blobs of ``dimensions``
+        length (or ``None`` for empty text). ``EmbeddingEngine`` is the neural
+        implementation; the seam lets a second encoder be substituted without
+        touching a single caller.
 
-    Any implementation returns L2-normalized ``float32`` blobs of ``dimensions``
-    length (or ``None`` for empty text). ``EmbeddingEngine`` is the neural
-    implementation; the seam lets a second encoder be substituted without
-    touching a single caller.
-    """
+    source: ADR-0525"""
 
     @property
     def dimensions(self) -> int:
@@ -62,25 +46,18 @@ class EmbeddingProvider(Protocol):
 class _EmbeddingMathMixin:
     """Stateless vector arithmetic shared by every embedding provider.
 
-    A mixin (not free functions) so the concrete provider keeps exposing these
-    as class/instance methods — ``EmbeddingEngine._cache_key``,
-    ``engine.similarity``, ``engine.to_list`` — the exact surface the existing
-    tests exercise.
-    """
+    source: ADR-0525"""
 
     @staticmethod
     def _cache_key(text: str) -> str:
         """Return the SHA256[:16] cache key for ``text``.
 
-        precondition: ``text`` is a non-empty str.
-        postcondition: returns a 16-char lowercase hex string; the same
-        input always produces the same key; key length is independent of
-        ``len(text)``.
+                precondition: ``text`` is a non-empty str.
+                postcondition: returns a 16-char lowercase hex string; the same
+                input always produces the same key; key length is independent of
+                ``len(text)``.
 
-        Source: ADR-0045 R5 — ``hashlib.sha256(text.encode()).hexdigest()[:16]``
-        is the mandated cache-key form for any memoization layer over
-        user-provided strings.
-        """
+        source: ADR-0525"""
         return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
     @staticmethod

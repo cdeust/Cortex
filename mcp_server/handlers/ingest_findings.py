@@ -1,13 +1,5 @@
 """Handler: ingest_findings — pull an AP findings run into Cortex's store.
 
-Consumer, never producer (ADR-0052 D1): AP writes files under
-``<output_dir>/runs/<run_id>/``; this handler reads them off disk and
-writes Cortex memories/wiki. No network or MCP call to AP is made here —
-the findings tools (extract_finding/refine_finding/start_verification/...)
-are not in APBridge's allowlist (ap_bridge.py `_AP_TOOLS`) precisely
-because this flow never needs them (D1 acceptance invariant: AP has no
-PG/network client; this handler is the pull side).
-
 Gradation (D2): verified finding (stage-2 verified:true) -> wiki page +
 receipt memos (wiki.memos, digest-anchored) + memory tagged
 finding,verified. Non-verified finding -> memory only, tagged
@@ -23,7 +15,8 @@ independent of the 'extracted_from' link (stage-1's source_path), which
 is always anchored when AP set it, with no extra step required.
 
 Cortex consumes; AP produces.
-"""
+
+source: ADR-0410"""
 
 from __future__ import annotations
 

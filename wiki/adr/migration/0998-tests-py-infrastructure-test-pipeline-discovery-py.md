@@ -1,0 +1,17 @@
+# ADR-0998: tests_py/infrastructure/test_pipeline_discovery.py design and historical evidence
+
+Status: accepted; existing test/harness evidence preserved during issue #514.
+
+Source `tests_py/infrastructure/test_pipeline_discovery.py`, original SHA-256 `85d9f7a6bff37dd648b847a7e6285c9d251fb30cab9bcd38347331f9143034f9`.
+Assertions and runtime fixture literals remain unchanged.
+
+## Original docstring, lines 114–118
+
+````text
+"""The security allowlist validates a resolved command by basename. When
+    upstream renamed its binary once before, the resolver was updated and the
+    pool allowlist was not: every ingest failed with "Command not in allowed
+    list" (CHANGELOG 3.14.11). Both now read the same module, and this asserts
+    they agree rather than trusting that they were edited together."""
+````
+

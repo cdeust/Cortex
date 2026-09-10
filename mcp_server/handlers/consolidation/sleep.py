@@ -23,31 +23,26 @@ def run_deep_sleep(
 ) -> dict:
     """Run deep sleep compute as an NREM/REM two-phase consolidation (F1).
 
-    The offline pass is routed through ``run_two_phase_consolidation``: an
-    NREM-like exact-replay phase (delegating verbatim to the existing
-    ``sleep_compute`` single pass — dream replay, summarization, re-embedding,
-    narration) followed by a REM-like recombination/abstraction phase (schema
-    formation + merge over any provided clusters). The NREM plan keys
-    (``replay_updates`` / ``stale_embeddings`` / ``cluster_summaries`` /
-    ``narration``) are unchanged, so the downstream apply steps are unaffected;
-    the split adds a ``sleep_phases`` block with per-phase counts.
+        The offline pass is routed through ``run_two_phase_consolidation``: an
+        NREM-like exact-replay phase (delegating verbatim to the existing
+        ``sleep_compute`` single pass — dream replay, summarization, re-embedding,
+        narration) followed by a REM-like recombination/abstraction phase (schema
+        formation + merge over any provided clusters). The NREM plan keys
+        (``replay_updates`` / ``stale_embeddings`` / ``cluster_summaries`` /
+        ``narration``) are unchanged, so the downstream apply steps are unaffected;
+        the split adds a ``sleep_phases`` block with per-phase counts.
 
-    F2 targeted reactivation. An optional ``cue`` (topic / tag / entity /
-    free-text) biases *which* memories preferentially replay in the NREM phase.
-    With no cue (the default) replay is chosen purely by heat, exactly as
-    pre-F2 — identity.
+        F2 targeted reactivation. An optional ``cue`` (topic / tag / entity /
+        free-text) biases *which* memories preferentially replay in the NREM phase.
+        With no cue (the default) replay is chosen purely by heat, exactly as
+        pre-F2 — identity.
 
-    Ablation: ``CORTEX_ABLATE_SLEEP_PHASES=1`` (Mechanism.SLEEP_PHASES) skips
-    the REM phase, falling back to exactly the single-pass NREM consolidation.
-    ``CORTEX_ABLATE_TARGETED_REACTIVATION=1`` (Mechanism.TARGETED_REACTIVATION)
-    forces the cue off so replay selection is heat-only, as pre-F2.
+        Ablation: ``CORTEX_ABLATE_SLEEP_PHASES=1`` (Mechanism.SLEEP_PHASES) skips
+        the REM phase, falling back to exactly the single-pass NREM consolidation.
+        ``CORTEX_ABLATE_TARGETED_REACTIVATION=1`` (Mechanism.TARGETED_REACTIVATION)
+        forces the cue off so replay selection is heat-only, as pre-F2.
 
-    When the consolidate handler pre-loads the memory list (issue #13) we
-    reduce over it directly. When called standalone (``memories is None``) we
-    STREAM via the chunked decay cursor so peak RAM is one chunk plus the
-    bounded replay/stale/narration accumulators — not the whole corpus (the
-    old ``get_all_memories_for_decay()`` materialized 500k+ rows at once).
-    """
+    source: ADR-0374"""
     if memories is None:
         chunks: object = store.iter_memories_for_decay()
     else:
@@ -140,9 +135,7 @@ def _fix_stale_embeddings(
     return count
 
 
-# Minimum memories behind a narration for it to be worth storing.
-# source: pre-existing tuned value, extracted unchanged (#197 family 3);
-# provenance not recorded at introduction
+# source: ADR-0374
 _MIN_NARRATION_MEMORIES = 5
 
 
@@ -172,8 +165,7 @@ def _store_narration(
                 "confidence": 0.7,
                 "heat": 0.5,
                 "store_type": "semantic",
-                # M-D2 (7.4): dream-replay auto-narration — machine-
-                # synthesized, same rationale as CLS/memify.
+                # source: ADR-0374
                 "write_class": "derived",
             }
         )

@@ -21,14 +21,7 @@ from mcp_server.infrastructure.profile_store import load_profiles
 from mcp_server.infrastructure.scanner import discover_conversations_for_projects
 from mcp_server.shared.types_features import FeatureDictionary, PersistentFeature
 
-# Bound on how many real sessions the attribution mode fetches from disk.
-# source: measured 2026-07-10 on this environment -- a discover_conversations_
-# for_projects() scan capped at 20 sessions from one project directory takes
-# ~12ms (vs ~270ms for an unscoped full-history scan), keeping the handler
-# within the tool schema's documented "Latency <100ms" budget. Matches the
-# pre-existing MAX_SAMPLES truncation already applied downstream in
-# attribution_tracer.py (conversations[:20]), so fetching more here would
-# only be discarded by trace_attribution before use.
+# source: ADR-0391
 ATTRIBUTION_SAMPLE_LIMIT = 20
 
 schema = {
@@ -278,10 +271,7 @@ def _resolve_persistent_features(
 ) -> list[PersistentFeature]:
     """Validate the disk-persisted persistentFeatures, or compute them fresh.
 
-    Same boundary-validation pattern as _resolve_feature_dictionary: the
-    disk-loaded list is untyped JSON; validate once here so the caller
-    always holds list[PersistentFeature].
-    """
+    source: ADR-0391"""
     raw = profiles.get("persistentFeatures")
     if raw:
         return [PersistentFeature.model_validate(pf) for pf in raw]

@@ -1,12 +1,6 @@
 """Resolve only torch through the explicit CPU index; bootstrap stdlib only.
 
-The download is hash-checked against the lock export, then supplied as a local
-wheel to the ordinary PyPI resolution. --extra-index-url cannot express uv's
-package-specific explicit index rule: pip searches all indexes without priority.
-Sources: https://pip.pypa.io/en/stable/cli/pip_download/
-https://pip.pypa.io/en/stable/cli/pip_install/#finding-packages
-https://docs.astral.sh/uv/concepts/indexes/#pinning-a-package-to-an-index
-"""
+source: ADR-0752"""
 
 from __future__ import annotations
 

@@ -1,0 +1,224 @@
+---
+kind: adr
+number: 0534
+title: Preserve memory_config design decisions
+status: accepted
+---
+
+# ADR-0534: memory_config design decisions
+
+## Context
+
+Canonical migration of decision evidence from `mcp_server/infrastructure/memory_config.py` under ADR-0056.
+The excerpts below preserve historical claims and citations verbatim; original ADR numbers are historical quotations, not current identity bindings.
+
+## Decision
+
+Keep the source implementation linked to this versioned decision record. Operational API documentation remains with the implementation.
+
+## Preserved decision evidence
+
+### root_agent_topic, original line 269
+
+````text
+    When ``CORTEX_ROOT_AGENT_TOPIC`` is set in the environment, the server
+    FORCES this ``agent_topic`` on every recall/remember and strips the
+    ``agent_topic`` argument from the registered tool schemas. This is
+    capability-style scoping (cf. supermemory's ``x-sm-project`` header):
+    the model cannot target — or accidentally omit — another scope, because
+    the parameter is not exposed to it at all.
+````
+
+### root_agent_topic, original line 269
+
+````text
+    Read once at process start (single-process FastMCP stdio server), so a
+    plain env read with no caching layer is sufficient. Empty/unset → None,
+    meaning no rooting (the ``agent_topic`` parameter behaves as before).
+    
+````
+
+### mcp_pool_max_connections, original line 249
+
+````text
+        Resolves the ``0 = auto`` sentinel to ``max(2, os.cpu_count())``.
+        os.cpu_count() can return None (rare, e.g. unsupported platform);
+        treat that as a single core and fall back to the floor of 2.
+        source: MCP_POOL_MAX_CONNECTIONS field comment.
+        
+````
+
+### comment, original line 49
+
+````text
+# ── Storage ──────────────────────────────────────────────────────────
+    # 127.0.0.1 not localhost: avoids IPv6 ::1 / peer-auth ambiguity
+````
+
+### comment, original line 52
+
+````text
+# deprecated, kept for migration
+````
+
+### comment, original line 81
+
+````text
+# ── Spreading Activation (Collins & Loftus 1975) ────────────────────
+````
+
+### comment, original line 91
+
+````text
+# Novelty-score source for the write gate. False = flat 4-signal
+    # weighted sum (compute_novelty_score); True = 3-level hierarchical
+    # free-energy gate (Friston 2005), whose sigmoid novelty_score is on the
+    # same [0,1] scale so the threshold/bypass/calibration path is unchanged.
+    # Default MUST stay flat: benchmarks/gate_precision (2026-06-11,
+    # benchmarks/results/gate_precision/20260611-220728.json) measured
+    # ROC-AUC flat 0.9998 vs hierarchical 0.5514 on novel-vs-duplicate
+    # separation. Two structural defects in the hierarchical path: (1) the
+    # neutral schema default (match=0.0) makes L2 free energy a constant 1.5,
+    # flooring the sigmoid score above the 0.4 threshold for ALL content;
+    # (2) no level carries embedding-similarity evidence, so duplicates of
+    # stored content are invisible to it. Do not flip without redesigning
+    # L0/L2 and re-running gate_precision.
+    # Toggle: CORTEX_MEMORY_WRITE_GATE_HIERARCHICAL.
+````
+
+### comment, original line 130
+
+````text
+# ── Recency Boost (ai-architect inspired) ──────────────────────────────
+````
+
+### comment, original line 135
+
+````text
+# ── Strategic Ordering ("Lost in the Middle" mitigation) ─────────────
+````
+
+### comment, original line 140
+
+````text
+# ── Test-Time Learning (Titans, NeurIPS 2025) ─────────────────────────
+````
+
+### comment, original line 145
+
+````text
+# ── Adaptive Decay (Titans, NeurIPS 2025) ────────────────────────────
+````
+
+### comment, original line 150
+
+````text
+# ── Co-Activation (Dragon Hatchling, Pathway 2025) ───────────────────
+````
+
+### comment, original line 155
+
+````text
+# ── Response budget (bounded MCP I/O) ─────────────────────────────────
+    # source: Claude Code 2.1.170 binary, extracted 2026-06-10 —
+    # MAX_MCP_OUTPUT_TOKENS default 25000 tokens × 4 chars/token = 100,000
+    # chars of compact-JSON payload, × 0.75 safety factor (UTF-16 vs
+    # code-point divergence guard, ai-prd-builder ContextManager.swift
+    # commit 462de01). Full derivation + char-exact verification:
+    # mcp_server/core/response_budget.py module docstring.
+````
+
+### comment, original line 168
+
+````text
+# ── A3 lazy-heat (Phase 3 Scalability Program, v3.13.0) ───────────────
+    # Kill-switch for the A3 refactor. After the main refactor landed,
+    # the Python layer assumes heat_base unconditionally — this flag is
+    # reserved for a future DDL-level swap of effective_heat() to
+    # effective_heat_frozen() per design doc §9. Kept on the settings
+    # object for forward compat with tests that still reference it.
+````
+
+### comment, original line 176
+
+````text
+# ── Phase 5: ConnectionPool latency classes ───────────────────────────
+    # Source: docs/program/phase-5-pool-admission-design.md §1.1.
+    #
+    # Interactive pool — hot path (recall, remember, anchor, etc.). Sized
+    # for concurrent MCP tool invocations. min=2 keeps two connections
+    # warm; max=8 ≥ cycle-workers + 1 satisfies invariant I10.
+````
+
+### comment, original line 186
+
+````text
+# Batch pool — long-running writers (consolidate, seed_project,
+    # wiki_pipeline, ingest_*). Separate resource so batch jobs cannot
+    # starve interactive calls.
+````
+
+### comment, original line 191
+
+````text
+# 30 min — consolidate can run this long
+````
+
+### comment, original line 193
+
+````text
+# Emergency kill switch: if true, pools are bypassed and every
+    # `pool.connection()` returns a single shared connection (pre-Phase-5
+    # behavior). Default false post-merge.
+````
+
+### comment, original line 198
+
+````text
+# ── MCP client pool (bounded-io Phase 3) ─────────────────────────────
+    # Max live upstream MCP child connections held in mcp_client_pool. Each
+    # pooled connection is a spawned child OS PROCESS (asyncio
+    # create_subprocess_exec in mcp_client._spawn_process), not a cheap DB
+    # handle, so the binding constraint is OS process / RSS pressure — the
+    # exact failure mode in the ingest_codebase ConnectionResetError RCA
+    # 2026-06-09 (child driven to OOM). Beyond this count, get_client evicts
+    # the least-recently-used IDLE connection before opening a new one, and
+    # fails fast with McpConnectionError when all live connections are busy.
+    #
+    # Default 0 = "derive from os.cpu_count()" (see _resolve_mcp_pool_max):
+    # one heavy child process per core is a defensible machine-relative
+    # ceiling, floored at 2 so a 1-core box can still hold a working set of
+    # two distinct upstream servers. This is an ENGINEERING DEFAULT pending
+    # measurement: the value that would truly calibrate it is the measured
+    # steady-state RSS of the spawned children (today only `codebase` /
+    # ai-architect-mcp-codebase is heavy) against available host memory. Override
+    # via CORTEX_MEMORY_MCP_POOL_MAX_CONNECTIONS once that data exists.
+    # source: os.cpu_count() machine bound; floor mirrors a two-server
+    # working set; RSS calibration is the open measurement.
+````
+
+### comment, original line 220
+
+````text
+# ai-architect-mcp-codebase (ADR-0046) — on by default so the L6 symbol
+    # ring has depth out of the box. Users who want to cut token /
+    # subprocess cost override via CORTEX_MEMORY_AP_ENABLED=0 in their
+    # MCP config.
+````
+
+### comment, original line 226
+
+````text
+# AP_SYNC_RESULT_TIMEOUT_S (removed): the former 3900 s cross-loop wait
+    # ceiling for the AP reader thread was floored at mcp_client's in-loop
+    # AP-call cap. callTimeoutMs=0 made that in-loop bound infinite for a
+    # live child, so no finite cross-loop ceiling could satisfy the floor
+    # invariant anymore, and keeping one killed live >65 min analyze sweeps
+    # on wall-clock. Replaced by ap_sync_loop._AP_SYNC_PROBE_INTERVAL_S
+    # (dead-thread probe cadence, not a ceiling) + mcp_client's in-loop
+    # child-silence watchdog. source: PR #431.
+````
+
+## Consequences
+
+Review rationale and source changes together. Historical evidence is preserved rather than silently rewritten; executable Python structure is unchanged after removing docstrings.

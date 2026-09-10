@@ -1,8 +1,6 @@
 """Handler for the record_session_end tool — incremental profile update.
 
-Also stores an episodic memory summarizing the session and creates
-prospective triggers from any TODO/decision keywords detected.
-"""
+source: ADR-0434"""
 
 from __future__ import annotations
 
@@ -213,11 +211,7 @@ def _build_session_entry(
 ) -> dict[str, Any]:
     """Build the session log entry dict.
 
-    ``score`` is the session self-critique overall score in [0, 1] (or None if
-    critique failed). It is persisted so downstream consumers — procedural
-    skill mining (B1) reinforcement, in particular — have a per-session reward
-    signal rather than having to recompute the critique.
-    """
+    source: ADR-0434"""
     return {
         "sessionId": session_id,
         "domain": domain_id,
@@ -255,7 +249,7 @@ def _try_generate_critique(
         return None
 
 
-# source: rolling cap documented in the _append_session_log docstring
+# source: ADR-0434
 _SESSION_LOG_CAP = 1000
 
 
@@ -276,11 +270,7 @@ def _update_profile(
 ) -> tuple[bool, dict | None]:
     """Apply incremental profile update. Returns (updated, domain_profile).
 
-    D5: writes only the one changed domain file via ``save_profile``
-    rather than rewriting the whole profile store on every session end.
-    The ``profiles`` dict is mutated in-place so downstream code keeps
-    observing the updated shape.
-    """
+    source: ADR-0434"""
     dp = (profiles.get("domains") or {}).get(domain_id)
     if not dp:
         return False, dp
@@ -349,10 +339,7 @@ async def handler(args: dict) -> dict:
         category=category,
     )
 
-    # Auto-spawn a task-record ADR if the session was substantive.
-    # User directive 2026-05-18: every task / bug / feature gets the
-    # same detailed approach. Non-fatal on any failure — the session
-    # log + memory store + profile update have already happened above.
+    # source: ADR-0434
     task_record_status: dict[str, Any] = {
         "status": "skipped",
         "reason": "not_attempted",
@@ -373,9 +360,7 @@ async def handler(args: dict) -> dict:
             "reason": f"{type(exc).__name__}: {exc}",
         }
 
-    # Mine procedural skills (B1) from the session history. Additive only —
-    # writes to the procedural_skills table, never to memories — so it cannot
-    # change episodic/semantic recall. Non-fatal on any failure.
+    # source: ADR-0434
     procedural_status: dict[str, Any] = {
         "status": "skipped",
         "reason": "not_attempted",
@@ -391,12 +376,7 @@ async def handler(args: dict) -> dict:
             "reason": f"{type(exc).__name__}: {exc}",
         }
 
-    # M-D6 (7.6): persist top_suggestions as lesson-candidate memories —
-    # previously computed by generate_critique() above and returned in
-    # `critique`, but never stored anywhere else (design §M-D6: "Aucune
-    # promotion automatique... top_suggestions calculées puis perdues").
-    # Best-effort: a failure here must not fail session-end, same
-    # contract as memoryStored above.
+    # source: ADR-0434
     lesson_candidates_stored = 0
     if critique and critique.get("top_suggestions"):
         lesson_candidates_stored = await _try_store_lesson_candidates(

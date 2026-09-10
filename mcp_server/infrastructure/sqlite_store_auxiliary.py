@@ -196,11 +196,7 @@ class SqliteAuxiliaryMixin:
     ) -> int:
         """Return the number of memories assigned to *slot_index*.
 
-        Lightweight alternative to ``get_memories_in_slot`` when only the
-        count is needed (e.g. the ``temporally_linked`` metric in engram
-        allocation).  *exclude_id* omits a specific memory from the count
-        so the caller doesn't need to guess whether it's committed yet.
-        """
+        source: ADR-0606"""
         if exclude_id is not None:
             row = self._conn.execute(
                 "SELECT COUNT(*) AS c FROM memories WHERE slot_index = ? AND id != ?",

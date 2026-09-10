@@ -1,15 +1,10 @@
 """Content-addressed filesystem store for full raw tool-output artifacts.
 
-When an auto-captured tool output exceeds GIST_BUDGET, the full raw output is
-written here and the memory body keeps only a gist + a pointer to the artifact
-path (see core/gist_extraction.py and docs/provenance/bounded-io-phase2-design.md F3).
-The artifact is a plain Markdown file loadable by the Read tool — zero new MCP
-surface, nothing dropped from the corpus.
-
 Content addressing (sha256 of the content) makes repeated identical outputs
 dedup to a single file, and monthly sharding (<yyyy-mm>/) keeps directory
 fan-out bounded over time.
-"""
+
+source: ADR-0504"""
 
 from __future__ import annotations
 
@@ -21,9 +16,7 @@ from mcp_server.infrastructure.config import METHODOLOGY_DIR
 
 ARTIFACTS_DIR = METHODOLOGY_DIR / "artifacts"
 
-# sha256 hex is 64 chars; the first 16 (64 bits) give a collision-free key for
-# the artifact corpus (millions of files → negligible birthday-collision risk)
-# while keeping filenames short. Mirrors backfill_helpers.file_hash([:16]).
+# source: ADR-0504
 _ADDRESS_LEN = 16
 
 

@@ -1,0 +1,288 @@
+---
+kind: adr
+number: 0602
+title: Preserve sqlite_schema design decisions
+status: accepted
+---
+
+# ADR-0602: sqlite_schema design decisions
+
+## Context
+
+Canonical migration of decision evidence from `mcp_server/infrastructure/sqlite_schema.py` under ADR-0056.
+The excerpts below preserve historical claims and citations verbatim; original ADR numbers are historical quotations, not current identity bindings.
+
+## Decision
+
+Keep the source implementation linked to this versioned decision record. Operational API documentation remains with the implementation.
+
+## Preserved decision evidence
+
+### module, original line 1
+
+````text
+Translates pg_schema.py tables to SQLite-compatible DDL.
+Uses FTS5 for full-text search and sqlite-vec for vector similarity.
+````
+
+### get_all_ddl, original line 384
+
+````text
+    INDEXES_DDL is a list of individual CREATE INDEX statements so that
+    _init_schema's per-statement loop creates every index. A single
+    multi-statement string passed to sqlite3.execute() would silently
+    run only the first statement.
+    
+````
+
+### comment, original line 71
+
+````text
+# Supersession read-path layer — SQLite mirror of pg_schema.py's
+# current_memories view. Same single-source invariant: a row is current
+# iff superseded_by_id IS NULL. Executed AFTER migrations in
+# sqlite_store._init_schema (superseded_by_id arrives via MIGRATIONS on
+# older databases). SQLite re-parses view SQL on schema change, so
+# SELECT * tracks later column additions. Audit + spec:
+# docs/program/pr2-read-path-supersession-audit.json.
+````
+
+### comment, original line 102
+
+````text
+# Kept as its own DDL constant (not appended to HOMEOSTATIC_STATE_DDL
+# above): sqlite3's execute() runs only the FIRST statement in a
+# multi-statement string (see get_all_ddl's own docstring note on
+# INDEXES_DDL for the same constraint) — each CREATE must be its own
+# list entry in get_all_ddl() below.
+````
+
+### comment, original line 123
+
+````text
+# Regular (self-content) FTS5 table — NOT external-content (issue #169).
+# The store writes code-aware augmented content (identifier sub-tokens appended
+# by shared.code_tokenize.augment_content) so a query for `payment` matches a
+# memory that only wrote `normalizePaymentAmount`. An external-content table
+# (content='memories') would re-derive tokens from the ORIGINAL memories.content
+# on DELETE, orphaning the appended sub-tokens and corrupting the index
+# (verified 2026-07-24). A self-content table lets DELETE-by-rowid remove
+# exactly the tokens that were indexed. No code reads `content` back from this
+# table — every consumer uses rowid/rank/MATCH — so the external-content
+# storage saving was unused. Existing databases are converted by
+# sqlite_store._migrate_fts_code_tokenize (one-shot rebuild + reindex).
+````
+
+### comment, original line 186
+
+````text
+# Injection receipts (blame path T1/T2 — decision Cortex 4255039):
+# append-only proof of presence-in-context per injecting channel. PG parity
+# with pg_schema.py; session_id NULLable (the recall handler has no session
+# identity; hooks derive it from the transcript basename). memory_id has no
+# FK: a hard-forget must not rewrite the audit trail. The channel CHECK
+# mirrors handlers/injection_receipts.py INJECTION_CHANNELS (parity asserted
+# by test); tables created by the T1 DDL keep free TEXT — SQLite cannot add
+# a CHECK without a table rebuild (same stance as the non-enforced FK
+# migrations above), so the emitter-level validation is the enforcement
+# point there.
+````
+
+### comment, original line 334
+
+````text
+# User session-level mood state for MOOD_CONGRUENT_RERANK (Bower 1981).
+# Mirrors pg_schema.py user_mood table. The seed row defaults to neutral
+# so the pg_recall._get_user_mood() bridge gets a real signal instead of
+# always returning None.
+# Split into two separate DDL statements because sqlite3.Connection.execute()
+# accepts only one statement at a time (unlike executescript).
+# Source: Bower, G.H. (1981). "Mood and Memory." Am. Psychologist 36(2).
+````
+
+### comment, original line 352
+
+````text
+# Seed the default neutral mood row. Engineering choice: this INSERT is a
+# separate DDL so _init_schema's per-statement try/except loop handles it
+# individually — a conflict on an existing row is silently skipped.
+````
+
+### comment, original line 360
+
+````text
+# ── Indexes ───────────────────────────────────────────────────────────────
+# Each index is a separate string so _init_schema's per-statement loop
+# executes all of them. sqlite3.Connection.execute() runs only the first
+# statement of a multi-statement string; a single large INDEXES_DDL would
+# silently create only the first index and discard the rest.
+````
+
+### comment, original line 399
+
+````text
+# MEMORIES_VEC_DDL is handled separately — requires sqlite-vec
+````
+
+### comment, original line 417
+
+````text
+# The wiki schema (issue #206). Every statement is CREATE ... IF NOT
+        # EXISTS and _init_schema runs on every store construction, so an
+        # existing database gains these tables on next open — that IS the
+        # migration, no back-compat shim.
+````
+
+### comment, original line 434
+
+````text
+# Trigger provenance (bounded-io Phase 2 F1) — PG parity with the
+    # prospective_memories.created_by migration in pg_schema.py.
+````
+
+### comment, original line 437
+
+````text
+# Memory supersession chain (P0-1a parity) — mirrors pg_schema.py
+    # supersedes_id / superseded_by_id columns added in MIGRATIONS_DDL.
+    # SQLite does not enforce FK on ADD COLUMN; the FK is declared for
+    # documentation but will not be enforced at this site.
+````
+
+### comment, original line 443
+
+````text
+# Learned RL value (B2 value learning) — PG parity with the memories.value
+    # migration in pg_schema.py. Scalar in [0,1], TD-updated from outcomes.
+````
+
+### comment, original line 446
+
+````text
+# Source-monitoring attribution (C1 reality monitoring) — PG parity.
+    # perceived / told / inferred / unknown.
+````
+
+### comment, original line 449
+
+````text
+# Capture origin (issue #365) — PG parity with the memories.capture_origin
+    # migration in pg_schema.py. Which CHANNEL produced the content
+    # (deliberate / local_action / network / unknown), resolved from the
+    # producing tool name and never from the content, so a fetched payload
+    # cannot forge it. Gates the content-derived write-gate bypasses.
+    # Backfilled to 'legacy' on creation — see COLUMN_BACKFILLS.
+````
+
+### comment, original line 456
+
+````text
+# Habituation stimulus identity (E1 habituation & sensitization) — PG
+    # parity. Normalised content key; repeated presentations of the same
+    # signature drive the write gate's response decrement (Rankin 2009).
+````
+
+### comment, original line 460
+
+````text
+# Reversible inhibitory tag (E2 fear extinction / inhibitory learning) — PG
+    # parity. Scalar in [0,1]: 0 = no extinction (default, no behaviour change);
+    # higher = the learned association is suppressed WITHOUT deletion, so it can
+    # spontaneously recover (decay) or be reinstated (cleared). Distinct from
+    # is_stale (active_forgetting's soft-delete): extinction leaves the memory
+    # fully present and only lowers its effective retrieval weight
+    # (Bouton 2004; Milad & Quirk 2012).
+````
+
+### comment, original line 468
+
+````text
+# M-D2 (7.4) — PG parity with the memories.write_class column added
+    # in pg_schema.py MIGRATIONS_DDL. SQLite's generic ADD-COLUMN
+    # migration loop cannot express a CHECK constraint (ALTER TABLE ...
+    # ADD COLUMN in SQLite does not support inline CHECK on some
+    # versions); the enum is enforced at the write-time contract instead
+    # (mcp_server.shared.write_class.validate_write_class, called by every
+    # writer before insert) — SQLite is the testing-only fallback
+    # (CLAUDE.md: "No SQLite" is the production direction), so a
+    # DB-level backstop here is not load-bearing.
+````
+
+### comment, original line 478
+
+````text
+# M-D6 (7.6) — PG parity with the memory_rules.source_memory_id /
+    # prospective_memories.source_memory_id columns added in
+    # pg_schema.py MIGRATIONS_DDL. Nullable pointer, no backfill needed.
+````
+
+### comment, original line 483
+
+````text
+# Embedding provenance (issue #169). '' = unknown/legacy, 'neural' =
+    # sentence-transformers, 'fallback' = algorithmic (download-free). The
+    # vector search filters to rows matching the query's space so the two
+    # geometrically-incompatible spaces never silently cross-rank. Legacy rows
+    # ('') are treated as neural-compatible (they predate the fallback), the
+    # honest default for a store that only ever had the neural encoder.
+````
+
+### comment, original line 492
+
+````text
+# Statements run ONCE, at the instant the corresponding MIGRATIONS column is
+# created — the SQLite counterpart of putting an UPDATE inside pg_schema.py's
+# `IF NOT EXISTS` block. Keyed by (table, column): the migration loop applies
+# the entry only when its ADD COLUMN actually succeeded, so an existing column
+# is never re-backfilled and rows written later keep the column DEFAULT.
+#
+# Deliberately a plain lookup table rather than a general migration framework:
+# there is one entry, and a coarse table is auditable at a glance.
+````
+
+### comment, original line 501
+
+````text
+# issue #368 — rows present when capture_origin is created predate the
+    # attribute entirely. 'legacy' keeps them at full ranking weight; the
+    # DEFAULT 'unknown' would demote the whole historical corpus once the
+    # read-side trust factor ships.
+````
+
+## Consequences
+
+Review rationale and source changes together. Historical evidence is preserved rather than silently rewritten; executable Python structure is unchanged after removing docstrings.
+
+### SQL literal, source line 75
+
+````sql
+-- M-D3 (7.1, 2026-07-10): one row per (domain, write_class) — see
+-- pg_schema.py::HOMEOSTATIC_STATE_DDL for the full rationale. Fresh
+-- SQLite DBs get the composite key directly; pre-existing ones are
+-- migrated by sqlite_store.py::_migrate_homeostatic_state_write_class
+-- (SQLite cannot ALTER a PRIMARY KEY in place — same one-shot,
+-- no-read-shim policy as the PG migration: legacy rows relabel
+-- write_class='auto').
+````
+
+### SQL literal, source line 119
+
+````sql
+-- Provenance mirror of the PG schema: 'ast_symbol' vs 'text_concept'.
+-- Consumed by core.entity_dedup to exempt code symbols from fuzzy dedup.
+````
+
+### SQL literal, source line 194
+
+````sql
+-- M-D6 (7.6) — PG parity, see pg_schema.py's prospective_memories DDL
+-- comment for the full rationale (unenforced pointer, no FK).
+````
+
+### SQL literal, source line 260
+
+````sql
+-- M-D6 (7.6) — PG parity, see pg_schema.py's memory_rules DDL
+-- comment for the read-path-neutrality argument (unenforced
+-- pointer, apply_rules() never reads this column).
+````

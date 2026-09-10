@@ -1,13 +1,6 @@
 #!/usr/bin/env python3
 """Full-corpus provenance sweep — I6-D6 grader run at scale (M-D5, 7.5).
 
-The grader itself (``handlers/validate_memory.py``) already exists and is
-the sole writer of ``memories.source_attribution``'s grade vocabulary
-(verified/verifiable/unverifiable) — this script adds NOTHING new to the
-grading logic. It is a thin, paginated driver: the corpus-wide pass the
-I6-D6 design specified but that had never been run past a 100-row sample
-(inc6.5) or the full store (§0.4 of the design doc: 72/10 079 graded).
-
 Runs ``handlers.validate_memory.handler`` repeatedly, following its own
 ``after_id`` cursor (1000 rows/call) until ``next_after_id`` is ``None``,
 and writes a campaign journal artifact: before/after grade distribution,
@@ -25,17 +18,7 @@ orchestrator decides, per the 7.5 task mandate)::
 
     uv run python scripts/provenance_sweep.py --apply
 
-The pass is idempotent by construction (validate_memory.py's own
-contract, i6d6): re-running after ``--apply`` re-computes the same grade
-for a memory whose references haven't changed and writes the identical
-value — zero DB deltas on a stable corpus, confirmed per-memory in
-``tests_py/handlers/test_validate_memory.py::TestProvenanceIdempotence``.
-
-Network bound: ``--url-check-limit`` caps DISTINCT URLs HEAD-checked PER
-PAGE (default 0 for this driver — see the module docstring's rationale;
-override for a network-connected run). URLs beyond the limit are graded
-"not sampled this pass" (ceiling verifiable, never penalized as dead).
-"""
+source: ADR-0776"""
 
 from __future__ import annotations
 
@@ -55,8 +38,7 @@ from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: E40
 
 _GRADES = ("verified", "verifiable", "unverifiable")
 
-# source: pre-existing tuned value, extracted unchanged (#197 family 3);
-# provenance not recorded at introduction
+# source: ADR-0776
 _MAX_SAMPLE_REPORTS = 200
 
 
@@ -123,9 +105,7 @@ async def _run(
         for r in result["reports"]:
             grade = r["provenance_grade"]
             projected_grades[grade] += 1
-            # Reclassification transitions are read from the CURRENT (not
-            # yet mutated on dry-run) DB row via the report's memory_id —
-            # cheap because reports already carry the field we need.
+            # source: ADR-0776
             if len(sample_reports) < _MAX_SAMPLE_REPORTS:
                 sample_reports.append(
                     {

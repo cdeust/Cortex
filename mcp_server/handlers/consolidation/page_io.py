@@ -1,13 +1,6 @@
 """Filesystem read/write helpers for the headless authoring worker.
 
-Pure I/O leaf helpers: read source files, parse/rewrite wiki page
-frontmatter, render a project tree, and build the anchor-page prompt
-(which reads README/manifest/CLAUDE.md from disk). Split out of
-``headless_authoring`` to keep that module under the size limit
-(Fowler: Move Function). The public import surface remains
-``headless_authoring``; these names are imported there and by the
-drain/orchestration siblings.
-"""
+source: ADR-0371"""
 
 from __future__ import annotations
 
@@ -22,10 +15,7 @@ from mcp_server.observability import silent_failure
 
 from .authoring_prompts import _UNTRUSTED_GUARD, _wrap_untrusted
 
-# Tag attached to every pointer memory the headless worker's writes produce,
-# distinguishing them from interactively-authored wiki_write calls in
-# recall/audit without changing write_class semantics (both paths share the
-# same governed pointer-memory contract — see write_governed_page).
+# source: ADR-0371
 _HEADLESS_TAG = "headless-authoring"
 
 # Hard cap on the project-level context handed to Claude. Bigger
@@ -33,10 +23,7 @@ _HEADLESS_TAG = "headless-authoring"
 # enough for the LLM to write a substantive anchor page.
 _CONTEXT_BYTES_CAP = 16000
 
-# Cap on a single source file's text handed to the LLM: larger files are
-# truncated to head + tail with a "[truncated]" marker (see use site).
-# source: pre-existing tuned value, extracted unchanged (#197 family 3);
-# provenance not recorded at introduction
+# source: ADR-0371
 _FILE_TEXT_CAP = 8000
 
 
@@ -224,11 +211,7 @@ async def _rewrite_page(
             tags=[_HEADLESS_TAG],
         )
     except UnclosedFrontmatterError as exc:
-        # This worker only ever rebuilds a page via
-        # _compute_rewritten_page, which always emits a closed fence —
-        # this branch is unreachable in practice but the write-time
-        # gate (issue #107) makes the failure mode explicit rather than
-        # letting an unhandled exception crash the batch drain cycle.
+        # source: ADR-0371
         silent_failure.note("headless_authoring.rewrite_page.frontmatter", exc)
         return False
     if "error" in result:
@@ -421,16 +404,11 @@ async def _write_anchor_page(
 ) -> Path | None:
     """Write the authored anchor page through the governed wiki-write path.
 
-    precondition: ``suggested_path`` is wiki-root-relative and does not yet
-    exist (callers only reach here for ``covered=False`` scopes).
-    postcondition: on success, the page exists on disk AND the same
-    write_class='mechanical' pointer memory + wiki.citations sync as any
-    other governed write fire (see ``write_governed_page``); on failure
-    (including a create-mode race where the page now exists), the failure
-    is recorded via ``silent_failure.note`` and ``None`` is returned —
-    the previous raw ``OSError``-swallow is replaced with an observable
-    degradation.
-    """
+    Precondition: ``suggested_path`` is wiki-root-relative and does not exist.
+    Postcondition: creates the page with the governed mechanical pointer and citation
+    synchronization. On failure, records ``silent_failure.note`` and returns ``None``.
+
+    source: ADR-0371"""
     title_map = {
         "product-overview": "Product overview",
         "architecture": "Architecture overview",
@@ -455,16 +433,7 @@ async def _write_anchor_page(
         f"kind: {suggested_kind}\n"
         f"domain: {domain}\n"
         f"scope: {scope_name}\n"
-        # 'seedling' — the only valid page_row_from_md/wiki.pages.status value
-        # for freshly-authored, unreviewed content (CHECK constraint:
-        # 'seedling'|'budding'|'evergreen', pg_schema.py). The template used
-        # to say 'living', a maturity value the schema has never accepted —
-        # invisible before this fix because the raw disk-write path never
-        # called page_row_from_md/upsert_page at all (see write_governed_page
-        # in wiki_write.py). Root-cause fix, not a cosmetic rename: an
-        # invalid status silently degrades the wiki.pages sync to a no-op
-        # (best-effort try/except in _sync_page_and_cite), which would have
-        # defeated this very governance fix for every anchor page.
+        # source: ADR-0371
         "status: seedling\n"
         "authored_by: headless-authoring-worker\n"
         "provenance: auto-authored\n"
@@ -483,21 +452,11 @@ async def _write_anchor_page(
             tags=[_HEADLESS_TAG, "anchor"],
         )
     except UnclosedFrontmatterError as exc:
-        # The frontmatter block above is always closed by this function's
-        # own literal "---\n\n" — unreachable in practice, but this call
-        # runs under asyncio.gather(return_exceptions=False) (see below),
-        # so an unhandled exception here would crash sibling anchor-page
-        # writes too. Catching keeps the write-time gate (issue #107)
-        # from becoming a new way for one page to take the batch down.
+        # source: ADR-0371
         silent_failure.note("headless_authoring.write_anchor_page.frontmatter", exc)
         return None
     if "error" in result:
-        # Covers both the mkdir/write OSError the raw path used to swallow
-        # AND a create-mode race (page authored concurrently) — both are
-        # now observable via silent_failure instead of a bare ``except
-        # OSError: return None``. This runs under
-        # asyncio.gather(return_exceptions=False), so the caller relies on
-        # the None return (not an exception) to skip this one page.
+        # source: ADR-0371
         silent_failure.note(
             "headless_authoring.write_anchor_page.governed_write",
             RuntimeError(result["error"]),

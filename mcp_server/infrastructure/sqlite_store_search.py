@@ -21,10 +21,7 @@ from mcp_server.infrastructure.embedding_engine import current_embedding_mode
 def _decode_tags(raw: Any) -> list:
     """Deserialize a SQLite ``tags`` TEXT column into a list.
 
-    SQLite stores tags as a JSON string; the ``recall`` output schema (and
-    parity with the PostgreSQL backend) requires a list. Mirrors the decode in
-    ``SqliteMemoryStore._normalize_memory_row``.
-    """
+    source: ADR-0616"""
     if isinstance(raw, str):
         try:
             return json.loads(raw)
@@ -62,11 +59,7 @@ class SqliteSearchMixin:
     ) -> list[dict[str, Any]]:
         """Client-side WRRF fusion: vector + FTS5 + heat + recency.
 
-        ``trusted_origins`` / ``untrusted_factor`` carry the capture-origin
-        trust policy (issue #368), passed in rather than imported because
-        infrastructure may not depend on core. Defaults are the identity
-        transform, so an unaware caller gets the pre-#368 ranking.
-        """
+        source: ADR-0616"""
         w = weights or {}
         w_vector = w.get("vector", 1.0)
         w_fts = w.get("fts", 0.5)
@@ -109,11 +102,7 @@ class SqliteSearchMixin:
                 "WHERE embedding MATCH ? ORDER BY distance LIMIT ?",
                 (vec.tobytes(), pool),
             ).fetchall()
-            # Keep only vectors that live in the SAME space as the query
-            # embedding (issue #169): a 'fallback' (algorithmic) vector and a
-            # 'neural' vector are geometrically incompatible, so their cosine
-            # distances are not comparable. Cross-space rows still surface via
-            # FTS/heat/recency — they are only barred from the vector signal.
+            # source: ADR-0616
             keep = self._vec_rows_in_query_space([r["rowid"] for r in rows])
             rank = 0
             for r in rows:
@@ -152,12 +141,13 @@ class SqliteSearchMixin:
         """Subset of ``rowids`` whose embedding space matches the query's.
 
         precondition: ``rowids`` are memory ids returned by the vec KNN.
-        postcondition: returns the ids whose ``memories.embedding_model`` is
-        compatible with the current process embedding mode (issue #169):
-        a neural query keeps 'neural' and legacy '' rows; a fallback query keeps
-        only 'fallback' rows; an 'unknown' mode (no engine constructed — e.g. a
-        raw-vector unit test) keeps everything. Fail-open on a missing column.
-        """
+                postcondition: returns the ids whose ``memories.embedding_model`` is
+                compatible with the current process embedding mode :
+                a neural query keeps 'neural' and legacy '' rows; a fallback query keeps
+                only 'fallback' rows; an 'unknown' mode (no engine constructed — e.g. a
+                raw-vector unit test) keeps everything. Fail-open on a missing column.
+
+        source: ADR-0616"""
         if not rowids:
             return set()
 
@@ -262,21 +252,10 @@ class SqliteSearchMixin:
         trusted_origins: tuple[str, ...],
         untrusted_factor: float,
     ) -> None:
-        """Scale down scores whose capture_origin is not trusted (issue #368).
+        """Multiplicative, not additive: an additive penalty cannot demote a
+                passage that wins on similarity.
 
-        PG parity: the counterpart is the `trust_weighted` CTE in
-        pg_schema.py. Applied here for the same reason it sits there — after
-        the signals are fused but BEFORE `_fetch_ranked_results` sorts and
-        truncates, so it reorders candidates instead of filtering an already
-        ranked list (arXiv 2604.16548: "Retrieval-time filtering alone is
-        insufficient").
-
-        Multiplicative, not additive: an additive penalty cannot demote a
-        passage that wins on similarity.
-
-        The policy arrives as arguments — this layer must not import core.
-        An empty `trusted_origins` with factor 1.0 is the identity transform.
-        """
+        source: ADR-0616"""
         if not scores or untrusted_factor == 1.0:
             return
         ids = list(scores.keys())
@@ -287,9 +266,7 @@ class SqliteSearchMixin:
         ).fetchall()
         trusted = set(trusted_origins)
         for r in rows:
-            # A row missing from this result set keeps its score: it cannot
-            # be judged, and silently demoting what we failed to read would
-            # be a different bug from the one under fix.
+            # source: ADR-0616
             if r["capture_origin"] not in trusted:
                 scores[r["id"]] *= untrusted_factor
 
@@ -303,13 +280,7 @@ class SqliteSearchMixin:
     ) -> list[dict[str, Any]]:
         top_ids = sorted(scores, key=scores.get, reverse=True)[: max_results * 3]  # type: ignore[arg-type]
         placeholders = ",".join("?" * len(top_ids))
-        # current_memories: the vector/FTS signals read virtual tables
-        # (memories_vec/memories_fts) that cannot carry the supersession
-        # predicate, so superseded ids can enter `scores`. This ranked-fetch
-        # gate is the SQLite analog of the PG candidates-CTE exclusion:
-        # superseded rows vanish from row_map and are skipped. They may still
-        # consume vector/FTS pool slots — acceptable at fallback scale, same
-        # argument as the O(N) embedding join in get_hot_embeddings.
+        # source: ADR-0616
         rows = self._conn.execute(
             f"SELECT * FROM current_memories WHERE id IN ({placeholders})",  # noqa: S608 — interpolation is a generated ?/%s placeholder list; every value is a bound parameter (docs/ASSURANCE-CASE.md §5)
             top_ids,
@@ -340,8 +311,7 @@ class SqliteSearchMixin:
                     "tags": _decode_tags(row["tags"]),
                     "importance": row["importance"],
                     "surprise_score": row["surprise_score"],
-                    # issue #368 — PG parity: the read path needs the origin
-                    # to break the heat feedback loop without a second query.
+                    # source: ADR-0616
                     "capture_origin": row["capture_origin"],
                 }
             )
@@ -350,19 +320,8 @@ class SqliteSearchMixin:
     def search_fts(self, query: str, limit: int = 20) -> list[tuple[int, float]]:
         """Full-text search via FTS5. Returns (memory_id, score) pairs.
 
-        Joined on current_memories + NOT is_stale (mirror of the PG
-        search_fts): this is a discovery channel whose hits are injected
-        client-side with a fabricated score, so exclusion must happen here —
-        no downstream ranking can demote a superseded or stale hit.
-        """
-        # NOTE: ``query`` here is an already-built FTS5 expression — callers
-        # (auto_recall._fts_query_from_prompt,
-        # recall_helpers.build_expanded_query) construct their own OR/AND term
-        # lists — so it must be passed through
-        # verbatim, NOT re-expanded (re-wrapping their operators would turn an OR
-        # into a literal AND, issue #169 regression). Code-aware matching on this
-        # path is carried entirely by index-time augmentation (augment_content),
-        # which indexes both the full identifier and its sub-tokens.
+        source: ADR-0616"""
+        # source: ADR-0616
         try:
             rows = self._conn.execute(
                 "SELECT memories_fts.rowid AS rowid, memories_fts.rank AS rank "
@@ -385,11 +344,7 @@ class SqliteSearchMixin:
     ) -> list[tuple[int, float]]:
         """Vector KNN search via sqlite-vec. Returns (memory_id, distance).
 
-        heads_only mirrors PgMemoryStore.search_vectors: the vec virtual
-        table cannot carry the supersession predicate, so hits are
-        post-filtered against current_memories (superseded ids may consume
-        top_k slots — acceptable at fallback scale).
-        """
+        source: ADR-0616"""
         if not self._has_vec:
             return []
         vec = self._bytes_to_vector(query_embedding)
@@ -430,14 +385,7 @@ class SqliteSearchMixin:
     ) -> list[tuple[int, float]]:
         """Client-side spread activation: query terms -> entities -> memories.
 
-        domain/include_globals mirror PgMemoryStore.spread_activation_memories
-        (ADR-0054, same substitutability contract): the entity graph stays
-        unscoped, but the final entity->memory mapping is filtered to
-        ``domain`` (plus is_global rows when include_globals) so the
-        SQLite fallback (memory_store.py's inspection-mode path, which
-        can serve real traffic) does not reopen the cross-domain
-        injection the PostgreSQL fix closes.
-        """
+        source: ADR-0616"""
         seed_entities = self._resolve_seed_entities(query_terms, min_heat)
         if not seed_entities:
             return []
@@ -504,13 +452,12 @@ class SqliteSearchMixin:
         domain: str | None = None,
         include_globals: bool = True,
     ) -> list[tuple[int, float]]:
-        """Map activated entities to memory rows, domain-scoped (ADR-0054).
+        """Precondition: none. Postcondition: every returned memory_id either
+                belongs to ``domain`` or, when ``include_globals`` is True, carries
+                ``is_global = 1`` -- unless ``domain`` is None, in which case no
+                filter is applied (mirrors the PL/pgSQL p_domain IS NULL branch).
 
-        Precondition: none. Postcondition: every returned memory_id either
-        belongs to ``domain`` or, when ``include_globals`` is True, carries
-        ``is_global = 1`` -- unless ``domain`` is None, in which case no
-        filter is applied (mirrors the PL/pgSQL p_domain IS NULL branch).
-        """
+        source: ADR-0616"""
         memory_acts: dict[int, float] = {}
         for eid, act in activated.items():
             entity = self._conn.execute(
@@ -543,17 +490,9 @@ class SqliteSearchMixin:
         domain: str | None = None,
         limit: int = 500,
     ) -> list[tuple[int, Any, float]]:
-        """Return (memory_id, embedding_bytes, heat) for hot memories.
+        """Fetch hot memory IDs, then load their sqlite-vec embeddings by rowid.
 
-        Precondition: min_heat >= 0.0; limit >= 1.
-        Postcondition: ordered by heat_base DESC; len <= limit; rows without
-          embeddings are excluded; empty list when sqlite-vec is absent.
-
-        Mirrors PgMemoryStore.get_hot_embeddings. SQLite stores embeddings in
-        memories_vec (sqlite-vec); we join client-side: fetch hot IDs, then
-        fetch each embedding by rowid. Engineering choice: O(N) join is
-        acceptable at fallback scale (<10k memories).
-        """
+        source: ADR-0616"""
         # precondition: heat column is heat_base in SQLite schema (A3 migration)
         conds = ["heat_base >= ?", "NOT is_stale"]
         params: list[Any] = [min_heat]
@@ -609,20 +548,11 @@ class SqliteSearchMixin:
     ) -> list[tuple[int, int, float]]:
         """Return (mem_a, mem_b, proximity_weight) pairs co-accessed recently.
 
-        Precondition: window_hours > 0; limit >= 1.
-        Postcondition: a < b (canonical pair order); w in (0,1]; ordered DESC;
-          len <= limit.
+                Precondition: window_hours > 0; limit >= 1.
+                Postcondition: a < b (canonical pair order); w in (0,1]; ordered DESC;
+                  len <= limit.
 
-        Mirrors PgMemoryStore.get_temporal_co_access for SR-graph construction.
-        SQLite divergence: only one last_accessed timestamp per memory (no
-        access log). Approximation: pair memories whose last_accessed differs
-        by less than window_hours; proximity = 1 - delta/window (linear decay).
-        min_access is honored via access_count >= min_access, mirroring the PG
-        stored procedure WHERE clause (pg_schema.py get_temporal_co_access).
-        Source: Dayan, P. (1993). "Improving Generalisation for Temporal
-        Difference Learning: The Successor Representation." Neural Computation
-        5(4), 613-624. Proximity formula adapted from PG stored procedure shape.
-        """
+        source: ADR-0616"""
         window_seconds = window_hours * 3600.0
         try:
             rows = self._conn.execute(

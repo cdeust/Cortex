@@ -1,0 +1,82 @@
+# ADR-0496: mcp_server/hooks/preemptive_context.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `mcp_server/hooks/preemptive_context.py`; original SHA-256 `b3779a42fb0600c3978fccb16ad0543c866f519902131d75507844953a46b1ef`.
+
+## Original docstring, lines 2–56
+
+````text
+"""Claude Code PostToolUse hook — preemptive memory priming.
+
+When an agent reads or edits a file, this hook "primes" related memories
+by boosting their heat. This makes them surface naturally in subsequent
+recall() calls without explicit querying — implementing the "proactive
+brain" pattern where context pre-activates related representations.
+
+Paper backing:
+  - Bar 2007 "The proactive brain" (Trends in Cognitive Sciences):
+    the brain continuously generates top-down predictions from context,
+    pre-activating representations before bottom-up input arrives.
+  - Collins & Loftus 1975: spreading activation — file path as cue node
+    activates related memory nodes in the knowledge graph.
+  - Smith & Vela 2001: context reinstatement at retrieval produces a
+    reliable memory benefit (d=0.28, ~15-20% boost).
+
+Source backing:
+  - Claude Code hooks system (lesson 10): PreToolUse exit 0 does NOT
+    inject context (stdout not shown to model). PostToolUse is the
+    correct hook for capturing context and influencing subsequent behavior.
+  - Claude Code auto-memory (lesson 40): "findRelevantMemories" surfaces
+    relevant files before the main agent responds — analogous to our
+    heat priming making memories surface in recall.
+
+Strategy:
+  On Edit/Write/Read of a file, boost heat of memories mentioning that
+  file. This is "spreading activation" — the file access cue propagates
+  activation to related memory nodes via heat boost. Those memories then
+  rank higher in the next recall() call.
+
+  This avoids the PreToolUse injection limitation: instead of trying to
+  push context into the model (which PreToolUse can't do), we pull it
+  by making relevant memories hotter so they surface organically.
+
+Installation
+------------
+Add to ``~/.claude/settings.json`` under hooks::
+
+    {
+        "hooks": {
+            "PostToolUse": [{
+                "type": "command",
+                "command": "python3 -m mcp_server.hooks.preemptive_context",
+                "timeout": 3
+            }]
+        }
+    }
+
+Invariants
+----------
+- Fires on Edit/Write/Read tools only
+- Non-blocking: exits quickly, errors logged to stderr
+- Heat boost is small (0.1) — primes but doesn't dominate ranking
+- Cooldown per file (60s) — avoids repeated boosting on rapid edits
+"""
+````
+
+## Original comment, lines 98–99
+
+````text
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+````
+
+## Original comment, lines 141–143
+
+````text
+# A3 canonical boost: heat_base + heat_base_set_at refresh. effective_heat()
+    # reads the boost at query time via the WRRF fusion path.
+    # Source: phase-3-a3-migration-design.md §3.4.
+````
+

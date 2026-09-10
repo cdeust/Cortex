@@ -1,11 +1,8 @@
 """wiki.claim_events DB operations.
 
-Split out of ``pg_store_wiki.py`` (originally 890 lines, over the
-300-line file limit — CLAUDE.md "Code Quality Rules") purely for size
-compliance; no logic changed.
-
 Pure infrastructure — no core imports, no handler imports.
-"""
+
+source: ADR-0573"""
 
 from __future__ import annotations
 
@@ -25,12 +22,9 @@ from mcp_server.infrastructure.pg_store_wiki_common import _returning_id
 def insert_claim_events(conn: StoreConnection, claims: list[dict]) -> list[int]:
     """Bulk insert ClaimEvent rows. Returns the new ids in order.
 
-    Each ``claims`` dict requires: ``text``, ``claim_type``. Optional:
-    memory_id, session_id, entity_ids, evidence_refs, confidence,
-    supersedes, embedding (vector or None).
+        All inserted in one cursor cycle for throughput.
 
-    All inserted in one cursor cycle for throughput.
-    """
+    source: ADR-0573"""
     if not claims:
         return []
 
@@ -105,17 +99,14 @@ def get_entities_by_memory(
     return out
 
 
-# source: pre-existing tuned value, extracted unchanged (#197 family 3);
-# provenance not recorded at introduction
+# source: ADR-0573
 _MIN_ENTITY_NAME_CHARS = 3
 
 
 def get_entity_name_index(conn: StoreConnection, limit: int = 5000) -> dict[str, int]:
     """Return name → entity_id map for inline-mention matching.
 
-    Limit caps the index size for in-memory matching against claim text.
-    Heat-ranked so the most frequently-touched entities win.
-    """
+    source: ADR-0573"""
     with conn.cursor() as cur:
         cur.execute(
             "SELECT name, id FROM entities ORDER BY heat DESC NULLS LAST LIMIT %s",
@@ -140,9 +131,7 @@ def get_claims_by_entity(
 ) -> dict[int, list[dict]]:
     """For each entity_id, fetch claims that already reference it.
 
-    Used by the resolver to find supersedes / conflict candidates.
-    Excludes the claims being resolved (avoid self-matches).
-    """
+    source: ADR-0573"""
     if not entity_ids:
         return {}
     excl = exclude_claim_ids or []
@@ -195,10 +184,9 @@ def update_claim_entities(
 def update_claim_supersedes(
     conn: StoreConnection, updates: list[tuple[int, int]]
 ) -> int:
-    """Bulk update wiki.claim_events.supersedes. Returns rows updated.
+    """Bulk update wiki.claim_events.supersedes.
 
-    ``updates`` is [(new_claim_id, superseded_claim_id), ...].
-    """
+    source: ADR-0573"""
     if not updates:
         return 0
     written = 0

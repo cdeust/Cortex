@@ -1,0 +1,87 @@
+---
+kind: adr
+number: 0538
+title: Preserve pg_store design decisions
+status: accepted
+---
+
+# ADR-0538: pg_store design decisions
+
+## Context
+
+Canonical migration of decision evidence from `mcp_server/infrastructure/pg_store.py` under ADR-0056.
+The excerpts below preserve historical claims and citations verbatim; original ADR numbers are historical quotations, not current identity bindings.
+
+## Decision
+
+Keep the source implementation linked to this versioned decision record. Operational API documentation remains with the implementation.
+
+## Preserved decision evidence
+
+### module, original line 1
+
+````text
+Single storage backend for all memory operations. Retrieval logic lives
+in PL/pgSQL stored procedures. Benchmarks and production use the same
+code path.
+````
+
+### module, original line 1
+
+````text
+``PgMemoryStore`` is assembled from the ``Pg*Mixin`` classes below, each
+implementing one concern (connection/pool lifecycle, DDL migration,
+value serialization, the INSERT path, atomic supersession, heat
+writers, memory-metadata writers, search/retrieval) — split out of a
+single 1384-line file (over the 300-line §4.1 cap) along those
+boundaries. This module is the thin facade: it owns only construction
+(``__init__``) and teardown (``close``), plus re-exporting the
+module-level DDL helpers (``compute_ddl_hash``, ``read_schema_hash``,
+``_get_database_url``) that ``mcp_server.migrate`` — a standalone entry
+point that must decide "is the DB current" without constructing a full
+store — imports from this path.
+````
+
+### module, original line 1
+
+````text
+Phase 5 connection pools (docs/program/phase-5-pool-admission-design.md):
+    * ``_interactive_pool`` — hot-path tools (recall, remember, etc.)
+    * ``_batch_pool`` — long-running writers (consolidate, wiki_pipeline)
+    * ``_conn`` — persistent single connection kept for backward compat
+      with 281 existing call sites. New code should use
+      ``acquire_interactive()`` / ``acquire_batch()`` context managers.
+````
+
+### module, original line 1
+
+````text
+Requires: psycopg[binary]>=3.1, psycopg_pool>=3.2, pgvector>=0.3
+
+````
+
+### comment, original line 74
+
+````text
+# Re-exported for external callers (mcp_server.migrate, tests) that import
+# these module-level DDL helpers from this facade path — see module
+# docstring. Single source of truth stays pg_store_ddl.py.
+````
+
+### comment, original line 118
+
+````text
+# Invalidate prepared statements after schema DDL — stored procedure
+        # signatures may have changed, making cached plans stale.
+````
+
+### comment, original line 122
+
+````text
+# Phase 5 pools — lazy-constructed; opening on first acquire
+        # avoids paying pool-open cost for short-lived usages (tests).
+````
+
+## Consequences
+
+Review rationale and source changes together. Historical evidence is preserved rather than silently rewritten; executable Python structure is unchanged after removing docstrings.

@@ -1,22 +1,6 @@
 #!/usr/bin/env python3
 """Generate the README's repo-derived badges as committed SVG files.
 
-Why these badges are committed files and not hotlinked images
--------------------------------------------------------------
-A remote badge URL (img.shields.io/...) is a third-party request fired on
-every README view, and it lets its host restate our claim at any time with
-no commit in this repository. A committed file cannot drift and cannot be
-restated by anyone else.
-
-Why only THESE badges
----------------------
-Every figure below is determined BY THIS REPOSITORY: the licence, the
-Python floor, the collected test count, the bibliography size, the package
-version. So a committed copy can always be made true again by regenerating
-it from the working tree, with no network access at all — which is why this
-runs as a blocking CI check on every push and PR (`--check`) rather than on
-a cron. Drift is caught where it is introduced.
-
 Two README badges are deliberately NOT converted, and must not be:
 
   * The CI status badge reflects the LIVE result of the last run on main.
@@ -30,14 +14,11 @@ Two README badges are deliberately NOT converted, and must not be:
     additionally justifies displaying THEIR badge image, so replacing it
     with our own rendering would undercut that criterion.
 
-The MCP Toplist badge sits between the two and IS committed, because it
-carries an explicit "as of <month>" stamp: a stale copy remains a true
-statement about a point in time. See refresh_mcp_toplist_badge.py.
-
 Usage:
     python3 scripts/generate_repo_badges.py           # rewrite if changed
     python3 scripts/generate_repo_badges.py --check   # exit 1 if stale
-"""
+
+source: ADR-0738"""
 
 from __future__ import annotations
 
@@ -46,9 +27,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-# Sibling modules, path-imported for the same reason the launcher family
-# does it: resolves identically whether this runs as a script or is loaded
-# via importlib.util.spec_from_file_location from a test.
+# source: ADR-0738
 _SCRIPTS_DIR = str(Path(__file__).resolve().parent)
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
@@ -57,12 +36,7 @@ import check_doc_claims  # noqa: E402
 import doc_claim_structural  # noqa: E402
 import repo_badge_catalog  # noqa: E402
 
-# Only the label/message palette repo_badge_svg() itself renders with, plus
-# _HEALTHY (tests_py/scripts/test_generate_repo_badges.py reads
-# gen._HEALTHY), are re-exported here; _NEUTRAL/_CORPUS are used only by
-# repo_badge_catalog.fixed_badge_specs, which owns them (issue #293 split —
-# see that module's docstring for why it returns field dicts, not
-# RepoBadge instances, and never imports this class).
+# source: ADR-0738
 from repo_badge_catalog import _HEALTHY as _HEALTHY  # noqa: E402  (re-export)
 from repo_badge_catalog import (  # noqa: E402
     _LABEL_FILL,
@@ -78,17 +52,7 @@ ASSETS_DIR = Path("assets")
 class RepoBadge:
     """One generated badge: its file, its two panels, and its alt text.
 
-    Data only — deliberately no methods. mutmut's mutation generator
-    categorically excludes the body of any `@dataclass`-decorated class (it
-    must, since copying a decorated class for the trampoline setup can
-    re-run the decorator and its side effects), so logic placed on methods
-    here would carry zero mutation coverage no matter how the test loader
-    names the module. Confirmed empirically: 234 mutants for this file, 0
-    attributed to `path`/`render` while they were methods (issue #262's
-    3rd pass; same defect and same fix shape as `ConstraintSet` in
-    scripts/pip_constraint_sets.py). `repo_badge_path`/`repo_badge_svg`
-    below carry the same logic as free functions instead.
-    """
+    source: ADR-0738"""
 
     filename: str
     label: str
@@ -150,13 +114,7 @@ def canonical_python_floor() -> str:
 def build_badges(test_count: int | None) -> list[RepoBadge]:
     """Every repo-derived badge, resolved against the working tree.
 
-    The canonical readers are check_doc_claims's own, not reimplementations:
-    a badge that disagreed with the gate would be the exact drift this file
-    exists to prevent. The field data itself lives in repo_badge_catalog.py
-    (issue #293 split, §4: the 300-line file cap) — this function's own job
-    is only to resolve the canonical values and construct `RepoBadge`
-    instances from the returned specs.
-    """
+    source: ADR-0738"""
     version = check_doc_claims.canonical_version()
     references = check_doc_claims.canonical_reference_count()
     licence = canonical_licence()
@@ -167,10 +125,7 @@ def build_badges(test_count: int | None) -> list[RepoBadge]:
             licence, floor, references, version
         )
     ]
-    # The test count is the one figure that cannot be read off a file: it is
-    # whatever the suite collects right now. Omitted rather than guessed when
-    # the caller has not measured it, so a stale badge is never written from
-    # an assumption.
+    # source: ADR-0738
     if test_count is not None:
         badges.append(RepoBadge(**repo_badge_catalog.tests_badge_spec(test_count)))
     return badges
@@ -203,23 +158,20 @@ def stale(badge: RepoBadge) -> str | None:
 
 
 def stale_tests_badge(test_count: int) -> str | None:
-    """A monotone floor, not an exact snapshot (issue #293, §6): two
-    branches adding tests compute different, both-true live counts for the
-    same post-merge tree, so an exact match is how any two such PRs
-    conflicted on this file, and how main's gate flapped red on a merge
-    that only grew the count. Lagging is not reported; only an OVER-claim
-    is. `stale()` still checks everything else exactly — see
-    doc_claim_structural.check_badge_floor for the same invariant.
-    """
+    """A monotone floor, not an exact snapshot: two
+        branches adding tests compute different, both-true live counts for the
+        same post-merge tree, so an exact match is how any two such PRs
+        conflicted on this file, and how main's gate flapped red on a merge
+        that only grew the count.
+
+    source: ADR-0738"""
     # Filename is constant regardless of test_count; resolved directly (not
     # via a throwaway RepoBadge) to remove an inert mutant class outright.
     path = ASSETS_DIR / repo_badge_catalog.TESTS_BADGE_FILENAME
     target = REPO_ROOT / path
     if not target.exists():
         return f"{path}: missing — run scripts/generate_repo_badges.py"
-    # utf-8 pinned explicitly (provenance comments contain an em dash; see
-    # test_stale_tests_badge_pins_utf8_on_read); "UTF-8" is an equivalent
-    # spelling (codecs.lookup is case-insensitive), not a distinct mutant.
+    # source: ADR-0738
     match = doc_claim_structural.TESTS_BADGE.search(target.read_text(encoding="utf-8"))
     if match is None:
         return f"{path}: no test-count figure in its <title>; diverged from this gate"

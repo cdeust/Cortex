@@ -1,0 +1,117 @@
+---
+kind: adr
+number: 0554
+title: Preserve pg_store_memory_meta design decisions
+status: accepted
+---
+
+# ADR-0554: pg_store_memory_meta design decisions
+
+## Context
+
+Canonical migration of decision evidence from `mcp_server/infrastructure/pg_store_memory_meta.py` under ADR-0056.
+The excerpts below preserve historical claims and citations verbatim; original ADR numbers are historical quotations, not current identity bindings.
+
+## Decision
+
+Keep the source implementation linked to this versioned decision record. Operational API documentation remains with the implementation.
+
+## Preserved decision evidence
+
+### module, original line 1
+
+````text
+Split out of pg_store.py (issue: 1384-line file over the 300-line §4.1
+cap) — the single-row UPDATE writers that mutate a memory's non-heat
+metadata (importance, access stats, value, extinction, protection,
+staleness, provenance, compression, mood) share one concern: simple
+targeted column writes with no cross-row coordination.
+
+````
+
+### update_memory_value, original line 45
+
+````text
+Persist a memory's learned RL value (B2). Defensive on stores whose
+        `value` column predates this migration — a failed UPDATE is swallowed so
+        rating/credit never breaks on an un-migrated store.
+````
+
+### update_memory_value, original line 45
+
+````text
+        The pre-migration case is now rare (the migration is current-schema
+        baseline); an UPDATE failing today is more likely a real regression
+        than a stale column, so the first such failure is logged rather than
+        silently absorbed forever (see silent_failure module docstring).
+````
+
+### update_memory_extinction, original line 65
+
+````text
+        Writes ONLY the ``extinction_strength`` scalar in [0,1]; the memory's
+        content and heat_base are left untouched — extinction suppresses the
+        effective retrieval weight without erasing the trace, so decaying
+        (spontaneous recovery) or clearing (reinstatement) the tag restores the
+        original association (Bouton 2004). Defensive on stores whose
+        ``extinction_strength`` column predates this migration — a failed UPDATE
+        is swallowed so deprecation never breaks on an un-migrated store.
+````
+
+### update_memory_extinction, original line 65
+
+````text
+        See ``update_memory_value`` docstring: the same rare-pre-migration
+        reasoning applies, so the first failure is logged, not just swallowed.
+````
+
+### get_user_mood, original line 101
+
+````text
+        Scalar contract matches ``mcp_server/core/pg_recall.py:_get_user_mood``
+        which clamps and floats the returned value. None means "no signal" —
+        the MOOD_CONGRUENT_RERANK stage no-ops in that case (Bower 1981
+        requires a real mood; we never fabricate one).
+        
+````
+
+### set_user_mood, original line 146
+
+````text
+        Refreshes ``updated_at`` automatically. Idempotent — repeated
+        writes with the same value still bump the timestamp, which is
+        the correct semantics for a "freshness of last observed mood"
+        signal that downstream EMA aggregators may consult.
+        
+````
+
+### update_forgetting_pressure_accum, original line 195
+
+````text
+        Written every forgetting cycle (including leak-down when interference
+        abates), so the accumulator carries sustained-pressure history across
+        cycles — the faithful discretization of gradual Rac1 erosion.
+        source: mcp_server/core/active_forgetting.py (update_pressure_accum).
+        
+````
+
+### comment, original line 87
+
+````text
+# ── User mood (Bower 1981 mood-congruent recall) ──────────────────
+    # The pg_recall._get_user_mood(store) bridge duck-types against
+    # ``get_user_mood()`` and consumes a scalar valence in [-1, +1].
+    # We expose:
+    #   - get_user_mood()       → scalar float (the bridge contract)
+    #   - get_user_mood_state() → {valence, arousal} dict (richer reads)
+    #   - set_user_mood(v, a)   → upsert (writers / emotion classifier)
+    # Returns ``None`` from get_user_mood() iff the row is genuinely
+    # absent — defensive; the schema seeds a 'default' neutral row, but
+    # an in-flight migration or a manually deleted row should still
+    # no-op the rerank rather than crash.
+    # Source: Bower, G.H. (1981). "Mood and Memory." Am. Psychologist 36(2).
+````
+
+## Consequences
+
+Review rationale and source changes together. Historical evidence is preserved rather than silently rewritten; executable Python structure is unchanged after removing docstrings.

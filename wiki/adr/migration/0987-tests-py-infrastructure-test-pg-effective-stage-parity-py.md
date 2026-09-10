@@ -1,0 +1,29 @@
+# ADR-0987: tests_py/infrastructure/test_pg_effective_stage_parity.py design and historical evidence
+
+Status: accepted; existing test/harness evidence preserved during issue #514.
+
+Source `tests_py/infrastructure/test_pg_effective_stage_parity.py`, original SHA-256 `01595e81f721284ec068e47fa6d7ea00f7dbf2b0a5c77c2d36fe71572ae772e9`.
+Assertions and runtime fixture literals remain unchanged.
+
+## Original docstring, lines 1–17
+
+````text
+"""DRY parity test: the SQL effective_stage() derivation must equal an
+iterative application of the canonical Python advancement logic.
+
+Root cause (memory 4202985): A3 made HEAT lazy on the read path but left
+STAGE eager (advanced only by the consolidation handler). effective_stage()
+re-derives the stage lazily inside effective_heat(). To stay DRY with the
+single source of truth — cascade_advancement.compute_advancement_readiness —
+this test pins the SQL ladder against an iterative application of that exact
+Python function across a grid of inputs.
+
+The reference loop advances repeatedly until no change, treating stage_hours
+as a dwell budget consumed stage-by-stage (the same model the SQL uses), and
+disables the dopamine gate (encoding-time, unavailable on the read path) so
+the LABILE→EARLY_LTP transition is decided by importance alone.
+
+Runs against cortex_test (conftest redirects DATABASE_URL).
+"""
+````
+

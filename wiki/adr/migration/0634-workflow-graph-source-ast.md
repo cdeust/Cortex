@@ -1,0 +1,161 @@
+---
+kind: adr
+number: 0634
+title: Preserve workflow_graph_source_ast design decisions
+status: accepted
+---
+
+# ADR-0634: workflow_graph_source_ast design decisions
+
+## Context
+
+Canonical migration of decision evidence from `mcp_server/infrastructure/workflow_graph_source_ast.py` under ADR-0056.
+The excerpts below preserve historical claims and citations verbatim; original ADR numbers are historical quotations, not current identity bindings.
+
+## Decision
+
+Keep the source implementation linked to this versioned decision record. Operational API documentation remains with the implementation.
+
+## Preserved decision evidence
+
+### module, original line 1
+
+````text
+AST-backed loader for the workflow graph (ADR-0046).
+````
+
+### module, original line 1
+
+````text
+Peer of ``workflow_graph_source_pg`` / ``workflow_graph_source_jsonl``.
+Calls the ``ai-architect-mcp-codebase`` MCP server via ``ap_bridge`` and
+returns builder-shaped dicts for symbol nodes and the AST edges
+(``defined_in``, ``calls``, ``imports``, ``member_of``).
+````
+
+### module, original line 1
+
+````text
+Constrained to the Cortex-known file set: AP may have indexed files
+that Cortex doesn't know about (e.g. vendored dependencies); we filter
+so the graph stays focused on what the user's sessions actually touch.
+````
+
+### module, original line 1
+
+````text
+Pure infrastructure — no core imports. When AP is disabled
+(``CORTEX_MEMORY_AP_ENABLED=0``) or unreachable, every loader returns
+``[]`` so the workflow graph degrades to the native in-process AST
+source in ``workflow_graph_source_native_ast``.
+````
+
+### module, original line 1
+
+````text
+Composition point over three separated concerns (issue #275 — this file
+previously held all three and exceeded the 300-line cap): ``ap_sync_loop``
+(cross-loop sync/drain primitive, ``_SyncLoop`` re-exported here),
+``workflow_graph_ast_symbols`` (AST symbol loading), and
+``workflow_graph_ast_edges`` (AST edge loading). The three private
+``_*_batches_async``/``_verify_symbols_async`` methods below stay thin
+instance-method delegates into those modules (not free functions) because
+tests monkeypatch them per-instance.
+
+````
+
+### last_search_degraded_reason, original line 66
+
+````text
+Why the last ``search_codebase`` call degraded, or ``None`` if
+        it succeeded or was never attempted. Reads the bridge's own
+        recorded outcome — no second round-trip.
+````
+
+### iter_symbols, original line 83
+
+````text
+Yield AST symbol rows one per-query batch (one AP ``query_graph``
+        per label per graph). Each yielded list is the result of a single
+        AP roundtrip; the caller sees batch *N* before batch *N+1*'s query
+        is issued, so the source-internal peak is one query's rows — never
+        the union across all ~21 label queries × graphs.
+````
+
+### load_symbols, original line 107
+
+````text
+        Materializes every batch into one list for consumers that genuinely
+        need the whole set (the workflow_graph builder iterates ``ast_symbols``
+        once and the handler takes ``len(...)``). The streaming win is still
+        real: ``iter_symbols`` bounds the *source*-internal peak to one query
+        while this list is filled. Consumers that can iterate should call
+        ``iter_symbols`` directly to avoid the final materialization.
+        
+````
+
+### iter_ast_edges, original line 125
+
+````text
+Yield CALLS / IMPORTS / MEMBER_OF / USES edge rows one per-query
+        batch (one AP ``query_graph`` per rel-table per graph, ~89 queries).
+        Same incremental contract as ``iter_symbols``: peak retained inside
+        the source is one rel-table's rows, not the union of all 89.
+        Empty ``file_paths`` means "no path filter".
+````
+
+### load_ast_edges, original line 142
+
+````text
+Full-set convenience over ``iter_ast_edges`` (see ``load_symbols``
+        for why the final list is kept: the builder + handler ``len(...)``
+        genuinely need the whole edge set).
+````
+
+### _iter_symbols_async, original line 155
+
+````text
+        A failed query for one (graph, label) is skipped — one bad graph or
+        label never kills the whole stream, matching the prior swallow-and-
+        continue contract.
+        
+````
+
+### _load_symbols_async, original line 192
+
+````text
+        Kept list-returning because ``http_standalone_graph`` caches the
+        per-project symbol list and reports ``len(syms)`` — a genuine
+        full-set consumer (reported as needing-full-set in the C3 RCA).
+        
+````
+
+### search_codebase, original line 218
+
+````text
+        Phase 3 (ADR-0046). Returns ``[]`` when AP is disabled, no
+        graph_path is configured, or the call itself failed — check
+        ``last_search_degraded_reason`` afterwards to tell "AP found
+        nothing" (``None``) apart from "AP call failed" (set).
+````
+
+### verify_symbols, original line 236
+
+````text
+        Used by the wiki_verify handler (ADR-0046 Phase 2). Returns
+        ``{qname: False}`` for every input when AP is disabled OR no
+        graph_path is configured — the handler interprets that as
+        'verification skipped', not as confirmed staleness.
+        
+````
+
+### _edge_batches_async, original line 278
+
+````text
+Delegates to ``workflow_graph_ast_edges.edge_batches_async``
+        (same rationale as ``_symbol_batches_async`` above).
+````
+
+## Consequences
+
+Review rationale and source changes together. Historical evidence is preserved rather than silently rewritten; executable Python structure is unchanged after removing docstrings.

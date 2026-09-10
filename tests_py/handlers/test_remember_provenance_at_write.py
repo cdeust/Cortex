@@ -202,10 +202,10 @@ class TestProvenanceDeadRefHint:
     def test_implicit_directory_names_root_and_says_directory_not_passed(
         self, tmp_path, monkeypatch
     ):
-        """Live repro (memory 4341427, 2026-08-08): omit `directory` —
-        resolution silently uses the process cwd, which need not be the
-        writer's project root. The hint must name that root and say so,
-        never conflate this with a genuinely-dead path."""
+        """Omitting directory reports the fallback resolution root without claiming
+        paths are dead.
+
+        source: ADR-0955"""
         monkeypatch.chdir(tmp_path)
         dead_rel = "src/yet_another_missing_file.py"
         result = asyncio.run(

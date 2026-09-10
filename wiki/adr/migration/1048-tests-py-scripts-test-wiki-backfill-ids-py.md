@@ -1,0 +1,13 @@
+# ADR-1048: tests_py/scripts/test_wiki_backfill_ids.py design and historical evidence
+
+Status: accepted; existing test/harness evidence preserved during issue #514.
+
+Source `tests_py/scripts/test_wiki_backfill_ids.py`, original SHA-256 `2f0a7ab88fb80b0af52ba5239020fe86679741f569b3fada9baaf6a2c1788c99`.
+Assertions and runtime fixture literals remain unchanged.
+
+## Original docstring, lines 1–1
+
+````text
+"""Tests for the wiki page-ID backfill script (Phase 3 of ADR-2244)."""
+````
+

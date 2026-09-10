@@ -1,14 +1,7 @@
 """Craftsmanship rule 4 — module-scope numeric literals without a
 ``# source:`` comment.
 
-Split out of ``craftsmanship_rules.py`` for the same reason
-``craftsmanship_imports.py`` was (file-size self-application, see that
-module's docstring).
-
-**Known, documented detection gaps** (flagged in review; each is pinned by
-a test in ``tests_py/scripts/test_craftsmanship_constants.py`` asserting
-the CURRENT non-detecting behavior, so silently "fixing" one is a reviewed
-diff, not an accidental drift):
+Known detection gaps:
 
 1. **Computed expressions** — ``TIMEOUT = 60 * 60`` is an ``ast.BinOp``,
    not the bare ``ast.Constant``/negated-constant this rule's
@@ -24,7 +17,8 @@ diff, not an accidental drift):
 None of these are exotic — they are exactly the forms most likely to
 carry an accidental magic number. Extending detection to them is future
 work, not silently promised by this module's name.
-"""
+
+source: ADR-0721"""
 
 from __future__ import annotations
 
@@ -42,18 +36,7 @@ from craftsmanship_rules import Violation  # noqa: E402
 
 SOURCE_COMMENT_MARKER = "# source:"
 
-# NOT a "# source:"-backed constant (flagged in review: citing "task
-# instruction" as a §8 source is not one — §8 wants a paper, a committed
-# benchmark, or a dated measurement, none of which apply to an exemption
-# list). This is a documented implementer DECISION, not a measurement:
-# the exact values a human reviewer accepts without asking "where does
-# that number come from" — 0/1/-1/2/100/1000 are load-bearing in every
-# language's arithmetic idiom (empty/singleton/negation/pair/percent/
-# per-mille), and a power of two up to 2**16 (65536) is legible on sight
-# as a bit-width or buffer size, not a business threshold that needs
-# citing. Pinned by
-# tests_py/scripts/test_craftsmanship_constants.py so a change to this
-# list is a reviewed diff, not silent drift.
+# source: ADR-0721
 _POWERS_OF_TWO_USUELLES = frozenset(2**exp for exp in range(1, 17))
 TRIVIAL_LITERALS = frozenset({0, 1, -1, 2, 100, 1000}) | _POWERS_OF_TWO_USUELLES
 
@@ -114,9 +97,9 @@ def check_unsourced_constants(
     rel_path: str, tree: ast.Module, source: str
 ) -> list[Violation]:
     """Rule 4 — a non-trivial module-scope numeric literal with no nearby
-    ``# source:`` comment. ``detail`` is the constant's name: stable across
-    any edit that leaves the assignment (and its comment) untouched.
-    """
+        ``# source:`` comment.
+
+    source: ADR-0721"""
     lines = source.splitlines()
     violations = []
     for name, value_node, lineno in _module_level_numeric_assignments(tree):

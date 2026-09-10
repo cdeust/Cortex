@@ -128,11 +128,9 @@ def test_valid_adr_admitted() -> None:
 
 
 def test_valid_lesson_admitted_as_explanation() -> None:
-    """ADR-2244 §4.1: the legacy 'lesson' kind maps to modern 'explanation'.
+    """Legacy 'lesson' kind maps to 'explanation' with developer audience.
 
-    Root-cause analysis is explanatory content — the 'lesson' bucket
-    collapses into 'explanation' with audience=[developer].
-    """
+    source: ADR-0929"""
     content = (
         "The bug was that FlashRank ONNX cache persisted stale weights across "
         "container restarts. Root cause: cache key did not include model hash. "
@@ -218,7 +216,7 @@ def test_derive_title_still_works_for_clean_input() -> None:
     assert title.startswith("Decision:")
 
 
-# ── ADR-2244: modern-kind routing (tutorial / how-to / runbook / rfc / journal) ──
+# source: ADR-0929
 
 
 def test_classifier_detects_runbook_from_pattern() -> None:
@@ -287,23 +285,13 @@ def test_classifier_detects_journal_from_dated_heading() -> None:
     assert result.kind == "journal"
 
 
-# ── ADR-2244: provenance and audience inference ────────────────────────
+# source: ADR-0929
 
 
 def test_codebase_tag_is_rejected_from_wiki() -> None:
-    """Policy 2026-05-17 (superseded ADR-2244 Phase 6 admission):
-    ``codebase`` / ``code-reference`` tags mark per-file extractor output
-    from ``codebase_analyze``. They are valuable in PG memory (recall
-    substrate, halo retrieval) but bloat the wiki — a single scan
-    repeats one page per file per invocation (8734-page incident).
+    """Wiki admission rejects codebase extractor output.
 
-    Coverage of the codebase now flows through the structural scope
-    pages (``architecture-overview``, ``services``, ``api``,
-    ``data-flow`` per project) written via ``curate_wiki``'s
-    coverage-driven jobs — not per-file dumps. The classifier
-    rejects ``codebase``-tagged content here so the wiki layer never
-    re-accumulates per-file pages.
-    """
+    source: ADR-0929"""
     content = (
         "## Process — packages/codebase-rust/src/parser/mod.rs::parse_file\n"
         "Decision: this function parses a single source file via tree-sitter "
@@ -352,11 +340,9 @@ def test_adr_detected_from_nygard_heading_skeleton() -> None:
 
 
 def test_architecture_tag_alone_does_not_route_to_adr() -> None:
-    """Pilot 2026-05-13 found 8 of 8 RFC pages misrouted to ADR because
-    they carried the ``architecture`` tag, which used to be in adr.tag_aliases.
-    ``architecture`` was removed from adr aliases — those pages now stay RFC
-    (or fall through to explanation if no other signal hits).
-    """
+    """Test architecture tag alone does not route to adr.
+
+    source: ADR-0929"""
     content = (
         "## Top-level layout\n\n- README.md\n- pyproject.toml\n\n"
         "Project structure: repo-a. Primary languages: unknown."
@@ -368,15 +354,9 @@ def test_architecture_tag_alone_does_not_route_to_adr() -> None:
 
 
 def test_codebase_analyze_output_is_rejected_from_wiki() -> None:
-    """Policy 2026-05-17 (superseded ADR-2244 Phase 6 admission):
-    output of ``codebase_analyze`` carries the ``codebase`` audit tag
-    and stays in PG memory only. The wiki documents code structurally
-    (architecture, services, api, data-flow per project, written by
-    ``curate_wiki`` coverage jobs) — not via one page per scanned file.
+    """Codebase-tagged extractor output stays in memory without creating a wiki page.
 
-    The 8734-page misroute the original ADR-2244 Phase 6 test guarded
-    against is now prevented at admission, not at kind-routing.
-    """
+    source: ADR-0929"""
     content = (
         "# Process — packages/codebase-rust/src/parser/mod.rs::parse_file\n\n"
         "- Entry kind: lib_entry\n"
@@ -399,11 +379,9 @@ def test_codebase_analyze_output_is_rejected_from_wiki() -> None:
 
 
 def test_crypto_module_name_does_not_flag_security_audience() -> None:
-    """Pilot 2026-05-13 found ADR-001 (zero dependencies) tagged ``security``
-    audience because its body listed ``crypto`` among Node built-in modules.
-    The security pattern now requires ``cryptograph(y|ic)`` — the full word —
-    so a bare module name no longer fires the audience.
-    """
+    """A bare crypto module name does not imply a security audience.
+
+    source: ADR-0929"""
     content = (
         "Decision: use zero external dependencies. Rely on Node.js built-in "
         "modules: fs, path, os, http, crypto, and node:test. No external "

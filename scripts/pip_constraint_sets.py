@@ -7,27 +7,9 @@ from uv.lock and writes the files is scripts/generate_pip_constraints.py.
 Keeping the table separable is what lets a test assert the mapping without
 a uv on PATH, and what keeps either file under the 300-line cap.
 
-Why one file per call site
---------------------------
-A job must install what it tests and no more. Handing every job a single
-superset would silently change what the SQLite job exercises (it would
-acquire psycopg) and would enlarge the supply-chain surface of the lint job
-to that of the full test matrix. Each entry below names its consumers, and
-the engine's `--check` fails when a file and the lock disagree.
-
 Adding a set is one entry in SETS — no edit to the engine (§1.2).
 
-Data and behavior are deliberately separated: `ConstraintSet` below carries
-only fields, and the logic that reads them (`constraint_path`,
-`constraint_command`, `constraint_header_lines`) is module-level functions,
-not methods. mutmut's mutation generator categorically excludes the body of
-any `@dataclass`-decorated class (it must, since copying a decorated class
-for the trampoline setup can re-run the decorator and its side effects) —
-so logic left as methods on `ConstraintSet` would carry zero mutation
-coverage no matter how the test loader names the module (issue #262 found
-the file's coverage aborting; this is why fixing the loader name alone
-could not produce one).
-"""
+source: ADR-0775"""
 
 from __future__ import annotations
 
@@ -56,16 +38,11 @@ def constraint_path(constraint_set: ConstraintSet) -> Path:
 def constraint_command(constraint_set: ConstraintSet) -> list[str]:
     """The uv invocation whose stdout IS this file.
 
-    `--locked` and not `--frozen`: `--frozen` exports whatever the lock
-    happens to say, so a pyproject.toml edited but never re-locked would
-    still export cleanly and `--check` would stay green over files
-    describing a dependency set nobody declared. `--locked` fails
-    instead, naming `uv lock` as the fix.
+        Captured from stdout and never via `-o`: uv writes the invoking
+        command into the file header, and an `-o` path would embed an
+        absolute, machine-specific path and destroy determinism.
 
-    Captured from stdout and never via `-o`: uv writes the invoking
-    command into the file header, and an `-o` path would embed an
-    absolute, machine-specific path and destroy determinism.
-    """
+    source: ADR-0775"""
     cmd = [
         "uv",
         "export",

@@ -57,10 +57,8 @@ def register(mcp: MCPServer) -> None:
 
 
 def _register_remember(mcp: MCPServer) -> None:
-    # Connection-rooted scoping: when CORTEX_ROOT_AGENT_TOPIC is set the
-    # agent_topic parameter is omitted from the registered signature
-    # (MCPServer derives the input schema from the signature), so the model
-    # never sees it. The handler forces the root topic server-side.
+    # source: ADR-0698
+
     if root_agent_topic() is not None:
 
         @mcp.tool(name="remember", **tool_kwargs(remember.schema))
@@ -316,10 +314,8 @@ def _register_import_sessions(mcp: MCPServer) -> None:
     ) -> dict[str, Any]:
         """Import conversation history into the memory store.
 
-        Always streams JSONL files via head+tail (ADR-0045 R2). The legacy
-        ``full_read`` parameter was removed in v3.13.0 Phase 1 because it
-        loaded entire JSONLs into Python memory (OOM path).
-        """
+        Streams JSONL files using head and tail windows."""
+        # source: ADR-0698
         return await safe_handler(
             import_sessions.handler,
             {
@@ -368,7 +364,8 @@ def _register_unified_search(mcp: MCPServer) -> None:
         project_root: str | None = None,
         exact_id: bool = False,
     ) -> dict[str, Any]:
-        """RRF-fuse Cortex memory recall with AP code search (ADR-0046 P3)."""
+        """Fuse Cortex recall with AP code search using reciprocal rank fusion."""
+        # source: ADR-0698
         return await safe_handler(
             unified_search.handler,
             {

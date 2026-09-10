@@ -1,16 +1,4 @@
-"""``wiki.citations`` seed-campaign — DB operations (M-D7, INC7.7).
-
-Finds pages whose ``wiki.pages.memory_id`` column already carries a
-verified pointer to their authoring memory (see
-``core.wiki_citation_seed`` module docstring for why this is the only
-reliable source), and the subset of those pairs already present in
-``wiki.citations`` (idempotence check for an accurate dry-run count —
-the actual write in ``insert_citation`` is self-dedupng regardless via
-``ON CONFLICT DO NOTHING`` on ``uq_wiki_citations_page_memory``).
-
-Infrastructure — no handler imports, no core-decision logic (that lives
-in ``core.wiki_citation_seed.classify_seed_candidates``).
-"""
+"""source: ADR-0572"""
 
 from __future__ import annotations
 
@@ -22,26 +10,19 @@ if TYPE_CHECKING:
     from mcp_server.infrastructure.db_types import StoreConnection
 
 
-# Measured 20 rows on the dev DB (2026-07-11); comfortably above any
-# realistic corpus size for the filename-encoded-memory_id convention
-# (bounded by the number of pages ever migrated via wiki_migrate.py from
-# a single source memory, not by total page count).
+# source: ADR-0572
 DEFAULT_SEED_SCAN_LIMIT = 5000
 
 
 def list_page_memory_seed_candidates(conn: StoreConnection, limit: int) -> list[dict]:
     """Every ``wiki.pages`` row with a non-null, FK-valid ``memory_id``.
 
-    Precondition: none beyond a provisioned ``wiki`` schema.
-    Postcondition: returns at most ``limit`` rows, each
-    ``{page_id, memory_id, domain}``, ordered by ``page_id`` for
-    deterministic pagination across dry-run/apply re-runs. The join
-    to ``memories`` is redundant with the column's own
-    ``REFERENCES memories(id)`` constraint (a dangling FK cannot exist)
-    but is kept explicit so a future ``ON DELETE SET NULL`` semantics
-    change cannot silently admit a stale id without this query
-    reflecting it.
-    """
+    Precondition: none beyond a provisioned ``wiki`` schema. Postcondition: returns at
+    most ``limit`` rows, each
+        ``{page_id, memory_id, domain}``, ordered by ``page_id`` for
+        deterministic pagination across dry-run/apply re-runs.
+
+    source: ADR-0572"""
     sql = """
     SELECT p.id AS page_id, p.memory_id AS memory_id,
            p.domain AS domain
@@ -59,19 +40,11 @@ def list_page_memory_seed_candidates(conn: StoreConnection, limit: int) -> list[
 def list_existing_page_memory_citations(
     conn: StoreConnection, page_ids: list[int]
 ) -> set[tuple[int, int]]:
-    """(page_id, memory_id) pairs already recorded in ``wiki.citations``.
+    """Return existing (page_id, memory_id) citation pairs with non-null
+    memory_id for the
+    supplied page IDs. Returns an empty set when there are no matching citations.
 
-    Precondition: ``page_ids`` is the exact candidate set from
-    ``list_page_memory_seed_candidates`` (scoping the query keeps it
-    cheap and keeps the returned set exactly comparable to
-    ``core.wiki_citation_seed.classify_seed_candidates``'s input
-    contract).
-    Postcondition: returns every ``(page_id, memory_id)`` pair with
-    ``memory_id IS NOT NULL`` already present for the given pages —
-    an empty set on a fresh DB (matches "wiki.citations = 0" at design
-    time), and after ``--apply`` a set equal to the full candidate list
-    (proving idempotence on re-run).
-    """
+        source: ADR-0572"""
     if not page_ids:
         return set()
     sql = """

@@ -1,13 +1,6 @@
 """Memory INSERT-path mixin for PgMemoryStore.
 
-Split out of pg_store.py (issue: 1384-line file over the 300-line §4.1
-cap) — the single-writer INSERT path: SQL constant + param building +
-the two commit strategies (``insert_memory`` commits standalone;
-``_insert_memory_on`` leaves the transaction boundary to its caller).
-Atomic reconsolidation-supersession (which reuses ``_insert_memory_on``
-inside its own transaction) is a separate concern — see the sibling
-``pg_store_supersede`` module.
-"""
+source: ADR-0583"""
 
 from __future__ import annotations
 
@@ -25,10 +18,7 @@ from mcp_server.shared.temporal_normalize import normalize_date_to_iso
 class PgWriteMixin(PgStoreHost):
     """Memory INSERT on PostgreSQL — SQL constant, param building, commit."""
 
-    # Single source of truth for the memory INSERT. insert_memory() runs it on
-    # a pooled autocommit connection (one row per statement); supersede_atomic()
-    # runs it inside an explicit transaction so the row and its supersession
-    # edge commit — or roll back — as one unit, never leaving a disconnected row.
+    # source: ADR-0583
     _INSERT_MEMORY_SQL = """INSERT INTO memories (
                 content, embedding, tags, source, domain,
                 directory_context, created_at, last_accessed, heat_base_set_at,
@@ -63,23 +53,9 @@ class PgWriteMixin(PgStoreHost):
     def _resolve_insert_dates(self, data: dict[str, Any], now: str) -> tuple[str, str]:
         """Normalize created_at and anchor heat_base_set_at to the event date.
 
-        A3 decay clock: anchor heat_base_set_at to the event date, not NOW().
-        effective_heat() decays from COALESCE(heat_base_set_at, last_accessed,
-        created_at); for a never-touched insert the faithful "last canonical
-        touch" IS the event (created_at), so a historical-dated memory
-        (import / benchmark loader) engages the SQL forgetting law instead of
-        reading hours_elapsed≈0. No-op for fresh writes where created_at≈now.
-        Source: docs/program/phase-3-a3-migration-design.md §3.1 (clock = last
-        touch); benchmark root-cause memory 4202968.
+                Returns ``(created_at, heat_base_set_at)`` — both already defaulted.
 
-        No "is it already ISO?" pre-test here: deciding that is
-        normalize_date_to_iso's job, and it returns a real ISO datetime
-        unchanged. The pre-test this replaces was `"T" not in raw_created`,
-        which skipped normalization for every string merely CONTAINING a T —
-        including "8 May 2023 13:56 EST" (issue #252).
-
-        Returns ``(created_at, heat_base_set_at)`` — both already defaulted.
-        """
+        source: ADR-0583"""
         raw_created = data.get("created_at")
         if raw_created and isinstance(raw_created, str):
             raw_created = normalize_date_to_iso(raw_created) or raw_created
@@ -135,18 +111,11 @@ class PgWriteMixin(PgStoreHost):
             "dominant_emotion": data.get("dominant_emotion", "neutral"),
             "supersedes_id": data.get("supersedes_id"),
             "source_attribution": data.get("source_attribution", "unknown"),
-            # issue #365: channel-derived capture origin. Defaults to
-            # "unknown" (permissive at the gate) so every existing writer
-            # is unaffected; the auto-capture path passes its real origin.
+            # source: ADR-0583
             "capture_origin": data.get("capture_origin", "unknown"),
             "stimulus_signature": data.get("stimulus_signature", ""),
             "extinction_strength": data.get("extinction_strength", 0.0),
-            # M-D2 (7.4): every writer resolves this explicitly BEFORE
-            # calling insert_memory (mcp_server.shared.write_class is the
-            # single classification choke point; infrastructure/ must not
-            # import core/, so this layer trusts the caller and relies on
-            # the memories.write_class CHECK constraint as the DB-level
-            # backstop against a value outside the four known classes).
+            # source: ADR-0583
             "write_class": data.get("write_class") or "deliberate",
         }
 
@@ -170,10 +139,7 @@ class PgWriteMixin(PgStoreHost):
     ) -> int:
         """Run the memory INSERT on ``conn`` WITHOUT committing.
 
-        The caller owns the transaction boundary: insert_memory() commits on a
-        pooled autocommit connection; supersede_atomic() commits or rolls back
-        the row together with its supersession edge.
-        """
+        source: ADR-0583"""
         row = conn.execute(
             self._INSERT_MEMORY_SQL, self._build_insert_params(data)
         ).fetchone()

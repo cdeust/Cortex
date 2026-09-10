@@ -15,20 +15,16 @@ Three subcommands:
     compute precision per threshold and select S. Writes a calibration
     report artifact. Read-only against the DB (uses only the labels file).
 
-``apply``
-    Given a calibrated threshold S, auto-supersede components >= S
-    (reusing the I6-D1 supersede-to-existing mechanism) and write the
-    review queue for [0.75, S). Dry-run by default; ``--apply`` writes.
-
 Usage
 -----
 
     uv run python scripts/near_dup_calibrate.py sample
-    uv run python scripts/near_dup_calibrate.py calibrate \
-        --labels docs/campaigns/i6d2_labels.json
+    uv run python scripts/near_dup_calibrate.py calibrate         --labels
+    docs/campaigns/i6d2_labels.json
     uv run python scripts/near_dup_calibrate.py apply --threshold 0.90
     uv run python scripts/near_dup_calibrate.py apply --threshold 0.90 --apply
-"""
+
+source: ADR-0773"""
 
 from __future__ import annotations
 

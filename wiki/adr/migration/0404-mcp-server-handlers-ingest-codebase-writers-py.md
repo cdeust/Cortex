@@ -1,0 +1,27 @@
+# ADR-0404: mcp_server/handlers/ingest_codebase_writers.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `mcp_server/handlers/ingest_codebase_writers.py`; original SHA-256 `bf871c6135ac801955e2ca55cbedeccf16afb2b0d5a46ba608e6741b347bbf33`.
+
+## Original docstring, lines 1–15
+
+````text
+"""Cortex-side projection for ingest_codebase — pure row builders.
+
+Projects the upstream graph projection (symbols, files, edges) into the row
+tuples the streaming staging sinks COPY into PostgreSQL. These functions are
+PURE (no I/O): the handler (composition root) drives them through
+``StagingResolveSink`` / ``BackpressurePipeline`` so ids resolve server-side
+and no ``name -> id`` map is ever held in Python.
+
+Name canonicalization (``canonicalize_entity_name``) is applied HERE, on both
+an entity's name and any edge endpoint that references it, so the staging
+``JOIN ... ON LOWER(name)`` always matches the Python dedup policy. File paths
+are literal (never all-caps shout-case) so canonicalization is identity for
+them; they are passed through verbatim on both the file entity and the
+containment edge.
+"""
+````
+

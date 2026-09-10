@@ -1,8 +1,7 @@
-"""Explicit ADR identity inventory and opt-in quarantine (issue #514/ADR-0056).
-
-Only canonical filenames define identities. No fuzzy title matching or global
+"""Only canonical filenames define identities. No fuzzy title matching or global
 wiki export is performed; every operation stays inside the supplied root.
-"""
+
+source: ADR-0624"""
 
 from __future__ import annotations
 
@@ -77,14 +76,17 @@ def quarantine_plan(root: Path | str) -> dict[str, str]:
 def quarantine_malformed_decisions(
     root: Path | str, *, apply: bool = False
 ) -> dict[str, str]:
-    """Default to planning; explicit apply moves original bytes without rewriting."""
+    """Default to planning; explicit apply moves original bytes without
+    rewriting.
+
+    source: ADR-0624"""
     base = Path(root).resolve()
     moves = quarantine_plan(base)
     if apply:
         for source, destination in moves.items():
             target = safe_join(base, destination)
             target.parent.mkdir(parents=True, exist_ok=True)
-            # Exclusive creation prevents replacing an existing quarantine record.
+            # source: ADR-0624
             with target.open("xb") as output:
                 output.write(safe_join(base, source).read_bytes())
             safe_join(base, source).unlink()
@@ -94,9 +96,7 @@ def quarantine_malformed_decisions(
 def _directory_stamp(path: Path) -> list[int]:
     """Use nanosecond identity/change stamps, not file-body timestamps.
 
-    source: Python os.stat_result contract; directory entry mutations change
-    parent metadata. ctime also detects attempts to restore an earlier mtime.
-    """
+    source: ADR-0624"""
     info = path.lstat()
     if not stat.S_ISDIR(info.st_mode):
         raise ValueError(f"ADR inventory requires real directories: {path}")
@@ -134,10 +134,7 @@ def _atomic_json(target: Path, payload: object) -> bytes:
 def write_decision_index(root: Path | str) -> dict[str, str]:
     """Persist deterministic ID map plus local directory freshness evidence.
 
-    The map is portable. The adjacent state file is filesystem-local and must
-    be regenerated after checkout; it never belongs in a tracked export.
-    Publishing state last makes interrupted map updates fail closed on lookup.
-    """
+    source: ADR-0624"""
     base = Path(root).resolve()
     before = _directory_inventory(base)
     index = decision_index(base)

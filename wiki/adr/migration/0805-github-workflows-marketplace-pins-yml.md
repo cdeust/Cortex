@@ -22,3 +22,13 @@ Source rationale preserved verbatim. Identifiers inside historical quotations ar
 ````text
 # source: run 33723724819 (2026-09-03), max 13s; ceil(2 * 13 / 60).
 ````
+
+## Final non-Python residual audit
+
+### .github/workflows/marketplace-pins.yml — pre-cleanup line 8
+
+````text
+# Cron matters more than the PR trigger: pins go stale by INACTION, and
+# inaction never opens a PR. Weekly is bounded staleness (max 7 days),
+# vs unbounded before.
+````

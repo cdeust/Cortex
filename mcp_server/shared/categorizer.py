@@ -99,9 +99,7 @@ def categorize_with_scores(text: str | None) -> dict[str, float]:
 def categorize(text: str | None) -> str:
     """Classify text into a single best work category.
 
-    Returns the highest-scoring category, with tie-breaking favoring
-    multi-word phrase matches. Defaults to "general" if no match.
-    """
+    source: ADR-0644"""
     if not text:
         return "general"
 

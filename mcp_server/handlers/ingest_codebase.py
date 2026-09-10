@@ -1,16 +1,6 @@
 """Handler: ingest_codebase — pull codebase analysis from the upstream
 ai-architect-mcp-codebase MCP server into Cortex's store.
 
-Flow
-----
-1. Resolve the project's graph path (cache hit or upstream analyze).
-2. Pull the FULL chain hierarchy from the Kuzu graph via Cypher:
-   every Function/Method/Struct, every File, every call edge between
-   symbols, every File→symbol containment edge.
-3. Project upstream artefacts into Cortex's stores: memories + KG
-   entities + KG edges + wiki reference pages per process.
-4. Return an ingestion summary.
-
 Cortex is the CONSUMER — upstream owns analysis, Cortex owns
 documentation and knowledge-graph state.
 
@@ -20,7 +10,8 @@ This file is the composition root. Implementation is split:
   - ingest_codebase_cypher.py    — Kuzu fetchers
   - ingest_codebase_writers.py   — MemoryStore writers
   - ingest_codebase_pages.py     — process wiki rendering
-"""
+
+source: ADR-0399"""
 
 from __future__ import annotations
 
@@ -67,22 +58,12 @@ logger = logging.getLogger(__name__)
 # Upstream MCP server name in mcp-connections.json.
 _UPSTREAM_SERVER = "codebase"
 
-# Symbol ingest page size. Symbols are fetched and written in pages of
-# this size so the peak RAM stays at O(page_size) rather than O(N_symbols).
-# Kuzu queries use SKIP/LIMIT pagination per page so the MCP JSON-RPC
-# blob per request is bounded regardless of total corpus size.
-# Call edges and containment edges are pulled once after all symbol pages
-# complete (they reference qualified_names that must already exist).
-# source: Carnot analysis — root cause of OOM is accumulating all symbols
-#   in one Python list before any write; adaptive pagination removes that.
+# source: ADR-0399
 _SYMBOL_PAGE_SIZE: int = 5_000
 _DEFAULT_TOP_SYMBOLS: int | None = None  # None = ingest full graph, paged
 _DEFAULT_TOP_PROCESSES: int | None = None
 
-# Edge fetch+write page size. Edges are paged out of Kuzu via SKIP/LIMIT and
-# written one page at a time to a single staging sink on the loop thread —
-# constant memory on both sides. source: benchmark — the proven 1000-row chunk
-# (74MB peak RSS / ~49.5k rows/s streaming 500k rows, measured 2026-06-03).
+# source: ADR-0399
 _EDGE_PAGE_SIZE: int = 1_000
 
 # Human-readable names for the 6 sequential ingest stages.
@@ -131,14 +112,10 @@ def _default_output_dir(project_path: str) -> str:
 def _prune_precedent_graphs(output_dir: str) -> list[str]:
     """Remove stale graphs for the SAME project once a fresh one is built.
 
-    Graph dirs are keyed ``<project-name>-<hash>`` (project_key) — but a
-    path move, a version-named legacy dir, or a re-index under a new hash
-    leaves the old ``<name>-*`` dir behind. Those precedents pollute
-    ``resolve_graph_paths`` (the impact query then scans 4 graphs, some
-    stale/empty, and can pick a stale hit). Per "update a version → remove
-    the precedent", drop every sibling sharing this project's name prefix
-    except the one we just wrote. Returns removed dir names.
-    """
+    Remove stale sibling graph directories sharing the current project name prefix,
+    preserving the graph just written. Returns removed directory names.
+
+    source: ADR-0399"""
 
     cur = Path(output_dir)
     parent = cur.parent
@@ -221,7 +198,7 @@ async def _stream_symbol_pages(
         if rows:
             ctx.writer.add_many(rows)
         total_symbols += len(page)
-        # stride != page_size — see symbol_page_stride (2026-06-11 RCA).
+        # source: ADR-0399
         offset += cypher.symbol_page_stride(ctx.page_size)
         _checkpoint_write(ctx.store, ctx.run_id, offset, total_symbols)
         ctx.progress.advance(total_symbols, total=ctx.symbol_total)
@@ -399,12 +376,7 @@ async def _pull_processes(
 ) -> list[dict[str, Any]]:
     """Pull ALL processes via upstream get_processes; respect optional cap.
 
-    Upstream pages its process list by serialized size (``truncated`` +
-    ``next_offset``, ai-architect-mcp-codebase ``do_get_processes``); a single
-    call returns only the first page. Follow the cursor until exhausted —
-    the previous single-shot read silently dropped every process past the
-    first byte-budget page (2026-06-11 RCA).
-    """
+    source: ADR-0399"""
     procs: list[dict[str, Any]] = []
     offset = 0
     try:
@@ -445,11 +417,7 @@ async def _enrich_process_symbols(
 ) -> None:
     """Attach participating symbol qns to each process (in place).
 
-    ``get_processes`` returns only counts (``node_count``); the actual
-    membership lives in the graph as ParticipatesIn edges. Pages without
-    symbols carry no documentation value (2026-05-17 user feedback), so
-    this fetch is what makes the wiki pages worth writing.
-    """
+    source: ADR-0399"""
     for proc in processes:
         entry = proc.get("entry_point")
         if not entry or not _process_node_count(proc):
@@ -489,10 +457,7 @@ async def handler(
     if not project_path:
         return {"ingested": False, "reason": "project_path is required"}
 
-    # A plugin-cache copy is NOT a project. Indexing them produced 8
-    # duplicate symbol universes (versions 3.18.3–3.19.5 of Cortex
-    # itself) whose graphs outlived their deleted source dirs and
-    # polluted the galaxy + impact queries (user report 2026-06-13).
+    # source: ADR-0399
     _resolved = str(Path(project_path).expanduser().resolve())
     if "/plugins/cache/" in _resolved or "/.claude/plugins/" in _resolved:
         return {
@@ -536,9 +501,7 @@ async def handler(
             "error": f"{type(exc).__name__}: {exc}",
         }
 
-    # The fresh graph supersedes any precedent for this project — remove
-    # stale ``<name>-*`` siblings so resolve_graph_paths returns only the
-    # current graph (no stale/empty hits in the impact query).
+    # source: ADR-0399
     _prune_precedent_graphs(output_dir)
 
     diagnostics: list[Any] = []
@@ -602,10 +565,7 @@ async def handler(
             )
         wiki_paths = pages.write_process_pages(processes)
 
-        # ── Phase 5: docs content (INC5.3, D6) — optional, cheap relative to
-        # the symbol/edge phases above; content indexing of Markdown-family
-        # files happens on Cortex's side only (D6 rationale in
-        # ingest_docs_content_writers.py's module docstring). ────────────────
+        # source: ADR-0399
         docs_stats: dict[str, Any] = {}
         if args.get("ingest_docs", True):
             _progress.stage(_STAGES[6], 6, len(_STAGES))
@@ -619,10 +579,7 @@ async def handler(
         "ingested": True,
         "graph_path": graph_path,
         "analyze": analyze_stats,
-        # entities_written = rows actually INSERTed by the staging sink
-        # (post NOT EXISTS dedup); entities_seen = rows streamed at it.
-        # The previous response reported seen counts AS written — a
-        # misnomer that masked the domain-blind dedup bug (2026-06-11 RCA).
+        # source: ADR-0399
         "entities_written": entities_written,
         "entities_seen": total_symbols_seen + len(files),
         "edges_written": edges_written,

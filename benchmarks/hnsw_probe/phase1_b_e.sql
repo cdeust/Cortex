@@ -1,5 +1,5 @@
 -- Phase 1 (HNSW present): conditions B and E — batched UPDATEs.
--- Expected to be fast (seconds each).
+-- source: ADR-0832
 
 SET client_min_messages = WARNING;
 \pset format unaligned

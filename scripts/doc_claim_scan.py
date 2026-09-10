@@ -1,16 +1,6 @@
 """Claim-scanning machinery for scripts/check_doc_claims.py.
 
-Extracted (issue #293, Extract Function/Move Function) to keep
-check_doc_claims.py under the repo's 300-line file cap. Answers "does a
-scanned file's prose claim (a count, phrased as 'N things') agree with a
-canonical number" and "which lines have declared they are not a claim."
-
-`scanned_files`/`read_fn` are explicit parameters rather than module
-globals, so check_doc_claims.py's thin wrappers (which do reference its own
-`SCANNED_FILES`/`read` bare names, and so DO see `gate.read = fake` /
-`gate.SCANNED_FILES = (...)` patches in tests_py/scripts/test_check_doc_claims.py)
-can forward them through unchanged.
-"""
+source: ADR-0729"""
 
 from __future__ import annotations
 
@@ -22,12 +12,7 @@ ReadFn = Callable[[str], str]
 # A line introducing a past release states that release's numbers.
 HISTORY_MARKER = re.compile(r"\*\*v\d+\.\d+\.\d+")
 
-# A line whose number counts something else declares which family it is not a
-# claim for. Rewording the prose to dodge a pattern would hide a true, measured
-# number to keep the gate quiet; declaring it keeps the number and puts the
-# exemption on the record, at the one site that knows why it is not a claim.
-# The label must match a claim family exactly — an unrecognised or misspelled
-# label exempts nothing, so the marker fails closed.
+# source: ADR-0729
 NOT_A_CLAIM = re.compile(r"\[not-a-count-claim: ([a-z][a-z ]*)\]")
 
 
@@ -81,10 +66,7 @@ def check_counts(
 ) -> list[str]:
     """Report claims that disagree — and the absence of any claim at all.
 
-    A pattern that matches nothing would pass silently forever, which is how a
-    gate becomes decorative: the vacuity guard makes a reworded (or deleted)
-    claim a build failure rather than an unnoticed loss of coverage.
-    """
+    source: ADR-0729"""
     claims = scan_claims(pattern, label, scanned_files, read_fn)
     if not claims:
         return [

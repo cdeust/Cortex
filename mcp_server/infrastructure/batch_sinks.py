@@ -1,15 +1,12 @@
 """Fire-and-forget batch-sink adapters: COPY and executemany.
 
-Both implement the ``BatchSink`` contract — one batch in, durably committed,
-released — and are atomic per batch via ``with conn.transaction()`` (the only
-construct that gives BEGIN/COMMIT/ROLLBACK under ``autocommit=True``).
-
 Use ``CopyBatchSink`` for max-throughput bulk inserts into a table with no
 conflict handling. Use ``ExecuteManyBatchSink`` when the write needs
 ``ON CONFLICT`` (idempotent upsert) — COPY cannot express it.
 
 Pure infrastructure — no core imports.
-"""
+
+source: ADR-0506"""
 
 from __future__ import annotations
 
@@ -45,7 +42,7 @@ class CopyBatchSink(PooledConnectionSink):
             return 0
         conn = self._ensure_conn()
         written = 0
-        with conn.transaction():  # atomic per batch under autocommit
+        with conn.transaction():  # source: ADR-0506
             with conn.cursor() as cur, cur.copy(self._copy_sql) as cp:
                 for item in batch:
                     cp.write_row(self._row_adapter(item))

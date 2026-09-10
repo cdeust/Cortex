@@ -1,0 +1,139 @@
+---
+kind: adr
+number: 0604
+title: Preserve sqlite_sql_translate design decisions
+status: accepted
+---
+
+# ADR-0604: sqlite_sql_translate design decisions
+
+## Context
+
+Canonical migration of decision evidence from `mcp_server/infrastructure/sqlite_sql_translate.py` under ADR-0056.
+The excerpts below preserve historical claims and citations verbatim; original ADR numbers are historical quotations, not current identity bindings.
+
+## Decision
+
+Keep the source implementation linked to this versioned decision record. Operational API documentation remains with the implementation.
+
+## Preserved decision evidence
+
+### module, original line 1
+
+````text
+Pure string/regex rewriting, zero I/O: extracted from `sqlite_compat.py`
+(issue #260) to keep that file under the project's 300-line cap
+(CLAUDE.md, coding-standards §4.1) after adding the datetime-adapter fix.
+`sqlite_compat.py` imports `_translate_sql`/`_returning_was_stripped` from
+here for its own use; the split is behaviour-preserving — same functions,
+same module-global `_SUPPORTS_RETURNING` contract, full suite green
+unchanged (see the issue #260 PR).
+````
+
+### module, original line 1
+
+````text
+Translations:
+  - %s -> ? (parameter placeholders)
+  - ::jsonb, ::TEXT, ::REAL, ::INT -> stripped (type casts)
+  - SERIAL PRIMARY KEY -> INTEGER PRIMARY KEY AUTOINCREMENT
+  - TIMESTAMPTZ -> TEXT
+  - DEFAULT NOW() -> DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  - ON CONFLICT ... DO UPDATE SET -> preserved (SQLite 3.24+)
+  - RETURNING id -> stripped (use lastrowid instead)
+  - wiki.<table> -> wiki_<table> (SQLite has no schema namespaces)
+  - array_length(col, 1) -> json_array_length(col) (arrays are JSON TEXT)
+
+````
+
+### _returning_was_stripped, original line 39
+
+````text
+True when this SQL had a RETURNING clause that translation removed.
+````
+
+### _translate_sql, original line 52
+
+````text
+Translate psycopg-style SQL to SQLite-compatible SQL.
+````
+
+### comment, original line 28
+
+````text
+# SQLite grew RETURNING in 3.35.0 (2021-03-12).
+# source: https://sqlite.org/lang_returning.html ("added in 3.35.0")
+# When present we keep the clause, because upsert callers need the id of the
+# row the statement actually touched: on the ON CONFLICT DO UPDATE path
+# lastrowid does NOT identify the updated row, so the strip-and-synthesise
+# fallback below would hand back the wrong page id. Older runtimes keep the
+# historical strip behaviour.
+````
+
+### comment, original line 53
+
+````text
+# Named (pyformat) placeholders: %(name)s -> :name. Must run before the
+    # positional pass. The bulk claim/draft/page inserts bind by name, so
+    # without this the wiki pipeline extracts zero claims and reports the
+    # per-memory failure as `near "%": syntax error` (issue #206).
+````
+
+### comment, original line 62
+
+````text
+# Strip PostgreSQL type casts: ::jsonb, ::TEXT, ::REAL, and the ARRAY
+    # forms ::int[] / ::bigint[]. The trailing [] must be consumed with the
+    # cast — matching only `::int` left a stray `[]` behind, turning
+    # `%s::int[]` into `?[]` and failing with a syntax error (issue #206).
+````
+
+### comment, original line 95
+
+````text
+# `UPDATE tbl l SET ...` -> `UPDATE tbl AS l SET ...`. PostgreSQL accepts
+    # a bare table alias; SQLite's UPDATE grammar requires the AS keyword.
+    # (SQLite has supported UPDATE ... FROM since 3.33, so only the alias
+    # spelling needs fixing.) Used by the backlink resolution pass.
+    # The table may still be schema-qualified (`wiki.links`) at this point —
+    # the wiki.<table> flattening runs further down — so the name pattern
+    # has to admit a dot.
+````
+
+### comment, original line 134
+
+````text
+# `(xmax = 0) AS inserted` -> dropped. xmax is a PostgreSQL system column
+    # used by upsert_page to tell INSERT from UPDATE; SQLite has no analogue.
+    # Dropping it is safe because no caller reads the alias — upsert_page
+    # branches on whether a row came back at all, which RETURNING id alone
+    # answers. Leaving it in produced `near ",": syntax error` (issue #206).
+````
+
+### comment, original line 146
+
+````text
+# `a IS DISTINCT FROM b` -> `a IS NOT b`: SQLite's IS/IS NOT are already
+    # NULL-safe, which is exactly what IS DISTINCT FROM means.
+````
+
+### comment, original line 154
+
+````text
+# wiki.<table> -> wiki_<table>. SQLite has no schema namespaces, so the
+    # isolated `wiki` PostgreSQL schema is flattened to a table-name prefix
+    # (mcp_server/infrastructure/sqlite_schema_wiki.py declares them).
+````
+
+### comment, original line 159
+
+````text
+# array_length(col, 1) -> json_array_length(col). PostgreSQL INTEGER[]/
+    # BIGINT[] columns are stored as JSON TEXT under SQLite; PostgreSQL
+    # returns NULL for an empty array here, json_array_length returns 0 —
+    # both are falsy against the `> 0` predicate every call site uses.
+````
+
+## Consequences
+
+Review rationale and source changes together. Historical evidence is preserved rather than silently rewritten; executable Python structure is unchanged after removing docstrings.

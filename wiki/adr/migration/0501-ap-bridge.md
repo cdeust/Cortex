@@ -1,0 +1,294 @@
+---
+kind: adr
+number: 0501
+title: Preserve ap_bridge design decisions
+status: accepted
+---
+
+# ADR-0501: ap_bridge design decisions
+
+## Context
+
+Canonical migration of decision evidence from `mcp_server/infrastructure/ap_bridge.py` under ADR-0056.
+The excerpts below preserve historical claims and citations verbatim; original ADR numbers are historical quotations, not current identity bindings.
+
+## Decision
+
+Keep the source implementation linked to this versioned decision record. Operational API documentation remains with the implementation.
+
+## Preserved decision evidence
+
+### module, original line 1
+
+````text
+Bridge to the ``ai-architect-mcp-codebase`` sibling MCP server (ADR-0046).
+````
+
+### module, original line 1
+
+````text
+Enabled by default (``MemorySettings.AP_ENABLED = True``) so the L6
+symbol ring has depth out of the box. Users cut token / subprocess
+cost by setting ``CORTEX_MEMORY_AP_ENABLED=0`` in their MCP config.
+When off, no connection is attempted, every call returns an empty
+result, and the workflow graph falls back to the native in-process
+AST source.
+````
+
+### is_enabled, original line 60
+
+````text
+    Single source of truth: ``MemorySettings.AP_ENABLED`` (reads
+    ``CORTEX_MEMORY_AP_ENABLED`` via pydantic-settings env prefix).
+    Default is ``True`` — the L6 symbol ring has depth out of the box.
+    Users who want to cut token / subprocess cost set
+    ``CORTEX_MEMORY_AP_ENABLED=0`` in their MCP server env block.
+````
+
+### is_enabled, original line 60
+
+````text
+    AP absence still degrades gracefully: ``APBridge.connect()`` returns
+    False silently and every tool call short-circuits to []; the native
+    in-process AST source fills the L6 ring.
+    
+````
+
+### resolve_graph_path, original line 82
+
+````text
+    Preference order:
+      1. ``CORTEX_AP_GRAPH_PATH`` env var (explicit caller override).
+      2. The conventional legacy location ``$HOME/.cortex/ap_graph/graph``.
+      3. The first graph in the multi-project roster (``resolve_graph_paths``).
+    
+````
+
+### resolve_graph_paths, original line 101
+
+````text
+    Cortex keeps AP-indexed graphs under TWO directory schemes — the
+    legacy ``~/.cortex/ap_graphs/<project>/graph`` (predates the AP CLI
+    rename) and the current ``~/.cache/cortex/code-graphs/<project>-<hash>/graph``
+    (where the in-tree ``ingest_codebase`` handler writes them). Both
+    must be scanned so a fresh install with no manual setup discovers
+    every graph the user already has.
+````
+
+### _resolve_command, original line 142
+
+````text
+    Priority:
+      1. ``CORTEX_AP_COMMAND`` env var — full shell-free invocation
+         spec (JSON: ``{"command": "...", "args": [...]}``).
+      2. Methodology bin symlink — ``~/.claude/methodology/bin/mcp-server``
+         set up by Cortex's silent installer (pipeline_installer.py).
+         Basename ``mcp-server`` matches the MCPClient allowlist.
+      3. Installed-plugin resolution — read ``installed_plugins.json`` for
+         the ACTIVE ``ai-architect-mcp-codebase`` install and invoke its compiled
+         Rust binary at ``<installPath>/target/release/automatised-pipeline``.
+         This is the SAME source of truth the plugin's own ``.mcp.json``
+         launcher uses, so it picks the active version (e.g. 0.2.0 over a
+         stale 0.0.9) rather than guessing.
+````
+
+### _degrade, original line 293
+
+````text
+Record why the last AP call failed and emit the stderr note.
+````
+
+### _degrade, original line 293
+
+````text
+        Shared by both ``call()`` except-branches (timeout, other
+        exception) — the caller always gets ``None`` back and
+        ``unavailable_reason`` always names why.
+        
+````
+
+### call, original line 305
+
+````text
+        ``timeout_s`` bounds this single call with a wall-clock ceiling.
+        The client itself runs AP with ``callTimeoutMs=0`` (indexing may
+        legitimately exceed any fixed bound), so without this the only
+        backstop is the 600s wedge-silence window — far too slow for an
+        interactive read/lookup. Interactive wrappers pass
+        ``interactive_call_timeout_s()``; the indexing wrappers leave it
+        ``None`` (unbounded). A timeout degrades exactly like any other AP
+        failure: reason recorded, stderr note, ``None`` returned so callers
+        fall back to Cortex-only results.
+        
+````
+
+### index_codebase, original line 363
+
+````text
+        AP requires both ``path`` (source root) and ``output_dir``
+        (where ``graph/`` lives). Returns a dict including
+        ``graph_path``; subsequent calls must pass that path.
+        
+````
+
+### get_context, original line 398
+
+````text
+        AP v0.0.9 keys this by ``qualified_name`` (``file::name``), not the
+        legacy ``symbol_id``. This is the full directional dependency view.
+        
+````
+
+### get_processes, original line 411
+
+````text
+        Each process: entry_point, entry_kind (main/test/handler/lib_entry),
+        depth, node_count. Requires cluster_graph to have run.
+        
+````
+
+### detect_changes, original line 459
+
+````text
+        AP v0.0.9 takes ``base_ref``/``head_ref`` (+ ``codebase_path`` when
+        running git internally) or raw ``diff_text`` — not legacy
+        ``base``/``head``.
+        
+````
+
+### analyze_codebase, original line 494
+
+````text
+        search_codebase (Stage 3d) requires all three to have run; use
+        this when you want Phase-3 unified search against a fresh index.
+        
+````
+
+### comment, original line 76
+
+````text
+# Config system unavailable (e.g. test import-order edge case):
+        # fall back to the on-by-default contract.
+````
+
+### comment, original line 171
+
+````text
+# Methodology bin symlink (preferred — same path the live MCP
+    # server uses via mcp-connections.json).
+````
+
+### comment, original line 175
+
+````text
+# Full path is fine — MCPClient validates by basename against
+        # the command allowlist (which contains "mcp-server").
+````
+
+### comment, original line 178
+
+````text
+# Installed-plugin resolution via installed_plugins.json.
+    #
+    # The compiled Rust MCP entrypoint is ``target/release/automatised-pipeline``
+    # — NOT anything under ``bin/`` (which holds only ``ensure-binary.sh``, a
+    # bash build helper). The previous probe globbed ``bin/*`` and ran
+    # ``node ensure-binary.sh`` → SyntaxError. Resolve the active install the
+    # way the plugin's launcher does. source: user report (two installs:
+    # 0.0.9 + 0.2.0; must pick the active one, not glob).
+````
+
+### comment, original line 191
+
+````text
+# Canonical key first: a host may still carry a pre-v0.9.0 install,
+        # but a current one must never lose to it.
+````
+
+### comment, original line 238
+
+````text
+# Fast-path ONLY when the underlying client is ALSO still live.
+        # MCPClient self-closes after its idle timeout (default 5 min) and
+        # a failed call can drop the transport — but this bridge's
+        # ``_connected`` stayed True, so every later call short-circuited
+        # to a dead client and silently returned None until the process
+        # restarted (the "AST works, then stops" flakiness). Re-verify the
+        # client and reconnect on staleness. source: MCP handshake RCA,
+        # 2026-06-03.
+````
+
+### comment, original line 251
+
+````text
+# Drop a stale/dead client (idle-closed or errored) so we
+            # rebuild rather than reuse a torn-down transport.
+````
+
+### comment, original line 261
+
+````text
+# Disable the per-call timeout for AP. Fresh indexing of
+                # large codebases can exceed any fixed bound; liveness is
+                # governed by the child process and explicit cancellation.
+                # See mcp_client.py: callTimeoutMs=0 -> no asyncio.wait_for.
+````
+
+### comment, original line 267
+
+````text
+# The upstream binary is not in the default allowlist.
+                # ``node`` is for the plugin-cache resolution path; the
+                # upstream names come from upstream_identity so this set
+                # cannot drift from the resolver above.
+````
+
+### comment, original line 280
+
+````text
+# Leave _connected False so the NEXT call retries (cold-start
+                # / transient failures self-heal instead of poisoning the
+                # bridge for the process lifetime).
+````
+
+### comment, original line 319
+
+````text
+# this call's outcome is authoritative
+````
+
+### comment, original line 322
+
+````text
+# connect() success guarantees a client; defensive
+````
+
+### comment, original line 329
+
+````text
+# interactive ceiling hit — degrade, don't hang
+````
+
+### comment, original line 343
+
+````text
+# ── Convenience wrappers matching AP's MCP schema (src/tool_schemas.rs).
+    # All Stage-3a tools are scoped to a ``graph_path`` returned by
+    # index_codebase; callers pass it through or rely on the cached one.
+    # ── Interactive read-path tools carry a wall-clock ceiling
+    # (interactive_call_timeout_s) so a wedged-but-connected AP degrades to
+    # Cortex-only in seconds instead of stalling for the 600s wedge window.
+    # The indexing/write tools below (index_codebase, analyze_codebase,
+    # resolve_graph, cluster_graph, detect_changes) stay unbounded on purpose.
+````
+
+### comment, original line 507
+
+````text
+# MCPClient.close() is SYNCHRONOUS — ``await self._client.close()``
+                # was ``await None`` → TypeError on every teardown.
+````
+
+## Consequences
+
+Review rationale and source changes together. Historical evidence is preserved rather than silently rewritten; executable Python structure is unchanged after removing docstrings.

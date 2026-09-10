@@ -39,3 +39,12 @@ Source rationale preserved verbatim. Identifiers inside historical quotations ar
 -- Drop: instant. Create: ~100s on 66K rows (measured in setup).
 -- We'll cache this by running WITH-HNSW conditions consecutively, then WITHOUT.
 ````
+
+## Final non-Python residual audit
+
+### benchmarks/hnsw_probe/run_conditions.sql — pre-cleanup line 10
+
+````text
+-- Plus probe F) HNSW present, per-row UPDATE with per-row COMMIT
+--             (matches production exactly)  — only measure once due to runtime.
+````

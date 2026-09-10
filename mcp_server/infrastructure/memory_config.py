@@ -46,10 +46,9 @@ class MemorySettings(BaseSettings):
     # CLAUDE_ENVIRONMENT
     RUNTIME: str = ""
 
-    # ── Storage ──────────────────────────────────────────────────────────
-    # 127.0.0.1 not localhost: avoids IPv6 ::1 / peer-auth ambiguity
+    # source: ADR-0534
     DATABASE_URL: str = "postgresql://127.0.0.1:5432/cortex"
-    DB_PATH: str = str(METHODOLOGY_DIR / "memory.db")  # deprecated, kept for migration
+    DB_PATH: str = str(METHODOLOGY_DIR / "memory.db")  # source: ADR-0534
     SQLITE_FALLBACK_PATH: str = str(METHODOLOGY_DIR / "memory.db")
     STORE_BACKEND: str = "auto"  # "auto" | "postgresql" | "sqlite"
     SESSION_LOG_ROLLING_LIMIT: int = 1000
@@ -78,7 +77,7 @@ class MemorySettings(BaseSettings):
     HOPFIELD_BETA: float = 8.0
     HOPFIELD_MAX_PATTERNS: int = 5000
 
-    # ── Spreading Activation (Collins & Loftus 1975) ────────────────────
+    # source: ADR-0534
     SA_DECAY: float = 0.65
     SA_THRESHOLD: float = 0.1
     SA_MAX_DEPTH: int = 3
@@ -88,20 +87,7 @@ class MemorySettings(BaseSettings):
     WRITE_GATE_THRESHOLD: float = 0.4
     WRITE_GATE_CONTINUITY_DISCOUNT: float = 0.15
     WRITE_GATE_CONTINUITY_WINDOW: int = 10
-    # Novelty-score source for the write gate. False = flat 4-signal
-    # weighted sum (compute_novelty_score); True = 3-level hierarchical
-    # free-energy gate (Friston 2005), whose sigmoid novelty_score is on the
-    # same [0,1] scale so the threshold/bypass/calibration path is unchanged.
-    # Default MUST stay flat: benchmarks/gate_precision (2026-06-11,
-    # benchmarks/results/gate_precision/20260611-220728.json) measured
-    # ROC-AUC flat 0.9998 vs hierarchical 0.5514 on novel-vs-duplicate
-    # separation. Two structural defects in the hierarchical path: (1) the
-    # neutral schema default (match=0.0) makes L2 free energy a constant 1.5,
-    # flooring the sigmoid score above the 0.4 threshold for ALL content;
-    # (2) no level carries embedding-similarity evidence, so duplicates of
-    # stored content are invisible to it. Do not flip without redesigning
-    # L0/L2 and re-running gate_precision.
-    # Toggle: CORTEX_MEMORY_WRITE_GATE_HIERARCHICAL.
+    # source: ADR-0534
     WRITE_GATE_HIERARCHICAL: bool = False
 
     # ── Reconsolidation ───────────────────────────────────────────────────
@@ -127,110 +113,61 @@ class MemorySettings(BaseSettings):
     COMPRESSION_GIST_AGE_HOURS: float = 168.0  # 7 days
     COMPRESSION_TAG_AGE_HOURS: float = 720.0  # 30 days
 
-    # ── Recency Boost (ai-architect inspired) ──────────────────────────────
+    # source: ADR-0534
     RECENCY_BOOST_MAX: float = 0.15  # Maximum recency bonus
     RECENCY_BOOST_HALFLIFE_DAYS: float = 30.0  # Exponential decay half-life
     RECENCY_BOOST_CUTOFF_DAYS: float = 90.0  # No boost after this age
 
-    # ── Strategic Ordering ("Lost in the Middle" mitigation) ─────────────
+    # source: ADR-0534
     STRATEGIC_ORDERING_ENABLED: bool = True
     STRATEGIC_TOP_FRACTION: float = 0.3  # Top 30% at start
     STRATEGIC_BOTTOM_FRACTION: float = 0.2  # Bottom 20% at end
 
-    # ── Test-Time Learning (Titans, NeurIPS 2025) ─────────────────────────
+    # source: ADR-0534
     SURPRISE_MOMENTUM_ENABLED: bool = True
     SURPRISE_MOMENTUM_ETA: float = 0.7  # momentum decay (EMA)
     SURPRISE_MOMENTUM_DELTA: float = 0.08  # max heat change per recall
 
-    # ── Adaptive Decay (Titans, NeurIPS 2025) ────────────────────────────
+    # source: ADR-0534
     ADAPTIVE_DECAY_ENABLED: bool = True
     ADAPTIVE_DECAY_MIN_RATE: float = 0.90
     ADAPTIVE_DECAY_MAX_RATE: float = 0.999
 
-    # ── Co-Activation (Dragon Hatchling, Pathway 2025) ───────────────────
+    # source: ADR-0534
     CO_ACTIVATION_ENABLED: bool = True
     CO_ACTIVATION_LEARNING_RATE: float = 0.1
     CO_ACTIVATION_MIN_SCORE: float = 0.3
 
-    # ── Response budget (bounded MCP I/O) ─────────────────────────────────
-    # source: Claude Code 2.1.170 binary, extracted 2026-06-10 —
-    # MAX_MCP_OUTPUT_TOKENS default 25000 tokens × 4 chars/token = 100,000
-    # chars of compact-JSON payload, × 0.75 safety factor (UTF-16 vs
-    # code-point divergence guard, ai-prd-builder ContextManager.swift
-    # commit 462de01). Full derivation + char-exact verification:
-    # mcp_server/core/response_budget.py module docstring.
+    # source: ADR-0534
     MAX_RESPONSE_CHARS: int = 75_000
 
     # ── Embedding ─────────────────────────────────────────────────────────
     EMBEDDING_DIM: int = 384
     EMBEDDING_DEVICE: str = "cpu"  # "cpu" | "auto" | "cuda" | "mps"
 
-    # ── A3 lazy-heat (Phase 3 Scalability Program, v3.13.0) ───────────────
-    # Kill-switch for the A3 refactor. After the main refactor landed,
-    # the Python layer assumes heat_base unconditionally — this flag is
-    # reserved for a future DDL-level swap of effective_heat() to
-    # effective_heat_frozen() per design doc §9. Kept on the settings
-    # object for forward compat with tests that still reference it.
+    # source: ADR-0534
     A3_LAZY_HEAT: bool = True
 
-    # ── Phase 5: ConnectionPool latency classes ───────────────────────────
-    # Source: docs/program/phase-5-pool-admission-design.md §1.1.
-    #
-    # Interactive pool — hot path (recall, remember, anchor, etc.). Sized
-    # for concurrent MCP tool invocations. min=2 keeps two connections
-    # warm; max=8 ≥ cycle-workers + 1 satisfies invariant I10.
+    # source: ADR-0534
     POOL_INTERACTIVE_MIN: int = 2
     POOL_INTERACTIVE_MAX: int = 8
     POOL_INTERACTIVE_TIMEOUT_S: float = 5.0
 
-    # Batch pool — long-running writers (consolidate, seed_project,
-    # wiki_pipeline, ingest_*). Separate resource so batch jobs cannot
-    # starve interactive calls.
+    # source: ADR-0534
     POOL_BATCH_MIN: int = 1
     POOL_BATCH_MAX: int = 2
-    POOL_BATCH_TIMEOUT_S: float = 1800.0  # 30 min — consolidate can run this long
+    POOL_BATCH_TIMEOUT_S: float = 1800.0  # source: ADR-0534
 
-    # Emergency kill switch: if true, pools are bypassed and every
-    # `pool.connection()` returns a single shared connection (pre-Phase-5
-    # behavior). Default false post-merge.
+    # source: ADR-0534
     POOL_DISABLED: bool = False
 
-    # ── MCP client pool (bounded-io Phase 3) ─────────────────────────────
-    # Max live upstream MCP child connections held in mcp_client_pool. Each
-    # pooled connection is a spawned child OS PROCESS (asyncio
-    # create_subprocess_exec in mcp_client._spawn_process), not a cheap DB
-    # handle, so the binding constraint is OS process / RSS pressure — the
-    # exact failure mode in the ingest_codebase ConnectionResetError RCA
-    # 2026-06-09 (child driven to OOM). Beyond this count, get_client evicts
-    # the least-recently-used IDLE connection before opening a new one, and
-    # fails fast with McpConnectionError when all live connections are busy.
-    #
-    # Default 0 = "derive from os.cpu_count()" (see _resolve_mcp_pool_max):
-    # one heavy child process per core is a defensible machine-relative
-    # ceiling, floored at 2 so a 1-core box can still hold a working set of
-    # two distinct upstream servers. This is an ENGINEERING DEFAULT pending
-    # measurement: the value that would truly calibrate it is the measured
-    # steady-state RSS of the spawned children (today only `codebase` /
-    # ai-architect-mcp-codebase is heavy) against available host memory. Override
-    # via CORTEX_MEMORY_MCP_POOL_MAX_CONNECTIONS once that data exists.
-    # source: os.cpu_count() machine bound; floor mirrors a two-server
-    # working set; RSS calibration is the open measurement.
+    # source: ADR-0534
     MCP_POOL_MAX_CONNECTIONS: int = 0
 
-    # ai-architect-mcp-codebase (ADR-0046) — on by default so the L6 symbol
-    # ring has depth out of the box. Users who want to cut token /
-    # subprocess cost override via CORTEX_MEMORY_AP_ENABLED=0 in their
-    # MCP config.
+    # source: ADR-0534
     AP_ENABLED: bool = True
 
-    # AP_SYNC_RESULT_TIMEOUT_S (removed): the former 3900 s cross-loop wait
-    # ceiling for the AP reader thread was floored at mcp_client's in-loop
-    # AP-call cap. callTimeoutMs=0 made that in-loop bound infinite for a
-    # live child, so no finite cross-loop ceiling could satisfy the floor
-    # invariant anymore, and keeping one killed live >65 min analyze sweeps
-    # on wall-clock. Replaced by ap_sync_loop._AP_SYNC_PROBE_INTERVAL_S
-    # (dead-thread probe cadence, not a ceiling) + mcp_client's in-loop
-    # child-silence watchdog. source: PR #431.
+    # source: ADR-0534
 
     model_config = {"env_prefix": "CORTEX_MEMORY_"}
 
@@ -248,11 +185,7 @@ class MemorySettings(BaseSettings):
     def mcp_pool_max_connections(self) -> int:
         """Effective max live MCP child connections in the pool.
 
-        Resolves the ``0 = auto`` sentinel to ``max(2, os.cpu_count())``.
-        os.cpu_count() can return None (rare, e.g. unsupported platform);
-        treat that as a single core and fall back to the floor of 2.
-        source: MCP_POOL_MAX_CONNECTIONS field comment.
-        """
+        source: ADR-0534"""
         if self.MCP_POOL_MAX_CONNECTIONS > 0:
             return self.MCP_POOL_MAX_CONNECTIONS
         cores = os.cpu_count() or 1
@@ -268,16 +201,6 @@ def get_memory_settings() -> MemorySettings:
 def root_agent_topic() -> str | None:
     """Launch-time capability scope for connection-rooted isolation.
 
-    When ``CORTEX_ROOT_AGENT_TOPIC`` is set in the environment, the server
-    FORCES this ``agent_topic`` on every recall/remember and strips the
-    ``agent_topic`` argument from the registered tool schemas. This is
-    capability-style scoping (cf. supermemory's ``x-sm-project`` header):
-    the model cannot target — or accidentally omit — another scope, because
-    the parameter is not exposed to it at all.
-
-    Read once at process start (single-process FastMCP stdio server), so a
-    plain env read with no caching layer is sufficient. Empty/unset → None,
-    meaning no rooting (the ``agent_topic`` parameter behaves as before).
-    """
+    source: ADR-0534"""
     val = os.environ.get("CORTEX_ROOT_AGENT_TOPIC", "").strip()
     return val or None

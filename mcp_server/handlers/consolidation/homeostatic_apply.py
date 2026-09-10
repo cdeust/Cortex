@@ -1,20 +1,6 @@
 """Homeostatic regulation mechanics: scalar update, fold, bimodal cohort.
 
-Split from ``homeostatic.py`` to keep both files under the 500-line cap
-(§4.1 coding standards) — same precedent as ``core/homeostatic_health.py``
-("Split from homeostatic_plasticity.py to keep files under 300 lines").
-``homeostatic.py`` owns the policy (which write class gets regulated, and
-why — ``_REGULATED_CLASSES``); this module owns the mechanics (how a
-single, already-class-scoped population gets scaled/folded/cohort-
-corrected). ``homeostatic.py::_dispatch_class`` is the only caller.
-
-References:
-    Turrigiano 2008 — multiplicative synaptic scaling (order-preserving)
-    Tetzlaff 2011 Eq. 3 — delta_w = alpha * w * (r_target - r_actual)
-    Pfister 2013 — bimodality coefficient
-    docs/program/phase-3-a3-migration-design.md §5
-    scratchpad/memoire-qui-comprend-design.md §M-D3
-"""
+source: ADR-0363"""
 
 from __future__ import annotations
 
@@ -27,15 +13,7 @@ from mcp_server.shared import write_class
 
 logger = logging.getLogger(__name__)
 
-# source: Pfister et al. (2013) "Good things peak in pairs." Frontiers in
-#         Psychology 4:700 — b > 5/9 ≈ 0.555 is the formal criterion. But
-#         uniform distributions also sit at ~0.555 (denominator =
-#         kurtosis_excess + 3, kurtosis_excess ≈ -1.2 for uniform → b ≈
-#         1/1.8 ≈ 0.556), so the Pfister threshold false-positives on
-#         platykurtic unimodal data. Cortex uses 0.7 for a clean margin:
-#         true bimodal distributions score > 1.0 (measured); uniform/
-#         unimodal score < 0.6 (measured). Empirically calibrated on
-#         synthetic fixtures.
+# source: ADR-0363
 BIMODALITY_TRIGGER = 0.7
 
 # Homeostatic target mean (Turrigiano 2008).
@@ -45,22 +23,17 @@ TARGET_HEAT = 0.4
 # into prefilter-distorting territory.
 _FOLD_LOG_THRESHOLD = math.log(2.0)
 
-# Minimum mean-effective-heat before the scaling divisor is numerically
-# safe. Below this we skip the cycle rather than amplify noise.
+# source: ADR-0363
 _MIN_SAFE_MEAN = 0.01
 
 # Per-cycle cap on the multiplicative step relative to the current factor.
 # Matches the legacy Turrigiano α=0.05 ceiling (~3% per cycle).
 _MAX_STEP = 0.03
 
-# Health score at or above which (absent bimodality) no rescaling runs.
-# source: pre-existing tuned value, extracted unchanged (#197 family 3);
-# provenance not recorded at introduction
+# source: ADR-0363
 _HEALTHY_SCORE_MIN = 0.6
 
-# Minimum per-row heat change worth a write; smaller deltas are noise.
-# source: pre-existing tuned value, extracted unchanged (#197 family 3);
-# provenance not recorded at introduction
+# source: ADR-0363
 _HEAT_WRITE_EPSILON = 0.001
 
 
@@ -157,13 +130,7 @@ def apply_scalar(
             "factor": round(factor_old, 4),
         }
 
-    # scalar_update: heat_base is NOT rewritten — only homeostatic_state.factor
-    # changes. Stored-heat distribution is literally identical → bimodality
-    # coefficient is unchanged. fold: heat_base IS rewritten per-row with
-    # [0.0, 1.0] clipping; when many rows saturate the shape can shift, so
-    # on fold we report the pre-fold value as a bounded estimate and flag
-    # that the post-fold value would require a re-scan to compute exactly.
-    # See issue #14 OB4 — null was previously ambiguous.
+    # source: ADR-0363
 
     if _fold_triggered(factor_new):
         folded = _apply_fold(store, domain, factor_new, cls)
@@ -202,26 +169,9 @@ def _fold_triggered(factor: float) -> bool:
 
 def _apply_fold(store: MemoryStore, domain: str, factor: float, cls: str) -> int:
     """Multiply heat_base by factor for class ``cls``'s own rows, reset
-    homeostatic_state.factor=1.0 for ``(domain, cls)``.
+        homeostatic_state.factor=1.0 for ``(domain, cls)``.
 
-    Writes are bounded by the domain partition AND ``memories.write_class
-    = cls`` directly (7.4: the explicit column landed in the same
-    migration this predicate switch ships with — no second classification
-    path, per ``mcp_server.shared.write_class``'s module doctrine). Pre-7.4
-    rows read the column's DEFAULT (``'deliberate'``, the safe default —
-    see ``infrastructure/pg_schema.py``'s MIGRATIONS_DDL comment) until
-    the one-shot backfill (``handlers/consolidation/write_class_backfill.py``)
-    reclassifies them from ``source``; until that backfill runs, true
-    ``auto`` rows written before 7.4 are conservatively EXCLUDED from
-    folding (a delayed correction, self-heals on the next fold cycle after
-    backfill — never the opposite, irreversible failure mode of folding
-    deliberate content, which is the regression this whole design fixes).
-    Skips protected/no_decay/stale. Amortized once per month per (domain,
-    class) under normal operation. Phase 5: batched UPDATE runs on the
-    batch pool. Journals the event (M-D3 telemetry step 1 — the
-    2026-07-10 19:22 fold left no queryable trace anywhere but row
-    timestamps; every fold from here forward is DB-queryable).
-    """
+    source: ADR-0363"""
     if cls not in write_class.ALL_WRITE_CLASSES:
         logger.warning(
             "Homeostatic fold requested for unknown write class %r — refusing.",
@@ -245,8 +195,7 @@ def _apply_fold(store: MemoryStore, domain: str, factor: float, cls: str) -> int
     try:
         store.log_homeostatic_fold(domain, cls, factor, rows)
     except AttributeError:
-        # Test doubles / stores predating M-D3 may not implement the
-        # journal method — the fold itself must not fail because of it.
+        # source: ADR-0363
         pass
     return rows
 
@@ -266,9 +215,7 @@ def _safe_get_factor(store: MemoryStore, domain: str, cls: str) -> float:
     try:
         return float(store.get_homeostatic_factor(domain, write_class=cls))
     except TypeError:
-        # Test doubles predating M-D3 (positional-only get_homeostatic_
-        # factor(domain)) — fall back to the pre-stratification call
-        # shape rather than fail the cycle.
+        # source: ADR-0363
         try:
             return float(store.get_homeostatic_factor(domain))
         except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues

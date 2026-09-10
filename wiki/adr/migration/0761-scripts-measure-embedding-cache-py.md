@@ -1,0 +1,25 @@
+# ADR-0761: scripts/measure_embedding_cache.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `scripts/measure_embedding_cache.py`; original SHA-256 `1367203daf6bd8703757a6ecf0cd95b74ac899934aca3e34cfffb1071b85a817`.
+
+## Original comment, lines 65–65
+
+````text
+# source: https://docs.python.org/3.13/library/os.html#os.times (Unix/Windows).
+````
+
+## Original comment, lines 70–70
+
+````text
+# source: https://docs.python.org/3.13/library/time.html#time.process_time
+````
+
+## Original comment, lines 151–151
+
+````text
+# source: remediation contract §3 — four repetitions, discard the first.
+````
+

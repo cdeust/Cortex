@@ -172,29 +172,10 @@ class TestFetchContents:
 
 class TestFetchMemberStats:
     def test_returns_effective_heat_and_created_at(self):
-        """Root cause (CI run 29109251545, 2026-07-10): this test used to
-        assert effective_heat == heat_base (0.42) unconditionally. That is
-        only true when the row's domain has a neutral (1.0) homeostatic
-        factor — fetch_member_stats's SQL joins
-        ``COALESCE(homeostatic_state.factor, 1.0)`` per domain
-        (pg_store_near_dup.py), and that factor is real, mutable, per-
-        domain server state, not a test-local constant. A same-session
-        handler test (test_consolidate.py, real store) can leave a
-        non-1.0 factor for the empty-string domain (conftest.py's
-        ``homeostatic_state`` cleanup gap, now closed) — reproduced
-        deterministically: 0.42 * 0.9409 == 0.395178, byte-for-byte the
-        value CI observed. Fix: probe the SAME live factor
-        ``fetch_member_stats`` reads (via ``store.get_homeostatic_factor``,
-        the canonical accessor, pg_store.py) and assert against the
-        derived expectation instead of a hardcoded constant — same
-        "probe, don't predict" pattern as INC6.6
-        (core/memory_reheat.py::compute_reheat_target). ``no_decay=TRUE``
-        at insert (see ``_insert``) makes this structurally exact: the
-        protected branch of ``effective_heat()`` is
-        ``LEAST(1.0, GREATEST(0.0, heat_base * factor))`` with no time
-        term, so the only free variable is the per-domain factor — no
-        clock dependency remains once that is probed rather than assumed.
-        """
+        """Expected effective heat is derived from the live homeostatic factor, with
+        decay disabled.
+
+        source: ADR-0995"""
         store = _pg_only()
         with store.batch_pool.connection() as conn:
             mid = _insert(

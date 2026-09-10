@@ -8,9 +8,9 @@ import struct
 import time
 from dataclasses import dataclass
 
-# source: Python struct docs: !I is a network-order unsigned 32-bit length.
+# source: ADR-0513
 _LENGTH = struct.Struct("!I")
-_ACCEPTED = b"\x01"  # source: capture-worker-design.md, binary admission result.
+_ACCEPTED = b"\x01"  # source: ADR-0513
 _REFUSED = b"\x00"
 
 

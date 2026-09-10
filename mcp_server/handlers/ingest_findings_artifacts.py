@@ -1,20 +1,6 @@
 """Pure parsing of ai-architect-mcp-codebase (AP) findings artifacts (INC5.1).
 
-AP writes ONLY files under ``<output_dir>/runs/<run_id>/`` (ADR-0052 D1:
-Cortex pulls, AP never pushes; no network/PG client exists in AP). This
-module reads those files off disk and returns typed, JSON-agnostic
-records. It never touches PostgreSQL, the wiki filesystem, or Cortex's
-MemoryStore — that is ``ingest_findings_writers``'s job (SRP split,
-coding-standards.md 1.1).
-
-Artifact layout confirmed by reading AP's own source (not guessed):
-  - ``index.json``                              main.rs:274-281 (Index)
-  - ``findings/<id>/stage-1.refined.json``       main.rs:92, 243-249
-  - ``findings/<id>/stage-2.verified.json``      main.rs:107, 1195-1213
-  - ``findings/<id>/stage-4.prd_input.json``     prd_input.rs:38 (optional)
-  - ``findings/<id>/stage-6.validation.json``    prd_validator.rs:27 (optional)
-  - ``findings/<id>/stage-8.security.json``      security_gates.rs:35 (optional)
-"""
+source: ADR-0411"""
 
 from __future__ import annotations
 
@@ -31,8 +17,7 @@ PRD_INPUT_FILE_NAME = "stage-4.prd_input.json"
 VALIDATION_FILE_NAME = "stage-6.validation.json"
 SECURITY_FILE_NAME = "stage-8.security.json"
 
-# (stage label, filename, verdict-extraction key) — receipts checked in
-# this fixed order for every finding. stage-2 is present iff verified.
+# source: ADR-0411
 _RECEIPT_SPECS: tuple[tuple[str, str], ...] = (
     ("stage-2", VERIFIED_FILE_NAME),
     ("stage-6", VALIDATION_FILE_NAME),
@@ -48,26 +33,12 @@ class MalformedArtifactError(Exception):
 class Receipt:
     """One stage receipt (stage-2/6/8), digest-anchored to its file on disk.
 
-    ``digest`` is sha256 over the RAW BYTES of the artifact file as read
-    from disk — re-verifiable by any caller via ``hashlib.sha256(open(
-    artifact_path, 'rb').read())``, independent of AP's internal
-    canonicalization.
+        ``digest`` is sha256 over the RAW BYTES of the artifact file as read
+        from disk — re-verifiable by any caller via ``hashlib.sha256(open(
+        artifact_path, 'rb').read())``, independent of AP's internal
+        canonicalization.
 
-    ``transcript_digest`` (stage-2 only, else None) is a VERBATIM COPY of
-    the ``transcript_digest`` field AP itself writes into
-    ``stage-2.verified.json`` (main.rs ``VerifiedArtifact.transcript_digest``,
-    serialized main.rs:1738) — AP's own semantic digest over the
-    canonicalized transcript, which survives a re-serialization of the
-    artifact file (whitespace/key-order changes) that would change
-    ``digest`` above. This is a copy of AP's claim, never a
-    re-derivation: reimplementing AP's canonicalization algorithm in
-    Python would be a second, driftable implementation of the same
-    procedure (INC5.1's original digest decision, preserved). The two
-    digests are deliberately independent anchors: ``digest`` = raw bytes
-    (strict, catches ANY byte change), ``transcript_digest`` = AP's
-    semantic claim (survives harmless re-serialization, distrust-then-
-    verify against AP's own computation).
-    """
+    source: ADR-0411"""
 
     stage: str
     rel_path: str
@@ -81,17 +52,7 @@ class Receipt:
 class FindingRecord:
     """One finding's ingestible state, gradated by its stage-2 verdict.
 
-    ``source_path`` (from stage-1's ``ExtractedFinding.source_path``,
-    main.rs:201 — an ``Option<String>``, an ABSOLUTE filesystem path to
-    the document AP extracted this finding FROM, or None when the
-    finding was submitted inline) is semantically DISTINCT from
-    ``file_paths`` (stage-4's ``matched_symbols`` — project-relative code
-    files the finding is ABOUT). ``source_path`` is extraction
-    provenance ("where this finding came from"); ``file_paths`` is
-    subject matter ("what code this finding concerns"). See
-    ``ingest_findings_writers._SOURCE_DOCUMENT_LINK_KIND`` for how the
-    two are kept distinguishable in ``wiki.page_sources``.
-    """
+    source: ADR-0411"""
 
     run_id: str
     finding_id: str
@@ -184,15 +145,7 @@ def _extract_verdict(stage: str, raw: dict[str, Any]) -> str:
 def _extract_file_paths(finding_dir: Path) -> list[str]:
     """File paths a finding touches, from stage-4's matched symbols (D4).
 
-    stage-4.prd_input.json is optional (only present when
-    ``prepare_prd_input`` ran for this finding). When absent, returns an
-    empty list rather than guessing paths out of free-text description —
-    inventing paths via regex would be an unsourced heuristic (coding-
-    standards.md 8, "no invented constants/claims"); "no stage-4 data"
-    means "I don't know the affected files", not "0 files".
-    ``matched_symbols[].qualified_name`` is ``"<file_path>::<symbol>"``
-    (AP's own convention, confirmed in prd_input.rs report_to_json).
-    """
+    source: ADR-0411"""
     path = finding_dir / PRD_INPUT_FILE_NAME
     if not path.exists():
         return []

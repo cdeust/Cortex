@@ -140,8 +140,8 @@ ENV CORTEX_RUNTIME=cowork
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
     CMD python -c "import mcp_server.__main__"
 
-# MCP servers typically run stdio transport; no ports to expose.
-# Prometheus metrics endpoint is served by the sidecar in Phase 7.1.
+# Use stdio transport; no ports are exposed.
+# source: ADR-0812
 #
 # source: ADR-0812
 

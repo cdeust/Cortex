@@ -99,15 +99,7 @@ def _parse_args(
 ) -> tuple[str, list, str, str, bool, str, bool, str | None, float | None, str | None]:
     """Extract and default handler arguments.
 
-    Second-to-last element `initial_heat` is the optional age-adjusted
-    baseline used by backfill / import paths (issue #14 P1). None = legacy
-    1.0 baseline. Defensive clamp to [0, 1] — schema validation enforces
-    the same bounds.
-
-    Last element `write_class` is the raw, UNVALIDATED explicit class
-    argument (M-D2, 7.4) — None when the caller omitted it. Validation
-    happens in `_handler_impl` (the write-time contract), not here.
-    """
+    source: ADR-0436"""
     raw_initial = args.get("initial_heat")
     initial_heat: float | None = None
     if raw_initial is not None:
@@ -156,11 +148,12 @@ def _validated_write_class(args: dict[str, Any]) -> str:
 
 
 def _resolved_origin(args: dict[str, Any], write_class: str) -> str:
-    """Issue #365: trust the producing channel, never attacker-controlled content.
+    """trust the producing channel, never attacker-controlled content.
 
     Only an absent tool name on a deliberate write is promoted to deliberate.
     Named but unknown tools keep UNKNOWN; auto captures cannot claim this bypass.
-    """
+
+    source: ADR-0436"""
     origin_tool = str(args.get("origin_tool") or "").strip()
     origin = capture_origin.classify_capture_origin(origin_tool)
     if not origin_tool and write_class == write_class_module.DELIBERATE:
@@ -296,20 +289,10 @@ async def _handler_impl(
 
     mid: int | None
     if supersedes_id is not None:
-        # Explicit supersession: the caller's intent overrides automatic
-        # curation (no merge/link second-guessing) and the block-replica
-        # upsert. force=True composes with it — the gate was bypassed
-        # above, yet the edge is still posted below (sovereign human
-        # correction; previously force and supersede were exclusive
-        # because force early-returned "create" inside try_curation).
+        # source: ADR-0436
         action, mid = "supersede", supersedes_id
     else:
-        # Block-replica upsert: if the incoming memory is a system-memory block
-        # snapshot (tagged 'memory-replica' + 'vpath:…'), refresh the existing row
-        # in-place rather than inserting a new one (one row per block file).
-        # Normal writes are completely unaffected — this branch exits early on
-        # any write that isn't a replica.
-        # contract: zetetic-team-subagents memory/contract.md §8b
+        # source: ADR-0436
         upserted, upsert_id = try_block_replica_upsert(
             content, embedding, tags, source, store
         )
@@ -364,17 +347,7 @@ async def _handler_impl(
     if result.get("stored"):
         update_user_mood_ema(content, source, store)
 
-    # Promote decision-shaped memories to the authored wiki layer.
-    #
-    # Contract (E8, post-Taleb fragility audit):
-    #   - On success: ``result["wiki_page"]`` is the relative path.
-    #   - On classifier rejection: no field added (memory didn't qualify).
-    #   - On wiki I/O failure: memory write is already committed; we log
-    #     the failure to ``result["warnings"]`` so the caller can observe
-    #     the partial failure rather than silently losing the signal.
-    #
-    # The store write has succeeded by this point; a failure here is a
-    # partial-failure, not a total one. Documented in the schema.
+    # source: ADR-0436
     if result.get("stored") and result.get("memory_id") is not None:
         try:
             wiki_path = wiki_memory_sync.sync_memory_strict(
@@ -403,6 +376,5 @@ async def _handler_impl(
     return result
 
 
-# Telemetry-instrumented public entry. Records latency, byte volume,
-# and write success/fail per call (Popper C6 read/write ratio audit).
+# source: ADR-0436
 handler = instrument("remember", _handler_impl, result_count_key=None)

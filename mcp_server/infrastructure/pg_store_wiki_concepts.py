@@ -1,11 +1,8 @@
 """wiki.concepts DB operations.
 
-Split out of ``pg_store_wiki.py`` (originally 890 lines, over the
-300-line file limit — CLAUDE.md "Code Quality Rules") purely for size
-compliance; no logic changed.
-
 Pure infrastructure — no core imports, no handler imports.
-"""
+
+source: ADR-0575"""
 
 from __future__ import annotations
 
@@ -85,12 +82,7 @@ def insert_concept(conn: StoreConnection, concept: dict[str, Any]) -> int:
         return _returning_id(cur.fetchone())
 
 
-# Column allowlist for update_concept: every patchable wiki.concepts column
-# (pg_schema.py DDL), enumerated in code so an unknown key is REFUSED rather
-# than interpolated into SQL — the same refuse-not-escape mechanism as
-# wiki_view_executor._TABLE_WHITELIST (docs/ASSURANCE-CASE.md §5). Before this
-# allowlist, any dict key reached the SET clause verbatim; the single caller
-# (wiki_emerge) passes literal keys, but the boundary now enforces it.
+# source: ADR-0575
 _UPDATABLE_COLUMNS: frozenset[str] = frozenset(
     {
         "label",

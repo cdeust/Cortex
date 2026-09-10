@@ -1,0 +1,118 @@
+# ADR-0451: mcp_server/handlers/validate_memory.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `mcp_server/handlers/validate_memory.py`; original SHA-256 `267ad24bbf0e816b8906f980d6676bb8b6b28566a61292b66bcc21fb4244087e`.
+
+## Original docstring, lines 1–28
+
+````text
+"""Handler: validate_memory — graded provenance verifier (I6-D6).
+
+Two distinct outputs per memory, both computed from the same reference
+extraction pass:
+
+1. Staleness (unchanged from before I6-D6): FILE PATHS ONLY feed the
+   staleness score (core/staleness.py). URLs, commits, artifact digests,
+   and citations are never extraction inputs to ``is_stale`` — a memory
+   describing a historical fact is not stale just because a URL it
+   mentions went 404 (see core/staleness.py header). This tool is
+   BIDIRECTIONAL on staleness since I6-D6: a stale memory whose file
+   refs all resolve again is rehabilitated (``is_stale`` set back to
+   false), not just flagged one-directionally.
+2. Provenance grade (new, I6-D6): every reference type — file paths, git
+   commit SHAs, URLs (HEAD-checked, bounded sample), and content-addressed
+   artifact digests (sha256[:16] recomputation) — is checked and combined
+   into one of verified / verifiable / unverifiable (core/provenance.py),
+   persisted to ``memories.source_attribution``. This handler is the sole
+   writer of that grade going forward; a prior write from a different
+   subsystem (C1 source/reality monitoring, remember_helpers.py) is a
+   distinct, non-grade epistemic-origin classification that this handler's
+   grade overwrites on the memory's next verification pass. Citations
+   (DOI/arXiv) are recognized but never auto-verified — no source exists
+   to check them against (coding-standards.md §8).
+
+Can target a single memory, a domain, a directory, or all memories
+(cursor-paginated via ``after_id``, 1000 per call).
+"""
+````
+
+## Original comment, lines 48–49
+
+````text
+# ── Bounds (I6-D6: no unbounded network fan-out from a memory-maintenance
+# tool) ───────────────────────────────────────────────────────────────────
+````
+
+## Original comment, lines 54–55
+
+````text
+# source: RFC 9110 §15 — 2xx (success) and 3xx (redirection) status
+# codes count as reachable; 4xx/5xx do not
+````
+
+## Original comment, lines 219–219
+
+````text
+# ── Provenance I/O: commit refs ───────────────────────────────────────────
+````
+
+## Original comment, lines 264–264
+
+````text
+# ── Provenance I/O: URL refs (bounded sample) ─────────────────────────────
+````
+
+## Original comment, lines 297–297
+
+````text
+# ── Provenance I/O: artifact digests ──────────────────────────────────────
+````
+
+## Original docstring, lines 334–361
+
+````text
+"""Grade NOT-YET-INSERTED content's provenance from LOCAL-ONLY checks
+    (no network) -- the write-path-safe subset of a full validate_memory
+    pass (M-D5, 7.5). Called by ``handlers/remember_helpers.py`` before a
+    memory is inserted.
+
+    Reuses the exact extraction + local-verification logic this handler
+    runs in its batch sweep (``_resolve_existing_paths``,
+    ``_git_commit_exists``, ``_check_artifact_refs``, ``core.provenance``)
+    -- zero new grading logic (coding-standards.md §9: no parallel
+    classification path). The only difference from a full pass: URL refs
+    are never HEAD-checked here -- a write-time network call has unbounded
+    latency, out of ``remember()``'s budget (design doc M-D5: "reste dans
+    la passe batch"). A URL ref here is graded exactly as "not sampled
+    this pass" grades it in the batch handler (ceiling VERIFIABLE, never
+    penalized as dead).
+
+    precondition: ``content`` is the memory's raw (already-hardened)
+        content; ``base_dir`` defaults to the current working directory
+        when empty (matches ``_handler_impl``'s own default).
+    postcondition: same grade semantics as one row of ``_grade_memories``
+        -- the worst outcome among file/commit/artifact/citation
+        references. The returned report's ``memory_id`` is always 0 (no
+        row exists yet); callers must not persist anything keyed by it,
+        and must NOT write the grade into ``memories.source_attribution``
+        -- this handler is that column's sole writer (module docstring);
+        callers persist the grade, if at all, through a different
+        mechanism (e.g. an additive tag).
+    """
+````
+
+## Original comment, lines 530–530
+
+````text
+# ── Provenance grading (file/commit/url/artifact/citation) ──────────
+````
+
+## Original comment, lines 602–603
+
+````text
+# Telemetry-instrumented public entry. Records latency / byte volume
+# / result count per call (Popper C6 read/write ratio audit).
+````
+

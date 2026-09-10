@@ -1,0 +1,37 @@
+---
+kind: adr
+number: 0511
+title: Preserve capture_server design decisions
+status: accepted
+---
+
+# ADR-0511: capture_server design decisions
+
+## Context
+
+Canonical migration of decision evidence from `mcp_server/infrastructure/capture_server.py` under ADR-0056.
+The excerpts below preserve historical claims and citations verbatim; original ADR numbers are historical quotations, not current identity bindings.
+
+## Decision
+
+Keep the source implementation linked to this versioned decision record. Operational API documentation remains with the implementation.
+
+## Preserved decision evidence
+
+### module, original line 1
+
+````text
+No handler/core imports: composition supplies an async callback and diagnostics.
+One pending mailbox provides bounded backpressure, never immediate load shedding.
+
+````
+
+### comment, original line 45
+
+````text
+# source: capture-worker-design.md: one pending rendezvous with backpressure.
+````
+
+## Consequences
+
+Review rationale and source changes together. Historical evidence is preserved rather than silently rewritten; executable Python structure is unchanged after removing docstrings.

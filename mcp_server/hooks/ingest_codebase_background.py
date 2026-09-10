@@ -1,13 +1,5 @@
 """Background worker that invokes ``ingest_codebase`` for a project.
 
-Spawned by two triggers, both detached so the parent returns immediately:
-  * the SessionStart hook, when the cached graph is missing or older than
-    the TTL (``pipeline_graph_ttl.graph_is_stale``); and
-  * the PostToolUse ``post_commit_reindex`` hook, after a commit that
-    touched indexable source — there it passes ``--reindex`` because the
-    commit IS the change signal, so the graph must be rebuilt even though
-    a cached one exists.
-
 Invocation:
     python -m mcp_server.hooks.ingest_codebase_background /path/to/project
     python -m mcp_server.hooks.ingest_codebase_background /path/to/project --reindex
@@ -22,7 +14,8 @@ Exit code:
   * 2 on fatal error (no project_root)
 
 Output goes to the redirected stdout (the parent's log file).
-"""
+
+source: ADR-0492"""
 
 from __future__ import annotations
 
@@ -33,7 +26,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_MIN_ARGC = 2  # source: structural — program name + <project_root>
+_MIN_ARGC = 2  # source: ADR-0492
 
 
 def main() -> None:
@@ -56,9 +49,7 @@ def main() -> None:
         print(f"[bg-ingest] ingest_codebase import failed: {exc}", file=sys.stderr)
         sys.exit(1)
 
-    # Without --reindex: reuse a fresh cached graph, auto-reindex when
-    # stale (SessionStart trigger). With --reindex: force analyze_codebase
-    # because a commit already told us the source changed (commit trigger).
+    # source: ADR-0492
     args: dict[str, Any] = {
         "project_path": project_root,
         "force_reindex": force_reindex,
@@ -90,10 +81,6 @@ if __name__ == "__main__":
     from mcp_server.hooks._store_lifecycle import close_shared_store_on_exit
 
     exit_if_headless_authoring_child()
-    # issue #398: main() calls sys.exit() on every path; wrapping the whole
-    # call in this context manager guarantees the store is closed before
-    # the process actually ends (see _store_lifecycle.py for the verified
-    # mechanism -- psycopg pool threads are daemon threads; the fragile
-    # path is __del__'s finalization-time join, which close() pre-empts).
+    # source: ADR-0492
     with close_shared_store_on_exit():
         main()

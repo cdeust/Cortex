@@ -1,0 +1,20 @@
+# ADR-0951: tests_py/handlers/test_injection_receipts_emitter.py design and historical evidence
+
+Status: accepted; existing test/harness evidence preserved during issue #514.
+
+Source `tests_py/handlers/test_injection_receipts_emitter.py`, original SHA-256 `48eab6462b5d64e56d6a67b7b5bb04d46aa5fc62810a19fcf44e57ff488fa0dd`.
+Assertions and runtime fixture literals remain unchanged.
+
+## Original comment, lines 76–77
+
+````text
+# T2 channel enum hardening (decision 4255039 correction 3): a
+# channel outside the enum is a coding bug, not a degradation mode.
+````
+
+## Original comment, lines 190–190
+
+````text
+# Decision 4255039 correction 3 fixed the enum at exactly these four.
+````
+

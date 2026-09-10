@@ -1248,6 +1248,1566 @@
       "mirror": "ADR-0358-mcp-server-handlers-consolidation-embedding-upgrade-py.md",
       "path": "adr/migration/0358-mcp-server-handlers-consolidation-embedding-upgrade-py.md"
     },
+    "ADR-0359": {
+      "mirror": "ADR-0359-mcp-server-handlers-consolidation-entity-merge-py.md",
+      "path": "adr/migration/0359-mcp-server-handlers-consolidation-entity-merge-py.md"
+    },
+    "ADR-0360": {
+      "mirror": "ADR-0360-mcp-server-handlers-consolidation-forgetting-py.md",
+      "path": "adr/migration/0360-mcp-server-handlers-consolidation-forgetting-py.md"
+    },
+    "ADR-0361": {
+      "mirror": "ADR-0361-mcp-server-handlers-consolidation-headless-authoring-py.md",
+      "path": "adr/migration/0361-mcp-server-handlers-consolidation-headless-authoring-py.md"
+    },
+    "ADR-0362": {
+      "mirror": "ADR-0362-mcp-server-handlers-consolidation-homeostatic-py.md",
+      "path": "adr/migration/0362-mcp-server-handlers-consolidation-homeostatic-py.md"
+    },
+    "ADR-0363": {
+      "mirror": "ADR-0363-mcp-server-handlers-consolidation-homeostatic-apply-py.md",
+      "path": "adr/migration/0363-mcp-server-handlers-consolidation-homeostatic-apply-py.md"
+    },
+    "ADR-0364": {
+      "mirror": "ADR-0364-mcp-server-handlers-consolidation-memify-py.md",
+      "path": "adr/migration/0364-mcp-server-handlers-consolidation-memify-py.md"
+    },
+    "ADR-0365": {
+      "mirror": "ADR-0365-mcp-server-handlers-consolidation-memify-derive-py.md",
+      "path": "adr/migration/0365-mcp-server-handlers-consolidation-memify-derive-py.md"
+    },
+    "ADR-0366": {
+      "mirror": "ADR-0366-mcp-server-handlers-consolidation-memory-dedup-exact-pass-py.md",
+      "path": "adr/migration/0366-mcp-server-handlers-consolidation-memory-dedup-exact-pass-py.md"
+    },
+    "ADR-0367": {
+      "mirror": "ADR-0367-mcp-server-handlers-consolidation-memory-domain-backfill-pass-py.md",
+      "path": "adr/migration/0367-mcp-server-handlers-consolidation-memory-domain-backfill-pass-py.md"
+    },
+    "ADR-0368": {
+      "mirror": "ADR-0368-mcp-server-handlers-consolidation-memory-reheat-pass-py.md",
+      "path": "adr/migration/0368-mcp-server-handlers-consolidation-memory-reheat-pass-py.md"
+    },
+    "ADR-0369": {
+      "mirror": "ADR-0369-mcp-server-handlers-consolidation-memory-staleness-pass-py.md",
+      "path": "adr/migration/0369-mcp-server-handlers-consolidation-memory-staleness-pass-py.md"
+    },
+    "ADR-0370": {
+      "mirror": "ADR-0370-mcp-server-handlers-consolidation-near-dup-calibration-pass-py.md",
+      "path": "adr/migration/0370-mcp-server-handlers-consolidation-near-dup-calibration-pass-py.md"
+    },
+    "ADR-0371": {
+      "mirror": "ADR-0371-mcp-server-handlers-consolidation-page-io-py.md",
+      "path": "adr/migration/0371-mcp-server-handlers-consolidation-page-io-py.md"
+    },
+    "ADR-0372": {
+      "mirror": "ADR-0372-mcp-server-handlers-consolidation-plasticity-py.md",
+      "path": "adr/migration/0372-mcp-server-handlers-consolidation-plasticity-py.md"
+    },
+    "ADR-0373": {
+      "mirror": "ADR-0373-mcp-server-handlers-consolidation-pruning-py.md",
+      "path": "adr/migration/0373-mcp-server-handlers-consolidation-pruning-py.md"
+    },
+    "ADR-0374": {
+      "mirror": "ADR-0374-mcp-server-handlers-consolidation-sleep-py.md",
+      "path": "adr/migration/0374-mcp-server-handlers-consolidation-sleep-py.md"
+    },
+    "ADR-0376": {
+      "mirror": "ADR-0376-mcp-server-handlers-consolidation-wiki-backlog-pass-py.md",
+      "path": "adr/migration/0376-mcp-server-handlers-consolidation-wiki-backlog-pass-py.md"
+    },
+    "ADR-0377": {
+      "mirror": "ADR-0377-mcp-server-handlers-consolidation-wiki-citation-seed-pass-py.md",
+      "path": "adr/migration/0377-mcp-server-handlers-consolidation-wiki-citation-seed-pass-py.md"
+    },
+    "ADR-0378": {
+      "mirror": "ADR-0378-mcp-server-handlers-consolidation-wiki-domain-backfill-pass-py.md",
+      "path": "adr/migration/0378-mcp-server-handlers-consolidation-wiki-domain-backfill-pass-py.md"
+    },
+    "ADR-0379": {
+      "mirror": "ADR-0379-mcp-server-handlers-consolidation-wiki-maintenance-py.md",
+      "path": "adr/migration/0379-mcp-server-handlers-consolidation-wiki-maintenance-py.md"
+    },
+    "ADR-0380": {
+      "mirror": "ADR-0380-mcp-server-handlers-consolidation-wiki-source-backfill-pass-py.md",
+      "path": "adr/migration/0380-mcp-server-handlers-consolidation-wiki-source-backfill-pass-py.md"
+    },
+    "ADR-0381": {
+      "mirror": "ADR-0381-mcp-server-handlers-consolidation-write-class-backfill-pass-py.md",
+      "path": "adr/migration/0381-mcp-server-handlers-consolidation-write-class-backfill-pass-py.md"
+    },
+    "ADR-0382": {
+      "mirror": "ADR-0382-mcp-server-handlers-create-trigger-py.md",
+      "path": "adr/migration/0382-mcp-server-handlers-create-trigger-py.md"
+    },
+    "ADR-0383": {
+      "mirror": "ADR-0383-mcp-server-handlers-curate-distill-py.md",
+      "path": "adr/migration/0383-mcp-server-handlers-curate-distill-py.md"
+    },
+    "ADR-0384": {
+      "mirror": "ADR-0384-mcp-server-handlers-curate-wiki-py.md",
+      "path": "adr/migration/0384-mcp-server-handlers-curate-wiki-py.md"
+    },
+    "ADR-0385": {
+      "mirror": "ADR-0385-mcp-server-handlers-curate-wiki-serialize-py.md",
+      "path": "adr/migration/0385-mcp-server-handlers-curate-wiki-serialize-py.md"
+    },
+    "ADR-0386": {
+      "mirror": "ADR-0386-mcp-server-handlers-curate-wiki-uncited-py.md",
+      "path": "adr/migration/0386-mcp-server-handlers-curate-wiki-uncited-py.md"
+    },
+    "ADR-0387": {
+      "mirror": "ADR-0387-mcp-server-handlers-decision-recall-py.md",
+      "path": "adr/migration/0387-mcp-server-handlers-decision-recall-py.md"
+    },
+    "ADR-0389": {
+      "mirror": "ADR-0389-mcp-server-handlers-detect-gaps-py.md",
+      "path": "adr/migration/0389-mcp-server-handlers-detect-gaps-py.md"
+    },
+    "ADR-0390": {
+      "mirror": "ADR-0390-mcp-server-handlers-drill-down-py.md",
+      "path": "adr/migration/0390-mcp-server-handlers-drill-down-py.md"
+    },
+    "ADR-0391": {
+      "mirror": "ADR-0391-mcp-server-handlers-explore-features-py.md",
+      "path": "adr/migration/0391-mcp-server-handlers-explore-features-py.md"
+    },
+    "ADR-0392": {
+      "mirror": "ADR-0392-mcp-server-handlers-forget-py.md",
+      "path": "adr/migration/0392-mcp-server-handlers-forget-py.md"
+    },
+    "ADR-0393": {
+      "mirror": "ADR-0393-mcp-server-handlers-get-causal-chain-py.md",
+      "path": "adr/migration/0393-mcp-server-handlers-get-causal-chain-py.md"
+    },
+    "ADR-0394": {
+      "mirror": "ADR-0394-mcp-server-handlers-get-grooming-health-py.md",
+      "path": "adr/migration/0394-mcp-server-handlers-get-grooming-health-py.md"
+    },
+    "ADR-0397": {
+      "mirror": "ADR-0397-mcp-server-handlers-get-telemetry-py.md",
+      "path": "adr/migration/0397-mcp-server-handlers-get-telemetry-py.md"
+    },
+    "ADR-0398": {
+      "mirror": "ADR-0398-mcp-server-handlers-import-sessions-py.md",
+      "path": "adr/migration/0398-mcp-server-handlers-import-sessions-py.md"
+    },
+    "ADR-0399": {
+      "mirror": "ADR-0399-mcp-server-handlers-ingest-codebase-py.md",
+      "path": "adr/migration/0399-mcp-server-handlers-ingest-codebase-py.md"
+    },
+    "ADR-0400": {
+      "mirror": "ADR-0400-mcp-server-handlers-ingest-codebase-cypher-py.md",
+      "path": "adr/migration/0400-mcp-server-handlers-ingest-codebase-cypher-py.md"
+    },
+    "ADR-0401": {
+      "mirror": "ADR-0401-mcp-server-handlers-ingest-codebase-graph-py.md",
+      "path": "adr/migration/0401-mcp-server-handlers-ingest-codebase-graph-py.md"
+    },
+    "ADR-0402": {
+      "mirror": "ADR-0402-mcp-server-handlers-ingest-codebase-pages-py.md",
+      "path": "adr/migration/0402-mcp-server-handlers-ingest-codebase-pages-py.md"
+    },
+    "ADR-0404": {
+      "mirror": "ADR-0404-mcp-server-handlers-ingest-codebase-writers-py.md",
+      "path": "adr/migration/0404-mcp-server-handlers-ingest-codebase-writers-py.md"
+    },
+    "ADR-0405": {
+      "mirror": "ADR-0405-mcp-server-handlers-ingest-docs-content-py.md",
+      "path": "adr/migration/0405-mcp-server-handlers-ingest-docs-content-py.md"
+    },
+    "ADR-0406": {
+      "mirror": "ADR-0406-mcp-server-handlers-ingest-docs-content-cypher-py.md",
+      "path": "adr/migration/0406-mcp-server-handlers-ingest-docs-content-cypher-py.md"
+    },
+    "ADR-0407": {
+      "mirror": "ADR-0407-mcp-server-handlers-ingest-docs-content-writers-py.md",
+      "path": "adr/migration/0407-mcp-server-handlers-ingest-docs-content-writers-py.md"
+    },
+    "ADR-0408": {
+      "mirror": "ADR-0408-mcp-server-handlers-ingest-document-py.md",
+      "path": "adr/migration/0408-mcp-server-handlers-ingest-document-py.md"
+    },
+    "ADR-0409": {
+      "mirror": "ADR-0409-mcp-server-handlers-ingest-document-writers-py.md",
+      "path": "adr/migration/0409-mcp-server-handlers-ingest-document-writers-py.md"
+    },
+    "ADR-0410": {
+      "mirror": "ADR-0410-mcp-server-handlers-ingest-findings-py.md",
+      "path": "adr/migration/0410-mcp-server-handlers-ingest-findings-py.md"
+    },
+    "ADR-0411": {
+      "mirror": "ADR-0411-mcp-server-handlers-ingest-findings-artifacts-py.md",
+      "path": "adr/migration/0411-mcp-server-handlers-ingest-findings-artifacts-py.md"
+    },
+    "ADR-0413": {
+      "mirror": "ADR-0413-mcp-server-handlers-ingest-findings-writers-py.md",
+      "path": "adr/migration/0413-mcp-server-handlers-ingest-findings-writers-py.md"
+    },
+    "ADR-0414": {
+      "mirror": "ADR-0414-mcp-server-handlers-ingest-helpers-py.md",
+      "path": "adr/migration/0414-mcp-server-handlers-ingest-helpers-py.md"
+    },
+    "ADR-0415": {
+      "mirror": "ADR-0415-mcp-server-handlers-ingest-prd-py.md",
+      "path": "adr/migration/0415-mcp-server-handlers-ingest-prd-py.md"
+    },
+    "ADR-0416": {
+      "mirror": "ADR-0416-mcp-server-handlers-ingest-provenance-py.md",
+      "path": "adr/migration/0416-mcp-server-handlers-ingest-provenance-py.md"
+    },
+    "ADR-0417": {
+      "mirror": "ADR-0417-mcp-server-handlers-injection-receipts-py.md",
+      "path": "adr/migration/0417-mcp-server-handlers-injection-receipts-py.md"
+    },
+    "ADR-0418": {
+      "mirror": "ADR-0418-mcp-server-handlers-latency-class-py.md",
+      "path": "adr/migration/0418-mcp-server-handlers-latency-class-py.md"
+    },
+    "ADR-0419": {
+      "mirror": "ADR-0419-mcp-server-handlers-lesson-promotion-py.md",
+      "path": "adr/migration/0419-mcp-server-handlers-lesson-promotion-py.md"
+    },
+    "ADR-0423": {
+      "mirror": "ADR-0423-mcp-server-handlers-navigate-memory-py.md",
+      "path": "adr/migration/0423-mcp-server-handlers-navigate-memory-py.md"
+    },
+    "ADR-0424": {
+      "mirror": "ADR-0424-mcp-server-handlers-procedural-skill-writer-py.md",
+      "path": "adr/migration/0424-mcp-server-handlers-procedural-skill-writer-py.md"
+    },
+    "ADR-0427": {
+      "mirror": "ADR-0427-mcp-server-handlers-query-methodology-py.md",
+      "path": "adr/migration/0427-mcp-server-handlers-query-methodology-py.md"
+    },
+    "ADR-0428": {
+      "mirror": "ADR-0428-mcp-server-handlers-rate-memory-py.md",
+      "path": "adr/migration/0428-mcp-server-handlers-rate-memory-py.md"
+    },
+    "ADR-0429": {
+      "mirror": "ADR-0429-mcp-server-handlers-rebuild-profiles-py.md",
+      "path": "adr/migration/0429-mcp-server-handlers-rebuild-profiles-py.md"
+    },
+    "ADR-0430": {
+      "mirror": "ADR-0430-mcp-server-handlers-recall-py.md",
+      "path": "adr/migration/0430-mcp-server-handlers-recall-py.md"
+    },
+    "ADR-0431": {
+      "mirror": "ADR-0431-mcp-server-handlers-recall-helpers-py.md",
+      "path": "adr/migration/0431-mcp-server-handlers-recall-helpers-py.md"
+    },
+    "ADR-0432": {
+      "mirror": "ADR-0432-mcp-server-handlers-recall-hierarchical-py.md",
+      "path": "adr/migration/0432-mcp-server-handlers-recall-hierarchical-py.md"
+    },
+    "ADR-0433": {
+      "mirror": "ADR-0433-mcp-server-handlers-recall-skills-py.md",
+      "path": "adr/migration/0433-mcp-server-handlers-recall-skills-py.md"
+    },
+    "ADR-0434": {
+      "mirror": "ADR-0434-mcp-server-handlers-record-session-end-py.md",
+      "path": "adr/migration/0434-mcp-server-handlers-record-session-end-py.md"
+    },
+    "ADR-0435": {
+      "mirror": "ADR-0435-mcp-server-handlers-record-session-end-memory-py.md",
+      "path": "adr/migration/0435-mcp-server-handlers-record-session-end-memory-py.md"
+    },
+    "ADR-0436": {
+      "mirror": "ADR-0436-mcp-server-handlers-remember-py.md",
+      "path": "adr/migration/0436-mcp-server-handlers-remember-py.md"
+    },
+    "ADR-0437": {
+      "mirror": "ADR-0437-mcp-server-handlers-remember-bulk-py.md",
+      "path": "adr/migration/0437-mcp-server-handlers-remember-bulk-py.md"
+    },
+    "ADR-0438": {
+      "mirror": "ADR-0438-mcp-server-handlers-remember-helpers-py.md",
+      "path": "adr/migration/0438-mcp-server-handlers-remember-helpers-py.md"
+    },
+    "ADR-0439": {
+      "mirror": "ADR-0439-mcp-server-handlers-remember-preflight-py.md",
+      "path": "adr/migration/0439-mcp-server-handlers-remember-preflight-py.md"
+    },
+    "ADR-0441": {
+      "mirror": "ADR-0441-mcp-server-handlers-remember-response-py.md",
+      "path": "adr/migration/0441-mcp-server-handlers-remember-response-py.md"
+    },
+    "ADR-0442": {
+      "mirror": "ADR-0442-mcp-server-handlers-remember-schema-py.md",
+      "path": "adr/migration/0442-mcp-server-handlers-remember-schema-py.md"
+    },
+    "ADR-0443": {
+      "mirror": "ADR-0443-mcp-server-handlers-replay-tracking-py.md",
+      "path": "adr/migration/0443-mcp-server-handlers-replay-tracking-py.md"
+    },
+    "ADR-0445": {
+      "mirror": "ADR-0445-mcp-server-handlers-seed-project-py.md",
+      "path": "adr/migration/0445-mcp-server-handlers-seed-project-py.md"
+    },
+    "ADR-0446": {
+      "mirror": "ADR-0446-mcp-server-handlers-seed-project-constants-py.md",
+      "path": "adr/migration/0446-mcp-server-handlers-seed-project-constants-py.md"
+    },
+    "ADR-0448": {
+      "mirror": "ADR-0448-mcp-server-handlers-source-walk-py.md",
+      "path": "adr/migration/0448-mcp-server-handlers-source-walk-py.md"
+    },
+    "ADR-0450": {
+      "mirror": "ADR-0450-mcp-server-handlers-unified-search-py.md",
+      "path": "adr/migration/0450-mcp-server-handlers-unified-search-py.md"
+    },
+    "ADR-0451": {
+      "mirror": "ADR-0451-mcp-server-handlers-validate-memory-py.md",
+      "path": "adr/migration/0451-mcp-server-handlers-validate-memory-py.md"
+    },
+    "ADR-0452": {
+      "mirror": "ADR-0452-mcp-server-handlers-why-py.md",
+      "path": "adr/migration/0452-mcp-server-handlers-why-py.md"
+    },
+    "ADR-0453": {
+      "mirror": "ADR-0453-mcp-server-handlers-wiki-adr-py.md",
+      "path": "adr/migration/0453-mcp-server-handlers-wiki-adr-py.md"
+    },
+    "ADR-0454": {
+      "mirror": "ADR-0454-mcp-server-handlers-wiki-compile-py.md",
+      "path": "adr/migration/0454-mcp-server-handlers-wiki-compile-py.md"
+    },
+    "ADR-0455": {
+      "mirror": "ADR-0455-mcp-server-handlers-wiki-consolidate-py.md",
+      "path": "adr/migration/0455-mcp-server-handlers-wiki-consolidate-py.md"
+    },
+    "ADR-0456": {
+      "mirror": "ADR-0456-mcp-server-handlers-wiki-consolidate-staleness-py.md",
+      "path": "adr/migration/0456-mcp-server-handlers-wiki-consolidate-staleness-py.md"
+    },
+    "ADR-0457": {
+      "mirror": "ADR-0457-mcp-server-handlers-wiki-curate-py.md",
+      "path": "adr/migration/0457-mcp-server-handlers-wiki-curate-py.md"
+    },
+    "ADR-0458": {
+      "mirror": "ADR-0458-mcp-server-handlers-wiki-emerge-py.md",
+      "path": "adr/migration/0458-mcp-server-handlers-wiki-emerge-py.md"
+    },
+    "ADR-0459": {
+      "mirror": "ADR-0459-mcp-server-handlers-wiki-extract-py.md",
+      "path": "adr/migration/0459-mcp-server-handlers-wiki-extract-py.md"
+    },
+    "ADR-0461": {
+      "mirror": "ADR-0461-mcp-server-handlers-wiki-list-py.md",
+      "path": "adr/migration/0461-mcp-server-handlers-wiki-list-py.md"
+    },
+    "ADR-0462": {
+      "mirror": "ADR-0462-mcp-server-handlers-wiki-memory-sync-py.md",
+      "path": "adr/migration/0462-mcp-server-handlers-wiki-memory-sync-py.md"
+    },
+    "ADR-0463": {
+      "mirror": "ADR-0463-mcp-server-handlers-wiki-migrate-py.md",
+      "path": "adr/migration/0463-mcp-server-handlers-wiki-migrate-py.md"
+    },
+    "ADR-0464": {
+      "mirror": "ADR-0464-mcp-server-handlers-wiki-pipeline-py.md",
+      "path": "adr/migration/0464-mcp-server-handlers-wiki-pipeline-py.md"
+    },
+    "ADR-0465": {
+      "mirror": "ADR-0465-mcp-server-handlers-wiki-purge-py.md",
+      "path": "adr/migration/0465-mcp-server-handlers-wiki-purge-py.md"
+    },
+    "ADR-0466": {
+      "mirror": "ADR-0466-mcp-server-handlers-wiki-read-py.md",
+      "path": "adr/migration/0466-mcp-server-handlers-wiki-read-py.md"
+    },
+    "ADR-0467": {
+      "mirror": "ADR-0467-mcp-server-handlers-wiki-refine-py.md",
+      "path": "adr/migration/0467-mcp-server-handlers-wiki-refine-py.md"
+    },
+    "ADR-0468": {
+      "mirror": "ADR-0468-mcp-server-handlers-wiki-reindex-py.md",
+      "path": "adr/migration/0468-mcp-server-handlers-wiki-reindex-py.md"
+    },
+    "ADR-0469": {
+      "mirror": "ADR-0469-mcp-server-handlers-wiki-rename-py.md",
+      "path": "adr/migration/0469-mcp-server-handlers-wiki-rename-py.md"
+    },
+    "ADR-0470": {
+      "mirror": "ADR-0470-mcp-server-handlers-wiki-resolve-py.md",
+      "path": "adr/migration/0470-mcp-server-handlers-wiki-resolve-py.md"
+    },
+    "ADR-0471": {
+      "mirror": "ADR-0471-mcp-server-handlers-wiki-seed-codebase-py.md",
+      "path": "adr/migration/0471-mcp-server-handlers-wiki-seed-codebase-py.md"
+    },
+    "ADR-0472": {
+      "mirror": "ADR-0472-mcp-server-handlers-wiki-synthesize-py.md",
+      "path": "adr/migration/0472-mcp-server-handlers-wiki-synthesize-py.md"
+    },
+    "ADR-0473": {
+      "mirror": "ADR-0473-mcp-server-handlers-wiki-verify-py.md",
+      "path": "adr/migration/0473-mcp-server-handlers-wiki-verify-py.md"
+    },
+    "ADR-0474": {
+      "mirror": "ADR-0474-mcp-server-handlers-wiki-view-py.md",
+      "path": "adr/migration/0474-mcp-server-handlers-wiki-view-py.md"
+    },
+    "ADR-0475": {
+      "mirror": "ADR-0475-mcp-server-handlers-wiki-write-py.md",
+      "path": "adr/migration/0475-mcp-server-handlers-wiki-write-py.md"
+    },
+    "ADR-0477": {
+      "mirror": "ADR-0477-mcp-server-hooks-capture-mode-py.md",
+      "path": "adr/migration/0477-mcp-server-hooks-capture-mode-py.md"
+    },
+    "ADR-0478": {
+      "mirror": "ADR-0478-mcp-server-hooks-headless-guard-py.md",
+      "path": "adr/migration/0478-mcp-server-hooks-headless-guard-py.md"
+    },
+    "ADR-0479": {
+      "mirror": "ADR-0479-mcp-server-hooks-store-lifecycle-py.md",
+      "path": "adr/migration/0479-mcp-server-hooks-store-lifecycle-py.md"
+    },
+    "ADR-0480": {
+      "mirror": "ADR-0480-mcp-server-hooks-telemetry-py.md",
+      "path": "adr/migration/0480-mcp-server-hooks-telemetry-py.md"
+    },
+    "ADR-0481": {
+      "mirror": "ADR-0481-mcp-server-hooks-agent-briefing-py.md",
+      "path": "adr/migration/0481-mcp-server-hooks-agent-briefing-py.md"
+    },
+    "ADR-0482": {
+      "mirror": "ADR-0482-mcp-server-hooks-agent-briefing-keywords-py.md",
+      "path": "adr/migration/0482-mcp-server-hooks-agent-briefing-keywords-py.md"
+    },
+    "ADR-0483": {
+      "mirror": "ADR-0483-mcp-server-hooks-agent-briefing-log-py.md",
+      "path": "adr/migration/0483-mcp-server-hooks-agent-briefing-log-py.md"
+    },
+    "ADR-0484": {
+      "mirror": "ADR-0484-mcp-server-hooks-agent-briefing-query-py.md",
+      "path": "adr/migration/0484-mcp-server-hooks-agent-briefing-query-py.md"
+    },
+    "ADR-0485": {
+      "mirror": "ADR-0485-mcp-server-hooks-auto-recall-py.md",
+      "path": "adr/migration/0485-mcp-server-hooks-auto-recall-py.md"
+    },
+    "ADR-0486": {
+      "mirror": "ADR-0486-mcp-server-hooks-capture-dispatch-py.md",
+      "path": "adr/migration/0486-mcp-server-hooks-capture-dispatch-py.md"
+    },
+    "ADR-0488": {
+      "mirror": "ADR-0488-mcp-server-hooks-capture-worker-logging-py.md",
+      "path": "adr/migration/0488-mcp-server-hooks-capture-worker-logging-py.md"
+    },
+    "ADR-0489": {
+      "mirror": "ADR-0489-mcp-server-hooks-capture-worker-policy-py.md",
+      "path": "adr/migration/0489-mcp-server-hooks-capture-worker-policy-py.md"
+    },
+    "ADR-0490": {
+      "mirror": "ADR-0490-mcp-server-hooks-compaction-checkpoint-py.md",
+      "path": "adr/migration/0490-mcp-server-hooks-compaction-checkpoint-py.md"
+    },
+    "ADR-0491": {
+      "mirror": "ADR-0491-mcp-server-hooks-consolidate-background-py.md",
+      "path": "adr/migration/0491-mcp-server-hooks-consolidate-background-py.md"
+    },
+    "ADR-0492": {
+      "mirror": "ADR-0492-mcp-server-hooks-ingest-codebase-background-py.md",
+      "path": "adr/migration/0492-mcp-server-hooks-ingest-codebase-background-py.md"
+    },
+    "ADR-0493": {
+      "mirror": "ADR-0493-mcp-server-hooks-pipeline-impact-bump-py.md",
+      "path": "adr/migration/0493-mcp-server-hooks-pipeline-impact-bump-py.md"
+    },
+    "ADR-0494": {
+      "mirror": "ADR-0494-mcp-server-hooks-post-commit-reindex-py.md",
+      "path": "adr/migration/0494-mcp-server-hooks-post-commit-reindex-py.md"
+    },
+    "ADR-0495": {
+      "mirror": "ADR-0495-mcp-server-hooks-post-tool-capture-py.md",
+      "path": "adr/migration/0495-mcp-server-hooks-post-tool-capture-py.md"
+    },
+    "ADR-0496": {
+      "mirror": "ADR-0496-mcp-server-hooks-preemptive-context-py.md",
+      "path": "adr/migration/0496-mcp-server-hooks-preemptive-context-py.md"
+    },
+    "ADR-0497": {
+      "mirror": "ADR-0497-mcp-server-hooks-session-lifecycle-py.md",
+      "path": "adr/migration/0497-mcp-server-hooks-session-lifecycle-py.md"
+    },
+    "ADR-0498": {
+      "mirror": "ADR-0498-mcp-server-hooks-session-start-py.md",
+      "path": "adr/migration/0498-mcp-server-hooks-session-start-py.md"
+    },
+    "ADR-0500": {
+      "mirror": "ADR-0500-agent-config.md",
+      "path": "adr/migration/0500-agent-config.md"
+    },
+    "ADR-0501": {
+      "mirror": "ADR-0501-ap-bridge.md",
+      "path": "adr/migration/0501-ap-bridge.md"
+    },
+    "ADR-0502": {
+      "mirror": "ADR-0502-ap-sync-loop.md",
+      "path": "adr/migration/0502-ap-sync-loop.md"
+    },
+    "ADR-0503": {
+      "mirror": "ADR-0503-artifact-gc.md",
+      "path": "adr/migration/0503-artifact-gc.md"
+    },
+    "ADR-0504": {
+      "mirror": "ADR-0504-artifact-store.md",
+      "path": "adr/migration/0504-artifact-store.md"
+    },
+    "ADR-0505": {
+      "mirror": "ADR-0505-backend-marker.md",
+      "path": "adr/migration/0505-backend-marker.md"
+    },
+    "ADR-0506": {
+      "mirror": "ADR-0506-batch-sinks.md",
+      "path": "adr/migration/0506-batch-sinks.md"
+    },
+    "ADR-0507": {
+      "mirror": "ADR-0507-brain-index-store.md",
+      "path": "adr/migration/0507-brain-index-store.md"
+    },
+    "ADR-0508": {
+      "mirror": "ADR-0508-capture-client.md",
+      "path": "adr/migration/0508-capture-client.md"
+    },
+    "ADR-0509": {
+      "mirror": "ADR-0509-capture-lock.md",
+      "path": "adr/migration/0509-capture-lock.md"
+    },
+    "ADR-0510": {
+      "mirror": "ADR-0510-capture-peer.md",
+      "path": "adr/migration/0510-capture-peer.md"
+    },
+    "ADR-0511": {
+      "mirror": "ADR-0511-capture-server.md",
+      "path": "adr/migration/0511-capture-server.md"
+    },
+    "ADR-0512": {
+      "mirror": "ADR-0512-capture-socket.md",
+      "path": "adr/migration/0512-capture-socket.md"
+    },
+    "ADR-0513": {
+      "mirror": "ADR-0513-capture-transport.md",
+      "path": "adr/migration/0513-capture-transport.md"
+    },
+    "ADR-0514": {
+      "mirror": "ADR-0514-config.md",
+      "path": "adr/migration/0514-config.md"
+    },
+    "ADR-0515": {
+      "mirror": "ADR-0515-db-types.md",
+      "path": "adr/migration/0515-db-types.md"
+    },
+    "ADR-0516": {
+      "mirror": "ADR-0516-document-reader.md",
+      "path": "adr/migration/0516-document-reader.md"
+    },
+    "ADR-0517": {
+      "mirror": "ADR-0517-embedding-batch.md",
+      "path": "adr/migration/0517-embedding-batch.md"
+    },
+    "ADR-0518": {
+      "mirror": "ADR-0518-embedding-cache.md",
+      "path": "adr/migration/0518-embedding-cache.md"
+    },
+    "ADR-0519": {
+      "mirror": "ADR-0519-embedding-downloads.md",
+      "path": "adr/migration/0519-embedding-downloads.md"
+    },
+    "ADR-0520": {
+      "mirror": "ADR-0520-embedding-engine.md",
+      "path": "adr/migration/0520-embedding-engine.md"
+    },
+    "ADR-0521": {
+      "mirror": "ADR-0521-embedding-factory.md",
+      "path": "adr/migration/0521-embedding-factory.md"
+    },
+    "ADR-0522": {
+      "mirror": "ADR-0522-embedding-fallback-provider.md",
+      "path": "adr/migration/0522-embedding-fallback-provider.md"
+    },
+    "ADR-0523": {
+      "mirror": "ADR-0523-embedding-model-lifecycle.md",
+      "path": "adr/migration/0523-embedding-model-lifecycle.md"
+    },
+    "ADR-0524": {
+      "mirror": "ADR-0524-embedding-prefix.md",
+      "path": "adr/migration/0524-embedding-prefix.md"
+    },
+    "ADR-0525": {
+      "mirror": "ADR-0525-embedding-provider.md",
+      "path": "adr/migration/0525-embedding-provider.md"
+    },
+    "ADR-0526": {
+      "mirror": "ADR-0526-file-io.md",
+      "path": "adr/migration/0526-file-io.md"
+    },
+    "ADR-0527": {
+      "mirror": "ADR-0527-groomer-coordinator.md",
+      "path": "adr/migration/0527-groomer-coordinator.md"
+    },
+    "ADR-0528": {
+      "mirror": "ADR-0528-groomer-coordinator-io.md",
+      "path": "adr/migration/0528-groomer-coordinator-io.md"
+    },
+    "ADR-0529": {
+      "mirror": "ADR-0529-hook-cascade-counter.md",
+      "path": "adr/migration/0529-hook-cascade-counter.md"
+    },
+    "ADR-0530": {
+      "mirror": "ADR-0530-hook-counter-lock.md",
+      "path": "adr/migration/0530-hook-counter-lock.md"
+    },
+    "ADR-0531": {
+      "mirror": "ADR-0531-mcp-call-timeout.md",
+      "path": "adr/migration/0531-mcp-call-timeout.md"
+    },
+    "ADR-0532": {
+      "mirror": "ADR-0532-mcp-client.md",
+      "path": "adr/migration/0532-mcp-client.md"
+    },
+    "ADR-0533": {
+      "mirror": "ADR-0533-mcp-client-pool.md",
+      "path": "adr/migration/0533-mcp-client-pool.md"
+    },
+    "ADR-0534": {
+      "mirror": "ADR-0534-memory-config.md",
+      "path": "adr/migration/0534-memory-config.md"
+    },
+    "ADR-0535": {
+      "mirror": "ADR-0535-memory-store.md",
+      "path": "adr/migration/0535-memory-store.md"
+    },
+    "ADR-0536": {
+      "mirror": "ADR-0536-otel-exporter.md",
+      "path": "adr/migration/0536-otel-exporter.md"
+    },
+    "ADR-0537": {
+      "mirror": "ADR-0537-pg-schema.md",
+      "path": "adr/migration/0537-pg-schema.md"
+    },
+    "ADR-0538": {
+      "mirror": "ADR-0538-pg-store.md",
+      "path": "adr/migration/0538-pg-store.md"
+    },
+    "ADR-0539": {
+      "mirror": "ADR-0539-pg-store-archive.md",
+      "path": "adr/migration/0539-pg-store-archive.md"
+    },
+    "ADR-0540": {
+      "mirror": "ADR-0540-pg-store-checkpoint.md",
+      "path": "adr/migration/0540-pg-store-checkpoint.md"
+    },
+    "ADR-0541": {
+      "mirror": "ADR-0541-pg-store-cls.md",
+      "path": "adr/migration/0541-pg-store-cls.md"
+    },
+    "ADR-0542": {
+      "mirror": "ADR-0542-pg-store-co-access.md",
+      "path": "adr/migration/0542-pg-store-co-access.md"
+    },
+    "ADR-0543": {
+      "mirror": "ADR-0543-pg-store-consolidation-stage.md",
+      "path": "adr/migration/0543-pg-store-consolidation-stage.md"
+    },
+    "ADR-0544": {
+      "mirror": "ADR-0544-pg-store-cortical-schema.md",
+      "path": "adr/migration/0544-pg-store-cortical-schema.md"
+    },
+    "ADR-0545": {
+      "mirror": "ADR-0545-pg-store-ddl.md",
+      "path": "adr/migration/0545-pg-store-ddl.md"
+    },
+    "ADR-0546": {
+      "mirror": "ADR-0546-pg-store-engram.md",
+      "path": "adr/migration/0546-pg-store-engram.md"
+    },
+    "ADR-0547": {
+      "mirror": "ADR-0547-pg-store-entities.md",
+      "path": "adr/migration/0547-pg-store-entities.md"
+    },
+    "ADR-0548": {
+      "mirror": "ADR-0548-pg-store-entity-merge.md",
+      "path": "adr/migration/0548-pg-store-entity-merge.md"
+    },
+    "ADR-0549": {
+      "mirror": "ADR-0549-pg-store-heat.md",
+      "path": "adr/migration/0549-pg-store-heat.md"
+    },
+    "ADR-0550": {
+      "mirror": "ADR-0550-pg-store-host.md",
+      "path": "adr/migration/0550-pg-store-host.md"
+    },
+    "ADR-0551": {
+      "mirror": "ADR-0551-pg-store-lesson-promotion.md",
+      "path": "adr/migration/0551-pg-store-lesson-promotion.md"
+    },
+    "ADR-0552": {
+      "mirror": "ADR-0552-pg-store-memory-dedup.md",
+      "path": "adr/migration/0552-pg-store-memory-dedup.md"
+    },
+    "ADR-0553": {
+      "mirror": "ADR-0553-pg-store-memory-domain.md",
+      "path": "adr/migration/0553-pg-store-memory-domain.md"
+    },
+    "ADR-0554": {
+      "mirror": "ADR-0554-pg-store-memory-meta.md",
+      "path": "adr/migration/0554-pg-store-memory-meta.md"
+    },
+    "ADR-0555": {
+      "mirror": "ADR-0555-pg-store-memory-reheat.md",
+      "path": "adr/migration/0555-pg-store-memory-reheat.md"
+    },
+    "ADR-0556": {
+      "mirror": "ADR-0556-pg-store-memory-write-class.md",
+      "path": "adr/migration/0556-pg-store-memory-write-class.md"
+    },
+    "ADR-0557": {
+      "mirror": "ADR-0557-pg-store-near-dup.md",
+      "path": "adr/migration/0557-pg-store-near-dup.md"
+    },
+    "ADR-0558": {
+      "mirror": "ADR-0558-pg-store-procedural.md",
+      "path": "adr/migration/0558-pg-store-procedural.md"
+    },
+    "ADR-0559": {
+      "mirror": "ADR-0559-pg-store-prospective.md",
+      "path": "adr/migration/0559-pg-store-prospective.md"
+    },
+    "ADR-0560": {
+      "mirror": "ADR-0560-pg-store-queries.md",
+      "path": "adr/migration/0560-pg-store-queries.md"
+    },
+    "ADR-0561": {
+      "mirror": "ADR-0561-pg-store-query-stream.md",
+      "path": "adr/migration/0561-pg-store-query-stream.md"
+    },
+    "ADR-0562": {
+      "mirror": "ADR-0562-pg-store-receipts.md",
+      "path": "adr/migration/0562-pg-store-receipts.md"
+    },
+    "ADR-0563": {
+      "mirror": "ADR-0563-pg-store-relationships.md",
+      "path": "adr/migration/0563-pg-store-relationships.md"
+    },
+    "ADR-0565": {
+      "mirror": "ADR-0565-pg-store-schema.md",
+      "path": "adr/migration/0565-pg-store-schema.md"
+    },
+    "ADR-0566": {
+      "mirror": "ADR-0566-pg-store-search.md",
+      "path": "adr/migration/0566-pg-store-search.md"
+    },
+    "ADR-0567": {
+      "mirror": "ADR-0567-pg-store-serialize.md",
+      "path": "adr/migration/0567-pg-store-serialize.md"
+    },
+    "ADR-0568": {
+      "mirror": "ADR-0568-pg-store-signals.md",
+      "path": "adr/migration/0568-pg-store-signals.md"
+    },
+    "ADR-0569": {
+      "mirror": "ADR-0569-pg-store-stats.md",
+      "path": "adr/migration/0569-pg-store-stats.md"
+    },
+    "ADR-0570": {
+      "mirror": "ADR-0570-pg-store-supersede.md",
+      "path": "adr/migration/0570-pg-store-supersede.md"
+    },
+    "ADR-0571": {
+      "mirror": "ADR-0571-pg-store-wiki.md",
+      "path": "adr/migration/0571-pg-store-wiki.md"
+    },
+    "ADR-0572": {
+      "mirror": "ADR-0572-pg-store-wiki-citation-seed.md",
+      "path": "adr/migration/0572-pg-store-wiki-citation-seed.md"
+    },
+    "ADR-0573": {
+      "mirror": "ADR-0573-pg-store-wiki-claims.md",
+      "path": "adr/migration/0573-pg-store-wiki-claims.md"
+    },
+    "ADR-0574": {
+      "mirror": "ADR-0574-pg-store-wiki-common.md",
+      "path": "adr/migration/0574-pg-store-wiki-common.md"
+    },
+    "ADR-0575": {
+      "mirror": "ADR-0575-pg-store-wiki-concepts.md",
+      "path": "adr/migration/0575-pg-store-wiki-concepts.md"
+    },
+    "ADR-0576": {
+      "mirror": "ADR-0576-pg-store-wiki-domain.md",
+      "path": "adr/migration/0576-pg-store-wiki-domain.md"
+    },
+    "ADR-0577": {
+      "mirror": "ADR-0577-pg-store-wiki-drafts.md",
+      "path": "adr/migration/0577-pg-store-wiki-drafts.md"
+    },
+    "ADR-0578": {
+      "mirror": "ADR-0578-pg-store-wiki-links.md",
+      "path": "adr/migration/0578-pg-store-wiki-links.md"
+    },
+    "ADR-0579": {
+      "mirror": "ADR-0579-pg-store-wiki-notes.md",
+      "path": "adr/migration/0579-pg-store-wiki-notes.md"
+    },
+    "ADR-0580": {
+      "mirror": "ADR-0580-pg-store-wiki-pages.md",
+      "path": "adr/migration/0580-pg-store-wiki-pages.md"
+    },
+    "ADR-0581": {
+      "mirror": "ADR-0581-pg-store-wiki-sources.md",
+      "path": "adr/migration/0581-pg-store-wiki-sources.md"
+    },
+    "ADR-0582": {
+      "mirror": "ADR-0582-pg-store-wiki-thermo.md",
+      "path": "adr/migration/0582-pg-store-wiki-thermo.md"
+    },
+    "ADR-0583": {
+      "mirror": "ADR-0583-pg-store-write.md",
+      "path": "adr/migration/0583-pg-store-write.md"
+    },
+    "ADR-0584": {
+      "mirror": "ADR-0584-pipeline-discovery.md",
+      "path": "adr/migration/0584-pipeline-discovery.md"
+    },
+    "ADR-0585": {
+      "mirror": "ADR-0585-pipeline-graph-ttl.md",
+      "path": "adr/migration/0585-pipeline-graph-ttl.md"
+    },
+    "ADR-0586": {
+      "mirror": "ADR-0586-pipeline-install-lock.md",
+      "path": "adr/migration/0586-pipeline-install-lock.md"
+    },
+    "ADR-0587": {
+      "mirror": "ADR-0587-pipeline-install-release.md",
+      "path": "adr/migration/0587-pipeline-install-release.md"
+    },
+    "ADR-0588": {
+      "mirror": "ADR-0588-pipeline-install-rust.md",
+      "path": "adr/migration/0588-pipeline-install-rust.md"
+    },
+    "ADR-0589": {
+      "mirror": "ADR-0589-pipeline-installer.md",
+      "path": "adr/migration/0589-pipeline-installer.md"
+    },
+    "ADR-0590": {
+      "mirror": "ADR-0590-pipeline-installer-common.md",
+      "path": "adr/migration/0590-pipeline-installer-common.md"
+    },
+    "ADR-0591": {
+      "mirror": "ADR-0591-pooled-sink.md",
+      "path": "adr/migration/0591-pooled-sink.md"
+    },
+    "ADR-0592": {
+      "mirror": "ADR-0592-profile-store.md",
+      "path": "adr/migration/0592-profile-store.md"
+    },
+    "ADR-0593": {
+      "mirror": "ADR-0593-project-wiki.md",
+      "path": "adr/migration/0593-project-wiki.md"
+    },
+    "ADR-0594": {
+      "mirror": "ADR-0594-row-factory.md",
+      "path": "adr/migration/0594-row-factory.md"
+    },
+    "ADR-0595": {
+      "mirror": "ADR-0595-scanner.md",
+      "path": "adr/migration/0595-scanner.md"
+    },
+    "ADR-0596": {
+      "mirror": "ADR-0596-scanner-parse.md",
+      "path": "adr/migration/0596-scanner-parse.md"
+    },
+    "ADR-0597": {
+      "mirror": "ADR-0597-session-registry.md",
+      "path": "adr/migration/0597-session-registry.md"
+    },
+    "ADR-0599": {
+      "mirror": "ADR-0599-sqlite-compat.md",
+      "path": "adr/migration/0599-sqlite-compat.md"
+    },
+    "ADR-0600": {
+      "mirror": "ADR-0600-sqlite-connection-registry.md",
+      "path": "adr/migration/0600-sqlite-connection-registry.md"
+    },
+    "ADR-0602": {
+      "mirror": "ADR-0602-sqlite-schema.md",
+      "path": "adr/migration/0602-sqlite-schema.md"
+    },
+    "ADR-0603": {
+      "mirror": "ADR-0603-sqlite-schema-wiki.md",
+      "path": "adr/migration/0603-sqlite-schema-wiki.md"
+    },
+    "ADR-0604": {
+      "mirror": "ADR-0604-sqlite-sql-translate.md",
+      "path": "adr/migration/0604-sqlite-sql-translate.md"
+    },
+    "ADR-0605": {
+      "mirror": "ADR-0605-sqlite-store.md",
+      "path": "adr/migration/0605-sqlite-store.md"
+    },
+    "ADR-0606": {
+      "mirror": "ADR-0606-sqlite-store-auxiliary.md",
+      "path": "adr/migration/0606-sqlite-store-auxiliary.md"
+    },
+    "ADR-0607": {
+      "mirror": "ADR-0607-sqlite-store-entities.md",
+      "path": "adr/migration/0607-sqlite-store-entities.md"
+    },
+    "ADR-0608": {
+      "mirror": "ADR-0608-sqlite-store-entity-merge.md",
+      "path": "adr/migration/0608-sqlite-store-entity-merge.md"
+    },
+    "ADR-0609": {
+      "mirror": "ADR-0609-sqlite-store-grooming.md",
+      "path": "adr/migration/0609-sqlite-store-grooming.md"
+    },
+    "ADR-0610": {
+      "mirror": "ADR-0610-sqlite-store-lesson-promotion.md",
+      "path": "adr/migration/0610-sqlite-store-lesson-promotion.md"
+    },
+    "ADR-0611": {
+      "mirror": "ADR-0611-sqlite-store-mood.md",
+      "path": "adr/migration/0611-sqlite-store-mood.md"
+    },
+    "ADR-0612": {
+      "mirror": "ADR-0612-sqlite-store-queries.md",
+      "path": "adr/migration/0612-sqlite-store-queries.md"
+    },
+    "ADR-0613": {
+      "mirror": "ADR-0613-sqlite-store-receipts.md",
+      "path": "adr/migration/0613-sqlite-store-receipts.md"
+    },
+    "ADR-0616": {
+      "mirror": "ADR-0616-sqlite-store-search.md",
+      "path": "adr/migration/0616-sqlite-store-search.md"
+    },
+    "ADR-0617": {
+      "mirror": "ADR-0617-sqlite-store-stats.md",
+      "path": "adr/migration/0617-sqlite-store-stats.md"
+    },
+    "ADR-0618": {
+      "mirror": "ADR-0618-staging-resolve-sink.md",
+      "path": "adr/migration/0618-staging-resolve-sink.md"
+    },
+    "ADR-0619": {
+      "mirror": "ADR-0619-stream-sources.md",
+      "path": "adr/migration/0619-stream-sources.md"
+    },
+    "ADR-0620": {
+      "mirror": "ADR-0620-upstream-availability.md",
+      "path": "adr/migration/0620-upstream-availability.md"
+    },
+    "ADR-0621": {
+      "mirror": "ADR-0621-upstream-governor.md",
+      "path": "adr/migration/0621-upstream-governor.md"
+    },
+    "ADR-0622": {
+      "mirror": "ADR-0622-upstream-identity.md",
+      "path": "adr/migration/0622-upstream-identity.md"
+    },
+    "ADR-0623": {
+      "mirror": "ADR-0623-viz-client.md",
+      "path": "adr/migration/0623-viz-client.md"
+    },
+    "ADR-0624": {
+      "mirror": "ADR-0624-wiki-decision-index.md",
+      "path": "adr/migration/0624-wiki-decision-index.md"
+    },
+    "ADR-0625": {
+      "mirror": "ADR-0625-wiki-decision-mirror.md",
+      "path": "adr/migration/0625-wiki-decision-mirror.md"
+    },
+    "ADR-0626": {
+      "mirror": "ADR-0626-wiki-page-fs.md",
+      "path": "adr/migration/0626-wiki-page-fs.md"
+    },
+    "ADR-0627": {
+      "mirror": "ADR-0627-wiki-pages-listing.md",
+      "path": "adr/migration/0627-wiki-pages-listing.md"
+    },
+    "ADR-0628": {
+      "mirror": "ADR-0628-wiki-reindex-io.md",
+      "path": "adr/migration/0628-wiki-reindex-io.md"
+    },
+    "ADR-0629": {
+      "mirror": "ADR-0629-wiki-schema-reader.md",
+      "path": "adr/migration/0629-wiki-schema-reader.md"
+    },
+    "ADR-0630": {
+      "mirror": "ADR-0630-wiki-store.md",
+      "path": "adr/migration/0630-wiki-store.md"
+    },
+    "ADR-0631": {
+      "mirror": "ADR-0631-workflow-graph-ast-edges.md",
+      "path": "adr/migration/0631-workflow-graph-ast-edges.md"
+    },
+    "ADR-0632": {
+      "mirror": "ADR-0632-workflow-graph-ast-response.md",
+      "path": "adr/migration/0632-workflow-graph-ast-response.md"
+    },
+    "ADR-0633": {
+      "mirror": "ADR-0633-workflow-graph-ast-symbols.md",
+      "path": "adr/migration/0633-workflow-graph-ast-symbols.md"
+    },
+    "ADR-0634": {
+      "mirror": "ADR-0634-workflow-graph-source-ast.md",
+      "path": "adr/migration/0634-workflow-graph-source-ast.md"
+    },
+    "ADR-0635": {
+      "mirror": "ADR-0635-mcp-server-mcp-progress.md",
+      "path": "adr/migration/0635-mcp-server-mcp-progress.md"
+    },
+    "ADR-0636": {
+      "mirror": "ADR-0636-mcp-server-mcp-prompts.md",
+      "path": "adr/migration/0636-mcp-server-mcp-prompts.md"
+    },
+    "ADR-0637": {
+      "mirror": "ADR-0637-mcp-server-migrate.md",
+      "path": "adr/migration/0637-mcp-server-migrate.md"
+    },
+    "ADR-0639": {
+      "mirror": "ADR-0639-mcp-server-observability-metrics.md",
+      "path": "adr/migration/0639-mcp-server-observability-metrics.md"
+    },
+    "ADR-0640": {
+      "mirror": "ADR-0640-mcp-server-observability-silent-failure.md",
+      "path": "adr/migration/0640-mcp-server-observability-silent-failure.md"
+    },
+    "ADR-0643": {
+      "mirror": "ADR-0643-mcp-server-shared-algorithmic-embedding.md",
+      "path": "adr/migration/0643-mcp-server-shared-algorithmic-embedding.md"
+    },
+    "ADR-0644": {
+      "mirror": "ADR-0644-mcp-server-shared-categorizer.md",
+      "path": "adr/migration/0644-mcp-server-shared-categorizer.md"
+    },
+    "ADR-0645": {
+      "mirror": "ADR-0645-mcp-server-shared-code-tokenize.md",
+      "path": "adr/migration/0645-mcp-server-shared-code-tokenize.md"
+    },
+    "ADR-0646": {
+      "mirror": "ADR-0646-mcp-server-shared-content-hardening.md",
+      "path": "adr/migration/0646-mcp-server-shared-content-hardening.md"
+    },
+    "ADR-0647": {
+      "mirror": "ADR-0647-mcp-server-shared-domain-mapping.md",
+      "path": "adr/migration/0647-mcp-server-shared-domain-mapping.md"
+    },
+    "ADR-0648": {
+      "mirror": "ADR-0648-mcp-server-shared-entity-canonical.md",
+      "path": "adr/migration/0648-mcp-server-shared-entity-canonical.md"
+    },
+    "ADR-0649": {
+      "mirror": "ADR-0649-mcp-server-shared-freshness.md",
+      "path": "adr/migration/0649-mcp-server-shared-freshness.md"
+    },
+    "ADR-0651": {
+      "mirror": "ADR-0651-mcp-server-shared-hook-state-paths.md",
+      "path": "adr/migration/0651-mcp-server-shared-hook-state-paths.md"
+    },
+    "ADR-0652": {
+      "mirror": "ADR-0652-mcp-server-shared-json-native.md",
+      "path": "adr/migration/0652-mcp-server-shared-json-native.md"
+    },
+    "ADR-0654": {
+      "mirror": "ADR-0654-mcp-server-shared-log-file-lock.md",
+      "path": "adr/migration/0654-mcp-server-shared-log-file-lock.md"
+    },
+    "ADR-0655": {
+      "mirror": "ADR-0655-mcp-server-shared-log-rotation.md",
+      "path": "adr/migration/0655-mcp-server-shared-log-rotation.md"
+    },
+    "ADR-0658": {
+      "mirror": "ADR-0658-mcp-server-shared-minhash.md",
+      "path": "adr/migration/0658-mcp-server-shared-minhash.md"
+    },
+    "ADR-0659": {
+      "mirror": "ADR-0659-mcp-server-shared-near-dup-calibration.md",
+      "path": "adr/migration/0659-mcp-server-shared-near-dup-calibration.md"
+    },
+    "ADR-0660": {
+      "mirror": "ADR-0660-mcp-server-shared-platform.md",
+      "path": "adr/migration/0660-mcp-server-shared-platform.md"
+    },
+    "ADR-0661": {
+      "mirror": "ADR-0661-mcp-server-shared-progress.md",
+      "path": "adr/migration/0661-mcp-server-shared-progress.md"
+    },
+    "ADR-0662": {
+      "mirror": "ADR-0662-mcp-server-shared-project-ids.md",
+      "path": "adr/migration/0662-mcp-server-shared-project-ids.md"
+    },
+    "ADR-0663": {
+      "mirror": "ADR-0663-mcp-server-shared-redaction.md",
+      "path": "adr/migration/0663-mcp-server-shared-redaction.md"
+    },
+    "ADR-0666": {
+      "mirror": "ADR-0666-mcp-server-shared-string-distance.md",
+      "path": "adr/migration/0666-mcp-server-shared-string-distance.md"
+    },
+    "ADR-0667": {
+      "mirror": "ADR-0667-mcp-server-shared-subprocess-safe.md",
+      "path": "adr/migration/0667-mcp-server-shared-subprocess-safe.md"
+    },
+    "ADR-0668": {
+      "mirror": "ADR-0668-mcp-server-shared-telemetry-context.md",
+      "path": "adr/migration/0668-mcp-server-shared-telemetry-context.md"
+    },
+    "ADR-0669": {
+      "mirror": "ADR-0669-mcp-server-shared-temporal.md",
+      "path": "adr/migration/0669-mcp-server-shared-temporal.md"
+    },
+    "ADR-0670": {
+      "mirror": "ADR-0670-mcp-server-shared-temporal-normalize.md",
+      "path": "adr/migration/0670-mcp-server-shared-temporal-normalize.md"
+    },
+    "ADR-0671": {
+      "mirror": "ADR-0671-mcp-server-shared-temporal-timezones.md",
+      "path": "adr/migration/0671-mcp-server-shared-temporal-timezones.md"
+    },
+    "ADR-0672": {
+      "mirror": "ADR-0672-mcp-server-shared-text.md",
+      "path": "adr/migration/0672-mcp-server-shared-text.md"
+    },
+    "ADR-0673": {
+      "mirror": "ADR-0673-mcp-server-shared-types-features.md",
+      "path": "adr/migration/0673-mcp-server-shared-types-features.md"
+    },
+    "ADR-0675": {
+      "mirror": "ADR-0675-mcp-server-shared-vader.md",
+      "path": "adr/migration/0675-mcp-server-shared-vader.md"
+    },
+    "ADR-0676": {
+      "mirror": "ADR-0676-mcp-server-shared-wiki-classification.md",
+      "path": "adr/migration/0676-mcp-server-shared-wiki-classification.md"
+    },
+    "ADR-0677": {
+      "mirror": "ADR-0677-mcp-server-shared-wiki-decision-ids.md",
+      "path": "adr/migration/0677-mcp-server-shared-wiki-decision-ids.md"
+    },
+    "ADR-0678": {
+      "mirror": "ADR-0678-mcp-server-shared-wiki-frontmatter.md",
+      "path": "adr/migration/0678-mcp-server-shared-wiki-frontmatter.md"
+    },
+    "ADR-0679": {
+      "mirror": "ADR-0679-mcp-server-shared-wiki-frontmatter-validation.md",
+      "path": "adr/migration/0679-mcp-server-shared-wiki-frontmatter-validation.md"
+    },
+    "ADR-0680": {
+      "mirror": "ADR-0680-mcp-server-shared-wiki-index.md",
+      "path": "adr/migration/0680-mcp-server-shared-wiki-index.md"
+    },
+    "ADR-0681": {
+      "mirror": "ADR-0681-mcp-server-shared-wiki-ir.md",
+      "path": "adr/migration/0681-mcp-server-shared-wiki-ir.md"
+    },
+    "ADR-0682": {
+      "mirror": "ADR-0682-mcp-server-shared-wiki-layout.md",
+      "path": "adr/migration/0682-mcp-server-shared-wiki-layout.md"
+    },
+    "ADR-0683": {
+      "mirror": "ADR-0683-mcp-server-shared-wiki-page-builders.md",
+      "path": "adr/migration/0683-mcp-server-shared-wiki-page-builders.md"
+    },
+    "ADR-0684": {
+      "mirror": "ADR-0684-mcp-server-shared-wiki-pages.md",
+      "path": "adr/migration/0684-mcp-server-shared-wiki-pages.md"
+    },
+    "ADR-0685": {
+      "mirror": "ADR-0685-mcp-server-shared-wiki-readme.md",
+      "path": "adr/migration/0685-mcp-server-shared-wiki-readme.md"
+    },
+    "ADR-0686": {
+      "mirror": "ADR-0686-mcp-server-shared-wiki-schema-loader.md",
+      "path": "adr/migration/0686-mcp-server-shared-wiki-schema-loader.md"
+    },
+    "ADR-0687": {
+      "mirror": "ADR-0687-mcp-server-shared-wiki-source-paths.md",
+      "path": "adr/migration/0687-mcp-server-shared-wiki-source-paths.md"
+    },
+    "ADR-0688": {
+      "mirror": "ADR-0688-mcp-server-shared-write-class.md",
+      "path": "adr/migration/0688-mcp-server-shared-write-class.md"
+    },
+    "ADR-0690": {
+      "mirror": "ADR-0690-mcp-server-telemetry-middleware.md",
+      "path": "adr/migration/0690-mcp-server-telemetry-middleware.md"
+    },
+    "ADR-0691": {
+      "mirror": "ADR-0691-mcp-server-tool-error-handler.md",
+      "path": "adr/migration/0691-mcp-server-tool-error-handler.md"
+    },
+    "ADR-0692": {
+      "mirror": "ADR-0692-mcp-server-tool-profile-middleware.md",
+      "path": "adr/migration/0692-mcp-server-tool-profile-middleware.md"
+    },
+    "ADR-0693": {
+      "mirror": "ADR-0693-mcp-server-tool-profiles.md",
+      "path": "adr/migration/0693-mcp-server-tool-profiles.md"
+    },
+    "ADR-0696": {
+      "mirror": "ADR-0696-mcp-server-tool-registry-ingest.md",
+      "path": "adr/migration/0696-mcp-server-tool-registry-ingest.md"
+    },
+    "ADR-0698": {
+      "mirror": "ADR-0698-mcp-server-tool-registry-memory.md",
+      "path": "adr/migration/0698-mcp-server-tool-registry-memory.md"
+    },
+    "ADR-0700": {
+      "mirror": "ADR-0700-mcp-server-tool-registry-wiki.md",
+      "path": "adr/migration/0700-mcp-server-tool-registry-wiki.md"
+    },
+    "ADR-0702": {
+      "mirror": "ADR-0702-mcp-server-validation-schemas.md",
+      "path": "adr/migration/0702-mcp-server-validation-schemas.md"
+    },
+    "ADR-0703": {
+      "mirror": "ADR-0703-scripts-aggregate-hook-timings-py.md",
+      "path": "adr/migration/0703-scripts-aggregate-hook-timings-py.md"
+    },
+    "ADR-0704": {
+      "mirror": "ADR-0704-scripts-backfill-wiki-titles-2026-07-14-py.md",
+      "path": "adr/migration/0704-scripts-backfill-wiki-titles-2026-07-14-py.md"
+    },
+    "ADR-0705": {
+      "mirror": "ADR-0705-scripts-backfill-write-class-py.md",
+      "path": "adr/migration/0705-scripts-backfill-write-class-py.md"
+    },
+    "ADR-0706": {
+      "mirror": "ADR-0706-scripts-badge-render-py.md",
+      "path": "adr/migration/0706-scripts-badge-render-py.md"
+    },
+    "ADR-0708": {
+      "mirror": "ADR-0708-scripts-campaign-guards-i6d5-measure-reheat-ranks-py.md",
+      "path": "adr/migration/0708-scripts-campaign-guards-i6d5-measure-reheat-ranks-py.md"
+    },
+    "ADR-0709": {
+      "mirror": "ADR-0709-scripts-check-ci-file-count-py.md",
+      "path": "adr/migration/0709-scripts-check-ci-file-count-py.md"
+    },
+    "ADR-0710": {
+      "mirror": "ADR-0710-scripts-check-ci-gate-complete-py.md",
+      "path": "adr/migration/0710-scripts-check-ci-gate-complete-py.md"
+    },
+    "ADR-0711": {
+      "mirror": "ADR-0711-scripts-check-ci-gate-results-py.md",
+      "path": "adr/migration/0711-scripts-check-ci-gate-results-py.md"
+    },
+    "ADR-0712": {
+      "mirror": "ADR-0712-scripts-check-craftsmanship-py.md",
+      "path": "adr/migration/0712-scripts-check-craftsmanship-py.md"
+    },
+    "ADR-0713": {
+      "mirror": "ADR-0713-scripts-check-doc-claims-py.md",
+      "path": "adr/migration/0713-scripts-check-doc-claims-py.md"
+    },
+    "ADR-0714": {
+      "mirror": "ADR-0714-scripts-check-marketplace-pins-py.md",
+      "path": "adr/migration/0714-scripts-check-marketplace-pins-py.md"
+    },
+    "ADR-0716": {
+      "mirror": "ADR-0716-scripts-check-venv-lock-parity-py.md",
+      "path": "adr/migration/0716-scripts-check-venv-lock-parity-py.md"
+    },
+    "ADR-0717": {
+      "mirror": "ADR-0717-scripts-check-version-surfaces-py.md",
+      "path": "adr/migration/0717-scripts-check-version-surfaces-py.md"
+    },
+    "ADR-0718": {
+      "mirror": "ADR-0718-scripts-collect-response-budget-payloads-py.md",
+      "path": "adr/migration/0718-scripts-collect-response-budget-payloads-py.md"
+    },
+    "ADR-0719": {
+      "mirror": "ADR-0719-scripts-cortex-ingest-py.md",
+      "path": "adr/migration/0719-scripts-cortex-ingest-py.md"
+    },
+    "ADR-0720": {
+      "mirror": "ADR-0720-scripts-craftsmanship-baseline-py.md",
+      "path": "adr/migration/0720-scripts-craftsmanship-baseline-py.md"
+    },
+    "ADR-0721": {
+      "mirror": "ADR-0721-scripts-craftsmanship-constants-py.md",
+      "path": "adr/migration/0721-scripts-craftsmanship-constants-py.md"
+    },
+    "ADR-0722": {
+      "mirror": "ADR-0722-scripts-craftsmanship-decisions-py.md",
+      "path": "adr/migration/0722-scripts-craftsmanship-decisions-py.md"
+    },
+    "ADR-0723": {
+      "mirror": "ADR-0723-scripts-craftsmanship-git-py.md",
+      "path": "adr/migration/0723-scripts-craftsmanship-git-py.md"
+    },
+    "ADR-0724": {
+      "mirror": "ADR-0724-scripts-craftsmanship-imports-py.md",
+      "path": "adr/migration/0724-scripts-craftsmanship-imports-py.md"
+    },
+    "ADR-0725": {
+      "mirror": "ADR-0725-scripts-craftsmanship-layer-table-py.md",
+      "path": "adr/migration/0725-scripts-craftsmanship-layer-table-py.md"
+    },
+    "ADR-0726": {
+      "mirror": "ADR-0726-scripts-craftsmanship-rules-py.md",
+      "path": "adr/migration/0726-scripts-craftsmanship-rules-py.md"
+    },
+    "ADR-0728": {
+      "mirror": "ADR-0728-scripts-dev-run-ingest-py.md",
+      "path": "adr/migration/0728-scripts-dev-run-ingest-py.md"
+    },
+    "ADR-0729": {
+      "mirror": "ADR-0729-scripts-doc-claim-scan-py.md",
+      "path": "adr/migration/0729-scripts-doc-claim-scan-py.md"
+    },
+    "ADR-0730": {
+      "mirror": "ADR-0730-scripts-doc-claim-sources-py.md",
+      "path": "adr/migration/0730-scripts-doc-claim-sources-py.md"
+    },
+    "ADR-0731": {
+      "mirror": "ADR-0731-scripts-doc-claim-structural-py.md",
+      "path": "adr/migration/0731-scripts-doc-claim-structural-py.md"
+    },
+    "ADR-0732": {
+      "mirror": "ADR-0732-scripts-docker-smoke-sh.md",
+      "path": "adr/migration/0732-scripts-docker-smoke-sh.md"
+    },
+    "ADR-0733": {
+      "mirror": "ADR-0733-scripts-docker-smoke-client-py.md",
+      "path": "adr/migration/0733-scripts-docker-smoke-client-py.md"
+    },
+    "ADR-0735": {
+      "mirror": "ADR-0735-scripts-embedding-prefix-fixtures-py.md",
+      "path": "adr/migration/0735-scripts-embedding-prefix-fixtures-py.md"
+    },
+    "ADR-0736": {
+      "mirror": "ADR-0736-scripts-embedding-prefix-model-measure-py.md",
+      "path": "adr/migration/0736-scripts-embedding-prefix-model-measure-py.md"
+    },
+    "ADR-0737": {
+      "mirror": "ADR-0737-scripts-generate-pip-constraints-py.md",
+      "path": "adr/migration/0737-scripts-generate-pip-constraints-py.md"
+    },
+    "ADR-0738": {
+      "mirror": "ADR-0738-scripts-generate-repo-badges-py.md",
+      "path": "adr/migration/0738-scripts-generate-repo-badges-py.md"
+    },
+    "ADR-0739": {
+      "mirror": "ADR-0739-scripts-groomer-py.md",
+      "path": "adr/migration/0739-scripts-groomer-py.md"
+    },
+    "ADR-0740": {
+      "mirror": "ADR-0740-scripts-install-plugin-sh.md",
+      "path": "adr/migration/0740-scripts-install-plugin-sh.md"
+    },
+    "ADR-0742": {
+      "mirror": "ADR-0742-scripts-launcher-py.md",
+      "path": "adr/migration/0742-scripts-launcher-py.md"
+    },
+    "ADR-0743": {
+      "mirror": "ADR-0743-scripts-launcher-capture-py.md",
+      "path": "adr/migration/0743-scripts-launcher-capture-py.md"
+    },
+    "ADR-0744": {
+      "mirror": "ADR-0744-scripts-launcher-cleanup-py.md",
+      "path": "adr/migration/0744-scripts-launcher-cleanup-py.md"
+    },
+    "ADR-0745": {
+      "mirror": "ADR-0745-scripts-launcher-cleanup-fs-py.md",
+      "path": "adr/migration/0745-scripts-launcher-cleanup-fs-py.md"
+    },
+    "ADR-0746": {
+      "mirror": "ADR-0746-scripts-launcher-cleanup-registry-py.md",
+      "path": "adr/migration/0746-scripts-launcher-cleanup-registry-py.md"
+    },
+    "ADR-0747": {
+      "mirror": "ADR-0747-scripts-launcher-deps-py.md",
+      "path": "adr/migration/0747-scripts-launcher-deps-py.md"
+    },
+    "ADR-0748": {
+      "mirror": "ADR-0748-scripts-launcher-deps-fs-py.md",
+      "path": "adr/migration/0748-scripts-launcher-deps-fs-py.md"
+    },
+    "ADR-0749": {
+      "mirror": "ADR-0749-scripts-launcher-deps-install-py.md",
+      "path": "adr/migration/0749-scripts-launcher-deps-install-py.md"
+    },
+    "ADR-0750": {
+      "mirror": "ADR-0750-scripts-launcher-pins-py.md",
+      "path": "adr/migration/0750-scripts-launcher-pins-py.md"
+    },
+    "ADR-0751": {
+      "mirror": "ADR-0751-scripts-launcher-pip-py.md",
+      "path": "adr/migration/0751-scripts-launcher-pip-py.md"
+    },
+    "ADR-0752": {
+      "mirror": "ADR-0752-scripts-launcher-torch-cpu-py.md",
+      "path": "adr/migration/0752-scripts-launcher-torch-cpu-py.md"
+    },
+    "ADR-0753": {
+      "mirror": "ADR-0753-scripts-marketplace-pins-github-py.md",
+      "path": "adr/migration/0753-scripts-marketplace-pins-github-py.md"
+    },
+    "ADR-0754": {
+      "mirror": "ADR-0754-scripts-marketplace-pins-http-py.md",
+      "path": "adr/migration/0754-scripts-marketplace-pins-http-py.md"
+    },
+    "ADR-0755": {
+      "mirror": "ADR-0755-scripts-marketplace-pins-manifests-py.md",
+      "path": "adr/migration/0755-scripts-marketplace-pins-manifests-py.md"
+    },
+    "ADR-0756": {
+      "mirror": "ADR-0756-scripts-marketplace-pins-registry-py.md",
+      "path": "adr/migration/0756-scripts-marketplace-pins-registry-py.md"
+    },
+    "ADR-0757": {
+      "mirror": "ADR-0757-scripts-marketplace-pins-self-py.md",
+      "path": "adr/migration/0757-scripts-marketplace-pins-self-py.md"
+    },
+    "ADR-0758": {
+      "mirror": "ADR-0758-scripts-marketplace-pins-semver-py.md",
+      "path": "adr/migration/0758-scripts-marketplace-pins-semver-py.md"
+    },
+    "ADR-0759": {
+      "mirror": "ADR-0759-scripts-mcp-host-client-py.md",
+      "path": "adr/migration/0759-scripts-mcp-host-client-py.md"
+    },
+    "ADR-0760": {
+      "mirror": "ADR-0760-scripts-mcp-toplist-ranking-py.md",
+      "path": "adr/migration/0760-scripts-mcp-toplist-ranking-py.md"
+    },
+    "ADR-0761": {
+      "mirror": "ADR-0761-scripts-measure-embedding-cache-py.md",
+      "path": "adr/migration/0761-scripts-measure-embedding-cache-py.md"
+    },
+    "ADR-0762": {
+      "mirror": "ADR-0762-scripts-measure-embedding-prefix-py.md",
+      "path": "adr/migration/0762-scripts-measure-embedding-prefix-py.md"
+    },
+    "ADR-0764": {
+      "mirror": "ADR-0764-scripts-measure-pipeline-hook-py.md",
+      "path": "adr/migration/0764-scripts-measure-pipeline-hook-py.md"
+    },
+    "ADR-0765": {
+      "mirror": "ADR-0765-scripts-memory-dedup-exact-py.md",
+      "path": "adr/migration/0765-scripts-memory-dedup-exact-py.md"
+    },
+    "ADR-0766": {
+      "mirror": "ADR-0766-scripts-memory-domain-backfill-py.md",
+      "path": "adr/migration/0766-scripts-memory-domain-backfill-py.md"
+    },
+    "ADR-0767": {
+      "mirror": "ADR-0767-scripts-memory-reheat-py.md",
+      "path": "adr/migration/0767-scripts-memory-reheat-py.md"
+    },
+    "ADR-0768": {
+      "mirror": "ADR-0768-scripts-memory-staleness-revalidate-py.md",
+      "path": "adr/migration/0768-scripts-memory-staleness-revalidate-py.md"
+    },
+    "ADR-0769": {
+      "mirror": "ADR-0769-scripts-migrate-decision-blocks-py.md",
+      "path": "adr/migration/0769-scripts-migrate-decision-blocks-py.md"
+    },
+    "ADR-0770": {
+      "mirror": "ADR-0770-scripts-mutation-check-sh.md",
+      "path": "adr/migration/0770-scripts-mutation-check-sh.md"
+    },
+    "ADR-0771": {
+      "mirror": "ADR-0771-scripts-mutation-equivalents-py.md",
+      "path": "adr/migration/0771-scripts-mutation-equivalents-py.md"
+    },
+    "ADR-0772": {
+      "mirror": "ADR-0772-scripts-mutation-recheck-survivors-py.md",
+      "path": "adr/migration/0772-scripts-mutation-recheck-survivors-py.md"
+    },
+    "ADR-0773": {
+      "mirror": "ADR-0773-scripts-near-dup-calibrate-py.md",
+      "path": "adr/migration/0773-scripts-near-dup-calibrate-py.md"
+    },
+    "ADR-0774": {
+      "mirror": "ADR-0774-scripts-pg-storage-calibration-py.md",
+      "path": "adr/migration/0774-scripts-pg-storage-calibration-py.md"
+    },
+    "ADR-0775": {
+      "mirror": "ADR-0775-scripts-pip-constraint-sets-py.md",
+      "path": "adr/migration/0775-scripts-pip-constraint-sets-py.md"
+    },
+    "ADR-0776": {
+      "mirror": "ADR-0776-scripts-provenance-sweep-py.md",
+      "path": "adr/migration/0776-scripts-provenance-sweep-py.md"
+    },
+    "ADR-0777": {
+      "mirror": "ADR-0777-scripts-refresh-mcp-toplist-badge-py.md",
+      "path": "adr/migration/0777-scripts-refresh-mcp-toplist-badge-py.md"
+    },
+    "ADR-0778": {
+      "mirror": "ADR-0778-scripts-refresh-rustup-hash-sh.md",
+      "path": "adr/migration/0778-scripts-refresh-rustup-hash-sh.md"
+    },
+    "ADR-0779": {
+      "mirror": "ADR-0779-scripts-regenerate-file-docs-py.md",
+      "path": "adr/migration/0779-scripts-regenerate-file-docs-py.md"
+    },
+    "ADR-0780": {
+      "mirror": "ADR-0780-scripts-repo-badge-catalog-py.md",
+      "path": "adr/migration/0780-scripts-repo-badge-catalog-py.md"
+    },
+    "ADR-0781": {
+      "mirror": "ADR-0781-scripts-response-budget-measurements-py.md",
+      "path": "adr/migration/0781-scripts-response-budget-measurements-py.md"
+    },
+    "ADR-0782": {
+      "mirror": "ADR-0782-scripts-setup-py.md",
+      "path": "adr/migration/0782-scripts-setup-py.md"
+    },
+    "ADR-0783": {
+      "mirror": "ADR-0783-scripts-setup-sh.md",
+      "path": "adr/migration/0783-scripts-setup-sh.md"
+    },
+    "ADR-0784": {
+      "mirror": "ADR-0784-scripts-setup-db-py.md",
+      "path": "adr/migration/0784-scripts-setup-db-py.md"
+    },
+    "ADR-0785": {
+      "mirror": "ADR-0785-scripts-spawn-agent-sh.md",
+      "path": "adr/migration/0785-scripts-spawn-agent-sh.md"
+    },
+    "ADR-0786": {
+      "mirror": "ADR-0786-scripts-test-agent-briefing-py.md",
+      "path": "adr/migration/0786-scripts-test-agent-briefing-py.md"
+    },
+    "ADR-0787": {
+      "mirror": "ADR-0787-scripts-update-plugin-sh.md",
+      "path": "adr/migration/0787-scripts-update-plugin-sh.md"
+    },
+    "ADR-0788": {
+      "mirror": "ADR-0788-scripts-verify-mcp-hosts-py.md",
+      "path": "adr/migration/0788-scripts-verify-mcp-hosts-py.md"
+    },
+    "ADR-0789": {
+      "mirror": "ADR-0789-scripts-verify-release-artifact-py.md",
+      "path": "adr/migration/0789-scripts-verify-release-artifact-py.md"
+    },
+    "ADR-0790": {
+      "mirror": "ADR-0790-scripts-wiki-backfill-ids-py.md",
+      "path": "adr/migration/0790-scripts-wiki-backfill-ids-py.md"
+    },
+    "ADR-0791": {
+      "mirror": "ADR-0791-scripts-wiki-bulk-migrate-py.md",
+      "path": "adr/migration/0791-scripts-wiki-bulk-migrate-py.md"
+    },
+    "ADR-0792": {
+      "mirror": "ADR-0792-scripts-wiki-citation-seed-py.md",
+      "path": "adr/migration/0792-scripts-wiki-citation-seed-py.md"
+    },
+    "ADR-0793": {
+      "mirror": "ADR-0793-scripts-wiki-pilot-migration-py.md",
+      "path": "adr/migration/0793-scripts-wiki-pilot-migration-py.md"
+    },
+    "ADR-0794": {
+      "mirror": "ADR-0794-scripts-wiki-rebucket-file-docs-py.md",
+      "path": "adr/migration/0794-scripts-wiki-rebucket-file-docs-py.md"
+    },
     "ADR-0795": {
       "mirror": "ADR-0795-clusterfuzzlite-Dockerfile.md",
       "path": "adr/migration/0795-clusterfuzzlite-Dockerfile.md"
@@ -1564,6 +3124,30 @@
       "mirror": "ADR-0873-docker-entrypoint-sh.md",
       "path": "adr/migration/0873-docker-entrypoint-sh.md"
     },
+    "ADR-0874": {
+      "mirror": "ADR-0874-pyproject-toml.md",
+      "path": "adr/migration/0874-pyproject-toml.md"
+    },
+    "ADR-0875": {
+      "mirror": "ADR-0875-scripts-phase-0-4-5-backfill-sql.md",
+      "path": "adr/migration/0875-scripts-phase-0-4-5-backfill-sql.md"
+    },
+    "ADR-0876": {
+      "mirror": "ADR-0876-scripts-v3-12-2-entity-canonical-merge-sql.md",
+      "path": "adr/migration/0876-scripts-v3-12-2-entity-canonical-merge-sql.md"
+    },
+    "ADR-0877": {
+      "mirror": "ADR-0877-scripts-v3-13-0-a3-migration-sql.md",
+      "path": "adr/migration/0877-scripts-v3-13-0-a3-migration-sql.md"
+    },
+    "ADR-0878": {
+      "mirror": "ADR-0878-scripts-v3-13-0-a3-rollback-sql.md",
+      "path": "adr/migration/0878-scripts-v3-13-0-a3-rollback-sql.md"
+    },
+    "ADR-0879": {
+      "mirror": "ADR-0879-video-generate.md",
+      "path": "adr/migration/0879-video-generate.md"
+    },
     "ADR-0880": {
       "mirror": "ADR-0880-fuzz-fuzz-yaml-frontmatter-py.md",
       "path": "adr/migration/0880-fuzz-fuzz-yaml-frontmatter-py.md"
@@ -1572,9 +3156,269 @@
       "mirror": "ADR-0881-fuzz-replay-corpus-py.md",
       "path": "adr/migration/0881-fuzz-replay-corpus-py.md"
     },
+    "ADR-0882": {
+      "mirror": "ADR-0882-tests-py-domain-mapping-isolation-py.md",
+      "path": "adr/migration/0882-tests-py-domain-mapping-isolation-py.md"
+    },
+    "ADR-0883": {
+      "mirror": "ADR-0883-tests-py-pg-safety-guards-py.md",
+      "path": "adr/migration/0883-tests-py-pg-safety-guards-py.md"
+    },
+    "ADR-0884": {
+      "mirror": "ADR-0884-tests-py-pg-schema-provision-py.md",
+      "path": "adr/migration/0884-tests-py-pg-schema-provision-py.md"
+    },
+    "ADR-0889": {
+      "mirror": "ADR-0889-tests-py-benchmarks-test-capture-origin-mix-py.md",
+      "path": "adr/migration/0889-tests-py-benchmarks-test-capture-origin-mix-py.md"
+    },
+    "ADR-0891": {
+      "mirror": "ADR-0891-tests-py-benchmarks-test-disk-space-snapshot-py.md",
+      "path": "adr/migration/0891-tests-py-benchmarks-test-disk-space-snapshot-py.md"
+    },
+    "ADR-0892": {
+      "mirror": "ADR-0892-tests-py-benchmarks-test-lib-init-no-psycopg-py.md",
+      "path": "adr/migration/0892-tests-py-benchmarks-test-lib-init-no-psycopg-py.md"
+    },
+    "ADR-0918": {
+      "mirror": "ADR-0918-tests-py-core-test-import-isolation-py.md",
+      "path": "adr/migration/0918-tests-py-core-test-import-isolation-py.md"
+    },
+    "ADR-0923": {
+      "mirror": "ADR-0923-tests-py-core-test-provenance-py.md",
+      "path": "adr/migration/0923-tests-py-core-test-provenance-py.md"
+    },
+    "ADR-0929": {
+      "mirror": "ADR-0929-tests-py-core-test-wiki-classifier-py.md",
+      "path": "adr/migration/0929-tests-py-core-test-wiki-classifier-py.md"
+    },
+    "ADR-0932": {
+      "mirror": "ADR-0932-tests-py-core-test-wiki-identity-py.md",
+      "path": "adr/migration/0932-tests-py-core-test-wiki-identity-py.md"
+    },
+    "ADR-0933": {
+      "mirror": "ADR-0933-tests-py-core-test-wiki-layout-py.md",
+      "path": "adr/migration/0933-tests-py-core-test-wiki-layout-py.md"
+    },
+    "ADR-0934": {
+      "mirror": "ADR-0934-tests-py-core-test-wiki-pages-py.md",
+      "path": "adr/migration/0934-tests-py-core-test-wiki-pages-py.md"
+    },
+    "ADR-0935": {
+      "mirror": "ADR-0935-tests-py-core-test-wiki-sync-routing-py.md",
+      "path": "adr/migration/0935-tests-py-core-test-wiki-sync-routing-py.md"
+    },
+    "ADR-0938": {
+      "mirror": "ADR-0938-tests-py-handlers-consolidation-test-cls-link-provenance-py.md",
+      "path": "adr/migration/0938-tests-py-handlers-consolidation-test-cls-link-provenance-py.md"
+    },
+    "ADR-0946": {
+      "mirror": "ADR-0946-tests-py-handlers-test-forgetting-cycle-py.md",
+      "path": "adr/migration/0946-tests-py-handlers-test-forgetting-cycle-py.md"
+    },
+    "ADR-0951": {
+      "mirror": "ADR-0951-tests-py-handlers-test-injection-receipts-emitter-py.md",
+      "path": "adr/migration/0951-tests-py-handlers-test-injection-receipts-emitter-py.md"
+    },
+    "ADR-0953": {
+      "mirror": "ADR-0953-tests-py-handlers-test-remember-helpers-silent-failures-py.md",
+      "path": "adr/migration/0953-tests-py-handlers-test-remember-helpers-silent-failures-py.md"
+    },
+    "ADR-0954": {
+      "mirror": "ADR-0954-tests-py-handlers-test-remember-link-provenance-py.md",
+      "path": "adr/migration/0954-tests-py-handlers-test-remember-link-provenance-py.md"
+    },
+    "ADR-0955": {
+      "mirror": "ADR-0955-tests-py-handlers-test-remember-provenance-at-write-py.md",
+      "path": "adr/migration/0955-tests-py-handlers-test-remember-provenance-at-write-py.md"
+    },
+    "ADR-0960": {
+      "mirror": "ADR-0960-tests-py-handlers-test-why-py.md",
+      "path": "adr/migration/0960-tests-py-handlers-test-why-py.md"
+    },
+    "ADR-0962": {
+      "mirror": "ADR-0962-tests-py-handlers-test-wiki-redirect-handlers-py.md",
+      "path": "adr/migration/0962-tests-py-handlers-test-wiki-redirect-handlers-py.md"
+    },
+    "ADR-0963": {
+      "mirror": "ADR-0963-tests-py-handlers-test-wiki-seed-codebase-py.md",
+      "path": "adr/migration/0963-tests-py-handlers-test-wiki-seed-codebase-py.md"
+    },
+    "ADR-0966": {
+      "mirror": "ADR-0966-tests-py-handlers-test-wiki-write-path-governance-py.md",
+      "path": "adr/migration/0966-tests-py-handlers-test-wiki-write-path-governance-py.md"
+    },
+    "ADR-0967": {
+      "mirror": "ADR-0967-tests-py-hooks-test-agent-briefing-py.md",
+      "path": "adr/migration/0967-tests-py-hooks-test-agent-briefing-py.md"
+    },
+    "ADR-0971": {
+      "mirror": "ADR-0971-tests-py-hooks-test-hook-receipts-py.md",
+      "path": "adr/migration/0971-tests-py-hooks-test-hook-receipts-py.md"
+    },
+    "ADR-0972": {
+      "mirror": "ADR-0972-tests-py-hooks-test-hook-receipts-unit-py.md",
+      "path": "adr/migration/0972-tests-py-hooks-test-hook-receipts-unit-py.md"
+    },
+    "ADR-0973": {
+      "mirror": "ADR-0973-tests-py-hooks-test-preemptive-context-py.md",
+      "path": "adr/migration/0973-tests-py-hooks-test-preemptive-context-py.md"
+    },
+    "ADR-0976": {
+      "mirror": "ADR-0976-tests-py-infrastructure-test-capture-origin-legacy-backfill-py.md",
+      "path": "adr/migration/0976-tests-py-infrastructure-test-capture-origin-legacy-backfill-py.md"
+    },
+    "ADR-0978": {
+      "mirror": "ADR-0978-tests-py-infrastructure-test-config-py.md",
+      "path": "adr/migration/0978-tests-py-infrastructure-test-config-py.md"
+    },
+    "ADR-0981": {
+      "mirror": "ADR-0981-tests-py-infrastructure-test-embedding-live-contract-py.md",
+      "path": "adr/migration/0981-tests-py-infrastructure-test-embedding-live-contract-py.md"
+    },
+    "ADR-0983": {
+      "mirror": "ADR-0983-tests-py-infrastructure-test-injection-receipts-store-py.md",
+      "path": "adr/migration/0983-tests-py-infrastructure-test-injection-receipts-store-py.md"
+    },
+    "ADR-0984": {
+      "mirror": "ADR-0984-tests-py-infrastructure-test-mcp-client-py.md",
+      "path": "adr/migration/0984-tests-py-infrastructure-test-mcp-client-py.md"
+    },
+    "ADR-0985": {
+      "mirror": "ADR-0985-tests-py-infrastructure-test-pg-alpha-integral-py.md",
+      "path": "adr/migration/0985-tests-py-infrastructure-test-pg-alpha-integral-py.md"
+    },
+    "ADR-0986": {
+      "mirror": "ADR-0986-tests-py-infrastructure-test-pg-decay-clock-anchor-py.md",
+      "path": "adr/migration/0986-tests-py-infrastructure-test-pg-decay-clock-anchor-py.md"
+    },
+    "ADR-0987": {
+      "mirror": "ADR-0987-tests-py-infrastructure-test-pg-effective-stage-parity-py.md",
+      "path": "adr/migration/0987-tests-py-infrastructure-test-pg-effective-stage-parity-py.md"
+    },
+    "ADR-0991": {
+      "mirror": "ADR-0991-tests-py-infrastructure-test-pg-recall-scoring-debias-py.md",
+      "path": "adr/migration/0991-tests-py-infrastructure-test-pg-recall-scoring-debias-py.md"
+    },
+    "ADR-0993": {
+      "mirror": "ADR-0993-tests-py-infrastructure-test-pg-spread-activation-scoping-py.md",
+      "path": "adr/migration/0993-tests-py-infrastructure-test-pg-spread-activation-scoping-py.md"
+    },
+    "ADR-0995": {
+      "mirror": "ADR-0995-tests-py-infrastructure-test-pg-store-near-dup-py.md",
+      "path": "adr/migration/0995-tests-py-infrastructure-test-pg-store-near-dup-py.md"
+    },
+    "ADR-0997": {
+      "mirror": "ADR-0997-tests-py-infrastructure-test-pg-user-mood-py.md",
+      "path": "adr/migration/0997-tests-py-infrastructure-test-pg-user-mood-py.md"
+    },
+    "ADR-0998": {
+      "mirror": "ADR-0998-tests-py-infrastructure-test-pipeline-discovery-py.md",
+      "path": "adr/migration/0998-tests-py-infrastructure-test-pipeline-discovery-py.md"
+    },
+    "ADR-0999": {
+      "mirror": "ADR-0999-tests-py-infrastructure-test-schema-integrity-py.md",
+      "path": "adr/migration/0999-tests-py-infrastructure-test-schema-integrity-py.md"
+    },
+    "ADR-1005": {
+      "mirror": "ADR-1005-tests-py-infrastructure-test-stdio-late-response-py.md",
+      "path": "adr/migration/1005-tests-py-infrastructure-test-stdio-late-response-py.md"
+    },
+    "ADR-1011": {
+      "mirror": "ADR-1011-tests-py-integration-test-recall-trust-ranking-py.md",
+      "path": "adr/migration/1011-tests-py-integration-test-recall-trust-ranking-py.md"
+    },
+    "ADR-1012": {
+      "mirror": "ADR-1012-tests-py-integration-test-spread-activation-candidate-contract-py.md",
+      "path": "adr/migration/1012-tests-py-integration-test-spread-activation-candidate-contract-py.md"
+    },
     "ADR-1014": {
       "mirror": "ADR-1014-tests-py-invariants-test-i2-canonical-writer-py.md",
       "path": "adr/migration/1014-tests-py-invariants-test-i2-canonical-writer-py.md"
+    },
+    "ADR-1015": {
+      "mirror": "ADR-1015-tests-py-invariants-test-guard-against-populated-db-py.md",
+      "path": "adr/migration/1015-tests-py-invariants-test-guard-against-populated-db-py.md"
+    },
+    "ADR-1016": {
+      "mirror": "ADR-1016-tests-py-invariants-test-guard-against-populated-db-structural-py.md",
+      "path": "adr/migration/1016-tests-py-invariants-test-guard-against-populated-db-structural-py.md"
+    },
+    "ADR-1017": {
+      "mirror": "ADR-1017-tests-py-invariants-test-guard-blocks-populated-db-py.md",
+      "path": "adr/migration/1017-tests-py-invariants-test-guard-blocks-populated-db-py.md"
+    },
+    "ADR-1020": {
+      "mirror": "ADR-1020-tests-py-invariants-test-pg-schema-provision-ready-py.md",
+      "path": "adr/migration/1020-tests-py-invariants-test-pg-schema-provision-ready-py.md"
+    },
+    "ADR-1021": {
+      "mirror": "ADR-1021-tests-py-invariants-test-pg-throwaway-db-py.md",
+      "path": "adr/migration/1021-tests-py-invariants-test-pg-throwaway-db-py.md"
+    },
+    "ADR-1025": {
+      "mirror": "ADR-1025-tests-py-scripts-craftsmanship-support-py.md",
+      "path": "adr/migration/1025-tests-py-scripts-craftsmanship-support-py.md"
+    },
+    "ADR-1028": {
+      "mirror": "ADR-1028-tests-py-scripts-test-check-craftsmanship-exploits-py.md",
+      "path": "adr/migration/1028-tests-py-scripts-test-check-craftsmanship-exploits-py.md"
+    },
+    "ADR-1030": {
+      "mirror": "ADR-1030-tests-py-scripts-test-check-marketplace-pins-registry-py.md",
+      "path": "adr/migration/1030-tests-py-scripts-test-check-marketplace-pins-registry-py.md"
+    },
+    "ADR-1034": {
+      "mirror": "ADR-1034-tests-py-scripts-test-craftsmanship-imports-py.md",
+      "path": "adr/migration/1034-tests-py-scripts-test-craftsmanship-imports-py.md"
+    },
+    "ADR-1039": {
+      "mirror": "ADR-1039-tests-py-scripts-test-launcher-constraints-extras-py.md",
+      "path": "adr/migration/1039-tests-py-scripts-test-launcher-constraints-extras-py.md"
+    },
+    "ADR-1041": {
+      "mirror": "ADR-1041-tests-py-scripts-test-launcher-pins-match-lock-py.md",
+      "path": "adr/migration/1041-tests-py-scripts-test-launcher-pins-match-lock-py.md"
+    },
+    "ADR-1042": {
+      "mirror": "ADR-1042-tests-py-scripts-test-mcp-json-contract-py.md",
+      "path": "adr/migration/1042-tests-py-scripts-test-mcp-json-contract-py.md"
+    },
+    "ADR-1048": {
+      "mirror": "ADR-1048-tests-py-scripts-test-wiki-backfill-ids-py.md",
+      "path": "adr/migration/1048-tests-py-scripts-test-wiki-backfill-ids-py.md"
+    },
+    "ADR-1054": {
+      "mirror": "ADR-1054-tests-py-shared-test-platform-py.md",
+      "path": "adr/migration/1054-tests-py-shared-test-platform-py.md"
+    },
+    "ADR-1055": {
+      "mirror": "ADR-1055-tests-py-shared-test-project-ids-py.md",
+      "path": "adr/migration/1055-tests-py-shared-test-project-ids-py.md"
+    },
+    "ADR-1057": {
+      "mirror": "ADR-1057-tests-py-shared-test-wiki-classification-py.md",
+      "path": "adr/migration/1057-tests-py-shared-test-wiki-classification-py.md"
+    },
+    "ADR-1058": {
+      "mirror": "ADR-1058-python-decorator-call-attribution.md",
+      "path": "adr/cortex/1058-python-decorator-call-attribution.md"
+    },
+    "ADR-1059": {
+      "mirror": "ADR-1059-install-the-generated-constraint-file-with---no-deps-and-never-with---upgrade.md",
+      "path": "adr/cortex/1059-install-the-generated-constraint-file-with---no-deps-and-never-with---upgrade.md"
+    },
+    "ADR-1060": {
+      "mirror": "ADR-1060-refuse-a-decision-written-into-code-at-edit-time-in-the-distributed-hook.md",
+      "path": "adr/cortex/1060-refuse-a-decision-written-into-code-at-edit-time-in-the-distributed-hook.md"
+    },
+    "ADR-1061": {
+      "mirror": "ADR-1061-make-the-launcher-deps-idempotence-guard-abi-aware.md",
+      "path": "adr/cortex/1061-make-the-launcher-deps-idempotence-guard-abi-aware.md"
+    },
+    "ADR-1062": {
+      "mirror": "ADR-1062-enforce-the---no-deps-hashed-install-invariant-at-the-hook-and-the-ci-gate.md",
+      "path": "adr/cortex/1062-enforce-the---no-deps-hashed-install-invariant-at-the-hook-and-the-ci-gate.md"
     }
   },
   "project": "cortex",

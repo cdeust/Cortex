@@ -1,4 +1,4 @@
-"""PG-gated tests for the T2 hook receipt channels (decision 4255039).
+"""PG-gated tests for the T2 hook receipt channels.
 
 Falsifiable T2 criteria, per channel:
 
@@ -15,7 +15,8 @@ test would fire on the host machine). agent_briefing and auto_recall are
 exercised end-to-end as subprocesses, mirroring test_auto_recall.py.
 
 Skipped automatically when PG is not reachable (CI without pgvector).
-"""
+
+source: ADR-0971"""
 
 from __future__ import annotations
 
@@ -336,14 +337,7 @@ def test_agent_briefing_falls_back_when_only_dispatch_agent_is_installed(
     import; conftest.py's ``_redirect_real_data_roots`` uses the identical
     pattern).
 
-    The throwaway tree here holds exactly ``agents/dispatch.md`` — the
-    real shape of ``~/.claude/agents/`` under the plugin-only-dispatch
-    architecture (dispatch.md's own frontmatter: "it never does the work
-    itself"). Before the fix, only an ABSENT agents directory triggered
-    ``_FALLBACK_AGENTS``; a present directory containing only the
-    dispatcher yielded a roster of ``{"dispatch"}``, so "engineer" was
-    never a known specialist and the briefing silently never fired.
-    """
+    source: ADR-0971"""
     mid = _seed(
         _db,
         "HOOKRCPT_TEST corvidae plangent isotherm dossier archive",
@@ -387,7 +381,7 @@ def test_agent_briefing_falls_back_when_only_dispatch_agent_is_installed(
     assert mid in [r["memory_id"] for r in items]
 
 
-# ── channel enum on live PG (decision 4255039 correction 3) ──────────────
+# source: ADR-0971
 
 
 def test_pg_rejects_unknown_channel_live(_db) -> None:

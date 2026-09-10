@@ -5,10 +5,7 @@ Two halves, cleanly split: ``core.entity_dedup`` plans the merge (pure, no I/O �
 (atomic rewire). This consolidation cycle is the composition root that wires the
 two together.
 
-Ablation-gated by ``Mechanism.ENTITY_DEDUP`` so a benchmark A/B can run the
-no-regression gate with the merge disabled (``CORTEX_ABLATE_ENTITY_DEDUP=1``)
-versus enabled, isolating its retrieval impact.
-"""
+source: ADR-0359"""
 
 from __future__ import annotations
 
@@ -40,12 +37,7 @@ def run_entity_merge_cycle(store: MemoryStore) -> dict:
 def _apply_merges(store: MemoryStore, remap: dict[str, str]) -> int:
     """Apply each alias→survivor merge.
 
-    The dedup remap keys entities by id (``_merge_key`` uses the entity id when
-    present, which live DB rows always have); name-only keys can appear for
-    legacy/test inputs without ids, so we skip any non-numeric key rather than
-    guess an id. Each merge is independently atomic — one failing pair does not
-    abort the rest.
-    """
+    source: ADR-0359"""
     applied = 0
     for alias_key, survivor_key in remap.items():
         if not (alias_key.isdigit() and survivor_key.isdigit()):

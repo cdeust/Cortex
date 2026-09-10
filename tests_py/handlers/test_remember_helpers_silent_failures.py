@@ -1,13 +1,6 @@
 """Silent-except sweep (audit 2026-07-11): try_block_replica_upsert.
 
-This is the checkpoint/rethink block-sync path (memory-architecture.md:
-``.pending-sync`` -> Cortex DB replica of ``memory-tool.sh`` writes).
-Both its SQL statements were a bare ``except Exception: return False,
-None`` -- the exact SQL-error-swallowed shape as the spread_activation
-incident (a broken SELECT/UPDATE is indistinguishable from "no existing
-block row", so the caller silently INSERTS A DUPLICATE instead of
-superseding, with zero signal).
-"""
+source: ADR-0953"""
 
 from __future__ import annotations
 

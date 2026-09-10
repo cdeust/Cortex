@@ -1,0 +1,27 @@
+# ADR-0728: scripts/dev_run_ingest.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `scripts/dev_run_ingest.py`; original SHA-256 `993f78947a70c042d2f840549e3613310e011059b79e27728fc04ca5d5be8fb2`.
+
+## Original docstring, lines 1–9
+
+````text
+"""Dev driver: run the ingest_codebase handler from the working tree.
+
+Exercises the exact repo code (not the installed plugin) against the
+production DB + the real upstream ai-architect-mcp-codebase binary, so the
+2026-06-11 pagination/wiki/dedup fixes can be verified live before a
+release. Not wired into the MCP server — invoke manually:
+
+    uv run python scripts/dev_run_ingest.py /path/to/project [--force]
+"""
+````
+
+## Original comment, lines 18–18
+
+````text
+# source: structural — program name + <project_path>
+````
+

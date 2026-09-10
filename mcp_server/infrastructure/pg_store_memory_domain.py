@@ -1,20 +1,8 @@
 """``memories`` domain-backfill DB operations (I6-D3).
 
-Reads domain-less memory rows (``current_memories`` — chain heads only,
-matching the audit's own scope) and rewrites their ``domain``/``tags``
-columns. Split into its own module (rather than added to an existing
-``pg_store_*`` file) to keep each infrastructure file focused and under
-the size cap — mirrors ``pg_store_wiki_domain.py``'s precedent for the
-same problem shape (ADR-0051 Volet 4, commit 4ea13310).
-
 Pure infrastructure — no core imports, no handler imports.
 
-Every write here is guarded by ``WHERE (domain IS NULL OR domain = '')``
-at the SQL level, not just in the caller: a concurrent write racing this
-campaign can never be clobbered, and re-running the same UPDATE after it
-already applied is a no-op (idempotence by construction, not by
-application-level bookkeeping).
-"""
+source: ADR-0553"""
 
 from __future__ import annotations
 
@@ -32,31 +20,15 @@ _ORPHAN_TAG = "domain-orphan"
 def list_domainless_memories(
     conn: StoreConnection, limit: int, *, include_orphans: bool = False
 ) -> list[dict]:
-    """Active (chain-head) memories whose domain is empty, with evidence.
+    """List current chain-head memories with an empty domain.
 
-    Pre-condition:  ``limit`` bounds the per-cycle/per-run scan.
-    Post-condition: every returned row carries ``id``, ``directory_context``
-                    (``''`` if unset) and ``tags`` (JSON-decoded to a
-                    Python list by psycopg's jsonb adapter). Scoped to
-                    ``current_memories`` (superseded_by_id IS NULL) —
-                    the same view the I6-D3 acceptance-criterion SQL
-                    queries. By default, rows already carrying the
-                    ``domain-orphan`` tag are excluded: an orphan is a
-                    terminal, explicit state (I6-D3 rejects a sentinel
-                    domain value, so the tag is the only signal that the
-                    row was already processed) — without this exclusion
-                    every re-run would re-select and re-journal every
-                    orphan forever, breaking the idempotence contract
-                    even though no DB write would actually occur. Pass
-                    ``include_orphans=True`` to deliberately re-scan
-                    previously-orphaned rows — the correct move only
-                    after a change to the resolution logic itself (e.g.
-                    a domain_mapping.py fix) that could newly resolve
-                    rows the old logic could not (INC6.2 worktree gap).
-                    ``update_memory_domain`` strips the orphan tag on a
-                    successful re-resolution, so a rescanned-and-resolved
-                    row will not be re-selected as an orphan again.
-    """
+    Pre-condition: limit bounds returned rows.
+
+    Post-condition: return id, directory_context (empty when unset), and
+    decoded tags. Exclude domain-orphan-tagged rows unless
+    include_orphans=True.
+
+    source: ADR-0553"""
     orphan_filter = (
         "" if include_orphans else "AND NOT tags @> '[\"domain-orphan\"]'::jsonb"
     )
@@ -74,23 +46,15 @@ def list_domainless_memories(
 
 
 def update_memory_domain(conn: StoreConnection, memory_id: int, domain: str) -> bool:
-    """Set one memory's domain, but only if it is still empty.
+    """Fill an empty memory domain and remove its orphan tag.
 
-    Pre-condition:  ``memory_id`` refers to an existing ``memories`` row;
-                    ``domain`` is non-empty.
-    Post-condition: if the row's domain was ``NULL``/``''`` at UPDATE
-                    time, it now equals ``domain``, the ``domain-orphan``
-                    tag (if present — a previously-orphaned row now
-                    resolving on a rescan, INC6.2) is removed from
-                    ``tags``, and this returns ``True``. Otherwise the
-                    row is untouched (some concurrent writer already gave
-                    it a domain) and this returns ``False`` — never
-                    overwrites a non-empty domain. The tag removal is a
-                    no-op (jsonb ``-`` on an absent element) for rows
-                    that were never orphan-tagged, so this is safe to
-                    call unconditionally for both first-pass fills and
-                    orphan-rescan fills.
-    """
+    Pre-condition: memory_id exists and domain is non-empty.
+
+    Post-condition: if the stored domain is NULL or empty, set domain, remove
+    domain-orphan from tags, and return True. Otherwise leave the row
+    unchanged and return False.
+
+    source: ADR-0553"""
     with conn.cursor() as cur:
         cur.execute(
             """UPDATE memories
@@ -104,19 +68,15 @@ def update_memory_domain(conn: StoreConnection, memory_id: int, domain: str) -> 
 
 
 def tag_memory_orphan(conn: StoreConnection, memory_id: int) -> bool:
-    """Append the ``domain-orphan`` tag, but only if the domain is still
-    empty and the tag isn't already present.
+    """Tag a memory as domain-orphan without assigning a domain.
 
-    Pre-condition:  ``memory_id`` refers to an existing ``memories`` row.
-    Post-condition: if the row's domain was ``NULL``/``''`` and its
-                    ``tags`` did not already contain ``domain-orphan``,
-                    the tag is appended and this returns ``True``. The
-                    row's ``domain`` column is left empty — an orphan
-                    is a tagged, explicit state, not a fabricated
-                    domain value (I6-D3: "domaine sentinelle rejeté").
-                    Otherwise (domain non-empty, or tag already present)
-                    the row is untouched and this returns ``False``.
-    """
+    Pre-condition: memory_id identifies an existing row.
+
+    Post-condition: append the tag and return True only when the domain
+    remains empty and the tag is absent. Otherwise change nothing and return
+    False.
+
+    source: ADR-0553"""
     with conn.cursor() as cur:
         cur.execute(
             """UPDATE memories

@@ -112,10 +112,7 @@ class TestNormalizeProjectId:
         assert normalize_project_id("-users-dev-cortex") == "-users-dev-cortex"
 
     def test_posix_ids_differing_only_by_case_fold_equal(self):
-        # Documented tradeoff (see project_ids.py docstring): on a
-        # case-sensitive filesystem two distinct sibling directories
-        # differing only by case would fold to the same normalized id.
-        # Accepted — see rationale in normalize_project_id's docstring.
+        # source: ADR-1055  # noqa: ERA001
         assert normalize_project_id("-Users-dev-Foo") == normalize_project_id(
             "-Users-dev-foo"
         )

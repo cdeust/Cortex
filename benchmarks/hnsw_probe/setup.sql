@@ -15,8 +15,8 @@ CREATE TABLE _bench_memories_hnsw (
 -- source: ADR-0835
 ALTER TABLE _bench_memories_hnsw SET (autovacuum_enabled = false);
 
--- Helper: generate an L2-normalized random 384-dim vector as text "[v1,v2,...]".
--- L2 normalization matches sentence-transformers all-MiniLM-L6-v2 output.
+-- Generate an L2-normalized random 384-dimensional vector as text.
+-- source: ADR-0835
 CREATE OR REPLACE FUNCTION _bench_random_unit_vec_384()
 RETURNS vector(384) AS $$
 DECLARE
@@ -47,8 +47,8 @@ FROM generate_series(1, 66064);
 
 SELECT COUNT(*) AS seeded_rows FROM _bench_memories_hnsw;
 
--- Build the HNSW index AFTER seeding (matches Cortex production init order).
--- Note: initial build cost is separate from per-UPDATE maintenance cost.
+-- Build the HNSW index after seeding.
+-- source: ADR-0835
 CREATE INDEX _bench_memories_hnsw_emb_idx
     ON _bench_memories_hnsw USING hnsw (embedding vector_cosine_ops)
     WITH (m = 16, ef_construction = 64);

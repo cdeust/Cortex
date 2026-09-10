@@ -1,7 +1,5 @@
 """Handler: wiki_rename — move a page and leave a redirect stub.
 
-Phase 3.2 of ADR-2244. The operation:
-
   1. Read source page; require valid frontmatter ``id`` (Phase 3 invariant).
   2. Refuse if source is itself a redirect stub.
   3. Refuse if destination already exists (unless ``overwrite_dest`` true).
@@ -9,18 +7,7 @@ Phase 3.2 of ADR-2244. The operation:
   5. Replace source with a redirect stub pointing at destination (carrying
      the source's id-or-target id).
 
-This is the building block for the Phase 4 bulk-rename script
-(``.md.md`` cleanup, timestamp-slug fixes, ``file-*`` → ``files/``
-moves). It is intentionally a small, well-tested handler that does one
-move at a time; the bulk migration script will loop over it.
-
-The two writes happen as best-effort sequential atomic writes. If the
-destination write succeeds but the stub write fails, the caller sees an
-error AND the page exists at both paths — investigated and reverted
-manually. We do not roll back the destination write because that would
-risk losing the new copy if the rollback itself fails. The bulk migration
-script logs every move so any partial state is recoverable.
-"""
+source: ADR-0469"""
 
 from __future__ import annotations
 
@@ -42,9 +29,9 @@ schema = {
     "title": "Wiki — rename page",
     "annotations": IDEMPOTENT_WRITE,
     "description": (
+        # source: ADR-0469
         "Move a wiki page from ``from_path`` to ``to_path`` and leave a "
         "redirect stub at the old location pointing to the new one. "
-        "Phase 3.2 of ADR-2244 — the move preserves inbound links because "
         "``wiki_read`` follows redirect stubs transparently. Refuses to "
         "operate on pages without a stable ``id`` field (run "
         "``scripts/wiki_backfill_ids.py`` first) or on existing redirect "

@@ -7,18 +7,14 @@ INSIDE PostgreSQL — ``INSERT ... SELECT ... ON CONFLICT`` for entities, and a
 dict ever lives in Python, so peak application RAM is O(one batch) regardless
 of total entity count.
 
-source: ~/.claude/plans/sharded-popping-harbor.md — the genius review
-(Dijkstra D4 / Liskov D2) proved that returning a ``dict[name, id]`` to Python
-reintroduces an O(total_entities) stage-spanning buffer that breaks the
-constant-memory invariant on the highest-ROI path. Resolving in SQL removes it.
-
 Atomicity under ``autocommit=True`` comes from the explicit
 ``with conn.transaction()`` — the only construct that issues BEGIN/COMMIT and
 rolls the whole batch back on failure (Dijkstra D1). The temp table is declared
 ``ON COMMIT DELETE ROWS`` so it self-clears after each batch commits.
 
 Pure infrastructure — no core imports.
-"""
+
+source: ADR-0618"""
 
 from __future__ import annotations
 
@@ -38,10 +34,7 @@ if TYPE_CHECKING:
 class StagingResolveSink(PooledConnectionSink):
     """A ``BatchSink`` that stages names and resolves ids server-side.
 
-    One sink owns one pooled connection for its lifetime (the pipeline builds
-    one sink per worker). ``write_batch`` is atomic per batch; ``close``
-    returns the connection to the pool.
-    """
+    source: ADR-0618"""
 
     def __init__(
         self,
@@ -78,7 +71,7 @@ class StagingResolveSink(PooledConnectionSink):
         if not batch:
             return 0
         conn = self._ensure_conn()
-        with conn.transaction():  # atomic per batch under autocommit
+        with conn.transaction():  # source: ADR-0618
             with conn.cursor() as cur:
                 with cur.copy(self._copy_sql) as cp:
                     for item in batch:
@@ -89,32 +82,14 @@ class StagingResolveSink(PooledConnectionSink):
 
 # ── Concrete keyed-path configurations (OCP: new keyed sinks = new config) ──
 
-# Producers must yield CANONICALIZED names (LOWER(name) dedup matches the
-# Python policy LOWER(canonicalize_entity_name(name)) only when names are
-# pre-canonicalized in the producer — a pure shared-layer transform).
+# source: ADR-0618
 
 _ENTITY_STAGE_DDL = (
     "CREATE TEMP TABLE IF NOT EXISTS _stage_entities "
     "(name text, type text, domain text, heat real) ON COMMIT DELETE ROWS"
 )
 _ENTITY_COPY_SQL = "COPY _stage_entities (name, type, domain, heat) FROM STDIN"
-# Resolve via NOT EXISTS rather than ON CONFLICT: the entity stage runs
-# SINGLE-WRITER (concurrency=1 — entities are the dependency root and the
-# staged barrier serializes them before edges), so the read-then-insert is
-# race-free WITHOUT a unique index. This deliberately avoids a fragile
-# cross-table entity-merge migration on the live store. The A3 migration adds
-# only a NON-unique idx_entities_lower_name to keep the NOT EXISTS lookup
-# index-backed. DISTINCT ON collapses intra-batch case variants.
-# Dedup is scoped to (LOWER(name), domain): a name-global NOT EXISTS made
-# every re-ingest a no-op once ANY domain held the name — all code entities
-# stayed credited to the first domain ever ingested (stale code:3.18.4,
-# 2026-06-11 RCA). The same symbol name in two projects is two entities.
-# The stored side is compared against LOWER(s.domain) because the
-# trg_entities_domain_normalize trigger (pg_schema.normalize_domain)
-# lowercases entities.domain on INSERT — comparing against the raw staged
-# value would never match. (The trigger's legacy alias mapping
-# jarvis/cortex-cowork→cortex never applies to code:* ingest domains.)
-# INVARIANT: callers MUST set concurrency=1 for an entity sink pipeline.
+# source: ADR-0618
 _ENTITY_RESOLVE_SQL = (
     "INSERT INTO entities (name, type, domain, created_at, last_accessed, heat) "
     "SELECT DISTINCT ON (LOWER(s.name), LOWER(s.domain)) s.name, s.type, "
@@ -134,12 +109,7 @@ _EDGE_STAGE_DDL = (
 _EDGE_COPY_SQL = (
     "COPY _stage_edges (src_name, dst_name, rel_type, weight, domain) FROM STDIN"
 )
-# Requires uq_relationships_directed (A3). The JOIN drops edges whose endpoints
-# were never ingested (dangling) — counted via rows_in - rows_written, NOT
-# silently swallowed. Endpoint resolution is scoped to the edge's domain:
-# once entities dedup per (name, domain), an unscoped LOWER(name) JOIN would
-# multi-match the same name across domains and fan one staged edge out into
-# a cross-domain cartesian product.
+# source: ADR-0618
 _EDGE_RESOLVE_SQL = (
     "INSERT INTO relationships "
     "(source_entity_id, target_entity_id, relationship_type, weight, "

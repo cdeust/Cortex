@@ -1,0 +1,57 @@
+# ADR-0772: scripts/mutation_recheck_survivors.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `scripts/mutation_recheck_survivors.py`; original SHA-256 `bf791c77b3f6d895a10651dd1c65a7051812320717c2b4b27a89896c9f54e8de`.
+
+## Original docstring, lines 2–28
+
+````text
+"""Re-verify mutmut "survived" mutants against the FULL test selection.
+
+mutmut 3.x attributes each mutant to only the test(s) its coverage-tracing
+trampoline recorded as calling the mutated function during the one-time
+baseline stats pass (`mutants/mutmut-stats.json`,
+`tests_by_mangled_function_name`). A module that builds a dispatch table
+**once, eagerly, at import time** — e.g. `ast_parser._EXTRACTORS = {...,
+**build_extra_extractors()}` — is invisible to that attribution for every
+test after the first: later tests exercise the already-built, cached
+closures without ever re-invoking `build_extra_extractors`/`_make_extractor`,
+so mutmut re-runs the mutant against only the first (often irrelevant)
+test and reports "survived" even though the full suite kills it.
+
+This module closes that gap generically — for ANY source file, not just
+one hand-identified case — by re-running every mutant mutmut reports
+"survived" against the FULL declared test selection (the same tests a
+human would use to reproduce the bug by hand) before trusting the
+verdict. A mutant recovered this way is reported as such, never silently
+reclassified: coding-standards.md issue #269 acceptance criterion 2
+requires the false-survivor cause stay visible to the reader, not just
+absorbed.
+
+Pure decision logic (parse_survivors, format_report,
+any_genuine_survivors) takes no I/O; only recheck_survivor's `runner`
+touches the filesystem/process table, and it is injected so tests can
+substitute a fake for the real pytest invocation.
+"""
+````
+
+## Original comment, lines 41–41
+
+````text
+# source: structural — <mutants_dir> + at least one <test_path>.
+````
+
+## Reviewed remaining docstring (scripts/mutation_recheck_survivors.py, interim lines 139–146)
+
+````text
+Render the human-readable recheck report.
+
+Postcondition: a recovered (false-survivor) mutant is always listed
+under its own labeled section, distinct from a genuine survivor —
+the false-survivor cause must stay visible to the reader rather than
+being silently absorbed into a plain "killed" count (issue #269
+acceptance criterion 2).
+````
+

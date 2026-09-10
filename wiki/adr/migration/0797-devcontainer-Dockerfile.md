@@ -99,3 +99,15 @@ Source rationale preserved verbatim. Identifiers inside historical quotations ar
 # incident again, one layer up.
 # source: .github/workflows/ci.yml:131-155 (5 attempts, attempt*10s backoff)
 ````
+
+## Final non-Python residual audit
+
+### .devcontainer/Dockerfile — pre-cleanup line 29
+
+````text
+# gcc/libpq-dev: same build deps as ../Dockerfile's builder stage (psycopg
+# has no manylinux wheel for every platform this image might run on).
+# postgresql-client: scripts/setup_db.py shells out to psql/createdb/
+# pg_isready (see that file) — required for postCreateCommand to work.
+# git: contributor workflow inside the container.
+````

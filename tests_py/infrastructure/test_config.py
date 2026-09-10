@@ -78,7 +78,8 @@ class TestClaudeDirOverride:
     override before the first import precisely so no test can touch the
     operator's real tree. What the production contract actually promises is
     tested here instead, both arms, on freshly imported instances.
-    """
+
+    source: ADR-0978"""
 
     def test_unset_defaults_to_home_dot_claude(self, monkeypatch):
         assert _config_under(monkeypatch, None).CLAUDE_DIR == Path.home() / ".claude"

@@ -1,11 +1,6 @@
 """Pip resolution before dependency commit; stdlib only.
 
-The CPU torch wheel is staged separately, then participates in the same PyPI
-resolution as the requested ML packages. Base constraints retain the launcher's
-shared dependency pins. PEP 668 retry remains limited to the private --target.
-Sources: https://pip.pypa.io/en/stable/cli/pip_install/
-https://pip.pypa.io/en/stable/topics/configuration/#pip-config-file
-"""
+source: ADR-0751"""
 
 from __future__ import annotations
 
@@ -35,7 +30,7 @@ def clean_environment() -> dict[str, str]:
         "PIP_BUILD_CONSTRAINT",
     ):
         environment.pop(name, None)
-    # source: pip configuration docs — os.devnull disables every config file.
+    # source: ADR-0751
     environment["PIP_CONFIG_FILE"] = os.devnull
     return environment
 

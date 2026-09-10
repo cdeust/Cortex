@@ -1,25 +1,5 @@
 """Headless authoring worker — drains the curation-gap queue.
 
-This is the actuator Meadows' leverage-point audit identified as
-missing (2026-05-18): the gap detector knows what's missing and
-``curate_wiki`` builds prompts, but the loop terminated in a queue
-waiting for a human to consume the jobs interactively. The drain rate
-was zero because the actuator was disconnected.
-
-The worker connects sensor -> actuator: walks the wiki for pages with
-``curation_gaps``, calls the user's Claude Code session via ``claude
--p`` to author the missing section (no API key needed — existing
-credentials carry through), and rewrites the page (marker replaced,
-``curation_gaps`` shrinks, ``lifecycle`` promotes toward ``accepted``).
-Per-cycle bounded (``MAX_DRAINS_PER_CYCLE``); subsequent
-``consolidate_background`` runs drain the rest. A failed LLM call
-leaves the page untouched — never corrupted, only replaced on success.
-
-Module layout (split 2026-06-30, then again 2026-07-30 for #276, to
-satisfy the size limit without changing behaviour): this module
-remains the stable public import surface, defining the constants and
-dataclass types, then re-exporting everything else:
-
   * ``authoring_prompts``   — prompt builders, parsers, gap markers.
   * ``page_io``             — frontmatter parse/rewrite, file reads,
                               anchor-page prompt + writer.
@@ -37,16 +17,7 @@ The scanners and the cycle resolve the patchable names
 ``_scan_pages_with_gaps``) as attributes of THIS module at call time,
 so ``monkeypatch.setattr(headless_authoring, ...)`` is observed.
 
-Import direction (fixed 2026-07-30, issue #237): the siblings above
-used to import THIS module back at their own module top, deadlocking
-any fresh interpreter that imported one of them first (partial-module
-``ImportError`` — reproducible with e.g. ``python -c "import
-mcp_server.handlers.consolidation.candidate_scan"``). Each sibling now
-resolves ``_root`` with a deferred, function-scoped import instead
-(``# noqa: PLC0415 — import cycle``, per pyproject.toml's named
-exemption for this family) — the load-time back-reference is gone, the
-call-time patchability above is unchanged.
-"""
+source: ADR-0361"""
 
 from __future__ import annotations
 
@@ -74,9 +45,7 @@ CLAUDE_CALL_TIMEOUT_SEC: int = 180
 _CLAUDE_BIN = "claude"
 
 
-# ── Environment-configured knobs — read at import time so values stay
-# stable for the process lifetime. All defaults are POLICY CAPS, not
-# measured constants: tune via env vars to match your hardware/cost. ──
+# source: ADR-0361
 
 
 def _env_int(name: str, default: int) -> int:
@@ -117,20 +86,14 @@ def _env_float(name: str, default: float) -> float:
         return default
 
 
-# Max concurrent ``claude -p`` subprocesses per cycle.
-# Policy cap — not a measured constant.  Default 4 is conservative for
-# a 4-core laptop; raise to 8–16 for a server host.
+# source: ADR-0361
 CORTEX_HEADLESS_CONCURRENCY: int = _env_int("CORTEX_HEADLESS_CONCURRENCY", 4)
 
 # Per-cycle wall-clock deadline (seconds).
 # Policy cap — 300 s keeps each consolidate cycle latency bounded.
 CORTEX_HEADLESS_BUDGET_SEC: float = _env_float("CORTEX_HEADLESS_BUDGET_SEC", 300.0)
 
-# Per-cycle USD ceiling.  <=0 means unlimited.
-# POLICY CAP — operational safety rail bounding one cycle's API spend.
-# NOT a measured scientific constant — tunable via env to match your
-# cost tolerance.  Default 5.0 USD is conservative for testing; raise
-# to 20–50 USD for production batch runs.
+# source: ADR-0361
 CORTEX_HEADLESS_USD_BUDGET: float = _env_float("CORTEX_HEADLESS_USD_BUDGET", 5.0)
 
 # Per-cycle anchor drain cap (was hard-coded 30; env-tunable, default 8
@@ -144,18 +107,7 @@ CORTEX_HEADLESS_MAX_FILE_DRAINS: int = _env_int(
     "CORTEX_HEADLESS_MAX_FILE_DRAINS", MAX_DRAINS_PER_CYCLE
 )
 
-# Agents mode — selects the ``claude -p`` invocation strategy.
-#   1 (default): load the user's zetetic agent ROSTER (--setting-sources user)
-#       and give the top-level authoring agent the ``Task`` tool so it can
-#       delegate read-only codebase analysis to specialists (architect,
-#       engineer, …). A hard ``--disallowedTools`` ceiling (Write/Edit/Bash/
-#       NotebookEdit) propagates to every spawned subagent, so the roster can
-#       analyse but never write or execute. User hooks load too — they are
-#       neutralised by CORTEX_HEADLESS_AUTHORING_CHILD (see _subprocess_env).
-#   0: hardened solo path — ``--safe-mode`` config isolation, no roster, no
-#       Task tool. Use when you want zero user-config surface in the child.
-# Policy knob, not a measured constant. Default 1 reflects the design intent:
-# diverse specialist grounding beats a single generalist pass.
+# source: ADR-0361
 CORTEX_HEADLESS_AGENTS: int = _env_int("CORTEX_HEADLESS_AGENTS", 1)
 
 
@@ -166,11 +118,7 @@ CORTEX_HEADLESS_AGENTS: int = _env_int("CORTEX_HEADLESS_AGENTS", 1)
 class InvokeResult:
     """Outcome of one ``claude -p`` call.
 
-    ``text`` is None when the call failed (timeout, missing binary,
-    non-zero exit, or empty response).  ``cost_usd`` is 0.0 when the
-    CLI omits the field or JSON parse fails — we degrade gracefully and
-    never crash on a missing cost signal.
-    """
+    source: ADR-0361"""
 
     text: str | None  # None on failure
     cost_usd: float  # client-side spend estimate; 0.0 when unavailable
@@ -178,7 +126,9 @@ class InvokeResult:
 
 @dataclass
 class _AnchorCandidate:
-    """One missing groundable anchor to author (pre-screened, no I/O)."""
+    """One missing groundable anchor to author.
+
+    source: ADR-0361"""
 
     domain: str
     scope_name: str
@@ -204,14 +154,7 @@ def _delegation_hint_for(kind: str) -> str | None:
     return _delegation_hint(kind)
 
 
-# ── Re-exports — the public import surface (see module docstring) ─────────
-#
-# These siblings resolve THIS module as ``_root`` via a deferred,
-# function-scoped import (issue #237) and read the patchable names off it
-# at call time — no back-reference at module scope, so nothing below is
-# load-order-sensitive anymore. The imports stay after the constant/type
-# definitions purely for readability (this module defines its own public
-# surface before re-exporting the rest of it).
+# source: ADR-0361
 
 from .cycle_types import (  # noqa: E402
     CycleBudget,

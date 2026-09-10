@@ -1,0 +1,65 @@
+# ADR-0432: mcp_server/handlers/recall_hierarchical.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `mcp_server/handlers/recall_hierarchical.py`; original SHA-256 `d64cf537e5e7400a1a914875907d442077bc9b02fef50d85de96e4e80a0ee23e`.
+
+## Original comment, lines 123–126
+
+````text
+# Minimum embedded memories before hierarchical clustering is attempted;
+# below this the handler falls back to flat vector search.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+````
+
+## Original docstring, lines 147–156
+
+````text
+"""Fetch memories eligible for hierarchy building.
+
+    Pre: exactly one of ``domain`` or ``memory_ids`` is non-empty (enforced
+         by the handler before this is called).
+    Post: returned list has ``heat >= min_heat`` for every element, and its
+         size is O(500) for domain mode or O(len(memory_ids)) for explicit
+         mode. The uncapped ``get_all_memories_for_decay()`` fallback was
+         removed in v3.13.0 (ADR-0045 R3 — build_hierarchy is O(N^2) and
+         infeasible past ~5K memories).
+    """
+````
+
+## Original comment, lines 272–276
+
+````text
+# Too few embeddings for clustering — fall back to flat vector search.
+        # Adapt the flat response to THIS handler's contract (results/total/
+        # hierarchy) instead of leaking the flat shape through; previously the
+        # passthrough only satisfied the contract via recall's now-removed
+        # duplicate `results`/`total` alias keys.
+````
+
+## Original comment, lines 306–311
+
+````text
+# strict=True: compute_level_weights' return type is a fixed
+        # 3-tuple (L0, L1, L2 weights), always matching the 3-element
+        # literal on the left. Documented equivalent mutant
+        # (coding-standards.md §12.1): the tuple-typed return makes a
+        # length mismatch unreachable, so strict=True vs strict=False/None
+        # is not observable through this call.
+````
+
+## Original comment, lines 323–324
+
+````text
+# Telemetry-instrumented public entry. Records latency / byte volume
+# / result count per call (Popper C6 read/write ratio audit).
+````
+
+## Original schema description, interim lines 33–51
+
+````text
+Retrieve memories via the fractal three-level hierarchy (L0=individual memories, L1=topic clusters, L2=root clusters), with adaptive level weighting from query length: short queries weight toward broader L2 clusters (you're scanning a topic), long queries toward specific L0 memories (you have a precise question). REQUIRES either `domain` or `memory_ids` to bound the tree build — the uncapped fallback was removed in v3.13.0 because clustering is O(N^2) in the candidate set (infeasible past ~5K memories, see ADR-0045 R3). Use this instead of `recall` when you want the topology of the memory space, not just a flat ranked list. Distinct from `recall` (flat WRRF result, no hierarchy), `drill_down` (consumer of this tool's output, navigates one level deeper into a returned cluster), and `navigate_memory` (graph traversal, not cluster tree). Not read-only: every surfaced memory is recorded as a hippocampal replay event — access_count/replay_count increment and hippocampal_dependency decays (CLS-B, Ketz et al. 2023) — so repeat calls are not idempotent (`track_replay_event`, `replay_tracking.py`). Latency ~150-300ms on domain-scoped calls. Returns {hierarchy: [{cluster_id, level, label, score, members?}], total_clusters}.
+````
+

@@ -221,10 +221,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     )
     existing_index = _existing_concepts_index(conn, candidate_entities)
 
-    # Cold-start detection: measured against TOTAL resolved-claim
-    # corpus size, not the loaded batch. That way a large corpus
-    # processed in small pages still runs with steady-state rules,
-    # and fresh installs benefit from the relaxed thresholds.
+    # source: ADR-0458
     with conn.cursor() as cur:
         cur.execute(
             # Aliased explicitly: psycopg names a bare COUNT(*) column
@@ -235,11 +232,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
             "AND array_length(entity_ids, 1) > 0"
         )
         row = cur.fetchone()
-        # A `SELECT COUNT(*)` with no GROUP BY always returns exactly one row,
-        # so `row is None` is unreachable here; the guard makes that explicit
-        # for the type checker (fetchone is typed Optional) and degrades to the
-        # cold-start path (0 claims) rather than raising if the invariant ever
-        # breaks. No observable behavior change on the reachable path.
+        # source: ADR-0458
         if row is None:
             total_claims = 0
         else:

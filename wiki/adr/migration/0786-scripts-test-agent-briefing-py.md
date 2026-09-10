@@ -1,0 +1,14 @@
+# ADR-0786: scripts/test-agent-briefing.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `scripts/test-agent-briefing.py`; original SHA-256 `9f185ddfda8ad82af37c342708f117613a4314e5b214b22afb2e779e4fa9b193`.
+
+## Original comment, lines 107–108
+
+````text
+# T2 row contract: _fetch_agent_context projects r["id"]
+                # on every row (injection receipts, decision 4255039).
+````
+

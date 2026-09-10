@@ -1,9 +1,6 @@
 """Memory-archive mixin for PgMemoryStore.
 
-Split out of pg_store_auxiliary.py (issue #407: 397 lines over the
-300-line §4.1 cap) — schema-mismatch archival is its own concern,
-distinct from prospective/procedural/engram/cortical-schema storage.
-"""
+source: ADR-0539"""
 
 from __future__ import annotations
 

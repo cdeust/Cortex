@@ -1,0 +1,51 @@
+# ADR-0711: scripts/check_ci_gate_results.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `scripts/check_ci_gate_results.py`; original SHA-256 `74db4924056d3d5f80863b0f98e61c01aa64cda301b1d359ddd6c02ea71764f6`.
+
+## Original docstring, lines 1–12
+
+````text
+"""Fail CI Green unless every job succeeded or has a verified skip reason.
+
+The policy mirrors ci.yml: code, dependency or workflow PR changes run code
+jobs and Docker smoke. Pushes and dispatches also run those jobs; schedules
+run smoke but skip code jobs. Runtime/devcontainer builds require Docker
+changes, a schedule or a dispatch. The vendor CLI job skips fork PRs because
+it executes npm postinstall. Missing classifications and unknown jobs fail closed.
+
+Source: tasks/codex-green-remediation-plan.md W1-2/W1-4 and ci.yml predicates.
+GitHub's needs context exposes result and outputs for direct dependencies:
+https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#needs-context
+"""
+````
+
+## Original comment, lines 21–21
+
+````text
+# source: .github/workflows/ci.yml, jobs gated by changes and lint.
+````
+
+## Original comment, lines 38–38
+
+````text
+# source: .github/workflows/ci.yml changes.outputs and on triggers.
+````
+
+## Original comment, lines 85–94
+
+````text
+# A docs-only PR must still run the one full-suite job. Part of that
+    # suite takes documentation as its INPUT — tests_py/scripts/
+    # test_codex_plugin_contract.py asserts on README.md's canonical published
+    # identities — so excluding '*.md' from `code` switched those guards off
+    # exactly when their subject changed. PR #509 was a README-only diff, every
+    # test job skipped, it merged green, and the push to main went red on that
+    # test across five jobs (run 34238410970, 2026-09-08; fixed by #510).
+    # Mirrors ci.yml's test-sqlite predicate, which carries the same note; this
+    # module and that predicate must stay in exact agreement (see the docstring
+    # on check_policy).
+````
+

@@ -1,11 +1,6 @@
 """curate_wiki's wire-transport serializers and LLM-facing instructions.
 
-Split out of ``curate_wiki.py`` (was pushing that file past the 500-line
-limit, CLAUDE.md "Code Quality Rules"). Pure functions: flatten the
-``core.auto_curator`` job dataclasses into MCP-wire dicts, and render
-the recipe text the in-session LLM follows. No I/O, no DB, no state —
-same "pure serialization" concern wherever the caller lives.
-"""
+source: ADR-0385"""
 
 from __future__ import annotations
 
@@ -35,10 +30,7 @@ def serialise_job(job: Any) -> dict[str, Any]:
 def serialise_reauthor_job(job: Any) -> dict[str, Any]:
     """Flatten a ReauthorJob for MCP wire transport.
 
-    Re-author jobs target an existing page; the wire shape carries the
-    wiki path being rewritten and the drift reasons that triggered the
-    job so the UI can show "Updating: <path> (missing source file)".
-    """
+    source: ADR-0385"""
     return {
         "job_type": "reauthor",
         "suggested_path": job.wiki_path,  # rewrite in place
@@ -54,12 +46,7 @@ def serialise_reauthor_job(job: Any) -> dict[str, Any]:
 def serialise_coverage_job(job: Any) -> dict[str, Any]:
     """Flatten a CoverageJob for MCP wire transport.
 
-    Coverage jobs differ from cluster jobs: they target a structural
-    scope, not a topic, so the wire shape carries ``scope_name`` and
-    ``scope_title`` instead of cluster-specific fields. ``job_type``
-    discriminates the two so the consuming LLM (and the unified UI)
-    can render them differently.
-    """
+    source: ADR-0385"""
     return {
         "job_type": "coverage",
         "suggested_path": job.suggested_path,

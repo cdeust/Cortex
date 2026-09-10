@@ -101,3 +101,24 @@ Source: `benchmarks/lib/bench_container.sh`; original SHA-256 `edad26e1d9ffd8691
 
 ````
 
+
+## Final non-Python residual audit
+
+### benchmarks/lib/bench_container.sh — pre-cleanup line 23
+
+````text
+# Discover the kernel-assigned host port docker bound for the container's
+# 5432/tcp. `docker port` output is "0.0.0.0:PORT" (one line per binding);
+# take the numeric suffix of the last line. Preferred over scanning for a
+# free port ourselves: asking the kernel for port 0 and reading back what it
+# bound is atomic — a manual scan-then-bind has a TOCTOU race another
+# process (or another concurrent reproduce.sh run) can win in between.
+````
+
+### benchmarks/lib/bench_container.sh — pre-cleanup line 57
+
+````text
+        # Explicit override: caller takes responsibility for the port being
+        # free and for any cross-run collision it may cause (mirrors
+        # conftest.py's CORTEX_TEST_DATABASE_URL override — respected verbatim).
+````

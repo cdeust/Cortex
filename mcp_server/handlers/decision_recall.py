@@ -1,9 +1,6 @@
 """Filesystem decision retrieval: exact identity first, scoped Boolean text lane.
 
-Issue #514 option C: identity lookup never depends on semantic retrieval.
-Text matches use the existing tokenizer and AND membership, ordered by path;
-there are no fitted lexical scores or thresholds.
-"""
+source: ADR-0387"""
 
 from __future__ import annotations
 

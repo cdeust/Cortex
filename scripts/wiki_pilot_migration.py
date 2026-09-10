@@ -1,15 +1,5 @@
 #!/usr/bin/env python3
-"""Pilot migration analyzer — Phase 2 of ADR-2244.
-
-Walks the methodology wiki, runs each page's body through the new
-data-driven classifier (``mcp_server.core.wiki_classifier.classify_memory``,
-post-#27/#28), and produces a Markdown report showing the proposed
-modern 4-tuple (kind, lifecycle, audience, provenance) for each page
-alongside its current legacy ``kind``.
-
-Goal: human-reviewable accuracy check before any bulk re-bucketing
-(Phase 4). The ADR-2244 acceptance criterion is ≥ 90% kind agreement
-with human judgment on a ~100-page representative sample.
+"""Pilot migration analyzer.
 
 Usage
 -----
@@ -19,12 +9,9 @@ Usage
         --sample-size 100 \\
         --out scripts/wiki-pilot-report.md
 
-By default samples are stratified across the current ``kind`` directories
-so the report exercises ADRs, specs, lessons, notes, references, etc.
-without being swamped by the 7,820 file-doc notes.
-
 Read-only. The script never writes to the wiki itself.
-"""
+
+source: ADR-0793"""
 
 from __future__ import annotations
 
@@ -132,9 +119,7 @@ def _parse_frontmatter(text: str) -> tuple[dict[str, object], str]:
 def _extract_tags(fm: dict[str, object]) -> list[str]:
     """Pull tags from frontmatter.
 
-    Accepts the value as ``list[str]`` (block list, inline list) or
-    ``str`` (comma-separated scalar). Empty/missing → ``[]``.
-    """
+    source: ADR-0793"""
     raw = fm.get("tags", "")
     if isinstance(raw, list):
         return [str(t).strip() for t in raw if str(t).strip()]
@@ -297,7 +282,7 @@ def _format_report(records: list[PageRecord], wiki_root: Path) -> str:
             rejection_reasons[r.rejection_reason] += 1
 
     lines: list[str] = []
-    lines.append("# ADR-2244 Phase 2 — Pilot migration report")
+    lines.append("# Wiki pilot migration report (source: ADR-0793)")
     lines.append("")
     lines.append(f"Wiki root: `{wiki_root}`")
     lines.append("")

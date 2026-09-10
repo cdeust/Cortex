@@ -1,9 +1,8 @@
-"""Tests for ADR-2244 routing in wiki_sync.build_from_memory.
+"""Tests for wiki_sync.build_from_memory routing.
 
-Verifies that the modern (kind, lifecycle, audience, provenance) tuple
-drives the directory, that the frontmatter shape conforms to the new
-schema, and that the file→notes/ misroute bug (Task #8) is fixed.
-"""
+Verifies modern kind, lifecycle, audience and provenance fields and directory routing.
+
+source: ADR-0935"""
 
 from __future__ import annotations
 
@@ -43,7 +42,9 @@ def test_adr_routes_to_adr_directory() -> None:
 
 
 def test_legacy_lesson_routes_to_explanation_directory() -> None:
-    """ADR-2244 §4.1: 'lesson' is dropped; root-cause goes to explanation/."""
+    """Lesson and root-cause content routes to explanation/.
+
+    source: ADR-0935"""
     content = (
         "The bug was that the cache key did not include the model SHA. "
         "Root cause: stale weights persisted across container restarts. "
@@ -83,8 +84,9 @@ def test_runbook_routes_to_runbook_directory() -> None:
 
 
 def test_frontmatter_includes_4tuple_axes() -> None:
-    """ADR-2244 §4: every modern page carries kind, lifecycle, audience,
-    provenance in its frontmatter."""
+    """Modern pages carry kind, lifecycle, audience and provenance in frontmatter.
+
+    source: ADR-0935"""
     content = (
         "Decision: use pgvector over IVFFlat for ANN search. Context: 100k "
         "memories. Decided to adopt HNSW. Consequences: Postgres is mandatory."
@@ -114,11 +116,9 @@ def test_rejection_returns_none() -> None:
 
 
 def test_new_page_carries_stable_id() -> None:
-    """Phase 3 of ADR-2244: every page written by wiki_sync gets a UUID4
-    id in its frontmatter so the path can later be moved without losing
-    the page's identity. The id is required for redirect stubs that
-    preserve inbound links during bulk migration.
-    """
+    """Every page written by wiki_sync receives a UUID4 frontmatter id.
+
+    source: ADR-0935"""
     from mcp_server.core.wiki_identity import is_valid_page_id
 
     content = (
@@ -166,15 +166,9 @@ def test_each_new_page_gets_a_distinct_id() -> None:
 
 
 def test_file_documentation_is_rejected_from_wiki() -> None:
-    """Policy 2026-05-17 (superseded ADR-2244 Phase 6 admission):
-    ``codebase`` / ``code-reference`` tags mark per-file extractor
-    output that bloats the wiki — they stay in PG memory only.
-    Coverage of the codebase flows through the structural scope
-    pages (architecture / services / api / data-flow / code-walkthrough
-    per project) the autonomous worker authors — not via per-file
-    auto-generated dumps. ``build_from_memory`` returns None so no
-    wiki page is written.
-    """
+    """Codebase-tagged extractor output does not create wiki pages.
+
+    source: ADR-0935"""
     content = (
         "Decision: this module parses a single source file via tree-sitter "
         "and falls back to regex tokenisation for unsupported languages. "

@@ -1,0 +1,44 @@
+---
+title: "ADR-0654 — mcp_server/shared/log_file_lock.py rationale"
+status: accepted
+source: mcp_server/shared/log_file_lock.py
+---
+
+# ADR-0654 — mcp_server/shared/log_file_lock.py
+
+Migrated source rationale. The excerpts below are preserved verbatim from the source snapshot; historical identifiers inside quotations are not current identities.
+
+## module — original line 3 (docstring)
+
+````text
+FileHandler locks are thread-local, not interprocess (Python Logging Cookbook,
+https://docs.python.org/3/howto/logging-cookbook.html). Use one stable sidecar
+inode so renaming the data file cannot detach the lock from other writers.
+The lock covers rotate/open/write or Popen, never the worker's runtime.
+
+````
+
+## log_file_lock — original line 23 (docstring)
+
+````text
+Keep the sidecar: unlinking it would split concurrent lock holders.
+````
+
+## module — original line 24 (comment)
+
+````text
+# source: owner-only permission for the lock metadata; os.open mode contract.
+````
+
+## module — original line 41 (comment)
+
+````text
+# source: https://docs.python.org/3/library/msvcrt.html#msvcrt.locking
+# One shared byte is sufficient; locking beyond EOF is supported.
+````
+
+## module — original line 52 (comment)
+
+````text
+# source: https://docs.python.org/3/library/fcntl.html#fcntl.flock
+````

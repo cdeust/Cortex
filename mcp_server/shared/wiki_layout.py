@@ -1,25 +1,18 @@
 """Wiki path contract — pure functions, no I/O.
 
-The wiki is an authored long-form Markdown layer. Pages live under a
-supplied wiki root; this module only computes paths so the core layer
-stays filesystem-agnostic.
+source: ADR-0682
 
 Layout::
 
-    <root>/adr/NNNN-<slug>.md         architecture decision records
-    <root>/specs/<slug>.md            feature specs / PRDs / design docs
-    <root>/files/<path-slug>.md       per-file documentation
-    <root>/notes/<slug>.md            free-form notes / investigations
-    <root>/.generated/INDEX.md        auto-regenerated table of contents
-"""
+    source: ADR-0682"""
 
 from __future__ import annotations
 
 import re
 from pathlib import PurePosixPath
 
-# Modern kinds (ADR-2244 §4.1). Each drives a directory under wiki/ for
-# pages classified to that kind. New writes use these names exclusively.
+# source: ADR-0682
+
 MODERN_PAGE_KINDS = (
     "tutorial",
     "how-to",
@@ -31,11 +24,9 @@ MODERN_PAGE_KINDS = (
     "journal",
 )
 
-# Legacy kinds — kept in PAGE_KINDS so existing pages remain readable and
-# wiki_list/wiki_read continue to function during the migration window.
-# New code SHOULD NOT route to these. See
-# ``mcp_server.shared.wiki_classification.LEGACY_KIND_TO_MODERN`` for the
-# read-time normalization map.
+# source: ADR-0682
+
+
 LEGACY_PAGE_KINDS = (
     "specs",
     "guides",
@@ -45,19 +36,16 @@ LEGACY_PAGE_KINDS = (
     "files",
 )
 
-# Full set accepted by ``page_path`` / ``domain_page_path`` — modern + legacy
-# for backward-compat. Validation in higher layers (wiki_classification.py)
-# enforces modern-only on write.
+# source: ADR-0682
+
+
 PAGE_KINDS = MODERN_PAGE_KINDS + LEGACY_PAGE_KINDS
 
 _SAFE = re.compile(r"[^a-zA-Z0-9_.-]+")
 _MAX_SLUG_LEN = 80
-# Trailing extension tokens to strip before slug consumers append ".md".
-# Without this strip, an input title that already looks like a filename
-# (e.g. "001-zero-dependencies.md") produced filenames like
-# "2234-001-zero-dependencies.md.md" because every caller in the wiki
-# layer appends ".md" unconditionally. Strip iteratively so e.g.
-# "foo.md.md" → "foo".
+# source: ADR-0682
+
+
 _TRAILING_MD_EXT = re.compile(r"(?:\.md)+$", re.IGNORECASE)
 
 
@@ -110,8 +98,8 @@ def index_path() -> PurePosixPath:
     return PurePosixPath(".generated") / "INDEX.md"
 
 
-# source: structural — a page path is at minimum kind/filename, so fewer than
-# two parts cannot name a page.
+# source: ADR-0682
+
 _MIN_PAGE_PATH_PARTS = 2
 
 

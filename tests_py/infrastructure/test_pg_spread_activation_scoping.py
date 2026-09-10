@@ -1,4 +1,4 @@
-"""Live-PG tests for spread_activation_memories (ADR-0054).
+"""Live-PG tests for spread_activation_memories.
 
 Two coupled defects, fixed together and tested together per the ADR's
 "never one without the other" decision:
@@ -21,7 +21,8 @@ Two coupled defects, fixed together and tested together per the ADR's
 
 Runs against cortex_test (conftest.py redirects DATABASE_URL and isolates
 entities/relationships/memories between tests).
-"""
+
+source: ADR-0993"""
 
 from __future__ import annotations
 

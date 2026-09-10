@@ -1,25 +1,6 @@
-"""Silent Rust toolchain bootstrap with optional hash-pinned installer.
+"""Install the Rust toolchain using the committed bootstrap hash manifest.
 
-The rustup bootstrap script (sh.rustup.rs) is fetched once and verified
-against a committed SHA256 manifest at ``scripts/rustup-init.sha256``
-before being piped to ``sh``. This converts the standard ``curl | sh``
-trust-by-TLS model into trust-by-committed-hash.
-
-Maintenance flow
-----------------
-The Cortex maintainer refreshes the hash manifest after a verified
-read of the upstream script:
-    curl -sSf https://sh.rustup.rs | shasum -a 256 \\
-      | awk '{print $1}' > scripts/rustup-init.sha256
-
-If the manifest file is missing or empty, hash pinning is OFF and the
-installer falls back to plain ``curl | sh`` with a warning emitted to
-the audit dict (``hash_pin_status: "manifest_missing"``).
-
-Override
---------
-- ``CORTEX_RUSTUP_PIN_HASH=0`` — skip hash verification entirely.
-"""
+source: ADR-0588"""
 
 from __future__ import annotations
 
@@ -37,7 +18,7 @@ from mcp_server.infrastructure.pipeline_installer_common import _run_quiet
 _DISABLE_RUST_ENV = "CORTEX_AUTO_INSTALL_RUST"
 _DISABLE_HASH_PIN_ENV = "CORTEX_RUSTUP_PIN_HASH"
 
-# source: FIPS 180-4 — a SHA-256 digest is 32 bytes = 64 hex characters
+# source: ADR-0588
 _SHA256_HEX_LEN = 64
 
 # Canonical rustup installer URL — official Rust project mirror.
@@ -85,28 +66,25 @@ def _read_pinned_hash() -> Optional[str]:
 def install_rust_toolchain() -> dict:
     """Best-effort silent install of the Rust toolchain via rustup.
 
-    Hash-verified path:
-      1. Download the bootstrap script to a tempfile via ``curl``.
-      2. Compute its SHA256.
-      3. Compare against the pinned manifest (if present and non-empty).
-      4. On match, ``sh tempfile -y --profile minimal --no-modify-path``.
-      5. Mismatch → ``rust_hash_mismatch`` (does NOT execute the script).
+        Hash-verified path:
+          1. Download the bootstrap script to a tempfile via ``curl``.
+          2. Compute its SHA256.
+          3. Compare against the pinned manifest (if present and non-empty).
+          4. On match, ``sh tempfile -y --profile minimal --no-modify-path``.
+          5. Mismatch → ``rust_hash_mismatch`` (does NOT execute the script).
 
-    If the manifest is missing OR ``CORTEX_RUSTUP_PIN_HASH=0``, the
-    installer falls back to the legacy curl-pipe-sh path with a status
-    note in the result dict.
+        Returns
+        -------
+        {
+          action: "rust_already_present" | "rust_installed" | "rust_disabled"
+                  | "rust_curl_missing" | "rust_install_failed"
+                  | "rust_hash_mismatch",
+          cargo:  <cargo path when present>,
+          detail: <error tail when failed>,
+          hash_pin_status: "verified" | "manifest_missing" | "disabled" | "skipped",
+        }
 
-    Returns
-    -------
-    {
-      action: "rust_already_present" | "rust_installed" | "rust_disabled"
-              | "rust_curl_missing" | "rust_install_failed"
-              | "rust_hash_mismatch",
-      cargo:  <cargo path when present>,
-      detail: <error tail when failed>,
-      hash_pin_status: "verified" | "manifest_missing" | "disabled" | "skipped",
-    }
-    """
+    source: ADR-0588"""
     if os.environ.get(_DISABLE_RUST_ENV, "").strip() in {"0", "false", "no"}:
         return {"action": "rust_disabled"}
 
@@ -128,7 +106,7 @@ def install_rust_toolchain() -> dict:
     if pinned_hash:
         return _install_with_hash_pin(curl, pinned_hash)
 
-    # Pin disabled or manifest missing — legacy curl-pipe-sh.
+    # source: ADR-0588
     pin_status = "disabled" if pin_disabled else "manifest_missing"
     cmd = (
         f"{shlex.quote(curl)} --proto '=https' --tlsv1.2 -sSf "

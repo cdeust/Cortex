@@ -1,15 +1,6 @@
-"""Cross-loop sync/drain primitive backing the AST-source AP bridge.
+"""Infrastructure layer only. No core imports.
 
-Split out of ``workflow_graph_source_ast.py`` (issue #275 — that file
-exceeded the 300-line cap) as its own cohesive concern: pinning one
-event loop across a caller's lifetime and exposing a bounded, synchronous
-façade over it. ``workflow_graph_source_ast.py`` re-exports ``_SyncLoop``
-so existing import paths (``from
-mcp_server.infrastructure.workflow_graph_source_ast import _SyncLoop``)
-keep working.
-
-Infrastructure layer only. No core imports.
-"""
+source: ADR-0502"""
 
 from __future__ import annotations
 
@@ -23,45 +14,24 @@ from mcp_server.errors import McpConnectionError
 
 logger = logging.getLogger(__name__)
 
-# Cross-loop probe cadence for the reader-thread wait. NOT a wall-clock
-# ceiling: each expiry only re-checks that the pinned loop thread is
-# still alive, then keeps waiting (the former AP_SYNC_RESULT_TIMEOUT_S
-# ceiling was floored at an in-loop cap that callTimeoutMs=0 made
-# infinite, and it killed live >65 min sweeps — see memory_config).
-# source: mcp_client._idle_loop's existing 30 s liveness-poll cadence;
-#   correctness-neutral — bounds only dead-loop-thread detection latency.
+# source: ADR-0502
 _AP_SYNC_PROBE_INTERVAL_S = 30.0
 
 
-# Shutdown-drain ceiling for ``_SyncLoop.close()``: bounds how long we wait
-# for tasks still running on the pinned loop to reach a terminal state
-# after being cancelled, before stopping the loop and joining its thread.
-# source: measured 2026-07-30 (macOS, CPython 3.12.12) — a cancelled
-#   ``asyncio.sleep(30)`` task (the wedge shape ``run``/``run_iter`` produce
-#   on a cross-loop timeout, issue #258) completes its cancellation in
-#   <1ms once ``asyncio.gather`` is awaited on the owning loop; three
-#   repeated trials all finished within 1ms. 2.0s reuses the grace period
-#   this method already applied to ``self._thread.join(...)`` below,
-#   giving headroom for a genuine (non-test) wedge where the abandoned
-#   coroutine's own cleanup does real I/O before honoring cancellation.
+# source: ADR-0502
 _SHUTDOWN_DRAIN_TIMEOUT_S = 2.0
 
 
 class _SyncLoop:
     """Owns a single event loop + runs coroutines on it synchronously.
 
-    The MCP client spawns the AP subprocess and binds its stdin/stdout
-    to the *current* event loop. If we close that loop between calls,
-    subsequent writes to those streams raise ``RuntimeError: Event loop
-    is closed``. This helper pins one loop for the lifetime of a caller
-    so every AP call shares the same loop/transport.
+        The MCP client spawns the AP subprocess and binds its stdin/stdout
+        to the *current* event loop. If we close that loop between calls,
+        subsequent writes to those streams raise ``RuntimeError: Event loop
+        is closed``. This helper pins one loop for the lifetime of a caller
+        so every AP call shares the same loop/transport.
 
-    When called from *inside* a running event loop (e.g. a FastMCP
-    async handler), we run the coroutine on the private loop inside a
-    dedicated thread so we never compete with the outer loop. That is
-    the only reliable way to expose a sync façade to async callers
-    without leaking thread-local state.
-    """
+    source: ADR-0502"""
 
     def __init__(self) -> None:
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -73,20 +43,7 @@ class _SyncLoop:
             loop = self._loop  # non-Optional local captured by the loop thread
 
             def _run_forever():
-                # Equivalent-mutant note (mutmut _ensure_loop__mutmut_5:
-                # ``set_event_loop(None)``): thread-local registration is
-                # unobservable here — every coroutine/callback this thread
-                # ever runs executes strictly inside ``loop.run_forever()``,
-                # so ``asyncio.get_event_loop()``/``get_running_loop()``
-                # already resolve to this exact loop via CPython's
-                # `_set_running_loop` bookkeeping (set for the duration of
-                # `run_forever()`), independent of this call. Verified: the
-                # full `tests_py/infrastructure/` suite (710 tests) is
-                # unaffected by removing this line. Kept anyway as the
-                # standard defensive idiom for "run a loop on a dedicated
-                # thread" (asyncio docs), in case a future AP-bridge
-                # dependency calls the legacy no-arg accessor outside a
-                # running-loop context.
+                # source: ADR-0502
                 asyncio.set_event_loop(loop)
                 loop.run_forever()
 
@@ -101,38 +58,16 @@ class _SyncLoop:
     def run(self, coro):
         """Run ``coro`` on the pinned loop and block until it completes.
 
-        Single-reader-thread ownership (verified): ``_ensure_loop`` spawns
-        exactly one ``ap-sync-loop`` thread that owns the loop for this
-        ``_SyncLoop``'s lifetime; every AP call funnels through here onto
-        that one loop. No other thread drives the loop, so the JSON-RPC
-        pipe has a single reader (Lamport H4 satisfied by construction).
-
-        The wait has no wall-clock ceiling — a live call is never killed
-        on elapsed time. A wedged AP child fails in-loop (mcp_client's
-        silence watchdog); a dead loop THREAD is caught by the probe in
-        ``_result_or_wedged``. On failure we never return partial data —
-        we raise ``McpConnectionError``.
-        """
+        source: ADR-0502"""
         loop = self._ensure_loop()
         future = asyncio.run_coroutine_threadsafe(coro, loop)
         return self._result_or_wedged(future, "call")
 
     def run_iter(self, agen) -> Iterator[Any]:
         """Drive an async generator one step per bounded cross-loop call,
-        yielding each item synchronously to the caller.
+                yielding each item synchronously to the caller.
 
-        This is the streaming primitive: ``agen`` (an async generator that
-        yields one batch per AP query) is advanced one ``__anext__`` at a
-        time, each on the pinned loop. The caller therefore receives batch
-        *N* (and may process/discard it) BEFORE batch *N+1*'s query is ever
-        issued — peak retained inside the source is one batch, not the
-        union across all queries.
-
-        A wedged step raises ``McpConnectionError`` rather than hanging
-        (see ``_result_or_wedged``). Partial batches already yielded are
-        real data; the generator stops at the failed step (it does not
-        silently return a truncated full list).
-        """
+        source: ADR-0502"""
         loop = self._ensure_loop()
         _sentinel = object()
 
@@ -152,13 +87,7 @@ class _SyncLoop:
     def _result_or_wedged(self, future, what: str):
         """Block until ``future`` resolves — no wall-clock ceiling.
 
-        A wedged AP child is failed in-loop by mcp_client's silence
-        watchdog (its ``McpConnectionError`` propagates via
-        ``future.result()``). What that cannot surface is the pinned loop
-        THREAD dying (nothing left to resolve the future), so each probe
-        expiry re-checks the thread and raises instead of hanging forever.
-        A live call is never killed on elapsed time.
-        """
+        source: ADR-0502"""
         while True:
             try:
                 return future.result(timeout=_AP_SYNC_PROBE_INTERVAL_S)
@@ -197,24 +126,13 @@ class _SyncLoop:
     def _drain_pending_tasks(self) -> None:
         """Cancel + await every task still running on the pinned loop.
 
-        precondition: none — safe to call on any ``_SyncLoop`` state.
-        postcondition: every task ``asyncio.all_tasks(loop)`` reported
-        (other than the drain task itself) has reached a terminal state
-        when this returns, UNLESS ``_SHUTDOWN_DRAIN_TIMEOUT_S`` elapsed
-        first (residual task logged, left for interpreter-exit GC).
+                precondition: none — safe to call on any ``_SyncLoop`` state.
+                postcondition: every task ``asyncio.all_tasks(loop)`` reported
+                (other than the drain task itself) has reached a terminal state
+                when this returns, UNLESS ``_SHUTDOWN_DRAIN_TIMEOUT_S`` elapsed
+                first (residual task logged, left for interpreter-exit GC).
 
-        Without this step, ``close()`` would call ``loop.stop()``
-        immediately after a ``run``/``run_iter`` timeout's
-        ``future.cancel()`` — which only *schedules* cancellation;
-        delivering it takes one more loop iteration ``run_forever()``
-        may never reach, leaving the task ``PENDING`` and, once GC'd,
-        logging "Task was destroyed but it is pending!" (issue #258,
-        reproduced via instrumented probe before this fix). See
-        ``_loop_is_drainable`` for the live-loop guard and
-        ``_run_task_drain`` for the schedule/await/timeout contract
-        (including the happens-before argument for why ``close()``'s
-        subsequent ``loop.stop()`` is safe).
-        """
+        source: ADR-0502"""
         loop = self._loop
         if loop is None or not _loop_is_drainable(loop, self._thread):
             return
@@ -226,18 +144,7 @@ def _loop_is_drainable(
 ) -> bool:
     """Guard: only a genuine, live, running loop can host a scheduled drain.
 
-    Refuses a ``None``/closed loop (nothing to drain); a test double
-    standing in for the loop (not a real ``AbstractEventLoop`` — scheduling
-    against it would leave the drain coroutine queued forever, since
-    nothing ever runs it, which is Python's own trigger for "coroutine
-    was never awaited"); and a loop whose ``run_forever()`` thread already
-    exited (no runner left to drive the scheduled callback). Guarding this
-    way leaves the caller exactly as safe as it was before this drain step
-    existed for those cases (``_SyncLoop.__new__`` + a mocked
-    ``_loop``/``_thread`` is an established test pattern for exercising
-    the surrounding error-swallowing branches in isolation — see
-    ``test_sync_loop_join_runtimeerror_is_swallowed``).
-    """
+    source: ADR-0502"""
     if loop is None or loop.is_closed():
         return False
     if not isinstance(loop, asyncio.AbstractEventLoop):
@@ -248,16 +155,14 @@ def _loop_is_drainable(
 
 
 async def _cancel_and_await_pending(loop: "asyncio.AbstractEventLoop") -> None:
-    """Cancel + await every non-current task on ``loop``. Runs ON ``loop``
-    (scheduled via ``run_coroutine_threadsafe`` — never called directly).
+    """Equivalent-mutant note (mutmut _drain_pending_tasks__mutmut_9,
+        __mutmut_11): passing ``loop`` explicitly vs. omitting it (defaulting
+        to ``get_running_loop()``) is unobservable — this coroutine is only
+        ever scheduled via ``run_coroutine_threadsafe(this(loop), loop)``, so
+        ``get_running_loop()`` IS ``loop`` on every call. Kept explicit for
+        readability, not behavior.
 
-    Equivalent-mutant note (mutmut _drain_pending_tasks__mutmut_9,
-    __mutmut_11): passing ``loop`` explicitly vs. omitting it (defaulting
-    to ``get_running_loop()``) is unobservable — this coroutine is only
-    ever scheduled via ``run_coroutine_threadsafe(this(loop), loop)``, so
-    ``get_running_loop()`` IS ``loop`` on every call. Kept explicit for
-    readability, not behavior.
-    """
+    source: ADR-0502"""
     current = asyncio.current_task(loop)
     pending = [t for t in asyncio.all_tasks(loop) if t is not current and not t.done()]
     for t in pending:
@@ -268,17 +173,9 @@ async def _cancel_and_await_pending(loop: "asyncio.AbstractEventLoop") -> None:
 
 def _run_task_drain(loop: "asyncio.AbstractEventLoop") -> None:
     """Schedule ``_cancel_and_await_pending`` on ``loop`` and block the
-    calling thread until it finishes or times out.
+        calling thread until it finishes or times out.
 
-    happens-before: the scheduled coroutine runs ON ``loop`` and directly
-    ``await``s ``asyncio.gather`` over every pending task, so it observes
-    the loop run however many iterations a cancellation needs — not just
-    the ones already processed by the time this is called.
-    ``future.result()`` blocks the calling thread until that gather
-    finishes (or the timeout fires), so the caller's subsequent
-    ``loop.stop()`` is strictly ordered after every drained task's
-    terminal transition.
-    """
+    source: ADR-0502"""
     try:
         future = asyncio.run_coroutine_threadsafe(_cancel_and_await_pending(loop), loop)
     except RuntimeError:

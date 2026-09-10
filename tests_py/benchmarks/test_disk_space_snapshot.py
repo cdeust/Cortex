@@ -7,7 +7,8 @@ never raising, matching every other probe in this codebase's manifest
 tooling. See the module's own docstring for the disk-exhaustion incident
 motivating this (leaked test databases filled a shared machine's disk to
 100% mid-benchmark, taking PostgreSQL down with no trace in the artifact).
-"""
+
+source: ADR-0891"""
 
 from __future__ import annotations
 

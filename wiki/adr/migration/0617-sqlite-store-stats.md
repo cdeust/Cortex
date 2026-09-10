@@ -1,0 +1,90 @@
+---
+kind: adr
+number: 0617
+title: Preserve sqlite_store_stats design decisions
+status: accepted
+---
+
+# ADR-0617: sqlite_store_stats design decisions
+
+## Context
+
+Canonical migration of decision evidence from `mcp_server/infrastructure/sqlite_store_stats.py` under ADR-0056.
+The excerpts below preserve historical claims and citations verbatim; original ADR numbers are historical quotations, not current identity bindings.
+
+## Decision
+
+Keep the source implementation linked to this versioned decision record. Operational API documentation remains with the implementation.
+
+## Preserved decision evidence
+
+### signature_repeat_stats, original line 50
+
+````text
+        Returns ``(repeat_count, hours_since_last)`` for memories sharing this
+        normalised ``stimulus_signature`` — the count feeds the write gate's
+        response decrement (Rankin 2009) and the elapsed hours drive
+        spontaneous recovery. ``hours_since_last`` is None when the signature is
+        unseen. Best-effort: returns ``(0, None)`` on any error or when the
+        column is absent (a store predating habituation), so the gate treats an
+        un-migrated store as if nothing has habituated.
+        
+````
+
+### increment_replay_count, original line 196
+
+````text
+        Uses ``_raw_conn`` (not the psycopg-compat ``_conn``) because
+        ``PsycopgCompatConnection`` strips ``RETURNING`` down to a single
+        column via regex (see ``sqlite_compat.py``) — this query needs four.
+        
+````
+
+### get_episodic_memories, original line 281
+
+````text
+CLS input — mirror of PgStatsMixin.get_episodic_memories. Reads
+        current_memories so a superseded episodic version is never
+        crystallized into a durable semantic fact.
+        
+````
+
+### get_semantic_memories, original line 305
+
+````text
+CLS dedup input — mirror of PgStatsMixin.get_semantic_memories.
+        Reads current_memories so a superseded semantic row cannot suppress
+        the corrected abstraction.
+        
+````
+
+## Consequences
+
+Review rationale and source changes together. Historical evidence is preserved rather than silently rewritten; executable Python structure is unchanged after removing docstrings.
+
+### signature_repeat_stats: completeness audit
+
+````text
+Habituation (E1) read side: prior presentations of a stimulus.
+
+Returns ``(repeat_count, hours_since_last)`` for memories sharing this
+        normalised ``stimulus_signature`` — the count feeds the write gate's
+        response decrement (Rankin 2009) and the elapsed hours drive
+        spontaneous recovery. ``hours_since_last`` is None when the signature is
+        unseen.
+
+source: ADR-0617
+````
+
+### extinguished_count: completeness audit
+
+````text
+Extinction (E2) read side: count of deprecated-but-retained memories.
+
+Returns how many memories carry an inhibitory extinction tag at or above
+``threshold`` — the association is suppressed WITHOUT deletion (the row
+is fully present, not is_stale), so it can spontaneously recover or be
+reinstated (Bouton 2004). Best-effort: returns 0 on any error or when
+the ``extinction_strength`` column is absent (a store predating
+extinction), so an un-migrated store reports nothing extinguished.
+````

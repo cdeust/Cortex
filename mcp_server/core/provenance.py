@@ -173,8 +173,9 @@ def grade_provenance(
             ref_counts=_ref_counts(
                 file_refs, commit_refs, url_refs, artifact_refs, has_citation
             ),
-            dead_refs=[],
-            uncheckable_refs=[],
+            # dead_refs/uncheckable_refs are left to the dataclass defaults:
+            # restating the empty lists here duplicates the default in two
+            # places and produces only equivalent mutants (issue #389).
             reason="no_extractable_reference",
         )
 

@@ -1,13 +1,8 @@
 """StreamSource adapters over the store's proven chunked iterators.
 
-Wraps an existing keyset / named-cursor iterator (``iter_hot_memories_chunked``,
-``iter_memories_for_decay``, or any ``(chunk_size) -> Iterator[list]`` factory)
-as a ``StreamSource``. These iterators already stream at a measured 74MB peak
-RSS / ~49.5k rows/s on a 500k-row corpus — the proven primitive; this adapter
-only re-exposes them under the pipeline's port.
-
 Pure infrastructure — no core imports (depends only on the injected factory).
-"""
+
+source: ADR-0619"""
 
 from __future__ import annotations
 
@@ -21,9 +16,7 @@ ChunkIterFactory = Callable[[int], Iterator[list[Any]]]
 class CursorStreamSource:
     """Adapt a chunked-iterator factory to the ``StreamSource`` port.
 
-    The factory MUST use keyset or server-side-cursor pagination (value-anchored
-    boundaries), never OFFSET — OFFSET drifts under concurrent mutation.
-    """
+    source: ADR-0619"""
 
     def __init__(self, iter_factory: ChunkIterFactory) -> None:
         self._iter_factory = iter_factory

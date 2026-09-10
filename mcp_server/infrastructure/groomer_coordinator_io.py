@@ -1,14 +1,6 @@
-"""Low-level I/O + lock primitives for the groomer coordinator (issue #171).
+"""Layer: infrastructure (all I/O). Imports shared/ + stdlib only.
 
-Mechanism half of the policy/mechanism split (coding-standards §1.1 SRP):
-``groomer_coordinator.py`` owns the session-counting POLICY; this module
-owns the filesystem + cross-platform locking MECHANISM it stands on —
-pid-liveness, atomic replace, ISO parsing, and a non-blocking per-store
-lock. Kept separate so the policy file reasons about coordination without
-carrying the platform ``fcntl``/``msvcrt`` split inline.
-
-Layer: infrastructure (all I/O). Imports shared/ + stdlib only.
-"""
+source: ADR-0528"""
 
 from __future__ import annotations
 
@@ -21,12 +13,9 @@ from pathlib import Path
 
 
 def pid_alive(pid: int) -> bool:
-    """True iff ``pid`` currently names a live process. Never raises.
+    """True iff ``pid`` currently names a live process.
 
-    A ``PermissionError`` (pid exists, owned by another user) counts as
-    alive — same discipline as ``session_registry._pid_alive`` (a peer infra
-    module); duplicated rather than importing a private symbol.
-    """
+    source: ADR-0528"""
     if pid <= 0:
         return False
     try:
@@ -41,7 +30,9 @@ def pid_alive(pid: int) -> bool:
 
 
 def parse_iso(raw: str | None) -> datetime | None:
-    """Parse an ISO-8601 stamp to an aware UTC datetime, or None. Never raises."""
+    """Parse an ISO-8601 stamp to an aware UTC datetime, or None.
+
+    source: ADR-0528"""
     if not raw:
         return None
     try:
@@ -55,9 +46,10 @@ def atomic_write_text(path: Path, text: str) -> bool:
     """Atomically replace ``path`` with ``text`` (tmp + ``os.replace``).
 
     postcondition: a concurrent reader observes either the old content or
-    the new content in full, never a torn write. Returns False (never
-    raises) on any I/O failure.
-    """
+        the new content in full, never a torn write. Returns False (never
+        raises) on any I/O failure.
+
+    source: ADR-0528"""
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         fd, tmp = tempfile.mkstemp(prefix=path.name + ".tmp.", dir=str(path.parent))
@@ -81,14 +73,7 @@ def atomic_write_json(path: Path, payload: dict) -> bool:
 class DecisionLock:
     """Non-blocking per-store lock context manager.
 
-    ``with DecisionLock(path) as acquired:`` yields True when this holder
-    won the lock and False when another holder already owns it (contended
-    simultaneous decision). Advisory ``flock`` on POSIX, mandatory
-    ``msvcrt.locking`` on Windows — same split as ``pipeline_install_lock``
-    (source: RAPPORT_INSTALLATION_CORTEX_WINDOWS.md §5.4). Never raises out
-    of ``__enter__``: a lock-open failure degrades to "not acquired" so the
-    caller skips rather than crashes.
-    """
+    source: ADR-0528"""
 
     def __init__(self, path: Path) -> None:
         self._path = path
@@ -118,10 +103,7 @@ class DecisionLock:
         self._fd = None
 
 
-# Direct ``sys.platform`` comparison (not the ``IS_WINDOWS`` alias): the type
-# checker statically prunes the unreachable branch per its configured target
-# platform, so ``msvcrt``/``fcntl`` are each only analysed where they exist —
-# an imported bool alias would not enable that narrowing.
+# source: ADR-0528
 if sys.platform == "win32":
     import msvcrt
 

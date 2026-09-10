@@ -1,0 +1,83 @@
+---
+kind: adr
+number: 0525
+title: Preserve embedding_provider design decisions
+status: accepted
+---
+
+# ADR-0525: embedding_provider design decisions
+
+## Context
+
+Canonical migration of decision evidence from `mcp_server/infrastructure/embedding_provider.py` under ADR-0056.
+The excerpts below preserve historical claims and citations verbatim; original ADR numbers are historical quotations, not current identity bindings.
+
+## Decision
+
+Keep the source implementation linked to this versioned decision record. Operational API documentation remains with the implementation.
+
+## Preserved decision evidence
+
+### module, original line 1
+
+````text
+Encoder-provider seam for the embedding subsystem (Cortex#173).
+````
+
+### module, original line 1
+
+````text
+  * ``EmbeddingProvider`` — the ``Protocol`` the store, handlers, and hooks
+    depend on. ``EmbeddingEngine`` (the neural encoder in
+    ``embedding_engine.py``) is its first and, today, only implementation. A
+    future download-free encoder (issue #169) plugs in here as a second
+    implementation without any consumer change.
+  * ``_EmbeddingMathMixin`` — the stateless vector arithmetic shared by any
+    provider (cache key, L2 normalize, cosine similarity, blob⇄list). Kept as a
+    mixin so ``EmbeddingEngine`` exposes these on the class exactly as before
+    (``EmbeddingEngine._cache_key`` etc. — the tests pin them there).
+````
+
+### module, original line 1
+
+````text
+Pure infrastructure: no model, no I/O. Split out of ``embedding_engine.py`` to
+bring that file under the 300-line cap and to make the provider boundary
+explicit. Behaviour is unchanged — the methods below are moved verbatim.
+
+````
+
+### EmbeddingProvider, original line 31
+
+````text
+The text→vector interface consumers depend on (Cortex#173 seam).
+````
+
+### _EmbeddingMathMixin, original line 63
+
+````text
+Stateless vector arithmetic shared by every embedding provider.
+````
+
+### _EmbeddingMathMixin, original line 63
+
+````text
+    A mixin (not free functions) so the concrete provider keeps exposing these
+    as class/instance methods — ``EmbeddingEngine._cache_key``,
+    ``engine.similarity``, ``engine.to_list`` — the exact surface the existing
+    tests exercise.
+    
+````
+
+### _cache_key, original line 73
+
+````text
+        Source: ADR-0045 R5 — ``hashlib.sha256(text.encode()).hexdigest()[:16]``
+        is the mandated cache-key form for any memoization layer over
+        user-provided strings.
+        
+````
+
+## Consequences
+
+Review rationale and source changes together. Historical evidence is preserved rather than silently rewritten; executable Python structure is unchanged after removing docstrings.

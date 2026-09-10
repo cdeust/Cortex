@@ -1,10 +1,6 @@
 """Cortical-schema (Piaget accommodation, Tse 2007) mixin for PgMemoryStore.
 
-Split out of pg_store_auxiliary.py (issue #407: 397 lines over the
-300-line §4.1 cap) — named ``cortical_schema`` (not ``schema``) to avoid
-colliding with ``pg_store_ddl.py``'s unrelated database-DDL "schema"
-vocabulary; this is the cognitive-science sense (schema_engine.py).
-"""
+source: ADR-0544"""
 
 from __future__ import annotations
 

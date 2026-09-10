@@ -32,3 +32,14 @@ Source rationale preserved verbatim. Identifiers inside historical quotations ar
 # unreliable here (verified 2026-07-14 — see initdb/01-extensions.sql
 # header for the exact failure).
 ````
+
+## Final non-Python residual audit
+
+### .devcontainer/docker-compose.yml — pre-cleanup line 13
+
+````text
+      # scripts/setup_db.py shells out to psql/createdb/pg_isready without
+      # passing -U/-W; these PG* env vars are the standard libpq
+      # credential/connection source those binaries read implicitly.
+      # Dev-only credentials, not reachable outside the compose network.
+````

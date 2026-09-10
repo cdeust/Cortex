@@ -17,31 +17,22 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     pass
 
-# source: structural — the id-lookup fetches exactly the survivor + alias pair
+# source: ADR-0548
 _MERGE_PAIR_COUNT = 2
 
 
 class PgEntityMergeMixin(PgStoreHost):
-    """Atomic entity collapse on PostgreSQL."""
+    """Atomic entity collapse on PostgreSQL.
+
+    source: ADR-0548"""
 
     def merge_entities(self, survivor_id: int, alias_id: int) -> dict[str, Any]:
         """Collapse ``alias_id`` into ``survivor_id`` in one transaction.
 
-        Rewires every ``memory_entities`` link and ``relationships`` edge from
-        the alias to the survivor, drops self-loops the rewire creates, lets the
-        survivor absorb the alias's heat/recency (bounded ``GREATEST`` — never a
-        naive sum that would break the [0,1] heat invariant), then archives the
-        alias as a tombstone (``archived=TRUE, heat=0``) rather than deleting it,
-        so the merge stays auditable. All statements commit together or roll back.
+                Returns ``{merged, survivor_id, alias_id, memory_links_moved,
+                relationships_rewired}``.
 
-        No-op (``merged=False``) when the ids are equal, either entity is
-        missing, or either is an ``ast_symbol`` — code-symbol identity is
-        structural and must never be fuzzy-merged (graphify #1205; defense in
-        depth over the core engine's own exclusion).
-
-        Returns ``{merged, survivor_id, alias_id, memory_links_moved,
-        relationships_rewired}``.
-        """
+        source: ADR-0548"""
         result = {
             "merged": False,
             "survivor_id": survivor_id,

@@ -56,7 +56,8 @@ log "PostgreSQL ready"
 mkdir -p "$CLAUDE_HOME/debug" "$CLAUDE_HOME/todos" "$CLAUDE_HOME/plugins"
 
 if [[ -d "$CLAUDE_MOUNT" ]]; then
-    # Only copy credentials — NOT settings.json (contains host-specific hooks/paths)
+    # Copy credentials only; exclude settings.json.
+    # source: ADR-0873
     if [[ -f "$CLAUDE_MOUNT/.credentials.json" ]]; then
         log "Copying credentials from host mount..."
         cp "$CLAUDE_MOUNT/.credentials.json" "$CLAUDE_HOME/.credentials.json"

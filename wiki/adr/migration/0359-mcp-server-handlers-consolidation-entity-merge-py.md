@@ -1,0 +1,36 @@
+# ADR-0359: mcp_server/handlers/consolidation/entity_merge.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `mcp_server/handlers/consolidation/entity_merge.py`; original SHA-256 `fc6fada74268bae2c560abd6a1d7422109cf1dc78125f5a4b8a3f3232546b93c`.
+
+## Original docstring, lines 1–11
+
+````text
+"""Entity-merge cycle: collapse fuzzy-duplicate concept entities.
+
+Two halves, cleanly split: ``core.entity_dedup`` plans the merge (pure, no I/O —
+3-pass exact/MinHash-LSH/Jaro-Winkler) and ``store.merge_entities`` performs it
+(atomic rewire). This consolidation cycle is the composition root that wires the
+two together.
+
+Ablation-gated by ``Mechanism.ENTITY_DEDUP`` so a benchmark A/B can run the
+no-regression gate with the merge disabled (``CORTEX_ABLATE_ENTITY_DEDUP=1``)
+versus enabled, isolating its retrieval impact.
+"""
+````
+
+## Original docstring, lines 41–48
+
+````text
+"""Apply each alias→survivor merge.
+
+    The dedup remap keys entities by id (``_merge_key`` uses the entity id when
+    present, which live DB rows always have); name-only keys can appear for
+    legacy/test inputs without ids, so we skip any non-numeric key rather than
+    guess an id. Each merge is independently atomic — one failing pair does not
+    abort the rest.
+    """
+````
+

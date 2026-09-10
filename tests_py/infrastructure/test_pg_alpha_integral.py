@@ -1,14 +1,5 @@
 """Parity + monotonicity tests for the piecewise α-integral decay exponent.
 
-Root cause (forgetting-curve fidelity benchmark, 2026-06-30): effective_heat()
-applied α(final stage)·hours_elapsed. When a trace matured (α drops, e.g.
-late_ltp 0.8 → consolidated 0.5) the lower α was applied retroactively to the
-whole past, so the decay exponent shrank across a stage boundary and heat ROSE
-with age — non-physical, non-monotonic forgetting (B_consolidated 6h 0.98982 →
-8h 0.99151). Fix: the decay exponent is ∫ α(stage(s)) ds (alpha_integral), and
-effective_heat() uses the difference of cumulative integrals over the decay
-window. α>0 everywhere ⇒ the integral is increasing ⇒ forgetting is monotone.
-
 These tests pin:
   1. SQL alpha_integral() == a Python oracle mirroring effective_stage's walk.
   2. alpha_integral is non-decreasing in τ (the property that makes forgetting
@@ -17,7 +8,8 @@ These tests pin:
      benchmark profile — the direct regression for the shipped defect.
 
 Runs against cortex_test (conftest redirects DATABASE_URL).
-"""
+
+source: ADR-0985"""
 
 from __future__ import annotations
 

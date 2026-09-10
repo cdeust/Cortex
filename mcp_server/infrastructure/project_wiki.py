@@ -1,4 +1,4 @@
-"""Project wiki boundaries. # source: ADR-0056"""
+"""source: ADR-0593"""
 
 from __future__ import annotations
 

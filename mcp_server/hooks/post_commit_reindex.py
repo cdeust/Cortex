@@ -58,9 +58,7 @@ def _cooldown_seconds() -> int:
         return 120
 
 
-# source: ai-architect-mcp-codebase src/parser/mod.rs Language::from_extension
-# (AST-parsed languages) + the indexer's .js-family light-link post-pass
-# (File nodes + import edges, no AST symbols).
+# source: ADR-0494
 _INDEXABLE_EXT = {
     "rs",
     "py",
@@ -141,9 +139,7 @@ def _changed_source_files(root: str) -> list[str]:
 def _commit_failed(event: dict[str, Any]) -> bool:
     """Best-effort: True when the tool output marks a no-op/failed commit.
 
-    When no output is captured we return False (proceed) — a spurious
-    re-analyse is harmless; a missed one is the bug we are fixing.
-    """
+    source: ADR-0494"""
     blob = ""
     for key in ("tool_response", "tool_result", "result", "output"):
         val = event.get(key)
@@ -176,8 +172,7 @@ def _check_cooldown(root: str) -> bool:
     return False
 
 
-# source: pre-existing tuned value, extracted unchanged (#197 family 3);
-# provenance not recorded at introduction
+# source: ADR-0494
 _MAX_COOLDOWN_ENTRIES = 50
 
 
@@ -223,8 +218,7 @@ def _spawn_reanalyze(root: str) -> bool:
     if not launcher.exists():
         return False
 
-    # Never resolve "python3"/"python" by PATH name — hits the Windows
-    # Store stub. source: RAPPORT_INSTALLATION_CORTEX_WINDOWS.md §5.2
+    # source: ADR-0494
     py = python_executable()
     cmd = [
         py,

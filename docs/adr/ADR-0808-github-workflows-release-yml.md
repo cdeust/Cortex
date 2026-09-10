@@ -425,3 +425,45 @@ Source rationale preserved verbatim. Identifiers inside historical quotations ar
 # ensure_ascii=False so the description's em-dash stays a literal
 # character instead of a — escape, matching committed server.json.
 ````
+
+## Final non-Python residual audit
+
+### .github/workflows/release.yml — pre-cleanup line 255
+
+````text
+          # Fail loudly if the ML stack is somehow absent — criterion 3 names it.
+````
+
+### .github/workflows/release.yml — pre-cleanup line 325
+
+````text
+          # The tag must describe the tree it is built from, or a user installing
+          # the asset gets a version the release notes do not describe.
+````
+
+### .github/workflows/release.yml — pre-cleanup line 338
+
+````text
+      # The MCP registry's `mcpb` registryType requires the artifact's URL and
+      # its sha256 — neither of which exists until the bundle is built and its
+      # download URL is known. The committed server.json therefore keeps the
+      # pypi package (its identifier is version-addressable, not URL-addressed)
+      # and this step emits the resolved variant carrying BOTH packages, as a
+      # release asset to submit to the registry.
+````
+
+### .github/workflows/release.yml — pre-cleanup line 411
+
+````text
+    # OIDC Trusted Publishing — no stored secret. Verified by PyPI against
+    # the trusted-publisher entry for (cdeust/Cortex, release.yml,
+    # environment=pypi). This is the same entry that published <= 3.14.7.
+````
+
+### .github/workflows/release.yml — pre-cleanup line 434
+
+````text
+        # Best-effort channel: a rejected upload (already-exists, or the
+        # Trusted Publisher entry was removed) must NOT red-X the primary
+        # marketplace/GitHub release.
+````

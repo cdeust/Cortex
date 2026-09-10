@@ -1,0 +1,42 @@
+---
+kind: adr
+number: 0500
+title: Preserve agent_config design decisions
+status: accepted
+---
+
+# ADR-0500: agent_config design decisions
+
+## Context
+
+Canonical migration of decision evidence from `mcp_server/infrastructure/agent_config.py` under ADR-0056.
+The excerpts below preserve historical claims and citations verbatim; original ADR numbers are historical quotations, not current identity bindings.
+
+## Decision
+
+Keep the source implementation linked to this versioned decision record. Operational API documentation remains with the implementation.
+
+## Preserved decision evidence
+
+### module, original line 1
+
+````text
+Key principle: recall before working, remember the why after — never remember
+what's already in the code or git history.
+````
+
+### comment, original line 111
+
+````text
+# ── security ───────────────────────────────────────────────────
+````
+
+### comment, original line 163
+
+````text
+# ── architect ──────────────────────────────────────────────────
+````
+
+## Consequences
+
+Review rationale and source changes together. Historical evidence is preserved rather than silently rewritten; executable Python structure is unchanged after removing docstrings.

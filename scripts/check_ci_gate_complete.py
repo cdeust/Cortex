@@ -1,13 +1,6 @@
 """Static CI-gate coverage and prerequisite checks without YAML dependencies.
 
-Every job must be a direct CI Green dependency or declare a conditional
-post-merge exemption. Every conditional gated job belongs to ALLOWED_SKIPS;
-the runtime checker independently verifies the reason for each actual skip.
-CI Green must always run to report failures and rejected skips.
-
-Source: tasks/codex-green-remediation-plan.md W1-2 and GitHub workflow syntax:
-https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idneeds
-"""
+source: ADR-0710"""
 
 from __future__ import annotations
 
@@ -23,8 +16,7 @@ if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 from check_ci_gate_results import check_policy  # noqa: E402
 
-# The aggregate context for this workflow. Renaming it requires updating
-# branch protection, hence a named constant rather than a literal.
+# source: ADR-0710
 GATE_JOB = "ci-green"
 
 _JOB_RE = re.compile(r"^  ([A-Za-z0-9_-]+):\s*$")

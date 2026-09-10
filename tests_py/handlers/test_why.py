@@ -1,4 +1,4 @@
-"""Unit tests for the why handler (blame path T3, decision 4255039).
+"""Unit tests for the why handler.
 
 Falsifiable T3 criteria at the handler boundary:
 
@@ -11,7 +11,8 @@ Falsifiable T3 criteria at the handler boundary:
   (anti-flooding, correction 5) — truncated rows keep their memory_id;
 * malformed receipt_ids raise loudly — a bad id list is a caller bug,
   not a degradation mode.
-"""
+
+source: ADR-0960"""
 
 from __future__ import annotations
 

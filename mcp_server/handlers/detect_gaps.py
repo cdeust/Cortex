@@ -211,7 +211,7 @@ def _cognitive_style_gaps(domain: str | None) -> list[dict[str, Any]]:
             [domain] if domain and domain in domains else list(domains.keys())
         )
         gaps = []
-        for dom_id in target_domain_ids[:5]:  # Cap to avoid long runs
+        for dom_id in target_domain_ids[:5]:  # source: ADR-0389
             blind_spots = detect_blind_spots(
                 domain_id=dom_id,
                 domain_conversations=sessions,

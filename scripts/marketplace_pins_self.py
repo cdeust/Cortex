@@ -1,11 +1,6 @@
 """Local-source (self-hosted-in-this-repo) pin checks for the marketplace gate.
 
-Split out of check_marketplace_pins.py (issue: that file crossed the
-300-line §4.1 cap once REGISTRY_VERSION_STALE was added). Covers pins
-shaped ``{"source": "./some/path", "version": ...}`` — a plugin whose code
-lives in this repo, checked against this repo's own ``plugin.json`` and
-git tags rather than a remote GitHub API.
-"""
+source: ADR-0757"""
 
 from __future__ import annotations
 
@@ -19,9 +14,7 @@ if _scripts_dir not in sys.path:
     sys.path.insert(0, _scripts_dir)
 from marketplace_pins_semver import local_semver_tags, parse_semver, tags_between  # noqa: E402
 
-# source: audited 2026-07-25 (Cortex PR #182 review clause 5) and 2026-08-04
-# (Cortex PR #351 Opus review) — each legacy identity is a notice-only shim
-# frozen at its rename release; advancing one would hide the migration boundary.
+# source: ADR-0757
 FROZEN_PINS = {
     "cortex": "deprecation shim, frozen at the 4.15.0 rename release",
     "cortex-viz": "deprecation shim, frozen at the 2.8.0 pre-rename release",

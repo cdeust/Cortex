@@ -1,15 +1,6 @@
 """Badge and structural-integrity checks for scripts/check_doc_claims.py.
 
-Extracted (issue #293, Extract Function/Move Function) to keep
-check_doc_claims.py under the repo's 300-line file cap. Two concerns live
-here because both fail CLOSED on a file the gate cannot read or parse: badge
-freshness (does a committed SVG's own figure agree with the canonical one)
-and file structural integrity (unresolved merge conflicts, invalid JSON).
-
-`read_fn`/`scanned_files` are explicit parameters — see doc_claim_scan.py's
-module docstring for why (test-patch propagation through
-check_doc_claims.py's thin wrappers).
-"""
+source: ADR-0731"""
 
 from __future__ import annotations
 
@@ -33,17 +24,7 @@ TESTS_BADGE = re.compile(r"<title>(\d+) tests passing</title>")
 # silently detaches whichever claim it carries from the checks below.
 SHIELDS_HOTLINK = re.compile(r"img\.shields\.io")
 
-# An unresolved merge conflict inside a scanned file states BOTH sides of a
-# claim at once, so every check above reads a file that no longer says one
-# thing. This is not hypothetical: `.bestpractices.json` was committed with
-# four such blocks (branch sec/pin-dependencies-and-fuzzing, commit c090278,
-# found 2026-07-29) and shipped through the whole gate, because the claim
-# regexes matched the first side and never looked at the file's structure.
-#
-# Matched on the labelled markers only (`<<<<<<< HEAD`, `>>>>>>> origin/main`
-# — git always writes a ref after the seven characters). A bare `=======` is
-# deliberately NOT matched: it is a legal setext H1 underline in Markdown, and
-# half the scanned files are Markdown, so matching it would fail honest docs.
+# source: ADR-0731
 CONFLICT_MARKER = re.compile(r"^(?:<{7}|>{7}) \S")
 
 
@@ -56,11 +37,7 @@ def check_badge(
 ) -> list[str]:
     """One committed badge SVG states one figure, and it must be the right one.
 
-    Fails closed on an unreadable or unmatched badge. The predecessor of this
-    check was `if badge and ...` against a regex over the README, which passed
-    silently the moment the badge stopped matching — the failure mode that
-    makes a gate worse than no gate, because it still reports success.
-    """
+    source: ADR-0731"""
     try:
         body = read_fn(relative_path)
     except FileNotFoundError:
@@ -128,14 +105,7 @@ def check_no_conflict_markers(
 ) -> list[str]:
     """No scanned file states both sides of a claim at once.
 
-    A file left with git's conflict markers is not a document that drifted —
-    it is a document that says two contradictory things and parses as neither.
-    The claim regexes above cannot see this: they match the first side and
-    report success, which is how four such blocks reached a green CI run.
-    A file the gate cannot read at all is a failure too, for the same reason
-    the badge check fails closed — a check that skips its subject is worse
-    than no check, because it still prints OK.
-    """
+    source: ADR-0731"""
     failures = []
     for relative_path in scanned_files:
         try:
@@ -157,13 +127,7 @@ def check_scanned_json_parses(
 ) -> list[str]:
     """Every scanned .json file is still machine-readable.
 
-    `.bestpractices.json` is transcribed into the OpenSSF questionnaire and
-    `manifest.json` is read by the plugin loader, so a file that no longer
-    parses is a broken consumer, not just a stale number. Derived from
-    the caller's scanned-file set rather than a second hand-kept list, so
-    adding a JSON file to the gate enrols it here with no edit to this
-    function.
-    """
+    source: ADR-0731"""
     failures = []
     for relative_path in scanned_files:
         if not relative_path.endswith(".json"):

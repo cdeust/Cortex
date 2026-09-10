@@ -134,7 +134,7 @@ def _infer_kind(claims: list[dict], available_kinds: set[str]) -> str:
     for c in claims:
         kind = _TYPE_TO_KIND_AFFINITY.get(c.get("claim_type", ""), "note")
         counts[kind] = counts.get(kind, 0) + 1
-    # Prefer adr / lesson / convention over note when present
+    # source: ADR-0472
     for preferred in ("adr", "lesson", "convention", "spec", "note"):
         if counts.get(preferred):
             if not available_kinds or preferred in available_kinds:
@@ -277,7 +277,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
             existing = find_draft_for_source(conn, memory_id=mid)
             if existing and not force:
-                # Update in place rather than spawn a duplicate
+                # source: ADR-0472
                 update_draft(
                     conn,
                     existing["id"],

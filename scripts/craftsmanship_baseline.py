@@ -1,40 +1,10 @@
 """Baseline load/save/diff for the craftsmanship gate.
 
-The baseline is the ratchet: it lists every violation known at the date it
-was introduced (or last regenerated), so ``check_craftsmanship.py`` never
-blocks retroactively on pre-existing debt — only on a violation that is
-NEW (absent from the baseline) or a baseline entry that has silently gone
-STALE (its violation no longer exists in the code, meaning someone fixed it
-without pruning the baseline — see this module's docstring in
-check_craftsmanship.py for why that also fails the gate).
-
-**A working-tree baseline is not, by itself, a trustworthy comparison
-source** — flagged in review, reproduced live: add
-``SNEAKY_LIMIT = 12345`` to a tracked file, the gate blocks it; run
-``--write-baseline`` in the same working tree, the gate now passes on the
-identical violation, because ``load_baseline`` just re-read whatever the
-PR itself had just written. The ``$comment`` warning above is a social
-contract, not a mechanism. ``check_craftsmanship.py`` closes this by
-comparing new violations against the baseline **as committed at the PR's
-base ref** (``git show <ref>:<path>``, immutable to the PR's own commits)
-and separately enforcing that the working-tree file is a SUBSET of that
-base-ref baseline — an addition with no matching fix is refused outright;
-see ``added_entries`` below.
-
-That first fix only closed the ADDITION side. A second review round
-reproduced the mirror image: hand-delete a baseline entry's JSON line
-without touching the source file it describes, and the gate answered OK —
-``added_entries`` only looks at what was added, and ``new_violations``
-only rescans the PR's diffed files (the baseline file itself isn't a
-``.py`` file, so a PR touching nothing else scans zero files). Closed by
-``falsified_removals``: every entry present at the base ref but absent
-from the working tree gets its file rescanned, and a removal whose
-violation still reproduces is refused exactly like an addition is.
-
 This module supplies the parsing both paths share
 (``parse_baseline_json``); the git plumbing lives in
 ``check_craftsmanship.py``, which already owns ``_run_git``.
-"""
+
+source: ADR-0720"""
 
 from __future__ import annotations
 
@@ -106,10 +76,7 @@ def stale_entries(
 ) -> list[Violation]:
     """Baseline entries whose violation no longer exists in the current code.
 
-    ``rescanned`` maps every file referenced anywhere in the baseline to the
-    violations a fresh scan of that file finds today (an empty set, or a
-    missing key, for a file that no longer exists or no longer offends).
-    """
+    source: ADR-0720"""
     stale = [
         entry for entry in baseline if entry not in rescanned.get(entry.file, set())
     ]
@@ -120,13 +87,9 @@ def added_entries(
     working_baseline: set[Violation], base_baseline: set[Violation]
 ) -> list[Violation]:
     """Entries present in this PR's baseline file but absent from the base
-    ref's — the ratchet-file check. The baseline file may only SHRINK
-    within a PR (a violation genuinely fixed, then pruned); an addition,
-    with or without a matching removal elsewhere, is refused. Debt
-    discovered mid-PR gets fixed at the source, not grandfathered — this
-    is what makes ``.craftsmanship-baseline.json`` a ratchet and not a
-    second, self-service allowlist.
-    """
+        ref's — the ratchet-file check.
+
+    source: ADR-0720"""
     return sorted(
         working_baseline - base_baseline, key=lambda v: (v.file, v.kind, v.detail)
     )
@@ -138,23 +101,16 @@ def falsified_removals(
     rescanned: dict[str, set[Violation]],
 ) -> list[Violation]:
     """The mirror image of ``added_entries``, flagged in review: closing
-    "add a violation, then run --write-baseline in the same tree" without
-    also closing "delete the JSON line by hand, leave the violation in
-    place" left the ratchet open on the removal side — any of the ~1400
-    grandfathered entries could be hand-deleted from
-    ``.craftsmanship-baseline.json`` for free, since neither
-    ``added_entries`` (only looks at additions) nor ``new_violations``
-    (only rescans this PR's diffed files, not every baselined file) would
-    ever see it.
+        "add a violation, then run --write-baseline in the same tree" without
+        also closing "delete the JSON line by hand, leave the violation in
+        place" left the ratchet open on the removal side — any of the ~1400
+        grandfathered entries could be hand-deleted from
+        ``.craftsmanship-baseline.json`` for free, since neither
+        ``added_entries`` (only looks at additions) nor ``new_violations``
+        (only rescans this PR's diffed files, not every baselined file) would
+        ever see it.
 
-    An entry present in ``base_baseline`` but absent from
-    ``working_baseline`` is a REMOVAL. Legitimate ("I fixed it, then
-    pruned") stays silent here — ``rescanned`` (a fresh scan of exactly
-    the files those removed entries reference) simply will not reproduce
-    it. Illegitimate ("I deleted the JSON line, the code is untouched")
-    is caught: the violation still reproduces despite the entry being
-    gone, so the removal is refused.
-    """
+    source: ADR-0720"""
     removed = base_baseline - working_baseline
     falsified = [v for v in removed if v in rescanned.get(v.file, set())]
     return sorted(falsified, key=lambda v: (v.file, v.kind, v.detail))

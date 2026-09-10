@@ -1,0 +1,21 @@
+# ADR-0967: tests_py/hooks/test_agent_briefing.py design and historical evidence
+
+Status: accepted; existing test/harness evidence preserved during issue #514.
+
+Source `tests_py/hooks/test_agent_briefing.py`, original SHA-256 `1b0a9454f0ac488295317086a353f1cc7b7586c9cd83f1eec15363485f6d80de`.
+Assertions and runtime fixture literals remain unchanged.
+
+## Original docstring, lines 89–97
+
+````text
+"""Regression for issue #400.
+
+    Under the plugin-only-dispatch architecture, ~/.claude/agents/ holds
+    exactly one file (dispatch.md, a router that "never does the work
+    itself" — see _NON_SPECIALIST_META_AGENTS). Before the fix, only an
+    ABSENT directory triggered the fallback; a present directory containing
+    only dispatch.md yielded a roster of {"dispatch"}, so "engineer" (and
+    every other specialist) was never briefable outside CI.
+    """
+````
+

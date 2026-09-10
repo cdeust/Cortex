@@ -1,0 +1,76 @@
+{
+  "baseline_head": "d50105006586c4d4e8409d1b00820fb0447192ba",
+  "candidate_source_sha256": "341339dcbf8ba7611b44a6bd3c707b1b90baca24fade006ddd2cc0884dac86a4",
+  "fixture_sources": {
+    "registry.py": "def route(): pass\ndef register(): pass\ndef work(): pass\n",
+    "app.py": "@route()\ndef handler():\n    work()\n@register()\nclass C:\n    @route()\n    def method(self):\n        work()\n"
+  },
+  "before_edges": [
+    [
+      "app.py",
+      "handler",
+      "registry.py",
+      "work"
+    ],
+    [
+      "app.py",
+      "C.method",
+      "registry.py",
+      "work"
+    ]
+  ],
+  "after_edges": [
+    [
+      "app.py",
+      "handler",
+      "registry.py",
+      "route"
+    ],
+    [
+      "app.py",
+      "handler",
+      "registry.py",
+      "work"
+    ],
+    [
+      "app.py",
+      "C",
+      "registry.py",
+      "register"
+    ],
+    [
+      "app.py",
+      "C.method",
+      "registry.py",
+      "route"
+    ],
+    [
+      "app.py",
+      "C.method",
+      "registry.py",
+      "work"
+    ]
+  ],
+  "added_registration_edges": [
+    [
+      "app.py",
+      "handler",
+      "registry.py",
+      "route"
+    ],
+    [
+      "app.py",
+      "C",
+      "registry.py",
+      "register"
+    ],
+    [
+      "app.py",
+      "C.method",
+      "registry.py",
+      "route"
+    ]
+  ],
+  "body_edges_unchanged": true,
+  "scope": "Deterministic real Python parser + local known-symbol resolver coverage; no runtime or semantic retrieval performance claim."
+}

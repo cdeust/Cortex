@@ -1,24 +1,5 @@
 #!/usr/bin/env bash
-# Spawn a zetetic agent as a standalone Claude Code session in an isolated git worktree.
-#
-# Usage:
-#   scripts/spawn-agent.sh <agent-name> [task-description]
-#
-# Examples:
-#   scripts/spawn-agent.sh engineer "Fix the auth bug in login.py"
-#   scripts/spawn-agent.sh architect                         # interactive REPL
-#
-# What it does:
-#   1. Resolves the agent file (.claude/agents/<name>.md) and strips YAML frontmatter.
-#   2. Creates a git worktree at <target-repo>/.claude/worktrees/<agent>-<timestamp>
-#      on a new branch — inside the repo, where Claude Code's own worktree sweep
-#      can see it (never a sibling directory or /tmp; owner correction 2026-09-08).
-#   3. Launches `claude` there with:
-#        --append-system-prompt  <agent body>   (installs the agent persona)
-#        --permission-mode bypassPermissions    (no interactive approval prompts)
-#      If a task is passed, runs headless with -p; otherwise drops into the REPL.
-#
-# Requirements: `claude` CLI on PATH, `git` >= 2.5.
+# source: ADR-0785
 
 set -euo pipefail
 
@@ -71,10 +52,7 @@ cd "$WORKTREE"
 
 echo "→ launching claude as '$AGENT' (permissions bypassed)"
 
-# Set MEMORY_AGENT_ID so memory-tool.sh audit log and ACL use the correct
-# identity. AGENT is the slug (basename of the agent file without .md).
-# Identity MUST come from the spawn site, not the subagent: the subagent
-# cannot forge its own id.
+# source: ADR-0785
 export MEMORY_AGENT_ID="$AGENT"
 
 if [[ -n "$TASK" ]]; then

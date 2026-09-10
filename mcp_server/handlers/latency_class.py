@@ -1,7 +1,5 @@
 """Phase 5: latency-class registry for MCP tool handlers.
 
-Source: docs/program/phase-5-pool-admission-design.md §1.1, ADR-0045 R6.
-
 Each tool declares which connection pool it may acquire:
 
     interactive — hot-path (recall, remember, anchor, ...).
@@ -13,17 +11,13 @@ Each tool declares which connection pool it may acquire:
                   Bounded to batch_pool (max=2, timeout=30min).
                   Admission semaphore default: Semaphore(1) per tool.
 
-Rationale (Erlang): without latency classes a single connection singleton
-serializes all work. With them, interactive and batch streams are
-isolated and their queueing behavior is predictable (bounded-buffer
-M/M/c/K instead of M/D/1 with c=1).
-
 The registry is a module-level dict so:
   * Adding a new tool requires one entry here — no scattered tags
     across 65 handler files.
   * Tests can enumerate all tools and assert a class is declared.
   * The admission middleware (step 5) reads from this registry.
-"""
+
+source: ADR-0418"""
 
 from __future__ import annotations
 

@@ -6,13 +6,7 @@ PURE (no I/O): the handler (composition root) drives them through
 ``StagingResolveSink`` / ``BackpressurePipeline`` so ids resolve server-side
 and no ``name -> id`` map is ever held in Python.
 
-Name canonicalization (``canonicalize_entity_name``) is applied HERE, on both
-an entity's name and any edge endpoint that references it, so the staging
-``JOIN ... ON LOWER(name)`` always matches the Python dedup policy. File paths
-are literal (never all-caps shout-case) so canonicalization is identity for
-them; they are passed through verbatim on both the file entity and the
-containment edge.
-"""
+source: ADR-0404"""
 
 from __future__ import annotations
 

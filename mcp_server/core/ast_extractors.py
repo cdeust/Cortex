@@ -287,6 +287,9 @@ def extract_calls_per_function(
     Walks every function/method definition reachable from ``root``.
     Methods inside a class get ``ClassName.method`` as their qname
     (matching the shape ``extract_python_definitions`` already emits).
+    Python decorator call expressions precede body calls for the decorated
+    function/method; decorated classes receive their own decorator-call entry.
+    Bare decorators contribute no call expression.
     Anonymous functions (lambdas, unnamed arrows) are skipped — no
     qname means we can't attach edges to them.
     """
@@ -303,15 +306,15 @@ def _walk_for_calls(
 ) -> None:
     """Walk ``node``'s descendants, tracking the enclosing class.
 
-    Precondition: `out` is the accumulator `extract_calls_per_function`
-    returns; this function only adds keys, it does not read existing ones.
-    Postcondition: every named function/method reachable from `node` has
-    its qualified name mapped to its deduped callee-basename list in `out`.
+    Named functions/methods and called-decorator classes map to deduped
+    callee basenames; class qualification matches definition extraction.
 
-    source: ADR-0100"""
-    stack: list[tuple[Node, str]] = [(c, class_scope) for c in reversed(node.children)]
+    source: ADR-1058"""
+    stack: list[tuple[Node, str, list[str]]] = [
+        (c, class_scope, []) for c in reversed(node.children)
+    ]
     while stack:
-        child, scope = stack.pop()
+        child, scope, decorator_calls = stack.pop()
         ntype = child.type
         if ntype in _CLASS_NODE_TYPES:
             name_node = child.child_by_field_name("name")
@@ -320,11 +323,18 @@ def _walk_for_calls(
 
             body = child.child_by_field_name("body") or child
             inner = cls or scope
-            stack.extend((c, inner) for c in reversed(body.children))
+            if decorator_calls and name_node:
+                out[cls] = decorator_calls
+            stack.extend((c, inner, []) for c in reversed(body.children))
         elif ntype == "decorated_definition":
-            # source: ADR-0100
-
-            stack.extend((c, scope) for c in reversed(child.children))
+            definition = child.child_by_field_name("definition")
+            if definition:
+                calls = [
+                    call
+                    for decorator in _find_children(child, "decorator")
+                    for call in _collect_call_basenames(decorator, source)
+                ]
+                stack.append((definition, scope, list(dict.fromkeys(calls))))
         elif ntype in _FUNCTION_NODE_TYPES:
             name_node = child.child_by_field_name("name")
             # source: ADR-0100
@@ -333,12 +343,13 @@ def _walk_for_calls(
             body = child.child_by_field_name("body") or child
             if fn_name:
                 qname = f"{scope}.{fn_name}" if scope else fn_name
-                out[qname] = _collect_call_basenames(body, source)
+                calls = decorator_calls + _collect_call_basenames(body, source)
+                out[qname] = list(dict.fromkeys(calls))
             # Descend into the body for nested definitions (inner
             # functions, closures that define named functions).
-            stack.extend((c, scope) for c in reversed(body.children))
+            stack.extend((c, scope, []) for c in reversed(body.children))
         else:
-            stack.extend((c, scope) for c in reversed(child.children))
+            stack.extend((c, scope, []) for c in reversed(child.children))
 
 
 def _collect_call_basenames(body: Node, source: bytes) -> list[str]:

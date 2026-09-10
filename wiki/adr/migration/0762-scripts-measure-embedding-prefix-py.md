@@ -1,0 +1,15 @@
+# ADR-0762: scripts/measure_embedding_prefix.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `scripts/measure_embedding_prefix.py`; original SHA-256 `d8c31b0a43c8a123bfa56c9c0a342d20f020cc48a99fb7f040821ff365872d03`.
+
+## Original comment, lines 30–32
+
+````text
+# Serialized tokenizer.json contains old 128-token truncation/padding.
+    # source: ST Transformer preprocessing uses sentence_bert_config's limit,
+    # longest_first truncation and longest-batch padding (none for one item).
+````
+

@@ -1,12 +1,6 @@
-"""AST *symbol* loading for the workflow graph (ADR-0046).
+"""Infrastructure layer only. No core imports.
 
-Split out of ``workflow_graph_source_ast.py`` (issue #275 — that file
-exceeded the 300-line cap) as its own cohesive concern: querying AP for
-symbol nodes (Function/Method/Struct/...) and normalizing them into the
-builder-shaped dict the workflow graph consumes.
-
-Infrastructure layer only. No core imports.
-"""
+source: ADR-0633"""
 
 from __future__ import annotations
 
@@ -18,11 +12,9 @@ from mcp_server.infrastructure.workflow_graph_ast_response import (
     build_path_tails,
 )
 
-# AP's node labels carrying symbol semantics. Derived from
-# stage-3 tree-sitter extractors; see
-# ``ai-architect-mcp-codebase/src/clustering.rs`` for the canonical list.
+# source: ADR-0633
 _SYMBOL_LABELS = (
-    # Core — Rust + Python (original set)
+    # source: ADR-0633
     "Function",
     "Method",
     "Struct",
@@ -47,21 +39,14 @@ _SYMBOL_LABELS = (
     "Package",
     "Namespace",
     "Variable",
-    # Import statements (one node per ``import`` site). AP wires every
-    # file to its imports via the ``Defines_File_Import`` rel table; the
-    # nodes themselves carry ``id`` (``<file>::<modpath>``), ``path``,
-    # ``alias``, ``is_glob``. Loaded via a custom property mapping below
-    # because imports lack ``qualified_name``.
+    # source: ADR-0633
     "Import",
 )
 
-# Labels whose nodes don't expose ``qualified_name`` / ``name``. The
-# load query falls back to ``id`` / ``path`` (or whatever the node
-# DOES carry) so they still flow into the graph.
+# source: ADR-0633
 _NON_QUALIFIED_LABELS = {"Import"}
 
-# source: "Cap at 10 tails to keep the WHERE clause tractable"  # noqa: ERA001
-# (comment in _symbol_batches_async._where_for_tails)  # noqa: ERA001
+# source: ADR-0633  # noqa: ERA001
 _MAX_WHERE_TAILS = 10
 
 
@@ -106,12 +91,7 @@ def _symbol_type_from_label(label: str) -> str:
 def _where_for_tails(prop: str, tails: set[str]) -> str:
     """Build a Cypher WHERE predicate that filters at the Kuzu level.
 
-    Each tail produces one STARTS WITH predicate on qualified_name (or
-    id for Import nodes). We emit the shortest unique tails only — if
-    "pkg/mod.py" is present, "mod.py" is redundant because any match for
-    "mod.py" also matches "pkg/mod.py". Cap at ``_MAX_WHERE_TAILS`` to
-    keep the WHERE clause tractable.
-    """
+    source: ADR-0633"""
     if not tails:
         return ""
     sorted_tails = sorted(tails, key=len, reverse=True)
@@ -205,20 +185,13 @@ async def symbol_batches_async(
 ):
     """Yield one batch of symbol rows per AP label query (async gen).
 
-    AP stores each symbol under its own label (Function, Method, Struct,
-    Enum, Trait, Constant, TypeAlias, ...). The qualified_name follows
-    ``<relative_file>::<name>``. We query each label separately (LadybugDB
-    rejects multi-label ``MATCH``). Each label's rows are yielded as soon
-    as its query returns, so the consumer can process/discard a label's
-    rows before the next label is queried — peak retained here is one
-    label's rows, not the union across all ``_SYMBOL_LABELS`` queries.
+        ``paths`` entries may be absolute (builder convention); AP's
+        ``File.id`` and the symbol ``qualified_name`` prefix are
+        repo-relative — ``build_path_tails``/``_where_for_tails`` match by
+        tail so both forms work, both server-side (WHERE) and as a Python
+        safeguard (``_parse_symbol_batch``).
 
-    ``paths`` entries may be absolute (builder convention); AP's
-    ``File.id`` and the symbol ``qualified_name`` prefix are
-    repo-relative — ``build_path_tails``/``_where_for_tails`` match by
-    tail so both forms work, both server-side (WHERE) and as a Python
-    safeguard (``_parse_symbol_batch``).
-    """
+    source: ADR-0633"""
     path_tails = build_path_tails(paths)
     for label in _SYMBOL_LABELS:
         query = _build_symbol_query(label, paths, path_tails)

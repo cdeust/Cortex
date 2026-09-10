@@ -77,3 +77,56 @@ Source: `benchmarks/lib/bench_regression.sh`; original SHA-256 `aeac114807f760a9
 
 ````
 
+
+## Final non-Python residual audit
+
+### benchmarks/lib/bench_regression.sh — pre-cleanup line 3
+
+````text
+# match would hide the drift (same anti-pattern rejected for the pyright
+````
+
+### benchmarks/lib/bench_regression.sh — pre-cleanup line 9
+
+````text
+# Baseline worktrees omit ignored datasets. Reuse the exact HEAD inputs,
+# never a second download which could change the corpus between comparisons.
+````
+
+### benchmarks/lib/bench_regression.sh — pre-cleanup line 40
+
+````text
+# Run the same benchmark set (respecting --only/--quick/--limit) against
+# BASELINE_REF's code, in an isolated git worktree, writing results under
+# $RESULTS_DIR/baseline/. Reuses the already-running container: harnesses
+# self-clean (purge is_benchmark rows on open, per reproduce.sh's header),
+# so a second harness run against the same DB is safe and does not require
+# a second container.
+````
+
+### benchmarks/lib/bench_regression.sh — pre-cleanup line 75
+
+````text
+    # cd into the worktree so `uv run` resolves ITS pyproject.toml/uv.lock —
+    # the baseline may pin different dependency versions than HEAD, and
+    # running it under HEAD's resolved env would not actually measure the
+    # baseline's code.
+````
+
+### benchmarks/lib/bench_regression.sh — pre-cleanup line 80
+
+````text
+        # Preserve errexit while cleaning up even when provisioning or a runner
+        # fails. An OR-list around this subshell would disable errexit within it.
+````
+
+### benchmarks/lib/bench_regression.sh — pre-cleanup line 133
+
+````text
+        # Round to the same 4-decimal precision reproduce.sh prints, so the
+        # pass/fail line matches exactly what a reader sees in this log —
+        # comparing at higher hidden precision than what's displayed is the
+        # rounding mismatch that made single-run borderline cases confusing
+        # to bisect (reproduce.sh's own check_floors docstring, LoCoMo
+        # same-commit noise note, stdev 0.0022 measured 2026-07-14).
+````

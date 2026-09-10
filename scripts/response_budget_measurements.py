@@ -22,7 +22,7 @@ def text_observation(content: list[dict]) -> dict:
     if any(block.get("type") != "text" for block in content):
         raise ValueError("This calibration only supports MCP text content")
     texts = [block["text"] for block in content]
-    # source: ECMAScript String values are sequences of 16-bit code units.
+    # source: ADR-0781
     units = [
         len(text.encode("utf-16-le", errors="surrogatepass")) // 2 for text in texts
     ]
@@ -31,8 +31,7 @@ def text_observation(content: list[dict]) -> dict:
         "text_code_points": sum(map(len, texts)),
         "text_utf8_bytes": sum(len(text.encode("utf-8")) for text in texts),
         "text_utf16_units": sum(units),
-        # source: Claude Code 2.1.263 ice/vc: sum(Math.round(text.length / 4)).
-        # Adding half the divisor reproduces JS half-up rounding for lengths.
+        # source: ADR-0781
         "host_estimated_tokens": sum((length + 2) // 4 for length in units),
     }
 

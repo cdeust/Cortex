@@ -1,10 +1,8 @@
 """PostgreSQL schema: DDL, extensions, stored procedures, migrations.
 
-Requires PostgreSQL 15+ with pgvector and pg_trgm extensions.
-All retrieval logic lives in PL/pgSQL stored procedures.
-
 Pure DDL — no connection management.
-"""
+
+source: ADR-0537"""
 
 from __future__ import annotations
 
@@ -79,44 +77,19 @@ CREATE TABLE IF NOT EXISTS memories (
     is_global BOOLEAN DEFAULT FALSE,
     supersedes_id   INTEGER REFERENCES memories(id) ON DELETE SET NULL,
     superseded_by_id INTEGER REFERENCES memories(id) ON DELETE SET NULL,
-    -- M-D2 (7.4, 2026-07-11): explicit write class, the single contract
-    -- mcp_server/core/write_class.py classifies against. DEFAULT
-    -- 'deliberate' is the module's documented safe default (an
-    -- unclassified write is never assumed to be flood/noise) — fresh
-    -- installs get every writer's EXPLICIT value at insert time
-    -- (handlers/remember.py, ingest_findings_writers.py, cls.py,
-    -- sleep.py, etc.; see write_class.py module docstring for the full
-    -- writer inventory), so this DEFAULT only matters for the historical
-    -- backfill window on pre-existing installs (MIGRATIONS_DDL below +
-    -- the one-shot handlers/consolidation/write_class_backfill.py pass).
+    -- source: ADR-0537
     write_class     TEXT NOT NULL DEFAULT 'deliberate'
                     CHECK (write_class IN
                         ('auto', 'deliberate', 'derived', 'mechanical'))
 );
 """
 
-# source: green-remediation W3-5/F6 explicitly selects 0.05 from the existing
-# 0.2 setting (3,140 HOT / 24,838 updates). PostgreSQL ALTER TABLE SET is
-# idempotent and preserves other reloptions. fillfactor awaits calibration;
-# no value is inferred from the HOT ratio alone.
+# source: ADR-0537
 MEMORIES_STORAGE_OPTIONS_DDL = """
 ALTER TABLE memories SET (autovacuum_vacuum_scale_factor = 0.05);
 """
 
-# Supersession read-path layer (PR "read-path supersession"). The invariant
-# "chain head = current version" is defined exactly ONCE, here: a row is
-# current iff nothing has superseded it (superseded_by_id IS NULL,
-# stamped atomically by supersede_atomic). Every content-serving read
-# selects FROM current_memories; physical maintenance (decay/forgetting
-# cursors), chain machinery (_current_chain_head, include_related) and
-# explicit by-id reads stay on memories by contract. Coverage audit:
-# grep current_memories. Audit + spec:
-# docs/program/pr2-read-path-supersession-audit.json.
-# CREATE OR REPLACE is idempotent; executed AFTER MIGRATIONS_DDL in
-# get_all_ddl() so databases predating the supersession columns gain
-# them first. The planner inlines this single-predicate view, and the
-# predicate is benchmark-neutral by construction (fixtures never set
-# superseded_by_id, so view ≡ table on all benchmark data).
+# source: ADR-0537
 CURRENT_MEMORIES_VIEW_DDL = """
 CREATE OR REPLACE VIEW current_memories AS
     SELECT * FROM memories WHERE superseded_by_id IS NULL;
@@ -132,28 +105,14 @@ CREATE TABLE IF NOT EXISTS entities (
     last_accessed   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     heat            REAL DEFAULT 1.0,
     archived        BOOLEAN DEFAULT FALSE,
-    -- Provenance: 'ast_symbol' (code symbol from codebase ingestion — exempt
-    -- from label-fuzzy dedup, graphify #1205) vs 'text_concept' (extracted from
-    -- memory content — eligible for fuzzy dedup). Consumed by core.entity_dedup.
+    -- source: ADR-0537
     origin          TEXT NOT NULL DEFAULT 'text_concept'
                     CHECK (origin IN ('ast_symbol', 'text_concept'))
 );
 """
 
 HOMEOSTATIC_STATE_DDL = """
--- M-D3 (7.1, 2026-07-10): one row per (domain, write_class), not one row
--- per domain. The pre-stratification single-row-per-domain fold regulated
--- every write class toward the same target mean using the same factor —
--- confirmed (SQL, dev DB) to have re-suppressed the deliberate class in
--- the SAME UPDATE as the auto-capture flood at 2026-07-10 19:22 (1021
--- rows folded together, 511 post_tool_capture + 510 deliberate-class
--- sources, domain=''). See mcp_server/core/write_class.py for the
--- taxonomy and mcp_server/handlers/consolidation/homeostatic.py for the
--- per-class regulation policy. Fresh installs get the composite key
--- directly; existing installs are migrated by the DO block below
--- (MIGRATIONS_DDL) which backfills write_class='auto' via column DEFAULT
--- — the honest one-shot label for legacy rows, since their factor
--- history was driven by a corpus that was 92% auto-capture by volume.
+-- source: ADR-0537
 CREATE TABLE IF NOT EXISTS homeostatic_state (
     domain      TEXT NOT NULL,
     write_class TEXT NOT NULL DEFAULT 'auto'
@@ -164,12 +123,7 @@ CREATE TABLE IF NOT EXISTS homeostatic_state (
     PRIMARY KEY (domain, write_class)
 );
 
--- M-D3 (7.1): fold-event journal — instrumentation the design doc's
--- acceptance criterion required BEFORE any fold-policy change ("pas de
--- correctif sans confirmation du coupable"). The 2026-07-10 19:22 fold
--- left no queryable trace anywhere except memories.heat_base_set_at
--- matching a batched write — every fold from this point forward is
--- queryable directly, no row-timestamp archaeology required.
+-- source: ADR-0537
 CREATE TABLE IF NOT EXISTS homeostatic_fold_log (
     id          SERIAL PRIMARY KEY,
     domain      TEXT NOT NULL,
@@ -210,21 +164,12 @@ CREATE INDEX IF NOT EXISTS idx_memory_entities_entity
     ON memory_entities (entity_id);
 """
 
-# ── Wiki Schema (Phase 1 of redesign) ─────────────────────────────────────
-# Isolated `wiki` schema. Intentionally ZERO joins from the recall hot path.
-#
-# Pipeline IRs stored as first-class tables, each inspectable and queryable:
-#   transcript  →  claim_events  →  concepts  →  drafts  →  pages  →  rendered
-#
-# Survival physics match memories.heat / decay / staleness — pages EARN
-# existence through citation, backlinks, access; LOSE it through idleness,
-# staleness, redundancy.
+# source: ADR-0537
 
 WIKI_SCHEMA_DDL = """
 CREATE SCHEMA IF NOT EXISTS wiki;
 
--- claim_events: atomic extracted assertions from a transcript/memory.
--- Inspectable "laboratory notebook" — Hopper's nanosecond wire.
+-- source: ADR-0537
 CREATE TABLE IF NOT EXISTS wiki.claim_events (
     id              BIGSERIAL PRIMARY KEY,
     memory_id       INTEGER REFERENCES memories(id) ON DELETE SET NULL,
@@ -244,9 +189,7 @@ CREATE TABLE IF NOT EXISTS wiki.claim_events (
     extracted_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- concepts: emergent candidate knowledge nodes (Strauss axial coding).
--- Sits BETWEEN memories and pages. Crystallises from entity co-occurrence
--- + embedding density. Graduates to a page on saturation.
+-- source: ADR-0537
 CREATE TABLE IF NOT EXISTS wiki.concepts (
     id                      BIGSERIAL PRIMARY KEY,
     label                   TEXT NOT NULL,
@@ -270,8 +213,7 @@ CREATE TABLE IF NOT EXISTS wiki.concepts (
     core_category_link      BIGINT REFERENCES wiki.concepts(id) ON DELETE SET NULL
 );
 
--- drafts: synthesized page content before curation.
--- Inspectable pre-render review surface.
+-- source: ADR-0537
 CREATE TABLE IF NOT EXISTS wiki.drafts (
     id              BIGSERIAL PRIMARY KEY,
     concept_id      BIGINT REFERENCES wiki.concepts(id) ON DELETE CASCADE,
@@ -292,17 +234,12 @@ CREATE TABLE IF NOT EXISTS wiki.drafts (
     published_page_id INTEGER
 );
 
--- pages: the authored, approved wiki page (mirror of .md file).
--- Files remain source of truth — this is the facet/query index.
+-- source: ADR-0537
 CREATE TABLE IF NOT EXISTS wiki.pages (
     id              SERIAL PRIMARY KEY,
     memory_id       INTEGER UNIQUE REFERENCES memories(id) ON DELETE SET NULL,
     concept_id      BIGINT REFERENCES wiki.concepts(id) ON DELETE SET NULL,
-    -- Denormalized 1:1 fast-path mirror of wiki.page_sources for the
-    -- dominant single-file-doc case: keeps the recall hot path join-free
-    -- (see "ZERO joins from recall hot path" invariant above). NULL for
-    -- pages that document zero or many files; wiki.page_sources is the
-    -- source of truth for the N:M case. ADR-0051.
+    -- source: ADR-0537
     documents_primary TEXT,
     rel_path        TEXT UNIQUE NOT NULL,
     slug            TEXT NOT NULL,
@@ -313,17 +250,7 @@ CREATE TABLE IF NOT EXISTS wiki.pages (
     tags            JSONB NOT NULL DEFAULT '[]'::jsonb,
     audience        JSONB NOT NULL DEFAULT '[]'::jsonb,
     requires        JSONB NOT NULL DEFAULT '[]'::jsonb,
-    -- Union of the digital-garden maturity vocabulary (seedling/budding/
-    -- evergreen, the column default) with every status vocabulary the
-    -- system itself emits into frontmatter: 'living' (core/auto_curator.py
-    -- lines 475,538 and handlers/consolidation/page_io.py:376) and the
-    -- kind-specific ADR/specs statuses in
-    -- core/wiki_templates.py STATUS_VALUES (proposed/accepted/rejected/
-    -- deprecated/superseded for ADRs; draft/review/accepted/implemented/
-    -- deprecated for specs). Kept in sync manually with wiki_migrate.py's
-    -- _VALID_STATUS_VALUES (handlers may import core; infrastructure may
-    -- not, so the union is duplicated here with this provenance comment
-    -- rather than imported).
+    -- source: ADR-0537
     status          TEXT NOT NULL DEFAULT 'seedling'
                     CHECK (status IN (
                       'seedling','budding','evergreen','living',
@@ -339,7 +266,7 @@ CREATE TABLE IF NOT EXISTS wiki.pages (
     sections        JSONB NOT NULL DEFAULT '{}'::jsonb,
     body_hash       TEXT NOT NULL DEFAULT '',
     embedding       vector(384),
-    -- thermodynamic survival physics (mirrors memories table)
+    -- source: ADR-0537
     heat            REAL NOT NULL DEFAULT 1.0 CHECK (heat >= 0.0 AND heat <= 1.0),
     access_count    INTEGER NOT NULL DEFAULT 0,
     citation_count  INTEGER NOT NULL DEFAULT 0,
@@ -353,8 +280,7 @@ CREATE TABLE IF NOT EXISTS wiki.pages (
     archived_at     TIMESTAMPTZ
 );
 
--- links: outgoing references from a page (see-also, requires, supersedes, inline).
--- Backlink lookup = reverse index by dst_page_id.
+-- source: ADR-0537
 CREATE TABLE IF NOT EXISTS wiki.links (
     src_page_id     INTEGER NOT NULL REFERENCES wiki.pages(id) ON DELETE CASCADE,
     dst_slug        TEXT NOT NULL,
@@ -367,8 +293,7 @@ CREATE TABLE IF NOT EXISTS wiki.links (
     PRIMARY KEY (src_page_id, dst_slug, link_kind)
 );
 
--- citations: page referenced during a Claude Code session.
--- Drives heat via trigger and is the primary authority-earning signal.
+-- source: ADR-0537
 CREATE TABLE IF NOT EXISTS wiki.citations (
     id              BIGSERIAL PRIMARY KEY,
     page_id         INTEGER NOT NULL REFERENCES wiki.pages(id) ON DELETE CASCADE,
@@ -378,36 +303,19 @@ CREATE TABLE IF NOT EXISTS wiki.citations (
     cited_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- page_sources: N:M edge from a wiki page to the source file(s) it
--- documents. General model — an anchor/scope page can document many
--- files, and (rarely) a file can be documented by more than one page
--- (e.g. a module overview plus a deep-dive). Populated from frontmatter
--- (`documents:`/legacy `source_file_path`/`file`/`file:` tag) and from
--- wiki.claim_events.evidence_refs (kind='file'). Mirrors wiki.links'
--- shape (src table row -> target key, typed by link_kind).
--- Downstream consumer: cortex-viz wiki-page -> source-file edges.
--- ADR-0051.
+-- source: ADR-0537
 CREATE TABLE IF NOT EXISTS wiki.page_sources (
     page_id         INTEGER NOT NULL REFERENCES wiki.pages(id) ON DELETE CASCADE,
     source_path     TEXT NOT NULL,
     symbol          TEXT,
     link_kind       TEXT NOT NULL DEFAULT 'documents'
-                    -- 'finding' added INC5.1 (ADR-0052 D4): AP-finding ->
-                    -- file-reference edges written by ingest_findings
-                    -- (code files the finding is ABOUT, stage-4
-                    -- matched_symbols). 'extracted_from' added 5.1b:
-                    -- AP-finding -> source-document edge (stage-1
-                    -- ExtractedFinding.source_path — the document the
-                    -- finding was extracted FROM). Kept distinct from
-                    -- 'finding' so a graph reader can tell provenance
-                    -- apart from subject matter.
+                    -- source: ADR-0537
                     CHECK (link_kind IN (
                       'documents','references','derived','finding','extracted_from'
                     )),
     confidence      REAL NOT NULL DEFAULT 1.0,
     source          TEXT NOT NULL DEFAULT 'frontmatter'
-                    -- 'ap-pipeline' added INC5.1: provenance tag for rows
-                    -- written by ingest_findings from AP artifacts.
+                    -- source: ADR-0537
                     CHECK (source IN (
                       'frontmatter','claim_evidence','body','codebase_grounding',
                       'ap-pipeline'
@@ -415,9 +323,7 @@ CREATE TABLE IF NOT EXISTS wiki.page_sources (
     PRIMARY KEY (page_id, source_path, link_kind)
 );
 
--- memos: the grounded-theory audit trail. Every curation decision
--- (merge, split, promote, abandon, reclassify) writes one row with
--- its inputs, rationale, alternatives considered, and confidence.
+-- source: ADR-0537
 CREATE TABLE IF NOT EXISTS wiki.memos (
     id              BIGSERIAL PRIMARY KEY,
     subject_type    TEXT NOT NULL
@@ -432,14 +338,12 @@ CREATE TABLE IF NOT EXISTS wiki.memos (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Indexes for the likely query patterns
+-- source: ADR-0537
 CREATE INDEX IF NOT EXISTS idx_wiki_claim_events_memory
     ON wiki.claim_events (memory_id);
 CREATE INDEX IF NOT EXISTS idx_wiki_claim_events_session
     ON wiki.claim_events (session_id);
--- HNSW reloptions pinned for determinism: same (m, ef_construction) as
--- memories.embedding so benchmark reproducibility doesn't drift on
--- pgvector default changes. source: docs/provenance/hnsw-determinism-playbook.md §1
+-- source: ADR-0537
 CREATE INDEX IF NOT EXISTS idx_wiki_claim_events_embedding
     ON wiki.claim_events USING hnsw (embedding vector_cosine_ops)
     WITH (m = 16, ef_construction = 64);
@@ -471,8 +375,7 @@ CREATE INDEX IF NOT EXISTS idx_wiki_links_dst
 CREATE INDEX IF NOT EXISTS idx_wiki_links_dst_slug
     ON wiki.links (dst_slug);
 
--- Reverse index: file -> page(s) documenting it. The query the viz
--- edge-builder actually runs.
+-- source: ADR-0537
 CREATE INDEX IF NOT EXISTS idx_wiki_page_sources_path
     ON wiki.page_sources (source_path);
 
@@ -485,40 +388,9 @@ CREATE INDEX IF NOT EXISTS idx_wiki_memos_subject
     ON wiki.memos (subject_type, subject_id);
 """
 
-# Triggers and PL/pgSQL functions for the wiki schema live in a separate
-# block because `_split_statements` treats any block containing `$$` as
-# a single atomic unit (CREATE FUNCTION body may contain semicolons).
+# source: ADR-0537
 WIKI_TRIGGERS_DDL = """
--- Trigger: denormalise citation_count + last_cited_at + heat bump on cite
---
--- The +0.05 bump has NO published or measured source (coding-standards.md
--- §8 gap, flagged twice: design inc5 risk D7, report T2-H4). It is an
--- unvalidated engineering default, introduced at the trigger's origin
--- (commit 4516b489, "feat(wiki redesign): Phase 1.1") with no derivation
--- beyond "same physics as pg_store memory decay" (wiki_thermodynamics.py
--- module docstring). It is internally consistent with two other
--- single-reinforcement-event heat bumps in this codebase that are
--- likewise unsourced engineering defaults of the same magnitude:
---   - mcp_server/core/reconsolidation.py:310 _RECONS_HEAT_BUMP_UPDATE = 0.05
---     (memories.heat bump on retrieval-driven reconsolidation update;
---     explicitly labelled "calibration pending" in that module)
---   - mcp_server/infrastructure/pg_store_relationships.py:181
---     entities.heat bump on Hebbian co-activation, also +0.05, also
---     unsourced.
--- No empirical calibration is possible yet either: wiki.citations has 0
--- rows in the dev DB as of 2026-07-10 (feature not yet exercised in
--- practice), and all 154 existing wiki.pages sit at heat 0.95-1.0
--- (cap-saturated at LEAST(1.0, ...)), so the bump has had zero observable
--- effect to date and no distribution exists to calibrate against.
--- Structural implication of the current value (informational, not a
--- justification): with the 1.0 cap and the 0.4 ARCHIVED_REVIVAL_HEAT
--- threshold (wiki_thermodynamics.py), a single citation cannot revive an
--- archived page (heat near AREA_TO_ARCHIVED_HEAT=0.1 floor) on its own —
--- reaching 0.4 needs >=6 citations with no intervening decay.
--- source: none — engineering default, calibration pending. See
--- docs/provenance/ (blend-weight-calibration.md precedent for how this
--- codebase resolves "engineering default" placeholders: pre-register a
--- sweep, cite the resulting optimum, update this comment).
+-- source: ADR-0537
 CREATE OR REPLACE FUNCTION wiki.on_citation_insert() RETURNS trigger AS $$
 BEGIN
     UPDATE wiki.pages
@@ -585,13 +457,7 @@ CREATE TABLE IF NOT EXISTS prospective_memories (
     triggered_at        TIMESTAMPTZ,
     triggered_count     INTEGER DEFAULT 0,
     created_by          TEXT NOT NULL DEFAULT '',
-    -- M-D6 (7.6): the lesson memory this trigger was promoted from, when
-    -- created via a lesson_promotion job (mcp_server/handlers/
-    -- lesson_promotion.py). NULL for triggers created directly by
-    -- create_trigger without going through a promotion job. No FK: same
-    -- unenforced-pointer convention as memories' `derived-src:<id>` tags
-    -- (memify_derive.py) — a hard-forgotten source lesson must not force
-    -- deletion of the trigger it produced.
+    -- source: ADR-0537
     source_memory_id    INTEGER
 );
 
@@ -644,16 +510,7 @@ CREATE INDEX IF NOT EXISTS idx_stage_transitions_memory
 CREATE INDEX IF NOT EXISTS idx_stage_transitions_time
     ON stage_transitions (transitioned_at);
 
--- Injection receipts (blame path T1/T2 — decision Cortex 4255039). Every
--- channel that injects memory content into a context emits, at injection
--- time, an append-only receipt capturing {memory_id, rank, score} for
--- exactly the bound payload (emitted AFTER bound_payload: transcript↔DB
--- parity invariant). Presence-in-context evidence only, never causality
--- (Pearl ladder). session_id is NULLable: the mcp recall handler has no
--- session identity in scope; hook channels derive it from the transcript
--- file basename (correction 7). channel is enum-hardened (T2): the four
--- values mirror handlers/injection_receipts.py INJECTION_CHANNELS —
--- parity asserted by test_injection_receipts_store.py.
+-- source: ADR-0537
 CREATE TABLE IF NOT EXISTS injection_receipts (
     id                  SERIAL PRIMARY KEY,
     session_id          TEXT,
@@ -668,10 +525,7 @@ CREATE INDEX IF NOT EXISTS idx_injection_receipts_session
 CREATE INDEX IF NOT EXISTS idx_injection_receipts_time
     ON injection_receipts (emitted_at);
 
--- memory_id carries NO FK on purpose: receipts are an append-only audit
--- trail — a later hard-forget of the memory must not rewrite the evidence
--- of what was in context (unlike stage_transitions, whose rows lose all
--- value once the memory is gone).
+-- source: ADR-0537
 CREATE TABLE IF NOT EXISTS injection_receipt_items (
     id                  SERIAL PRIMARY KEY,
     receipt_id          INTEGER NOT NULL
@@ -701,17 +555,7 @@ CREATE TABLE IF NOT EXISTS memory_rules (
     priority            INTEGER DEFAULT 0,
     is_active           BOOLEAN DEFAULT TRUE,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    -- M-D6 (7.6): the lesson memory this rule was promoted from, when
-    -- created via a lesson_promotion job. NULL for rules created
-    -- directly by add_rule without going through a promotion job.
-    -- READ-PATH NOTE: memory_rules is read every recall via
-    -- core.memory_rules.apply_rules (SELECT * in get_all_active_rules /
-    -- get_rules_for_scope, so this column is included automatically).
-    -- apply_rules() only ever reads rule_type/condition/action/priority
-    -- — it does not reference source_memory_id — so this addition does
-    -- NOT change recall's filtering or ranking decision, only the
-    -- shape of rows it already reads. No FK: same unenforced-pointer
-    -- convention as memories' `derived-src:<id>` tags.
+    -- source: ADR-0537
     source_memory_id    INTEGER
 );
 
@@ -736,15 +580,7 @@ CREATE TABLE IF NOT EXISTS oscillatory_state (
     state_json  TEXT NOT NULL DEFAULT '{}'
 );
 
--- User session-level mood state for MOOD_CONGRUENT_RERANK (Bower 1981).
--- Single-row table keyed by user_id (default 'default') so the recall
--- pipeline's _get_user_mood(store) bridge can read a real signal instead
--- of always returning None. The seed row defaults to neutral (valence=0,
--- arousal=0) — consumers may update via set_user_mood() once an upstream
--- emotion classifier wires in. The duck-typed pg_recall._get_user_mood()
--- bridge consumes the scalar `valence` only. `arousal` is reserved for the
--- two-dimensional Russell (1980) circumplex if a future stage needs it.
--- Source: Bower, G.H. (1981). "Mood and Memory." Am. Psychologist 36(2).
+-- source: ADR-0537
 CREATE TABLE IF NOT EXISTS user_mood (
     user_id     TEXT PRIMARY KEY DEFAULT 'default',
     valence     REAL NOT NULL DEFAULT 0.0
@@ -756,14 +592,7 @@ CREATE TABLE IF NOT EXISTS user_mood (
 INSERT INTO user_mood (user_id, valence, arousal) VALUES ('default', 0.0, 0.0)
 ON CONFLICT (user_id) DO NOTHING;
 
--- Precomputed (x, y) coordinates for every workflow-graph node. The
--- layout pass runs out-of-band (handlers/recompute_layout.py via
--- igraph DrL on CPU) and persists the result here so the viz can ship
--- coordinates with each node, eliminating the d3-force tick cost in
--- the browser. ``topology_fingerprint`` tracks which graph build the
--- coordinates were computed against. The tile and quadtree endpoints
--- read them by ``layout_version`` so a stale layout never serves
--- alongside fresh nodes.
+-- source: ADR-0537
 CREATE TABLE IF NOT EXISTS workflow_graph_layout (
     node_id              TEXT PRIMARY KEY,
     x                    REAL NOT NULL,
@@ -775,15 +604,7 @@ CREATE TABLE IF NOT EXISTS workflow_graph_layout (
 );
 """
 
-# ── Procedural memory (B1) ────────────────────────────────────────────────
-# Skills = recurring successful action sequences mined from session tool-use
-# (Graybiel 2008 chunking) with a reinforced success rate (Schultz 1997 RPE).
-# Retrieved by *situation* (context_signature), never by content similarity —
-# the defining split from the declarative episodic/semantic store. A dedicated
-# table (mirroring prospective_memories) rather than a memories.store_type row,
-# because a skill's fields (ordered action sequence, proficiency, success/
-# failure counts) are structured, not free text. Idempotent, additive: this
-# CREATE IF NOT EXISTS touches no existing table.
+# source: ADR-0537
 PROCEDURAL_SKILLS_DDL = """
 CREATE TABLE IF NOT EXISTS procedural_skills (
     id                  SERIAL PRIMARY KEY,
@@ -812,28 +633,19 @@ CREATE INDEX IF NOT EXISTS idx_memories_content_trgm
     ON memories USING gin (content gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_memories_heat_base
     ON memories (heat_base);
--- Composite key for KEYSET pagination of the viz graph build
--- (iter_hot_memories_chunked): ``ORDER BY heat_base DESC, id DESC`` with a
--- ``(heat_base, id) < (...)`` cursor becomes a pure index range scan, no
--- per-page sort even across the large heat_base tie groups (e.g. 149k rows
--- at one heat value). source: EXPLAIN, 2026-06-03.
+-- source: ADR-0537
 CREATE INDEX IF NOT EXISTS idx_memories_heat_base_id
     ON memories (heat_base DESC, id DESC);
 CREATE INDEX IF NOT EXISTS idx_memories_domain
     ON memories (domain);
--- M-D2 (7.4): the homeostatic fold's UPDATE (homeostatic_apply.py::
--- _apply_fold) filters WHERE domain = %s AND write_class = %s — this
--- composite index makes that an index range scan instead of a domain-
--- only scan + per-row filter.
+-- source: ADR-0537
 CREATE INDEX IF NOT EXISTS idx_memories_domain_write_class
     ON memories (domain, write_class);
 CREATE INDEX IF NOT EXISTS idx_memories_store_type
     ON memories (store_type);
 CREATE INDEX IF NOT EXISTS idx_memories_created_at
     ON memories (created_at);
--- source: W4-1/F4 and bounded-io Phase 2 M2. Match the hot/recency
--- predicates exactly; NULL source/is_stale rows stay excluded. No clock
--- expression in an index: heat still sorts by exact effective_heat.
+-- source: ADR-0537
 CREATE INDEX IF NOT EXISTS idx_memories_curated_heat_base
     ON memories (heat_base)
     WHERE source <> 'post_tool_capture' AND NOT is_stale
@@ -844,14 +656,7 @@ CREATE INDEX IF NOT EXISTS idx_memories_curated_created_at
       AND superseded_by_id IS NULL;
 CREATE INDEX IF NOT EXISTS idx_memories_stage
     ON memories (consolidation_stage);
--- Grooming telemetry (get_grooming_health): candidate/backlog counts filter
--- on tags @> '["lesson"]'::jsonb / tag-prefix scans ('promoted:%',
--- 'distill-of:%'). Without this index the same query the promotion
--- planner already runs (pg_store_lesson_promotion.list_lesson_promotion_
--- candidates) is a full Seq Scan over `memories` (measured: 81ms at
--- 11,012 rows, EXPLAIN ANALYZE 2026-07-11 -- grows linearly with table
--- size). Mirrors the existing idx_wiki_pages_tags_gin index already
--- proven on wiki.pages.tags (pg_schema.py:431).
+-- source: ADR-0537
 CREATE INDEX IF NOT EXISTS idx_memories_tags_gin
     ON memories USING gin (tags);
 CREATE INDEX IF NOT EXISTS idx_entities_name
@@ -870,9 +675,7 @@ CREATE INDEX IF NOT EXISTS idx_rel_pair_type
     ON relationships (source_entity_id, target_entity_id, relationship_type);
 CREATE INDEX IF NOT EXISTS idx_memories_agent_context
     ON memories (agent_context);
--- Supersession chain walks (borrow-from-supermemory item 1). Partial so the
--- index covers only the sparse subset of memories that participate in a
--- version chain; on a store with no edges these are empty and cost nothing.
+-- source: ADR-0537
 CREATE INDEX IF NOT EXISTS idx_memories_superseded_by
     ON memories (superseded_by_id) WHERE superseded_by_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_memories_supersedes
@@ -886,56 +689,10 @@ CREATE INDEX IF NOT EXISTS idx_workflow_graph_layout_xy
 """
 
 
-# ── PL/pgSQL: effective_heat (A3 lazy-heat read path) ────────────────────
-#
-# Source: docs/program/phase-3-a3-migration-design.md §2.
-#
-# Single source of truth for I1, I5, I7, I8. Pure-ish function: STABLE
-# (reads wall-clock via t_now arg — planner-constant within a single
-# query), PARALLEL SAFE (no session state). Output is structurally
-# bounded in [stage_floor, 1.0] — I8 becomes a property of the formula,
-# not a per-site LEAST guard.
-#
-# Preserved semantics:
-#   - Stage-dependent α (Kandel 2001)
-#   - Emotional damping β (Yonelinas & Ritchey 2015, Kleinsmith & Kaplan 1963)
-#   - Stage floors (Bahrick 1984 permastore, Benna & Fusi 2016)
-#   - p_factor (global decay rate per hour) = 0.95 default
+# source: ADR-0537
 
 EFFECTIVE_STAGE_FN = """
--- effective_stage — LAZY read-time derivation of the consolidation stage.
---
--- Root cause (memory 4202985): A3 made HEAT lazy (decayed from stage_hours
--- on the read path) but left STAGE eager — advanced only by the
--- consolidation handler (handlers/consolidation/cascade.py), never on
--- recall/read. Benchmark and import runs trigger no consolidation pass, so
--- a row stays frozen at its insert stage 'labile' (α=2.0, floor=0.0) while
--- its heat decays under the labile law → collapses to ~0. This function
--- re-derives the stage lazily from elapsed dwell + the row's stored signal
--- columns so α and the floor track the trace's true maturity.
---
--- Mirrors cascade_advancement.compute_advancement_readiness applied
--- cumulatively (advance as far as time + signals permit, one shot),
--- forward-chain only (labile→early_ltp→late_ltp→consolidated), monotonic
--- (never demote below the stored stage). The DA gate of the LABILE→EARLY_LTP
--- transition is encoding-time and unavailable on the read path, so only the
--- importance gate is used (dopamine treated as absent).
---
--- stage_hours is treated as a dwell BUDGET consumed stage-by-stage: leaving
--- a stage requires budget ≥ that stage's effective min_dwell, and consumes it.
---
--- min_dwell hours: labile=0, early_ltp=1, late_ltp=6, consolidated=24.
---   source: cascade_stages._STAGE_PROPERTIES (Kandel 2001)
--- schema acceleration on min_dwell (cascade_advancement._effective_min_dwell):
---   systems-consolidation stages (late_ltp, consolidated): × 15^(-schema)
---     (Tse 2007 ~10-15× acceleration; 15.0 base is an engineering choice)
---   synaptic-tag stages (labile, early_ltp): × (1 - schema·0.2)
--- signal gates (cascade_advancement._check_*_advancement):
---   labile→early_ltp:     importance > 0.3            (DA path disabled at read)
---   early_ltp→late_ltp:   access_count ≥ 1 OR importance > 0.4
---   late_ltp→consolidated: access_count ≥ (3 if schema < 0.5 else 1)
--- 'reconsolidating' and any unknown stage are returned unchanged — they are
--- access-triggered (Nader 2000), not time-derivable.
+-- source: ADR-0537
 CREATE OR REPLACE FUNCTION effective_stage(
     p_stage      TEXT,
     p_hours      DOUBLE PRECISION,
@@ -952,12 +709,12 @@ DECLARE
     dwell    DOUBLE PRECISION;
     late_thr INTEGER;
 BEGIN
-    -- Only the forward synaptic-tag chain is derived lazily.
+    -- source: ADR-0537
     IF cur NOT IN ('labile', 'early_ltp', 'late_ltp', 'consolidated') THEN
         RETURN cur;
     END IF;
 
-    -- LABILE → EARLY_LTP. min_dwell(labile)=0 → no budget consumed.
+    -- source: ADR-0537
     IF cur = 'labile' THEN
         IF imp > 0.3 THEN
             cur := 'early_ltp';
@@ -966,7 +723,7 @@ BEGIN
         END IF;
     END IF;
 
-    -- EARLY_LTP → LATE_LTP. effective min_dwell = 1.0 · (1 - schema·0.2).
+    -- source: ADR-0537
     IF cur = 'early_ltp' THEN
         dwell := 1.0 * (1.0 - sch * 0.2);
         IF budget >= dwell AND (acc >= 1 OR imp > 0.4) THEN
@@ -977,7 +734,7 @@ BEGIN
         END IF;
     END IF;
 
-    -- LATE_LTP → CONSOLIDATED. effective min_dwell = 6.0 · 15^(-schema).
+    -- source: ADR-0537
     IF cur = 'late_ltp' THEN
         dwell := 6.0 * POWER(15.0, -sch);
         late_thr := CASE WHEN sch < 0.5 THEN 3 ELSE 1 END;
@@ -986,37 +743,14 @@ BEGIN
         END IF;
     END IF;
 
-    -- CONSOLIDATED is terminal on the forward chain.
+    -- source: ADR-0537
     RETURN cur;
 END;
 $$ LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE;
 """
 
 ALPHA_INTEGRAL_FN = """
--- alpha_integral — cumulative α-weighted dwell time ∫₀^τ α(stage(s)) ds.
---
--- Root cause (forgetting-curve fidelity benchmark, 2026-06-30): effective_heat
--- applied α(final stage) to ALL elapsed hours. When a trace matures, α drops
--- (late_ltp 0.8 → consolidated 0.5); applying the lower α retroactively to the
--- whole past made the decay exponent α·t DECREASE across a stage boundary, so
--- heat ROSE with age — non-physical, non-monotonic forgetting (e.g.
--- B_consolidated 6h heat 0.98982 → 8h 0.99151).
---
--- Fix: the instantaneous decay rate is α(stage at dwell-time s). The decay
--- accumulated over a window is the INTEGRAL of α over that window, not
--- α(endpoint)·window. This returns ∫₀^p_tau α(stage(s)) ds on the dwell clock,
--- walking the SAME forward chain as effective_stage() (identical gates and
--- effective min_dwell). α>0 everywhere ⇒ the integral is strictly increasing
--- in p_tau ⇒ POWER(p_factor, integral) is monotone decreasing ⇒ forgetting is
--- monotone by construction.
---
--- α(stage): labile=2.0, early_ltp=1.2, late_ltp=0.8, consolidated=0.5,
---   reconsolidating=1.5, other=1.0. source: pg_schema effective_heat α ladder
---   (Kandel 2001 stage-dependent decay exponent).
--- Stage durations mirror effective_stage: labile min_dwell 0 (imp>0.3 gate,
---   instant); early_ltp 1.0·(1-0.2·schema) gated on acc≥1 OR imp>0.4; late_ltp
---   6.0·15^(-schema) gated on acc≥(3 if schema<0.5 else 1). A failed gate
---   freezes the trace in that stage for the remaining τ (its α covers the tail).
+-- source: ADR-0537
 CREATE OR REPLACE FUNCTION alpha_integral(
     p_stage      TEXT,
     p_tau        DOUBLE PRECISION,
@@ -1035,14 +769,13 @@ DECLARE
     late_thr  INTEGER;
     seg       DOUBLE PRECISION;
 BEGIN
-    -- Off-chain stages decay at their fixed α for the whole window.
+    -- source: ADR-0537
     IF cur NOT IN ('labile', 'early_ltp', 'late_ltp', 'consolidated') THEN
         RETURN (CASE cur WHEN 'reconsolidating' THEN 1.5 ELSE 1.0 END)
                * remaining;
     END IF;
 
-    -- LABILE: min_dwell 0. imp>0.3 ⇒ leave instantly (0 duration, no α
-    -- contribution). Else frozen labile ⇒ α=2.0 for the whole window.
+    -- source: ADR-0537
     IF cur = 'labile' THEN
         IF imp > 0.3 THEN
             cur := 'early_ltp';
@@ -1051,7 +784,7 @@ BEGIN
         END IF;
     END IF;
 
-    -- EARLY_LTP: α=1.2. Leaves after dwell = 1.0·(1-0.2·schema) iff gated.
+    -- source: ADR-0537
     IF cur = 'early_ltp' THEN
         dwell := 1.0 * (1.0 - sch * 0.2);
         IF NOT (acc >= 1 OR imp > 0.4) THEN
@@ -1064,7 +797,7 @@ BEGIN
         cur := 'late_ltp';
     END IF;
 
-    -- LATE_LTP: α=0.8. Leaves after dwell = 6.0·15^(-schema) iff gated.
+    -- source: ADR-0537
     IF cur = 'late_ltp' THEN
         dwell := 6.0 * POWER(15.0, -sch);
         late_thr := CASE WHEN sch < 0.5 THEN 3 ELSE 1 END;
@@ -1078,18 +811,14 @@ BEGIN
         cur := 'consolidated';
     END IF;
 
-    -- CONSOLIDATED: terminal, α=0.5 for all remaining τ.
+    -- source: ADR-0537
     RETURN total + 0.5 * remaining;
 END;
 $$ LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE;
 """
 
 EFFECTIVE_HEAT_FN = """
--- p_factor default: 0.95 per DAY (pre-A3 DECAY_MEMORIES_FN ran ~daily,
--- each run applied factor 0.95 once). Converted to per-hour equivalent:
--- 0.95^(1/24) ≈ 0.99787. This preserves the macroscopic decay rate while
--- making the function continuous in elapsed hours. Source:
--- docs/program/phase-3-a3-migration-design.md §2.
+-- source: ADR-0537
 CREATE OR REPLACE FUNCTION effective_heat(
     m           memories,
     t_now       TIMESTAMPTZ,
@@ -1106,36 +835,21 @@ DECLARE
     eff_decay_hours DOUBLE PRECISION;
     eff_stage      TEXT;
 BEGIN
-    -- Pinned: protected or explicit no_decay. heat_base is authoritative;
-    -- factor still applies (homeostatic contraction affects even anchors
-    -- — LEAST(1.0, …) preserves I7: protected heat never exceeds its
-    -- heat_base=1.0 baseline).
+    -- source: ADR-0537
     IF m.is_protected OR COALESCE(m.no_decay, FALSE) THEN
         RETURN LEAST(1.0::REAL, GREATEST(0.0::REAL, m.heat_base * factor));
     END IF;
 
-    -- Hours since heat_base was last bumped (= last canonical touch).
-    -- Falls back to last_accessed then created_at for rows migrated from
-    -- pre-A3 without a heat_base_set_at value.
+    -- source: ADR-0537
     hours_elapsed := GREATEST(0.0, EXTRACT(EPOCH FROM
         (t_now - COALESCE(m.heat_base_set_at, m.last_accessed, m.created_at)))
         / 3600.0);
 
-    -- Hours since the row entered its current consolidation stage.
-    -- Used by the emotional-damping β term (larger Δt_stage → β closer
-    -- to 1 - 0.30·|valence|, per pg_schema.py:757-759).
+    -- source: ADR-0537
     stage_hours := GREATEST(0.0, EXTRACT(EPOCH FROM
         (t_now - COALESCE(m.stage_entered_at, m.created_at))) / 3600.0);
 
-    -- Lazily derive the effective consolidation stage. A3 made HEAT lazy but
-    -- left STAGE eager (advanced only by the consolidation handler, never on
-    -- the read path), so between consolidation passes a row's heat decayed
-    -- under the labile α while the trace had already earned a later,
-    -- slower-decaying stage. effective_stage() re-derives the stage from
-    -- elapsed dwell (stage_hours) + the stored signal columns so α and the
-    -- floor below match the trace's true maturity, monotonically (never
-    -- below the stored stage). 'reconsolidating'/unknown stages pass through
-    -- unchanged. source: effective_stage() + cascade_advancement gates.
+    -- source: ADR-0537
     eff_stage := effective_stage(
         m.consolidation_stage,
         stage_hours,
@@ -1144,20 +858,11 @@ BEGIN
         m.schema_match_score
     );
 
-    -- β(valence, Δt_stage) — Yonelinas & Ritchey 2015 emotional damping.
-    -- source: pg_schema.py:757-759
-    --
-    -- (1 - EXP(-x)) saturates to 1 for x > ~80 (EXP(-80) < 1e-34).
-    -- Cap the argument at 80 to prevent EXP underflow on rows with
-    -- stage_hours in the tens of thousands (e.g. benchmark fixtures
-    -- with multi-year timestamps).
+    -- source: ADR-0537
     beta := 1.0 - 0.30 * ABS(COALESCE(m.emotional_valence, 0.0))
                 * (1.0 - EXP(-LEAST(stage_hours / 1.0, 80.0)));
 
-    -- Stage permastore floor — Bahrick 1984 + Benna & Fusi 2016.
-    -- Uses the lazily-derived eff_stage (see above) so a trace that has
-    -- matured into late_ltp/consolidated gets its retention floor even
-    -- between consolidation passes. source: pg_schema.py:742-747
+    -- source: ADR-0537
     stage_floor := CASE eff_stage
         WHEN 'consolidated'    THEN 0.10
         WHEN 'late_ltp'        THEN 0.05
@@ -1165,18 +870,7 @@ BEGIN
         ELSE 0.0
     END;
 
-    -- Decay exponent = ∫ α(stage(s)) ds over the elapsed window, NOT
-    -- α(final stage)·hours_elapsed. The latter applied a matured trace's
-    -- lower α retroactively to its whole past, so the exponent could shrink
-    -- across a stage boundary and heat ROSE with age (non-monotonic — see
-    -- alpha_integral). The decay window on the dwell clock is
-    -- [stage_hours - hours_elapsed, stage_hours]; its α-integral is the
-    -- difference of cumulative integrals (GREATEST clamps the lower bound for
-    -- rows whose heat was last touched before the current stored stage). For a
-    -- single-stage trace α is constant ⇒ the difference is exactly
-    -- α·hours_elapsed, so single-stage trajectories are byte-identical to the
-    -- prior formula; only multi-stage traces change, and only to remove the
-    -- non-physical bump. source: alpha_integral() (Kandel 2001).
+    -- source: ADR-0537
     eff_decay_hours :=
         alpha_integral(m.consolidation_stage, stage_hours,
                        m.importance, m.access_count, m.schema_match_score)
@@ -1184,25 +878,12 @@ BEGIN
                          GREATEST(0.0, stage_hours - hours_elapsed),
                          m.importance, m.access_count, m.schema_match_score);
 
-    -- Scale base by homeostatic factor (Feynman first-principles: factor
-    -- is a scalar-per-domain gain, not a per-row mutation). Then apply the
-    -- integrated decay: POWER(p_factor, β · ∫α). β (emotional damping) scales
-    -- the whole exponent as a slowly-varying global factor.
-    --
-    -- All intermediates are DOUBLE PRECISION (float8) to avoid REAL
-    -- underflow at ~1e-38. The clamp below pins output ≥ stage_floor,
-    -- and the final cast to REAL on RETURN lands in a safe range
-    -- because POWER values < 1e-38 collapse to 0 before the cast,
-    -- and GREATEST(stage_floor, 0) lifts the value back to stage_floor.
+    -- source: ADR-0537
     base_scaled := m.heat_base::DOUBLE PRECISION * factor::DOUBLE PRECISION;
     decayed := base_scaled * POWER(p_factor::DOUBLE PRECISION,
                                    beta * eff_decay_hours);
 
-    -- I1 + I8: clamp to REAL-safe range BEFORE cast. REAL (float4)
-    -- cannot represent values below ~1.2e-38 even as sub-normals —
-    -- the cast raises NumericValueOutOfRange. stage_floor may be 0
-    -- (labile), so use 1e-38 as the hard floor; downstream score
-    -- fusion (TMM, Bruch 2023) treats 1e-38 as functionally zero.
+    -- source: ADR-0537
     decayed := LEAST(1.0::DOUBLE PRECISION,
                      GREATEST(GREATEST(stage_floor, 1e-38::DOUBLE PRECISION),
                               decayed));
@@ -1211,11 +892,7 @@ END;
 $$ LANGUAGE plpgsql STABLE PARALLEL SAFE;
 """
 
-# effective_heat_frozen — kill-switch alias returning heat_base directly.
-# When CORTEX_MEMORY_A3_LAZY_HEAT=false at step 9 rollback, callers that
-# were switched to effective_heat() can be redirected here via a runtime
-# DDL swap (the function signature matches). Equivalent to the pre-A3
-# eager-stored heat read.
+# source: ADR-0537
 
 EFFECTIVE_HEAT_FROZEN_FN = """
 CREATE OR REPLACE FUNCTION effective_heat_frozen(
@@ -1225,23 +902,13 @@ CREATE OR REPLACE FUNCTION effective_heat_frozen(
     p_factor    REAL DEFAULT 0.95
 ) RETURNS REAL AS $$
 BEGIN
-    -- Return heat_base directly. No decay, no factor, no stage
-    -- adjustment — matches the pre-A3 stored-heat semantics exactly.
-    -- Used only as an emergency rollback target when the A3 flag is
-    -- flipped false but the schema has been migrated.
+    -- source: ADR-0537
     RETURN LEAST(1.0, GREATEST(0.0, m.heat_base));
 END;
 $$ LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE;
 """
 
-# ── PL/pgSQL: recall_memories (A3 lazy-heat canonical read path) ─────────
-#
-# Source: docs/program/phase-3-a3-migration-design.md §4.
-#
-# Each signal plans against the filter-only eligible relation; only the union
-# of its bounded pools is materialized. The fusion below is normalized TMM,
-# not rank-only RRF. Heat filtering and sorting retain effective_heat exactly.
-# source: docs/provenance/pg-recall-pools-design.md (W4-1 / F4).
+# source: ADR-0537
 
 RECALL_MEMORIES_LAZY_FN = """
 DROP FUNCTION IF EXISTS recall_memories(
@@ -1264,11 +931,7 @@ CREATE OR REPLACE FUNCTION recall_memories(
     p_w_ngram       REAL DEFAULT 0.3,
     p_w_recency     REAL DEFAULT 0.0,
     p_include_globals BOOLEAN DEFAULT TRUE,
-    -- issue #368. Both default to the identity transform: an empty trusted
-    -- set with factor 1.0 multiplies every row by 1.0, so a caller that
-    -- passes neither reproduces the pre-#368 ranking bit for bit. The set is
-    -- supplied by the caller rather than defaulted to a literal vocabulary
-    -- here, so this function never holds a copy of the trust policy.
+    -- source: ADR-0537
     p_trusted_origins TEXT[] DEFAULT ARRAY[]::TEXT[],
     p_untrusted_factor REAL DEFAULT 1.0
 ) RETURNS TABLE (
@@ -1286,9 +949,7 @@ CREATE OR REPLACE FUNCTION recall_memories(
     source          TEXT,
     value           REAL,
     source_attribution TEXT,
-    -- issue #368: returned so the read path can break the heat feedback loop
-    -- without a second query. Distinct from source_attribution, which is
-    -- derived BY READING the content and therefore cannot carry trust.
+    -- source: ADR-0537
     capture_origin  TEXT
 ) AS $$
 DECLARE
@@ -1307,28 +968,17 @@ DECLARE
                             ELSE to_tsquery('english', v_or_expr) END;
     v_min_heat_base REAL;
 BEGIN
-    -- Resolve the homeostatic factor for this domain (1.0 default).
-    -- M-D3 (7.1): homeostatic_state's PK is (domain, write_class) since
-    -- the fold/scalar regulator was stratified per write class — 'auto'
-    -- is the only class ever regulated (see homeostatic.py doctrine
-    -- comment), so it is the only class whose factor departs from the
-    -- neutral 1.0 default; pinning the filter here reproduces the
-    -- pre-stratification recall behavior exactly (same numeric factor
-    -- for the same corpus) while remaining correct once other classes'
-    -- rows exist in the table.
+    -- source: ADR-0537
     SELECT COALESCE(MAX(hs.factor), 1.0) INTO v_factor
     FROM homeostatic_state hs
     WHERE hs.domain = COALESCE(p_domain, '') AND hs.write_class = 'auto';
 
-    -- Prefilter threshold: heat_base >= p_min_heat / factor is the
-    -- monotonic transform that preserves ordering (Zhuangzi: positive
-    -- factor preserves the order relation on heat_base). Index usable.
+    -- source: ADR-0537
     v_min_heat_base := p_min_heat / GREATEST(v_factor, 0.001);
 
     RETURN QUERY
     WITH
-    -- Inline the common filters into each independently planned signal.
-    -- source: PostgreSQL 16 queries-with.html, CTE materialization.
+    -- source: ADR-0537
     eligible AS NOT MATERIALIZED (
         SELECT m.*
         FROM current_memories m
@@ -1339,7 +989,7 @@ BEGIN
                OR (p_include_globals AND m.is_global = TRUE))
           AND (p_directory IS NULL OR m.directory_context = p_directory)
     ),
-    -- Signal 1: Vector cosine similarity (pgvector)
+    -- source: ADR-0537
     vec AS (
         SELECT c.id,
                (1.0 - (c.embedding <=> p_query_emb))::REAL AS raw_score
@@ -1349,7 +999,7 @@ BEGIN
         ORDER BY c.embedding <=> p_query_emb
         LIMIT v_pool
     ),
-    -- Signal 2: Full-text search
+    -- source: ADR-0537
     fts AS (
         SELECT c.id,
                ts_rank_cd(c.content_tsv, v_tsq)::REAL AS raw_score
@@ -1359,7 +1009,7 @@ BEGIN
         ORDER BY ts_rank_cd(c.content_tsv, v_tsq) DESC
         LIMIT v_pool
     ),
-    -- Signal 3: Trigram similarity
+    -- source: ADR-0537
     ngram AS (
         SELECT c.id,
                similarity(c.content, p_query_text)::REAL AS raw_score
@@ -1370,19 +1020,7 @@ BEGIN
         ORDER BY similarity(c.content, p_query_text) DESC
         LIMIT v_pool
     ),
-    -- Signal 4: exact lazy heat, with an indexable heat_base prefilter.
-    -- Age/stage/valence differ by row: heat_base ordering is not equivalent.
-    -- This pool may still scan/sort all eligible curated rows; it is not
-    -- bounded until LIMIT. The partial Btree supports its cheap prefilter.
-    -- Auto-captures are excluded from the heat and recency pools
-    -- (bounded-io Phase 2 F2, docs/provenance/bounded-io-phase2-design.md M2):
-    -- their freshness is a mechanical artifact of one-write-per-tool-call
-    -- (baseline_heat 1.0 + always-recent created_at), carrying no
-    -- importance information. Including them let a fresh raw dump join
-    -- 4-5 fusion signal pools while month-old curated lessons joined 1-2 — the
-    -- measured 60x inversion. Categorical de-bias, no tuned constant;
-    -- auto-captures still compete on content (vector/fts/ngram).
-    -- Benchmark-neutral: fixtures never write source='post_tool_capture'.
+    -- source: ADR-0537
     hot AS (
         SELECT c.id,
                effective_heat(c, NOW(), v_factor) AS raw_score
@@ -1392,7 +1030,7 @@ BEGIN
         ORDER BY effective_heat(c, NOW(), v_factor) DESC
         LIMIT v_pool
     ),
-    -- Signal 5: Recency via exponential decay
+    -- source: ADR-0537
     recency AS (
         SELECT c.id,
                EXP(-0.01 * EXTRACT(EPOCH FROM (NOW() - c.created_at))
@@ -1403,7 +1041,7 @@ BEGIN
         ORDER BY c.created_at DESC
         LIMIT v_pool
     ),
-    -- Load full rows once, only for the union of the five bounded pools.
+    -- source: ADR-0537
     candidates AS MATERIALIZED (
         SELECT m.* FROM current_memories m
         JOIN (
@@ -1412,7 +1050,7 @@ BEGIN
             UNION SELECT id FROM recency
         ) pool_ids ON pool_ids.id = m.id
     ),
-    -- Per-signal observed max for TMM normalization (Bruch 2023)
+    -- source: ADR-0537
     vec_max  AS (SELECT COALESCE(MAX(raw_score), 0.001) AS hi FROM vec),
     fts_max  AS (SELECT COALESCE(MAX(raw_score), 0.001) AS hi FROM fts),
     ng_max   AS (SELECT COALESCE(MAX(raw_score), 0.001) AS hi FROM ngram),
@@ -1477,40 +1115,14 @@ BEGIN
         FROM emotional_boosted eb
         JOIN candidates c ON c.id = eb.id
     ),
-    -- Metamemory confidence as a multiplicative document prior
-    -- (Kraaij, Westerveld & Hiemstra 2002, "The Importance of Prior
-    -- Probabilities for Entry Page Search", SIGIR — static document
-    -- priors multiply the query likelihood). confidence defaults to 1.0
-    -- (multiplicative identity) and moves ONLY via rate_memory feedback,
-    -- so the prior is data-driven, no invented constant, and an identity
-    -- transform on benchmark fixtures. Closes the M3 structural gap
-    -- (docs/provenance/bounded-io-phase2-design.md): user feedback previously had
-    -- no channel into rank.
+    -- source: ADR-0537
     confidence_weighted AS (
         SELECT tb.id,
                tb.final_score * COALESCE(c.confidence, 1.0) AS final_score
         FROM tag_boosted tb
         JOIN candidates c ON c.id = tb.id
     ),
-    -- Trust/provenance demotion (issue #368). Source: arXiv 2604.16548 —
-    -- retrieve-phase corruption ("malicious entries ranked highest by
-    -- embedding similarity"), whose required defence is a trust-aware
-    -- retrieval POLICY, the survey being explicit that "Retrieval-time
-    -- filtering alone is insufficient". Hence a factor inside the ranking
-    -- expression, evaluated before ORDER BY and before the LIMIT, rather
-    -- than a filter over an already-ranked list.
-    --
-    -- Multiplicative like its three predecessors, and necessarily so: an
-    -- additive term cannot demote — it contributes at best zero and leaves
-    -- a hostile passage's similarity intact.
-    --
-    -- This function holds NO trust policy of its own. The trusted set
-    -- arrives as a parameter so mcp_server/core/capture_origin.py stays the
-    -- single source of truth; hardcoding the vocabulary here would let the
-    -- two drift apart silently, which is the failure mode the module was
-    -- written against. Defaults are the identity transform (empty set,
-    -- factor 1.0), so a caller that passes neither gets the pre-#368
-    -- ranking exactly.
+    -- source: ADR-0537
     trust_weighted AS (
         SELECT cw.id,
                cw.final_score * CASE
@@ -1537,25 +1149,14 @@ BEGIN
            COALESCE(c.capture_origin, 'unknown')::TEXT
     FROM trust_weighted tw
     JOIN candidates c ON c.id = tw.id
-    -- Supersession head-of-chain demotion (borrow-from-supermemory item 1):
-    -- a memory that has been superseded (superseded_by_id IS NOT NULL) ranks
-    -- below every current version, then by fused score within each tier.
-    -- Boolean sorts FALSE < TRUE, so current (NULL -> FALSE) leads. This is a
-    -- tier sort, not a tuned penalty -- no invented constant. Benchmark-neutral:
-    -- fixtures never set the edge, so the first key is constant FALSE and the
-    -- order collapses to the prior ORDER BY cw.final_score DESC.
+    -- source: ADR-0537
     ORDER BY (c.superseded_by_id IS NOT NULL), tw.final_score DESC
     LIMIT p_max_results * 3;
 END;
 $$ LANGUAGE plpgsql STABLE
--- source: PostgreSQL 16 runtime-config-query.html#GUC-PLAN-CACHE-MODE and
--- sql-prepare.html; W4-1 30k-row experiment 2026-09-07: automatic generic
--- plans stop using HNSW after the first five calls (16k versus 8.6k buffers).
--- These selective pools depend on actual query/filter values. Keep replanning
--- local to this function; caller settings and ANN parameters are preserved.
+-- source: ADR-0537
 SET plan_cache_mode = 'force_custom_plan'
--- source: existing strict similarity > 0.1 cutoff above; pg_trgm % is
--- indexable but otherwise inherits a caller's potentially stricter setting.
+-- source: ADR-0537
 SET pg_trgm.similarity_threshold = '0.1';
 """
 
@@ -1574,10 +1175,10 @@ CREATE OR REPLACE FUNCTION spread_activation(
 BEGIN
     RETURN QUERY
     WITH RECURSIVE spread AS (
-        -- Seed nodes
+        -- source: ADR-0537
         SELECT unnest(p_seed_entity_ids) AS eid, 1.0::REAL AS act, 0 AS depth
         UNION ALL
-        -- Propagate through relationships
+        -- source: ADR-0537
         SELECT
             CASE
                 WHEN r.source_entity_id = s.eid THEN r.target_entity_id
@@ -1601,37 +1202,7 @@ END;
 $$ LANGUAGE plpgsql STABLE;
 """
 
-# ── PL/pgSQL: spread_activation_memories ────────────────────────────────
-# Full pipeline: query terms → entity resolution → propagation → memory IDs.
-# Replaces 4 Python-side round trips with 1 server-side call.
-#
-# Domain scoping (ADR-0054, 2026-07-11): the entity graph (entities,
-# relationships) is intentionally global -- a token shared across projects
-# (e.g. "TypeError", "src/main.rs") legitimately creates one shared entity
-# row, and relationships carry no domain column by design (see
-# RELATIONSHIPS_DDL). Filtering seed_entities or spread by domain would
-# starve that legitimate sharing. The injection point that matters is the
-# LAST step -- entity_memories, where activation is mapped onto actual
-# memory rows -- mirroring the precedent already established by
-# pg_recall.py::_memories_by_entity_fn (`if domain and m.get("domain") !=
-# domain: continue`) and by recall_memories()'s own p_domain/p_include_globals
-# gate on the same `m.domain` column (see RECALL_MEMORIES_LAZY_FN above).
-# Measured without this filter (scratchpad/spread-activation-scoping-design.md
-# §2.3): 52.8% of topologically-reachable injections are cross-domain,
-# 87.5% of queries have >=1 cross-domain hit. p_domain defaults to NULL
-# (no filter) only for the two callers that explicitly opt in via
-# cross_domain=True (recall_pipeline.py::spreading_activation_expand);
-# the default at every layer above this function is scoped.
-#
-# WITH RECURSIVE fix (bug present since the function's introduction,
-# 8228a0d2): the `spread` CTE self-references (`FROM spread s`) but the
-# original declaration used a plain `WITH`, which PostgreSQL rejects
-# ("relation \"spread\" does not exist") on every single call -- the
-# entire channel has been dead in production since inception, its
-# exception silently swallowed by recall_pipeline.py's `except Exception:
-# return candidates`. See spread_activation() above, which already used
-# WITH RECURSIVE correctly -- this was the only divergence between the
-# two twin functions.
+# source: ADR-0537
 
 SPREAD_ACTIVATION_MEMORIES_FN = """
 DROP FUNCTION IF EXISTS spread_activation_memories(
@@ -1653,7 +1224,7 @@ CREATE OR REPLACE FUNCTION spread_activation_memories(
 BEGIN
     RETURN QUERY
     WITH RECURSIVE
-    -- Step 1: Resolve query terms to entity IDs (case-insensitive)
+    -- source: ADR-0537
     seed_entities AS (
         SELECT DISTINCT e.id AS eid
         FROM entities e, unnest(p_query_terms) AS t(term)
@@ -1661,7 +1232,7 @@ BEGIN
           AND e.heat >= p_min_heat
           AND NOT e.archived
     ),
-    -- Step 2: Spread activation via recursive CTE
+    -- source: ADR-0537
     spread AS (
         SELECT se.eid, 1.0::REAL AS act, 0 AS depth
         FROM seed_entities se
@@ -1679,7 +1250,7 @@ BEGIN
         WHERE s.depth < p_max_depth
           AND s.act * p_decay * r.weight * r.confidence >= p_threshold
     ),
-    -- Aggregate activations per entity (max, not sum — prevents over-boost)
+    -- source: ADR-0537
     entity_acts AS (
         SELECT s.eid, MAX(s.act)::REAL AS act
         FROM spread s
@@ -1687,13 +1258,7 @@ BEGIN
         WHERE e.heat >= p_min_heat AND NOT e.archived
         GROUP BY s.eid
     ),
-    -- Step 3: Map entity activations to memories via FTS + ILIKE.
-    -- current_memories: spread activation re-injects candidates from the
-    -- entity graph AFTER the WRRF ranking — a superseded version reached
-    -- through its entities would bypass every ranking barrier, so chain
-    -- heads only. Domain filter here (not on entities/relationships,
-    -- see module comment above) mirrors recall_memories()'s p_domain/
-    -- p_include_globals gate on the same m.domain column.
+    -- source: ADR-0537
     entity_memories AS (
         SELECT DISTINCT m.id AS mid, ea.act
         FROM entity_acts ea
@@ -1705,7 +1270,7 @@ BEGIN
                OR m.domain = p_domain
                OR (p_include_globals AND m.is_global = TRUE))
     )
-    -- Return max activation per memory (entity with strongest path wins)
+    -- source: ADR-0537
     SELECT em.mid, MAX(em.act)::REAL
     FROM entity_memories em
     GROUP BY em.mid
@@ -1715,9 +1280,7 @@ END;
 $$ LANGUAGE plpgsql STABLE;
 """
 
-# ── PL/pgSQL: get_hot_embeddings ────────────────────────────────────────
-# Efficient batch fetch of memory IDs + embeddings for Hopfield/HDC.
-# Avoids loading full memory rows — only id + embedding bytes.
+# source: ADR-0537
 
 GET_HOT_EMBEDDINGS_FN = """
 CREATE OR REPLACE FUNCTION get_hot_embeddings(
@@ -1789,9 +1352,7 @@ $$ LANGUAGE plpgsql STABLE;
 # ── Migrations ───────────────────────────────────────────────────────────
 
 MIGRATIONS_DDL = """
--- A3 rename: heat column -> heat_base. Idempotent: only renames when
--- the old column still exists. After rename, add heat_base_set_at +
--- no_decay columns if missing. Source: docs/program/phase-3-a3-migration-design.md §1.
+-- source: ADR-0537
 DO $$
 BEGIN
     IF EXISTS (
@@ -1822,10 +1383,7 @@ BEGIN
     ) THEN
         ALTER TABLE memories ADD COLUMN no_decay BOOLEAN NOT NULL DEFAULT FALSE;
     END IF;
-    -- A2 active forgetting: leaky-integrator state for the permanent (Rac1)
-    -- circuit. Accumulates chronic-interference pressure across consolidation
-    -- cycles; sustained pressure (accum >= Theta_accum) marks the trace stale.
-    -- source: mcp_server/core/active_forgetting.py (update_pressure_accum).
+    -- source: ADR-0537
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.columns
         WHERE table_name = 'memories' AND column_name = 'forgetting_pressure_accum'
@@ -1835,19 +1393,14 @@ BEGIN
     END IF;
 END $$;
 
--- Phase 2 B3 migration: canonicalize co_retrieval relationships so
--- (min(source,target), max(source,target), 'co_retrieval') is unique.
--- Step 1: rewrite reverse-direction rows to canonical order, summing
--- weight with the canonical-direction row if present.
--- Step 2: delete the now-duplicate reverse rows.
--- Step 3: add the UNIQUE constraint. Idempotent via IF NOT EXISTS.
+-- source: ADR-0537
 DO $$
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM pg_indexes
         WHERE indexname = 'uq_relationships_canonical_co_retrieval'
     ) THEN
-        -- Step 1+2: dedup reverse direction rows.
+        -- source: ADR-0537
         WITH canonical AS (
             SELECT LEAST(source_entity_id, target_entity_id) AS a,
                    GREATEST(source_entity_id, target_entity_id) AS b,
@@ -1883,14 +1436,14 @@ BEGIN
           AND r.relationship_type = 'co_retrieval'
           AND (r.source_entity_id, r.target_entity_id) <> (dup.a, dup.b);
 
-        -- Step 3: UNIQUE constraint.
+        -- source: ADR-0537
         CREATE UNIQUE INDEX uq_relationships_canonical_co_retrieval
             ON relationships (source_entity_id, target_entity_id, relationship_type)
             WHERE relationship_type = 'co_retrieval';
     END IF;
 END $$;
 
--- Add is_benchmark column (idempotent)
+-- source: ADR-0537
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -1901,7 +1454,7 @@ BEGIN
     END IF;
 END $$;
 
--- Backfill: mark benchmark and test-artifact memories
+-- source: ADR-0537
 UPDATE memories SET is_benchmark = TRUE
 WHERE is_benchmark = FALSE
   AND (
@@ -1918,11 +1471,11 @@ WHERE is_benchmark = FALSE
     OR content = 'test memory for consolidation'
   );
 
--- Partial index for fast non-benchmark queries (A3: heat_base ordered)
+-- source: ADR-0537
 CREATE INDEX IF NOT EXISTS idx_memories_not_benchmark
     ON memories (heat_base DESC) WHERE NOT is_benchmark;
 
--- Migration: add agent_context column for agent-scoped memory
+-- source: ADR-0537
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -1933,10 +1486,7 @@ BEGIN
     END IF;
 END $$;
 
--- Migration: add learned RL value column (B2 value learning). A per-memory
--- scalar in [0,1] updated by TD credit assignment from session/rating outcomes
--- (Schultz 1997 RPE; Sutton & Barto 1998). 0.5 = neutral prior. Feeds
--- retention (high value resists decay) and retrieval priority.
+-- source: ADR-0537
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -1947,11 +1497,7 @@ BEGIN
     END IF;
 END $$;
 
--- Migration: add source-monitoring attribution (C1 reality monitoring). The
--- epistemic origin of a memory — perceived (externally grounded) / told (user-
--- stated) / inferred (self-generated) / unknown — distinct from the `source`
--- ingestion-pathway column. Johnson, Hashtroudi & Lindsay 1993. Guards against
--- confabulation (inferred content asserted as observed).
+-- source: ADR-0537
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -1962,16 +1508,7 @@ BEGIN
     END IF;
 END $$;
 
--- Migration: add capture origin (issue #365) — which CHANNEL produced the
--- content: deliberate (a user asked for it) / local_action (this machine's own
--- tools) / network (fetched off-machine, e.g. WebFetch/WebSearch) / unknown.
--- Resolved from the producing TOOL NAME at capture time, never inferred from
--- the content, so an off-machine payload cannot forge it. Distinct from BOTH
--- neighbours: `source` is the ingestion pathway, and `source_attribution` is
--- the epistemic origin that core/source_monitoring derives BY READING the
--- content — which is why neither can gate on trust. Governs whether the
--- content-derived write-gate bypasses may be claimed
--- (core/write_gate.determine_bypass).
+-- source: ADR-0537
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -1980,24 +1517,12 @@ BEGIN
     ) THEN
         ALTER TABLE memories
             ADD COLUMN capture_origin TEXT NOT NULL DEFAULT 'unknown';
-        -- Backfill (issue #368). Every row present at this instant predates
-        -- the attribute: its channel is not unknown, it was never recorded.
-        -- Marking it 'legacy' keeps it at full ranking weight, where the
-        -- DEFAULT 'unknown' would demote the entire historical corpus the
-        -- moment the read-side trust factor ships. Inside the IF NOT EXISTS
-        -- so it runs exactly once, on the upgrade that creates the column;
-        -- rows written afterwards get 'unknown' from the DEFAULT and are
-        -- demoted, which is the intended fail-closed behaviour for a channel
-        -- nobody classified.
+        -- source: ADR-0537
         UPDATE memories SET capture_origin = 'legacy';
     END IF;
 END $$;
 
--- Migration: add habituation stimulus signature (E1 habituation &
--- sensitization). A normalised content-identity key; repeated presentations of
--- the same signature drive the write gate's exponential response decrement, so
--- near-duplicate low-salience churn is suppressed rather than re-admitted
--- (Rankin 2009). Distinct from `source` / `source_attribution`.
+-- source: ADR-0537
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -2008,13 +1533,7 @@ BEGIN
     END IF;
 END $$;
 
--- Migration: add reversible inhibitory extinction tag (E2 fear extinction /
--- inhibitory learning). A scalar in [0,1]: 0 = no extinction (default, no
--- behaviour change); higher = the learned association is suppressed WITHOUT
--- deletion, so it spontaneously recovers (decay) or is reinstated (cleared).
--- Distinct from is_stale (active_forgetting's soft-delete): extinction leaves
--- the memory fully present and only lowers its effective retrieval weight
--- (Bouton 2004; Milad & Quirk 2012).
+-- source: ADR-0537
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -2025,7 +1544,7 @@ BEGIN
     END IF;
 END $$;
 
--- Migration: add is_global column for cross-project memory sharing
+-- source: ADR-0537
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -2039,13 +1558,7 @@ END $$;
 CREATE INDEX IF NOT EXISTS idx_memories_is_global
     ON memories (is_global) WHERE is_global = TRUE;
 
--- Migration: add explicit supersession edges (borrow-from-supermemory item 1).
--- supersedes_id points at the older fact this row replaces; superseded_by_id
--- points at the newer fact that replaced this row (head-of-chain has it NULL).
--- Additive to the reconsolidation model, not a replacement. Self-referential
--- FK with ON DELETE SET NULL so a hard-deleted version leaves no dangling
--- pointer. Both nullable, default NULL, so every existing and benchmark row
--- is unchanged -- benchmark-neutral by construction.
+-- source: ADR-0537
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -2064,7 +1577,7 @@ BEGIN
     END IF;
 END $$;
 
--- Migration: add stage_entered_at for real-time cascade tracking
+-- source: ADR-0537
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -2072,23 +1585,13 @@ BEGIN
         WHERE table_name = 'memories' AND column_name = 'stage_entered_at'
     ) THEN
         ALTER TABLE memories ADD COLUMN stage_entered_at TIMESTAMPTZ;
-        -- Backfill: set to created_at for existing memories
+        -- source: ADR-0537
         UPDATE memories SET stage_entered_at = created_at
             WHERE stage_entered_at IS NULL;
     END IF;
 END $$;
 
--- Migration: add ingested_at for consolidation cadence reasoning.
--- Source: docs/benchmarks/e1-v3-locomo-smoke-finding.md.
--- created_at = original event/utterance time (may be backdated on import).
--- ingested_at = when the row entered THIS Cortex DB (always NOW at insert).
--- Compression and decay cadence MUST use ingested_at: the mechanism asks
--- "has this memory had time to be revisited in MY system" not "when did
--- the original event happen". Backfill existing rows from created_at to
--- preserve idempotency and pre-existing semantics.
--- NOTE keep this comment free of semicolons (DDL is split on the literal
--- character per _split_statements — df14e16 and 9f94bd3 are prior
--- incidents of that class).
+-- source: ADR-0537
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -2096,16 +1599,12 @@ BEGIN
         WHERE table_name = 'memories' AND column_name = 'ingested_at'
     ) THEN
         ALTER TABLE memories ADD COLUMN ingested_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
-        -- Backfill rows that pre-existed this column. They were created
-        -- before ingested_at was tracked, so the safest assumption is
-        -- ingested_at = created_at (i.e., they entered the system at the
-        -- time their content was authored). This block runs only inside
-        -- the IF NOT EXISTS guard, so it is naturally idempotent.
+        -- source: ADR-0537
         UPDATE memories SET ingested_at = created_at;
     END IF;
 END $$;
 
--- Migration: persist arousal and dominant_emotion from emotional tagging
+-- source: ADR-0537
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns
                    WHERE table_name='memories' AND column_name='arousal')
@@ -2128,7 +1627,7 @@ END $$;
 CREATE INDEX IF NOT EXISTS idx_memories_dominant_emotion
     ON memories (dominant_emotion) WHERE dominant_emotion != 'neutral';
 
--- Migration: domain normalization trigger
+-- source: ADR-0537
 CREATE OR REPLACE FUNCTION normalize_domain() RETURNS trigger AS $$
 BEGIN
     NEW.domain := LOWER(COALESCE(NEW.domain, ''));
@@ -2155,20 +1654,10 @@ DO $$ BEGIN
     END IF;
 END $$;
 
--- ── Streaming-ingest support (sharded-popping-harbor refactor) ────────────
--- Source: ~/.claude/plans/sharded-popping-harbor.md (genius-verified A3).
--- The StagingResolveSink resolves entity/edge ids inside PG. The entity stage
--- is single-writer and resolves via NOT EXISTS, so it needs only a NON-unique
--- functional index to keep the LOWER(name) lookup index-backed — safe to
--- create unconditionally (never fails on existing case-variant duplicates).
+-- source: ADR-0537
 CREATE INDEX IF NOT EXISTS idx_entities_lower_name ON entities (LOWER(name));
 
--- The edge stage runs concurrency=2 and upserts via ON CONFLICT, so it needs a
--- UNIQUE index on the directed tuple. Without it, re-ingest after a crash
--- silently DUPLICATES every 'calls'/'contains' edge (genius Dijkstra D2). The
--- existing unique index is PARTIAL (co_retrieval only); add the full one.
--- Dedup keeps MIN(id) and touches only the relationships table — no cross-
--- table repointing (mirrors uq_relationships_canonical_co_retrieval above).
+-- source: ADR-0537
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -2192,9 +1681,7 @@ BEGIN
     END IF;
 END $$;
 
--- Checkpoint table for resumable ingest (genius Dijkstra D5): each batch's
--- writes and its progress update commit inside ONE conn.transaction(), so a
--- crashed run resumes from last_key_committed with no duplication.
+-- source: ADR-0537
 CREATE TABLE IF NOT EXISTS ingest_progress (
     run_id text PRIMARY KEY,
     last_key_committed text NOT NULL DEFAULT '',
@@ -2202,13 +1689,7 @@ CREATE TABLE IF NOT EXISTS ingest_progress (
     updated_at timestamptz NOT NULL DEFAULT NOW()
 );
 
--- Migration: trigger provenance (bounded-io Phase 2 F1). Distinguishes
--- user-created triggers ('create_trigger') from harvested ones
--- ('auto_extract') so future cleanups never have to guess. Pre-existing
--- rows keep '' (unattributable). The 2026-06-10 audit found 317 active
--- keyword_match triggers with 100%-garbage sampled conditions, all
--- harvested from raw tool dumps by write_post_store.extract_triggers —
--- see docs/provenance/bounded-io-phase2-design.md M1.
+-- source: ADR-0537
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns
                    WHERE table_name='prospective_memories'
@@ -2218,13 +1699,7 @@ DO $$ BEGIN
     END IF;
 END $$;
 
--- Migration: entity origin provenance (ast_symbol vs text_concept). Fuzzy
--- entity dedup (core.entity_dedup) must merge only text-extracted concepts;
--- AST-extracted code symbols (class/function/module names, dotted module paths)
--- share long prefixes and must never be label-fuzzy-merged (graphify #1205).
--- Backfill: rows whose type is a code-symbol kind, or whose name is a slash
--- path or a dotted module path (>= 2 dots, mirrors entity_dedup_filters.
--- is_structural_identifier), are ast_symbol; everything else stays text_concept.
+-- source: ADR-0537
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns
                    WHERE table_name='entities' AND column_name='origin')
@@ -2240,12 +1715,7 @@ DO $$ BEGIN
     END IF;
 END $$;
 
--- Migration: harden the injection-receipts channel enum (blame path T2,
--- decision 4255039 correction 3). Tables created by the T1 DDL carry a
--- free-TEXT channel; the CHECK added here mirrors the CREATE TABLE
--- constraint above and handlers/injection_receipts.py INJECTION_CHANNELS.
--- T1 only ever wrote 'recall', a member of the enum, so validating
--- existing rows is safe.
+-- source: ADR-0537
 DO $$ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM pg_constraint
@@ -2258,11 +1728,7 @@ DO $$ BEGIN
     END IF;
 END $$;
 
--- Migration: add wiki.pages.documents_primary for DBs provisioned before
--- ADR-0051 (wiki.page_sources is created fresh via CREATE TABLE IF NOT
--- EXISTS above and needs no guard; this column was added to an
--- already-existing table). table_schema qualifies the lookup since
--- information_schema.columns is not schema-scoped by default.
+-- source: ADR-0537
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -2274,13 +1740,7 @@ BEGIN
     END IF;
 END $$;
 
--- Migration: widen wiki.page_sources.link_kind + .source CHECKs for
--- INC5.1 (ADR-0052 D4) on DBs provisioned before this change. The
--- CREATE TABLE above already carries 'finding'/'ap-pipeline' for fresh
--- databases; this DO block patches existing ones. Idempotent: skips if
--- the live constraint definition already contains 'finding' (pg_get_
--- constraintdef comparison, same pattern as the documents_primary
--- migration above using information_schema instead of pg_constraint).
+-- source: ADR-0537
 DO $$
 BEGIN
     IF EXISTS (
@@ -2305,14 +1765,7 @@ BEGIN
     END IF;
 END $$;
 
--- Migration: widen wiki.page_sources.link_kind CHECK for 'extracted_from'
--- (5.1b, on top of INC5.1's 'finding'/'ap-pipeline' widening above) on
--- DBs provisioned before this change. The CREATE TABLE above already
--- carries 'extracted_from' for fresh databases; this DO block patches
--- existing ones (including ones that already ran the INC5.1 DO block
--- above and now have the 4-value constraint, not the original 3-value
--- one). Idempotent: skips if the live constraint already contains
--- 'extracted_from'.
+-- source: ADR-0537
 DO $$
 BEGIN
     IF EXISTS (
@@ -2328,48 +1781,17 @@ BEGIN
     END IF;
 END $$;
 
--- Migration: one citation per (page, session) (T2-H4/INC5.4, D7/Q2). A
--- session that re-reads the same page must not re-trigger the +0.05
--- heat bump on every read (trg_wiki_citation_bump). Partial unique
--- index: rows with session_id='' (no window-session identity resolved,
--- e.g. non-interactive callers) are intentionally excluded — they carry
--- no CITED_IN provenance semantics and must not collide with each
--- other. CREATE UNIQUE INDEX IF NOT EXISTS is itself idempotent; no DO
--- block needed.
+-- source: ADR-0537
 CREATE UNIQUE INDEX IF NOT EXISTS uq_wiki_citations_page_session
     ON wiki.citations (page_id, session_id)
     WHERE session_id <> '';
 
--- Migration: one citation per (page, memory) (I6-D7/INC6.8 — "flux
--- avant" write-path). Distinct dedup key from uq_wiki_citations_page_
--- session above: that index dedups "was this page read in this
--- session" (CITED_IN semantics, memory_id is incidental — always the
--- page's own anchor memory). THIS index dedups "was this memory
--- reported as used to author this page" (DOCUMENTS semantics,
--- consumed by cortex-viz's _WIKI_MEMORY_LINKS_SQL) regardless of
--- session — a re-curation that reports the same memory_id again for
--- the same page must be a no-op, not a growing row count. The two
--- indexes are independent partial uniques on the same table; insert_
--- citation's INSERT omits an explicit conflict target (unqualified
--- ON CONFLICT DO NOTHING) so a single statement is safely deduped by
--- whichever of the two applies — Postgres infers the arbiter per-row
--- when no target is named. CREATE UNIQUE INDEX IF NOT EXISTS is
--- itself idempotent; no DO block needed.
+-- source: ADR-0537
 CREATE UNIQUE INDEX IF NOT EXISTS uq_wiki_citations_page_memory
     ON wiki.citations (page_id, memory_id)
     WHERE memory_id IS NOT NULL;
 
--- Migration: stratify homeostatic_state by write_class (M-D3, 7.1,
--- 2026-07-10). Pre-existing installs have homeostatic_state(domain PK,
--- factor, updated_at) — one row per domain, written by a fold that did
--- not distinguish write class and re-suppressed the deliberate class
--- (confirmed by SQL against the dev DB: 2026-07-10 19:22 fold, 1021 rows,
--- domain='', 511 post_tool_capture + 510 deliberate-class sources, same
--- UPDATE, same factor). One-shot migration, no read shim (arbitrage
--- user 2026-07-10): existing rows are relabeled write_class='auto' via
--- column DEFAULT during the ADD COLUMN — the honest label, since their
--- factor history was driven by a corpus that was 92% auto-capture by
--- volume (I6 audit) — not a placeholder read-time interpretation.
+-- source: ADR-0537
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -2379,37 +1801,13 @@ BEGIN
         ALTER TABLE homeostatic_state ADD COLUMN write_class TEXT
             NOT NULL DEFAULT 'auto'
             CHECK (write_class IN ('auto', 'deliberate', 'derived', 'mechanical'));
-        -- Old PK was (domain) alone; the CHECK above already guarantees
-        -- every legacy row is 'auto', so dropping and re-adding as
-        -- (domain, write_class) is a pure widening — no row loses its
-        -- unique identity (there was at most one row per domain before).
+        -- source: ADR-0537
         ALTER TABLE homeostatic_state DROP CONSTRAINT homeostatic_state_pkey;
         ALTER TABLE homeostatic_state ADD PRIMARY KEY (domain, write_class);
     END IF;
 END $$;
 
--- Migration: explicit write_class column on memories (M-D2, 7.4,
--- 2026-07-11). Structural migration ONLY — adds the column with the
--- module's documented safe DEFAULT ('deliberate', see MEMORIES_DDL
--- comment above). This DO block does NOT reclassify existing rows from
--- their `source` value: unlike homeostatic_state (where every legacy row
--- was provably 'auto', a single constant), `memories.source` spans the
--- full M-D2 taxonomy (auto/deliberate/derived/mechanical source
--- prefixes) and reclassifying it correctly requires the same predicate
--- logic as mcp_server.shared.write_class.classify_write_class — DDL is
--- infrastructure/, which must not import core/ (Clean Architecture
--- dependency rule), so duplicating that logic here in raw SQL would be
--- a second classification path, exactly what the single-choke-point
--- design forbids. The one-shot data migration is instead a Python script
--- that imports classify_write_class directly: run
--- `uv run python scripts/backfill_write_class.py --apply` once after
--- this DDL applies (dry-run by default; idempotent — a second run finds
--- zero rows to change). Until that script runs, every pre-existing row
--- reads write_class='deliberate' (the DEFAULT) — the safe direction:
--- true auto-capture rows are conservatively excluded from homeostatic
--- folding (a delayed correction) rather than a deliberate row being
--- mistaken for foldable noise (the failure this design exists to
--- prevent — see homeostatic_apply.py::_apply_fold).
+-- source: ADR-0537
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -2421,10 +1819,7 @@ BEGIN
     END IF;
 END $$;
 
--- Migration: source_memory_id on memory_rules and prospective_memories
--- (M-D6, 7.6, 2026-07-11). Structural only — nullable, no backfill (no
--- pre-existing row was ever created via a promotion job, so NULL is
--- correct for all of them, not a placeholder needing later correction).
+-- source: ADR-0537
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -2441,16 +1836,7 @@ BEGIN
     END IF;
 END $$;
 
--- Migration: widen wiki.pages.status's CHECK to the full per-kind status
--- union. DBs provisioned before this change carry the narrower
--- ('seedling','budding','evergreen') constraint, which rejects every ADR
--- ('proposed'/'accepted'/...), specs ('draft'/'review'/...), and 'living'
--- status that the system itself writes into frontmatter — see the CREATE
--- TABLE comment above for the full provenance. Unconditional drop-then-add
--- is the idempotent form here (cheaper and more robust than diffing
--- pg_get_constraintdef's version-dependent textual output): dropping a
--- constraint that doesn't exist is a documented no-op via IF EXISTS, and
--- re-adding the same definition is safe on every rerun.
+-- source: ADR-0537
 ALTER TABLE wiki.pages DROP CONSTRAINT IF EXISTS pages_status_check;
 ALTER TABLE wiki.pages ADD CONSTRAINT pages_status_check CHECK (
     status IN (
@@ -2507,10 +1893,7 @@ def _split_statements(ddl: str) -> list[str]:
         return [ddl.strip()] if ddl.strip() else []
     statements = []
     for part in _strip_sql_line_comments(ddl).split(";"):
-        # Strip leading SQL line comments and blank lines so a chunk that
-        # begins with "-- foo\nCREATE TABLE ..." is not mistaken for the
-        # comment text being the first SQL token. Also drop chunks that
-        # are *entirely* comments / whitespace.
+        # source: ADR-0537
         lines = [ln for ln in part.splitlines()]
         # remove leading blank/comment lines
         while lines and (not lines[0].strip() or lines[0].lstrip().startswith("--")):
@@ -2524,10 +1907,7 @@ def _split_statements(ddl: str) -> list[str]:
 def get_all_ddl() -> list[LiteralString]:
     """Return all DDL as individual statements for safe per-statement execution.
 
-    Each statement can be executed independently — if one fails, the
-    rest still run. This prevents a single column type error from
-    silently skipping 7 subsequent table creations.
-    """
+    source: ADR-0537"""
     blocks = [
         EXTENSIONS_DDL,
         MEMORIES_DDL,
@@ -2540,26 +1920,18 @@ def get_all_ddl() -> list[LiteralString]:
         WIKI_LINK_TRIGGER_DDL,
         SUPPORT_TABLES_DDL,
         PROCEDURAL_SKILLS_DDL,
-        # MIGRATIONS_DDL runs BEFORE INDEXES_DDL so the heat→heat_base
-        # rename lands before indexes on heat_base are created.
+        # source: ADR-0537
         MIGRATIONS_DDL,
         MEMORIES_STORAGE_OPTIONS_DDL,
-        # CURRENT_MEMORIES_VIEW_DDL runs AFTER MIGRATIONS_DDL so databases
-        # predating the supersession columns gain superseded_by_id before
-        # the view referencing it is (re)created.
+        # source: ADR-0537
         CURRENT_MEMORIES_VIEW_DDL,
         INDEXES_DDL,
-        # effective_stage() must be created before effective_heat(), which
-        # calls it to derive the floor lazily on the read path. alpha_integral()
-        # likewise must precede effective_heat(), which calls it for the decay
-        # exponent (piecewise α-integral, monotonic forgetting).
+        # source: ADR-0537
         EFFECTIVE_STAGE_FN,
         ALPHA_INTEGRAL_FN,
         EFFECTIVE_HEAT_FN,
         EFFECTIVE_HEAT_FROZEN_FN,
-        # A3 canonical read path: lazy effective_heat() computes decay at
-        # read time; RECALL_MEMORIES_LAZY_FN replaces the eager legacy
-        # recall_memories() + decay_memories() entirely.
+        # source: ADR-0537
         RECALL_MEMORIES_LAZY_FN,
         SPREAD_ACTIVATION_FN,
         SPREAD_ACTIVATION_MEMORIES_FN,
@@ -2569,7 +1941,5 @@ def get_all_ddl() -> list[LiteralString]:
     result: list[str] = []
     for block in blocks:
         result.extend(_split_statements(block))
-    # Every element derives from the module-literal *_DDL blocks above;
-    # _split_statements only strips comments/whitespace (regex ops erase
-    # LiteralString provenance for the checker, so it is re-asserted here).
+    # source: ADR-0537
     return cast("list[LiteralString]", result)

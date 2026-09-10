@@ -70,7 +70,8 @@ class TestReaderLoopMarksDisconnected:
     set _connected = False so the pool discards the dead client instead of
     handing it back (which caused ConnectionResetError: Connection lost on the
     next stdin write). source: ingest_codebase RCA 2026-06-09.
-    """
+
+    source: ADR-0984"""
 
     def test_eof_marks_disconnected_and_fails_pending(self):
         async def _test():

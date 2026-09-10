@@ -230,6 +230,5 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     }
 
 
-# Add WIKI_ROOT import path validation at module load — not required
-# but catches misconfiguration early in dev.
+# source: ADR-0454
 assert isinstance(WIKI_ROOT, (str, Path)), "WIKI_ROOT must be a path-like"

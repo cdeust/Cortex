@@ -1,14 +1,10 @@
 """Task-prompt keyword extraction for the agent_briefing hook's FTS query.
 
-Split out of ``agent_briefing.py`` (issue #401 — that file exceeded the
-project's 300-line cap, docs/agent-guidance.md § Code Style) to isolate pure text
-processing (no I/O, no dependency on the rest of the hook) from prompt
-parsing/event control flow and the PG query.
-"""
+source: ADR-0482"""
 
 from __future__ import annotations
 
-# source: "words longer than 3 chars" per _extract_task_keywords docstring
+# source: ADR-0482
 _MIN_KEYWORD_CHARS = 3
 
 _STOPWORDS = {

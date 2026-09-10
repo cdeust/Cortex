@@ -1,15 +1,6 @@
 """Infrastructure adapter: MCP progress reporting via MCP Context.
 
-Lives outside shared/ because it imports mcp and asyncio — both
-outer-layer concerns. Wired by tool_registry_ingest.py (the composition root).
-
-Thread-bridging contract (CRITICAL):
-  The ingest handler runs on a WORKER THREAD (via asyncio.to_thread in
-  safe_handler). ctx.report_progress / ctx.info are async, bound to the
-  MAIN event loop. Dispatching them from the worker thread requires
-  run_coroutine_threadsafe. We fire-and-forget (never .result()) and swallow
-  exceptions so a slow or dead MCP client never blocks the ingest.
-"""
+source: ADR-0635"""
 
 from __future__ import annotations
 
@@ -30,21 +21,15 @@ class McpProgress:
       loop is the main asyncio event loop (get_running_loop() from the
            tool registration coroutine, before asyncio.to_thread hands off).
 
-    Postcondition (each public method):
-      A fire-and-forget coroutine is scheduled on the main loop via
-      run_coroutine_threadsafe; exceptions are silently swallowed so
-      ingest is never blocked by progress delivery failures.
+    source: ADR-0635
 
     Overall progress fraction:
       fraction = (stage_index + within_fraction) / stage_total
       where within_fraction = done / total when total > 0, else 0.0.
     """
 
-    # UI refresh cadence: 0.5 s ≈ 2 Hz — below the ~10 Hz flicker-fusion
-    # threshold for perceived smoothness (Wertheim 1994, "Motion perception
-    # during self-motion") while bounding MCP notification volume to at most
-    # 2 messages/s per stage. source: chosen UI cadence; not a measured
-    # production benchmark.
+    # source: ADR-0635
+
     _ADVANCE_MIN_INTERVAL_S: float = 0.5
 
     def __init__(self, ctx: "Context", loop: asyncio.AbstractEventLoop) -> None:
@@ -86,11 +71,7 @@ class McpProgress:
     def advance(self, done: int, total: int | None = None) -> None:
         """Update within-stage progress; throttled to ~2 Hz.
 
-        When total is known the bar fraction advances determinately.
-        When total is None (uncapped ingest — no cheap count is available)
-        the fraction stays at 0 but a ctx.info() line with the running count
-        is still dispatched so the user sees visible movement.
-        """
+        source: ADR-0635"""
         now = time.monotonic()
         if now - self._last_advance_ts < self._ADVANCE_MIN_INTERVAL_S:
             return
@@ -102,8 +83,8 @@ class McpProgress:
         overall = self._overall()
         self._dispatch(self._ctx.report_progress(progress=overall, total=1.0))
         if not (total and total > 0):
-            # Indeterminate total: emit running count as text so the user
-            # sees activity even though the bar fraction cannot advance.
+            # source: ADR-0635
+
             self._dispatch(self._ctx.info(f"ingested {done:,} symbols…"))
 
     def log(self, message: str) -> None:

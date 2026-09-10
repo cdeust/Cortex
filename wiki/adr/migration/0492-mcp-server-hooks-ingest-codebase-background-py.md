@@ -1,0 +1,61 @@
+# ADR-0492: mcp_server/hooks/ingest_codebase_background.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `mcp_server/hooks/ingest_codebase_background.py`; original SHA-256 `7087b5849f5190be066d101b768b06ca1f7437b6d0a37741ae3917802b78eff3`.
+
+## Original docstring, lines 1–25
+
+````text
+"""Background worker that invokes ``ingest_codebase`` for a project.
+
+Spawned by two triggers, both detached so the parent returns immediately:
+  * the SessionStart hook, when the cached graph is missing or older than
+    the TTL (``pipeline_graph_ttl.graph_is_stale``); and
+  * the PostToolUse ``post_commit_reindex`` hook, after a commit that
+    touched indexable source — there it passes ``--reindex`` because the
+    commit IS the change signal, so the graph must be rebuilt even though
+    a cached one exists.
+
+Invocation:
+    python -m mcp_server.hooks.ingest_codebase_background /path/to/project
+    python -m mcp_server.hooks.ingest_codebase_background /path/to/project --reindex
+
+Without ``--reindex`` the handler reuses a fresh cached graph and only
+re-analyses when the cache is stale/absent (identical to interactive
+use). With ``--reindex`` it forces ``analyze_codebase`` to run.
+
+Exit code:
+  * 0 on success
+  * 1 on recoverable error (logged, won't crash loop)
+  * 2 on fatal error (no project_root)
+
+Output goes to the redirected stdout (the parent's log file).
+"""
+````
+
+## Original comment, lines 36–36
+
+````text
+# source: structural — program name + <project_root>
+````
+
+## Original comment, lines 59–61
+
+````text
+# Without --reindex: reuse a fresh cached graph, auto-reindex when
+    # stale (SessionStart trigger). With --reindex: force analyze_codebase
+    # because a commit already told us the source changed (commit trigger).
+````
+
+## Original comment, lines 93–97
+
+````text
+# issue #398: main() calls sys.exit() on every path; wrapping the whole
+    # call in this context manager guarantees the store is closed before
+    # the process actually ends (see _store_lifecycle.py for the verified
+    # mechanism -- psycopg pool threads are daemon threads; the fragile
+    # path is __del__'s finalization-time join, which close() pre-empts).
+````
+

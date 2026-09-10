@@ -1,13 +1,6 @@
 """Memify fact derivation: synthesize new memories from high-weight entity
 relationships, routed through the production write gate.
 
-Wires `identify_derivable_facts` (mcp_server/core/curation.py) into the
-memify cycle so consolidate's schema description -- "extract reusable
-lessons and rules from recent successes/failures" -- is actually true.
-`identify_derivable_facts` was defined and unit-tested from its
-introduction but never called outside tests until this module (gate
-decision INC6.1b, 2026-07-10: wire it, don't delete it).
-
 Contract:
   * Append-only. Every derived fact is a NEW memory row created via the
     real `remember` handler. The source relationship and its member
@@ -42,7 +35,8 @@ Contract:
     call, so one memify cycle cannot flood the gate.
   * Never overrides the gate. `force` is always False -- a rejection is a
     valid, counted outcome, not a bug to route around.
-"""
+
+source: ADR-0365"""
 
 from __future__ import annotations
 
@@ -62,31 +56,13 @@ logger = logging.getLogger(__name__)
 # new invented constant.
 _WEIGHT_THRESHOLD = 10.0
 
-# Bounded scan of relationship candidates before dedup/derivation. Mirrors
-# the bounded-I/O convention already applied to tag-scoped reads elsewhere
-# in this codebase (pg_store_queries.get_memories_by_tag, audit 2026-06-09).
+# source: ADR-0365
 _CANDIDATE_SCAN_LIMIT = 500
 
-# Max write-gate attempts (full `remember()` calls -- embedding + entity
-# extraction + similarity search, the expensive path) per memify run.
-# Source: measured live-proof 2026-07-10 against a throwaway PostgreSQL
-# database (`cortex_derive_livetest`, schema-only, dropped after the proof
-# -- the shared dev/prod `cortex` DB was never touched). 20 real gate
-# attempts (mixed accept/reject) completed in 6.85s wall-clock, including
-# one first-call embedding-model load -- 0.34s/attempt worst case, ~0.19s/
-# attempt steady-state. 20 attempts therefore costs at most ~7s, well
-# inside the "~5-60s typical" budget documented on consolidate's schema.
-# Raw run: /memories/engineer/inc6.1b-memify-derivation.md.
+# source: ADR-0365
 _MAX_DERIVATIONS_PER_RUN = 20
 
-# Cap on `derived-src:<memory_id>` provenance tags per derived fact, split
-# evenly across the relationship's two endpoint entities (highest-heat
-# memories first, per get_memories_for_entity's ORDER BY heat_base DESC).
-# Source: measured live-proof 2026-07-10, same throwaway DB as above -- 3
-# source memories seeded per entity, all 6 came through untruncated
-# (2 entities x 3 = 6), so the cap was set to exactly the observed
-# per-entity provenance depth rather than an arbitrary round number. See
-# /memories/engineer/inc6.1b-memify-derivation.md for the raw row.
+# source: ADR-0365
 _PROVENANCE_SRC_CAP = 6
 
 _EMPTY_DERIVATION_STATS: dict[str, Any] = {

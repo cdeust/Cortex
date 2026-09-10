@@ -50,7 +50,11 @@ schema = {
                     "The reminder text Cortex will surface when the trigger fires."
                 ),
                 "examples": [
-                    "Before changing pg_recall.py, re-read ADR-0042 on WRRF weights.",
+                    (
+                        # source: ADR-0382
+                        "Before editing docs/adr, re-read ADR-0056 on canonical wiki "
+                        "decisions."
+                    ),
                     "Push the v3.10 release notes draft tonight.",
                 ],
             },

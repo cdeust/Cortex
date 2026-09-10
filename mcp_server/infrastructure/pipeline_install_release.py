@@ -4,25 +4,7 @@ When upstream publishes a GitHub Release with a per-platform tarball,
 fetching + extracting it is ~10 s vs ~6 min for git+cargo. This module
 implements the fast path with strict integrity gates:
 
-  1. Query GitHub Releases API for ``cdeust/ai-architect-mcp-codebase``.
-  2. Match an asset for the host platform (os/arch).
-  3. Download tarball + companion ``.sha256`` file.
-  4. Verify SHA256 before extracting.
-  5. Extract the binary, install at ``~/.claude/methodology/bin/mcp-server``.
-
-If any step fails (404, no matching asset, hash mismatch, network), we
-return ``unavailable`` and the caller falls through to the source build
-path. Failure here is NEVER fatal — it's a fast path, not a substitute.
-
-Asset naming convention (upstream contract)
--------------------------------------------
-- ``<name>-{os}-{arch}.tar.gz`` containing the binary at the archive root.
-  Assets are matched by the ``-{os}-{arch}`` suffix, so the producer may
-  rename or version-prefix them; the member name is what must be recognised,
-  and it is read from upstream_identity.BINARY_NAMES.
-- ``<name>-{os}-{arch}.tar.gz.sha256`` carrying the hex digest.
-- ``{os}`` ∈ {macos, linux}; ``{arch}`` ∈ {x86_64, aarch64}.
-"""
+source: ADR-0587"""
 
 from __future__ import annotations
 
@@ -47,7 +29,7 @@ from typing import Optional
 _RELEASES_URL = RELEASES_LATEST_URL
 _REQUEST_TIMEOUT = 30  # seconds
 _DISABLE_ENV = "CORTEX_DISABLE_PREBUILT"
-# source: FIPS 180-4 — a SHA-256 digest is 32 bytes = 64 hex characters
+# source: ADR-0587
 _SHA256_HEX_LEN = 64
 
 
@@ -70,10 +52,7 @@ def _platform_tag() -> Optional[str]:
 def _http_get(url: str, accept: Optional[str] = None) -> bytes:
     """Plain-Python HTTPS GET. Raises on any error.
 
-    No shell, no curl — keeps the supply-chain story unchanged when the
-    fast path is unavailable (the source-build fallback handles its own
-    git/cargo network).
-    """
+    source: ADR-0587"""
     req = urllib.request.Request(url)
     if accept:
         req.add_header("Accept", accept)
@@ -108,8 +87,7 @@ def _verify_and_extract(
 ) -> Optional[str]:
     """Verify SHA256, extract the upstream binary to dest_dir, return path.
 
-    Refuses tar entries that escape dest_dir (path-traversal guard).
-    """
+    source: ADR-0587"""
     h = hashlib.sha256()
     with open(tar_path, "rb") as f:
         for chunk in iter(lambda: f.read(65536), b""):
@@ -119,16 +97,12 @@ def _verify_and_extract(
     dest = Path(dest_dir).resolve()
     with tarfile.open(tar_path, "r:gz") as tar:
         for member in tar.getmembers():
-            # Path-traversal guard: each resolved member path must
-            # remain a child of dest_dir.
+            # source: ADR-0587
             target = (dest / member.name).resolve()
             if not str(target).startswith(str(dest) + os.sep) and target != dest:
                 return None
             if member.isfile() and Path(member.name).name in BINARY_NAMES:
-                # filter="data" enforces safe extraction (no symlinks
-                # outside dest, no special files, no setuid bits) —
-                # required default in Python 3.14, opt-in earlier.
-                # PEP 706 / CVE-2007-4559.
+                # source: ADR-0587
                 tar.extract(member, dest_dir, filter="data")
                 extracted = dest / member.name
                 os.chmod(extracted, 0o755)
@@ -139,9 +113,7 @@ def _verify_and_extract(
 def try_install_prebuilt(symlink_dest: Path) -> dict:
     """Try the fast path. Returns audit dict.
 
-    Always-non-fatal: ``unavailable`` is the default when anything goes
-    wrong. Callers fall through to the source-build path.
-    """
+    source: ADR-0587"""
     if os.environ.get(_DISABLE_ENV, "").strip() in {"1", "true", "yes"}:
         return {"action": "prebuilt_disabled"}
 
@@ -187,14 +159,13 @@ def try_install_prebuilt(symlink_dest: Path) -> dict:
                 "detail": "hash mismatch or no binary in archive",
             }
 
-        # Move the verified binary into the methodology bin dir under a
-        # versioned name so subsequent fast-path installs don't clash.
+        # source: ADR-0587
         symlink_dest.parent.mkdir(parents=True, exist_ok=True)
         final = symlink_dest.parent / f"{CANONICAL_BINARY}.prebuilt"
         shutil.move(binary, str(final))
         os.chmod(final, 0o755)
 
-        # Atomic symlink swap: link-to-temp + os.replace.
+        # source: ADR-0587
         tmp_link = symlink_dest.with_name(symlink_dest.name + ".new")
         if tmp_link.is_symlink() or tmp_link.exists():
             tmp_link.unlink()

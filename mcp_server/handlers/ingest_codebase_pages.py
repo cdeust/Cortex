@@ -21,14 +21,7 @@ def _slug(text: str) -> str:
 def _process_symbol_count(process: dict[str, Any]) -> int:
     """Symbols-in-flow count for a process dict.
 
-    Upstream ``get_processes`` (ai-architect-mcp-codebase src/main.rs,
-    ``do_get_processes``) emits exactly ``{name, entry_point, entry_kind,
-    depth, node_count}`` — the count key is ``node_count``. The previous
-    reader looked for ``symbol_count``/``symbols`` (keys that never
-    existed), so every process read as empty and zero wiki pages were
-    ever written (2026-06-11 RCA). ``symbols`` is honoured as a fallback
-    because the handler enriches processes with a fetched symbol list.
-    """
+    source: ADR-0402"""
     raw = process.get("node_count")
     if raw is None:
         return len(process.get("symbols") or [])
@@ -78,16 +71,9 @@ def render_process_page(process: dict[str, Any]) -> tuple[str, str]:
 
 
 def write_process_pages(processes: list[dict[str, Any]]) -> list[str]:
-    """Create wiki reference pages for each process. Returns paths written.
+    """Create wiki reference pages for each process.
 
-    2026-05-17 (user feedback "the wiki is still far from being curated
-    documentation"): processes with zero symbols-in-flow produce a
-    268-byte stub that carries no information. When the AST graph is
-    empty (the common case until ``analyze_codebase`` has been run for
-    a project) EVERY process page is empty — 1215 stubs in one audit,
-    100% of reference/codebase/. Filter them out: a Process page
-    without symbols has nothing to document.
-    """
+    source: ADR-0402"""
     written: list[str] = []
     skipped_empty = 0
     for proc in processes:

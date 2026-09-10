@@ -1,10 +1,6 @@
 """Injection-receipt persistence, SQLite backend.
 
-Blame path T1/T3 (decision Cortex 4255039): append-only record of what
-a channel injected into a context, plus the T3 read path resolving
-receipt ids into presence-in-context evidence. PG parity with
-pg_store_receipts.py.
-"""
+source: ADR-0613"""
 
 from __future__ import annotations
 
@@ -59,14 +55,7 @@ class SqliteReceiptsMixin:
     def fetch_injection_receipts(self, receipt_ids: list[int]) -> list[dict]:
         """Resolve receipt ids into flat (receipt × item × memory) rows.
 
-        PG parity with ``PgReceiptsMixin.fetch_injection_receipts``:
-        LEFT JOIN keeps evidence rows whose memory was hard-forgotten
-        after injection (every m.* column NULL); superseded memories are
-        surfaced with their correction state, never filtered; ordering
-        replays recorded facts only (emitted_at is ISO text, so DESC is
-        chronological). Empty input reads as empty output — the loud
-        non-empty contract lives at the tool boundary.
-        """
+        source: ADR-0613"""
         if not receipt_ids:
             return []
         placeholders = ",".join("?" for _ in receipt_ids)

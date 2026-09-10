@@ -50,7 +50,10 @@ def build_spec(
     body: str = "",
     tags: list[str] | None = None,
 ) -> str:
-    """Render a spec / PRD / design doc page."""
+    """Render a spec / PRD / design doc page.
+
+    source: ADR-0683
+    """
     fm = {
         "kind": "spec",
         "title": title,
@@ -102,9 +105,9 @@ def build_note(
     return render_page(PageDocument(frontmatter=fm, body=f"# {title}\n\n{body}\n"))
 
 
-# Source-memory counts at which a page's maturity label steps up.
-# source: pre-existing tuned values, extracted unchanged (#197 family 3);
-# provenance not recorded at introduction
+# source: ADR-0683
+
+
 _STABLE_SOURCE_COUNT = 8
 _REVIEWED_SOURCE_COUNT = 4
 _DRAFT_SOURCE_COUNT = 2

@@ -1,0 +1,139 @@
+---
+kind: adr
+number: 0549
+title: Preserve pg_store_heat design decisions
+status: accepted
+---
+
+# ADR-0549: pg_store_heat design decisions
+
+## Context
+
+Canonical migration of decision evidence from `mcp_server/infrastructure/pg_store_heat.py` under ADR-0056.
+The excerpts below preserve historical claims and citations verbatim; original ADR numbers are historical quotations, not current identity bindings.
+
+## Decision
+
+Keep the source implementation linked to this versioned decision record. Operational API documentation remains with the implementation.
+
+## Preserved decision evidence
+
+### module, original line 1
+
+````text
+Split out of pg_store.py (issue: 1384-line file over the 300-line §4.1
+cap) — the A3 canonical heat_base writers (``bump_heat_raw``,
+``update_memories_heat_batch``) and the per-(domain, write_class)
+homeostatic-factor read/write pair live together: both are the
+"how much does this memory's heat matter right now" concern.
+
+````
+
+### update_memory_heat, original line 43
+
+````text
+        Retained as a thin adapter so existing call sites don't need to
+        know about heat_base_set_at; the heat value semantics are
+        preserved because bump_heat_raw writes heat_base + stamps the
+        bump timestamp.
+        Source: docs/program/phase-3-a3-migration-design.md §3.1.
+        
+````
+
+### bump_heat_raw, original line 54
+
+````text
+A3 canonical single writer on `memories.heat_base` (invariant I2).
+````
+
+### bump_heat_raw, original line 54
+
+````text
+        Writes heat_base AND refreshes heat_base_set_at so subsequent
+        effective_heat() reads compute decay from the bump timestamp,
+        not the row's previous anchor. Clamped to [0, 1] defensively —
+        the CHECK constraint enforces the same bound but a defensive
+        clamp avoids IntegrityError round-trips for callers computing
+        near-limit values.
+````
+
+### bump_heat_raw, original line 54
+
+````text
+        Source: docs/program/phase-3-a3-migration-design.md §3.1.
+        Post-A3 this is the ONE canonical site that writes heat_base;
+        all other writers (anchor, preemptive_context, citation bump)
+        route through here.
+        
+````
+
+### get_homeostatic_factor, original line 77
+
+````text
+        Readers MUST use this helper rather than querying the table
+        directly — new domains arrive between homeostatic runs and have
+        no row. The COALESCE-to-1.0 default preserves neutral scaling.
+````
+
+### get_homeostatic_factor, original line 77
+
+````text
+        M-D3 (7.1, stratification): ``homeostatic_state``'s primary key is
+        ``(domain, write_class)`` — one row per class, not one per domain.
+        ``write_class`` defaults to ``"auto"`` because that is the only
+        class the recall-path read query (``pg_schema.py::recall_memories``
+        / ``fetch_member_stats`` / the reheat + dedup probes) ever
+        resolves; every other caller of this method (currently only
+        ``handlers/consolidation/homeostatic.py``) passes its class
+        explicitly. See ``mcp_server.shared.write_class`` for the taxonomy
+        this parameter is drawn from.
+````
+
+### get_homeostatic_factor, original line 77
+
+````text
+        Source: docs/program/phase-3-a3-migration-design.md §5.
+        
+````
+
+### set_homeostatic_factor, original line 110
+
+````text
+        Replaces the per-row heat UPDATE pattern in the homeostatic cycle
+        — one row written per cycle instead of 66K. Clamped to the
+        CHECK bounds (0 < factor < 10). See ``get_homeostatic_factor`` for
+        the M-D3 ``write_class`` rationale.
+        
+````
+
+### log_homeostatic_fold, original line 134
+
+````text
+        The 2026-07-10 19:22 fold that re-suppressed the deliberate class
+        left no queryable trace anywhere except the row-level signature on
+        ``memories`` itself (``heat_base_set_at`` matching a batched
+        write) — confirmed by direct SQL, not by this table, because this
+        table did not exist yet. Every fold from this point forward is
+        DB-queryable without reconstructing it from row timestamps.
+        
+````
+
+### update_memories_heat_batch, original line 153
+
+````text
+        Source: issue #13 (darval); docs/program/phase-3-a3-migration-design.md §3.2.
+        
+````
+
+## Consequences
+
+Review rationale and source changes together. Historical evidence is preserved rather than silently rewritten; executable Python structure is unchanged after removing docstrings.
+
+### get_memories_by_ids: completeness audit
+
+````text
+Read complete rows once, with exactly the get_memory normalization.
+
+Missing IDs are omitted; callers replay their own order and duplicates.
+The statement mirrors get_embeddings_for_memories's bound ANY query.
+````

@@ -174,8 +174,8 @@ STOPWORDS: frozenset[str] = frozenset(
 _SPLIT_RE = re.compile(r"\W+")
 
 
-# source: two-tier filter documented in extract_keywords docstring —
-# tokens >6 chars pass unconditionally, 2-6 char tokens only if technical
+# source: ADR-0672
+# source: ADR-0672
 _LONG_TOKEN_CHARS = 6
 _MIN_SHORT_TOKEN_CHARS = 2
 

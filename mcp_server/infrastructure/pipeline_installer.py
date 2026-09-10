@@ -1,15 +1,9 @@
-"""Silent installer for the upstream ai-architect-mcp-codebase binary.
-
-Bootstraps a fresh user machine. Strategy: prebuilt binary fast-path
-(GitHub Releases, hash-verified, ~10 s) → falls back to source build
-(rustup → git clone → cargo build, ~5–8 min). Idempotent. All
-subprocess output is captured. File-locked against concurrent runs.
-
-Opt-out env vars: CORTEX_AUTO_INSTALL_PIPELINE=0 (skip all),
+"""Opt-out env vars: CORTEX_AUTO_INSTALL_PIPELINE=0 (skip all),
 CORTEX_AUTO_INSTALL_RUST=0 (skip rustup), CORTEX_PIPELINE_GIT_URL=<url>
 (fork override), CORTEX_DISABLE_PREBUILT=1 (skip release fast-path),
 CORTEX_RUSTUP_PIN_HASH=0 (skip rustup hash verification).
-"""
+
+source: ADR-0589"""
 
 from __future__ import annotations
 
@@ -45,13 +39,10 @@ _DEFAULT_GIT_URL = "https://github.com/cdeust/ai-architect-mcp-codebase.git"
 _BUILT_BINARY_REL = "target/release/automatised-pipeline"
 _DISABLE_ENV = "CORTEX_AUTO_INSTALL_PIPELINE"
 
-# Minimum acceptable size for a successfully-built ai-architect-mcp-codebase
-# binary. The release build is multi-MB; anything below this threshold
-# is a corrupted or 0-byte file (disk full, killed compiler, etc.).
+# source: ADR-0589
 _MIN_BINARY_BYTES = 1_024 * 1_024
 
-# CI signals — default-skip the install in CI (5–8 min cold cost).
-# Users opt in with CORTEX_AUTO_INSTALL_PIPELINE=1.
+# source: ADR-0589
 _CI_ENV_VARS = ("CI", "GITHUB_ACTIONS", "GITLAB_CI", "CIRCLECI", "TRAVIS")
 
 
@@ -102,13 +93,11 @@ def install_pipeline(
 
 def _install_locked(force_rebuild: bool, git_url: Optional[str]) -> dict:
     """Install body, executed under the exclusive file-lock."""
-    # Re-check usability under the lock — another process may have
-    # finished between our outer check and lock acquisition.
+    # source: ADR-0589
     if not force_rebuild and _binary_is_usable(_INSTALL_SYMLINK):
         return {"action": "already_installed", "binary": str(_INSTALL_SYMLINK)}
 
-    # Fast path: prebuilt release binary. Always-non-fatal — failure
-    # falls through to the source-build path below.
+    # source: ADR-0589
     if not force_rebuild:
         prebuilt = try_install_prebuilt(_INSTALL_SYMLINK)
         if prebuilt.get("action") == "installed_prebuilt" and _binary_is_usable(
@@ -124,8 +113,7 @@ def _install_locked(force_rebuild: bool, git_url: Optional[str]) -> dict:
             "rust_already_present",
         }
         cargo = rust_result.get("cargo")
-        # A success action with no usable cargo path would previously flow a
-        # None into the build command; refuse it as missing_toolchain instead.
+        # source: ADR-0589
         if not installed or not isinstance(cargo, str) or not cargo:
             return {
                 "action": "missing_toolchain",
@@ -168,11 +156,10 @@ def _install_locked(force_rebuild: bool, git_url: Optional[str]) -> dict:
 def _ensure_source(
     src: Path, url: str, git: str, force_rebuild: bool
 ) -> Optional[dict]:
-    """Clone or refresh the source tree. Return None on success, or
-    a structured failure dict."""
-    # Validate any existing checkout. A half-cloned dir leaves
-    # src.exists() True with no Cargo.toml — re-clone is the only
-    # safe recovery.
+    """Clone or refresh the source tree.
+
+    source: ADR-0589"""
+    # source: ADR-0589
     if src.exists() and not (src / "Cargo.toml").is_file():
         try:
             _rmtree_quiet(src)
@@ -183,7 +170,7 @@ def _ensure_source(
             }
 
     if not src.exists():
-        # Clone into a .partial sibling, atomic-rename on success.
+        # source: ADR-0589
         partial = src.with_name(src.name + ".partial")
         if partial.exists():
             _rmtree_quiet(partial)
@@ -201,7 +188,9 @@ def _ensure_source(
 
 
 def _swap_symlink(binary: Path) -> dict:
-    """Atomic symlink swap (link-to-temp + os.replace)."""
+    """Atomic symlink swap (link-to-temp + os.replace).
+
+    source: ADR-0589"""
     try:
         _INSTALL_BIN_DIR.mkdir(parents=True, exist_ok=True)
         tmp_link = _INSTALL_SYMLINK.with_name(_INSTALL_SYMLINK.name + ".new")

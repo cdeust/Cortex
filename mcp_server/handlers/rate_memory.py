@@ -196,6 +196,5 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     return response
 
 
-# Telemetry-instrumented public entry. Records latency / byte volume
-# / result count per call (Popper C6 read/write ratio audit).
+# source: ADR-0428
 handler = instrument("rate_memory", _handler_impl, result_count_key=None)

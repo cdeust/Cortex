@@ -1,21 +1,4 @@
-"""SQLite <-> psycopg compatibility wrapper.
-
-Wraps a sqlite3 connection/cursor so handler code written against psycopg's
-API (``conn.execute("... %s ...", params)``, ``with conn.cursor() as cur``)
-runs unmodified on the SQLite fallback backend. SQL-dialect rewriting
-(``%s`` -> ``?``, ``TIMESTAMPTZ`` -> ``TEXT``, etc.) lives in
-``sqlite_sql_translate.py`` (split out in issue #260 to keep this file
-under the project's 300-line cap); this module owns parameter adaptation
-and the cursor/connection shape.
-
-Datetime wire format (issue #260): a bound `datetime.datetime` parameter is
-serialized via `_adapt_datetime_iso` below — plain `.isoformat()`, the same
-"T"-separated spelling `sqlite_store._now_iso()` and every other datetime
-write path in this codebase already produce. This replaces reliance on the
-stdlib's *implicit* default adapter (deprecated as of Python 3.12; see
-`_adapt_datetime_iso`'s docstring for the exact spelling it used to produce
-and why old rows keep reading correctly with no migration).
-"""
+"""source: ADR-0599"""
 
 from __future__ import annotations
 
@@ -33,35 +16,21 @@ def _adapt_datetime_iso(value: datetime) -> str:
     """Explicit `sqlite3.register_adapter` callback for `datetime.datetime`.
 
     Precondition: `value` is a `datetime.datetime` instance — sqlite3 only
-    invokes a registered adapter with instances of the exact type it was
-    registered for.
-    Postcondition: returns `value.isoformat()` — "T"-separated ISO-8601,
-    identical to `sqlite_store._now_iso()` and every other datetime write
-    path in this codebase, so a datetime-bearing column has one wire format
-    regardless of whether the caller passed an ISO string directly or (as
-    `cascade.py::_update_stage_entered` does) a raw `datetime` object as a
-    bound parameter — confirmed the sole such call site in this codebase by
-    an instrumented full-suite run (issue #260).
+        invokes a registered adapter with instances of the exact type it was
+        registered for. Postcondition: returns `value.isoformat()` — "T"-separated
+        ISO-8601,
+        identical to `sqlite_store._now_iso()` and every other datetime write
+        path in this codebase, so a datetime-bearing column has one wire format
+        regardless of whether the caller passed an ISO string directly or (as
+        `cascade.py::_update_stage_entered` does) a raw `datetime` object as a
+        bound parameter — confirmed the sole such call site in this codebase by
+        an instrumented full-suite run .
 
-    This supersedes the stdlib's *implicit* default adapter, deprecated as
-    of Python 3.12: that fallback produced `value.isoformat(" ")` (a space
-    separator) instead of "T". `datetime.fromisoformat()` — the read path
-    used by every reader of a datetime-bearing column here (`decay_cycle.py`,
-    `consolidation_engine.py`, `cascade.py`) — parses both spellings to an
-    identical `datetime` object (verified empirically, CPython 3.12.12:
-    `fromisoformat("2026-07-29 12:34:56.789012+00:00") ==
-    fromisoformat("2026-07-29T12:34:56.789012+00:00")`), so rows already on
-    disk in the old spelling keep reading correctly — no migration needed.
-    """
+    source: ADR-0599"""
     return value.isoformat()
 
 
-# Registered once at import time (idempotent — sqlite3 stores adapters in a
-# type-keyed dict, so re-import / re-registration just overwrites the same
-# entry). Must happen before any `datetime` is bound as a parameter through
-# this module's execute()/executemany() paths; every construction site of
-# `PsycopgCompatConnection` imports this module first (there is no other way
-# to obtain the class), so that ordering is guaranteed.
+# source: ADR-0599
 sqlite3.register_adapter(datetime, _adapt_datetime_iso)
 
 
@@ -119,11 +88,7 @@ class _CompatCursor:
 class _CompatExecutingCursor:
     """A psycopg-style cursor: `with conn.cursor() as cur: cur.execute(...)`.
 
-    Distinct from _CompatCursor, which wraps a statement the connection has
-    ALREADY executed. This one owns a raw cursor and translates each SQL
-    string on the way in, so the wiki handlers — written against psycopg and
-    shared verbatim with the PostgreSQL backend — run unmodified on SQLite.
-    """
+    source: ADR-0599"""
 
     def __init__(self, cursor: sqlite3.Cursor) -> None:
         self._cursor = cursor
@@ -152,12 +117,7 @@ class _CompatExecutingCursor:
     def executemany(self, sql: str, params_seq: Any) -> "_CompatExecutingCursor":
         """psycopg-parity executemany with SQL translation.
 
-        Shared query modules (e.g. ``pg_store_wiki_sources.upsert_page_sources``)
-        batch their inserts through ``cur.executemany``; without this method the
-        whole call chain raised ``AttributeError`` on the SQLite backend — the
-        same silent-degradation class as issue #206. RETURNING is not supported
-        here (psycopg's ``executemany`` does not return rows either).
-        """
+        source: ADR-0599"""
         translated = _translate_sql(sql)
         self._had_returning = False
         self._cursor.executemany(translated, params_seq)
@@ -168,10 +128,7 @@ class _CompatExecutingCursor:
     def fetchone(self) -> dict[str, Any] | None:
         row = self._cursor.fetchone()
         if row is None:
-            # _translate_sql strips RETURNING, so an INSERT ... RETURNING id
-            # yields no row here. pg_store_wiki_common._returning_id RAISES
-            # on None, so the id must be synthesised from lastrowid or every
-            # bulk insert in the wiki pipeline fails.
+            # source: ADR-0599
             if self._had_returning and self.lastrowid:
                 return {"id": self.lastrowid}
             return None
@@ -215,18 +172,7 @@ class PsycopgCompatConnection:
     def cursor(self, row_factory: Any = None) -> _CompatExecutingCursor:
         """Return a psycopg-style cursor (context manager, translating).
 
-        Its absence is the root cause of issue #206: the wiki pipeline's
-        seven handlers all reach for `conn.cursor()`, so every stage failed
-        with AttributeError on SQLite and the caller recorded it as a string.
-
-        `row_factory` is accepted for signature parity with psycopg's
-        `conn.cursor(row_factory=DICT_ROW)` — 29 shared call sites use it —
-        and is then ignored: this cursor already returns dict rows
-        unconditionally, which is exactly what `dict_row` asks for. psycopg's
-        other keyword, `name=` (server-side cursor), is deliberately NOT
-        accepted; its single call site lives in the PgMemoryStore-only
-        pg_store_queries mixin and cannot reach this class.
-        """
+        source: ADR-0599"""
         return _CompatExecutingCursor(self._real.cursor())
 
     def executescript(self, sql: str) -> None:

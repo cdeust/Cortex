@@ -1,11 +1,7 @@
 """Value-serialization mixin for PgMemoryStore: embedding<->bytes, datetime
 normalization, and memory-row normalization for consistent API output.
 
-Split out of pg_store.py (issue: 1384-line file over the 300-line §4.1 cap)
-— these are the conversions every read/write path in the other pg_store_*
-mixins ultimately funnels through, so they get their own cohesive module
-rather than living inside any single caller.
-"""
+source: ADR-0567"""
 
 from __future__ import annotations
 
@@ -41,8 +37,7 @@ class PgSerializeMixin(PgStoreHost):
         if vec is None:
             return None
         if isinstance(vec, Vector):
-            # pgvector>=0.5.0 psycopg loaders return Vector, not ndarray
-            # source: pgvector-python CHANGELOG 0.5.0 (2026-07-06)
+            # source: ADR-0567
             return vec.to_numpy().tobytes()
         return np.asarray(vec, dtype=np.float32).tobytes()
 
@@ -52,21 +47,7 @@ class PgSerializeMixin(PgStoreHost):
 
     # ── Row normalization ─────────────────────────────────────────────
 
-    # source: incident 2026-07-11 (garde x3 bench, LongMemEval), RCA in
-    # ADR-0054's addendum -- recall_memories() (the WRRF path) returned
-    # raw `dict(r)` rows with created_at still a psycopg
-    # `datetime.datetime` object, while every other memory-row reader in
-    # this class went through _normalize_memory_row and got an ISO
-    # string. Both are candidate dicts that can sit in the SAME list
-    # (recall_pipeline.spreading_activation_expand appends store.get_memory()
-    # rows onto recall_memories()'s output for RRF blending) and reach
-    # pg_recall.py::_chronological_rerank's `sorted(..., key=lambda c:
-    # c.get("created_at"))` together -- `str < datetime` raises
-    # unconditionally. The response schema for `recall`
-    # (handlers/recall.py, "created_at": {"type": "string", "format":
-    # "date-time"}) has always mandated the string form; recall_memories()
-    # was the one path never honoring it. Fixed at the source (both
-    # readers now share one normalizer) rather than patched at the sort.
+    # source: ADR-0567
     _DATETIME_FIELDS: tuple[str, ...] = (
         "created_at",
         "ingested_at",
@@ -79,16 +60,14 @@ class PgSerializeMixin(PgStoreHost):
         d: dict[str, Any], fields: tuple[str, ...] = _DATETIME_FIELDS
     ) -> dict[str, Any]:
         """Convert any `datetime.datetime` value in ``fields`` to ISO-8601
-        text, in place.
+                text, in place.
 
         Precondition: none. Postcondition: for every ``f`` in ``fields``,
-        ``d[f]`` is never a ``datetime.datetime`` instance -- either it was
-        already something else (str, None, absent), or it is now its
-        ``.isoformat()`` string. Every reader of a memory-row dict
-        (WRRF candidates, direct get_memory() rows, SA-injected
-        candidates) must go through this so a caller can compare/sort
-        mixed-origin candidate lists without a type mismatch.
-        """
+                ``d[f]`` is never a ``datetime.datetime`` instance -- either it was
+                already something else (str, None, absent), or it is now its
+                ``.isoformat()`` string.
+
+        source: ADR-0567"""
         for field in fields:
             if isinstance(d.get(field), datetime):
                 d[field] = d[field].isoformat()
@@ -104,15 +83,13 @@ class PgSerializeMixin(PgStoreHost):
         effective_heat() or a direct row select.
         """
         d = dict(row)
-        # A3: expose heat_base as heat for Python callers that expect
-        # the pre-A3 dict key. recall_memories() already returns heat
-        # (via effective_heat); this handles direct SELECT paths.
+        # source: ADR-0567
         if "heat" not in d and "heat_base" in d:
             d["heat"] = d["heat_base"]
         # Convert embedding back to bytes
         if "embedding" in d and d["embedding"] is not None:
             d["embedding"] = self._vector_to_bytes(d["embedding"])
-        # Ensure tags is a list
+        # source: ADR-0567
         if isinstance(d.get("tags"), str):
             try:
                 d["tags"] = json.loads(d["tags"])

@@ -14,6 +14,7 @@ from mcp_server.core.provenance import (
     VERIFIABLE,
     VERIFIED,
     ProvenanceReport,
+    _build_reason,
     extract_artifact_refs,
     extract_commit_refs,
     extract_url_refs,
@@ -44,6 +45,16 @@ class TestExtractCommitRefs:
         refs = extract_commit_refs("8872d56 and again 8872d56")
         assert refs.count("8872d56") == 1
 
+    def test_a_skipped_all_digit_token_does_not_abort_the_scan(self):
+        # `continue`, not `break`: an ignored token must not truncate the
+        # scan, or every SHA after the first counter/timestamp is lost.
+        assert extract_commit_refs("1234567890 then 8872d56") == ["8872d56"]
+
+    def test_a_repeated_token_does_not_abort_the_scan(self):
+        # Same guard for the dedupe arm of that same `continue`.
+        content = "8872d56 again 8872d56 then deadbee"
+        assert extract_commit_refs(content) == ["8872d56", "deadbee"]
+
 
 class TestExtractUrlRefs:
     def test_extracts_url(self):
@@ -57,6 +68,12 @@ class TestExtractUrlRefs:
     def test_dedupes(self):
         refs = extract_url_refs("https://a.com and https://a.com again")
         assert refs.count("https://a.com") == 1
+
+    def test_a_trailing_letter_is_not_stripped(self):
+        # The cut set is exactly `).,;:'"` — widening it would silently eat
+        # the last character of a legitimate path.
+        url = "https://example.com/PATHX"
+        assert extract_url_refs(f"see {url} for details") == [url]
 
 
 class TestExtractArtifactRefs:
@@ -73,6 +90,11 @@ class TestExtractArtifactRefs:
 
     def test_no_artifact_ref_returns_empty(self):
         assert extract_artifact_refs("plain text, no artifact pointer") == []
+
+    def test_dedupes_a_repeated_path(self):
+        path = "artifacts/2026-07/0123456789abcdef.md"
+        refs = extract_artifact_refs(f"{path} and again {path}")
+        assert refs == [(path, "0123456789abcdef")]
 
 
 class TestHasCitationRef:
@@ -240,6 +262,109 @@ class TestGradeCombination:
         }
 
 
+# ── Missing verdict entries ──────────────────────────────────────────────
+
+
+class TestGradeMissingVerdictEntries:
+    """The documented precondition: a ref absent from its verdicts dict
+    takes the LEAST-favorable outcome for its type, never the favorable
+    one. A verdict dict truncated by a bounded sample must never silently
+    promote a memory (issue #389)."""
+
+    def test_commit_absent_from_verdicts_is_uncheckable_not_verified(self):
+        report = _grade(commit_refs=["8872d56"], commit_verdicts={})
+        assert report.grade == VERIFIABLE
+        assert report.uncheckable_refs == ["8872d56"]
+
+    def test_artifact_absent_from_verdicts_is_dead_not_verified(self):
+        report = _grade(artifact_refs=[("art.md", "abc123")], artifact_verdicts={})
+        assert report.grade == UNVERIFIABLE
+        assert report.dead_refs == ["art.md"]
+
+
+# ── Reported fields ──────────────────────────────────────────────────────
+
+
+class TestGradeReportFields:
+    """Every field the caller reads back, on both return paths (issue #389).
+
+    The grade itself is covered above; these pin the identity, counts and
+    reason that travel with it.
+    """
+
+    def test_empty_report_carries_id_zeroed_counts_and_empty_lists(self):
+        report = _grade(memory_id=7)
+        assert report.memory_id == 7
+        assert report.ref_counts == {
+            "file": 0,
+            "commit": 0,
+            "url": 0,
+            "artifact": 0,
+            "citation": 0,
+        }
+        assert report.dead_refs == []
+        assert report.uncheckable_refs == []
+
+    def test_graded_report_carries_id_and_all_verified_reason(self):
+        report = _grade(memory_id=7, file_refs=["a.py"], existing_paths={"a.py"})
+        assert report.memory_id == 7
+        assert report.reason == "all_refs_verified"
+
+    def test_dead_file_ref_is_named_in_the_reason(self):
+        report = _grade(file_refs=["a.py"], existing_paths=set())
+        assert report.reason == "dead_refs: a.py"
+
+    def test_uncheckable_commit_is_named_in_the_reason(self):
+        report = _grade(commit_refs=["deadbee"], commit_verdicts={"deadbee": False})
+        assert report.reason == "uncheckable_refs: deadbee"
+
+    def test_citation_count_is_zero_when_no_citation_is_present(self):
+        report = _grade(file_refs=["a.py"], existing_paths={"a.py"})
+        assert report.ref_counts["citation"] == 0
+
+
+# ── Reason wording ───────────────────────────────────────────────────────
+
+
+class TestBuildReason:
+    """`_build_reason` maps (grade, dead, uncheckable) to the stored reason.
+
+    One of its four branches is unreachable through `grade_provenance`:
+    every path that appends an UNVERIFIABLE outcome also appends to `dead`,
+    so `grade == UNVERIFIABLE and not dead` never reaches this helper, and
+    the empty-outcome path hardcodes the same string rather than calling it.
+    The other three are reachable and are also pinned end-to-end by
+    `TestGradeReportFields`; they are asserted here as well because these
+    unit-level cases carry the boundary inputs (the three-ref join cap in
+    particular) the end-to-end tests do not supply (issue #389).
+    """
+
+    def test_unverifiable_with_dead_refs_names_them(self):
+        assert _build_reason(UNVERIFIABLE, ["a.py"], []) == "dead_refs: a.py"
+
+    def test_dead_refs_are_comma_joined_and_capped_at_three(self):
+        reason = _build_reason(UNVERIFIABLE, ["a.py", "b.py", "c.py", "d.py"], [])
+        assert reason == "dead_refs: a.py, b.py, c.py"
+
+    def test_unverifiable_without_dead_refs_reports_no_reference(self):
+        assert _build_reason(UNVERIFIABLE, [], []) == "no_extractable_reference"
+
+    def test_dead_refs_alone_do_not_explain_a_passing_grade(self):
+        # `and`, not `or`: dead refs only ever explain an UNVERIFIABLE grade.
+        assert _build_reason(VERIFIED, ["a.py"], []) == "all_refs_verified"
+
+    def test_verifiable_with_uncheckable_refs_names_them(self):
+        reason = _build_reason(VERIFIABLE, [], ["deadbee"])
+        assert reason == "uncheckable_refs: deadbee"
+
+    def test_uncheckable_refs_are_comma_joined_and_capped_at_three(self):
+        reason = _build_reason(VERIFIABLE, [], ["a", "b", "c", "d"])
+        assert reason == "uncheckable_refs: a, b, c"
+
+    def test_uncheckable_refs_alone_do_not_explain_a_verified_grade(self):
+        assert _build_reason(VERIFIED, [], ["deadbee"]) == "all_refs_verified"
+
+
 # ── write_time_hint (M-D5, 7.5) ─────────────────────────────────────────────
 
 
@@ -276,19 +401,7 @@ class TestWriteTimeHint:
         assert write_time_hint(r, "deliberate") == write_time_hint(r, "deliberate")
 
 
-# ── write_time_hint dead-ref states (issue #345) ────────────────────────────
-#
-# Reproduced live on memory 4341427 (2026-08-08): 3 real repo-relative paths
-# graded dead because `directory` was never passed to `remember`, so
-# resolution silently fell back to the process's cwd (the repo's PARENT,
-# not the repo itself). The naive "no ref found" -> "name the dead refs"
-# fix alone still misdiagnoses that case as "these paths are wrong" when
-# they are not -- the ROOT they were checked against is. Three mutually
-# exclusive states, per `_unverifiable_hint`'s contract:
-#   1. no references extracted at all (existing coverage above)
-#   2a. references extracted, resolution root is not a real directory
-#   2b. references extracted, root is real but was never explicitly given
-#   3.  references extracted, root explicit and real, refs genuinely absent
+# source: ADR-0923
 
 
 def _dead_report(

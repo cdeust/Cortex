@@ -1,0 +1,38 @@
+# ADR-0983: tests_py/infrastructure/test_injection_receipts_store.py design and historical evidence
+
+Status: accepted; existing test/harness evidence preserved during issue #514.
+
+Source `tests_py/infrastructure/test_injection_receipts_store.py`, original SHA-256 `2b9f70b7a1998df760102e5c118e10055d42c98cde2a753b4728315e78bd2336`.
+Assertions and runtime fixture literals remain unchanged.
+
+## Original docstring, lines 1–7
+
+````text
+"""Parity roundtrip for injection receipts (blame path T1, decision 4255039).
+
+Falsifiable T1 criterion: the persisted receipt items mirror the bound
+payload exactly — same memory_ids, same order (rank), same scores.
+Runs against the SQLite backend; the PG mixin shares the same contract
+(PG parity asserted by the shared insert signature and DDL parity).
+"""
+````
+
+## Original comment, lines 56–57
+
+````text
+# Decision 4255039 correction 1: the mcp recall handler has no
+# session identity in scope — NOT NULL would be unexecutable DDL.
+````
+
+## Original comment, lines 83–83
+
+````text
+# ── T2: channel enum hardening (decision 4255039 correction 3) ───────────
+````
+
+## Original comment, lines 130–130
+
+````text
+# ── T3: read path — fetch_injection_receipts (decision 4255039) ──────────
+````
+

@@ -1,11 +1,8 @@
 """Normalizes AP ``query_graph`` responses into a flat list of dicts.
 
-Split out of ``workflow_graph_source_ast.py`` (issue #275) — shared by
-both the symbol-loading and edge-loading concerns, so it gets its own
-narrow module rather than living inside either.
-
 Infrastructure layer only. No core imports.
-"""
+
+source: ADR-0632"""
 
 from __future__ import annotations
 
@@ -73,15 +70,10 @@ def _from_legacy_shape(payload: dict) -> list[dict]:
 
 
 def normalize_search_hits(resp: Any) -> list[dict[str, Any]]:
-    """Normalize a raw AP ``search_codebase`` response into
-    ``[{id, qualified_name, file_path, score, snippet, source}, ...]``.
+    """Normalize a raw AP ``search_codebase`` response into ``[{id,
+    qualified_name, file_path, score, snippet, source}, ...]``.
 
-    Split out of ``workflow_graph_source_ast.WorkflowGraphASTSource
-    .search_codebase`` (over the 300-line file cap) — this module already
-    owns "normalize an AP response shape", the same seam. Rows with no
-    ``qualified_name`` are dropped; ``id`` is deterministic so RRF fusion
-    can dedupe with the same scheme used for SYMBOL graph nodes.
-    """
+    source: ADR-0632"""
     out: list[dict[str, Any]] = []
     for r in as_list(resp):
         qname = r.get("qualified_name") or r.get("name") or ""
@@ -104,17 +96,7 @@ def normalize_search_hits(resp: Any) -> list[dict[str, Any]]:
 def build_path_tails(paths: list[str]) -> set[str]:
     """Expand each path into itself + every ``/``-boundary suffix ("tail").
 
-    Shared by the symbol- and edge-loading queries (both need to match a
-    ``paths`` entry, which may be absolute, against AP's repo-relative
-    ``qualified_name``/``File.id`` prefixes — matching by tail lets either
-    form work without knowing the other side's root).
-
-    source: measured 2026-06-04 — a blanket ``LIMIT 500`` with no WHERE
-    clause returned 0 rows for ``consolidate.py`` because the first 500
-    Functions all started with ``benchmarks/*``/``_pipeline/*``; building
-    every tail here lets the caller construct a server-side WHERE
-    predicate that filters by file prefix instead of discarding in Python.
-    """
+    source: ADR-0632"""
     path_tails: set[str] = set()
     for p in paths:
         if not p:

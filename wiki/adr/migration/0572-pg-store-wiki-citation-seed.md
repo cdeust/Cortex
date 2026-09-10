@@ -1,0 +1,107 @@
+---
+kind: adr
+number: 0572
+title: Preserve pg_store_wiki_citation_seed design decisions
+status: accepted
+---
+
+# ADR-0572: pg_store_wiki_citation_seed design decisions
+
+## Context
+
+Canonical migration of decision evidence from `mcp_server/infrastructure/pg_store_wiki_citation_seed.py` under ADR-0056.
+The excerpts below preserve historical claims and citations verbatim; original ADR numbers are historical quotations, not current identity bindings.
+
+## Decision
+
+Keep the source implementation linked to this versioned decision record. Operational API documentation remains with the implementation.
+
+## Preserved decision evidence
+
+### module, original line 1
+
+````text
+``wiki.citations`` seed-campaign — DB operations (M-D7, INC7.7).
+````
+
+### module, original line 1
+
+````text
+Finds pages whose ``wiki.pages.memory_id`` column already carries a
+verified pointer to their authoring memory (see
+``core.wiki_citation_seed`` module docstring for why this is the only
+reliable source), and the subset of those pairs already present in
+``wiki.citations`` (idempotence check for an accurate dry-run count —
+the actual write in ``insert_citation`` is self-dedupng regardless via
+``ON CONFLICT DO NOTHING`` on ``uq_wiki_citations_page_memory``).
+````
+
+### module, original line 1
+
+````text
+Infrastructure — no handler imports, no core-decision logic (that lives
+in ``core.wiki_citation_seed.classify_seed_candidates``).
+
+````
+
+### list_page_memory_seed_candidates, original line 33
+
+````text
+    Precondition: none beyond a provisioned ``wiki`` schema.
+    Postcondition: returns at most ``limit`` rows, each
+    ``{page_id, memory_id, domain}``, ordered by ``page_id`` for
+    deterministic pagination across dry-run/apply re-runs. The join
+    to ``memories`` is redundant with the column's own
+    ``REFERENCES memories(id)`` constraint (a dangling FK cannot exist)
+    but is kept explicit so a future ``ON DELETE SET NULL`` semantics
+    change cannot silently admit a stale id without this query
+    reflecting it.
+    
+````
+
+### list_existing_page_memory_citations, original line 62
+
+````text
+    Precondition: ``page_ids`` is the exact candidate set from
+    ``list_page_memory_seed_candidates`` (scoping the query keeps it
+    cheap and keeps the returned set exactly comparable to
+    ``core.wiki_citation_seed.classify_seed_candidates``'s input
+    contract).
+    Postcondition: returns every ``(page_id, memory_id)`` pair with
+    ``memory_id IS NOT NULL`` already present for the given pages —
+    an empty set on a fresh DB (matches "wiki.citations = 0" at design
+    time), and after ``--apply`` a set equal to the full candidate list
+    (proving idempotence on re-run).
+    
+````
+
+### comment, original line 25
+
+````text
+# Measured 20 rows on the dev DB (2026-07-11); comfortably above any
+# realistic corpus size for the filename-encoded-memory_id convention
+# (bounded by the number of pages ever migrated via wiki_migrate.py from
+# a single source memory, not by total page count).
+````
+
+## Consequences
+
+Review rationale and source changes together. Historical evidence is preserved rather than silently rewritten; executable Python structure is unchanged after removing docstrings.
+
+### list_existing_page_memory_citations: completeness audit
+
+````text
+(page_id, memory_id) pairs already recorded in ``wiki.citations``.
+
+Precondition: ``page_ids`` is the exact candidate set from
+    ``list_page_memory_seed_candidates`` (scoping the query keeps it
+    cheap and keeps the returned set exactly comparable to
+    ``core.wiki_citation_seed.classify_seed_candidates``'s input
+    contract). Postcondition: returns every ``(page_id, memory_id)`` pair with
+    ``memory_id IS NOT NULL`` already present for the given pages —
+    an empty set on a fresh DB (matches "wiki.citations = 0" at design
+    time), and after ``--apply`` a set equal to the full candidate list
+    (proving idempotence on re-run).
+
+source: ADR-0572
+````

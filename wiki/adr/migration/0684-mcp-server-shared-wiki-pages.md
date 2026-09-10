@@ -1,0 +1,42 @@
+---
+title: "ADR-0684 — mcp_server/shared/wiki_pages.py rationale"
+status: accepted
+source: mcp_server/shared/wiki_pages.py
+---
+
+# ADR-0684 — mcp_server/shared/wiki_pages.py
+
+Migrated source rationale. The excerpts below are preserved verbatim from the source snapshot; historical identifiers inside quotations are not current identities.
+
+## module — original line 3 (docstring)
+
+````text
+Design intent: pages are *authored* content, not derived views. Templates
+provide sensible sections; the body is whatever the caller passes in.
+````
+
+## module — original line 6 (docstring)
+
+````text
+This module is the composed public entry point for wiki page handling. The
+implementation is split across cohesive collaborators:
+````
+
+## module — original line 9 (docstring)
+
+````text
+  * ``wiki_frontmatter`` — ``PageDocument``, ``parse_page``, ``render_page``
+    (YAML-ish frontmatter parsing/rendering).
+  * ``wiki_page_builders`` — ``build_adr``, ``build_spec``, ``build_note``,
+    ``build_file_doc``, ``build_lesson``, ``build_convention``,
+    ``build_reference``, and their shared maturity/sources helpers.
+  * ``wiki_index`` — ``build_index`` (INDEX.md generation).
+````
+
+## module — original line 16 (docstring)
+
+````text
+Every name importable from this module before the split remains importable
+from here — this is the module's public contract, not a compat shim.
+
+````

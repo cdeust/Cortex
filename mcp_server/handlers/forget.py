@@ -115,17 +115,11 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
             "method": "soft",
             "memory_id": memory_id,
             "content_preview": mem["content"][:80],
-            # Soft delete is recoverable, so the raw content must survive with
-            # it. Reported explicitly rather than omitted so a caller can tell
-            # "kept on purpose" from "we forgot to look" (issue #366).
+            # source: ADR-0392
             "artifact_deleted": False,
         }
 
-    # ── Hard delete: cross-substrate, and the two orderings below are
-    # load-bearing (issue #366).
-    #
-    # The artifact path must be read BEFORE the row goes — it lives in the
-    # memory body, which is about to be unreachable.
+    # source: ADR-0392
     artifact_path = parse_artifact_pointer(mem.get("content") or "")
 
     # Wiki claims must go BEFORE the row: wiki.claim_events.memory_id is
@@ -136,8 +130,7 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
     deleted = store.delete_memory(memory_id)
 
-    # The reference check must run AFTER the row is gone, or the memory being
-    # forgotten counts itself as a live referrer and nothing is ever collected.
+    # source: ADR-0392
     artifact_deleted = (
         delete_artifact_if_unreferenced(store._conn, artifact_path)
         if deleted
@@ -157,11 +150,7 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
 def _delete_derived_claims(store: MemoryStore, memory_id: int) -> int:
     """Remove wiki claim_events derived from ``memory_id``; return the count.
 
-    Never raises: a wiki table that is absent or unreachable (SQLite installs
-    without the wiki schema, a degraded connection) must not block the deletion
-    the user asked for. Returns 0 when nothing was removed, and logs the reason
-    so a silent miss is still observable.
-    """
+    source: ADR-0392"""
     try:
         return int(delete_claims_for_memory(store._conn, memory_id))
     except Exception as exc:  # noqa: BLE001 — mechanism boundary, see docstring
@@ -171,6 +160,5 @@ def _delete_derived_claims(store: MemoryStore, memory_id: int) -> int:
         return 0
 
 
-# Telemetry-instrumented public entry. Records latency / byte volume
-# / result count per call (Popper C6 read/write ratio audit).
+# source: ADR-0392
 handler = instrument("forget", _handler_impl, result_count_key=None)

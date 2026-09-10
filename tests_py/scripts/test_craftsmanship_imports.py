@@ -8,7 +8,8 @@ boundary-layer symmetry (third-party IS permitted in infrastructure/,
 since that is Clean Architecture's adapter layer) and the two AST edge
 cases: a conditional import under ``if TYPE_CHECKING:`` is exempt, and a
 relative import (``from . import x``) never counts as a boundary crossing.
-"""
+
+source: ADR-1034"""
 
 from __future__ import annotations
 

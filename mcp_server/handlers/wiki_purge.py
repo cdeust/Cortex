@@ -5,10 +5,7 @@ and deletes the ones that would no longer be admitted. Memories in the
 PostgreSQL/SQLite store are left untouched — only the markdown files in
 ~/.claude/methodology/wiki/ are removed.
 
-Use this after tightening classifier rules, after a backfill that
-polluted the wiki, or whenever the wiki has drifted away from curated
-knowledge toward session audit artefacts.
-"""
+source: ADR-0465"""
 
 from __future__ import annotations
 
@@ -105,10 +102,10 @@ schema = {
                 "minimum": 0.0,
                 "maximum": 1.0,
                 "description": (
-                    "Fraction of content lines that must be placeholder "
-                    "markers for the page to be classified as a stub. "
-                    "Default 0.5 — calibrated on the 2026-05-18 stub "
-                    "audit; lower values catch mixed pages too."
+                    # source: ADR-0465
+                    "Fraction of content lines that must be placeholder markers for "
+                    "stub classification. Default 0.5; lower values also match "
+                    "mixed-content pages."
                 ),
             },
             "max_purges": {

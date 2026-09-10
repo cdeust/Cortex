@@ -115,9 +115,7 @@ def _parse_args(args: dict[str, Any] | None) -> tuple[Path, str, int, bool]:
     args = args or {}
     directory = args.get("directory", "") or os.getcwd()
     root = Path(directory).expanduser().resolve()
-    # Domain auto-detection: schema documents this behavior; the previous
-    # implementation passed an empty string through, which broke the
-    # per-domain purge contract (issue #16).
+    # source: ADR-0445
     domain = args.get("domain", "") or root.name
     max_kb = int(args.get("max_file_size_kb", 64))
     dry_run = args.get("dry_run", False)
@@ -182,14 +180,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     if not root.exists() or not root.is_dir():
         return {"seeded": False, "reason": f"directory not found: {root}"}
 
-    # 2026-05-17 (user feedback): refuse to seed transient roots —
-    # ``.claude/worktrees/agent-*``, pytest temp fixtures
-    # (``/private/var/folders/.../pytest-of-*``), and other ephemeral
-    # paths. Seeding them produced wiki pages titled
-    # ``Spec: Entry point: .claude/worktrees/agent-a0ceb782/...`` and
-    # ``Spec: Project structure: repo-a`` from fixture runs — both
-    # noise that lives forever in the wiki because the underlying path
-    # is gone by the next test run.
+    # source: ADR-0445
 
     if is_transient_seed_root(str(root)):
         return {
@@ -199,9 +190,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
     purged = 0
     if not dry_run:
-        # Scope purge to this domain (issue #16): seeding repo-A must not
-        # wipe out repo-B's seeded memories. Domain authority ends at the
-        # project boundary; cross-domain effects are an externality.
+        # source: ADR-0445
         purged = _get_store().delete_memories_by_tag("seeded", domain=domain)
 
     all_discoveries = collect_all_discoveries(root, max_bytes)

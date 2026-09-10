@@ -1,8 +1,6 @@
 """Generic single-consumer capture worker with independent socket admission.
 
-No handler/core imports: composition supplies an async callback and diagnostics.
-One pending mailbox provides bounded backpressure, never immediate load shedding.
-"""
+source: ADR-0511"""
 
 from __future__ import annotations
 
@@ -42,7 +40,7 @@ class CaptureServer:
         self.listener = listener
         self.callback = callback
         self.policy = policy
-        # source: capture-worker-design.md: one pending rendezvous with backpressure.
+        # source: ADR-0511
         self.pending: queue.Queue[Payload | None] = queue.Queue(maxsize=1)
         self.stopping = threading.Event()
         self.admission = threading.Lock()

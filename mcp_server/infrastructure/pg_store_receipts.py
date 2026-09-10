@@ -1,11 +1,5 @@
 """Injection-receipt persistence, PostgreSQL backend.
 
-Blame path T1/T2/T3 (decision Cortex 4255039): receipts are an
-append-only record of what a channel injected into a context — there is
-no update or delete surface by design. T3 adds the read path: resolving
-receipt ids (handed back by the model from ⟦rcpt:id⟧ context markers)
-into presence-in-context evidence.
-
 Two write paths share the single-statement SQL below:
 
 * ``PgReceiptsMixin.insert_injection_receipt`` — the store path used by
@@ -13,15 +7,14 @@ Two write paths share the single-statement SQL below:
 * ``insert_receipt_on_connection`` — the hook path (T2): SessionStart /
   UserPromptSubmit / SubagentStart hooks own a short-lived psycopg
   connection and no store instance.
-"""
+
+source: ADR-0562"""
 
 from __future__ import annotations
 
 from mcp_server.infrastructure.pg_store_host import PgStoreHost
 
-# Single data-modifying-CTE statement on purpose: the store's
-# ``_execute`` borrows a pool connection per call, so two separate
-# INSERTs could land on two connections and lose header/items atomicity.
+# source: ADR-0562
 _INSERT_RECEIPT_SQL = (
     "WITH r AS ("
     "  INSERT INTO injection_receipts (session_id, channel)"
@@ -66,14 +59,7 @@ def insert_receipt_on_connection(
     return int(row["receipt_id"] if isinstance(row, dict) else row[0])
 
 
-# Read path (T3). LEFT JOIN on purpose: memory_id carries no FK — a
-# memory hard-forgotten after injection must NOT erase the evidence that
-# it WAS in context; such rows come back with every m.* column NULL.
-# superseded_by_id is surfaced, never filtered: a receipt is historical
-# evidence, and a superseded memory that was injected stays part of the
-# record — the caller sees the correction state instead. Ordering is
-# recorded facts only (decision 4255039): emitted_at DESC, receipt id
-# DESC as the deterministic tiebreak, then the persisted injection rank.
+# source: ADR-0562
 _FETCH_RECEIPTS_SQL = (
     "SELECT r.id AS receipt_id, r.session_id, r.channel, r.emitted_at,"
     "       i.memory_id, i.rank, i.score,"
@@ -108,12 +94,7 @@ class PgReceiptsMixin(PgStoreHost):
     def fetch_injection_receipts(self, receipt_ids: list[int]) -> list[dict]:
         """Resolve receipt ids into flat (receipt × item × memory) rows.
 
-        One row per injected memory, ordered by recorded facts only
-        (emitted_at DESC, receipt id DESC, persisted rank ASC). Unknown
-        ids simply yield no rows — the handler reports them; an empty
-        input reads as an empty result (the loud non-empty contract
-        lives at the tool boundary, not here).
-        """
+        source: ADR-0562"""
         if not receipt_ids:
             return []
         rows = self._execute(

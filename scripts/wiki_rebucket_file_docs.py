@@ -1,40 +1,10 @@
 #!/usr/bin/env python3
-"""Re-bucket file-documentation notes — Phase 4.2 of ADR-2244.
-
-The 2026-05-12 audit found that ``codebase_analyze`` had been writing
-per-file documentation pages under ``notes/<domain>/<memory_id>-file-
-<file-slug>.md`` instead of the correct ``reference/<domain>/<file-slug>.md``.
-The misroute was fixed at the producer in #27 (Task #8) but the
-existing pages were never re-bucketed.
-
-Live count on the wiki: **8,734** file-doc notes across 10 domains.
-This script moves them to ``reference/`` with:
-
-  * A clean ``<file-slug>.md`` derived from the ``file:`` frontmatter
-    tag (which preserves the original source-tree path even when the
-    on-disk filename was truncated).
-  * Frontmatter rewritten to the modern schema:
-        kind: reference
-        lifecycle: seedling
-        audience: [developer]
-        provenance: auto-generated
-        generator:
-          model: cortex-codebase-analyze
-          version: v1
-          prompt_template: file-doc-v1
-          generated_at: <ISO-8601 from the original ``created`` field>
-  * A redirect stub at the original ``notes/`` path so inbound links
-    keep resolving via ``wiki_read``.
+"""Re-bucket file-documentation notes.
 
 Dry-run by default; ``--apply`` commits.
 
 Idempotency
 -----------
-
-A second --apply finds zero pages to re-bucket: the originals are now
-redirect stubs (skipped), and any new ``codebase_analyze`` output
-already lands in ``reference/`` directly thanks to #27. The script
-also skips pages whose target path already exists (collision).
 
 Requires
 --------
@@ -43,7 +13,8 @@ Each source page must carry a stable frontmatter ``id`` from Phase 3
 (``scripts/wiki_backfill_ids.py --apply``). Pages without an id are
 reported and skipped — the source classifier from #27 always emits an
 id on new writes, but the existing population predates that.
-"""
+
+source: ADR-0794"""
 
 from __future__ import annotations
 
@@ -77,9 +48,9 @@ class FileDocMove:
     """One detected file-doc page + computed re-bucket target."""
 
     rel_path: str  # current ``notes/<domain>/<id>-file-...md`` path
-    target_path: str  # ``reference/<domain>/<slug>.md``
+    target_path: str  # source: ADR-0794
     page_id: str | None  # stable id from frontmatter, None if absent
-    source_file_path: str  # original code path from the ``file:`` tag
+    source_file_path: str  # source: ADR-0794
     skip_reason: str = ""
 
 
@@ -132,8 +103,7 @@ def _derive_target_path(domain: str, source_file_path: str) -> str:
     slug = slugify(flat)
     if not slug or slug == "unknown":
         return ""
-    # ``slugify("")`` returns ``"unknown"`` so an empty domain would route
-    # to ``reference/unknown/…``. Coerce to ``_general`` explicitly.
+    # source: ADR-0794
     domain_slug = slugify(domain) if domain.strip() else "_general"
     if domain_slug == "unknown":
         domain_slug = "_general"
@@ -173,9 +143,7 @@ def _rewrite_frontmatter(
 ) -> str:
     """Build the modern ``kind: reference`` frontmatter and append body.
 
-    Preserves: id, title, tags, created, updated, memory_id (when present).
-    Replaces: kind. Adds: lifecycle, audience, provenance, generator.
-    """
+    source: ADR-0794"""
     lines = ["---"]
     if "id" in fm:
         lines.append(f"id: {fm['id']}")
@@ -204,7 +172,7 @@ def _rewrite_frontmatter(
             lines.append(f"  - {t}")
     elif isinstance(raw_tags, str) and raw_tags:
         lines.append(f"tags: {raw_tags}")
-    # Trace fields for migration audit.
+    # source: ADR-0794
     lines.append(f"source_file_path: {source_file_path}")
     lines.append("rebucketed_from: notes/")
     lines.append("---")

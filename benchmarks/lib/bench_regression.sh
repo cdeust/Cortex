@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # source: ADR-0067
-# match would hide the drift (same anti-pattern rejected for the pyright
+# source: ADR-0067
 # source: ADR-0067
 REGRESSION_TOLERANCE="${REGRESSION_TOLERANCE:-0.005}"
 BASELINE_REF="${BASELINE_REF:-origin/main}"
 BASELINE_RESULTS_DIR=""
 
-# Baseline worktrees omit ignored datasets. Reuse the exact HEAD inputs,
-# never a second download which could change the corpus between comparisons.
+# Reuse the HEAD datasets in the baseline worktree.
+# source: ADR-0067
 preflight_regression_datasets() {
     local name relative
     for name in longmemeval locomo; do
@@ -37,12 +37,8 @@ copy_regression_datasets() {
     done
 }
 
-# Run the same benchmark set (respecting --only/--quick/--limit) against
-# BASELINE_REF's code, in an isolated git worktree, writing results under
-# $RESULTS_DIR/baseline/. Reuses the already-running container: harnesses
-# self-clean (purge is_benchmark rows on open, per reproduce.sh's header),
-# so a second harness run against the same DB is safe and does not require
-# a second container.
+# Run the selected benchmarks in an isolated baseline worktree using the existing container.
+# source: ADR-0067
 run_baseline_benchmarks() {
     local baseline_sha
     baseline_sha="$(git -C "$REPO_ROOT" rev-parse "$BASELINE_REF" 2>/dev/null)" || {
@@ -72,13 +68,11 @@ run_baseline_benchmarks() {
     if [ -n "$LIMIT" ]; then lm_args+=(--limit "$LIMIT"); lo_args+=(--limit "$LIMIT")
     elif [ "$QUICK" = "1" ]; then lm_args+=(--limit 10); lo_args+=(--limit 1); fi
 
-    # cd into the worktree so `uv run` resolves ITS pyproject.toml/uv.lock —
-    # the baseline may pin different dependency versions than HEAD, and
-    # running it under HEAD's resolved env would not actually measure the
-    # baseline's code.
+    # Run uv inside the baseline worktree.
+    # source: ADR-0067
     (
-        # Preserve errexit while cleaning up even when provisioning or a runner
-        # fails. An OR-list around this subshell would disable errexit within it.
+        # Preserve errexit and clean up on subshell exit.
+        # source: ADR-0067
         trap 'git -C "$REPO_ROOT" worktree remove --force "$wt_dir" >/dev/null 2>&1 || true' EXIT
         copy_regression_datasets "$wt_dir"
         cd "$wt_dir"
@@ -130,12 +124,8 @@ for stem, keys in stems.items():
             print(f"REGRESSION CHECK {stem}.{key}: metric missing — FAIL")
             failed = True
             continue
-        # Round to the same 4-decimal precision reproduce.sh prints, so the
-        # pass/fail line matches exactly what a reader sees in this log —
-        # comparing at higher hidden precision than what's displayed is the
-        # rounding mismatch that made single-run borderline cases confusing
-        # to bisect (reproduce.sh's own check_floors docstring, LoCoMo
-        # same-commit noise note, stdev 0.0022 measured 2026-07-14).
+        # Round displayed and compared metrics to four decimal places.
+        # source: ADR-0067
         got_r, ref_r = round(got, 4), round(ref, 4)
         delta = got_r - ref_r
         status = "PASS" if delta >= -tol else "FAIL"

@@ -1,21 +1,6 @@
 """Wiki classification 4-tuple — kind, lifecycle, audience, provenance + tags.
 
-Implements the schema from ADR-2244 (richer wiki classification).
-
-**Open-world by design.** Per user direction 2026-05-12, the set of valid
-values on each axis is *not* a hardcoded Python frozenset — it is loaded
-from the registry in ``mcp_server.core.wiki_axis_registry``, which merges
-Python defaults with user-editable files under ``wiki/_schema/<axis>/``.
-Adding a new audience or lifecycle value is a wiki edit, not a code edit.
-
-Validation policy: **reject + suggest**. An unknown value raises
-``ValueError`` whose message proposes the closest registered name via
-``difflib.get_close_matches`` (user direction 2026-05-12).
-
-References:
-    - ADR-2244 in the methodology wiki
-    - docs/research/wiki-classification-survey.md (literature survey)
-"""
+source: ADR-0676"""
 
 from __future__ import annotations
 
@@ -23,12 +8,12 @@ from dataclasses import dataclass
 from typing import Final
 
 
-# ── Legacy kind back-compat (read-time only) ────────────────────────────
+# source: ADR-0676
 
 
-# Legacy kinds — readable for backward-compat but never produced by new
-# writes. The registry does not list these; ``normalize_legacy_kind``
-# remaps them on read.
+# source: ADR-0676
+
+
 LEGACY_KINDS: Final[frozenset[str]] = frozenset(
     {"notes", "specs", "conventions", "lessons", "guides", "files", "adrs"}
 )
@@ -40,8 +25,7 @@ LEGACY_KIND_TO_MODERN: Final[dict[str, str]] = {
     "lessons": "explanation",
     "guides": "how-to",
     "files": "reference",
-    # The wiki has a few pages under ``adrs/`` (plural) — observed during the
-    # 2026-05-13 Phase 2 pilot. Treated as the same legacy kind as ``adr``.
+    # source: ADR-0676
     "adrs": "adr",
 }
 
@@ -66,25 +50,15 @@ class Generator:
 
 @dataclass(frozen=True)
 class Classification:
-    """4-tuple page classification per ADR-2244.
+    """Represent wiki kind, lifecycle, audience, and provenance.
+
+    source: ADR-0676
 
     Validation consults the runtime registry (``get_registry()``) rather
     than hardcoded Python sets. Adding a new value to any axis requires
     only writing ``wiki/_schema/<axis>/<name>.md``.
 
-    Fields:
-        kind: registered value on the ``kind`` axis (drives directory).
-        lifecycle: registered value on the ``lifecycle`` axis;
-            ADR-specific lifecycle values (proposed/accepted/rejected/
-            superseded) carry ``applies_to_kinds=("adr",)`` in their
-            registration so non-ADRs reject them and ADRs reject the
-            universal lifecycle.
-        audience: tuple of registered values on the ``audience`` axis.
-            Multi-valued; must be non-empty.
-        provenance: registered value on the ``provenance`` axis.
-        generator: required when the provenance value's
-            ``requires_generator`` flag is True.
-        tags: free controlled-vocabulary tags.
+    source: ADR-0676
     """
 
     kind: str
@@ -95,30 +69,18 @@ class Classification:
     tags: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        # __post_init__ is a dunder — mutmut skips the WHOLE decorated
-        # ClassDef body regardless (`mutmut/mutation/file_mutation.py:236`),
-        # so this call site carries no mutation coverage either way; kept
-        # as a method (constructors need one) and calls the free function
-        # below for the actual validation logic (issue #282).
+        # source: ADR-0676
+
         validate_classification(self)
 
 
 def validate_classification(classification: "Classification") -> None:
     """Raise ValueError (with did-you-mean) if any axis violates the schema.
 
-    A free function, not a method: mutmut categorically excludes the body
-    of any `@dataclass`-decorated class (`mutmut/mutation/file_mutation.py:
-    236`), so logic placed on `Classification` methods would carry zero
-    mutation coverage no matter how the test loader names the module
-    (issue #262 3rd pass; issue #282). Split per-axis (§4.2, 40-line cap)
-    into `_validate_kind` / `_validate_lifecycle` / `_validate_audience` /
-    `_validate_provenance` below — the pre-extraction `validate()` method
-    was already 64 lines as a single block; this keeps the orchestrator
-    short instead of just relocating the same oversized function.
-    """
-    # Local import avoids importing the registry at module-load time
-    # (the registry reads the wiki on first call).
-    from mcp_server.core.wiki_axis_registry import (  # noqa: PLC0415 — documented deferral: the registry reads the wiki on first call; a module-load import would also invert the shared->core layer rule at import time
+    source: ADR-0676"""
+    # source: ADR-0676
+
+    from mcp_server.core.wiki_axis_registry import (  # noqa: PLC0415 — source: ADR-0676
         get_registry,
     )
 
@@ -131,7 +93,7 @@ def validate_classification(classification: "Classification") -> None:
 
 
 def _validate_kind(reg, c: "Classification") -> None:
-    from mcp_server.core.wiki_axis_registry import (  # noqa: PLC0415 — see validate_classification
+    from mcp_server.core.wiki_axis_registry import (  # noqa: PLC0415 — source: ADR-0676
         AXIS_KIND,
         axis_registry_has,
         did_you_mean,
@@ -143,7 +105,7 @@ def _validate_kind(reg, c: "Classification") -> None:
 
 
 def _validate_lifecycle(reg, c: "Classification") -> None:
-    from mcp_server.core.wiki_axis_registry import (  # noqa: PLC0415 — see validate_classification
+    from mcp_server.core.wiki_axis_registry import (  # noqa: PLC0415 — source: ADR-0676
         AXIS_LIFECYCLE,
         axis_registry_get,
         axis_registry_values,
@@ -172,7 +134,7 @@ def _validate_lifecycle(reg, c: "Classification") -> None:
 
 
 def _validate_audience(reg, c: "Classification") -> None:
-    from mcp_server.core.wiki_axis_registry import (  # noqa: PLC0415 — see validate_classification
+    from mcp_server.core.wiki_axis_registry import (  # noqa: PLC0415 — source: ADR-0676
         AXIS_AUDIENCE,
         axis_registry_has,
         did_you_mean,
@@ -187,7 +149,7 @@ def _validate_audience(reg, c: "Classification") -> None:
 
 
 def _validate_provenance(reg, c: "Classification") -> None:
-    from mcp_server.core.wiki_axis_registry import (  # noqa: PLC0415 — see validate_classification
+    from mcp_server.core.wiki_axis_registry import (  # noqa: PLC0415 — source: ADR-0676
         AXIS_PROVENANCE,
         axis_registry_get,
         did_you_mean,
@@ -238,23 +200,31 @@ def _format_unknown(axis: str, value: str, suggestions: tuple[str, ...]) -> str:
     )
 
 
-# ── Legacy helpers ──────────────────────────────────────────────────────
+# source: ADR-0676
 
 
 def normalize_legacy_kind(kind: str) -> str:
-    """Map a legacy kind name to its modern equivalent. Returns input unchanged
-    when already modern (registered) or unknown."""
+    """Map a legacy kind name to its modern equivalent.
+
+    source: ADR-0676
+    """
     return LEGACY_KIND_TO_MODERN.get(kind, kind)
 
 
 def is_legacy_kind(kind: str) -> bool:
-    """True if the kind belongs to the pre-ADR-2244 taxonomy."""
+    """Return whether the kind belongs to the legacy taxonomy.
+
+    source: ADR-0676
+    """
     return kind in LEGACY_KINDS
 
 
 def all_known_kinds() -> frozenset[str]:
-    """Modern (registered) + legacy kinds. For read paths that must accept either."""
-    from mcp_server.core.wiki_axis_registry import (  # noqa: PLC0415 — documented deferral: the registry reads the wiki on first call; a module-load import would also invert the shared->core layer rule at import time
+    """Modern (registered) + legacy kinds.
+
+    source: ADR-0676
+    """
+    from mcp_server.core.wiki_axis_registry import (  # noqa: PLC0415 — source: ADR-0676
         AXIS_KIND,
         axis_registry_names,
         get_registry,

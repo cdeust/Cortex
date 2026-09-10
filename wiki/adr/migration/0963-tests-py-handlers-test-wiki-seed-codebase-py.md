@@ -1,0 +1,50 @@
+# ADR-0963: tests_py/handlers/test_wiki_seed_codebase.py design and historical evidence
+
+Status: accepted; existing test/harness evidence preserved during issue #514.
+
+Source `tests_py/handlers/test_wiki_seed_codebase.py`, original SHA-256 `764c9fdb0bafcfa0479ffe3a4eedccf4c31662e6db07db7c786bf04cf53fc34a`.
+Assertions and runtime fixture literals remain unchanged.
+
+## Original docstring, lines 1–19
+
+````text
+"""Tests for the wiki_seed_codebase producer (ADR-2244 Phase 6.2).
+
+The seed handler imports markdown files (README, ADR, spec, convention,
+lesson) from a repo into Cortex memory. Phase 6.2 fixed two producer
+bugs:
+
+  1. ``_kind_for`` used to return legacy kind names (``spec``,
+     ``convention``, ``lesson``, ``note``). They now return modern
+     kinds (``adr``, ``rfc``, ``explanation``) that match
+     ``mcp_server.core.wiki_axis_registry`` tag-alias entries.
+
+  2. The emitted tag list used ``kind:<value>`` which the classifier
+     never read. The kind hint flowed nowhere. Tags now include the
+     bare modern kind name plus ``imported`` so provenance routes
+     correctly.
+
+This test file pins the producer contract so a future refactor cannot
+silently re-introduce the legacy shape.
+"""
+````
+
+## Original docstring, lines 39–39
+
+````text
+"""ADR-2244 §4.1: ``spec`` → modern ``rfc`` for pre-decision design."""
+````
+
+## Original docstring, lines 44–44
+
+````text
+"""Conventions/styles collapse into explanation per ADR-2244 §4.1."""
+````
+
+## Original docstring, lines 62–63
+
+````text
+"""The new schema forbids bare ``notes`` as a kind — defaults route
+    to ``explanation`` per ADR-2244 §4.1."""
+````
+

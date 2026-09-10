@@ -1,0 +1,86 @@
+---
+title: "ADR-0681 — mcp_server/shared/wiki_ir.py rationale"
+status: accepted
+source: mcp_server/shared/wiki_ir.py
+---
+
+# ADR-0681 — mcp_server/shared/wiki_ir.py
+
+Migrated source rationale. The excerpts below are preserved verbatim from the source snapshot; historical identifiers inside quotations are not current identities.
+
+## module — original line 3 (docstring)
+
+````text
+Each IR is a named, inspectable boundary between pipeline phases:
+````
+
+## module — original line 5 (docstring)
+
+````text
+    transcript → [ClaimEvent] → [Concept] → [DraftPage] → [ApprovedPage] → rendered
+````
+
+## module — original line 7 (docstring)
+
+````text
+These are Pydantic models (v2) so they round-trip JSON for DB storage
+(JSONB columns) and MCP tool payloads, and validate at the boundary.
+````
+
+## module — original line 10 (docstring)
+
+````text
+Pure data — no I/O. Imports: shared + stdlib only.
+
+````
+
+## EvidenceRef — original line 61 (docstring)
+
+````text
+    Kinds:
+      - file: a source file in the repo (path + optional line range)
+      - commit: a git commit SHA
+      - paper: arxiv / DOI / URL
+      - memory: another memory this claim derives from
+      - claim: another claim that supports this one
+      - benchmark: a named benchmark result
+    
+````
+
+## AxialSlots — original line 92 (docstring)
+
+````text
+The four axial-coding slots per Strauss & Corbin.
+````
+
+## CurationMemo — original line 238 (docstring)
+
+````text
+    Captures *why* a decision was made: the inputs considered, the
+    alternatives rejected, and the confidence. Without this, grounded
+    theory is not grounded.
+    
+````
+
+## module — original line 21 (comment)
+
+````text
+# ── Phase output: transcript → ClaimEvent ─────────────────────────────
+# Extracted from a raw session / memory. Atomic, timestamped, citable.
+````
+
+## module — original line 77 (comment)
+
+````text
+# ── Phase output: ClaimEvents → Concept ───────────────────────────────
+# Emergent candidate knowledge node. Strauss axial coding.
+# Sits between memories and pages.
+````
+
+## module — original line 228 (comment)
+
+````text
+# ── Curation memo (Strauss memoing) ────────────────────────────────────
+# Every pipeline decision writes a memo. Audit trail for the
+# grounded-theory process.
+````

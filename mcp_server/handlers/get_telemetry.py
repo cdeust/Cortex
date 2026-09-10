@@ -1,14 +1,9 @@
 """Handler: get_telemetry — return in-process telemetry counters.
 
-Surfaces the read/write workload distribution captured by
-``mcp_server.core.telemetry``: per-op call count, latency
-(sum/avg/max), byte volume, success/failure split, and the computed
-read/write ratio. This grounds the paper's "100x more reads than
-writes" claim in measurement (Popper C6).
-
 Composition root: pure-logic call into core; no I/O beyond what
 ``telemetry.summary()`` already does (memory snapshot + log path).
-"""
+
+source: ADR-0397"""
 
 from __future__ import annotations
 
@@ -63,22 +58,21 @@ schema = {
             "embedding_mode": {
                 "type": "string",
                 "description": (
-                    "Embedding provenance for this process (issue #169): "
-                    "'neural' = sentence-transformers, 'fallback' = "
-                    "download-free algorithmic embeddings (lower fidelity, "
-                    "engaged when the model is absent), 'unknown' = no encode "
-                    "has run yet. Fallback and neural vectors never cross-rank."
+                    # source: ADR-0397
+                    "Embedding provenance for this process: 'neural' = "
+                    "sentence-transformers, 'fallback' = download-free algorithmic "
+                    "embeddings (lower fidelity, engaged when the model is absent), "
+                    "'unknown' = no encode has run yet. Fallback and neural vectors "
+                    "never cross-rank."
                 ),
             },
         },
     },
     "description": (
-        "Return the in-process telemetry snapshot: per-op call counts, "
-        "latency, byte volume, success/failure split, and the computed "
-        "read/write ratio. Use this to verify Cortex's empirical "
-        "read/write workload distribution (Popper C6 — grounds the "
-        "paper's '100x more reads than writes' claim in measurement, "
-        "not assertion). Counters are per-process and reset on restart; "
+        # source: ADR-0397
+        "Return the in-process telemetry snapshot: per-operation call "
+        "counts, latency, byte volume, success/failure split, and "
+        "computed read/write ratio. Counters reset on process restart; "
         "the durable record is the JSONL at "
         "~/.claude/methodology/telemetry.jsonl."
     ),
@@ -91,9 +85,10 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
     precondition: none (read-only over in-memory dict).
     postcondition: returns ``telemetry.summary()`` augmented with
-    ``embedding_mode`` (issue #169) so a caller can tell whether semantic recall
+    ``embedding_mode`` so a caller can tell whether semantic recall
     is running on neural or download-free fallback embeddings.
-    """
+
+    source: ADR-0397"""
     summary = telemetry.summary()
     summary["embedding_mode"] = current_embedding_mode()
     return summary

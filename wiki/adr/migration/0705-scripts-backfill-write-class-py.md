@@ -1,0 +1,54 @@
+# ADR-0705: scripts/backfill_write_class.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `scripts/backfill_write_class.py`; original SHA-256 `d551073fedf4efb9af34211c33876c69e81d247623165587933cb95eec293119`.
+
+## Original docstring, lines 2–43
+
+````text
+"""One-shot historical migration: reclassify ``memories.write_class`` rows
+still at the schema migration's DEFAULT sentinel — M-D2, 7.4.
+
+Runs ``handlers.consolidation.write_class_backfill_pass`` against the
+shared store and writes a campaign journal artifact (source, from-class,
+to-class, row count per reclassified group).
+
+Precondition: the schema migration
+(``infrastructure/pg_schema.py`` MIGRATIONS_DDL, ``ALTER TABLE memories
+ADD COLUMN write_class ... DEFAULT 'deliberate'``) has already run against
+this database — every row got the sentinel; this script is what actually
+reclassifies the auto/derived/mechanical ones from their ``source`` value
+(the same single choke point every writer classifies through,
+``mcp_server.shared.write_class.classify_write_class``).
+
+Usage
+-----
+
+Dry-run (default) — classify and report, write nothing::
+
+    uv run python scripts/backfill_write_class.py
+
+Apply the change to the DB::
+
+    uv run python scripts/backfill_write_class.py --apply
+
+The pass is idempotent: re-running after ``--apply`` finds zero source
+groups left to reclassify (``list_source_groups_at_default`` only returns
+groups still at the sentinel), and never touches a row a post-7.4 writer
+already classified explicitly to something other than ``deliberate``
+(the SQL UPDATE re-guards ``write_class = 'deliberate'`` at write time,
+not just at scan time — see ``pg_store_memory_write_class.py``).
+
+Known residual risk (documented, not silently assumed away): a row
+explicitly written as ``write_class='deliberate'`` via a source string
+this module's taxonomy maps to a DIFFERENT class (e.g. an operator
+deliberately overriding a `post_tool_capture`-sourced write to
+`deliberate`) is indistinguishable from an unclassified historical row
+and WILL be reclassified by this pass. Bounded to the window between the
+schema migration landing and this script's first run — run this script
+promptly after deploying the migration to minimize it.
+"""
+````
+

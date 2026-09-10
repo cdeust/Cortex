@@ -10,9 +10,7 @@ plugin ships SQLite by default and README documents these PostgreSQL-only
 enrichments as no-ops). Those tests assert the absence of a signal on
 purpose — see ``test_missing_psycopg_is_silent``.
 
-Paper backing for the mechanism itself lives in the module docstring
-(Bar 2007; Collins & Loftus 1975; Smith & Vela 2001).
-"""
+source: ADR-0973"""
 
 from __future__ import annotations
 

@@ -45,7 +45,9 @@ def test_adr_with_proposed_lifecycle() -> None:
 
 
 def test_runbook_with_multi_audience() -> None:
-    """Audience facet is multi-valued (ADR-2244 §4.3)."""
+    """The audience facet accepts multiple values.
+
+    source: ADR-1057"""
     c = Classification(
         kind="runbook",
         lifecycle="active",
