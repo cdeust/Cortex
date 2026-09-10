@@ -81,6 +81,24 @@ def _badge_check(
 
 
 # source: ADR-0717
+_README_BADGE_ALT = re.compile(r'alt="Version (\d+\.\d+\.\d+)"')
+
+
+def _readme_alt_check(read_fn: ReadFn, expected: str) -> list[str]:
+    """The README's version-badge alt text.
+
+    The badge SVG itself is generated and gated, but the alt text beside it in
+    the README is hand-written prose that nothing read. It drifted three minor
+    versions behind before anyone noticed (README said 4.17.1 at 4.20.0), which
+    is exactly the drift this module exists to prevent.
+
+    source: ADR-0717"""
+    return doc_claim_structural.check_badge(
+        "README.md", _README_BADGE_ALT, expected, "version badge alt text", read_fn
+    )
+
+
+# source: ADR-0717
 _BADGE_ARIA_LABEL = re.compile(r'aria-label="Version (\d+\.\d+\.\d+)"')
 _BADGE_SHADOW_TEXT = re.compile(r'fill-opacity="0.25"[^>]*>(\d+\.\d+\.\d+)</text>')
 _BADGE_SOLID_TEXT = re.compile(r'fill="#fff"[^>]*>(\d+\.\d+\.\d+)</text>')
@@ -146,7 +164,7 @@ def _uv_lock_check(read_fn: ReadFn, expected: str) -> list[str]:
     return []
 
 
-# One row per version site (16 sites across 12 files). Adding a 17th JSON
+# One row per version site (17 sites across 13 files). Adding another JSON
 # site or badge occurrence is a one-line addition here; only a genuinely new
 # FILE FORMAT (neither JSON, regex-matchable text, nor uv.lock's own shape)
 # would need a new `_..._check` function alongside it.
@@ -186,6 +204,7 @@ SURFACES: tuple[SurfaceCheck, ...] = (
     partial(_badge_check, doc_claim_structural.VERSION_BADGE, "<title>"),
     partial(_badge_check, _BADGE_SHADOW_TEXT, "shadow <text>"),
     partial(_badge_check, _BADGE_SOLID_TEXT, "solid <text>"),
+    _readme_alt_check,
     _uv_lock_check,
 )
 

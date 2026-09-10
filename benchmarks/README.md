@@ -52,7 +52,7 @@ deterministic.
 
 | Flag | Effect |
 |---|---|
-| `--only longmemeval,locomo,beam` | run only these benchmarks |
+| `--only longmemeval,locomo,beam` | run only these benchmarks; `decision-ids` is also accepted, and the artifact names `longmemeval-s` and `beam-100K` are aliases. An unknown or empty token fails closed with exit 2 before anything runs |
 | `--no-ablation` / `--ablation-only` | skip the sweep / skip the plain benchmarks |
 | `--ablate-on locomo\|beam\|longmemeval` | which benchmark the sweep drives (default `locomo`) |
 | `--quick` | small per-benchmark limits (fast end-to-end check) |

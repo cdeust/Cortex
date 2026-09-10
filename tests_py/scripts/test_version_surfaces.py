@@ -95,6 +95,7 @@ OK_FILES: dict[str, str] = {
     ".claude-plugin/marketplace.json": _MARKETPLACE_OK,
     "plugins/hypermnesia-mcp-codex/.codex-plugin/plugin.json": f'{{"version": "{_V}"}}',
     "assets/badge-version.svg": _BADGE_SVG_OK,
+    "README.md": f'<img src="assets/badge-version.svg" alt="Version {_V}">\n',
     "uv.lock": _UV_LOCK_OK,
 }
 
@@ -126,12 +127,13 @@ class NominalTests(_GateTestCase):
         self._install()
         self.assertEqual(self._failures(), [])
 
-    def test_sixteen_surfaces_are_registered(self):
-        # source: the task's own site inventory — 12 files, 3 of them (server.json,
+    def test_seventeen_surfaces_are_registered(self):
+        # source: the task's own site inventory — 13 files, 3 of them (server.json,
         # marketplace.json, package-lock.json) carrying 2 keys each, plus the
-        # badge's 4 occurrences: 10 JSON/uv.lock sites - 3 double-counted files
-        # + 3 extra keys + 3 extra badge occurrences = 16.
-        self.assertEqual(len(gate.SURFACES), 16)
+        # badge's 4 occurrences and the README's alt text: 10 JSON/uv.lock sites
+        # - 3 double-counted files + 3 extra keys + 3 extra badge occurrences
+        # + 1 README site = 17.
+        self.assertEqual(len(gate.SURFACES), 17)
 
 
 class PerSurfaceDesyncTests(_GateTestCase):
@@ -267,6 +269,18 @@ class PerSurfaceDesyncTests(_GateTestCase):
         failure = self._assert_single_failure_about("assets/badge-version.svg")
         self.assertIn("shadow <text>", failure)
 
+    def test_readme_badge_alt_desync_is_reported(self):
+        """The alt text is hand-written prose beside a generated badge, which
+        is how it drifted three minor versions behind unnoticed."""
+        self._install(
+            **{"README.md": '<img src="assets/badge-version.svg" alt="Version 9.9.9">'}
+        )
+        failures = gate.check_version_surfaces(gate.read)
+        self.assertTrue(
+            any("version badge alt text" in f and "9.9.9" in f for f in failures),
+            failures,
+        )
+
     def test_badge_solid_text_desync_is_reported(self):
         self._install(
             **{
@@ -332,7 +346,7 @@ class MainTests(unittest.TestCase):
         code, out, err = self._run()
         self.assertEqual(code, 0)
         self.assertEqual(err, "")
-        self.assertIn("version surfaces OK (16 site(s) checked", out)
+        self.assertIn("version surfaces OK (17 site(s) checked", out)
 
     def test_a_diverged_tree_exits_one_and_names_the_surface(self):
         files = dict(OK_FILES)
