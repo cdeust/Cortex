@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [4.21.0] - 2026-09-10
+
 ### Fixed
 
 - **The decision gate no longer exempts a language, a test file or a file
