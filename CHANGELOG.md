@@ -8,6 +8,26 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **The decision gate no longer exempts a language, a test file or a file
+  header (#555).** Owner ruling of 2026-09-10 on ADR-1060, no exception. On
+  that day six lines of `///` rationale written into a `tests/*.rs` file
+  passed `mcp_server/hooks/decision_gate.py` because each of its three
+  exemptions sufficed alone: `//` and `/* */` languages were deferred "until
+  measured", the path was under a test root, and the run sat before anything
+  executable. All three are removed. `mcp_server/hooks/_decision_gate_lex.py`
+  now reads `//` and `/* */` (`.rs .js .jsx .ts .tsx .go .java .c .h .cpp
+  .hpp .cc .swift .kt .kts .cs .scala .m .mm .dart .php`), `--` (`.sql .lua
+  .hs`) and `;` (`.el .clj .lisp`) through one scanner that tracks string
+  literals and block comments, alongside the `#` family (`.py .sh .bash .zsh
+  .rb .pl .toml .yaml .yml .r .cfg .ini`), so a `//` inside a string literal
+  is never a comment; a Python comment after code on the same line no longer
+  counts as a comment line. Unchanged: the eight-line threshold,
+  grandfathering of blocks already in the file (only what the call introduces
+  is judged, so the ten tracked files with a long header stay editable), the
+  `source:` pointer line, fail-open on unreadable input and the explicit
+  `CORTEX_DECISION_GATE=off` override. The refusal states the new scope. The
+  measurement behind the header ruling is in the ADR's revision section.
+
 - **`benchmarks/reproduce.sh --only` no longer accepts a selector that runs nothing.**
   `--only` was compared token for token against `longmemeval`, `locomo`, `beam`
   and `decision-ids`, while the script itself prints the artifact names
