@@ -1,0 +1,198 @@
+---
+kind: adr
+number: 0616
+title: Preserve sqlite_store_search design decisions
+status: accepted
+---
+
+# ADR-0616: sqlite_store_search design decisions
+
+## Context
+
+Canonical migration of decision evidence from `mcp_server/infrastructure/sqlite_store_search.py` under ADR-0056.
+The excerpts below preserve historical claims and citations verbatim; original ADR numbers are historical quotations, not current identity bindings.
+
+## Decision
+
+Keep the source implementation linked to this versioned decision record. Operational API documentation remains with the implementation.
+
+## Preserved decision evidence
+
+### _decode_tags, original line 22
+
+````text
+    SQLite stores tags as a JSON string; the ``recall`` output schema (and
+    parity with the PostgreSQL backend) requires a list. Mirrors the decode in
+    ``SqliteMemoryStore._normalize_memory_row``.
+    
+````
+
+### recall_memories, original line 63
+
+````text
+        ``trusted_origins`` / ``untrusted_factor`` carry the capture-origin
+        trust policy (issue #368), passed in rather than imported because
+        infrastructure may not depend on core. Defaults are the identity
+        transform, so an unaware caller gets the pre-#368 ranking.
+        
+````
+
+### _vec_rows_in_query_space, original line 152
+
+````text
+        precondition: ``rowids`` are memory ids returned by the vec KNN.
+        postcondition: returns the ids whose ``memories.embedding_model`` is
+        compatible with the current process embedding mode (issue #169):
+        a neural query keeps 'neural' and legacy '' rows; a fallback query keeps
+        only 'fallback' rows; an 'unknown' mode (no engine constructed — e.g. a
+        raw-vector unit test) keeps everything. Fail-open on a missing column.
+        
+````
+
+### _apply_trust_factor, original line 265
+
+````text
+Scale down scores whose capture_origin is not trusted (issue #368).
+````
+
+### _apply_trust_factor, original line 265
+
+````text
+        PG parity: the counterpart is the `trust_weighted` CTE in
+        pg_schema.py. Applied here for the same reason it sits there — after
+        the signals are fused but BEFORE `_fetch_ranked_results` sorts and
+        truncates, so it reorders candidates instead of filtering an already
+        ranked list (arXiv 2604.16548: "Retrieval-time filtering alone is
+        insufficient").
+````
+
+### _apply_trust_factor, original line 265
+
+````text
+        The policy arrives as arguments — this layer must not import core.
+        An empty `trusted_origins` with factor 1.0 is the identity transform.
+        
+````
+
+### search_fts, original line 351
+
+````text
+        Joined on current_memories + NOT is_stale (mirror of the PG
+        search_fts): this is a discovery channel whose hits are injected
+        client-side with a fabricated score, so exclusion must happen here —
+        no downstream ranking can demote a superseded or stale hit.
+        
+````
+
+### search_vectors, original line 386
+
+````text
+        heads_only mirrors PgMemoryStore.search_vectors: the vec virtual
+        table cannot carry the supersession predicate, so hits are
+        post-filtered against current_memories (superseded ids may consume
+        top_k slots — acceptable at fallback scale).
+        
+````
+
+### spread_activation_memories, original line 431
+
+````text
+        domain/include_globals mirror PgMemoryStore.spread_activation_memories
+        (ADR-0054, same substitutability contract): the entity graph stays
+        unscoped, but the final entity->memory mapping is filtered to
+        ``domain`` (plus is_global rows when include_globals) so the
+        SQLite fallback (memory_store.py's inspection-mode path, which
+        can serve real traffic) does not reopen the cross-domain
+        injection the PostgreSQL fix closes.
+        
+````
+
+### _map_entities_to_memories, original line 507
+
+````text
+Map activated entities to memory rows, domain-scoped (ADR-0054).
+````
+
+### get_temporal_co_access, original line 610
+
+````text
+        Mirrors PgMemoryStore.get_temporal_co_access for SR-graph construction.
+        SQLite divergence: only one last_accessed timestamp per memory (no
+        access log). Approximation: pair memories whose last_accessed differs
+        by less than window_hours; proximity = 1 - delta/window (linear decay).
+        min_access is honored via access_count >= min_access, mirroring the PG
+        stored procedure WHERE clause (pg_schema.py get_temporal_co_access).
+        Source: Dayan, P. (1993). "Improving Generalisation for Temporal
+        Difference Learning: The Successor Representation." Neural Computation
+        5(4), 613-624. Proximity formula adapted from PG stored procedure shape.
+        
+````
+
+### comment, original line 112
+
+````text
+# Keep only vectors that live in the SAME space as the query
+            # embedding (issue #169): a 'fallback' (algorithmic) vector and a
+            # 'neural' vector are geometrically incompatible, so their cosine
+            # distances are not comparable. Cross-space rows still surface via
+            # FTS/heat/recency — they are only barred from the vector signal.
+````
+
+### comment, original line 290
+
+````text
+# A row missing from this result set keeps its score: it cannot
+            # be judged, and silently demoting what we failed to read would
+            # be a different bug from the one under fix.
+````
+
+### comment, original line 306
+
+````text
+# current_memories: the vector/FTS signals read virtual tables
+        # (memories_vec/memories_fts) that cannot carry the supersession
+        # predicate, so superseded ids can enter `scores`. This ranked-fetch
+        # gate is the SQLite analog of the PG candidates-CTE exclusion:
+        # superseded rows vanish from row_map and are skipped. They may still
+        # consume vector/FTS pool slots — acceptable at fallback scale, same
+        # argument as the O(N) embedding join in get_hot_embeddings.
+````
+
+### comment, original line 343
+
+````text
+# issue #368 — PG parity: the read path needs the origin
+                    # to break the heat feedback loop without a second query.
+````
+
+### comment, original line 358
+
+````text
+# NOTE: ``query`` here is an already-built FTS5 expression — callers
+        # (auto_recall._fts_query_from_prompt,
+        # recall_helpers.build_expanded_query) construct their own OR/AND term
+        # lists — so it must be passed through
+        # verbatim, NOT re-expanded (re-wrapping their operators would turn an OR
+        # into a literal AND, issue #169 regression). Code-aware matching on this
+        # path is carried entirely by index-time augmentation (augment_content),
+        # which indexes both the full identifier and its sub-tokens.
+````
+
+## Consequences
+
+Review rationale and source changes together. Historical evidence is preserved rather than silently rewritten; executable Python structure is unchanged after removing docstrings.
+
+### get_hot_embeddings: completeness audit
+
+````text
+Return (memory_id, embedding_bytes, heat) for hot memories.
+
+Precondition: min_heat >= 0.0; limit >= 1.
+Postcondition: ordered by heat_base DESC; len <= limit; rows without
+  embeddings are excluded; empty list when sqlite-vec is absent.
+
+Mirrors PgMemoryStore.get_hot_embeddings. SQLite stores embeddings in
+memories_vec (sqlite-vec); we join client-side: fetch hot IDs, then
+fetch each embedding by rowid. Engineering choice: O(N) join is
+acceptable at fallback scale (<10k memories).
+````

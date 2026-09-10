@@ -1,0 +1,843 @@
+---
+title: "ADR-0874 — pyproject.toml rationale"
+status: accepted
+source: pyproject.toml
+---
+
+# ADR-0874 — pyproject.toml
+
+Source rationale preserved verbatim. Identifiers inside historical quotations are not current identities.
+
+## pyproject.toml — original line 24
+
+````text
+# mcp 2.0.0 folded FastMCP's decorator API into the SDK itself
+# (mcp.server.mcpserver.MCPServer, the documented successor to
+# fastmcp.FastMCP) and fastmcp-slim (latest, 3.4.5) still declares
+# `mcp<2.0`, so the two cannot coexist in one lock — keeping fastmcp
+# would freeze this repo below mcp 2.0.0 forever. mcp_server/ now
+# imports mcp.server.mcpserver directly; anyio is still used
+# directly by mcp_server/tool_profile_middleware.py (no longer only
+# a fastmcp transitive dependency), so it stays declared.
+# source: PyPI JSON API https://pypi.org/pypi/fastmcp-slim/json,
+#         read 2026-08-01 (3.4.5 requires_dist: "mcp<2.0,>=1.24.0").
+````
+
+## pyproject.toml — original line 39
+
+````text
+# Recall quality depends essentially on these two: the embedding model
+# (semantic vectors) and the cross-encoder reranker. Without them the
+# engine degrades to low-quality hash embeddings + no rerank (see
+# infrastructure/embedding_engine.py, core/reranker.py). They are NOT
+# optional — promoted from the benchmarks/dev extras to base so every
+# distribution ships full-quality recall by default. The plugin already
+# installs them (scripts/setup.sh, scripts/launcher.py); this closes the
+# gap for the MCPB build (`uv run`). uv.lock pins ST 5.4.1 / flashrank 0.2.10.
+````
+
+## pyproject.toml — original line 49
+
+````text
+# core/temporal_normalize.py parses every free-form `created_at` that
+# states a time of day (the LoCoMo shape "1:56 pm on 8 May, 2023", any
+# string carrying a timezone) through dateutil. It was never declared and
+# arrived only by transitive luck: absent from requirements/ci-*.txt, so
+# every CI test job ran with the parser missing and the fallback path
+# dead — the store silently kept dates it could not read. A declared
+# dependency is what makes the write path behave the same on every
+# install and both backends. >=2.8.2 is the floor for the `tzinfos`
+# callable contract the resolver relies on.
+````
+
+## pyproject.toml — original line 66
+
+````text
+# Cortex's primary install path is Anthropic's plugin marketplace
+# (`/plugin install hypermnesia-mcp@cortex-plugins`). The marketplace clones this
+# repo into ~/.claude/plugins/cache/cortex-plugins/hypermnesia-mcp/<version>/ and
+# Claude Code spawns the MCP server + hooks via scripts/launcher.py
+# (see .mcp.json + .claude-plugin/plugin.json). PyPI is the best-effort,
+# hook-free compatibility channel for Gemini CLI, Codex CLI, and other hosts.
+# The two console scripts below are for local CLI use from a checkout:
+#   - cortex-doctor: runs the environment doctor.
+#   - hypermnesia-mcp: starts the stdio MCP server (equivalent to
+#     `python -m mcp_server`). Registry indexers such as Glama build the
+#     repo with `uv sync` and launch it via `uv run hypermnesia-mcp`,
+#     so this entry point must exist and match the package name.
+````
+
+## pyproject.toml — original line 85
+
+````text
+# >=0.4: top-level pgvector.Vector import; <0.6: 0.5.0 changed psycopg
+# loaders to return Vector (handled in pg_store._vector_to_bytes) — guard
+# against the next breaking minor. source: pgvector-python CHANGELOG.
+````
+
+## pyproject.toml — original line 95
+
+````text
+# Floor 1.12.5: the first release where `ast_parser`'s whole call chain —
+# `get_parser(<name>).parse(<bytes>)` — is both valid at runtime and
+# type-checkable. The floor is what the API requires, not a preference:
+# the range below it is four mutually incompatible shapes, and the old
+# `>=0.24.0` floor admitted every one of them (issue #253).
+# source: measured 2026-07-29, one probe per published wheel
+# (macosx_11_0_arm64) + one pyright 1.1.410 run per probe —
+#   <=1.6.2      `SupportedLanguage` = 179-name Literal WITHOUT "csharp"
+#                and `get_parser(name: SupportedLanguage)` — our language
+#                set is rejected. pyright: 1 error
+#   1.6.3        the macOS wheel ships no `tree_sitter_language_pack`
+#   1.7.x        never published — PyPI goes 1.6.3 -> 1.8.0
+#   1.8.0        no `SupportedLanguage` symbol at all
+#   1.9.0-1.12.2 306-name Literal WITH "csharp", but `get_parser` returns
+#                a `builtins.Parser` whose `parse(source: str)` REJECTS
+#                bytes: `get_parser("python").parse(b"...")` raises
+#                `TypeError: 'bytes' object is not an instance of 'str'`,
+#                uncaught, so `codebase_analyze` crashes. pyright: 1 error
+#   >=1.12.5     `get_parser` returns `tree_sitter.Parser`, `parse(bytes)`
+#                works, literal unchanged. pyright: 0 errors (1.12.5,
+#                1.13.0, 1.13.5 = locked, 1.13.6 = newest)
+# This is what the previous comment here was reaching for — it claimed
+# `<1.7` was needed because "1.7.0+ ... raise AttributeError on instances
+# of builtins.Parser" — except the pin it annotated said `<1.14`, so the
+# broken window was admitted rather than excluded. The window is real and
+# now excluded; the version numbers are measured rather than recalled.
+````
+
+## pyproject.toml — original line 123
+
+````text
+# Leiden community detection (Traag et al. 2019) — strict improvement
+# over Louvain. igraph supplies the graph backend leidenalg runs on.
+# detect_communities falls back to networkx Louvain when absent.
+````
+
+## pyproject.toml — original line 150
+
+````text
+# Optional OTLP telemetry export (issue #122) -- OFF by default. Absent this
+# extra (and OTEL_EXPORTER_OTLP_ENDPOINT), Cortex telemetry stays local-only
+# (~/.claude/methodology/telemetry.jsonl, no network egress). Installing this
+# extra alone changes nothing either -- see
+# infrastructure/otel_exporter.py::build_otel_exporter, which additionally
+# requires the endpoint env var before wiring any exporter.
+````
+
+## pyproject.toml — original line 164
+
+````text
+# Surface hanging tests in CI instead of stalling the whole runner.
+# source: 2026-05-25 CI on commit 148d5a1 — Test (Python 3.12)
+# hung silently >3h on a single pytest invocation; no per-test
+# timeout meant no way to identify the offender. 300s is generous
+# vs current measurements; @pytest.mark.timeout(N) opts out per test.
+````
+
+## pyproject.toml — original line 172
+
+````text
+# tests_py/test_mcp_prompts.py catches ExceptionGroup/BaseExceptionGroup
+# (mcp.Client's in-process transport wraps server-raised errors in one
+# via anyio task-group teardown, mcp 2.0.0 migration PR #331). Both
+# names are 3.11+ builtins; Cortex supports 3.10 (requires-python
+# above), so the test imports the backport explicitly rather than
+# relying on anyio's own transitive pin of it (same "transitive luck"
+# anti-pattern python-dateutil/mcp/anyio above already document).
+# source: exceptiongroup PyPI page — re-exports the 3.11+ builtins
+# unchanged on 3.11+, provides the backport on 3.10.
+````
+
+## pyproject.toml — original line 187
+
+````text
+# W1-6: benchmark output, media and paper bundles dominate the source archive;
+# retain application source, tests, fixtures and packaging inputs.
+# source: https://hatch.pypa.io/latest/config/build/#patterns
+````
+
+## pyproject.toml — original line 201
+
+````text
+#
+# This table is declared before the `[[tool.uv.index]]` / `[tool.uv.sources]`
+# tables below so it never re-opens a `tool.uv` super-table those sub-tables
+# already created implicitly.
+````
+
+## pyproject.toml — original line 205
+
+````text
+#
+# onnxruntime 1.24.x publishes NO cp310 artifact: 1.24.3 ships 24 files whose
+# lowest interpreter tag is cp311, and no sdist; 1.24.0 declares no
+# Requires-Python at all. uv therefore accepts it for the python<3.11 fork and
+# locks it there with a wheel list that contains nothing installable on 3.10,
+# so pip dies with "No matching distribution found for onnxruntime==1.24.3"
+# (CI run 30436365825, "Test (Python 3.10)"; reproduced 2026-07-29 in
+# python:3.10-slim/linux-amd64 against requirements/ci-postgresql.txt, which
+# reported "from versions: ..., 1.23.0, 1.23.1, 1.23.2").
+# 1.23.2 is the highest release carrying a cp310 manylinux_2_17_x86_64 wheel.
+````
+
+## pyproject.toml — original line 215
+
+````text
+#
+# A constraint and not a project dependency: constraints steer OUR resolution
+# only and are never published in the wheel metadata, so a consumer installing
+# Cortex on 3.11+ is unaffected and still resolves the current onnxruntime.
+# source: PyPI JSON API https://pypi.org/pypi/onnxruntime/json, read 2026-07-29
+#         (1.23.0/1.23.1/1.23.2 each ship 5 cp310 files; 1.24.0 ships 0).
+# source: uv settings reference, "constraint-dependencies" —
+#         https://docs.astral.sh/uv/reference/settings/#constraint-dependencies
+````
+
+## pyproject.toml — original line 233
+
+````text
+#
+# CORRECTION (2026-08-10 review): this bound is NOT merely precautionary.
+# sympy's maintainer documents a real, active dependency on a deprecated
+# mpmath 1.4.x API (`mpf_log`, replaced by `mpf_ln`) — sympy 1.14.0 still
+# calls it, and an mpmath 1.4.0 ALPHA once broke `import sympy` outright
+# before that was fixed. `sympy.sqrt(8).evalf()` importing and evaluating
+# correctly under mpmath 1.4.1 (verified 2026-08-01) is a sample of one
+# code path, not proof the two are compatible in general — it does not
+# cover whatever else in sympy's ~large surface still calls deprecated
+# mpmath internals. Nothing in this repo imports sympy or mpmath
+# directly (both arrive transitively through torch), which is exactly
+# why this override is acceptable at all: the deprecated-API surface
+# sympy still touches is not exercised by anything this repo runs.
+````
+
+## pyproject.toml — original line 246
+
+````text
+#
+# Bounded, not open-ended: sympy's maintainer states the NEXT sympy
+# release (1.15) will cap at `mpmath<1.5`, precisely because an mpmath
+# 1.4.0 alpha broke sympy import once already and they do not want a
+# repeat with a hypothetical mpmath 1.5. This override matches that
+# stated ceiling rather than leaving the door open for
+# `uv lock --upgrade` (routine, not `--upgrade-package mpmath`) to pull
+# a version sympy's own maintainer has already said may not work.
+# Remove this override once sympy ships a release with mpf_log removed
+# and widens its own declared range past 1.4.
+# source: sympy/sympy#29231 (github.com/sympy/sympy/issues/29231),
+#         read 2026-08-10 — maintainer (oscarbenjamin) comments:
+#         "sympy 1.14.0 uses API that is deprecated in mpmath 1.4.0"
+#         (mpf_log); "mpmath 1.4.0 alpha 0 completely broke sympy to the
+#         extent that `import sympy` failed"; "I would say that the new
+#         [sympy 1.15] release should cap `mpmath < 1.5`".
+# source: PyPI JSON API https://pypi.org/pypi/sympy/json, read 2026-08-10
+#         (latest 1.14.0, requires_dist still `mpmath<1.4,>=1.1.0`)
+# source: uv settings reference, "override-dependencies" —
+#         https://docs.astral.sh/uv/reference/settings/#override-dependencies
+````
+
+## pyproject.toml — original line 271
+
+````text
+#
+# Every container in this repo installs torch from the PyTorch CPU index,
+# because sentence-transformers pulls torch as a mandatory base dependency
+# and the default index serves the CUDA build — ~2GB of nvidia-cu13-* wheels
+# in an image that never sees a GPU (measured 2026-07-12, root Dockerfile).
+````
+
+## pyproject.toml — original line 276
+
+````text
+#
+# That was done with a bare `--index-url` flag at each call site, which has
+# two defects this section fixes at the root instead of at the three throw
+# sites:
+````
+
+## pyproject.toml — original line 280
+
+````text
+#
+#   * The wheels came from an index the lockfile knew nothing about, so
+#     uv.lock recorded the PyPI torch and its PyPI hashes. There was no
+#     source of truth that could produce a hash for the artifact actually
+#     installed, which is why --require-hashes was not reachable before.
+#   * Three Dockerfiles each re-stated the index URL and the rationale.
+````
+
+## pyproject.toml — original line 291
+
+````text
+#
+# The marker keeps the change to the platforms that had the problem: on
+# Linux (all containers, all CI runners) torch comes from the CPU index; on
+# macOS the PyPI wheel is already CPU-only, so contributors on a Mac resolve
+# exactly as before.
+# source: uv indexes documentation, "Using multiple indexes" —
+#         https://docs.astral.sh/uv/concepts/indexes/
+````
+
+## pyproject.toml — original line 307
+
+````text
+# Agent worktrees under .claude/worktrees/ are transient copies of the
+# repo (for parallel agent runs) — they are not project source and must
+# not be format/lint-checked. Without this, `ruff format --check .` (CI)
+# trips on whatever uncommitted state an agent worktree happens to hold.
+````
+
+## pyproject.toml — original line 314
+
+````text
+# Explicit rule set (issue #197: maximal-strictness program, grown one rule
+# family per PR so every family lands with its findings fixed, not ignored).
+# The first four entries are ruff's former implicit defaults, pinned
+# explicitly so future additions are deliberate config changes.
+````
+
+## pyproject.toml — original line 323
+
+````text
+# S110 try-except-pass: a swallowed exception with no signal is the
+# exact shape of the FlashRank and spreading-activation incidents
+# (docs/audits/silent-except-audit-2026-07-11.md). Every production
+# site either narrows to the expected exception class (typed excepts
+# are exempt under the default check-typed-exception=false) or emits
+# a signal (silent_failure.note / logger).
+````
+
+## pyproject.toml — original line 330
+
+````text
+# BLE001 blind-except (issue #197, family 2): a broad `except Exception`
+# is allowed only at a genuine last-resort boundary (tool handlers,
+# degraded-mechanism wrappers, hook/CLI entry points) and then MUST
+# carry a per-site `# noqa: BLE001 — <reason>` naming the signal it
+# emits (silent_failure.note / logger / the returned error report).
+# Everything else narrows to the exceptions the body can actually
+# raise, or re-raises (both exempt under ruff's BLE001 semantics).
+````
+
+## pyproject.toml — original line 338
+
+````text
+# PLR2004 magic-value-comparison (issue #197, family 3): every literal
+# compared against in production code becomes a NAMED constant carrying
+# a `# source:` comment (coding standard §8: citation, benchmark,
+# measurement, structural rationale, or an explicit statement that the
+# value predates provenance tracking — never an invented source).
+# Structural arities (e.g. `len(parts) == 2` after a single-separator
+# split) prefer unpacking or a named arity constant with a one-line
+# rationale. No production noqa for this rule; ruff already exempts
+# the sentinels -1/0/1 and str/bytes comparisons.
+````
+
+## pyproject.toml — original line 348
+
+````text
+# E501 line-too-long (issue #197, family 3): the limit is the
+# formatter's line-length (ruff default, 88 — unchanged; findings are
+# fixed by rewrapping, never by raising the limit). `ruff format`
+# cannot split long strings/comments, so E501 is what makes those
+# lines a CI failure instead of a drift. Per-site
+# `# noqa: E501 — <reason>` only for unsplittable tokens (URLs,
+# hashes, verbatim log/schema lines).
+````
+
+## pyproject.toml — original line 356
+
+````text
+# PLC0415 import-outside-top-level (issue #197, family 4): imports live
+# at module top so the import graph is static and a broken module fails
+# at boot, not mid-operation. A function-level import survives only with
+# a per-site `# noqa: PLC0415 — <reason>` naming one of: an optional
+# dependency or a module whose top-level closure hard-imports one
+# (importing it eagerly would break installs without that extra), an
+# ImportError-probe boundary (the except arm IS the degraded mode), an
+# import cycle (partner named; the pre-existing #233 family), a hook
+# latency boundary (per-event hook processes boot in ~0.05 s vs ~0.6 s
+# for the registry closure, measured 2026-07-28), or a deferral the
+# module itself documents.
+````
+
+## pyproject.toml — original line 368
+
+````text
+# S608 hardcoded-sql-expression (issue #197, family 4): every value
+# crosses to the store as a bound parameter; the only interpolated SQL
+# fragments are in-code literals or identifiers gated by an in-code
+# allowlist that REFUSES unknown names — never escaping
+# (docs/ASSURANCE-CASE.md §5). Each site carries a per-site
+# `# noqa: S608 — <mechanism>` naming which of those forms it uses, so
+# any NEW string-built SQL fails CI until it states its mechanism.
+````
+
+## pyproject.toml — original line 376
+
+````text
+# B (bugbear) (issue #239, family 1 of the continuation program): 16
+# findings in mcp_server/ (the issue's measurement scope) plus 25 more
+# once the repo-wide select picked up benchmarks/, scripts/, and
+# tests_py/ (41 total, source: `ruff check . --select B` after
+# enabling) — every one triaged individually, no blanket ignores.
+#   B905 zip-without-strict (26 sites across the repo): every site now
+#     states strict=True or strict=False explicitly. True where the
+#     surrounding code already guarantees equal-length iterables
+#     (built from the same source one-to-one, an already-checked
+#     length, or a documented index-correspondence precondition);
+#     False where unequal length is the intended behavior
+#     (common-prefix scans over independent strings, a pairwise
+#     traj/traj[1:] walk) or the inputs cross an external MCP
+#     tool-call / store-write boundary whose shape drift should
+#     degrade gracefully rather than raise.
+#   B904 raise-without-from (5 sites): every re-wrap in an `except`
+#     now chains `from <exc>`, preserving the original traceback as
+#     `__cause__` — an additive diagnostic, not an observable
+#     behavior change for any caller catching the wrapping type.
+#   B007 unused-loop-control-variable (9 sites) / B023
+#     function-uses-loop-variable (1 site): renamed to `_`-prefixed,
+#     or bound as a lambda default argument, at the exact sites
+#     ruff flagged — no other lines touched.
+#   B015 pointless-comparison (1 site, a test): a discarded `x is None`
+#     expression asserted nothing; removed rather than promoted to a
+#     new assertion (which would be new test coverage, not a refactor).
+#   B017 assert-blind-exception (3 sites, tests): narrowed to the
+#     concrete exception type each site's code path actually raises
+#     (confirmed by reproduction — sqlite3.ProgrammingError,
+#     mcp.shared.exceptions.McpError).
+````
+
+## pyproject.toml — original line 407
+
+````text
+# RET (return discipline) (issue #239, family 2): 20 findings in
+# mcp_server/ + 9 more repo-wide (29 total). 25 of the 29 were RET505
+# (superfluous else/elif after return) — mechanical, ruff's own `--fix`
+# applied every one unchanged in meaning. The remaining RET504
+# (unnecessary assignment before return) sites were inlined by hand
+# EXCEPT one: `_telemetry_wrap.py`'s `result = await fn(args); return
+# result` looks identical to the others but `result` is also read by
+# the `finally` block's telemetry sample — inlining would silently
+# zero out that count. Documented in place with `# noqa: RET504`
+# rather than fixed, since fixing it would be a behavior change.
+````
+
+## pyproject.toml — original line 418
+
+````text
+# DTZ (naive datetime) (issue #239, family 3): 4 findings in
+# mcp_server/ + 12 more repo-wide (16 total, 3 rule variants).
+#   DTZ003 datetime.utcnow() (2 sites, benchmarks/): replaced with
+#     datetime.now(timezone.utc) — the deprecated call fed only a
+#     %-directive-free strftime(), so the formatted string is
+#     byte-identical either way; this resolves the deprecation with
+#     zero output change.
+#   DTZ007 strptime without %z (1 site, benchmarks/): the parsed value
+#     is stamped `tzinfo=timezone.utc` on the very next line, so the
+#     function's actual return value is always aware — documented
+#     in place with `# noqa: DTZ007`.
+#   DTZ001 datetime() without tzinfo (13 sites, core/temporal.py +
+#     core/context_assembly/stage_detector.py + their test files):
+#     these two parsers are naive-by-design — every caller only ever
+#     diffs two datetimes THIS module produced (date-only, no
+#     time-of-day), and the sibling ISO-parse branch in each is
+#     naive too whenever the input lacks an explicit offset. Making
+#     one branch aware while its sibling stays naive would raise on
+#     the very comparisons these functions exist to support;
+#     unifying tz-awareness across both parsing paths is a design
+#     change for a dedicated fix, not this lint refactor. Documented
+#     in place with `# noqa: DTZ001` at each site (production) or a
+#     class-level docstring note (tests, whose literals are expected
+#     outputs/inputs for the same naive contract) — one exception,
+#     `test_sqlite_datetime_adapter_260.py`, where the naive input IS
+#     the test's stated point (round-tripping a tzinfo-less datetime).
+````
+
+## pyproject.toml — original line 445
+
+````text
+# N (PEP 8 naming) (issue #239, family 4): 26 findings repo-wide across
+# 7 rule variants, every one fixed or documented, zero per-file-ignore
+# needed (no tests_py/**-wide carve-out — see below).
+#   N806/N803 (mostly local-variable/parameter case): renamed to
+#     lowercase at every mechanical site (_KIND_LABELS, _SENTINEL,
+#     _PASSWORD_QUERY_KEYS, _TYPE_INTENTS, _EXPLICIT_KNOWLEDGE_TAGS,
+#     the sparse_dictionary_learning.py Gram-matrix K/D/G/M locals,
+#     N_THREADS/N_INCREMENTS in a test). Two sites keep the
+#     capitalization via `# noqa: N803`/`# noqa: N806` instead,
+#     because the case IS the cited source's notation: Platt (1999)
+#     logistic-calibration parameters A/B in platt_calibration.py, and
+#     the Titans paper's memory-matrix symbol M in titans_memory.py —
+#     renaming would make the code harder to verify against its
+#     source, the exact case this rule's override exists for.
+#   N818 (exception name missing Error suffix, 7 sites): every custom
+#     exception renamed (MalformedArtifactError, InstallLockBusyError,
+#     WikiExistsError, WikiMissingError, _SupersedeCasConflictError,
+#     plus two test-local ones) with every raise/except/import site
+#     updated atomically (blast radius checked via grep before
+#     renaming, per this program's standing practice).
+#   N815 (mixed-case attribute in class scope, 5 sites, all in
+#     shared/types_features.py): NOT a bare rename — these 5 Pydantic
+#     fields are an external JSON wire contract (the module's own
+#     docstring: "mirrors the JS-era MCP/profiles.json contract").
+#     Fixed with `Field(alias="camelCase")` + `populate_by_name=True`,
+#     mirroring the exact precedent in the sibling module
+#     shared/types_profiles.py, so the Python attribute is snake_case
+#     while the wire format is untouched.
+#   N801 (class name not CapWords, 1 site): decision_lock ->
+#     DecisionLock.
+#   N812 (non-lowercase import alias, 1 site): dropped a single-letter
+#     module alias (`as M`) entirely — the module's own name was
+#     already short.
+#   N802 (function name not lowercase, 5 sites): 3 lowercase the
+#     invariant-ID prefix only (test_I2_* -> test_i2_*, preserving
+#     traceability to docs/invariants/cortex-invariants.md's I2 row);
+#     1 moves Tsodyks-Markram (1997) U/u notation out of the test name
+#     into its docstring rather than collapsing the two letters to the
+#     same lowercase; 1 is a plain lowercase (HOME env-var reference).
+#   N999 (invalid module name, 2 sites): test_I2_canonical_writer.py
+#     and test_I10_pool_capacity.py filenames encode this project's
+#     OWN invariant-ID scheme, formally cross-referenced by
+#     docs/invariants/cortex-invariants.md's table (and, for I2,
+#     ADR-0053 plus two production-code comments citing the filename
+#     literally) — renaming the file would break that cross-reference
+#     for zero benefit. Documented with `# noqa: N999` instead.
+````
+
+## pyproject.toml — original line 492
+
+````text
+# ERA (commented-out code) (issue #239, family 5): 51 findings
+# repo-wide, 50 false positives from the eradicate heuristic
+# misreading documentation as code (quoted-string §8 source
+# citations, math-formula/SQL/format-by-example documentation, and 3
+# lines in infrastructure/wiki_store.py that deliberately mirror
+# CodeQL's py/path-injection sanitizer example verbatim, self-
+# documented at the site) — each suppressed with a per-site
+# `# noqa: ERA001 — <reason>`, never a blanket ignore. The one
+# genuine site (core/pg_recall.py: a literal disabled import + call
+# for the abandoned v0.1 abstention-gate model) was actually fixed —
+# the commented invocation deleted, replaced with prose on why the
+# module stays in the tree unwired.
+````
+
+## pyproject.toml — original line 506
+
+````text
+# ── Families deliberately NOT selected (issue #197, criterion 1) ────────────
+# Counts measured against mcp_server/ 2026-07-28, ruff 0.15.20 — what
+# enabling each would face. The program's bar: a family lands only with every
+# finding fixed or per-site-justified, never blanket-ignored. Three stated
+# reasons for exclusion:
+````
+
+## pyproject.toml — original line 511
+
+````text
+#
+# (a) REJECTED — polices style this project delegates elsewhere:
+#     D (1,094): docstring FORMATTING conventions (blank lines, imperative
+#       mood). Docstring content — contracts, pre/postconditions — is
+#       reviewed under the completion checklist; the formatting rules find
+#       no defects.
+#     ANN (347): annotation-PRESENCE checks. The pyright gate holds
+#       mcp_server/ at zero diagnostics and checks annotation CORRECTNESS;
+#       ANN would duplicate it textually.
+#     COM (937): trailing-comma style is owned by the pinned formatter;
+#       ruff's own documentation recommends against COM alongside
+#       `ruff format`.
+#     TD/FIX (0): deferral governance lives in filed issues with acceptance
+#       criteria, not in TODO-comment metadata shape.
+#     I (271): import-ORDER cosmetics — repo-wide churn, no defect-finding
+#       power. Import PLACEMENT, the failure-relevant half, is enforced by
+#       PLC0415 above.
+````
+
+## pyproject.toml — original line 528
+
+````text
+#
+# (b) REWRITE-SUGGESTION families — UP (91), C4 (13), SIM (68), PIE (10),
+#     RSE (1), PERF (94), RUF (725): stylistic/modernization transformations
+#     of working code. None targets the silent-failure, injection, or
+#     contract-lie defect classes this program exists for; each is a
+#     dedicated-PR-sized diff under the fix-with-landing bar.
+````
+
+## pyproject.toml — original line 534
+
+````text
+#
+# (c) JUDGEMENT families not yet triaged — TRY (163), ARG (54->667
+#     repo-wide), PTH (91), FBT (258->461 repo-wide), S beyond S110/S608
+#     (34 production + 11078 S101-in-tests): tracked as the program's
+#     continuation in issue #239 (B, RET, DTZ, N, ERA landed above).
+#     Enabling any of them without the per-finding triage the landed
+#     families received would mean blanket ignores — the exact
+#     anti-pattern this explicit select list exists to prevent.
+````
+
+## pyproject.toml — original line 544
+
+````text
+# Test code: try/except/pass and broad excepts in tests are deliberate
+# teardown or optional-path handling; a real failure surfaces through the
+# assertion or the harness, not through a log signal. PLR2004 is ignored in
+# tests because the compared literal IS the expected value under test — the
+# assertion's spec. Naming `assert len(rows) == 3` as `EXPECTED_ROWS` moves
+# the contract away from the assertion site and adds nothing a reader needs
+# (ruff's own default exempts assert-heavy test idioms poorly; 1,216 sites
+# measured 2026-07-28). E501 is NOT ignored in tests: long lines are equally
+# unreadable there, and every finding was rewrapped. PLC0415 is ignored in
+# tests because a function-level import in a test IS the fixture mechanism:
+# deferring the module under test past monkeypatching/env setup, importing
+# inside the test so an optional-backend ImportError skips rather than kills
+# collection, and keeping each test's dependency surface local to it
+# (745 sites measured 2026-07-28). S608 is ignored in tests because the
+# interpolated SQL there is fixture setup/inspection against a test-owned
+# throwaway database — the assertion is the boundary, and no untrusted input
+# exists (6 sites measured 2026-07-28). The production-code bans
+# (mcp_server/) stay fully enforced.
+````
+
+## pyproject.toml — original line 567
+
+````text
+# source: 2026-05-25 CI stall on 148d5a1 — Test (Python 3.12) hung >3h
+# on a single pytest invocation with no per-test timeout to identify
+# the offender. Thread method is required: signal-based timeouts
+# conflict with pytest-asyncio's non-main-thread test runs.
+````
+
+## pyproject.toml — original line 573
+
+````text
+# Fail closed when a plugin the config DEPENDS ON is absent. Without this,
+# an environment missing pytest-timeout only emits
+# `PytestConfigWarning: Unknown config option: timeout` and runs on with no
+# per-test timeout at all — the protection above silently evaporates and a
+# hang stalls the run indefinitely instead of failing at 300s (observed
+# 2026-07-28 while reproducing issue #219: a local run hung >600s because
+# the plugin was not installed).
+````
+
+## pyproject.toml — original line 583
+
+````text
+#
+# source: SWIG did not set `__module__` on its three support types
+#   (SwigPyObject, SwigPyPacked, swigvarlink); CPython warns about builtin
+#   types lacking it. SWIG 4.4.0 fixes this by moving all three into the SWIG
+#   runtime module — https://github.com/swig/swig/issues/2881. Same defect
+#   tracked downstream at huggingface/transformers#42981 and
+#   facebookresearch/faiss#4481 ("Upgrade to SWIG 4.4").
+````
+
+## pyproject.toml — original line 590
+
+````text
+#
+# Emitter here is `sentencepiece` (measured 2026-07-28: it is the only
+#   distribution under the interpreter's site-packages containing
+#   `SwigPyObject`, and importing it reproduces all three warnings). It is
+#   NOT a declared Cortex dependency — it appears 0 times in `uv.lock` and
+#   `pyproject.toml` — but `transformers` imports it opportunistically when a
+#   developer's environment happens to provide it, so the warnings surface in
+#   some local runs and not others. That environment-dependence is exactly why
+#   this is pinned by message rather than by module: it must not depend on
+#   which package happens to trigger the import first.
+````
+
+## pyproject.toml — original line 600
+
+````text
+#
+# Anchored to the three type names, not a `SwigPy.*` prefix: `swigvarlink`
+#   does not share that prefix and would keep leaking through. Any OTHER
+#   DeprecationWarning, including one from our own code, still surfaces.
+````
+
+## pyproject.toml — original line 610
+
+````text
+# Regression tripwire for issue #260: `sqlite_compat.py` now registers an
+# explicit `sqlite3.register_adapter(datetime, ...)` (see its module
+# docstring), so nothing in this codebase should ever again hit the
+# stdlib's *implicit* default adapter for `datetime.datetime`. If this
+# fires, a new bound-raw-datetime call site was added outside that
+# adapter's coverage — turn it into a hard failure so it cannot silently
+# return the way it did before (3 warnings across
+# tests_py/handlers/test_consolidate.py and
+# tests_py/integration/test_memory_lifecycle.py).
+````
+
+## pyproject.toml — original line 636
+
+````text
+# CI's own tooling lives here rather than as bare `pip install ruff==X` lines
+# in the workflow. Two reasons, in order of weight:
+````
+
+## pyproject.toml — original line 647
+
+````text
+#
+# Groups are per-job so no job installs a tool it does not run (ISP applied
+# to dependencies: a lint job that drags in pyright pays for it in cold-start
+# time and in supply-chain surface).
+````
+
+## pyproject.toml — original line 659
+
+````text
+# The build backend from [build-system].requires, pinned here as well so
+# `python -m build --no-isolation` can run against an already-hashed
+# environment. With isolation (the default) build downloads hatchling from
+# PyPI at build time, outside every hash check in this repository — a real
+# gap even though Scorecard does not parse implicit build-isolation
+# fetches, since it executes third-party code to produce our artifact.
+````
+
+## pyproject.toml — original line 667
+
+````text
+# torch is named here ONLY so [tool.uv.sources] can bind to it. uv applies a
+# source to the project's own direct dependencies; torch reaches this project
+# transitively through sentence-transformers, so without this line the source
+# below is silently inert — the lock keeps resolving the PyPI CUDA build and
+# the exported hashes would install ~2GB of nvidia-cu13-* wheels into every
+# container. Verified inert before this group existed: `uv lock` left torch at
+# `source = { registry = "https://pypi.org/simple" }` with cuda-toolkit deps.
+````
+
+## pyproject.toml — original line 674
+
+````text
+#
+# A dependency-group and not an extra, deliberately: PEP 735 groups are local
+# to this repository and are NOT published in the wheel's metadata, so naming
+# torch here does not add a dependency that anyone installing hypermnesia-mcp
+# from PyPI would see. It only steers OUR resolution.
+````
+
+## pyproject.toml — original line 682
+
+````text
+# Coverage-guided fuzzing of the pure parsers (see fuzz/). Atheris is the
+# libFuzzer binding for CPython and is what ClusterFuzzLite runs in CI.
+# source: https://github.com/google/atheris — the reference Python engine,
+# and the one OSS-Fuzz's python builder installs.
+````
+
+## pyproject.toml — original line 686
+
+````text
+#
+# The marker is not defensive vagueness, it is the actual wheel matrix:
+# atheris 3.1.0 publishes cp312/cp313/cp314 manylinux_2_17_x86_64 wheels and
+# NOTHING else — no macOS, no aarch64 (checked on the PyPI JSON API,
+# 2026-07-28). Without the marker, `uv lock` would try to satisfy atheris on
+# an arm64 Mac and fall back to building libFuzzer from source. The harnesses
+# in fuzz/ are therefore CI-only by construction; each one keeps a pure-python
+# entry point so its corpus can still be replayed anywhere (see
+# fuzz/replay_corpus.py).
+````
+
+## pyproject.toml — original line 700
+
+````text
+# Mutation testing (mutmut 3.x). Mutation score — not line coverage — is
+# the real signal that a test SUITE can detect a regression: a mutant that
+# survives is a behavior no test pins. This guards against the class of bug
+# where green tests on one backend (SQLite) hide a failure on another (PG),
+# e.g. the 2026-06-23 recall structuredContent regression.
+````
+
+## pyproject.toml — original line 705
+
+````text
+#
+# This committed scope is narrowed to the demonstrated module; per-change
+# runs widen `source_paths`/`only_mutate` to the touched files (see
+# scripts/mutation_check.sh). Mac defaults use_setproctitle to False.
+# source_paths = the importable package (so the mutants/ working copy can
+# import it); only_mutate narrows the actual mutation to the touched file;
+# also_copy brings the test tree (mutmut's default copies tests/ and test/
+# but NOT tests_py/). For a per-change run, repoint only_mutate + the test
+# selection at the changed file and its test.
+````
+
+## pyproject.toml — original line 716
+
+````text
+# A module that READS repository files needs them in the mutants/ working copy
+# too: scripts/check_doc_claims.py resolves its canonical sources relative to
+# its own location, so without these its repository-level tests raise
+# FileNotFoundError under every mutant and the run reports no usable result.
+# uv.lock/requirements/pyproject.toml: scripts/generate_pip_constraints.py and
+# its test read these directly (uv.lock registries, requirements/*.txt,
+# pyproject.toml's [[tool.uv.index]] entries) — issue #262.
+# .github: tests_py/scripts/test_typecheck_env_parity.py reads
+# .github/workflows/ci.yml directly; without it, a scoped run that selects
+# that test fails collection under every mutant with FileNotFoundError
+# instead of scoring the suite — issue #262.
+# assets: check_doc_claims.py's own unpatched RepositoryTests read the
+# committed badge SVGs (check_versions -> check_badge) directly off disk;
+# without this a scoped run that includes check_doc_claims.py/
+# generate_repo_badges.py fails EVERY mutant on "assets/badge-version.svg:
+# missing" before it can score a single one — reproduced empirically
+# (issue #293) attempting exactly that run.
+# scripts: tests_py/conftest.py — the ROOT conftest every test in the suite
+# collects through — does `from scripts.check_venv_lock_parity import
+# postgresql_extra_drift` at module level. Without this entry, ANY scoped
+# run (any `only_mutate`/test selection) fails collection at the conftest
+# itself with `ModuleNotFoundError: No module named 'scripts'` before a
+# single mutant can be scored — reproduced empirically (2026-07-31) while
+# scoping a run at mcp_server/core/ast_parser.py; not specific to that
+# file, since every run shares this same conftest.
+````
+
+## Final non-Python residual audit
+
+### pyproject.toml — pre-cleanup line 129
+
+````text
+# CPU-only graph viz path: precomputed igraph layout + Datashader tile
+# rendering + Apache Arrow streaming for client-side hit-test. Enables
+# the /api/tile + /api/quadtree + /api/recompute_layout endpoints. No
+# GPU dependency. Install size ≈ 200 MB (numba + llvmlite dominate).
+````
+
+### pyproject.toml — pre-cleanup line 228
+
+````text
+# ── mpmath — real, named upstream incompatibility with a known ceiling ───
+#
+# sympy 1.14.0 (latest, no newer release exists) declares
+# `mpmath<1.4,>=1.1.0`. Dependabot's mpmath 1.3.0 -> 1.4.1 bump therefore
+# fails uv's default resolution: sympy pins the lock back to 1.3.0.
+````
+
+### pyproject.toml — pre-cleanup line 287
+
+````text
+# Declaring the index here makes uv.lock record the CPU wheels and their
+# hashes, which is what scripts/generate_pip_constraints.py then exports.
+# `explicit = true` means this index is used ONLY for packages that name it
+# below — it never becomes a general fallback that could shadow PyPI.
+````
+
+### pyproject.toml — pre-cleanup line 639
+
+````text
+#   1. A version is not a hash. Scorecard's Pinned-Dependencies check treats
+#      any pip install without --require-hashes as unpinned, and it is right
+#      to: an exact version still resolves to whatever artifact the index
+#      serves for it today. Only a hash pins the bytes. Putting these in the
+#      lock is what lets scripts/generate_pip_constraints.py emit a hashed
+#      requirements file for them.
+#   2. The pins were duplicated across workflow files with no mechanism
+#      keeping them equal. One lock entry per tool removes the drift.
+````

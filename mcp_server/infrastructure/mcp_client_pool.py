@@ -1,8 +1,7 @@
-"""Singleton connection pool for MCP clients — lazy connect, reuse, idle timeout.
-
-Reads server config from mcp-connections.json, creates MCPClient instances on
+"""Reads server config from mcp-connections.json, creates MCPClient instances on
 demand, caches by server name.
-"""
+
+source: ADR-0533"""
 
 from __future__ import annotations
 
@@ -19,9 +18,7 @@ from mcp_server.infrastructure.file_io import read_json
 from mcp_server.infrastructure.mcp_client import MCPClient
 from mcp_server.infrastructure.memory_config import get_memory_settings
 
-# Insertion-ordered: dict preserves insertion order (PEP 468 / CPython 3.7+),
-# so the FIRST key is the least-recently-used connection. ``get_client``
-# re-inserts on every cache hit to keep this ordering an LRU ordering.
+# source: ADR-0533
 _pool: dict[str, MCPClient] = {}
 
 
@@ -59,16 +56,15 @@ def _load_server_config(server_name: str) -> dict[str, Any]:
 
 
 def _evict_lru_idle() -> bool:
-    """Evict the least-recently-used connection that is NOT serving a call.
+    """Evict the least-recently-used idle connection.
 
     Pre-condition: the pool is at capacity and a new server is requested.
-    Post-condition: returns True and removes exactly one connection (the
-    LRU among connections with no in-flight request) if such a connection
-    exists; returns False and mutates nothing if every live connection is
-    busy. A busy connection is never evicted — closing it would cancel an
-    in-flight request (see MCPClient.busy). Iteration order is insertion
-    order, so the first non-busy key found is the LRU idle one.
-    """
+
+    Post-condition: return True after removing one idle connection, or False
+    without mutation when every live connection is busy. Never evict an
+    in-flight connection.
+
+    source: ADR-0533"""
     for name, client in _pool.items():
         if not client.busy:
             client.close()
@@ -79,15 +75,15 @@ def _evict_lru_idle() -> bool:
 
 
 def _admit_new_connection(server_name: str) -> None:
-    """Bound the pool size before a new connection is opened.
+    """Make room for a new pooled server connection.
 
-    Pre-condition: ``server_name`` is not already a live pooled connection.
-    Post-condition: the pool holds < max connections (room for one more),
-    OR an McpConnectionError is raised. When at capacity, the LRU idle
-    connection is evicted; if all are busy, fail fast rather than grow
-    unbounded — this is the explicit anti-leak guarantee from the
-    pool-leak fix follow-on. source: docs/provenance/bounded-io-plan.md Phase 3.
-    """
+    Pre-condition: server_name is not already a live pooled connection.
+
+    Post-condition: the pool has room for one connection, or
+    McpConnectionError is raised. At capacity, evict the LRU idle connection;
+    raise when all connections are busy.
+
+    source: ADR-0533"""
     max_conns = get_memory_settings().mcp_pool_max_connections
     if len(_pool) < max_conns:
         return
@@ -104,10 +100,7 @@ def _admit_new_connection(server_name: str) -> None:
 async def get_client(server_name: str) -> MCPClient:
     """Get a connected MCP client for the named server.
 
-    Pool size is bounded by mcp_pool_max_connections: a cache hit touches
-    the LRU ordering; a miss admits via _admit_new_connection (LRU-evict or
-    fail-fast) before spawning a child, so the pool never grows unbounded.
-    """
+    source: ADR-0533"""
     existing = _pool.get(server_name)
     if existing and existing.connected:
         # LRU touch: move to the most-recently-used end of the ordering.
@@ -124,12 +117,7 @@ async def get_client(server_name: str) -> MCPClient:
     config = _load_server_config(server_name)
     client = MCPClient(config)
 
-    # Upstream MCP servers ship binaries that are not in the default
-    # allowlist. Mirror the extension that ap_bridge.py applies on its
-    # bridge path so the pool path is not silently rejected. Without
-    # this, ingest_codebase fails with "Command not in allowed list"
-    # even when mcp-connections.json correctly points at the binary.
-    # source: ap_bridge.py L226-L233 — same set, same reason.
+    # source: ADR-0533
     client._extra_allowed_commands = {"node", *ALLOWED_UPSTREAM_COMMANDS}
 
     await client.connect()

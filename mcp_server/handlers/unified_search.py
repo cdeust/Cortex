@@ -1,23 +1,16 @@
 """Handler: unified_search — RRF-fuse Cortex memory recall with AP code
-search (ADR-0046 Phase 3).
+search.
 
 Composition root: cortex.recall (semantic memory) + ap.search_codebase
 (code symbols) → core.unified_search_fusion → single ranked list.
-
-When AP is off, the handler returns Cortex-only results marked
-``status: partial, sources: [cortex]`` — never fails. When Cortex
-returns nothing and AP is on, the response is the AP-only hits.
-When AP is on but the per-call attempt itself fails (timeout, transport
-error, not installed), ``status`` is also ``partial`` and ``degraded``
-names the source and reason — this is distinct from AP genuinely
-returning zero hits, which stays ``status: ok, degraded: null``.
 
 The fusion contract: each input list must present unique string ids.
 - Memories use ``memory:<memory_id>`` (added by this handler).
 - AP symbols use ``symbol:<file>::<qualname>`` (added by the infra
   layer).
 Ids never collide across sources.
-"""
+
+source: ADR-0450"""
 
 from __future__ import annotations
 
@@ -43,16 +36,18 @@ schema = {
     "title": "Unified search",
     "annotations": READ_ONLY,
     "description": (
-        "Unified search across Cortex memories and the automatised-"
-        "pipeline code graph (ADR-0046 Phase 3). Runs cortex.recall and "
-        "ap.search_codebase in parallel, then merges via Reciprocal "
-        "Rank Fusion (k=60, Cormack 2009). Returns a single ranked "
-        "list with ``source_ranks`` on every record so the UI can "
-        "explain where each hit came from. Falls back to Cortex-only "
-        "when AP is disabled (CORTEX_MEMORY_AP_ENABLED=0) or "
-        "unreachable (status=partial). An explicit project_root adds authored "
-        "wiki pages matching every query token. Bare ADR-NNNN or exact_id "
-        "queries resolve only the canonical wiki page, before memory/AP calls."
+        # source: ADR-0450
+        "Unified search across Cortex memories and the "
+        "automatised-pipeline code graph. Runs cortex.recall and "
+        "ap.search_codebase in parallel, then merges via Reciprocal Rank "
+        "Fusion (k=60). Returns a single ranked list with "
+        "``source_ranks`` on every record so the UI can explain where "
+        "each hit came from. Falls back to Cortex-only when AP is "
+        "disabled (CORTEX_MEMORY_AP_ENABLED=0) or unreachable "
+        "(status=partial). An explicit project_root adds authored wiki "
+        "pages matching every query token. Bare ADR-NNNN or exact_id "
+        "queries resolve only the canonical wiki page, before memory/AP "
+        "calls."
     ),
     "inputSchema": {
         "type": "object",
@@ -78,10 +73,10 @@ schema = {
                 "type": "boolean",
                 "default": False,
                 "description": (
-                    "Forwarded verbatim to cortex.recall's ADR-0054 "
-                    "spreading-activation opt-out (see recall's schema "
-                    "for detail). Defaults to false: cross-domain "
-                    "candidates the entity graph could reach stay excluded."
+                    # source: ADR-0450
+                    "Forwarded to cortex.recall's spreading-activation cross-domain "
+                    "opt-in. Defaults to false, excluding candidates reached from "
+                    "other domains."
                 ),
             },
             "sa_mode": {
@@ -89,10 +84,9 @@ schema = {
                 "enum": ["tail", "augment", "off"],
                 "default": "tail",
                 "description": (
-                    "Forwarded verbatim to cortex.recall's ADR-0054 "
-                    "addendum spreading-activation mode (see recall's "
-                    "schema for detail). Defaults to the benchmark-neutral "
-                    "``tail`` mode."
+                    # source: ADR-0450
+                    "Forwarded to cortex.recall's spreading-activation mode. Defaults "
+                    "to ``tail``; see recall's schema for mode semantics."
                 ),
             },
         },

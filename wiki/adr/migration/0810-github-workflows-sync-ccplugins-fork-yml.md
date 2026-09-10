@@ -15,3 +15,18 @@ Source rationale preserved verbatim. Identifiers inside historical quotations ar
 # local commits that somehow landed. Fall back to hard reset
 # (the fork is meant to be a clean mirror, not an author).
 ````
+
+## Final non-Python residual audit
+
+### .github/workflows/sync-ccplugins-fork.yml — pre-cleanup line 3
+
+````text
+# Keeps cdeust/awesome-claude-code-plugins fork's main in step with
+# ccplugins/awesome-claude-code-plugins main. Runs on:
+#   - every push to Cortex main (piggyback — cheap, stays fresh)
+#   - a daily cron (catches upstream activity when Cortex is quiet)
+#   - manual dispatch
+# This way, when publish-ccplugins.yml fires on a Cortex release, the
+# fork is already up-to-date and the sync/cortex-<tag> branch is
+# always rooted at a clean upstream HEAD.
+````

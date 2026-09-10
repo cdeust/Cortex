@@ -23,13 +23,13 @@ def supported() -> None:
 def peer_uid(connection: socket.socket) -> int:
     supported()
     if sys.platform == "linux":
-        # source: unix(7), struct ucred = pid_t, uid_t, gid_t.
+        # source: ADR-0510
         credentials = struct.Struct("iII")
         value = connection.getsockopt(
             socket.SOL_SOCKET, socket.SO_PEERCRED, credentials.size
         )
         return credentials.unpack(value)[1]
-    # source: Apple getpeereid(3); uid_t/gid_t are unsigned int on macOS.
+    # source: ADR-0510
     library = ctypes.CDLL(None, use_errno=True)
     getpeereid = library.getpeereid
     getpeereid.argtypes = [

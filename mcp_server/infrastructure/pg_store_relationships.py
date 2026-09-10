@@ -18,9 +18,7 @@ class PgRelationshipMixin(PgStoreHost):
     ) -> int:
         """Batch-update relationship weights. Single round-trip, single commit.
 
-        Source: issue #13 — plasticity LTP/LTD can update 30k+ edges in one
-        cycle. Per-row UPDATEs dominate wall-clock on the consolidate run.
-        """
+        source: ADR-0563"""
         if not updates:
             return 0
         ids = [int(u[0]) for u in updates]
@@ -38,9 +36,7 @@ class PgRelationshipMixin(PgStoreHost):
     def delete_relationships_batch(self, rel_ids: list[int]) -> int:
         """Batch-delete relationships by id. Single round-trip.
 
-        Source: issue #13 — pruning cycle deleted 32k+ edges per-row on
-        darval's store.
-        """
+        source: ADR-0563"""
         if not rel_ids:
             return 0
         self._execute(
@@ -51,12 +47,7 @@ class PgRelationshipMixin(PgStoreHost):
         return len(rel_ids)
 
     def insert_relationship(self, data: dict[str, Any]) -> int:
-        # Idempotent on the directed tuple (source, target, type). Re-ingest
-        # (e.g. incremental codebase re-analysis) replays the same structural
-        # edges; without ON CONFLICT this raises UniqueViolation on
-        # uq_relationships_directed. On conflict we refresh the edge instead
-        # of duplicating: keep the strongest weight, mark it re-reinforced.
-        # Source: uq_relationships_directed (pg_schema.py §A3); issue #13.
+        # source: ADR-0563
         row = self._execute(
             "INSERT INTO relationships "
             "(source_entity_id, target_entity_id, relationship_type, weight, "
@@ -152,19 +143,7 @@ class PgRelationshipMixin(PgStoreHost):
     ) -> None:
         """Dragon Hatchling Hebbian update via single UPSERT.
 
-        Phase 2 B3: collapses the pre-Phase-2 three-statement pattern
-        (UPDATE fwd / UPDATE reverse / INSERT if both miss) into one
-        INSERT ... ON CONFLICT DO UPDATE. For ``co_retrieval`` (a
-        symmetric edge), ``(source_entity_id, target_entity_id)`` is
-        canonicalized via LEAST/GREATEST so the UNIQUE partial index
-        ``uq_relationships_canonical_co_retrieval`` fires correctly.
-        Non-symmetric types (``causal``, etc.) keep the directional
-        semantics and fall through the three-step legacy path because
-        no UNIQUE constraint exists for them.
-
-        Source: docs/program/phase-5-pool-admission-design.md (Phase 2
-        B3 UPSERT); pg_schema.py migration for the UNIQUE constraint.
-        """
+        source: ADR-0563"""
         src = self._execute(
             "SELECT id FROM entities WHERE LOWER(name) = LOWER(%s) LIMIT 1",
             (source_name,),
@@ -176,18 +155,7 @@ class PgRelationshipMixin(PgStoreHost):
         if not src or not tgt:
             return
         sid, tid = int(src["id"]), int(tgt["id"])
-        # Touch entities: update last_accessed and warm heat on co-activation.
-        # The +0.05 magnitude has no published or measured source: none —
-        # engineering default, calibration pending (Cortex coding standard
-        # §8). Same unsourced-+0.05-magnitude family as
-        # core/reconsolidation.py:_RECONS_HEAT_BUMP_UPDATE (explicitly
-        # labelled "calibration pending" there) and the wiki citation heat
-        # bump (infrastructure/pg_schema.py WIKI_TRIGGERS_DDL, cfd8e4c3) —
-        # internally consistent, not independently derived. See
-        # docs/provenance/blend-weight-calibration.md for the procedural
-        # precedent this codebase follows to graduate a placeholder like
-        # this to a cited, measured value (that document itself does not
-        # cover this constant).
+        # source: ADR-0563
         self._execute(
             "UPDATE entities SET last_accessed = NOW(), "
             "heat = LEAST(1.0, heat + 0.05) "

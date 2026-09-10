@@ -1,20 +1,14 @@
 """DRY parity test: the SQL effective_stage() derivation must equal an
 iterative application of the canonical Python advancement logic.
 
-Root cause (memory 4202985): A3 made HEAT lazy on the read path but left
-STAGE eager (advanced only by the consolidation handler). effective_stage()
-re-derives the stage lazily inside effective_heat(). To stay DRY with the
-single source of truth — cascade_advancement.compute_advancement_readiness —
-this test pins the SQL ladder against an iterative application of that exact
-Python function across a grid of inputs.
-
 The reference loop advances repeatedly until no change, treating stage_hours
 as a dwell budget consumed stage-by-stage (the same model the SQL uses), and
 disables the dopamine gate (encoding-time, unavailable on the read path) so
 the LABILE→EARLY_LTP transition is decided by importance alone.
 
 Runs against cortex_test (conftest redirects DATABASE_URL).
-"""
+
+source: ADR-0987"""
 
 from __future__ import annotations
 

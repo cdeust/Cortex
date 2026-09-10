@@ -5,8 +5,9 @@ weights based on entity heat.
 
 Returns include diagnostic ``reason_for_zero`` / ``reason_for_inaction``
 fields when the cycle produces no mutation counters, distinguishing
-early-return from a genuine "nothing to do" pass (issue #14 P2, darval).
-"""
+early-return from a genuine "nothing to do" pass.
+
+source: ADR-0364"""
 
 from __future__ import annotations
 
@@ -23,19 +24,13 @@ from mcp_server.observability import silent_failure
 
 logger = logging.getLogger(__name__)
 
-# Thresholds mirror the defaults applied inside
-# `identify_prunable` / `identify_strengtheneable`. Pulled to module
-# scope so the diagnostic reclassification can reproduce the same
-# gates without calling back into the curation helpers.
-# Source: mcp_server.core.curation (identify_prunable defaults).
+# source: ADR-0364
 _PRUNE_HEAT_THRESHOLD = 0.01
 _PRUNE_CONFIDENCE_THRESHOLD = 0.3
 _STRENGTHEN_MIN_ACCESS = 5
 _STRENGTHEN_MIN_CONFIDENCE = 0.8
 
-# Heat below which the diagnostic `heat_lt05` flag counts a memory as cool.
-# source: pre-existing tuned value, extracted unchanged (#197 family 3);
-# provenance not recorded at introduction
+# source: ADR-0364
 _LOW_HEAT_THRESHOLD = 0.5
 
 
@@ -45,21 +40,20 @@ def run_memify_cycle(
 ) -> dict:
     """Run memify self-improvement: prune, strengthen, reweight.
 
-    `memories` may be pre-loaded by the consolidate handler (issue #13).
+        Postcondition:
+          * Always returns ``pruned``, ``strengthened``, ``reweighted``.
+          * When all three counters are zero → additive
+            ``reason_for_zero`` key with one of ``passed_through``,
+            ``below_access_threshold``, ``below_stale_threshold``,
+            ``reweight_only_gate``.
+          * When ``pruned == 0 AND strengthened == 0 AND reweighted > 0`` →
+            additive ``reason_for_inaction`` key with one of the same
+            values. ``pruned`` / ``strengthened`` / ``reweighted`` are
+            preserved unchanged.
+          * When any of ``pruned`` / ``strengthened`` is non-zero → both
+            diagnostic keys are absent.
 
-    Postcondition (issue #14 P2):
-      * Always returns ``pruned``, ``strengthened``, ``reweighted``.
-      * When all three counters are zero → additive
-        ``reason_for_zero`` key with one of ``passed_through``,
-        ``below_access_threshold``, ``below_stale_threshold``,
-        ``reweight_only_gate``.
-      * When ``pruned == 0 AND strengthened == 0 AND reweighted > 0`` →
-        additive ``reason_for_inaction`` key with one of the same
-        values. ``pruned`` / ``strengthened`` / ``reweighted`` are
-        preserved unchanged.
-      * When any of ``pruned`` / ``strengthened`` is non-zero → both
-        diagnostic keys are absent.
-    """
+    source: ADR-0364"""
     pruned, strengthened, flags, scanned = _stream_prune_strengthen(store, memories)
     reweighted = _reweight_relationships(store)
 
@@ -107,14 +101,7 @@ def _stream_prune_strengthen(
 ) -> tuple[int, int, dict[str, bool], int]:
     """Stream prune + strengthen + diagnostic flags in ONE pass.
 
-    ``identify_prunable`` / ``identify_strengtheneable`` are per-memory
-    threshold filters, so applying them per chunk and unioning the effects is
-    equivalent to one full-list call — at O(chunk) RAM instead of O(N). Deletes
-    / importance updates go through the interactive pool, so they don't contend
-    with the batch-pool read cursor, and the cursor's MVCC snapshot keeps the
-    scan stable across the deletes. Returns (pruned, strengthened, flags,
-    scanned).
-    """
+    source: ADR-0364"""
     pruned = strengthened = scanned = 0
     flags = {
         "prune_cand": False,
@@ -150,16 +137,14 @@ def _classify_memify_reason(
 ) -> str | None:
     """Classify the early-return path for memify (from streamed flags).
 
-    Same decision table as before, but driven by the streaming-accumulated
-    candidate-presence flags and the scanned count rather than a resident list:
+          * ``below_stale_threshold`` — memories exist but none are cold /
+            low-confidence enough to prune.
+          * ``below_access_threshold`` — none crossed the strengthen access gate.
+          * ``reweight_only_gate`` — nothing crossed prune/strengthen, yet reweight
+            fired (only in the ``reweighted > 0`` "inaction" shape).
+          * ``passed_through`` — genuine quiet-store no-op.
 
-      * ``below_stale_threshold`` — memories exist but none are cold /
-        low-confidence enough to prune.
-      * ``below_access_threshold`` — none crossed the strengthen access gate.
-      * ``reweight_only_gate`` — nothing crossed prune/strengthen, yet reweight
-        fired (only in the ``reweighted > 0`` "inaction" shape).
-      * ``passed_through`` — genuine quiet-store no-op.
-    """
+    source: ADR-0364"""
     if (pruned != 0) or (strengthened != 0):
         return None
 
@@ -193,14 +178,7 @@ def _log_if_passed_through(
 ) -> None:
     """Emit an INFO log when the stage finished as a genuine no-op.
 
-    Issue #14 P2 (darval): operators grep
-    ``stage=<name> reason=passed_through`` to distinguish "quiet store"
-    runs from early-return runs. Only fires when the classified reason
-    is ``passed_through`` on either field (``reason_for_zero`` or
-    ``reason_for_inaction``). Duration is tracked by the outer ``_timed``
-    wrapper; we pass 0 here because the handler sees the stage before
-    ``duration_ms`` is injected.
-    """
+    source: ADR-0364"""
     reason = stats.get("reason_for_zero") or stats.get("reason_for_inaction")
     if reason != "passed_through":
         return

@@ -1,25 +1,10 @@
 """Handler: wiki_read — fetch the raw markdown of a wiki page.
 
-Phase 3.2 of ADR-2244: when the page at the requested path is a redirect
-stub, follow the chain transparently and return the target's content.
-The response carries a ``redirect_chain`` array recording the paths
-walked, so callers can detect and surface a "this page moved" hint to
-their users when the caller cares.
-
 Caller can opt out of redirect-following via ``follow_redirects: false``
 to read the stub itself (useful for admin / migration tooling that
 needs to inspect or rewrite the stub).
 
-T2-H4/INC5.4 (D7): page content is filesystem-only, unchanged. On a
-successful read this handler ALSO records a best-effort wiki.citations
-row for the page actually returned to the caller — the schema's own
-comment names citations "the primary authority-earning signal"
-(pg_schema.py) and the write-path was dormant (``insert_citation`` had
-zero callers) until session identity became available via the T2
-window-session registry. This is a deliberate, explicit side effect,
-not a violation of "read-only": the markdown read and its result never
-depend on PG being reachable — see ``_cite_page``'s contract below.
-"""
+source: ADR-0466"""
 
 from __future__ import annotations
 

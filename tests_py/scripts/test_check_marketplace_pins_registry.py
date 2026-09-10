@@ -1,9 +1,7 @@
 """Tests for scripts/marketplace_pins_registry.py — the public MCP registry
-cross-check (REGISTRY_VERSION_STALE). Split out as its own test file
-(same rationale as test_check_marketplace_pins_sha_manifest.py: keeps each
-test file under the 300-line §4.1 cap); same `gate` module instance via
-_marketplace_pins_test_loader.py.
-"""
+cross-check (REGISTRY_VERSION_STALE).
+
+source: ADR-1030"""
 
 from __future__ import annotations
 

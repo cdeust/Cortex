@@ -1,4 +1,6 @@
-"""Tests for the wiki page-ID backfill script (Phase 3 of ADR-2244)."""
+"""Tests for the wiki page-ID backfill script.
+
+source: ADR-1048"""
 
 from __future__ import annotations
 

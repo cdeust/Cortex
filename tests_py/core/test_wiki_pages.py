@@ -98,14 +98,7 @@ def test_render_roundtrip() -> None:
 def test_parse_page_strips_quoted_scalar_value() -> None:
     """Reproduction (wiki.pages.title corruption, 36 rows, 2026-07-14):
 
-    a scalar value quoted per YAML convention because it contains a
-    colon (``title: "Public API surface: automatised-pipeline"``) must
-    have its surrounding quotes stripped, matching the block-list item
-    branch (line ~103) and the inline-list branch (``_strip_inline_list``)
-    which already do this. Before the fix, the scalar branch assigned
-    ``raw_stripped`` verbatim, leaving the literal quote characters in
-    ``fm["title"]`` and, downstream, in ``wiki.pages.title``.
-    """
+    source: ADR-0934"""
     text = (
         "---\n"
         'title: "Public API surface: automatised-pipeline"\n'

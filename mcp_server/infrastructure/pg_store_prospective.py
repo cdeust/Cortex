@@ -1,9 +1,6 @@
 """Prospective-memory (trigger-based recall) mixin for PgMemoryStore.
 
-Split out of pg_store_auxiliary.py (issue #407: 397 lines over the
-300-line §4.1 cap) — trigger-based proactive recall is its own
-concern, distinct from procedural skills/archives/engrams.
-"""
+source: ADR-0559"""
 
 from __future__ import annotations
 

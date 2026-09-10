@@ -115,7 +115,9 @@ class TestUpstreamAllowlist:
     upstream renamed its binary once before, the resolver was updated and the
     pool allowlist was not: every ingest failed with "Command not in allowed
     list" (CHANGELOG 3.14.11). Both now read the same module, and this asserts
-    they agree rather than trusting that they were edited together."""
+    they agree rather than trusting that they were edited together.
+
+    source: ADR-0998"""
 
     def test_canonical_binary_is_allowed(self):
         assert (

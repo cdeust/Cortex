@@ -1,10 +1,5 @@
 """Docs-content pass for ``ingest_codebase`` (INC5.3, design decision D6).
 
-D6: AP indexes every file as a ``File`` node (mode auto), documents
-included, but never stores or searches their content — content indexing
-belongs on Cortex's side (see the module docstring in
-``ingest_docs_content_writers.py`` for the full rationale and sources).
-
 This module is the pass's composition root: list Markdown-family
 ``File`` nodes from the AP graph, read each one off disk (root =
 ``project_path``, which the ``ingest_codebase`` handler already has —
@@ -19,7 +14,8 @@ Cypher module (``ingest_docs_content_cypher.py``), own writers module
 optionnelle") and touches a disjoint slice of state (memories +
 relationships only, no entity inserts, no streaming staging sink) from
 the symbol/edge pipeline the rest of ``ingest_codebase`` drives.
-"""
+
+source: ADR-0405"""
 
 from __future__ import annotations
 
@@ -55,7 +51,7 @@ async def run_docs_pass(
                    memories and zero new relationship rows (idempotent —
                    see ``writers.find_existing_doc_memory`` and
                    ``insert_relationship``'s ``ON CONFLICT``).
-                   ``docs_superseded`` (issue #381) counts the subset of
+                   ``docs_superseded`` counts the subset of
                    ``docs_written`` where a source file changed since its
                    last capture and the stale snapshot memory was
                    version-chained forward rather than left to be served
@@ -64,7 +60,8 @@ async def run_docs_pass(
                    (docs and binaries alike) already became an entity in
                    the caller's main entity phase; this function only
                    adds memories and relationship edges.
-    """
+
+    source: ADR-0405"""
     root = Path(project_path).expanduser().resolve()
     directory_context = str(root)
     diagnostics: list[str] = []

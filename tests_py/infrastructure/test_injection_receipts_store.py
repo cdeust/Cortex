@@ -1,10 +1,11 @@
-"""Parity roundtrip for injection receipts (blame path T1, decision 4255039).
+"""Parity roundtrip for injection receipts.
 
 Falsifiable T1 criterion: the persisted receipt items mirror the bound
 payload exactly — same memory_ids, same order (rank), same scores.
 Runs against the SQLite backend; the PG mixin shares the same contract
 (PG parity asserted by the shared insert signature and DDL parity).
-"""
+
+source: ADR-0983"""
 
 from __future__ import annotations
 
@@ -53,8 +54,7 @@ def test_header_records_channel_and_timestamp() -> None:
 
 
 def test_session_id_nullable() -> None:
-    # Decision 4255039 correction 1: the mcp recall handler has no
-    # session identity in scope — NOT NULL would be unexecutable DDL.
+    # source: ADR-0983
     s = _store()
     rid = s.insert_injection_receipt("recall", _payload())
     row = s._conn.execute(
@@ -80,7 +80,7 @@ def test_empty_items_rejected() -> None:
         s.insert_injection_receipt("recall", [])
 
 
-# ── T2: channel enum hardening (decision 4255039 correction 3) ───────────
+# source: ADR-0983
 
 
 def _ddl_check_members(ddl: str) -> set[str]:
@@ -127,7 +127,7 @@ def test_all_enum_channels_accepted_by_fresh_sqlite_table() -> None:
         assert s.insert_injection_receipt(channel, _payload()) > 0
 
 
-# ── T3: read path — fetch_injection_receipts (decision 4255039) ──────────
+# source: ADR-0983
 
 
 def test_fetch_joins_items_to_memories_in_rank_order() -> None:

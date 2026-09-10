@@ -6,19 +6,11 @@ writer is unit-testable on its own — the same split as
 
 The flow:
 
-  1. Load the session log (``{sessions: [...]}``) — the same history
-     ``record_session_end`` has just appended the current session to.
-  2. Mine recurring successful action sequences with
-     ``core.procedural_memory.mine_skills`` (Graybiel chunking + Schultz
-     reinforced success rate). Mining runs over the *whole* recent history,
-     not just this session, because a skill only exists once it recurs.
-  3. Upsert each mined skill into ``procedural_skills`` (content-addressed by
-     skill_id, so re-mining merges rather than duplicating).
-
 Failure is non-fatal — ``record_session_end`` must continue regardless. This
 writer only ADDS procedural rows; it never touches the episodic/semantic
 memories table, so turning it on cannot alter existing recall behaviour.
-"""
+
+source: ADR-0424"""
 
 from __future__ import annotations
 
@@ -62,15 +54,7 @@ def _session_log_to_mining_input(sessions: list[dict]) -> list[dict]:
 def _entry_outcome(entry: dict) -> Any:
     """Best-effort session outcome for reinforcement.
 
-    Prefers the session self-critique overall score (``score``, in [0,1] —
-    written by record_session_end as the mean of tool-diversity, 1-reversal,
-    decision-confidence and coverage-breadth). A score >= 0.5 counts as
-    success. This is a session-*quality* proxy, not a ground-truth task-success
-    label, but it is the only per-session reward signal the system records; a
-    well-run session is a reasonable proxy for "this procedure worked." Falls
-    back to an explicit ``outcome`` field, else None (unknown / neutral, which
-    advances the occurrence count without moving proficiency).
-    """
+    source: ADR-0424"""
     score = entry.get("score")
     if score is None:
         score = entry.get("critiqueScore")
@@ -79,9 +63,7 @@ def _entry_outcome(entry: dict) -> Any:
     return entry.get("outcome")
 
 
-# Minimum sessions of history before skill mining is attempted.
-# source: pre-existing tuned value, extracted unchanged (#197 family 3);
-# provenance not recorded at introduction
+# source: ADR-0424
 _MIN_MINING_SESSIONS = 3
 
 

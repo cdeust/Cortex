@@ -199,9 +199,9 @@ def test_hippocampal_dependency_slows_but_does_not_block_accumulation():
 
 
 def test_missing_hippocampal_dependency_defaults_to_fully_hippocampal():
-    """A row with no hippocampal_dependency key defaults to 1.0 (strongest
-    modulation) — matching the production DB column default, per the CLS-B
-    gate-C design decision (cortex memory 4261603)."""
+    """Missing hippocampal_dependency defaults to 1.0.
+
+    source: ADR-0946"""
     base = _memory(consolidation_stage="labile")
     del base["hippocampal_dependency"]
     default_store = _FakeStore([(0.9, 100.0)] * 5)

@@ -217,8 +217,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         return resolved
     query_text, view_meta = resolved
 
-    # Guard: wiki_view DB execution is PG-only. Under SQLite return a
-    # structured explanation instead of ImportError / AttributeError.
+    # source: ADR-0474
     store = _get_store()
     if not _is_pg(store):
         return {

@@ -7,18 +7,10 @@ MCP lifecycle batch, and verifies discovery plus one real SQLite-backed tool
 call. Client names are deliberately varied: Cortex must not branch on
 Claude-specific host identity, environment, or hooks.
 
-Behaving *as a host* is load-bearing, not decorative: the exchange itself
-lives in `mcp_host_client.py`, which keeps stdin open until every expected
-response has arrived and closes it only then. Closing stdin is the MCP
-shutdown signal (2025-06-18 §Lifecycle › Shutdown › stdio), so the previous
-`subprocess.run(input=...)` shape signalled shutdown before reading a single
-response and then demanded answers the protocol never owed it -- see that
-module's docstring for the mcp 2.0.0 interleaving where the demand is
-actually refused, in silence.
-
 Environment isolation (PYTHONPATH stripping, the SOCKS regression fixture,
 storage selection) also lives there, in `environment()`.
-"""
+
+source: ADR-0788"""
 
 from __future__ import annotations
 
@@ -54,8 +46,7 @@ from mcp_server.tool_profiles import LEAN_TOOL_NAMES  # noqa: E402
 CLIENTS = ("claude-code", "gemini-cli", "codex-cli")
 PROFILES: tuple[Literal["full", "lean"], ...] = ("full", "lean")
 STORAGE_SELECTIONS: tuple[Literal["sqlite", "auto"], ...] = ("sqlite", "auto")
-# source: tests_py/test_main.py standalone baseline plus its three documented
-# optional upstream integrations (ingest_codebase, change_impact, ingest_prd).
+# source: ADR-0788
 MIN_FULL_TOOL_COUNT = 52
 MAX_FULL_TOOL_COUNT = MIN_FULL_TOOL_COUNT + 3
 

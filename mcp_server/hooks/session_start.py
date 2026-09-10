@@ -5,16 +5,12 @@ Connects to PostgreSQL directly (no MCP roundtrip) and prints a compact
 Markdown context block to stdout. Claude Code injects this into the
 context window at the start of every session.
 
-On cold start (no database, no memories), prints a friendly setup guide
-instead. If memories exist, injects anchored + hot memories + checkpoint.
-If the database is empty but session history exists, suggests backfill
-with user consent.
-
 Output format
 -------------
 Prints to stdout — captured by Claude Code and prepended to the session.
 Errors go to stderr only and never surface to the user.
-"""
+
+source: ADR-0498"""
 
 from __future__ import annotations
 
@@ -87,17 +83,12 @@ def _short(text: str, max_len: int = 120) -> str:
 
 def _body(memory: dict, max_len: int = 120) -> str:
     """Render one memory's content for a banner line, keeping a fetch key
-    when — and only when — the line is actually truncated.
+        when — and only when — the line is actually truncated.
 
-    An untruncated line needs no key: the whole memory is already there.
-    A truncated one does, otherwise the reader can see that content was
-    cut but has no way to ask for the rest (``memory_marker`` docstring).
-    Emitting the key only on cut lines keeps the cost proportional to the
-    loss instead of taxing every line.
+        Truncation itself is byte-identical to ``_short`` — this changes what
+        a cut line CARRIES, not where it is cut.
 
-    Truncation itself is byte-identical to ``_short`` — this changes what
-    a cut line CARRIES, not where it is cut.
-    """
+    source: ADR-0498"""
     content = memory["content"].strip().replace("\n", " ")
     if len(content) <= max_len:
         return content
@@ -154,33 +145,20 @@ def _connect_pg():
 def _fetch_anchors(conn) -> list[dict]:
     """Fetch anchored memories (is_protected with _anchor tag).
 
-    Defense-in-depth: also exclude auto-captured memories even when
-    is_protected=TRUE (a protected auto-capture should not exist, but
-    we guard against it to prevent poisoned banner injection).
-    # contract: zetetic-team-subagents memory/contract.md §8b
-    """
+    source: ADR-0498"""
     try:
         rows = conn.execute(
-            # `memories.heat` is not a stored column; use effective_heat()
-            # to match production recall semantics (lazy A3 decay).
-            # Source: pg_schema.py EFFECTIVE_HEAT_FN.
+            # source: ADR-0498
             "SELECT m.id, m.content, m.tags, m.domain, m.is_global, "
             "m.created_at, m.source_attribution, m.is_stale "
-            # JOIN current_memories (not FROM the view): effective_heat()
-            # takes the `memories` composite type and a view row is not
-            # coercible to it; the join keeps m table-typed while the
-            # supersession invariant stays defined once, in the view.
-            # Anchors follow the chain head at supersession (write-path
-            # transfer in supersede_atomic), so the corrected anchor is
-            # what gets injected here.
+            # source: ADR-0498
             "FROM memories m JOIN current_memories cm ON cm.id = m.id "
             "WHERE m.is_protected = TRUE "
             # Exclude auto-captured noise (defense-in-depth — they should never
             # be protected, but guard against misconfiguration).
             # contract: zetetic-team-subagents memory/contract.md §8b
             "AND NOT (m.tags @> '[\"auto-captured\"]'::jsonb) "
-            # Never inject a corrected (superseded) fact into the banner —
-            # decision 4255039 correction 8.
+            # source: ADR-0498
             "AND m.superseded_by_id IS NULL "
             "ORDER BY effective_heat(m, NOW()) DESC LIMIT %s",
             (int(_ANCHOR_LIMIT),),
@@ -217,18 +195,15 @@ def _fetch_anchors(conn) -> list[dict]:
 def _fetch_team_decisions(conn, exclude_ids: set) -> list[dict]:
     """Fetch auto-protected decision memories visible across agents.
 
-    Implements the directory layer of Transactive Memory Systems
-    (Wegner 1987): team members know WHAT was decided, regardless
-    of WHO decided it. Decisions auto-propagate via is_global=TRUE
-    set during ingestion (memory_ingest.py).
+        Implements the directory layer of Transactive Memory Systems
+        (Wegner 1987): team members know WHAT was decided, regardless
+        of WHO decided it. Decisions auto-propagate via is_global=TRUE
+        set during ingestion (memory_ingest.py).
 
-    Only fetches decisions not already in anchors to avoid duplicates.
-    """
+    source: ADR-0498"""
     try:
         rows = conn.execute(
-            # `memories.heat` is not stored; effective_heat(m, NOW())
-            # matches production lazy A3 decay semantics.
-            # Source: pg_schema.py EFFECTIVE_HEAT_FN.
+            # source: ADR-0498
             "SELECT m.id, m.content, m.domain, m.agent_context, "
             "m.created_at, m.source_attribution, m.is_stale, "
             # JOIN current_memories: same pattern as _fetch_anchors —
@@ -238,8 +213,7 @@ def _fetch_team_decisions(conn, exclude_ids: set) -> list[dict]:
             "FROM memories m JOIN current_memories cm ON cm.id = m.id "
             "WHERE m.is_protected = TRUE AND m.is_global = TRUE "
             "AND m.agent_context != '' "
-            # Superseded decisions are corrected facts — never re-inject
-            # (decision 4255039 correction 8).
+            # source: ADR-0498
             "AND m.superseded_by_id IS NULL "
             "ORDER BY effective_heat(m, NOW()) DESC LIMIT 5",
         ).fetchall()
@@ -286,8 +260,7 @@ def _fetch_hot_memories(conn, exclude_ids: set) -> list[dict]:
             # contract: zetetic-team-subagents memory/contract.md §8b
             "AND NOT (tags @> '[\"auto-captured\"]'::jsonb "
             "         OR tags @> '[\"memory-replica\"]'::jsonb) "
-            # Never re-inject a corrected (superseded) fact —
-            # decision 4255039 correction 8.
+            # source: ADR-0498
             "AND superseded_by_id IS NULL "
             "ORDER BY heat_base DESC LIMIT %s",
             (float(_MIN_HEAT), int(_HOT_LIMIT + len(exclude_ids))),
@@ -316,17 +289,15 @@ def _fetch_hot_memories(conn, exclude_ids: set) -> list[dict]:
 
 def _count_pending_curations(conn) -> int:
     """Count topic clusters of PG memories that warrant a wiki page
-    but don't have one yet.
+        but don't have one yet.
 
-    Surfaced in the SessionStart preamble so the in-session LLM
-    (Opus 4.7) sees how much authoring work is queued. The full
-    detection logic lives in ``mcp_server.core.auto_curator``; this
-    helper just pulls a sample of recently-accessed memories and asks
-    the curator to count.
+        Surfaced in the SessionStart preamble so the in-session LLM
+        (Opus 4.7) sees how much authoring work is queued. The full
+        detection logic lives in ``mcp_server.core.auto_curator``; this
+        helper just pulls a sample of recently-accessed memories and asks
+        the curator to count.
 
-    Failure here is non-fatal: a missing curation count must never
-    break the SessionStart preamble. We return 0 and move on.
-    """
+    source: ADR-0498"""
     try:
         from mcp_server.core.auto_curator import count_pending_clusters  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
 
@@ -359,10 +330,7 @@ def _count_pending_curations(conn) -> int:
             )
         if not memories:
             return 0
-        # WIKI_ROOT lookup so the curator can skip already-authored
-        # clusters by filesystem mtime. The port is built here
-        # (composition root, §5.2) — core only declares the WikiPagePort
-        # shape it needs (issue #314).
+        # source: ADR-0498
         try:
             from mcp_server.infrastructure.config import WIKI_ROOT  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
             from mcp_server.infrastructure.wiki_page_fs import (  # noqa: PLC0415 — same optional-feature probe boundary
@@ -380,25 +348,23 @@ def _count_pending_curations(conn) -> int:
 
 def _fetch_grooming_staleness(conn) -> list[str]:
     """Return the kinds ('wiki'/'distillation'/'promotion') of
-    judgment-level grooming that are overdue for attention.
+        judgment-level grooming that are overdue for attention.
 
-    Precondition: none.
-    Postcondition: returns a subset of {'wiki', 'distillation',
-    'promotion'} -- kinds whose last execution is older than
-    ``core.grooming_health.GROOMING_STALENESS_THRESHOLD_DAYS`` days, or
-    that have never executed. Read-only, three bounded aggregate
-    queries (~30ms combined, EXPLAIN ANALYZE 2026-07-11 -- see
-    ``PgStatsMixin.get_grooming_ages`` for the per-query cost
-    breakdown; this hook queries directly rather than going through
-    ``get_shared_store`` to avoid pulling the full store composition
-    into the SessionStart hot path). Deliberately does NOT call the
-    backlog-count planners (curate_wiki/curate_distill/
-    lesson_promotion) -- those cost ~1s combined
-    (get_grooming_health.py), too expensive for every session start.
+        Precondition: none.
+        Postcondition: returns a subset of {'wiki', 'distillation',
+        'promotion'} -- kinds whose last execution is older than
+        ``core.grooming_health.GROOMING_STALENESS_THRESHOLD_DAYS`` days, or
+        that have never executed. Read-only, three bounded aggregate
+        queries (~30ms combined, EXPLAIN ANALYZE 2026-07-11 -- see
+        ``PgStatsMixin.get_grooming_ages`` for the per-query cost
+        breakdown; this hook queries directly rather than going through
+        ``get_shared_store`` to avoid pulling the full store composition
+        into the SessionStart hot path). Deliberately does NOT call the
+        backlog-count planners (curate_wiki/curate_distill/
+        lesson_promotion) -- those cost ~1s combined
+        (get_grooming_health.py), too expensive for every session start.
 
-    Failure here is non-fatal: a missing staleness signal must never
-    break the SessionStart preamble. Returns [] on any error.
-    """
+    source: ADR-0498"""
     try:
         from mcp_server.core.grooming_health import is_stale  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
 
@@ -613,12 +579,7 @@ def _emit_banner_receipt(
 ) -> int | None:
     """Emit the session_start injection receipt for the banner (T2).
 
-    Payload order mirrors the banner exactly: anchors, then team
-    decisions, then hot memories — rank = position in the injected
-    context. Banner lines are printed truncated (_short) but the memory
-    IS in context, so truncation never drops an item (same parity stance
-    as recall's bound_payload, decision 4255039 correction 11).
-    """
+    source: ADR-0498"""
     payload = [{"memory_id": m["id"]} for m in (*anchors, *team_decisions, *hot)]
     return emit_hook_receipt(
         conn,
@@ -646,11 +607,7 @@ def _build_context(
 ) -> str:
     """Build the Markdown context block injected into the session.
 
-    ``receipt_id`` stamps the banner header with the ⟦rcpt:id⟧ marker
-    (decision 4255039 correction 2) so the model can hand the id back
-    to ``cortex:why(receipt_ids=[...])`` — the receipt travels in-context
-    because server-side session-temporal resolution does not exist.
-    """
+    source: ADR-0498"""
     if (
         not anchors
         and not hot
@@ -694,13 +651,7 @@ def _build_context(
             lines.append(f"{bullet}{_freshness(m, now)}")
         lines.append("")
 
-    # 2026-05-17: surface pending wiki authoring work to the in-session
-    # LLM. The auto-curator (handlers/curate_wiki.py) detects high-heat
-    # topic clusters of PG memories that warrant a curated wiki page;
-    # the in-session LLM (Opus 4.7) is the authoring agent. Without
-    # this nudge the LLM has no way to know there's documentation
-    # work waiting — surfacing it here lets it happen "without a human
-    # asking", per the 2026-05-17 user directive.
+    # source: ADR-0498
     if pending_curations:
         lines.append("### Pending Wiki Curation")
         lines.append(
@@ -714,11 +665,7 @@ def _build_context(
         )
         lines.append("")
 
-    # G-4: one-line staleness reminder -- never a section, per the
-    # 76-day-silent-wiki lesson (a full pending-curations-style block per
-    # session would just become the next ignored nudge). Fires only when
-    # a kind has gone longer than the sourced threshold without a real
-    # (judgment-level) run; call `get_grooming_health` for exact counts.
+    # source: ADR-0498
     if stale_grooming:
         kinds_str = "/".join(stale_grooming)
         lines.append(
@@ -865,11 +812,7 @@ def _spawn_consolidate_cycle() -> int | None:
         Path(__file__).resolve().parents[2]
     )
     launcher = Path(plugin_root) / "scripts" / "launcher.py"
-    # Never resolve "python3"/"python" by PATH name: on Windows those hit
-    # the Microsoft Store stub (exits without running anything), which
-    # silently disables this spawn. python_executable() is the interpreter
-    # actually running this code (issue #315).
-    # source: RAPPORT_INSTALLATION_CORTEX_WINDOWS.md §5.2
+    # source: ADR-0498
     py = python_executable()
     if launcher.exists():
         cmd = [py, str(launcher), "mcp_server.hooks.consolidate_background"]
@@ -893,20 +836,7 @@ def _spawn_consolidate_cycle() -> int | None:
 def _maybe_background_consolidate() -> None:
     """Ensure ONE consolidate cycle runs per period across N sessions (#171).
 
-    The consolidate handler must NEVER be invoked manually by the user
-    (directive 2026-05-18). SessionStart owns the trigger, but the trigger
-    is now session-counted, not per-session: this window registers with the
-    per-store ``GroomerCoordinator`` and asks it to ensure a cycle. The
-    coordinator writes the period stamp under a per-store lock BEFORE
-    spawning, so two concurrent sessions produce exactly one cycle per
-    ``CORTEX_CONSOLIDATE_TTL_HOURS`` window (default 6h) — fixing the old
-    ``"(in-flight)"``-marker race where a second session read the stamp as
-    never-run and spawned a duplicate.
-
-    Degrade honestly (#171): if the coordinator path raises for ANY reason,
-    fall back to the legacy per-session stamp spawn with a logged NOTICE —
-    never silently skip grooming entirely.
-    """
+    source: ADR-0498"""
     try:
         from mcp_server.infrastructure.groomer_coordinator import (  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
             GroomerCoordinator,
@@ -1000,10 +930,7 @@ def _maybe_background_reanalyze() -> None:
         if not launcher.exists():
             return
 
-        # Never resolve "python3"/"python" by PATH name: on Windows those
-        # hit the Microsoft Store stub (exits without running anything),
-        # which silently disables this background reanalyze (issue #315).
-        # source: RAPPORT_INSTALLATION_CORTEX_WINDOWS.md §5.2
+        # source: ADR-0498
         py = python_executable()
         cmd = [
             py,
@@ -1061,29 +988,19 @@ def _lookup_cached_graph_path(project_root: str) -> str | None:
 
 def _refresh_session_registry(event: dict) -> None:
     """Best-effort write of this window's current session into the
-    per-window registry (T2-D6, T2-D11), plus an opportunistic purge of
-    dead-pid entries.
+        per-window registry (T2-D6, T2-D11), plus an opportunistic purge of
+        dead-pid entries.
 
-    precondition: ``event`` is the tolerant ``_read_event()`` result —
-    may be ``{}``. postcondition: on success, this window's registry
-    entry (keyed by the ancestor ``claude`` pid) holds the transcript
-    stem computed by ``session_id_from_transcript`` and stale entries
-    for closed windows are removed. Any failure — resolution, I/O,
-    import — degrades to a stderr log line and NEVER raises: the
-    SessionStart banner is critical and must ship regardless of the
-    registry's state (design §1 directing invariant).
+        precondition: ``event`` is the tolerant ``_read_event()`` result —
+        may be ``{}``. postcondition: on success, this window's registry
+        entry (keyed by the ancestor ``claude`` pid) holds the transcript
+        stem computed by ``session_id_from_transcript`` and stale entries
+        for closed windows are removed. Any failure — resolution, I/O,
+        import — degrades to a stderr log line and NEVER raises: the
+        SessionStart banner is critical and must ship regardless of the
+        registry's state (design §1 directing invariant).
 
-    Called unconditionally near the top of ``main()`` rather than after
-    the last banner line: three of ``main()``'s branches return early
-    (no PostgreSQL, setup failed, empty DB) and a real interactive
-    window can legitimately hit any of them on first launch — the
-    registry entry must exist for those windows too (T2-D9 case 3),
-    not only on the "normal flow" happy path. This is a deliberate
-    placement deviation from the design note's "dernière position du
-    hook" — the design's binding requirement is best-effort
-    non-interference with the banner, which top-of-main placement
-    satisfies identically (produces no stdout, no exception escapes).
-    """
+    source: ADR-0498"""
     try:
         from mcp_server.infrastructure.session_registry import (  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
             purge_dead_entries,
@@ -1096,16 +1013,7 @@ def _refresh_session_registry(event: dict) -> None:
         _log(f"session registry refresh skipped (non-fatal): {exc}")
 
 
-# ── SQLite backend path (zero-config plugin default) ─────────────────────
-#
-# The plugin's default install provisions no PostgreSQL server; the
-# launcher resolves CORTEX_MEMORY_STORE_BACKEND=sqlite from the install
-# marker (mcp_server/infrastructure/backend_marker.py). This path builds
-# the same banner (checkpoint + anchors + hot memories + injection
-# receipt) through the store abstraction instead of raw psycopg SQL.
-# PG-only banner extras — team decisions, pending wiki curation,
-# grooming staleness — are skipped here; README "Install" discloses the
-# difference.
+# source: ADR-0498
 
 # Tier-1 noise excluded from the banner on both backends.
 # contract: zetetic-team-subagents memory/contract.md §8b
@@ -1221,29 +1129,20 @@ def _sqlite_context(event: dict) -> None:
 def main() -> None:
     """Entry point — print context block to stdout."""
 
-    # Hook event first: stdin carries transcript_path, the stable session
-    # identity for the injection receipt (decision 4255039 correction 7).
+    # source: ADR-0498
     event = _read_event()
 
-    # Best-effort registry refresh (T2-H2) — see _refresh_session_registry
-    # docstring for why this runs here rather than at the tail of main().
+    # source: ADR-0498
     _refresh_session_registry(event)
 
     # Auto-discovery runs before the PG path so users see it work even
     # on a fresh machine without a DB set up yet.
     _auto_wire_pipeline()
 
-    # Background re-analysis: fire-and-forget when the graph is stale.
-    # This happens BEFORE PG connection because the spawn itself doesn't
-    # need the DB — the spawned process will connect independently. If
-    # the pipeline isn't installed OR the graph is fresh, this is a no-op.
+    # source: ADR-0498
     _maybe_background_reanalyze()
 
-    # Background consolidate: same pattern, different worker. Runs the
-    # full maintenance cycle (decay / compression / CLS / wiki purge /
-    # coverage audit) detached when the stamp is older than the TTL
-    # (default 6h). The user never invokes consolidate manually — every
-    # session opens against a freshly-consolidated store.
+    # source: ADR-0498
     _maybe_background_consolidate()
 
     # SQLite backend (zero-config plugin default): banner via the store

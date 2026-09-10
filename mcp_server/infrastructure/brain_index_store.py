@@ -1,7 +1,6 @@
 """Persistence layer for the brain index (cross-reference graph).
 
-- load_brain_index always returns a valid structure (never None)
-"""
+source: ADR-0507"""
 
 from __future__ import annotations
 

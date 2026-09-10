@@ -1,13 +1,6 @@
-"""wiki.page_sources DB operations (ADR-0051 STEP 2 — the writer).
+"""Pure infrastructure — no core imports, no handler imports.
 
-Split out of ``pg_store_wiki.py`` (already ~874 lines, over the 300-line
-file limit) rather than added there — coding-standards.md §4.1. Mirrors
-the shape of ``pg_store_wiki.upsert_link``: an idempotent refresh scoped
-by a key, matching how ``wiki_migrate.migrate_wiki`` already refreshes
-``wiki.links`` via ``delete_links_from`` + re-insert per page.
-
-Pure infrastructure — no core imports, no handler imports.
-"""
+source: ADR-0581"""
 
 from __future__ import annotations
 
@@ -22,20 +15,14 @@ if TYPE_CHECKING:
 
 
 def list_pages_missing_source_link(conn: StoreConnection, *, limit: int) -> list[dict]:
-    """Pages with no primary 'documents' source link (ADR-0051 STEP 3).
+    """List pages without any primary documents source link.
 
-    Selects pages where ``documents_primary IS NULL`` (the fast-path
-    mirror is unset) AND no ``wiki.page_sources`` row exists for that
-    page with ``link_kind = 'documents'`` (the N:M source of truth is
-    also empty) — both must be absent, matching the invariant
-    ``upsert_page`` maintains between the two representations.
+    Pre-condition: limit bounds returned pages.
 
-    Pre-condition:  ``limit`` bounds the per-cycle scan so a large wiki
-                    doesn't stall one ``consolidate`` invocation.
-    Post-condition: every returned row's ``id`` refers to a page with
-                    zero 'documents' rows in wiki.page_sources and a
-                    NULL documents_primary.
-    """
+    Post-condition: every result has NULL documents_primary and no
+    wiki.page_sources row with link_kind=documents.
+
+    source: ADR-0581"""
     sql = """
     SELECT p.id, p.memory_id, p.rel_path, p.title, p.domain, p.lead, p.sections
       FROM wiki.pages p
@@ -65,14 +52,7 @@ def _entry_row(
 ) -> tuple[int, str, str, float, str]:
     """Build one INSERT row ``(page_id, path, link_kind, confidence, source)``.
 
-    A bare ``str`` entry uses the call's ``source``/``confidence``
-    defaults (the original, still-supported shape — the ``documents``
-    link_kind callers pass a uniform origin for the whole list). A
-    ``tuple`` carries its own per-entry origin (ADR-0051 STEP 4: the
-    ``references`` link_kind mixes ``claim_evidence`` and ``body``
-    provenance in one call, which a single call-level ``source`` cannot
-    express).
-    """
+    source: ADR-0581"""
     match entry:
         case (path, entry_source, entry_confidence):
             return page_id, path, link_kind, entry_confidence, entry_source
@@ -91,26 +71,17 @@ def upsert_page_sources(
     source: str = "frontmatter",
     confidence: float = 1.0,
 ) -> int:
-    """Idempotently replace a page's ``wiki.page_sources`` rows for one link_kind.
+    """Replace a page’s source links for one link_kind.
 
-    Delete-then-insert scoped to ``(page_id, link_kind)`` — mirrors
-    ``pg_store_wiki`` refreshing ``wiki.links``, so re-running the writer
-    on an unchanged page produces the same rows (idempotent).
+    Pre-condition: page_id exists and all document paths are canonical.
+    Entries may be plain paths, (path, source), or (path, source, confidence);
+    plain paths use the call-level defaults.
 
-    ``documents`` entries: plain ``str`` uses the call's ``source``/
-    ``confidence`` for every row (original shape, unchanged); a
-    ``(path, source)`` / ``(path, source, confidence)`` tuple carries its
-    own per-entry origin (additive, ADR-0051 STEP 4 — a single call now
-    mixes provenances, e.g. 'references' mixing claim_evidence + body).
+    Post-condition: exactly one row per unique supplied path exists for
+    (page_id, link_kind); previous rows for that key are removed. Return the
+    number of inserted rows.
 
-    Pre-condition:  page_id exists; every path is already canonical
-                    (wiki_source_paths.normalize_source_path).
-    Post-condition: wiki.page_sources has exactly one row per unique
-                    path in ``documents`` for this (page_id, link_kind);
-                    no prior-call row for that key survives.
-
-    Returns the number of rows inserted.
-    """
+    source: ADR-0581"""
     with conn.cursor() as cur:
         cur.execute(
             "DELETE FROM wiki.page_sources WHERE page_id = %s AND link_kind = %s",

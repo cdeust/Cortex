@@ -30,22 +30,22 @@ schema = {
     "title": "Recall (hierarchical)",
     "annotations": NON_IDEMPOTENT_WRITE,
     "description": (
-        "Retrieve memories via the fractal three-level hierarchy (L0=individual "
-        "memories, L1=topic clusters, L2=root clusters), with adaptive level "
-        "weighting from query length: short queries weight toward broader L2 "
-        "clusters (you're scanning a topic), long queries toward specific L0 "
-        "memories (you have a precise question). REQUIRES either `domain` or "
-        "`memory_ids` to bound the tree build — the uncapped fallback was "
-        "removed in v3.13.0 because clustering is O(N^2) in the candidate set "
-        "(infeasible past ~5K memories, see ADR-0045 R3). Use this instead of "
-        "`recall` when you want the topology of the memory space, not just a "
-        "flat ranked list. Distinct from `recall` (flat WRRF result, no "
-        "hierarchy), `drill_down` (consumer of this tool's output, navigates "
-        "one level deeper into a returned cluster), and `navigate_memory` "
-        "(graph traversal, not cluster tree). Not read-only: every surfaced "
-        "memory is recorded as a hippocampal replay event — access_count/"
-        "replay_count increment and hippocampal_dependency decays (CLS-B, "
-        "Ketz et al. 2023) — so repeat calls are not idempotent "
+        # source: ADR-0432
+        "Retrieve memories via the fractal three-level hierarchy "
+        "(L0=individual memories, L1=topic clusters, L2=root clusters), "
+        "with adaptive level weighting from query length: short queries "
+        "weight toward broader L2 clusters (you're scanning a topic), "
+        "long queries toward specific L0 memories (you have a precise "
+        "question). REQUIRES either `domain` or `memory_ids` to bound the "
+        "tree build. Use this instead of `recall` when you want the "
+        "topology of the memory space, not just a flat ranked list. "
+        "Distinct from `recall` (flat WRRF result, no hierarchy), "
+        "`drill_down` (consumer of this tool's output, navigates one "
+        "level deeper into a returned cluster), and `navigate_memory` "
+        "(graph traversal, not cluster tree). Not read-only: every "
+        "surfaced memory is recorded as a hippocampal replay event — "
+        "access_count/replay_count increment and hippocampal_dependency "
+        "decays — so repeat calls are not idempotent "
         "(`track_replay_event`, `replay_tracking.py`). Latency ~150-300ms "
         "on domain-scoped calls. Returns {hierarchy: [{cluster_id, level, "
         "label, score, members?}], total_clusters}."
@@ -120,10 +120,7 @@ schema = {
 _store: MemoryStore | None = None
 
 
-# Minimum embedded memories before hierarchical clustering is attempted;
-# below this the handler falls back to flat vector search.
-# source: pre-existing tuned value, extracted unchanged (#197 family 3);
-# provenance not recorded at introduction
+# source: ADR-0432
 _MIN_MEMORIES_FOR_CLUSTERING = 3
 
 
@@ -146,14 +143,7 @@ def _fetch_candidate_memories(
 ) -> list[dict]:
     """Fetch memories eligible for hierarchy building.
 
-    Pre: exactly one of ``domain`` or ``memory_ids`` is non-empty (enforced
-         by the handler before this is called).
-    Post: returned list has ``heat >= min_heat`` for every element, and its
-         size is O(500) for domain mode or O(len(memory_ids)) for explicit
-         mode. The uncapped ``get_all_memories_for_decay()`` fallback was
-         removed in v3.13.0 (ADR-0045 R3 — build_hierarchy is O(N^2) and
-         infeasible past ~5K memories).
-    """
+    source: ADR-0432"""
     if memory_ids:
         hydrated: list[dict] = []
         for mid in memory_ids:
@@ -269,11 +259,7 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     # Filter memories that have embeddings (newly stored may lack them)
     memories_with_emb = [m for m in memories if m.get("embedding")]
     if len(memories_with_emb) < _MIN_MEMORIES_FOR_CLUSTERING:
-        # Too few embeddings for clustering — fall back to flat vector search.
-        # Adapt the flat response to THIS handler's contract (results/total/
-        # hierarchy) instead of leaking the flat shape through; previously the
-        # passthrough only satisfied the contract via recall's now-removed
-        # duplicate `results`/`total` alias keys.
+        # source: ADR-0432
 
         flat = await flat_recall(args)
         return {
@@ -303,12 +289,7 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
         "results": results,
         "total": len(results),
         "query_word_count": len(query.split()),
-        # strict=True: compute_level_weights' return type is a fixed
-        # 3-tuple (L0, L1, L2 weights), always matching the 3-element
-        # literal on the left. Documented equivalent mutant
-        # (coding-standards.md §12.1): the tuple-typed return makes a
-        # length mismatch unreachable, so strict=True vs strict=False/None
-        # is not observable through this call.
+        # source: ADR-0432
         "level_weights": dict(
             zip(
                 ["L0", "L1", "L2"],
@@ -320,6 +301,5 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     }
 
 
-# Telemetry-instrumented public entry. Records latency / byte volume
-# / result count per call (Popper C6 read/write ratio audit).
+# source: ADR-0432
 handler = instrument("recall_hierarchical", _handler_impl, result_count_key="results")

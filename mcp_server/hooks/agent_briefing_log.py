@@ -1,11 +1,6 @@
 """Stderr-only logging helper shared across the agent_briefing hook split.
 
-Extracted so the query module (``agent_briefing_query.py``) can log a
-degraded PG query without importing the hook's entry-point module
-(``agent_briefing.py``) — that direction would be a cycle, since the entry
-point imports the query module's functions. This module has zero
-dependents other than the agent_briefing split, so it sits below both.
-"""
+source: ADR-0483"""
 
 from __future__ import annotations
 

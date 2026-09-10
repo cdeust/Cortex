@@ -1,0 +1,64 @@
+# ADR-0468: mcp_server/handlers/wiki_reindex.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `mcp_server/handlers/wiki_reindex.py`; original SHA-256 `d6186ad0637576fe707df18a427ab2aa9e2c47716211acbf6739fde34c91a96e`.
+
+## Original docstring, lines 1–8
+
+````text
+"""Handler: wiki_reindex — regenerate the wiki table of contents.
+
+Writes the generated table of contents and exact decision index. Project
+mode also refreshes its tracked decision mirrors. Authored pages are enumerated
+via ``list_pages`` and grouped by kind.
+Deterministic output: sorted by kind then path so unchanged wikis yield
+byte-identical INDEX files.
+"""
+````
+
+## Original docstring, lines 74–79
+
+````text
+"""Render INDEX.md with human-authored content first, auto-gen second.
+
+    Phase 5 of ADR-2244: auto-generated pages get their own clearly-marked
+    section so readers see curated content first and aren't drowning in
+    the 8,700+ file-reference pages.
+    """
+````
+
+## Original docstring, lines 162–169
+
+````text
+"""Phases 3.2 + 5 of ADR-2244: split human / auto-gen / redirects.
+
+    Redirects: excluded entirely from INDEX.md (they're navigational aids
+    for inbound links, not content to advertise). Counted in the summary.
+
+    Auto-generated pages: surfaced in their own section after the
+    human-authored content so they don't drown the main listing.
+    """
+````
+
+## Reviewed remaining docstring (mcp_server/handlers/wiki_reindex.py, interim lines 154–162)
+
+````text
+Phases 3.2 + 5 of ADR-0468: split human / auto-gen / redirects.
+
+    Redirects: excluded entirely from INDEX.md (they're navigational aids
+    for inbound links, not content to advertise). Counted in the summary.
+
+    Auto-generated pages: surfaced in their own section after the
+    human-authored content so they don't drown the main listing.
+
+source: ADR-0468
+````
+
+## Original schema description, interim lines 29–47
+
+````text
+Regenerate the wiki table of contents at <wiki_root>/.generated/INDEX.md by enumerating every authored page and grouping it by kind (adr, specs, guides, reference, conventions, lessons, notes, journal, files). Redirect stubs are excluded; auto-generated pages (``provenance: auto-generated``) are surfaced in a separate ``Auto-generated reference`` section after the human-authored content so they don't dominate the main listing (Phase 5 of ADR-2244). Output is deterministic — sorted by kind then path so unchanged wikis yield byte-identical INDEX files. Authored pages are never touched. INDEX.md and the exact decision map are refreshed; project mode also updates docs/adr. Use this after bulk wiki edits, imports, or `wiki_compile` runs. Distinct from `wiki_list` (returns the listing in the response, no file write) and from `wiki_consolidate` (heat decay / staleness, not ToC rebuild). An explicit project_root isolates project publication. Latency <500ms on a 9000-page wiki. Returns {path, total_pages, by_kind, auto_generated_by_kind, redirect_count, root}.
+````
+

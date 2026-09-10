@@ -1,14 +1,6 @@
 """Search / retrieval mixin for PgMemoryStore: recall, FTS, vector KNN.
 
-Split out of pg_store.py (issue: 1384-line file over the 300-line §4.1
-cap) — every method here delegates to a PL/pgSQL stored procedure or a
-single read-only SELECT; grouped together because they are the primary
-"read path" concern, as opposed to the write-path (``pg_store_write``),
-metadata-mutation (``pg_store_heat`` / ``pg_store_memory_meta``), and
-downstream-signal (``pg_store_signals`` — spreading activation,
-Hopfield embeddings, temporal co-access; split out separately after
-the #399 trust-term port pushed this file to 301 lines) mixins.
-"""
+source: ADR-0566"""
 
 from __future__ import annotations
 
@@ -64,11 +56,7 @@ class PgSearchMixin(PgStoreHost):
             weights.get("ngram", 0.3),
             weights.get("recency", 0.0),
             include_globals,
-            # issue #368 — the trust policy is passed IN, never imported:
-            # infrastructure must not depend on core (module-inventory.md
-            # dependency rules). It travels from the caller to the stored
-            # procedure on every call, so neither this layer nor the SQL
-            # holds a second copy of the vocabulary that could drift.
+            # source: ADR-0566
             list(trusted_origins),
             untrusted_factor,
         )
@@ -91,8 +79,7 @@ class PgSearchMixin(PgStoreHost):
     ) -> list[dict[str, Any]]:
         """Bind, execute, and normalize one ``_RECALL_MEMORIES_SQL`` call.
 
-        See ``_recall_bind_params`` for the bind-order contract.
-        """
+        source: ADR-0566"""
         params = self._recall_bind_params(
             query_text,
             emb,
@@ -109,8 +96,7 @@ class PgSearchMixin(PgStoreHost):
             untrusted_factor,
         )
         rows = self._execute(self._RECALL_MEMORIES_SQL, params).fetchall()
-        # created_at must be ISO text, not datetime -- see
-        # _isoformat_datetime_fields's docstring (mixed-type candidate lists).
+        # source: ADR-0566
         return [self._isoformat_datetime_fields(dict(r)) for r in rows]
 
     def recall_memories(
@@ -130,13 +116,10 @@ class PgSearchMixin(PgStoreHost):
         untrusted_factor: float = 1.0,
     ) -> list[dict[str, Any]]:
         """Call the PL/pgSQL recall_memories function: over-fetched (3x
-        max_results) candidates for client-side FlashRank reranking. See
-        ``_run_recall`` for bind/execute/normalize.
+                max_results) candidates for client-side FlashRank reranking. See
+                ``_run_recall`` for bind/execute/normalize.
 
-        ``trusted_origins``/``untrusted_factor`` (issue #368): passed in,
-        not imported (infra may not depend on core; caller reads them from
-        ``core/capture_origin.py``). Defaults are the identity transform.
-        """
+        source: ADR-0566"""
         emb = self._bytes_to_vector(query_embedding)
         return self._run_recall(
             query_text,
@@ -157,11 +140,7 @@ class PgSearchMixin(PgStoreHost):
     def search_fts(self, query: str, limit: int = 20) -> list[tuple[int, float]]:
         """Full-text search via tsvector. Returns (memory_id, score) pairs.
 
-        Reads current_memories + NOT is_stale: this is a discovery channel
-        whose hits are injected by callers (prospective triggers) with a
-        fabricated score ABOVE the ranked results — exclusion must happen
-        here, no downstream ranking can demote a superseded or stale hit.
-        """
+        source: ADR-0566"""
         rows = self._execute(
             "SELECT id, ts_rank_cd(content_tsv, "
             "plainto_tsquery('english', %s)) AS score "
@@ -181,12 +160,7 @@ class PgSearchMixin(PgStoreHost):
     ) -> list[tuple[int, float]]:
         """Vector KNN search via pgvector. Returns (memory_id, distance) pairs.
 
-        heads_only routes through the current_memories view (supersession
-        chain heads only): the write-gate novelty helpers pass True so a
-        reformulation of an already-corrected fact is not scored "not novel"
-        against the dead version. Default stays False — interference/
-        forgetting callers must keep seeing physical rows.
-        """
+        source: ADR-0566"""
         src = "current_memories" if heads_only else "memories"
         emb = self._bytes_to_vector(query_embedding)
         rows = self._execute(

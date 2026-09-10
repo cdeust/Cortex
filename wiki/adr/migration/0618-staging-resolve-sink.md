@@ -1,0 +1,88 @@
+---
+kind: adr
+number: 0618
+title: Preserve staging_resolve_sink design decisions
+status: accepted
+---
+
+# ADR-0618: staging_resolve_sink design decisions
+
+## Context
+
+Canonical migration of decision evidence from `mcp_server/infrastructure/staging_resolve_sink.py` under ADR-0056.
+The excerpts below preserve historical claims and citations verbatim; original ADR numbers are historical quotations, not current identity bindings.
+
+## Decision
+
+Keep the source implementation linked to this versioned decision record. Operational API documentation remains with the implementation.
+
+## Preserved decision evidence
+
+### module, original line 1
+
+````text
+source: ~/.claude/plans/sharded-popping-harbor.md — the genius review
+(Dijkstra D4 / Liskov D2) proved that returning a ``dict[name, id]`` to Python
+reintroduces an O(total_entities) stage-spanning buffer that breaks the
+constant-memory invariant on the highest-ROI path. Resolving in SQL removes it.
+````
+
+### StagingResolveSink, original line 39
+
+````text
+    One sink owns one pooled connection for its lifetime (the pipeline builds
+    one sink per worker). ``write_batch`` is atomic per batch; ``close``
+    returns the connection to the pool.
+    
+````
+
+### comment, original line 81
+
+````text
+# atomic per batch under autocommit
+````
+
+### comment, original line 92
+
+````text
+# Producers must yield CANONICALIZED names (LOWER(name) dedup matches the
+# Python policy LOWER(canonicalize_entity_name(name)) only when names are
+# pre-canonicalized in the producer — a pure shared-layer transform).
+````
+
+### comment, original line 101
+
+````text
+# Resolve via NOT EXISTS rather than ON CONFLICT: the entity stage runs
+# SINGLE-WRITER (concurrency=1 — entities are the dependency root and the
+# staged barrier serializes them before edges), so the read-then-insert is
+# race-free WITHOUT a unique index. This deliberately avoids a fragile
+# cross-table entity-merge migration on the live store. The A3 migration adds
+# only a NON-unique idx_entities_lower_name to keep the NOT EXISTS lookup
+# index-backed. DISTINCT ON collapses intra-batch case variants.
+# Dedup is scoped to (LOWER(name), domain): a name-global NOT EXISTS made
+# every re-ingest a no-op once ANY domain held the name — all code entities
+# stayed credited to the first domain ever ingested (stale code:3.18.4,
+# 2026-06-11 RCA). The same symbol name in two projects is two entities.
+# The stored side is compared against LOWER(s.domain) because the
+# trg_entities_domain_normalize trigger (pg_schema.normalize_domain)
+# lowercases entities.domain on INSERT — comparing against the raw staged
+# value would never match. (The trigger's legacy alias mapping
+# jarvis/cortex-cowork→cortex never applies to code:* ingest domains.)
+# INVARIANT: callers MUST set concurrency=1 for an entity sink pipeline.
+````
+
+### comment, original line 137
+
+````text
+# Requires uq_relationships_directed (A3). The JOIN drops edges whose endpoints
+# were never ingested (dangling) — counted via rows_in - rows_written, NOT
+# silently swallowed. Endpoint resolution is scoped to the edge's domain:
+# once entities dedup per (name, domain), an unscoped LOWER(name) JOIN would
+# multi-match the same name across domains and fan one staged edge out into
+# a cross-domain cartesian product.
+````
+
+## Consequences
+
+Review rationale and source changes together. Historical evidence is preserved rather than silently rewritten; executable Python structure is unchanged after removing docstrings.

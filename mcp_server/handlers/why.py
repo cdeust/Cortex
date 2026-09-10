@@ -1,29 +1,10 @@
 """Handler: why -- resolve injection receipts into presence evidence.
 
-Blame path T3 (decision Cortex 4255039): the receipt-based primary
-path. The model reads the ⟦rcpt:id⟧ markers present in its own context
-(correction 2 — server-side session-temporal resolution does not exist
-in MCP) and hands the ids back here; this handler resolves them against
-the append-only receipt trail into presence-in-context evidence: which
-memories each channel put in front of the model, when, at which
-persisted rank and score.
-
 Locked lexicon: this is evidence of PRESENCE IN CONTEXT — Pearl's
 ladder rung 1, recorded associations only — never a causal claim about
 what produced an answer.
 
-Anti-self-pollution (correction 4): the receipt injected alongside the
-CURRENT prompt (its auto_recall block) must not enter the blame. Only
-the model can identify that marker — it is the one attached to the
-prompt asking the question — so the exclusion is enforced at the
-instruction layer (this schema + the /why command); the response keeps
-it auditable by carrying channel + emitted_at on every row.
-
-Anti-flooding bound (correction 5): the response passes through
-``bound_payload`` — the same measured budget as recall — so a long
-session's receipts cannot drown the context; truncated rows keep their
-ids for fetch-by-id.
-"""
+source: ADR-0452"""
 
 from __future__ import annotations
 
@@ -64,10 +45,10 @@ schema = {
                         "session_id": {
                             "type": ["string", "null"],
                             "description": (
+                                # source: ADR-0452
                                 "Transcript-derived session identity; null for "
-                                "receipts emitted by the MCP recall handler "
-                                "(no session in scope, decision 4255039 "
-                                "correction 1)."
+                                "receipts "
+                                "emitted by the MCP recall handler."
                             ),
                         },
                         "emitted_at": {
@@ -105,10 +86,11 @@ schema = {
                         "memory_missing": {
                             "type": "boolean",
                             "description": (
+                                # source: ADR-0452
                                 "True when the memory row no longer exists "
-                                "(hard-forget after injection). The receipt "
-                                "remains valid presence evidence — that is "
-                                "why receipt items carry no FK."
+                                "(hard-forget after "
+                                "injection). The receipt remains valid presence "
+                                "evidence."
                             ),
                         },
                         "superseded_by_id": {
@@ -160,26 +142,28 @@ schema = {
                 "type": "string",
                 "enum": ["presence-in-context"],
                 "description": (
-                    "Locked lexicon (decision 4255039): this response proves "
-                    "what was PRESENT in the context, never what CAUSED an "
-                    "answer (Pearl's ladder, rung 1)."
+                    # source: ADR-0452
+                    "Locked lexicon: this response proves what was PRESENT in the "
+                    "context, never what CAUSED an answer."
                 ),
             },
         },
     },
     "description": (
-        "Blame path resolver (decision 4255039): turn the ⟦rcpt:N⟧ markers "
-        "visible in the current context into presence-in-context evidence — "
-        "which memories each injection channel (recall, session_start, "
-        "auto_recall, agent_briefing) put into the context, when, at which "
-        "persisted rank and score. This is evidence of PRESENCE, never "
-        "causality. Protocol: collect the ⟦rcpt:N⟧ markers that were in "
-        "context BEFORE the answer being questioned; EXCLUDE the marker "
-        "injected alongside the current prompt's own memory block "
-        "(self-pollution guard) — then pass the ids here. To correct a wrong "
-        "memory surfaced by the evidence, store a superseding memory with "
-        "remember. Deterministic entry point: the /why slash command. "
-        "Distinct from `get_causal_chain` (entity-graph traversal over "
+        # source: ADR-0452
+        "Blame path resolver: turn the ⟦rcpt:N⟧ markers visible in "
+        "the current context into presence-in-context evidence — "
+        "which memories each injection channel (recall, "
+        "session_start, auto_recall, agent_briefing) put into the "
+        "context, when, at which persisted rank and score. This is "
+        "evidence of PRESENCE, never causality. Protocol: collect the "
+        "⟦rcpt:N⟧ markers that were in context BEFORE the answer "
+        "being questioned; EXCLUDE the marker injected alongside the "
+        "current prompt's own memory block (self-pollution guard) — "
+        "then pass the ids here. To correct a wrong memory surfaced "
+        "by the evidence, store a superseding memory with remember. "
+        "Deterministic entry point: the /why slash command. Distinct "
+        "from `get_causal_chain` (entity-graph traversal over "
         "inferred relations) and `recall` (similarity retrieval): why "
         "replays RECORDED injection receipts only."
     ),
@@ -193,11 +177,10 @@ schema = {
                 "minItems": 1,
                 "maxItems": 999,
                 "description": (
-                    "Receipt ids read from ⟦rcpt:N⟧ markers in the current "
-                    "context (at most 999 per call — bounded envelope, "
-                    "ADR-0045 R2). Pass the markers present before the "
-                    "answer being questioned; exclude the one attached to "
-                    "the current prompt (decision 4255039 correction 4)."
+                    # source: ADR-0452
+                    "Receipt ids from ⟦rcpt:N⟧ markers in the current context; at "
+                    "most 999 per call. Pass markers present before the answer being "
+                    "questioned, excluding the marker attached to the current prompt."
                 ),
                 "examples": [[412], [412, 415, 431]],
             },
@@ -206,27 +189,16 @@ schema = {
 }
 
 
-# Bounded envelope on the id list (ADR-0045 R2). 999 is the lowest
-# documented hard limit on the fetch path: SQLite's default
-# SQLITE_MAX_VARIABLE_NUMBER (sqlite.org/limits.html §9, releases before
-# 3.32.0) and the SQLite fallback binds one parameter per id. It also
-# keeps a worst-case all-unknown response (~7 JSON chars/id) far under
-# MAX_RESPONSE_CHARS, which bound_payload cannot shrink (non-ListTarget).
+# source: ADR-0452
 _MAX_RECEIPT_IDS = 999
-# Receipt ids are int4 (SERIAL); the PG path casts ::int[], so a larger
-# value is unrepresentable — reject it instead of leaking a backend-
-# specific NumericValueOutOfRange (PG) vs silent-unknown (SQLite) split.
+# source: ADR-0452
 _INT4_MAX = 2_147_483_647
 
 
 def _parse_receipt_ids(raw: Any) -> list[int]:
     """Coerce the argument into a deduplicated, ordered id list — loudly.
 
-    A malformed id list is a caller bug, not a degradation mode: raise
-    with the exact offender instead of silently dropping it. bool is
-    rejected explicitly (it is an int subclass and ``True`` would
-    silently resolve receipt 1).
-    """
+    source: ADR-0452"""
     if not isinstance(raw, list) or not raw:
         raise ValueError("receipt_ids requires a non-empty list of receipt ids")
     if len(raw) > _MAX_RECEIPT_IDS:
@@ -297,9 +269,7 @@ async def handler(args: dict[str, Any]) -> dict[str, Any]:
         "receipts_unknown": [r for r in receipt_ids if r not in resolved_ids],
         "semantics": "presence-in-context",
     }
-    # Anti-flooding bound (correction 5): same measured budget as recall;
-    # water-filling keeps the highest-scored rows fullest and every
-    # truncated row keeps its memory_id for fetch-by-id.
+    # source: ADR-0452
     settings = get_memory_settings()
     resp = bound_payload(
         resp, [ListTarget("evidence", weight_key="score")], settings.MAX_RESPONSE_CHARS

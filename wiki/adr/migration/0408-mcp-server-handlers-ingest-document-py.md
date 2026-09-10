@@ -1,0 +1,39 @@
+# ADR-0408: mcp_server/handlers/ingest_document.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `mcp_server/handlers/ingest_document.py`; original SHA-256 `8013b94133bbf5f7ec13dbd60c1077f7051ac17514fc0b5429766286a00c4c5e`.
+
+## Original docstring, lines 1–15
+
+````text
+"""Handler: ingest_document — pull a .docx or Confluence export into Cortex.
+
+Composition root (issue #192). Wires the pure parsers (``core.docx_parser`` /
+``core.confluence_parser`` → ``core.document_normalizer``) to the filesystem
+reader (``infrastructure.document_reader``) and the existing wiki/memory
+write path (``wiki_write.write_governed_page`` + ``ingest_document_writers``).
+
+The shared parsing/normalization seam this handler drives —
+``parse_confluence_storage`` → ``normalize_document`` → the write path — is
+exactly what the live-Confluence REST connector (enterprise-backlog#28, OUT
+of scope here) consumes: that leg swaps only the byte source (REST fetch for
+``read_confluence_export``) and the provenance (page URL + version for the
+content hash), reusing every line of parsing, normalization and writing
+below.
+"""
+````
+
+## Original docstring, lines 158–164
+
+````text
+"""Ingest a .docx or Confluence export into Cortex (issue #192).
+
+    Postcondition: on success writes exactly one wiki page + one summary
+    memory + one memory per section, all provenance-stamped, and returns
+    ``ingested: True``. A repeat ingest of the same (source, version) writes
+    nothing and returns ``idempotent_skip: True``. A read/parse failure
+    returns ``ingested: False`` with a reason and writes NOTHING."""
+````
+

@@ -1,0 +1,74 @@
+---
+kind: adr
+number: 0609
+title: Preserve sqlite_store_grooming design decisions
+status: accepted
+---
+
+# ADR-0609: sqlite_store_grooming design decisions
+
+## Context
+
+Canonical migration of decision evidence from `mcp_server/infrastructure/sqlite_store_grooming.py` under ADR-0056.
+The excerpts below preserve historical claims and citations verbatim; original ADR numbers are historical quotations, not current identity bindings.
+
+## Decision
+
+Keep the source implementation linked to this versioned decision record. Operational API documentation remains with the implementation.
+
+## Preserved decision evidence
+
+### module, original line 1
+
+````text
+Mirror of ``PgStatsMixin.get_grooming_ages`` (pg_store_stats.py). The
+jsonb tag queries translate to SQLite's ``json_each`` table-valued
+function; the wiki age is an honest degradation documented on the
+method. Missing entirely pre-fix: on the SQLite backend (the plugin
+default) every ``store.get_grooming_ages()`` call site raised
+``AttributeError`` -- observed on a real 30k-memory setup run,
+2026-07-22.
+
+````
+
+### get_grooming_ages, original line 25
+
+````text
+        Precondition: none.
+        Postcondition: returns {"wiki", "distillation", "promotion"} ->
+        timestamp string (ISO-8601, parseable by
+        ``datetime.fromisoformat``) of the most recent judgment-level
+        action of that kind recorded in this store, or None if none is
+        recorded. Read-only. Same contract as
+        ``PgStatsMixin.get_grooming_ages``, with one honest degradation:
+````
+
+### get_grooming_ages, original line 25
+
+````text
+        - wiki: always None. The ``tended`` timestamp lives only in the
+          PG ``wiki.pages`` index (pg_store_wiki_pages.py); the SQLite
+          schema has no wiki table, and wiki markdown on the filesystem
+          carries no tend record this store can read. None already means
+          "never recorded" to every consumer (core.grooming_health
+          treats it as always-stale; ``legs_due`` additionally requires
+          a non-zero backlog before nudging).
+        - distillation / promotion: the SQLite translation of the PG
+          jsonb queries -- 'lesson'-tagged memories carrying a
+          'distill-of:'/'promoted:' tag prefix, matched via json_each.
+        
+````
+
+### _last_lesson_tag_prefix, original line 53
+
+````text
+        The 'lesson' prefilter is semantically required, not an
+        optimisation shortcut: curate_distill.py and lesson_promotion.py
+        both only ever tag their output 'lesson', so it cannot exclude a
+        true positive (same argument as the PG twin's docstring).
+        
+````
+
+## Consequences
+
+Review rationale and source changes together. Historical evidence is preserved rather than silently rewritten; executable Python structure is unchanged after removing docstrings.

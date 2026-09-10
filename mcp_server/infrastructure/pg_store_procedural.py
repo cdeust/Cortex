@@ -1,9 +1,6 @@
 """Procedural-memory (B1: skills/habits) mixin for PgMemoryStore.
 
-Split out of pg_store_auxiliary.py (issue #407: 397 lines over the
-300-line §4.1 cap) — mined skill/habit persistence is its own concern,
-distinct from prospective triggers/archives/engrams.
-"""
+source: ADR-0558"""
 
 from __future__ import annotations
 
@@ -18,12 +15,7 @@ class PgProceduralMixin(PgStoreHost):
     def upsert_procedural_skill(self, data: dict[str, Any]) -> int:
         """Insert or update a mined skill, keyed by content-hash skill_id.
 
-        On conflict the aggregate counters are set to the incoming values
-        (the miner recomputes them from the full session history each run,
-        so the newest mined figures are authoritative). Returns the row id.
-        The action sequence is stored as a ``>``-joined string of step keys
-        (``tool`` or ``tool:target_kind``), mirroring core.procedural_memory.
-        """
+        source: ADR-0558"""
         row = self._execute(
             "INSERT INTO procedural_skills "
             "(skill_id, action_sequence, context_signature, occurrences, "

@@ -1,30 +1,4 @@
-"""MCP prompts for Cortex — ``prompts/list`` + ``prompts/get`` (issue #176).
-
-Cortex registers ~51 tools but exposes no prompts, so every multi-tool
-workflow it supports is discoverable only by reading docs or guessing — and
-those are exactly the compositions where a caller gets the order wrong
-(promotion episodic→semantic, wiki curation, session recall/onboarding). This
-module publishes those compositions as protocol the client can enumerate.
-
-Source of truth (issue #176 criterion 3, the #98 drift class): a prompt step
-names a tool and pulls that tool's one-line summary from the SAME handler
-schema map (``SCHEMAS``) that ``tools/list`` is built from — never a second,
-hand-maintained copy that can drift. ``test_mcp_prompts`` asserts every step
-tool exists in that map.
-
-Profile awareness (issue #177): ``is_available`` decides whether a prompt is
-offered under a profile — a prompt is offered iff the profile registers every
-tool its workflow drives. So ``session_recall`` (all-lean tools) is offered in
-both profiles, while ``promote_memories`` and ``curate_wiki`` (which drive the
-full curation/consolidation surface) are hidden AND gated under ``lean`` by
-``ToolProfileMiddleware``.
-
-Per-argument ``title``: the installed MCP SDK models a prompt argument as
-``name``/``description``/``required`` only (``mcp.types.PromptArgument`` has no
-``title`` field in this protocol version), so the human title is folded into
-each argument's description rather than emitted as a separate field. The
-prompt-level ``title`` IS emitted.
-"""
+"""source: ADR-0636"""
 
 from __future__ import annotations
 
@@ -229,14 +203,7 @@ def _register_session_recall(mcp: MCPServer, schemas: dict[str, dict]) -> None:
     ) -> str:
         """Guide a recall/onboarding session.
 
-        mcp 2.0.0 migration (PR #331): argument descriptions moved from this
-        docstring's Args: section into Annotated[..., Field(description=...)]
-        on each parameter — mcp 2.0.0's func_metadata no longer parses
-        Google-style docstrings for per-parameter descriptions the way
-        FastMCP did (verified: no docstring-parsing logic anywhere in
-        mcp.server.mcpserver.utilities.func_metadata, 2026-08-10). The
-        docstring itself still supplies the prompt's own description.
-        """
+        source: ADR-0636"""
         intro = f'Onboard onto project "{project}" and recall what Cortex already knows'
         intro += f" about: {focus}." if focus else "."
         return _render_body(schemas, SESSION_RECALL, intro)
@@ -258,9 +225,7 @@ def _register_promote_memories(mcp: MCPServer, schemas: dict[str, dict]) -> None
     ) -> str:
         """Guide episodic→semantic promotion.
 
-        See session_recall's docstring above for why argument descriptions
-        live in Annotated[..., Field(...)] rather than an Args: section.
-        """
+        source: ADR-0636"""
         intro = "Promote episodic memories into consolidated semantic knowledge"
         intro += f' for scope "{scope}".' if scope else "."
         return _render_body(schemas, PROMOTE_MEMORIES, intro)
@@ -279,8 +244,6 @@ def _register_curate_wiki(mcp: MCPServer, schemas: dict[str, dict]) -> None:
     ) -> str:
         """Guide a wiki curation kickoff.
 
-        See session_recall's docstring above for why argument descriptions
-        live in Annotated[..., Field(...)] rather than an Args: section.
-        """
+        source: ADR-0636"""
         intro = f'Kick off wiki curation for "{topic}".'
         return _render_body(schemas, CURATE_WIKI, intro)

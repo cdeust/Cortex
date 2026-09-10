@@ -16,12 +16,7 @@ from typing import TYPE_CHECKING, Any, Callable, Sequence
 if TYPE_CHECKING:
     import psycopg
 
-# A zero-arg callable returning a context manager that yields a psycopg
-# connection (e.g. ``store.batch_pool.connection``). Injected so this layer
-# never reaches into the store or psycopg_pool directly. The psycopg import is
-# typing-only (TYPE_CHECKING) so this module loads in a SQLite-only install
-# where the optional PostgreSQL driver is absent; the return type is a quoted
-# forward reference so the alias evaluates without importing psycopg at runtime.
+# source: ADR-0591
 ConnectAcquire = Callable[[], "AbstractContextManager[psycopg.Connection]"]
 RowAdapter = Callable[[Any], Sequence[Any]]
 

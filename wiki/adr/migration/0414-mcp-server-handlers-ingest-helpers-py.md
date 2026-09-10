@@ -1,0 +1,122 @@
+# ADR-0414: mcp_server/handlers/ingest_helpers.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `mcp_server/handlers/ingest_helpers.py`; original SHA-256 `8974df257298860ce7cbb57d6e8c020d9fad6fbdb189b58587f600ba7b344c3a`.
+
+## Original docstring, lines 41–54
+
+````text
+"""True when ``graph_path`` points at a graph that still exists on disk.
+
+    AP writes ``<output_dir>/graph`` as a LadybugDB directory; pre-3.14
+    builds wrote a single file at the same slot. Either form counts as
+    valid only when **non-empty** — an existing-but-empty directory is a
+    half-built or wiped graph, which must read as a cache miss so the
+    caller re-analyses rather than silently projecting zero symbols.
+
+    source: ingest staleness bug Jun-2026 — a memo outlived its graph
+    (the graph directory was deleted) and ``find_cached_graph`` handed the
+    dead path straight back to ``ensure_graph``, which then projected an
+    empty graph. A memo must never outlive the artefact it points at
+    (Dijkstra audit: the pointer is not the thing).
+    """
+````
+
+## Original docstring, lines 80–87
+
+````text
+"""Sortable recency key for a memo row (most-recent sorts highest).
+
+    Prefers ``created_at`` (when the path was memoised); falls back to
+    ``heat_base_set_at`` then ``last_accessed``. Datetimes are
+    ISO-normalised; a missing value sorts oldest. ISO-8601 strings sort
+    lexicographically in chronological order, so plain string comparison
+    is correct here.
+    """
+````
+
+## Original docstring, lines 99–111
+
+````text
+"""Return the cached graph_path for a project, or None.
+
+    Returns the path from the MOST-RECENT memo tagged with the project's
+    code-graph tag whose graph **still exists on disk**. A memo whose
+    graph was deleted (path missing or empty) is skipped, never returned
+    — this is the self-heal: a stale memo can no longer make the caller
+    project an empty graph. When no live graph is found, returns None so
+    the caller re-analyses and re-memoises.
+
+    source: ingest staleness bug Jun-2026 (Dijkstra audit). Previously
+    this returned the first tag match unconditionally, with no existence
+    check and no recency ordering.
+    """
+````
+
+## Original comment, lines 115–118
+
+````text
+# Tag-filtered, recency-ordered SQL lookup. The previous
+            # full-table scan materialized every memory (content +
+            # embeddings) to find a handful of graph memos
+            # (bounded-I/O audit 2026-06-09).
+````
+
+## Original comment, lines 150–153
+
+````text
+# Directories never worth scanning for source-change detection: VCS,
+# dependency caches, build outputs, virtualenvs, and the graph's own
+# sidecar index. Pruned so the freshness walk early-exits cheaply on a
+# real repo instead of stat-ing hundreds of thousands of vendored files.
+````
+
+## Original docstring, lines 176–193
+
+````text
+"""False when a source file changed AFTER the graph was built.
+
+    Compares the graph artefact's own mtime (its build time) against the
+    newest source file under ``project_path``. A bounded, ignore-pruned
+    ``os.walk`` early-exits on the FIRST file newer than the graph, so a
+    changed repo is detected without a full scan in the common case.
+
+    Returns True (treat as fresh) when the project root is absent or the
+    graph mtime is unreadable — staleness cannot be proven, and rejecting
+    on uncertainty would force a needless re-analyse. The existence and
+    health gates handle those cases; this gate's sole job is detecting a
+    real source-vs-graph time skew.
+
+    source: ingest stale-graph reuse Jun-2026 — ``find_cached_graph``
+    reused a graph built before the codebase changed, so /cortex-visualize
+    served a stale AST. ``graph_path_is_materialised`` (existence only)
+    could not catch this; only a build-vs-source time comparison can.
+    """
+````
+
+## Original docstring, lines 222–230
+
+````text
+"""Persist the graph path as a protected memory for future lookups.
+
+    Uses raw insert_memory (not the predictive-coding gate) so ingestion
+    state is always recorded, even when low-surprise.
+
+    ``extra_tags`` carries provenance (ADR-0052 sec 2, INC5.2) — e.g. the
+    ``src:ap`` / AP-version tags from ``ingest_provenance.ap_provenance_tags``
+    — appended to the base tag set.
+    """
+````
+
+## Original comment, lines 268–272
+
+````text
+# Bound concurrent in-flight calls to this single-process upstream child
+    # across every Cortex handler. Without this, two batch tools (distinct
+    # admission semaphores) can hammer the shared child until it OOMs and the
+    # next stdin write raises ConnectionResetError: Connection lost.
+    # source: upstream_governor.py / ingest_codebase RCA 2026-06-09.
+````
+

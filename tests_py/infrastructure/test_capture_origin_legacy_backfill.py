@@ -1,17 +1,11 @@
 """The legacy backfill runs exactly once, on the upgrade that creates the
 column (issue #368).
 
-Why this is tested against a real pre-migration database rather than by
-asserting substrings of the DDL: the property that matters is temporal — rows
-present when the column is created become 'legacy', rows written afterwards
-keep the 'unknown' DEFAULT and are demoted at read time. A text assertion on
-the migration source cannot distinguish those two cases, and it is exactly
-the distinction the whole design rests on.
-
 SQLite's ALTER TABLE ... DROP COLUMN (3.35+) lets the test reconstruct the
 pre-#365 shape from a current schema, so the upgrade path is exercised for
 real instead of simulated.
-"""
+
+source: ADR-0976"""
 
 from __future__ import annotations
 

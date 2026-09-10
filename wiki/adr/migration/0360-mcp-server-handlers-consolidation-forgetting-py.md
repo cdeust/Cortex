@@ -1,0 +1,70 @@
+# ADR-0360: mcp_server/handlers/consolidation/forgetting.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `mcp_server/handlers/consolidation/forgetting.py`; original SHA-256 `3a42e80c835ef58a131d04447ee2c991be94d0cc7f32bcd8a96fe95f9467c827`.
+
+## Original docstring, lines 1–48
+
+````text
+"""Consolidation cycle: dopaminergic active forgetting (two independent circuits).
+
+Composition root wiring ``core.active_forgetting`` (pure decisions) to the PG
+store (newer-neighbor search + reversible effects). It runs AFTER the deep-sleep
+replay pass so memories replayed this cycle count as sleep-protected
+(``recently_active``) and are exempt from the ongoing forgetting signal — sleep
+inhibits the Rac1 forgetting circuit (Davis & Zhong 2017, Neuron 95:490-503).
+
+Per active memory that is neither pinned nor replayed this cycle:
+
+  - ``chronic`` = the core ``chronic_interference`` over the NEWER overlapping
+    neighbours: a REDUNDANCY-GATED excess noisy-OR that counts only genuine
+    near-duplicates (sim ≥ τ_dup = curation.MERGE_THRESHOLD), excluding the ~0.5
+    background band of 384-dim embeddings. This is the saturation fix — a plain
+    noisy-OR over the 10 nearest newer neighbours saturated to ≈1.0 for 99.6% of
+    memories and marked 46% of the corpus stale in one cycle. The gating lives in
+    pure core (the store returns raw per-neighbour similarities), unit-testable
+    without a database (SRP).
+
+  - ``accum`` = the leaky integrator over cycles: ``λ·accum_{t-1} + chronic ×
+    stage_vulnerability × cortical_availability(hippocampal_dependency)``.
+    Permanent forgetting requires *sustained* pressure (accum ≥ Θ_accum),
+    faithful to the gradual Rac1/cofilin erosion; sleep-protected cycles add 0
+    and let the accumulator leak. The prior accumulator is read from the row
+    and the new value is written back EVERY cycle. The cortical-availability
+    factor is CLS-B gate C (McClelland 1995 two-stage transfer, see
+    ``core.active_forgetting.cortical_availability``): a still hippocampally-
+    dependent memory accumulates this pressure more slowly — bounded and
+    never zero, so this is a SOFT modulation of resistance, not a veto.
+
+  - the acute interferer = the strongest newer neighbor (``acute_overlap``) and
+    its age (``acute_age_hours``), feeding the stage-independent transient DAMB
+    block (Sabandal, Berry & Davis 2021, Nature 591:426-430).
+
+Effects, both reversible (the two circuits read disjoint signals and never
+chain — Sabandal 2021 tested and rejected transient→permanent conversion):
+
+  - permanent (Rac1) → ``mark_memory_stale(True)``: the row persists as a
+    residual engram, reinstated when the trace is reactivated.
+  - transient (DAMB) → ``heat × (1 - acute_overlap)``: retrieval suppression
+    whose magnitude rides the *measured* interferer salience. No biological
+    rate law exists for this magnitude at the hours/days timescale and the
+    salience effect is ordinal only (Berry, Phan & Davis 2018, PMC6239218), so
+    the suppression is scaled by the interferer overlap itself rather than an
+    invented constant; heat recovers on re-access.
+
+Ablation-gated by ``Mechanism.ACTIVE_FORGETTING``.
+"""
+````
+
+## Original comment, lines 66–70
+
+````text
+# Newer-neighbor fan-out for the chronic aggregate. Bounds I/O only: the gated
+# noisy-OR counts only near-duplicates, so this caps how much of a long similar-
+# neighbor tail is scanned — it is NOT a biological rate constant. Matches the
+# store's default KNN width.
+# source: I/O bound; mirrors search_vectors default top_k (pg_store.py)
+````
+

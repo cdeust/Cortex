@@ -9,17 +9,17 @@ import os
 from mcp_server.infrastructure.capture_transport import Limits
 from mcp_server.shared.content_hardening import CONTENT_MAX_BYTES
 
-# source: validation/schemas.py remember contract: directory=500, tags=20*80.
+# source: ADR-0489
 DIRECTORY_CHARS = 500
-# source: validation/schemas.py remember.tags.maxItems.
+# source: ADR-0489
 TAG_COUNT = 20
-# source: validation/schemas.py remember.tags.items.maxLength.
+# source: ADR-0489
 TAG_CHARS = 80
-# source: mcp_client.py MCPClient.__init__, idleTimeoutMs default 300000 ms.
+# source: ADR-0489
 DEFAULT_IDLE_SECONDS = 300.0
-# source: remediation plan F1/W3-1, existing PostToolUse hook timeout 10 seconds.
+# source: ADR-0489
 TRANSPORT_SECONDS = 10.0
-# source: RFC 8259 §7: a one-byte control becomes six ASCII bytes (\uXXXX).
+# source: ADR-0489
 JSON_ESCAPE_BYTES = 6
 CAPTURE_TOOLS = {
     "Edit",
@@ -33,15 +33,14 @@ CAPTURE_TOOLS = {
     "Grep",
     "WebFetch",
     "WebSearch",
-}  # source: post_tool_capture tool-kind sets; executable reconciliation test.
+}  # source: ADR-0489
 
 
 def limits() -> Limits:
     idle = float(os.environ.get("CORTEX_CAPTURE_IDLE_SECONDS", DEFAULT_IDLE_SECONDS))
     if not math.isfinite(idle) or idle <= 0:
         raise ValueError("CORTEX_CAPTURE_IDLE_SECONDS must be finite and positive")
-    # The fixed metadata has its exact JSON cost; variable strings take their
-    # worst escaped size. This includes tag quotes/commas, keys and braces.
+    # source: ADR-0489
     skeleton = {
         "content": "",
         "tags": [""] * TAG_COUNT,

@@ -1,31 +1,9 @@
 """Handler: validate_memory — graded provenance verifier (I6-D6).
 
-Two distinct outputs per memory, both computed from the same reference
-extraction pass:
-
-1. Staleness (unchanged from before I6-D6): FILE PATHS ONLY feed the
-   staleness score (core/staleness.py). URLs, commits, artifact digests,
-   and citations are never extraction inputs to ``is_stale`` — a memory
-   describing a historical fact is not stale just because a URL it
-   mentions went 404 (see core/staleness.py header). This tool is
-   BIDIRECTIONAL on staleness since I6-D6: a stale memory whose file
-   refs all resolve again is rehabilitated (``is_stale`` set back to
-   false), not just flagged one-directionally.
-2. Provenance grade (new, I6-D6): every reference type — file paths, git
-   commit SHAs, URLs (HEAD-checked, bounded sample), and content-addressed
-   artifact digests (sha256[:16] recomputation) — is checked and combined
-   into one of verified / verifiable / unverifiable (core/provenance.py),
-   persisted to ``memories.source_attribution``. This handler is the sole
-   writer of that grade going forward; a prior write from a different
-   subsystem (C1 source/reality monitoring, remember_helpers.py) is a
-   distinct, non-grade epistemic-origin classification that this handler's
-   grade overwrites on the memory's next verification pass. Citations
-   (DOI/arXiv) are recognized but never auto-verified — no source exists
-   to check them against (coding-standards.md §8).
-
 Can target a single memory, a domain, a directory, or all memories
 (cursor-paginated via ``after_id``, 1000 per call).
-"""
+
+source: ADR-0451"""
 
 from __future__ import annotations
 
@@ -45,14 +23,12 @@ from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
 from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.shared.subprocess_safe import run_with_hard_timeout
 
-# ── Bounds (I6-D6: no unbounded network fan-out from a memory-maintenance
-# tool) ───────────────────────────────────────────────────────────────────
+# source: ADR-0451
 _DEFAULT_URL_CHECK_LIMIT = 10
 _URL_CHECK_TIMEOUT_S = 3.0
 _GIT_CHECK_TIMEOUT_S = 2.0
 
-# source: RFC 9110 §15 — 2xx (success) and 3xx (redirection) status
-# codes count as reachable; 4xx/5xx do not
+# source: ADR-0451
 _HTTP_REACHABLE_MIN = 200
 _HTTP_REACHABLE_END = 400
 
@@ -216,7 +192,7 @@ def _path_exists(ref: str, base: Path) -> bool:
     return False
 
 
-# ── Provenance I/O: commit refs ───────────────────────────────────────────
+# source: ADR-0451
 
 
 def _git_commit_exists(repo_dir: str, sha: str, *, timeout: float) -> bool:
@@ -261,7 +237,7 @@ def _check_commit_refs(
     return cache
 
 
-# ── Provenance I/O: URL refs (bounded sample) ─────────────────────────────
+# source: ADR-0451
 
 
 def _check_url_reachable(url: str, *, timeout: float) -> bool:
@@ -294,7 +270,7 @@ def _check_url_refs(
     return verdicts
 
 
-# ── Provenance I/O: artifact digests ──────────────────────────────────────
+# source: ADR-0451
 
 
 def _digest_matches(path: str, digest: str, base: Path) -> bool:
@@ -332,33 +308,22 @@ def grade_from_content(
     base_dir: str = "",
 ) -> provenance.ProvenanceReport:
     """Grade NOT-YET-INSERTED content's provenance from LOCAL-ONLY checks
-    (no network) -- the write-path-safe subset of a full validate_memory
-    pass (M-D5, 7.5). Called by ``handlers/remember_helpers.py`` before a
-    memory is inserted.
+        (no network) -- the write-path-safe subset of a full validate_memory
+        pass (M-D5, 7.5).
 
-    Reuses the exact extraction + local-verification logic this handler
-    runs in its batch sweep (``_resolve_existing_paths``,
-    ``_git_commit_exists``, ``_check_artifact_refs``, ``core.provenance``)
-    -- zero new grading logic (coding-standards.md §9: no parallel
-    classification path). The only difference from a full pass: URL refs
-    are never HEAD-checked here -- a write-time network call has unbounded
-    latency, out of ``remember()``'s budget (design doc M-D5: "reste dans
-    la passe batch"). A URL ref here is graded exactly as "not sampled
-    this pass" grades it in the batch handler (ceiling VERIFIABLE, never
-    penalized as dead).
+        precondition: ``content`` is the memory's raw (already-hardened)
+            content; ``base_dir`` defaults to the current working directory
+            when empty (matches ``_handler_impl``'s own default).
+        postcondition: same grade semantics as one row of ``_grade_memories``
+            -- the worst outcome among file/commit/artifact/citation
+            references. The returned report's ``memory_id`` is always 0 (no
+            row exists yet); callers must not persist anything keyed by it,
+            and must NOT write the grade into ``memories.source_attribution``
+            -- this handler is that column's sole writer (module docstring);
+            callers persist the grade, if at all, through a different
+            mechanism (e.g. an additive tag).
 
-    precondition: ``content`` is the memory's raw (already-hardened)
-        content; ``base_dir`` defaults to the current working directory
-        when empty (matches ``_handler_impl``'s own default).
-    postcondition: same grade semantics as one row of ``_grade_memories``
-        -- the worst outcome among file/commit/artifact/citation
-        references. The returned report's ``memory_id`` is always 0 (no
-        row exists yet); callers must not persist anything keyed by it,
-        and must NOT write the grade into ``memories.source_attribution``
-        -- this handler is that column's sole writer (module docstring);
-        callers persist the grade, if at all, through a different
-        mechanism (e.g. an additive tag).
-    """
+    source: ADR-0451"""
     base = base_dir or os.getcwd()
     file_refs = collect_all_refs([{"content": content}])
     existing_paths = _resolve_existing_paths(file_refs, base)
@@ -527,7 +492,7 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     )
     fresh_stale_set = set(fresh_stale_ids)
 
-    # ── Provenance grading (file/commit/url/artifact/citation) ──────────
+    # source: ADR-0451
     commit_cache = _check_commit_refs(memories)
     all_urls: list[str] = []
     for mem in memories:
@@ -599,6 +564,5 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     }
 
 
-# Telemetry-instrumented public entry. Records latency / byte volume
-# / result count per call (Popper C6 read/write ratio audit).
+# source: ADR-0451
 handler = instrument("validate_memory", _handler_impl, result_count_key=None)

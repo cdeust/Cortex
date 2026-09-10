@@ -7,8 +7,8 @@
 --   D) HNSW absent,   batched UPDATE                — control
 --   E) HNSW present,  batched UPDATE + IS DISTINCT FROM gating   — v3.12 candidate
 --
--- Plus probe F) HNSW present, per-row UPDATE with per-row COMMIT
---             (matches production exactly)  — only measure once due to runtime.
+-- Probe F: per-row UPDATE with per-row COMMIT; run once.
+-- source: ADR-0834
 --
 -- source: ADR-0834
 

@@ -162,7 +162,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         except (ValueError, OSError) as exc:
             return {"error": f"project ADR publication failed: {exc}"}
 
-    # source: issue #514 — allocate and publish under one cooperating-writer lock.
+    # source: ADR-0453
     root = Path(WIKI_ROOT)
     root.mkdir(parents=True, exist_ok=True)
     with log_file_lock(root / ".adr-allocation"):

@@ -1,0 +1,42 @@
+---
+kind: adr
+number: 0575
+title: Preserve pg_store_wiki_concepts design decisions
+status: accepted
+---
+
+# ADR-0575: pg_store_wiki_concepts design decisions
+
+## Context
+
+Canonical migration of decision evidence from `mcp_server/infrastructure/pg_store_wiki_concepts.py` under ADR-0056.
+The excerpts below preserve historical claims and citations verbatim; original ADR numbers are historical quotations, not current identity bindings.
+
+## Decision
+
+Keep the source implementation linked to this versioned decision record. Operational API documentation remains with the implementation.
+
+## Preserved decision evidence
+
+### module, original line 1
+
+````text
+Split out of ``pg_store_wiki.py`` (originally 890 lines, over the
+300-line file limit — CLAUDE.md "Code Quality Rules") purely for size
+compliance; no logic changed.
+````
+
+### comment, original line 88
+
+````text
+# Column allowlist for update_concept: every patchable wiki.concepts column
+# (pg_schema.py DDL), enumerated in code so an unknown key is REFUSED rather
+# than interpolated into SQL — the same refuse-not-escape mechanism as
+# wiki_view_executor._TABLE_WHITELIST (docs/ASSURANCE-CASE.md §5). Before this
+# allowlist, any dict key reached the SET clause verbatim; the single caller
+# (wiki_emerge) passes literal keys, but the boundary now enforces it.
+````
+
+## Consequences
+
+Review rationale and source changes together. Historical evidence is preserved rather than silently rewritten; executable Python structure is unchanged after removing docstrings.

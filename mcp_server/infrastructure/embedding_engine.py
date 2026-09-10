@@ -2,31 +2,15 @@
 
 Provides text -> vector encoding for semantic similarity search.
 
-Strategy (selected by the factory per ``ModelState``, issue #169):
-  1. sentence-transformers (``ModelState.LOADED``) -- best quality, 384D
-  2. Download-free algorithmic fallback (every non-LOADED state) --
-     ``embedding_fallback_provider.AlgorithmicEmbeddingProvider``, the SECOND
-     ``EmbeddingProvider`` implementation. No state maps to nothing.
-
 The engine is lazy-loading: no model initialization until first encode() call.
-
-Structure (Cortex#173 — the file was split along three seams):
-  * ``embedding_provider.EmbeddingProvider`` — the interface consumers depend
-    on; ``EmbeddingEngine`` below is the neural implementation, the algorithmic
-    fallback is the second.
-  * ``embedding_model_lifecycle`` — device resolution + the explicit model-load
-    state machine (``ModelState``: package absent / model files absent / load
-    raised / loaded). See that module's docstring for the revision-pin history.
-  * ``embedding_factory`` — the composition root: it wires the two providers and
-    owns the state→provider selection (``use_fallback``, ``current_embedding_mode``).
-  * this module — the concrete neural provider (encode path + LRU cache).
 
 Device selection:
   Default is "cpu" for embedding consistency (GPU float32 arithmetic produces
   bit-different vectors from CPU). GPU is opt-in via CORTEX_MEMORY_EMBEDDING_DEVICE
   env var. Failed GPU inference retries on CPU (e.g. after OOM or MPS reset)
   before using the algorithmic fallback provider.
-"""
+
+source: ADR-0520"""
 
 from __future__ import annotations
 
@@ -59,11 +43,7 @@ from mcp_server.infrastructure.embedding_provider import (
 
 logger = logging.getLogger(__name__)
 
-# Re-exported for backward compatibility: callers and tests import these names
-# from ``embedding_engine`` directly (they lived here before the Cortex#173
-# split). The definitions now live in the seam modules — ``embedding_provider``
-# (interface), ``embedding_model_lifecycle`` (revision pin + cache dir), and
-# ``embedding_factory`` (composition root / selection + telemetry mode).
+# source: ADR-0520
 __all__ = [
     "DEFAULT_MODEL_REVISION",
     "EmbeddingEngine",
@@ -81,16 +61,11 @@ class EmbeddingEngine(
 ):
     """Lazy-loading neural embedding provider with graceful fallback.
 
-    Implements ``EmbeddingProvider`` (embedding_provider.py). Composes the model
-    lifecycle (``_EmbeddingLifecycleMixin``) and shared vector math
-    (``_EmbeddingMathMixin``); this class owns the encode path and the LRU cache.
+        Implements ``EmbeddingProvider`` (embedding_provider.py). Composes the model
+        lifecycle (``_EmbeddingLifecycleMixin``) and shared vector math
+        (``_EmbeddingMathMixin``); this class owns the encode path and the LRU cache.
 
-    Cache key discipline (ADR-0045 R5): the LRU cache is keyed by
-    ``sha256(text)[:16]`` (16 hex chars = 8 bytes of entropy), never by
-    raw text. Each key stores 16 characters regardless of input length.
-    Cache key storage scales with the entry count, not the memory text size.
-    The capacity is measured in docs/provenance/embedding-cache-capacity.md.
-    """
+    source: ADR-0520"""
 
     def __init__(
         self,
@@ -103,21 +78,16 @@ class EmbeddingEngine(
         self._dim = dim
         self._device_requested = device
         self._device: str | None = None  # resolved once, cached
-        # revision=None means "resolve refs/main at load time" (the
-        # pre-i7d3 unpinned behavior) — an explicit opt-out for callers
-        # that pass a different model_name this pin was never verified
-        # against. See embedding_model_lifecycle "Model revision pin".
+        # source: ADR-0520
         self._revision = revision
         self._model: Any = None
         self._unavailable = False
         self._model_state: ModelState = ModelState.UNINITIALIZED
-        # The SECOND provider (issue #169): the download-free algorithmic
-        # encoder the factory routes to for every non-LOADED ModelState. Same
-        # dimension contract as this neural engine.
+        # source: ADR-0520
         self._fallback_provider = AlgorithmicEmbeddingProvider(dim)
-        # Cache keyed by sha256(text)[:16] — see class docstring / ADR-0045 R5.
+        # source: ADR-0520
         self._cache: OrderedDict[str, bytes] = OrderedDict()
-        # source: docs/provenance/embedding-cache-capacity.md — eviction counterexample.
+        # source: ADR-0520
         self._cache_max = 128
         self._cache_hits = self._cache_misses = self._batch_reuses = 0
 
@@ -136,19 +106,20 @@ class EmbeddingEngine(
 
     @property
     def model_state(self) -> ModelState:
-        """The current lifecycle state of the neural model load (Cortex#173)."""
+        """The current lifecycle state of the neural model load.
+
+        source: ADR-0520"""
         return self._model_state
 
     @property
     def mode(self) -> str:
-        """Embedding provenance: ``"neural"`` or ``"fallback"`` (issue #169).
+        """precondition: none.
+                postcondition: forces model resolution if it has not been attempted,
+                then returns ``"neural"`` when a sentence-transformers model is loaded,
+                else ``"fallback"`` (algorithmic, download-free). Read by the store to
+                tag each stored vector's space and by telemetry.
 
-        precondition: none.
-        postcondition: forces model resolution if it has not been attempted,
-        then returns ``"neural"`` when a sentence-transformers model is loaded,
-        else ``"fallback"`` (algorithmic, download-free). Read by the store to
-        tag each stored vector's space and by telemetry.
-        """
+        source: ADR-0520"""
         if self._model_state is ModelState.UNINITIALIZED and not self._unavailable:
             self._ensure_model()
         return "fallback" if self._serve_fallback() else "neural"
@@ -156,12 +127,7 @@ class EmbeddingEngine(
     def _serve_fallback(self) -> bool:
         """Whether to route encode() to the algorithmic fallback provider.
 
-        After ``_ensure_model``, a loaded neural model has ``self._model`` set
-        (state LOADED); every fallback ModelState leaves ``self._model`` None.
-        A present model always takes the neural path; otherwise the factory's
-        per-ModelState mapping (``use_fallback``) decides — so no state maps to
-        nothing (issue #169).
-        """
+        source: ADR-0520"""
         if self._model is not None:
             return False
         return use_fallback(self._model_state)
@@ -189,7 +155,7 @@ class EmbeddingEngine(
             vec = self._model.encode(model_input)
         except RuntimeError:
             if self._device == "cpu":
-                raise  # Already on CPU — genuine bug, don't mask
+                raise  # source: ADR-0520
             self._fallback_to_cpu()
             if self._unavailable or self._model is None:
                 return self._fallback_encode(text)
@@ -205,10 +171,7 @@ class EmbeddingEngine(
     def encode(self, text: str) -> bytes | None:
         """Encode text to a float32 byte blob.
 
-        The LRU cache is keyed by ``sha256(text)[:16]`` per ADR-0045 R5
-        — never by raw text — so a 100 KB memory contributes 16 bytes of
-        key storage, not 100 KB.
-        """
+        source: ADR-0520"""
         if not text:
             return None
 
@@ -221,8 +184,7 @@ class EmbeddingEngine(
 
         self._ensure_model()
 
-        # Selection per ModelState is owned by the factory (issue #169):
-        # LOADED → neural encode; every other state → the algorithmic fallback.
+        # source: ADR-0520
         if self._serve_fallback():
             result = self._fallback_encode(text)
         else:
@@ -260,20 +222,13 @@ class EmbeddingEngine(
     def warm_cache(self, texts: list[str]) -> None:
         """Pre-populate the LRU cache for ``texts`` via one ``encode_batch()`` call.
 
-        Lets a caller about to make many individual ``encode()`` calls for
-        already-known text (e.g. backfill importing a session file's items
-        one ``remember()`` at a time -- issue: green-software review
-        2026-09-04) pay one batched model inference instead of
-        ``len(texts)`` sequential ones: each subsequent ``encode()`` call
-        for a warmed text becomes a cache hit. Already-cached and duplicate
-        texts are skipped/deduped before encoding.
+                LRU eviction (``_cache_max``) still applies -- if ``texts`` exceeds
+                the cache size, the earliest-warmed entries may be evicted before
+                their ``encode()`` call runs, which only forgoes the optimization
+                for those; ``encode()`` still returns a correct vector via its own
+                per-text fallback path.
 
-        LRU eviction (``_cache_max``) still applies -- if ``texts`` exceeds
-        the cache size, the earliest-warmed entries may be evicted before
-        their ``encode()`` call runs, which only forgoes the optimization
-        for those; ``encode()`` still returns a correct vector via its own
-        per-text fallback path.
-        """
+        source: ADR-0520"""
         to_encode = list(
             dict.fromkeys(
                 t for t in texts if t and self._cache_key(t) not in self._cache
@@ -287,13 +242,12 @@ class EmbeddingEngine(
                 self._cache_store(self._cache_key(text), vec)
 
     def _fallback_encode(self, text: str) -> bytes:
-        """Delegate to the algorithmic fallback provider (issue #169).
+        """precondition: ``text`` is a non-empty str (the GPU-failure and
+                model-absent paths only reach here with real content).
+                postcondition: returns a ``self._dim``-length, L2-normalized float32
+                blob from ``AlgorithmicEmbeddingProvider`` — the SECOND provider.
 
-        precondition: ``text`` is a non-empty str (the GPU-failure and
-        model-absent paths only reach here with real content).
-        postcondition: returns a ``self._dim``-length, L2-normalized float32
-        blob from ``AlgorithmicEmbeddingProvider`` — the SECOND provider.
-        """
+        source: ADR-0520"""
         blob = self._fallback_provider.encode(text)
-        # Non-empty text always yields a vector; guard the type only.
+        # source: ADR-0520
         return blob if blob is not None else np.zeros(self._dim, np.float32).tobytes()

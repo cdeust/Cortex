@@ -25,9 +25,7 @@ marked child it exits ``0`` immediately — a silent no-op that lets the
 ``claude -p`` call proceed with no side effects. Everywhere else it does
 nothing.
 
-This module has zero dependencies beyond the standard library, so importing it
-from a hook can never fail for a missing third-party package.
-"""
+source: ADR-0478"""
 
 from __future__ import annotations
 

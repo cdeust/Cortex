@@ -1,19 +1,7 @@
 """Backfill pass: re-derive the true project domain for wiki pages stuck
 in a catch-all bucket (``uncategorized``, ``_general``, ``global``, ...).
 
-Composition root — wires ``core.wiki_domain_backfill`` (pure majority-
-vote derivation) to infrastructure (DB reads/writes via
-``pg_store_wiki_domain``, repo-registry lookups via
-``shared.domain_mapping``, filesystem containment checks) under
-``run_wiki_maintenance``'s non-fatal try/except contract. Split out as
-its own module to keep ``wiki_maintenance.py`` under the 300-line cap
-(coding-standards.md §4.1).
-
-Volet 4 of the wiki data-quality cleanup (ADR-0051 family): the
-``documents`` primary-source backfill (Étape 3 / ``wiki_source_backfill``)
-closes the missing-link gap; this pass closes the wrong-domain gap using
-the same source-path evidence.
-"""
+source: ADR-0378"""
 
 from __future__ import annotations
 
@@ -29,10 +17,7 @@ from mcp_server.infrastructure.pg_store_wiki_domain import (
 
 logger = logging.getLogger(__name__)
 
-# Per-cycle scan cap — mirrors DEFAULT_BACKFILL_LIMIT's rationale in
-# wiki_source_backfill_pass.py: bounds one consolidate cycle's cost;
-# pages left over are picked up by the next cycle (list_catchall_pages_
-# with_sources only returns pages whose domain is STILL unregistered).
+# source: ADR-0378
 DEFAULT_DOMAIN_BACKFILL_LIMIT = 500
 
 

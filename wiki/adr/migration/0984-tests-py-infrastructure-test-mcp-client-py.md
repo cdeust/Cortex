@@ -1,0 +1,17 @@
+# ADR-0984: tests_py/infrastructure/test_mcp_client.py design and historical evidence
+
+Status: accepted; existing test/harness evidence preserved during issue #514.
+
+Source `tests_py/infrastructure/test_mcp_client.py`, original SHA-256 `9a8bdc1eb04fded8ac9cea0952779b7885e6a4f48b672202815e2048a0554148`.
+Assertions and runtime fixture literals remain unchanged.
+
+## Original docstring, lines 69–73
+
+````text
+"""When the child's stdout closes (EOF/crash), _read_loop's finally must
+    set _connected = False so the pool discards the dead client instead of
+    handing it back (which caused ConnectionResetError: Connection lost on the
+    next stdin write). source: ingest_codebase RCA 2026-06-09.
+    """
+````
+

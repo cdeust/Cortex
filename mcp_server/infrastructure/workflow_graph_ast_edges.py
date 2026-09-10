@@ -1,12 +1,6 @@
-"""AST *edge* loading for the workflow graph (ADR-0046).
+"""Infrastructure layer only. No core imports.
 
-Split out of ``workflow_graph_source_ast.py`` (issue #275 — that file
-exceeded the 300-line cap) as its own cohesive concern: querying AP's
-per-label-pair rel tables (CALLS / IMPORTS / MEMBER_OF / USES) and
-normalizing them into the builder-shaped edge dict.
-
-Infrastructure layer only. No core imports.
-"""
+source: ADR-0631"""
 
 from __future__ import annotations
 
@@ -23,14 +17,7 @@ from mcp_server.infrastructure.workflow_graph_ast_symbols import (
 )
 
 
-# AP rejects queries against rel tables that don't exist by returning
-# empty rows, so over-enumerating the full Cartesian product of label
-# kinds below is safe — it just costs extra round-trips against missing
-# tables. The narrower prior lists were the reason the cortex viz showed
-# ~4k imports instead of the tens of thousands the codebase actually
-# contains: every File→Class / File→Interface / File→TypeAlias /
-# File→Macro etc. edge was being silently dropped because its rel table
-# was never queried.
+# source: ADR-0631
 _CALL_LABELS = ("Function", "Method", "Macro")
 _CONTAINER_LABELS = (
     "Struct",
@@ -84,10 +71,10 @@ def _uses_rel_tables() -> list[tuple[str, str, str, str, bool]]:
 
 
 def _rel_tables_to_query() -> list[tuple[str, str, str, str, bool]]:
-    """Enumerate every ``(kind, table, src_lbl, dst_lbl, has_provenance)``
-    rel-table query AP could have produced (~89 total) — see
-    ``_calls_and_member_rel_tables``/``_import_rel_tables``/
-    ``_uses_rel_tables`` for each family's rationale."""
+    """Enumerate (kind, table, src_lbl, dst_lbl, has_provenance) relation-table
+    query descriptors.
+
+    source: ADR-0631"""
     return _calls_and_member_rel_tables() + _import_rel_tables() + _uses_rel_tables()
 
 
@@ -107,16 +94,7 @@ def _build_edge_query(
 ) -> str:
     """Construct the Cypher query for one rel-table.
 
-    ``has_provenance`` gates whether to fetch ``r.confidence`` +
-    ``r.resolution_method``: Kuzu raises a Binder exception on
-    missing-property access, so we only request those columns for rel
-    tables the AP resolver actually annotates (Calls_* / Imports_* /
-    Implements_* / Extends_* / Uses_*). Structural tables (HasMethod_* /
-    Defines_*) have no such columns — callers default confidence to 1.0
-    for those kinds instead. ``_NON_QUALIFIED_LABELS`` nodes (e.g.
-    Import) carry ``id`` instead of ``qualified_name``; selecting the
-    missing property would raise a Kuzu Binder exception.
-    """
+    source: ADR-0631"""
     if src_lbl == "File" or src_lbl in _NON_QUALIFIED_LABELS:
         select_src = "src.id AS src_name"
     else:
@@ -158,11 +136,7 @@ def _parse_provenance(
 ) -> "tuple[float | None, str | None]":
     """Parse ``r.confidence``/``r.resolution_method`` when present.
 
-    ``resolution_method`` comes back wrapped in literal single quotes
-    (see ``ai-architect-mcp-codebase`` resolver.rs:183 —
-    ``format!("'{method}'")``); stripped here at the infrastructure
-    boundary. Remove this strip once AP fixes the upstream quoting.
-    """
+    source: ADR-0631"""
     conf_raw = r.get("confidence") if has_provenance else None
     try:
         confidence = float(conf_raw) if conf_raw is not None else None
@@ -236,16 +210,12 @@ async def edge_batches_async(
 ):
     """Yield one batch of edge rows per AP rel-table query (async gen).
 
-    AP uses per-label-pair typed rel tables (LadybugDB convention):
-      * Calls_<Src>_<Dst>   for Function↔Method call edges
-      * Imports_File_<Lbl>  for File → imported symbol
-      * HasMethod_<Parent>_Method for struct/enum/trait → method
+        AP uses per-label-pair typed rel tables (LadybugDB convention):
+          * Calls_<Src>_<Dst>   for Function↔Method call edges
+          * Imports_File_<Lbl>  for File → imported symbol
+          * HasMethod_<Parent>_Method for struct/enum/trait → method
 
-    ``_rel_tables_to_query`` enumerates the known rel tables (~89
-    queries); each is issued via ``_run_edge`` and yielded as its own
-    batch the moment its query returns, so peak rows retained inside the
-    source is one rel-table's result — not the union across all 89.
-    """
+    source: ADR-0631"""
     path_tails = build_path_tails(paths)
     for kind, table, src_lbl, dst_lbl, has_provenance in _rel_tables_to_query():
         yield await _run_edge(

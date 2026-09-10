@@ -68,11 +68,7 @@ def bound_rejection(
 ) -> dict[str, Any] | None:
     """Reject only when the maximum attainable novelty is strictly too low.
 
-    source: predictive_coding_flat.compute_novelty_score uses positive weights;
-    embedding and temporal outputs are bounded by one. Temporal depends on
-    the vector-selected nearest memory and cannot be observed before encode.
-    Both subsequent multiply/clamp modulations are monotone in novelty.
-    """
+    source: ADR-0439"""
     signals = observed.signals
     upper = compute_novelty_score(1.0, signals["ent_nov"], 1.0, signals["struct_nov"])
     upper, _, _ = modulate_score(upper, observed)

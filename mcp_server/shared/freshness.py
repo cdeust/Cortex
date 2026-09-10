@@ -1,27 +1,15 @@
-"""Freshness annotation for injected memories (fleet-watch #110).
+"""Freshness annotation for injected memories.
 
-The harness-comparison rev.2 A/B measured the ai-architect stack (Harness B)
-serving facts "2-4 months stale with no age signal": every recalled memory
-entered the model's context as bare text, so a fresh fact and a months-old one
-were indistinguishable. This module renders the freshness the store *already*
-tracks -- ``created_at``, the ``source_attribution`` provenance grade, and
-``is_stale`` -- as a compact suffix the injection formatters append per memory.
-
-Pure: a memory dict plus an explicit ``now`` in, an annotation string out. The
-caller owns the clock, so the output is deterministic and testable. A memory
-that carries none of the three signals yields "" -- callers append nothing, so
-bare-memory call sites are unaffected.
+source: ADR-0649
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
 
-# Calendar/SI time-unit boundaries, in seconds. These are unit *definitions*
-# (a minute is 60 s, a day 86400 s), not tuned parameters; month and year use
-# the conventional 30-day / 365-day display approximations.
-# source: calendar arithmetic (SI second; 30-day month / 365-day year display
-#   convention).
+# source: ADR-0649
+
+# source: ADR-0649
 _MINUTE = 60
 _HOUR = 60 * _MINUTE
 _DAY = 24 * _HOUR

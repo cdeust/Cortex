@@ -1,11 +1,6 @@
 """Root-manifest version-split checks for the marketplace pin gate.
 
-Split out of check_marketplace_pins.py (issue: that file crossed the
-300-line §4.1 cap once REGISTRY_VERSION_STALE was added). Checks that
-every root-level manifest carrying its own copy of the version (server.json,
-manifest.json) agrees with the primary local marketplace pin — the guard
-AP #172 was missing when manifest.json alone went stale for two releases.
-"""
+source: ADR-0755"""
 
 from __future__ import annotations
 
@@ -24,11 +19,7 @@ ROOT_VERSION_MANIFESTS: tuple[tuple[str, str, str], ...] = (
 def check_root_manifests(root: Path, primary_pin: str) -> list[str]:
     """Flag every root manifest whose version disagrees with the primary pin.
 
-    An absent file is not a failure and neither is a missing version key: the
-    canonical repo has no manifest.json, ai-architect-mcp-codebase has both, and a
-    gate that demanded every row exist everywhere would be a false positive in
-    one repo or the other rather than a guard in both.
-    """
+    source: ADR-0755"""
     failures: list[str] = []
     for filename, key, failure_class in ROOT_VERSION_MANIFESTS:
         path = root / filename

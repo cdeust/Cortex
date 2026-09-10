@@ -60,8 +60,7 @@ schema = {
 }
 
 
-# source: the 1-hour cooldown documented in the skip reason below
-# (60 min × 60 s × 1000 ms)
+# source: ADR-0429
 _PROFILE_FRESH_MS = 3600000
 
 

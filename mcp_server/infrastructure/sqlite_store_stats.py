@@ -47,16 +47,12 @@ class SqliteStatsMixin:
         return float(row["avg_heat"] or 0.0) if row else 0.0
 
     def signature_repeat_stats(self, signature: str) -> tuple[int, float | None]:
-        """Habituation (E1) read side: prior presentations of a stimulus.
+        """Return (repeat_count, hours_since_last) for the normalized stimulus
+        signature.
+        hours_since_last is None for an unseen signature. Returns (0, None) on error or
+        when the signature column is absent.
 
-        Returns ``(repeat_count, hours_since_last)`` for memories sharing this
-        normalised ``stimulus_signature`` — the count feeds the write gate's
-        response decrement (Rankin 2009) and the elapsed hours drive
-        spontaneous recovery. ``hours_since_last`` is None when the signature is
-        unseen. Best-effort: returns ``(0, None)`` on any error or when the
-        column is absent (a store predating habituation), so the gate treats an
-        un-migrated store as if nothing has habituated.
-        """
+                source: ADR-0617"""
         if not signature:
             return 0, None
         try:
@@ -84,15 +80,11 @@ class SqliteStatsMixin:
         return count, hours
 
     def extinguished_count(self, threshold: float = 0.5) -> int:
-        """Extinction (E2) read side: count of deprecated-but-retained memories.
+        """Return the count of rows with extinction_strength at or above
+        threshold. Returns
+        0 on errors or when the column is absent. Rows are not modified.
 
-        Returns how many memories carry an inhibitory extinction tag at or above
-        ``threshold`` — the association is suppressed WITHOUT deletion (the row
-        is fully present, not is_stale), so it can spontaneously recover or be
-        reinstated (Bouton 2004). Best-effort: returns 0 on any error or when
-        the ``extinction_strength`` column is absent (a store predating
-        extinction), so an un-migrated store reports nothing extinguished.
-        """
+                source: ADR-0617"""
         try:
             row = self._conn.execute(
                 "SELECT COUNT(*) AS c FROM memories "
@@ -195,17 +187,15 @@ class SqliteStatsMixin:
     def increment_replay_count(self, memory_id: int) -> dict[str, Any] | None:
         """Increment replay_count and return the post-increment CLS-B inputs.
 
-        Returns ``{"replay_count", "hippocampal_dependency", "schema_match_score",
-        "importance"}`` read back atomically via ``RETURNING`` (SQLite >= 3.35;
-        single round trip — the caller needs the just-incremented count, not a
-        stale one), or ``None`` if the memory no longer exists. Pure
-        persistence: the caller (handler layer) decides what, if anything, to
-        do with these values.
+                Returns ``{"replay_count", "hippocampal_dependency",
+                "schema_match_score",
+                "importance"}`` read back atomically via ``RETURNING`` (SQLite >= 3.35;
+                single round trip — the caller needs the just-incremented count, not a
+                stale one), or ``None`` if the memory no longer exists. Pure
+                persistence: the caller (handler layer) decides what, if anything, to
+                do with these values.
 
-        Uses ``_raw_conn`` (not the psycopg-compat ``_conn``) because
-        ``PsycopgCompatConnection`` strips ``RETURNING`` down to a single
-        column via regex (see ``sqlite_compat.py``) — this query needs four.
-        """
+        source: ADR-0617"""
         row = self._raw_conn.execute(
             "UPDATE memories SET replay_count = replay_count + 1 WHERE id = ? "
             "RETURNING replay_count, hippocampal_dependency, "
@@ -278,10 +268,9 @@ class SqliteStatsMixin:
     def get_episodic_memories(
         self, domain: str = "", directory: str = "", limit: int = 500
     ) -> list[dict[str, Any]]:
-        """CLS input — mirror of PgStatsMixin.get_episodic_memories. Reads
-        current_memories so a superseded episodic version is never
-        crystallized into a durable semantic fact.
-        """
+        """Return episodic current-memory chain heads for consolidation.
+
+        source: ADR-0617"""
         conditions = ["store_type = 'episodic'", "NOT is_stale"]
         params: list = []
         if domain:
@@ -302,10 +291,9 @@ class SqliteStatsMixin:
     def get_semantic_memories(
         self, domain: str = "", limit: int = 500
     ) -> list[dict[str, Any]]:
-        """CLS dedup input — mirror of PgStatsMixin.get_semantic_memories.
-        Reads current_memories so a superseded semantic row cannot suppress
-        the corrected abstraction.
-        """
+        """Return semantic current-memory chain heads for deduplication.
+
+        source: ADR-0617"""
         if domain:
             rows = self._conn.execute(
                 "SELECT * FROM current_memories WHERE store_type = 'semantic' "

@@ -917,3 +917,52 @@ Source rationale preserved verbatim. Identifiers inside historical quotations ar
 # Pin pyright — diagnostic output drifts between releases, so a
 # zero-diagnostic tree is only comparable against the pinned version.
 ````
+
+## Final non-Python residual audit
+
+### .github/workflows/ci.yml — pre-cleanup line 258
+
+````text
+      # Protocol-level, hook-free proof for representative local client
+      # identities. This starts the installed production console entry point,
+      # under a SOCKS-proxy environment with no socks extra, then requires a
+      # full initialize/discovery round-trip for both full and lean profiles,
+      # plus a real SQLite memory_stats call. It is intentionally on the
+      # SQLite job: that is the zero-config backend used by Gemini/Codex
+      # installs, and all Python dependencies are already present here.
+````
+
+### .github/workflows/ci.yml — pre-cleanup line 276
+
+````text
+    # The pinned Claude package requires its postinstall to select the native
+    # validator. Never execute install scripts from a lockfile modified by an
+    # untrusted fork; same-repository PRs and main/workflow_dispatch remain
+    # covered by this vendor-parser contract.
+````
+
+### .github/workflows/ci.yml — pre-cleanup line 311
+
+````text
+          # @anthropic-ai/claude-code 2.1.220 declares Node >=22; Node 24 is
+          # the repository's existing release-toolchain pin.
+````
+
+### .github/workflows/ci.yml — pre-cleanup line 852
+
+````text
+  # These build only — no smoke run. docker/Dockerfile brings up PostgreSQL
+  # and pre-caches models, and .devcontainer/Dockerfile is opened by the Dev
+  # Containers CLI; asserting their runtime behaviour is a separate job with
+  # separate services. The claim here is narrow and worth making on its own:
+  # the image still builds, and its hash-pinned installs still resolve.
+````
+
+### .github/workflows/ci.yml — pre-cleanup line 867
+
+````text
+      # This image carries PostgreSQL 17, Node 22, torch and a pre-cached
+      # embedding model. A stock runner has ~14GB free, which the build can
+      # exhaust; the preinstalled toolchains below are worth ~10GB and are
+      # not used by it.
+````

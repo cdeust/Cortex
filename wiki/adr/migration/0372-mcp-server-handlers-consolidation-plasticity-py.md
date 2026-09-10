@@ -1,0 +1,54 @@
+# ADR-0372: mcp_server/handlers/consolidation/plasticity.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `mcp_server/handlers/consolidation/plasticity.py`; original SHA-256 `25a8855f47dcd68961c8d7e7249942e3efaf012bd8953b9f80e8552db2422361`.
+
+## Original docstring, lines 21–29
+
+````text
+"""Apply Hebbian LTP/LTD to knowledge graph edges.
+
+    `memories` may be pre-loaded by the consolidate handler (Phase B of
+    issue #13). When not provided, falls back to a broader hot-memory
+    window than before to avoid the co-access starvation documented in
+    the Feinstein/Feynman audit of darval's 66K run (previous limit=50
+    across 10,770 entities → 99.95% LTD was distribution collapse, not
+    plasticity).
+    """
+````
+
+## Original comment, lines 79–82
+
+````text
+# Source: issue #13 — the previous limit=50 sampled ~0.5% of a 10k-
+# entity store which collapsed the co-access set. 2000 gives an order-
+# of-magnitude better sample while keeping the subsequent O(N_mem × N_ent)
+# substring loop under ~25M ops on darval's store size.
+````
+
+## Original comment, lines 85–87
+
+````text
+# Heat floor for the co-access sample (hot memories only).
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+````
+
+## Original comment, lines 90–90
+
+````text
+# source: structural — a co-access edge needs at least a pair of entities
+````
+
+## Original docstring, lines 181–185
+
+````text
+"""Apply Hebbian weight updates via a single batched UPDATE.
+
+    Source: issue #13 — plasticity previously ran one UPDATE per edge
+    inside a loop. Batched path collapses 30k+ round-trips into one.
+    """
+````
+

@@ -1,32 +1,6 @@
-"""Near-duplicate candidate pair scan — DB operations (I6-D2, INC6.4).
+"""Pure infrastructure — no core imports, no handler imports.
 
-Measures cosine similarity between active memories' embeddings and
-returns candidate pairs above a floor similarity. Split into its own
-module for the same reason as ``pg_store_memory_dedup.py`` (I6-D1
-precedent): keep each infrastructure file focused and under the size
-cap.
-
-Pure infrastructure — no core imports, no handler imports.
-
-Method (documented per coding-standards.md §8 — "no source, no
-implementation" applies to methodology too, not just constants): an
-exhaustive O(n^2) pairwise cosine scan over ~10k active memories is
-~50M comparisons — computationally unreasonable for a one-shot campaign
-query. Instead, for every active memory this module asks the existing
-HNSW index (``idx_memories_embedding``, ``pg_schema.py:707-708``,
-``vector_cosine_ops``) for its own top-K approximate nearest neighbors
-via a LATERAL join — the same ORDER BY <=> LIMIT K pattern the
-production WRRF recall query already uses for a single query embedding
-(``pg_schema.py``'s ``recall_memories()``), just run once per row
-instead of once per user query. This is an approximation: a pair whose
-true cosine similarity is above the floor but where neither side ranks
-in the other's top-K is missed. K=30 was chosen because a manual check
-(2026-07-10, ad hoc `EXPLAIN ANALYZE` against this DB) showed the
-0.75-similarity candidate set per row saturates well under 30 members
-for every sampled anchor; this is a bound, not a proof of completeness,
-and is documented as such in the campaign artifact (I6-D2 step 2:
-"documente la methode").
-"""
+source: ADR-0557"""
 
 from __future__ import annotations
 
@@ -40,14 +14,10 @@ if TYPE_CHECKING:
 
 from mcp_server.shared.near_dup_calibration import SCAN_FLOOR, CandidatePair
 
-# Per-anchor approximate-neighbor fan-out. See module docstring for the
-# empirical justification (2026-07-10 EXPLAIN ANALYZE check on this DB).
+# source: ADR-0557
 DEFAULT_TOP_K = 30
 
-# Bounds the number of anchor rows scanned in one pass (not the number of
-# pairs produced) — mirrors DEFAULT_DEDUP_SCAN_LIMIT's rationale
-# (pg_store_memory_dedup.py). 10024 active memories with embeddings
-# measured 2026-07-10; comfortably under this cap.
+# source: ADR-0557
 DEFAULT_ANCHOR_LIMIT = 20000
 
 
@@ -58,23 +28,16 @@ def list_candidate_pairs(
     min_similarity: float = SCAN_FLOOR,
     anchor_limit: int = DEFAULT_ANCHOR_LIMIT,
 ) -> list[CandidatePair]:
-    """Every deduplicated (id_a < id_b) candidate pair with cosine
-    similarity >= ``min_similarity``, approximated via per-row top-K HNSW
-    lookups (see module docstring for the method and its bound).
+    """Find undirected candidate pairs using per-row top-K vector scans.
 
-    Pre-condition:  ``top_k`` >= 1; ``min_similarity`` in [0, 1].
-    Post-condition: returns one ``CandidatePair`` per undirected pair
-                    found by EITHER side's top-K scan (a pair is kept if
-                    it surfaces from A's neighbor scan OR B's — the
-                    LATERAL join is directional per anchor row, so the
-                    UNION via ``id_a < id_b`` + `DISTINCT` recovers the
-                    undirected pair even when only one direction's top-K
-                    happens to include it). Scoped to
-                    ``current_memories WHERE NOT is_stale AND embedding
-                    IS NOT NULL`` on both sides. No self-pairs. Ordered
-                    by ``(id_a, id_b)`` for deterministic downstream
-                    stratified sampling.
-    """
+    Pre-condition: top_k >= 1 and min_similarity is in [0, 1].
+
+    Post-condition: return distinct CandidatePair entries with id_a < id_b and
+    cosine similarity >= min_similarity, discovered from either member’s scan.
+    Both members are non-stale chain heads with embeddings. Exclude self-pairs
+    and order by (id_a, id_b).
+
+    source: ADR-0557"""
     sql = """
         WITH anchors AS (
             SELECT id, embedding
@@ -117,15 +80,13 @@ def list_candidate_pairs(
 
 
 def fetch_contents(conn: StoreConnection, ids: list[int]) -> dict[int, str]:
-    """Content text for a set of memory ids (for labeling artifacts).
+    """Fetch content text for the supplied memory IDs.
 
-    Post-condition: returns ``{id: content}`` for every id in ``ids``
-                    that still exists in ``current_memories``; ids that
-                    no longer exist (superseded between scan and fetch)
-                    are simply absent from the returned dict — the
-                    caller must handle a missing key, not assume
-                    completeness.
-    """
+    Post-condition: return {id: content} for IDs still present in
+    current_memories. Missing or superseded IDs are omitted; callers must
+    handle absent keys.
+
+    source: ADR-0557"""
     if not ids:
         return {}
     with conn.cursor(row_factory=DICT_ROW) as cur:
@@ -137,21 +98,12 @@ def fetch_contents(conn: StoreConnection, ids: list[int]) -> dict[int, str]:
 
 
 def fetch_member_stats(conn: StoreConnection, ids: list[int]) -> dict[int, dict]:
-    """``effective_heat`` and ``created_at`` for a set of memory ids
-    (for survivor election across a near-dup component).
+    """Fetch heat and creation time for the supplied current memory IDs.
 
-    Reuses the exact same CTE-hop pattern as
-    ``pg_store_memory_dedup.list_exact_duplicate_groups`` (re-project
-    ``current_memories`` through an anonymous-RECORD CTE before calling
-    ``effective_heat()``, required because the view's composite type does
-    not implicitly cast to the ``memories`` table type — see that
-    module's docstring for the full explanation).
+    Post-condition: return {id: {effective_heat: float, created_at:
+    datetime}}. Missing or superseded IDs are omitted.
 
-    Post-condition: returns ``{id: {"effective_heat": float,
-                    "created_at": datetime}}`` for every id in ``ids``
-                    still present in ``current_memories``; missing ids
-                    (superseded concurrently) are simply absent.
-    """
+    source: ADR-0557"""
     if not ids:
         return {}
     sql = """
@@ -165,11 +117,7 @@ def fetch_member_stats(conn: StoreConnection, ids: list[int]) -> dict[int, dict]
                    AS effective_heat,
                c.created_at
           FROM candidates c
-     -- M-D3 (7.1): homeostatic_state's PK is now (domain, write_class) —
-     -- without this filter the join fans out to one row per class and
-     -- COALESCE/effective_heat would see an arbitrary row, not the one
-     -- factor this table's readers were written for (auto is the only
-     -- class the fold/scalar mechanism regulates; see homeostatic.py).
+     -- source: ADR-0557
      LEFT JOIN homeostatic_state hs ON hs.domain = c.domain AND hs.write_class = 'auto'
          WHERE c.id = ANY(%(ids)s)
     """

@@ -59,11 +59,11 @@ schema = {
             "memories": {
                 "type": "array",
                 "description": (
-                    "Ranked list of matching memories. Best result is index 0. "
-                    'With ``format: "json"`` (default) each element is a '
-                    'memory object; with ``format: "tabular"`` each element '
-                    "is a cell array whose fields are named once in the "
-                    "sibling ``columns`` header (issue #170)."
+                    # source: ADR-0430
+                    "Ranked list of matching memories. Best result is index 0. With "
+                    '``format: "json"`` (default) each element is a memory object; '
+                    'with ``format: "tabular"`` each element is a cell array whose '
+                    "fields are named once in the sibling ``columns`` header."
                 ),
                 "items": {
                     "oneOf": [
@@ -129,10 +129,10 @@ schema = {
                 "type": "array",
                 "items": {"type": "string"},
                 "description": (
-                    "Present only when ``format`` is ``tabular``: the field "
-                    "names, in order, that each row array in ``memories`` "
-                    "carries. Declared once so field names are not repeated "
-                    "per memory (issue #170)."
+                    # source: ADR-0430
+                    "Present only when ``format`` is ``tabular``: the field names, in "
+                    "order, that each row array in ``memories`` carries. Declared "
+                    "once so field names are not repeated per memory."
                 ),
             },
             "format": {
@@ -147,12 +147,7 @@ schema = {
             },
             "intent": {
                 "type": "string",
-                # source: mcp_server/core/query_intent.py::QueryIntent — every
-                # value the classifier can emit must be in this enum or MCP
-                # output validation rejects the response. Previously the
-                # schema was narrower than the classifier's range, so any
-                # query falling back to QueryIntent.GENERAL ("general")
-                # failed validation. Issue #46.
+                # source: ADR-0430
                 "enum": [
                     "temporal",
                     "causal",
@@ -175,8 +170,8 @@ schema = {
                 "type": "integer",
                 "description": (
                     "Append-only injection receipt recording exactly the "
-                    "memories in this response (blame path, decision "
-                    "4255039). Absent when no memory was injected or the "
+                    "memories in this response. Absent when no memory "
+                    "was injected or the "
                     "receipt write failed."
                 ),
             },
@@ -271,14 +266,12 @@ schema = {
             "include_low_signal": {
                 "type": "boolean",
                 "description": (
-                    "When false (default), drops memories tagged as auto-"
-                    "captures (``auto-captured``, ``tool:edit``, ``_backfill``, "
-                    "``stage-N``, ``session-summary``, …) so curated content "
-                    "(ADRs, lessons, conventions) surfaces in the first few "
-                    "results. Spike 2026-05-13 showed unfiltered recall is "
-                    "drowned by tool-output captures even for queries about "
-                    "design decisions. Set true for debugging / replay "
-                    "tooling that needs the raw memory feed."
+                    # source: ADR-0430
+                    "When false (default), drops memories tagged as auto-captures "
+                    "(``auto-captured``, ``tool:edit``, ``_backfill``, ``stage-N``, "
+                    "``session-summary``, …) so curated content (ADRs, lessons, "
+                    "conventions) surfaces in the first few results. Set true for "
+                    "debugging / replay tooling that needs the raw memory feed."
                 ),
                 "default": False,
             },
@@ -297,15 +290,12 @@ schema = {
             "cross_domain": {
                 "type": "boolean",
                 "description": (
-                    "ADR-0054 opt-out for the spreading-activation entity-"
-                    "graph expansion stage only (the primary WRRF search "
-                    "above stays scoped to ``domain`` regardless of this "
-                    "flag). When true, that stage may inject memories from "
-                    "OTHER domains reachable through a shared entity (e.g. "
-                    "a common function name). Defaults to false: measured "
-                    "52.8% cross-domain injection rate when this stage runs "
-                    "unscoped. Mirrors the existing ``include_globals`` "
-                    "opt-in shape. Orthogonal to ``sa_mode``."
+                    # source: ADR-0430
+                    "Opt in to cross-domain memories in the spreading-activation "
+                    "entity-graph expansion stage only. The primary WRRF search "
+                    "remains scoped to ``domain``. When true, expansion may inject "
+                    "memories from other domains reachable through shared entities. "
+                    "Defaults to false. Orthogonal to ``sa_mode``."
                 ),
                 "default": False,
             },
@@ -314,17 +304,12 @@ schema = {
                 "enum": ["tail", "augment", "off"],
                 "default": "tail",
                 "description": (
-                    "ADR-0054 addendum (2026-07-11 garde x3 bench incident). "
-                    "``tail`` (default) only appends spreading-activation "
-                    "candidates to fill out a short result list, never "
-                    "reordering or rescoring an existing one — benchmark-"
-                    "neutral by construction on any corpus dense enough to "
-                    "already fill ``max_results``. ``augment`` is the "
-                    "pre-fusion mode that can reorder/outrank existing "
-                    "candidates — measured to regress LongMemEval MRR "
-                    "(0.9166->0.9009) even with domain scoping; kept for "
-                    "future dedicated tuning, never the default. ``off`` "
-                    "disables the channel."
+                    # source: ADR-0430
+                    "``tail`` (default) appends spreading-activation candidates only "
+                    "when the result list is shorter than ``max_results``, without "
+                    "reordering or rescoring existing results. ``augment`` applies "
+                    "expansion before fusion and can reorder existing candidates. "
+                    "``off`` disables the channel."
                 ),
             },
             "tags_any": {
@@ -376,16 +361,16 @@ schema = {
                 "type": "string",
                 "enum": ["json", "tabular"],
                 "description": (
-                    "Wire encoding for the ``memories`` list. ``json`` "
-                    "(default) returns an array of memory objects. "
-                    "``tabular`` declares the field names once in a "
-                    "``columns`` header and returns each memory as a cell "
-                    "array in that order, which drops the per-item repetition "
-                    "of field names on homogeneous result sets (issue #170). "
-                    "No information is lost — every field is recoverable by "
-                    "column position, and ids stay present for fetch-by-id. "
-                    "Applied after the response-budget water-filling, so the "
-                    "same budget cap still holds."
+                    # source: ADR-0430
+                    "Wire encoding for the ``memories`` list. ``json`` (default) "
+                    "returns an array of memory objects. ``tabular`` declares the "
+                    "field names once in a ``columns`` header and returns each memory "
+                    "as a cell array in that order, which drops the per-item "
+                    "repetition of field names on homogeneous result sets. No "
+                    "information is lost — every field is recoverable by column "
+                    "position, and ids stay present for fetch-by-id. Applied after "
+                    "the response-budget water-filling, so the same budget cap still "
+                    "holds."
                 ),
                 "default": "json",
             },
@@ -427,10 +412,7 @@ def _get_store() -> MemoryStore:
     return _store
 
 
-# Below this many results the head/middle/tail reorder is a no-op split.
-# source: pre-existing tuned value, extracted unchanged (#197 family 3);
-# provenance not recorded at introduction (Liu et al. 2023 motivates the
-# reorder, not this minimum)
+# source: ADR-0430
 _MIN_RESULTS_FOR_REORDER = 5
 
 
@@ -461,8 +443,7 @@ def _apply_co_activation(
     if is_mechanism_disabled(Mechanism.CO_ACTIVATION):
         # No-op: do not strengthen co-retrieved entity edges.
         return
-    # source: structural — co-activation strengthens pairs of co-retrieved
-    # entities, so it needs at least two results
+    # source: ADR-0430
     if not settings.CO_ACTIVATION_ENABLED or len(results) < _MIN_CO_RETRIEVED_RESULTS:
         return
     min_score = settings.CO_ACTIVATION_MIN_SCORE
@@ -568,8 +549,7 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
             int(args["memory_id"]), int(args.get("content_offset") or 0), fmt
         )
     if not args or not args.get("query"):
-        # Issue #46: even the early-return must satisfy the outputSchema's
-        # required keys (`memories`).
+        # source: ADR-0430
         return encode_within_budget(
             {"memories": [], "count": 0, "intent": "semantic"}, "memories", fmt
         )
@@ -617,10 +597,7 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
         sa_mode=sa_mode,
     )
 
-    # Low-signal filter (spike 2026-05-13). Tool-output captures,
-    # backfilled imports, and stage reports dominate unfiltered recall
-    # even for queries about design decisions, drowning out curated
-    # ADRs / lessons / conventions. Filter unless the caller opts in.
+    # source: ADR-0430
     low_signal_dropped = 0
     if not include_low_signal:
         results, low_signal_dropped = filter_low_signal(results)
@@ -660,10 +637,7 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
     intent_info = classify_query_intent(query)
     intent = intent_info.get("intent", QueryIntent.GENERAL)
-    # The legacy `results`/`total`/`query_intent` aliases byte-duplicated
-    # every memory on the wire (measured: 815KB response for 15 memories,
-    # 50% pure duplication — 2026-06-09 audit). All consumers now read the
-    # schema-aligned keys.
+    # source: ADR-0430
     resp = {
         "memories": results,
         "count": len(results),
@@ -673,41 +647,22 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
         "signals": {},
         "enhancements": build_enhancements(query, intent, "pg", settings),
     }
-    # Bounded I/O: the host rejects tool results over its token cap
-    # (core/response_budget.py docstring for the measured derivation).
-    # Truncated items keep their id; full content via the memory_id arg.
-    # Bound against the RESERVED budget: the self-describing ``format`` field
-    # (and, in tabular mode, the ``columns`` header) is appended after this,
-    # so its worst-case cost is held out of the cap here (issue #170).
+    # source: ADR-0430
     resp = bound_payload(
         resp,
         [ListTarget("memories", weight_key="score")],
         reserved_budget(settings.MAX_RESPONSE_CHARS),
     )
     resp["count"] = len(resp["memories"])
-    # Blame path T1 (decision 4255039): the receipt is emitted AFTER
-    # bound_payload so it mirrors exactly what enters the context
-    # (transcript↔DB parity invariant) — entries dropped by the response
-    # budget were never injected. T2-D7/T2-H3: session identity is
-    # resolved fresh at THIS emission (no cache — the window's session
-    # changes under the process across /clear, T2-D7) via the per-window
-    # registry (T2-H1). Degrades to None on any registry anomaly (no
-    # entry, dead pid, pid-reuse, tombstone, unknown schema) — never a
-    # guessed value (design §1 invariant); the recall read path itself
-    # never fails on registry errors (current_window_session's contract).
+    # source: ADR-0430
     receipt_id = emit_injection_receipt(
         store, resp["memories"], session_id=_resolve_session_id()
     )
     if receipt_id is not None:
         resp["receipt_id"] = receipt_id
-    # Tabular encoding (issue #170): compose AFTER bound_payload's
-    # selection/condensation and AFTER the receipt (which needs the memory
-    # objects to record ids), re-checking the SAME budget. On homogeneous
-    # sets this declares field names once instead of per memory; json is the
-    # default escape hatch. Truncated items keep their id in either encoding.
+    # source: ADR-0430
     return encode_within_budget(resp, "memories", fmt, settings.MAX_RESPONSE_CHARS)
 
 
-# Telemetry-instrumented public entry. Wrapper records latency, byte
-# volume, and result count per call (Popper C6 read/write ratio audit).
+# source: ADR-0430
 handler = instrument("recall", _handler_impl, result_count_key="memories")

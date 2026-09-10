@@ -60,3 +60,25 @@ Source rationale preserved verbatim. Identifiers inside historical quotations ar
 # -e carries the pattern: `--` would end option parsing and turn
 # the --exclude-dir flags into path operands.
 ````
+
+## Final non-Python residual audit
+
+### .github/workflows/upstream-identity.yml — pre-cleanup line 15
+
+````text
+# The contract URL is pinned to a full commit SHA, not a tag: the producer's
+# README is explicit that tags can be moved.
+````
+
+### .github/workflows/upstream-identity.yml — pre-cleanup line 24
+
+````text
+    # Weekly: catches a revocation published between our commits.
+````
+
+### .github/workflows/upstream-identity.yml — pre-cleanup line 52
+
+````text
+          # Outside the working tree: the contract lists revoked prefixes, and
+          # a scan of the repo must not find them in a file we just wrote.
+````

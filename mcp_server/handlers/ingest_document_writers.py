@@ -1,12 +1,6 @@
 """Memory writers + idempotency helpers for ``ingest_document``.
 
-Split from the handler so each stays under the repo's size caps (CLAUDE.md:
-300 lines/file, 40 lines/method) and the store-facing logic is unit-testable
-with a fake store (mirrors ``ingest_docs_content_writers``). Provenance is
-stamped on EVERY produced memory (issue #192): the version-scoped dedup tag
-(idempotent re-ingest) plus the version-independent source tag (all versions
-of one document stay recall-linkable).
-"""
+source: ADR-0409"""
 
 from __future__ import annotations
 
@@ -27,13 +21,12 @@ logger = logging.getLogger(__name__)
 
 def content_version(raw: str) -> str:
     """Stable version token for a document's bytes: a truncated SHA-256 of
-    its text. Identical content → identical version → idempotent re-ingest
-    (§13.1-A6); any edit changes the hash and triggers a fresh ingest.
-    source: hashlib.sha256 (stdlib); 16 hex chars = 64 bits, ample to avoid
-    accidental collision across one user's document set.
+        its text.
 
-    §12 note: the ``"utf-8"`` → ``"UTF-8"`` mutant is EQUIVALENT — Python codec
-    names are case-insensitive, so both select the identical codec."""
+        §12 note: the ``"utf-8"`` → ``"UTF-8"`` mutant is EQUIVALENT — Python codec
+        names are case-insensitive, so both select the identical codec.
+
+    source: ADR-0409"""
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 

@@ -1,0 +1,101 @@
+---
+kind: adr
+number: 0589
+title: Preserve pipeline_installer design decisions
+status: accepted
+---
+
+# ADR-0589: pipeline_installer design decisions
+
+## Context
+
+Canonical migration of decision evidence from `mcp_server/infrastructure/pipeline_installer.py` under ADR-0056.
+The excerpts below preserve historical claims and citations verbatim; original ADR numbers are historical quotations, not current identity bindings.
+
+## Decision
+
+Keep the source implementation linked to this versioned decision record. Operational API documentation remains with the implementation.
+
+## Preserved decision evidence
+
+### module, original line 1
+
+````text
+Silent installer for the upstream ai-architect-mcp-codebase binary.
+````
+
+### module, original line 1
+
+````text
+Bootstraps a fresh user machine. Strategy: prebuilt binary fast-path
+(GitHub Releases, hash-verified, ~10 s) → falls back to source build
+(rustup → git clone → cargo build, ~5–8 min). Idempotent. All
+subprocess output is captured. File-locked against concurrent runs.
+````
+
+### _ensure_source, original line 171
+
+````text
+Clone or refresh the source tree. Return None on success, or
+    a structured failure dict.
+````
+
+### _swap_symlink, original line 204
+
+````text
+Atomic symlink swap (link-to-temp + os.replace).
+````
+
+### comment, original line 48
+
+````text
+# Minimum acceptable size for a successfully-built ai-architect-mcp-codebase
+# binary. The release build is multi-MB; anything below this threshold
+# is a corrupted or 0-byte file (disk full, killed compiler, etc.).
+````
+
+### comment, original line 53
+
+````text
+# CI signals — default-skip the install in CI (5–8 min cold cost).
+# Users opt in with CORTEX_AUTO_INSTALL_PIPELINE=1.
+````
+
+### comment, original line 105
+
+````text
+# Re-check usability under the lock — another process may have
+    # finished between our outer check and lock acquisition.
+````
+
+### comment, original line 110
+
+````text
+# Fast path: prebuilt release binary. Always-non-fatal — failure
+    # falls through to the source-build path below.
+````
+
+### comment, original line 127
+
+````text
+# A success action with no usable cargo path would previously flow a
+        # None into the build command; refuse it as missing_toolchain instead.
+````
+
+### comment, original line 173
+
+````text
+# Validate any existing checkout. A half-cloned dir leaves
+    # src.exists() True with no Cargo.toml — re-clone is the only
+    # safe recovery.
+````
+
+### comment, original line 186
+
+````text
+# Clone into a .partial sibling, atomic-rename on success.
+````
+
+## Consequences
+
+Review rationale and source changes together. Historical evidence is preserved rather than silently rewritten; executable Python structure is unchanged after removing docstrings.

@@ -3,9 +3,7 @@
 Given an entity name (or memory ID), performs BFS through the relationship
 graph to surface chains of causation, dependency, and resolution.
 
-Useful for: understanding why a bug occurred, tracing a decision's origin,
-following an import chain across modules.
-"""
+source: ADR-0393"""
 
 from __future__ import annotations
 
@@ -238,9 +236,7 @@ def _get_related_memory_previews(
 ) -> list[dict]:
     """Fetch and format memory previews mentioning an entity.
 
-    heads_only: previews are served content — with heat-DESC ordering a
-    superseded version could rank ahead of its correction.
-    """
+    source: ADR-0393"""
     related = store.get_memories_mentioning_entity(
         entity_name, limit=5, heads_only=True
     )
@@ -298,6 +294,5 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     }
 
 
-# Telemetry-instrumented public entry. Records latency / byte volume
-# / result count per call (Popper C6 read/write ratio audit).
+# source: ADR-0393
 handler = instrument("get_causal_chain", _handler_impl, result_count_key="chain")

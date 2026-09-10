@@ -1,0 +1,86 @@
+---
+kind: adr
+number: 0531
+title: Preserve mcp_call_timeout design decisions
+status: accepted
+---
+
+# ADR-0531: mcp_call_timeout design decisions
+
+## Context
+
+Canonical migration of decision evidence from `mcp_server/infrastructure/mcp_call_timeout.py` under ADR-0056.
+The excerpts below preserve historical claims and citations verbatim; original ADR numbers are historical quotations, not current identity bindings.
+
+## Decision
+
+Keep the source implementation linked to this versioned decision record. Operational API documentation remains with the implementation.
+
+## Preserved decision evidence
+
+### module, original line 1
+
+````text
+Applies ONLY to calls whose server config opted out of a wall-clock cap
+(``callTimeoutMs: 0`` — the ingestion path: ap_bridge, pipeline_discovery).
+For those calls there is deliberately NO ceiling on total call duration:
+a fresh ``analyze_codebase`` of a large repository legitimately exceeds
+any fixed bound, and killing a live ingestion mid-flight is worse than
+waiting (owner requirement 2026-08-14; measured 2026-08-06: a wall-clock
+cap killed an actively-progressing ingest walking a 1.1 GB tree).
+````
+
+### default_call_timeout_s, original line 51
+
+````text
+    Reads ``CORTEX_MCP_CALL_TIMEOUT_S`` (positive float) when set and valid;
+    otherwise returns the documented default. A non-positive or malformed
+    override falls back to the default rather than disabling the window —
+    an unbounded wait on a silent child is the exact failure this guard
+    exists to prevent.
+    
+````
+
+### interactive_call_timeout_s, original line 71
+
+````text
+    Reads ``CORTEX_AP_INTERACTIVE_TIMEOUT_S`` (positive float) when set and
+    valid; otherwise returns the documented default. A non-positive or
+    malformed override falls back to the default — an unbounded interactive
+    call is exactly the hang this ceiling exists to prevent.
+    
+````
+
+### comment, original line 23
+
+````text
+# Default silence window (seconds) before a no-cap call is declared
+# wedged. 600s = 10x the measured 32s success latency of an
+# analyze/ingest run on the Cortex repo (live incident 2026-06-11:
+# call 1 completed in 32s). As a bound on total *silence* it is strictly
+# more conservative than the wall-clock ceiling it replaces: any child
+# output resets the window. source: ingest stdio-deadlock RCA 2026-06-11.
+````
+
+### comment, original line 32
+
+````text
+# Wall-clock ceiling (seconds) for INTERACTIVE AP read-path calls
+# (search_codebase, get_symbol, get_context, get_impact, get_processes,
+# query_graph, health_check). Unlike indexing, a read/lookup is not
+# legitimately long-running: an AP that connects but then wedges on such a
+# call must degrade to graceful Cortex-only results, not stall the tool.
+# The unbounded wedge window above (600s of SILENCE) is reserved for
+# ingestion and is far too slow here — unified_search would hang for up to
+# 10 minutes before falling back. (get_causal_chain has no AP dependency —
+# it is pure knowledge-graph BFS over MemoryStore — and cannot hang on AP;
+# do not conflate the two.)
+# source: interactive read-path ceiling. AP read tools are documented
+# interactive (unified_search target <200ms, docs/mcp-tools.md); 30s is a
+# wide margin over that interactive target yet 20x below the 600s indexing
+# wedge window, so a wedged AP degrades in seconds instead of minutes.
+````
+
+## Consequences
+
+Review rationale and source changes together. Historical evidence is preserved rather than silently rewritten; executable Python structure is unchanged after removing docstrings.

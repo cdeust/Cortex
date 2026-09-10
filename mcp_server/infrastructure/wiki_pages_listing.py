@@ -1,13 +1,7 @@
 """Wiki page listing + append-in-place: ``append_section``, ``list_pages``,
 ``next_adr_number``.
 
-Split out of wiki_store.py (issue: 439 lines over the 300-line §4.1
-cap, pre-existing before the layer-violation fix that also touched
-that file) — enumerating/appending to already-written pages is a
-distinct concern from the create/replace write path
-(``wiki_store.write_page``) and from reindex housekeeping
-(``wiki_reindex_io``).
-"""
+source: ADR-0627"""
 
 from __future__ import annotations
 
@@ -53,9 +47,7 @@ def append_section(
     current = target.read_text(encoding="utf-8")
     heading_line = f"## {heading}"
     if heading_line in current:
-        # Append at the end of the file — simplest semantics; the heading is
-        # reused, not duplicated, but the new content goes after whatever is
-        # already there.
+        # source: ADR-0627
         if not current.endswith("\n"):
             current += "\n"
         merged = f"{current}\n{content}\n"
@@ -92,7 +84,9 @@ def list_pages(root: Path | str, *, kind: str | None = None) -> list[str]:
 
 
 def next_adr_number(root: Path | str) -> int:
-    """Allocate above canonical IDs and published ADRs 0001–0055 (issue #514)."""
+    """Allocate above canonical IDs and published ADRs 0001–0055.
+
+    source: ADR-0627"""
 
     numbers = [parse_decision_id(token) for token in decision_index(root)]
     highest = max([RESERVED_DECISION_NUMBER, *[n for n in numbers if n is not None]])

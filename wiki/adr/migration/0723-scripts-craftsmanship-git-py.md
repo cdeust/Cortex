@@ -1,0 +1,44 @@
+# ADR-0723: scripts/craftsmanship_git.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `scripts/craftsmanship_git.py`; original SHA-256 `58b5e9d4d51c9bf1a1f041d809b2319d76c9d5281ede71673fa9f1dca3ea925e`.
+
+## Original docstring, lines 1–15
+
+````text
+"""Git plumbing for the craftsmanship gate: resolving the diff base ref,
+listing changed/tracked files, and reading the baseline exactly as
+committed at a ref — the tamper-proof comparison source
+``craftsmanship_baseline.py``'s module docstring explains the need for.
+
+Split out of ``check_craftsmanship.py`` to stay under the 300-line cap
+this gate enforces on everything else (self-application).
+
+Every function takes ``repo_root`` explicitly rather than reading a
+module-level constant: ``check_craftsmanship.py`` owns the one true
+``REPO_ROOT`` (patched by name in tests — ``mock.patch.object(gate,
+"REPO_ROOT", ...)``), and passing it through here means that patch keeps
+working after the split instead of silently operating on a second,
+un-patched copy.
+"""
+````
+
+## Original docstring, lines 101–112
+
+````text
+"""True if ``relative_path`` exists in the tree ``ref`` resolves to.
+
+    Self-audited after the two review-round findings that shared one root
+    cause (a control that fails OPEN when a signal is ambiguous, instead
+    of failing closed): swallowing every ``cat-file -e`` failure into a
+    bare False previously read an unrelated git error (corrupt object, a
+    ref that stopped resolving between the caller's earlier
+    ``rev-parse --verify`` and this call, disk failure) the exact same way
+    it read a genuinely absent path — silently handing
+    ``load_baseline_from_ref`` a bootstrap fallback to the tamperable
+    working-tree baseline. Distinguishes the two via git's own stderr.
+    """
+````
+

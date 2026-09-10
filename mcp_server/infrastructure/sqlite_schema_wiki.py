@@ -1,11 +1,4 @@
-"""SQLite mirror of the PostgreSQL `wiki` schema (pg_schema.py::WIKI_SCHEMA_DDL).
-
-SQLite has no schema namespaces, so `wiki.<table>` is flattened to
-`wiki_<table>`; sqlite_sql_translate._translate_sql rewrites the SQL on the
-way in (imported by sqlite_compat.py, issue #260), which is what lets the
-52 modules that query these tables run unmodified on both backends.
-
-Type mapping applied here (issue #206):
+"""SQLite wiki schema and operational type mapping.
 
 | PostgreSQL                  | SQLite                              |
 |-----------------------------|-------------------------------------|
@@ -16,20 +9,7 @@ Type mapping applied here (issue #206):
 | BOOLEAN                     | INTEGER (0/1)                       |
 | vector(384)                 | BLOB (no ANN index; see note)       |
 
-The `JSON` decltype is load-bearing, not decorative: `sqlite_store` connects
-with `detect_types=PARSE_DECLTYPES` and registers a converter for it, so
-`entity_ids` comes back a `list[int]` exactly as psycopg returns an
-`INTEGER[]`. Without it the column would return the string "[1,2]", which
-call sites like wiki_emerge.py:220 (`for eid in c.get("entity_ids") or []`)
-would iterate CHARACTER-WISE — silently producing garbage entity ids rather
-than failing. Verified 2026-07-27.
-
-`vector(384)` columns are kept as BLOB for column parity (`SELECT embedding`
-resolves) but carry no ANN index: pgvector's HNSW has no SQLite equivalent,
-and the sqlite-vec path used for `memories` needs a separate vec0 virtual
-table. No wiki pipeline handler reads these columns today. GIN indexes are
-likewise dropped — SQLite has no equivalent.
-"""
+source: ADR-0603"""
 
 from __future__ import annotations
 
@@ -102,9 +82,7 @@ CREATE TABLE IF NOT EXISTS wiki_drafts (
 );
 """
 
-# status/lifecycle_state vocabularies mirror pg_schema.py's wiki.pages
-# CHECK constraints verbatim — see that file for the provenance of each
-# value (core/wiki_templates.py STATUS_VALUES, auto_curator 'living', etc.).
+# source: ADR-0603
 WIKI_PAGES_DDL = """
 CREATE TABLE IF NOT EXISTS wiki_pages (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -210,10 +188,7 @@ CREATE TABLE IF NOT EXISTS wiki_memos (
 );
 """
 
-# Index parity with pg_schema.py minus the two PostgreSQL-only families:
-# HNSW (pgvector ANN) and GIN (tags containment). Partial indexes are kept —
-# SQLite supports them — with `NOT is_stale` rewritten to `is_stale = 0`
-# because is_stale is INTEGER here, not BOOLEAN.
+# source: ADR-0603
 WIKI_INDEXES_DDL = [
     "CREATE INDEX IF NOT EXISTS idx_wiki_claim_events_memory "
     "ON wiki_claim_events (memory_id);",
@@ -243,8 +218,7 @@ WIKI_INDEXES_DDL = [
     "ON wiki_memos (subject_type, subject_id);",
 ]
 
-# Order matters: wiki_concepts and wiki_pages precede the tables whose
-# foreign keys reference them (PRAGMA foreign_keys=ON is set on connect).
+# source: ADR-0603
 WIKI_TABLE_DDL = [
     WIKI_CLAIM_EVENTS_DDL,
     WIKI_CONCEPTS_DDL,

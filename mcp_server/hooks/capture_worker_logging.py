@@ -8,7 +8,7 @@ import stat
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-# source: remediation F9, measured 2026-09-06: 196 kB/day; 30 days ≈ 6 MB.
+# source: ADR-0488
 LOG_BYTES = 196_000 * 30
 
 
@@ -26,7 +26,7 @@ def configure(runtime: Path) -> None:
     )
     os.fchmod(descriptor, 0o600)
     os.close(descriptor)
-    # Retain the immediately previous segment; no accumulated unbounded history.
+    # source: ADR-0488
     handler = RotatingFileHandler(
         path, maxBytes=LOG_BYTES, backupCount=1, encoding="utf-8"
     )

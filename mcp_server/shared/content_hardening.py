@@ -1,30 +1,6 @@
 """Phase 7: content ingestion hardening.
 
-Applied at every user-input boundary (remember, ingest_*, backfill) to
-prevent three classes of defect:
-
-  1. Unicode duplicate memories (NFC normalization).
-     "café" written as U+00E9 vs "cafe" + U+0301 hash-mismatches and
-     creates ghost duplicates. NFC composes to the precomposed form
-     consistently.
-
-  2. ReDoS amplification via adversarially long content.
-     Content is capped at CONTENT_MAX_BYTES (default 1 MB). A single
-     1-MB payload hitting a vulnerable regex can block the event loop
-     for seconds. Truncation is silent but logged via stderr.
-
-  3. Unicode control / format characters that break tsvector /
-     downstream DOM rendering. We strip:
-       - C0 controls except \\t \\n \\r
-       - C1 controls (U+0080–U+009F)
-       - BOM / ZWNBSP (U+FEFF)
-       - Bidi-override overrides (trojan source — CVE-2021-42574)
-
-Source:
-  * Unicode Standard Annex #15 (Normalization Forms)
-  * CVE-2021-42574 (Trojan Source bidi override injection)
-  * docs/program/phase-5-pool-admission-design.md §7 (hardening)
-"""
+source: ADR-0646"""
 
 from __future__ import annotations
 
@@ -71,9 +47,7 @@ def _strip_control_chars(s: str) -> str:
 def _cap_bytes(s: str, max_bytes: int) -> str:
     """Truncate to <= max_bytes when UTF-8 encoded. Logs at truncation.
 
-    We encode, slice bytes, then decode with errors='ignore' so the
-    result is always valid UTF-8 (no orphaned continuation bytes).
-    """
+    source: ADR-0646"""
     encoded = s.encode("utf-8")
     if len(encoded) <= max_bytes:
         return s

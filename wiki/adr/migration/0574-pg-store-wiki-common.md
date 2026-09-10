@@ -1,0 +1,42 @@
+---
+kind: adr
+number: 0574
+title: Preserve pg_store_wiki_common design decisions
+status: accepted
+---
+
+# ADR-0574: pg_store_wiki_common design decisions
+
+## Context
+
+Canonical migration of decision evidence from `mcp_server/infrastructure/pg_store_wiki_common.py` under ADR-0056.
+The excerpts below preserve historical claims and citations verbatim; original ADR numbers are historical quotations, not current identity bindings.
+
+## Decision
+
+Keep the source implementation linked to this versioned decision record. Operational API documentation remains with the implementation.
+
+## Preserved decision evidence
+
+### module, original line 1
+
+````text
+Split out of ``pg_store_wiki.py`` (originally 890 lines, over the
+300-line file limit — CLAUDE.md "Code Quality Rules") purely for size
+compliance; no logic changed. ``body_hash`` and ``_returning_id`` are
+used across the pages/claims/concepts/drafts/citations modules.
+````
+
+### _returning_id, original line 23
+
+````text
+    A default psycopg cursor yields tuple rows; a ``dict_row`` cursor yields
+    dict rows — hence the isinstance split. An INSERT ... RETURNING always
+    produces exactly one row, so a None here is a broken query (or a silently
+    rolled-back transaction), not a normal path — surface it loudly.
+    
+````
+
+## Consequences
+
+Review rationale and source changes together. Historical evidence is preserved rather than silently rewritten; executable Python structure is unchanged after removing docstrings.

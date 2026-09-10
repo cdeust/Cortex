@@ -93,12 +93,9 @@ def test_index_path() -> None:
 
 
 def test_page_kinds_modern_plus_legacy() -> None:
-    """ADR-2244: PAGE_KINDS contains all 8 modern + 6 legacy kinds.
+    """PAGE_KINDS accepts all eight modern and six readable legacy kinds.
 
-    Modern kinds drive new writes; legacy kinds remain accepted by
-    ``page_path`` / ``domain_page_path`` so existing pages under
-    notes/specs/conventions/lessons/guides/files stay readable.
-    """
+    source: ADR-0933"""
     from mcp_server.shared.wiki_layout import LEGACY_PAGE_KINDS, MODERN_PAGE_KINDS
 
     assert MODERN_PAGE_KINDS == (

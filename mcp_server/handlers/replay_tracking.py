@@ -4,17 +4,12 @@ Every recall-family handler (recall, recall_hierarchical, navigate_memory,
 drill_down) treats a memory surfacing in its results as a hippocampal replay
 event (McClelland et al. 1995). Each such event should:
 
-  1. bump access_count / replay_count (existing behaviour), and
-  2. decrement hippocampal_dependency by exactly one C-HORSE transfer delta
-     (Ketz et al. 2023, eLife 12:e77185) — the CLS-B producer this module
-     wires into the shared replay path so it fires identically at all four
-     call sites instead of being re-derived per handler.
-
 Policy (whether/how much to decay) lives here, in the handler layer.
 Persistence (reading the post-increment row, writing the new dependency)
 lives in the infra store methods this module calls — the store never decides
 *when* to decay, only *how* to read/write a row.
-"""
+
+source: ADR-0443"""
 
 from __future__ import annotations
 

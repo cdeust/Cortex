@@ -1,25 +1,11 @@
 """Persistence layer for methodology profiles.
 
-D5 fix (Phase 1 fragility sweep): profiles are now split into one JSON file
-per domain under ``~/.claude/methodology/domains/<domain-id>.json``, with a
-top-level ``~/.claude/methodology/index.json`` listing domain ids + the
-small globals (version, updatedAt, globalStyle).
-
 Before this change every ``record_session_end`` fully read and fully
 rewrote a single ``profiles.json`` containing every domain's full profile.
 Per Thompson's audit: at 1000 domains that's ~10 MB of write amplification
 per session end — unacceptable as the system scales.
 
-Public API:
-    load_profiles()            - unified v2 dict (backwards compatible)
-    save_profiles(profiles)    - splits into per-domain files + index
-    load_profile(domain_id)    - lazy single-domain load
-    save_profile(domain_id, p) - targeted write — ONLY touches one file
-
-Migration: on first call after upgrade, if a legacy single-file
-``profiles.json`` exists, it is split into per-domain files and the
-legacy file is renamed to ``profiles.json.v1_backup``.
-"""
+source: ADR-0592"""
 
 from __future__ import annotations
 
@@ -30,9 +16,7 @@ from pathlib import Path
 from mcp_server.infrastructure.config import METHODOLOGY_DIR, PROFILES_PATH
 from mcp_server.infrastructure.file_io import ensure_dir, read_json, write_json
 
-# Per-domain split layout. Sibling files rather than nested so index.json
-# can act as the cheap "list all domains" read without touching any
-# per-domain file. See ADR-0045 §R2 (bounded I/O per operation).
+# source: ADR-0592
 DOMAINS_DIR = METHODOLOGY_DIR / "domains"
 INDEX_PATH = METHODOLOGY_DIR / "index.json"
 LEGACY_BACKUP_PATH = Path(str(PROFILES_PATH) + ".v1_backup")
@@ -57,22 +41,18 @@ def _now_iso() -> str:
 
 
 def _domain_path(domain_id: str) -> Path:
-    """Per-domain file path. ``domain_id`` is used verbatim — callers upstream
-    are responsible for producing safe identifiers (see
-    ``shared/project_ids.py``). We still guard against path traversal here
-    defensively.
-    """
+    """Per-domain file path.
+
+    source: ADR-0592"""
     if "/" in domain_id or ".." in domain_id or "\x00" in domain_id:
         raise ValueError(f"unsafe domain_id: {domain_id!r}")
     return DOMAINS_DIR / f"{domain_id}.json"
 
 
 def _migrate_legacy_if_present() -> bool:
-    """If a legacy single-file profiles.json exists, split it.
+    """Returns True if a migration happened (caller may want to log).
 
-    Returns True if a migration happened (caller may want to log). Safe to
-    call repeatedly — it's a no-op once the legacy file has been renamed.
-    """
+    source: ADR-0592"""
     if not PROFILES_PATH.exists():
         return False
     legacy = read_json(PROFILES_PATH)
@@ -82,17 +62,14 @@ def _migrate_legacy_if_present() -> bool:
     if not isinstance(domains, dict):
         return False
 
-    # Write each domain to its own file and build an index. This is one
-    # bounded bulk operation per upgrade; subsequent session ends only
-    # touch a single per-domain file.
+    # source: ADR-0592
     ensure_dir(DOMAINS_DIR)
     for domain_id, profile in domains.items():
         if isinstance(domain_id, str) and isinstance(profile, dict):
             try:
                 write_json(_domain_path(domain_id), profile)
             except ValueError:
-                # Skip ids that fail the safety guard — they will surface
-                # at ``load_profile`` time if something depends on them.
+                # source: ADR-0592
                 continue
 
     index = {
@@ -107,7 +84,9 @@ def _migrate_legacy_if_present() -> bool:
 
 
 def _ensure_index() -> dict:
-    """Return the on-disk index, triggering legacy migration if needed."""
+    """Return the on-disk index, triggering legacy migration if needed.
+
+    source: ADR-0592"""
     _migrate_legacy_if_present()
     idx = read_json(INDEX_PATH)
     if not isinstance(idx, dict):
@@ -118,16 +97,15 @@ def _ensure_index() -> dict:
 
 
 def load_profile(domain_id: str) -> dict | None:
-    """Lazy single-domain load — O(1) file reads, never touches other domains.
-
-    Preconditions:
-        - ``domain_id`` is the canonical domain identifier.
+    """Preconditions:
+            - ``domain_id`` is the canonical domain identifier.
 
     Postconditions:
-        - Returns the domain profile dict if the file exists.
-        - Returns None if the domain is unknown.
-        - Triggers the legacy migration on first access if needed.
-    """
+            - Returns the domain profile dict if the file exists.
+            - Returns None if the domain is unknown.
+            - Triggers the legacy migration on first access if needed.
+
+    source: ADR-0592"""
     _ensure_index()
     try:
         path = _domain_path(domain_id)
@@ -139,11 +117,7 @@ def load_profile(domain_id: str) -> dict | None:
 def load_profiles() -> dict:
     """Load all profiles, reassembled into the legacy v2 dict shape.
 
-    Backwards-compatible: callers that expect ``profiles["domains"][id]``
-    keep working. Internally: O(D) reads where D is the number of domains,
-    once per call. Most handlers only need a single domain and should
-    migrate to ``load_profile(domain_id)`` over time.
-    """
+    source: ADR-0592"""
     idx = _ensure_index()
     domains: dict = {}
     for domain_id in idx.get("domain_ids", []):
@@ -163,17 +137,18 @@ def save_profile(domain_id: str, profile: dict) -> None:
     """Save a single domain's profile — does NOT touch other domains' files.
 
     Postconditions:
-        - ``<domains_dir>/<domain_id>.json`` is rewritten atomically via
-          ``write_json``.
-        - ``index.json`` is updated only if ``domain_id`` is new.
-        - ``index.json.updatedAt`` is refreshed.
-        - Mtime of OTHER per-domain files is unchanged — this is the key
-          invariant that makes the split worthwhile.
+            - ``<domains_dir>/<domain_id>.json`` is rewritten atomically via
+              ``write_json``.
+            - ``index.json`` is updated only if ``domain_id`` is new.
+            - ``index.json.updatedAt`` is refreshed.
+            - Mtime of OTHER per-domain files is unchanged — this is the key
+              invariant that makes the split worthwhile.
 
-    Preconditions:
-        - ``domain_id`` is non-empty and contains no path-separator chars.
-        - ``profile`` is a serialisable dict.
-    """
+        Preconditions:
+            - ``domain_id`` is non-empty and contains no path-separator chars.
+            - ``profile`` is a serialisable dict.
+
+    source: ADR-0592"""
     ensure_dir(DOMAINS_DIR)
     write_json(_domain_path(domain_id), profile)
 
@@ -190,10 +165,7 @@ def save_profile(domain_id: str, profile: dict) -> None:
 def save_profiles(profiles: dict) -> None:
     """Save all profiles — splits into per-domain files + index.
 
-    Backwards-compatible with the legacy whole-dict API. Iterates the
-    ``domains`` dict and writes each to its own file. Callers that want
-    per-domain write amplification should use ``save_profile`` directly.
-    """
+    source: ADR-0592"""
     ensure_dir(DOMAINS_DIR)
     profiles["updatedAt"] = _now_iso()
 

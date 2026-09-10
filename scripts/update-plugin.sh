@@ -1,14 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Force-update Cortex plugin to the latest version.
-#
-# Claude Code caches plugin versions and doesn't always pick up updates
-# from the marketplace. This script clears the stale cache and triggers
-# a fresh install.
-#
-# Usage:
-#   curl -sSL https://raw.githubusercontent.com/cdeust/Cortex/main/scripts/update-plugin.sh | bash
+# source: ADR-0787
 
 PLUGIN_DIR="$HOME/.claude/plugins"
 CACHE_DIR="$PLUGIN_DIR/cache/cortex-plugins"

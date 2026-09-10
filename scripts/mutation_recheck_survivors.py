@@ -12,20 +12,7 @@ closures without ever re-invoking `build_extra_extractors`/`_make_extractor`,
 so mutmut re-runs the mutant against only the first (often irrelevant)
 test and reports "survived" even though the full suite kills it.
 
-This module closes that gap generically — for ANY source file, not just
-one hand-identified case — by re-running every mutant mutmut reports
-"survived" against the FULL declared test selection (the same tests a
-human would use to reproduce the bug by hand) before trusting the
-verdict. A mutant recovered this way is reported as such, never silently
-reclassified: coding-standards.md issue #269 acceptance criterion 2
-requires the false-survivor cause stay visible to the reader, not just
-absorbed.
-
-Pure decision logic (parse_survivors, format_report,
-any_genuine_survivors) takes no I/O; only recheck_survivor's `runner`
-touches the filesystem/process table, and it is injected so tests can
-substitute a fake for the real pytest invocation.
-"""
+source: ADR-0772"""
 
 from __future__ import annotations
 
@@ -38,7 +25,7 @@ from pathlib import Path
 
 _SURVIVED_SUFFIX = ": survived"
 
-# source: structural — <mutants_dir> + at least one <test_path>.
+# source: ADR-0772
 _MIN_ARGC = 2
 
 
@@ -154,9 +141,9 @@ def format_report(outcomes: Sequence[RecheckOutcome]) -> str:
     Postcondition: a recovered (false-survivor) mutant is always listed
     under its own labeled section, distinct from a genuine survivor —
     the false-survivor cause must stay visible to the reader rather than
-    being silently absorbed into a plain "killed" count (issue #269
-    acceptance criterion 2).
-    """
+    being silently absorbed into a plain "killed" count.
+
+    source: ADR-0772"""
     if not outcomes:
         return "  none — 0 mutmut-reported survivors to recheck"
 

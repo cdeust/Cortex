@@ -1,10 +1,6 @@
 """One encoder batch with explicit per-item recovery for best-effort writers.
 
-The consolidation writers already isolate encoding/storage failures per item.
-Preserve that contract: after a logged whole-batch failure, retry each input
-through scalar encode, retaining individual errors for the caller's existing
-boundary. No core imports, store calls, model construction or new batch limit.
-"""
+source: ADR-0517"""
 
 from __future__ import annotations
 

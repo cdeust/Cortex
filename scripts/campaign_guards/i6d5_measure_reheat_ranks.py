@@ -18,8 +18,7 @@ from sentence_transformers import SentenceTransformer
 
 # 5 echantillons deliberes, choisis dans le journal du dry-run baseline
 # (docs/campaigns/i6d5_memory_reheat_dry-run_20260710T151019Z.json),  # noqa: ERA001
-# repartis sur toute la distribution eh_avant (min, p25, median, p75, max
-# parmi les 544 lignes reheated de la mesure de reference).
+# source: ADR-0708
 SAMPLES = [
     (4198018, 0.033882845, "min (eh~0.015)"),
     (4196447, 0.081548996, "p25 (eh~0.10)"),
@@ -45,10 +44,9 @@ def _rank(cur, tid, query):
     return ids.index(tid) + 1 if tid in ids else None
 
 
-# source: pre-existing tuned value, extracted unchanged (#197 family 3);
-# provenance not recorded at introduction
+# source: ADR-0708
 _MIN_FIRST_LINE_CHARS = 20
-# source: structural — the guard reports a top-10 (R@10) tally
+# source: ADR-0708
 _TOP_RANK_CUTOFF = 10
 
 rows_out = []

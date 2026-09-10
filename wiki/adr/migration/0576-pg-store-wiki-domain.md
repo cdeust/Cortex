@@ -1,0 +1,38 @@
+---
+kind: adr
+number: 0576
+title: Preserve pg_store_wiki_domain design decisions
+status: accepted
+---
+
+# ADR-0576: pg_store_wiki_domain design decisions
+
+## Context
+
+Canonical migration of decision evidence from `mcp_server/infrastructure/pg_store_wiki_domain.py` under ADR-0056.
+The excerpts below preserve historical claims and citations verbatim; original ADR numbers are historical quotations, not current identity bindings.
+
+## Decision
+
+Keep the source implementation linked to this versioned decision record. Operational API documentation remains with the implementation.
+
+## Preserved decision evidence
+
+### module, original line 1
+
+````text
+Reads catch-all pages and rewrites their ``domain`` column. Split into
+its own module (rather than added to ``pg_store_wiki_pages.py``) to keep
+each infrastructure file focused and under the size cap — no unrelated
+function is reopened.
+````
+
+### list_catchall_pages_with_sources, original line 24
+
+````text
+Pages whose domain isn't a registered project, with source paths.
+````
+
+## Consequences
+
+Review rationale and source changes together. Historical evidence is preserved rather than silently rewritten; executable Python structure is unchanged after removing docstrings.

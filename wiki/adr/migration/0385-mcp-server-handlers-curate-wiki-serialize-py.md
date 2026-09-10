@@ -1,0 +1,44 @@
+# ADR-0385: mcp_server/handlers/curate_wiki_serialize.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `mcp_server/handlers/curate_wiki_serialize.py`; original SHA-256 `7d5fd008fb92cba6560f0a32407dc420ddbee2be5c50384b9830d39b67fd44f8`.
+
+## Original docstring, lines 1–8
+
+````text
+"""curate_wiki's wire-transport serializers and LLM-facing instructions.
+
+Split out of ``curate_wiki.py`` (was pushing that file past the 500-line
+limit, CLAUDE.md "Code Quality Rules"). Pure functions: flatten the
+``core.auto_curator`` job dataclasses into MCP-wire dicts, and render
+the recipe text the in-session LLM follows. No I/O, no DB, no state —
+same "pure serialization" concern wherever the caller lives.
+"""
+````
+
+## Original docstring, lines 36–41
+
+````text
+"""Flatten a ReauthorJob for MCP wire transport.
+
+    Re-author jobs target an existing page; the wire shape carries the
+    wiki path being rewritten and the drift reasons that triggered the
+    job so the UI can show "Updating: <path> (missing source file)".
+    """
+````
+
+## Original docstring, lines 55–62
+
+````text
+"""Flatten a CoverageJob for MCP wire transport.
+
+    Coverage jobs differ from cluster jobs: they target a structural
+    scope, not a topic, so the wire shape carries ``scope_name`` and
+    ``scope_title`` instead of cluster-specific fields. ``job_type``
+    discriminates the two so the consuming LLM (and the unified UI)
+    can render them differently.
+    """
+````
+

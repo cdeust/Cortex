@@ -4,10 +4,6 @@ Purpose: first-run users get concrete pages in their wiki within
 minutes of install, without waiting for session-derived memories to
 accumulate.
 
-Scanned by default:
-  README.md, CHANGELOG.md, CONTRIBUTING.md, ARCHITECTURE.md,
-  HISTORY.md, SECURITY.md, docs/**/*.md, ADR-*.md, adr/*.md
-
 Each file becomes ONE memory (via remember), tagged `seed:codebase`
 and the detected kind. The wiki pipeline is run afterward so the
 imports produce claim events → concepts → drafts → pages in one call.
@@ -16,7 +12,8 @@ Per-file size capped at 8 kB (head-only — prevents a 50-page README
 from flooding the extractor). Binary and huge files skipped.
 
 Never raises per-file; collects errors in the summary.
-"""
+
+source: ADR-0471"""
 
 from __future__ import annotations
 
@@ -123,9 +120,7 @@ _SEED_PATTERNS: list[str] = [
     ".claude/**/*.md",
 ]
 
-# Skip files larger than this (2 MB) — seed docs are prose, not blobs.
-# source: pre-existing tuned value, extracted unchanged (#197 family 3);
-# provenance not recorded at introduction
+# source: ADR-0471
 _MAX_SEED_FILE_BYTES = 2_000_000
 
 # Skip these paths even if they match a pattern (vendored / generated).
@@ -143,27 +138,23 @@ _SKIP_PATH_FRAGMENTS = (
 
 
 def _kind_for(rel_path: str) -> str:
-    """Map a seed-eligible markdown path to a *modern* (ADR-2244) kind.
+    """Map a seed-eligible markdown path to a *modern* kind.
 
-    Returned values are themselves tag aliases registered in
-    ``mcp_server.core.wiki_axis_defaults.DEFAULT_KINDS``, so emitting
-    the value as a memory tag lets the classifier route the page to
-    the correct kind directory.
+        Returned values are themselves tag aliases registered in
+        ``mcp_server.core.wiki_axis_defaults.DEFAULT_KINDS``, so emitting
+        the value as a memory tag lets the classifier route the page to
+        the correct kind directory.
 
-    Before ADR-2244 Phase 6.2 this function returned legacy kinds
-    (``spec``, ``convention``, ``lesson``, ``note``) and the call-site
-    wrote them as ``kind:<value>`` tags — a shape the classifier never
-    read. The kind hint flowed nowhere.
-    """
+    source: ADR-0471"""
     low = rel_path.lower()
     if "adr" in low or "decision" in low:
         return "adr"
     if "architecture" in low:
-        return "rfc"  # was: spec — modern: pre-decision design → rfc
+        return "rfc"  # source: ADR-0471
     if "convention" in low or "style" in low:
         return "explanation"  # was: convention
     if "lesson" in low or "postmortem" in low:
-        return "explanation"  # was: lesson
+        return "explanation"  # source: ADR-0471
     # README and bare notes route to explanation in the modern taxonomy.
     return "explanation"
 
@@ -238,11 +229,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
                 content = content[:max_bytes] + "\n\n[...truncated]"
             domain = repo_root.name or "seed"
             kind = _kind_for(rel)
-            # ADR-2244 Phase 6.2: emit ``kind`` as a registered tag alias
-            # (``adr`` / ``rfc`` / ``explanation``) so the classifier
-            # actually routes the page; emit ``imported`` so provenance
-            # resolves to ``imported`` (these are bulk-imported markdown
-            # files, not human-authored fresh in the wiki).
+            # source: ADR-0471
             result = await h_remember(
                 {
                     "content": content,

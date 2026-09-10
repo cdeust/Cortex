@@ -1,0 +1,32 @@
+# ADR-0755: scripts/marketplace_pins_manifests.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `scripts/marketplace_pins_manifests.py`; original SHA-256 `1b46cbec2ea5cc497d856b61a71091611d03de8ff0e4fbef087b840eb48cfb42`.
+
+## Original docstring, lines 1–8
+
+````text
+"""Root-manifest version-split checks for the marketplace pin gate.
+
+Split out of check_marketplace_pins.py (issue: that file crossed the
+300-line §4.1 cap once REGISTRY_VERSION_STALE was added). Checks that
+every root-level manifest carrying its own copy of the version (server.json,
+manifest.json) agrees with the primary local marketplace pin — the guard
+AP #172 was missing when manifest.json alone went stale for two releases.
+"""
+````
+
+## Original docstring, lines 25–31
+
+````text
+"""Flag every root manifest whose version disagrees with the primary pin.
+
+    An absent file is not a failure and neither is a missing version key: the
+    canonical repo has no manifest.json, ai-architect-mcp-codebase has both, and a
+    gate that demanded every row exist everywhere would be a false positive in
+    one repo or the other rather than a guard in both.
+    """
+````
+

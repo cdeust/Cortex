@@ -28,7 +28,7 @@ from scripts.response_budget_measurements import (
     token_observations,
 )  # noqa: E402 — direct script execution
 
-# source: remediation contract W4-4 — 100 real response payloads.
+# source: ADR-0718
 CALIBRATION_RESPONSES = 100
 ALLOWED_TOOLS = frozenset({"query_methodology", "recall"})
 

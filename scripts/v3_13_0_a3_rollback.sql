@@ -17,9 +17,9 @@
 --              WHERE table_name='memories' AND column_name='heat'; → 1 row
 --   5. Restart Cortex; decay + homeostatic cycles resume their eager form.
 --
--- Note: any writes to homeostatic_state.factor since migration are lost
--- by design. The factor was never a source of truth — heat_base was.
--- ============================================================================
+-- source: ADR-0878
+
+
 
 BEGIN;
 SET LOCAL statement_timeout = '30min';

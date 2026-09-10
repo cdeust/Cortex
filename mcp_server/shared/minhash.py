@@ -1,25 +1,6 @@
 """MinHash sketches + band-LSH blocking — dependency-free (numpy only).
 
-Used by the entity-graph fuzzy deduplicator (``core.entity_dedup``) to block
-candidate near-duplicate entity labels in sub-quadratic time before the exact
-Jaro-Winkler verification pass.
-
-Sources:
-    - MinHash (Jaccard estimation via min-wise permutations):
-      Broder, A. (1997). "On the resemblance and containment of documents."
-      Compression and Complexity of Sequences (SEQUENCES '97).
-    - Band-LSH (banding trades false-positive/false-negative rate against the
-      Jaccard threshold): Indyk & Motwani (1998), and Leskovec, Rajaraman &
-      Ullman, *Mining of Massive Datasets*, 3rd ed., Ch. 3.
-
-The hash family (Mersenne-prime affine permutations) and band structure are
-equivalent to ``datasketch`` so dedup quality is unchanged, but this module
-deliberately avoids ``datasketch``/``scipy``: datasketch.lsh imports
-``scipy.integrate.quad`` at module load, whose array_api_compat layer can hang
-for minutes under EDR software on some platforms (graphify issue, ported here).
-
-Pure utility — no I/O, no domain knowledge. Shared layer.
-"""
+source: ADR-0658"""
 
 from __future__ import annotations
 
@@ -28,18 +9,18 @@ import struct
 
 import numpy as np
 
-_MERSENNE_PRIME = np.uint64((1 << 61) - 1)  # source: Broder 1997 hash family
+_MERSENNE_PRIME = np.uint64((1 << 61) - 1)  # source: ADR-0658
 _HASH_MASK = np.uint64(0xFFFF_FFFF)  # mask permuted values to 32 bits
 
-# One (a, b) affine-coefficient pair-array per num_perm, shared across instances.
-# Seeded deterministically so sketches are reproducible run-to-run.
+# source: ADR-0658
+
 _COEFFS: dict[int, tuple[np.ndarray, np.ndarray]] = {}
 
 
 def _coeffs(num_perm: int) -> tuple[np.ndarray, np.ndarray]:
     """Return cached (a, b) coefficient arrays for ``num_perm`` permutations."""
     if num_perm not in _COEFFS:
-        rng = np.random.RandomState(1)  # fixed seed → deterministic sketches
+        rng = np.random.RandomState(1)  # source: ADR-0658
         a = rng.randint(1, int(_MERSENNE_PRIME), num_perm, dtype=np.uint64)
         b = rng.randint(0, int(_MERSENNE_PRIME), num_perm, dtype=np.uint64)
         _COEFFS[num_perm] = (a, b)
@@ -74,7 +55,10 @@ class MinHash:
 
 
 def _integrate(f, lo: float, hi: float, n: int = 128) -> float:
-    """Left-Riemann numerical integration — replaces scipy.integrate.quad."""
+    """Integrate the function numerically using left Riemann sums.
+
+    source: ADR-0658
+    """
     h = (hi - lo) / n
     return h * sum(f(lo + i * h) for i in range(n))
 

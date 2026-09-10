@@ -5,14 +5,7 @@ paths, stop sessions using the selected plugin, then run launcher.py
 --cleanup-deps --dry-run --plugin-id old@marketplace; review the JSON, then
 replace --dry-run with --apply. Only deps is removed, never the identity folder.
 
-Startup is audit-only: Claude's inline/synced plugins have no install record,
-and registries cannot enumerate every project, managed setting or live session.
-Source: https://code.claude.com/docs/en/plugins-reference . An explicit
---plugin-id supplies the owner-verified identity, not an inferred folder suffix.
-The owner must verify absence from undiscovered settings and stopped sessions.
-Missing/corrupt/incomplete known registries refuse deletion. Python 3.10 and
-platforms without descriptor-bound symlink protection refuse --apply.
-"""
+source: ADR-0744"""
 
 from __future__ import annotations
 

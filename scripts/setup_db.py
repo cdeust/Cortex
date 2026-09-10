@@ -90,9 +90,7 @@ def _pg_is_running(host: str, port: str) -> bool:
         return False
 
 
-# Substrings that mark a PostgreSQL connection failure as authentication/
-# authorization (not a missing database or a down server). Source: libpq
-# error messages — postgresql.org/docs/current/protocol-error-fields.html
+# source: ADR-0784
 _AUTH_SIGNATURES = (
     "password authentication failed",
     "no password supplied",
@@ -194,10 +192,7 @@ def _create_extensions(host: str, port: str, dbname: str) -> tuple[bool, str]:
 def _init_schema(database_url: str) -> tuple[bool, str]:
     """Run full schema initialization via psycopg.
 
-    Executes each DDL statement independently so a single failure
-    (e.g. extension missing, column type mismatch) doesn't prevent
-    the remaining tables and functions from being created.
-    """
+    source: ADR-0784"""
     try:
         import psycopg  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
         from psycopg.rows import dict_row  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode

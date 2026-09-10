@@ -1,0 +1,35 @@
+# ADR-1025: tests_py/scripts/_craftsmanship_support.py design and historical evidence
+
+Status: accepted; existing test/harness evidence preserved during issue #514.
+
+Source `tests_py/scripts/_craftsmanship_support.py`, original SHA-256 `a2fdbf2b136282f75cb7a91a0685537794094adf74152ae1c40b386c1e71bebd`.
+Assertions and runtime fixture literals remain unchanged.
+
+## Original docstring, lines 1–23
+
+````text
+"""Single-load helper for the four ``scripts/craftsmanship_*.py`` modules.
+
+Every ``test_craftsmanship_*.py`` file imports this module (a genuine
+package import, cached by Python's normal import machinery — this file
+lives under ``tests_py/scripts/``, a real package via its ``__init__.py``)
+instead of each independently calling
+``importlib.util.spec_from_file_location`` on ``craftsmanship_rules.py``.
+
+Why that independence was wrong: ``craftsmanship_rules.py`` defines the
+frozen dataclass ``Violation``, and its own body imports its two siblings
+(``craftsmanship_imports.py`` / ``craftsmanship_constants.py``), each of
+which imports ``Violation`` back. Every separate
+``spec_from_file_location`` call re-executes the file from scratch,
+minting a NEW ``Violation`` class each time — dataclass equality compares
+``__class__ is __class__``, so a baseline-diff test comparing a
+``Violation`` from one load against one from another silently always
+disagrees. Loading once, here, and sharing the result closes that.
+
+The dotted, path-derived module name (``scripts.craftsmanship_rules``, not
+a bare name) is preserved for mutmut's trampoline — same idiom as
+``check_doc_claims.py``'s sibling loads (see that file's test for the full
+rationale).
+"""
+````
+

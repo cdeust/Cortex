@@ -5,11 +5,9 @@ Cortex's MCP tools (recall, remember, etc.) as their knowledge base. The
 registry maps each agent to the tools it uses, enabling the graph builder to
 show agent nodes and tool ownership in the visualization.
 
-Key principle: recall before working, remember the why after — never remember
-what's already in the code or git history.
-
 Pure configuration — no I/O.
-"""
+
+source: ADR-0500"""
 
 from __future__ import annotations
 
@@ -108,7 +106,7 @@ AGENT_REGISTRY: list[dict] = [
         "remembers": ["remember"],
         "tools": ["recall", "get_rules", "recall_hierarchical", "remember"],
     },
-    # ── security ───────────────────────────────────────────────────
+    # source: ADR-0500
     {
         "name": "Security",
         "project": "cortex",
@@ -160,7 +158,7 @@ AGENT_REGISTRY: list[dict] = [
         "remembers": ["remember"],
         "tools": ["recall", "get_causal_chain", "recall_hierarchical", "remember"],
     },
-    # ── architect ──────────────────────────────────────────────────
+    # source: ADR-0500
     {
         "name": "Architect",
         "project": "cortex",

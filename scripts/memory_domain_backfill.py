@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 """Backfill the domain of memories stuck with ``domain = ''`` — I6-D3.
 
-Runs ``handlers.consolidation.memory_domain_backfill_pass`` against the
-shared store and writes a campaign journal artifact (id, evidence
-source, derived domain per row — I6-D3's "journalisation" requirement).
-
 Usage
 -----
 
@@ -20,7 +16,8 @@ The pass is idempotent: re-running after ``--apply`` finds zero rows
 left to backfill (``list_domainless_memories`` only returns rows still
 empty), and never overwrites a domain some other writer already set
 (``pg_store_memory_domain.update_memory_domain``'s guarded UPDATE).
-"""
+
+source: ADR-0766"""
 
 from __future__ import annotations
 

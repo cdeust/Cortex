@@ -1,0 +1,38 @@
+# ADR-0410: mcp_server/handlers/ingest_findings.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `mcp_server/handlers/ingest_findings.py`; original SHA-256 `c23d0ce6b5d04520b509b62127a67dde9fb63616ce3a930ccea5c01f58db2d79`.
+
+## Original docstring, lines 1–26
+
+````text
+"""Handler: ingest_findings — pull an AP findings run into Cortex's store.
+
+Consumer, never producer (ADR-0052 D1): AP writes files under
+``<output_dir>/runs/<run_id>/``; this handler reads them off disk and
+writes Cortex memories/wiki. No network or MCP call to AP is made here —
+the findings tools (extract_finding/refine_finding/start_verification/...)
+are not in APBridge's allowlist (ap_bridge.py `_AP_TOOLS`) precisely
+because this flow never needs them (D1 acceptance invariant: AP has no
+PG/network client; this handler is the pull side).
+
+Gradation (D2): verified finding (stage-2 verified:true) -> wiki page +
+receipt memos (wiki.memos, digest-anchored) + memory tagged
+finding,verified. Non-verified finding -> memory only, tagged
+finding,hypothesis, low confidence. See ingest_findings_writers for the
+write path and ingest_findings_artifacts for the on-disk parsing.
+
+Pipeline convention (5.1b): run AP's stage-4 (``prepare_prd_input``) for
+a verified finding BEFORE calling this handler if you want code
+anchoring (wiki.page_sources, link_kind='finding') in the resulting wiki
+page — stage-4 is optional and this handler never invokes it; without
+it, ``file_paths`` is empty (not guessed from free text). This is
+independent of the 'extracted_from' link (stage-1's source_path), which
+is always anchored when AP set it, with no extra step required.
+
+Cortex consumes; AP produces.
+"""
+````
+

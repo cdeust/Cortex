@@ -1,11 +1,6 @@
 """Consolidation-stage mixin for PgMemoryStore: cascade stage transitions.
 
-Split out of pg_store_stats.py (issue #407: 406 lines over the
-300-line §4.1 cap) — the LABILE→EARLY_LTP→LATE_LTP→CONSOLIDATED
-cascade's stage writes/reads (Kandel 2001) are their own concern,
-distinct from counts/dashboard (``pg_store_stats``) and CLS/
-oscillatory/interference queries (``pg_store_cls``).
-"""
+source: ADR-0543"""
 
 from __future__ import annotations
 
@@ -36,9 +31,7 @@ class PgConsolidationStageMixin(PgStoreHost):
     def insert_stage_transitions_batch(self, rows: list[dict]) -> int:
         """Batch-insert cascade stage-transition rows in a single statement.
 
-        Source: issue #13 — was per-row INSERT + per-row commit inside the
-        cascade loop (503 fsyncs on darval's run).
-        """
+        source: ADR-0543"""
         if not rows:
             return 0
         memory_ids = [int(r["memory_id"]) for r in rows]

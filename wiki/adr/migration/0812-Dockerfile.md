@@ -147,3 +147,12 @@ Source rationale preserved verbatim. Identifiers inside historical quotations ar
 # __main__.py — so the image never depends on a console-script name
 # (`hypermnesia-mcp` / `cortex-doctor`) staying stable across renames.
 ````
+
+## Final non-Python residual audit
+
+### Dockerfile — pre-cleanup line 143
+
+````text
+# MCP servers typically run stdio transport; no ports to expose.
+# Prometheus metrics endpoint is served by the sidecar in Phase 7.1.
+````

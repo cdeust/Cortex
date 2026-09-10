@@ -62,12 +62,12 @@ def replay(engine: Any, fixture: Path) -> dict[str, Any]:
 
 
 def snapshot() -> dict[str, float]:
-    # source: https://docs.python.org/3.13/library/os.html#os.times (Unix/Windows).
+    # source: ADR-0761
     usage = os.times()
     return {
         "user_seconds": usage.user,
         "system_seconds": usage.system,
-        # source: https://docs.python.org/3.13/library/time.html#time.process_time
+        # source: ADR-0761
         "cpu_seconds": time.process_time(),
         "wall_seconds": time.perf_counter(),
     }
@@ -148,7 +148,7 @@ def main() -> None:
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--capacity", type=int)
     parser.add_argument("--warm-session", action="store_true")
-    # source: remediation contract §3 — four repetitions, discard the first.
+    # source: ADR-0761
     parser.add_argument("--repetitions", type=int, default=4)
     args = parser.parse_args()
     if args.repetitions <= 1:

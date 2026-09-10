@@ -1,0 +1,75 @@
+---
+kind: adr
+number: 0588
+title: Preserve pipeline_install_rust design decisions
+status: accepted
+---
+
+# ADR-0588: pipeline_install_rust design decisions
+
+## Context
+
+Canonical migration of decision evidence from `mcp_server/infrastructure/pipeline_install_rust.py` under ADR-0056.
+The excerpts below preserve historical claims and citations verbatim; original ADR numbers are historical quotations, not current identity bindings.
+
+## Decision
+
+Keep the source implementation linked to this versioned decision record. Operational API documentation remains with the implementation.
+
+## Preserved decision evidence
+
+### module, original line 1
+
+````text
+Maintenance flow
+----------------
+The Cortex maintainer refreshes the hash manifest after a verified
+read of the upstream script:
+    curl -sSf https://sh.rustup.rs | shasum -a 256 \
+      | awk '{print $1}' > scripts/rustup-init.sha256
+````
+
+### install_rust_toolchain, original line 86
+
+````text
+    If the manifest is missing OR ``CORTEX_RUSTUP_PIN_HASH=0``, the
+    installer falls back to the legacy curl-pipe-sh path with a status
+    note in the result dict.
+````
+
+### comment, original line 40
+
+````text
+# source: FIPS 180-4 — a SHA-256 digest is 32 bytes = 64 hex characters
+````
+
+### comment, original line 131
+
+````text
+# Pin disabled or manifest missing — legacy curl-pipe-sh.
+````
+
+## Consequences
+
+Review rationale and source changes together. Historical evidence is preserved rather than silently rewritten; executable Python structure is unchanged after removing docstrings.
+
+### module: completeness audit
+
+````text
+Silent Rust toolchain bootstrap with optional hash-pinned installer.
+
+The rustup bootstrap script (sh.rustup.rs) is fetched once and verified
+against a committed SHA256 manifest at ``scripts/rustup-init.sha256``
+before being piped to ``sh``. This converts the standard ``curl | sh``
+trust-by-TLS model into trust-by-committed-hash.
+
+If the manifest file is missing or empty, hash pinning is OFF and the
+installer falls back to plain ``curl | sh`` with a warning emitted to
+the audit dict (``hash_pin_status: "manifest_missing"``).
+
+Override
+--------
+- ``CORTEX_RUSTUP_PIN_HASH=0`` — skip hash verification entirely.
+
+source: ADR-0588
+````

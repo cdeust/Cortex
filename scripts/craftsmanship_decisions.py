@@ -1,8 +1,6 @@
 """Resolve explicit source decision IDs and verify the reviewed wiki mirror.
 
-These integrity checks cannot be grandfathered through the size/debt baseline.
-Paper citations and ordinary source paths retain their existing interpretation.
-"""
+source: ADR-0722"""
 
 from __future__ import annotations
 

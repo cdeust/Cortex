@@ -93,6 +93,95 @@ def test_dist_info_versions_missing_dir_returns_empty(deps_mod, tmp_path):
     assert deps_mod._dist_info_versions(str(tmp_path / "nope")) == {}
 
 
+# ----------------------------------------------------- foreign-ABI detection ---
+
+
+def test_is_foreign_abi_extension_true_for_a_different_interpreter_tag(deps_mod):
+    fs = deps_mod._fs
+    assert (
+        fs.is_foreign_abi_extension(
+            "speedups.cpython-313-darwin.so", current_suffix=".cpython-314-darwin.so"
+        )
+        is True
+    )
+
+
+def test_is_foreign_abi_extension_false_when_tag_matches_current(deps_mod):
+    fs = deps_mod._fs
+    assert (
+        fs.is_foreign_abi_extension(
+            "speedups.cpython-314-darwin.so", current_suffix=".cpython-314-darwin.so"
+        )
+        is False
+    )
+
+
+def test_is_foreign_abi_extension_false_for_untagged_or_non_extension_names(deps_mod):
+    """The stable-ABI (`.abi3.so`) and plain `.so`/`.pyd` forms carry no
+    interpreter tag at all -- cross-version by construction -- and a
+    `.py` source file is not an extension in the first place."""
+    fs = deps_mod._fs
+    for name in (
+        "foo.abi3.so",
+        "foo.so",
+        "foo.pyd",
+        "__init__.py",
+        "cffi-1.17.1.dist-info",
+    ):
+        assert (
+            fs.is_foreign_abi_extension(name, current_suffix=".cpython-314-darwin.so")
+            is False
+        ), name
+
+
+def test_entry_has_foreign_abi_extension_walks_nested_directories(deps_mod, tmp_path):
+    fs = deps_mod._fs
+    pkg = tmp_path / "websockets"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("# x\n", encoding="utf-8")
+    (pkg / "speedups.cpython-313-darwin.so").write_bytes(b"old")
+    assert (
+        fs.entry_has_foreign_abi_extension(
+            str(pkg), current_suffix=".cpython-314-darwin.so"
+        )
+        is True
+    )
+
+
+def test_entry_has_foreign_abi_extension_false_for_missing_path(deps_mod, tmp_path):
+    fs = deps_mod._fs
+    assert fs.entry_has_foreign_abi_extension(str(tmp_path / "nope")) is False
+
+
+def test_prune_foreign_abi_extensions_removes_only_foreign_top_level_files(
+    deps_mod, tmp_path
+):
+    """Prunes a stale top-level extension; leaves the current-ABI file
+    and a same-tagged file nested inside a package directory (that
+    shape is handled by the ABI-aware idempotence guard replacing the
+    whole directory, not by this top-level sweep)."""
+    fs = deps_mod._fs
+    deps_dir = tmp_path / "deps"
+    deps_dir.mkdir()
+    (deps_dir / "_cffi_backend.cpython-313-darwin.so").write_bytes(b"old")
+    (deps_dir / "_cffi_backend.cpython-314-darwin.so").write_bytes(b"new")
+    pkg = deps_dir / "websockets"
+    pkg.mkdir()
+    (pkg / "speedups.cpython-313-darwin.so").write_bytes(b"nested-old")
+
+    fs.prune_foreign_abi_extensions(
+        str(deps_dir), current_suffix=".cpython-314-darwin.so"
+    )
+
+    assert not (deps_dir / "_cffi_backend.cpython-313-darwin.so").exists()
+    assert (deps_dir / "_cffi_backend.cpython-314-darwin.so").exists()
+    assert (pkg / "speedups.cpython-313-darwin.so").exists()  # untouched: not top-level
+
+
+def test_prune_foreign_abi_extensions_missing_dir_is_a_silent_no_op(deps_mod, tmp_path):
+    deps_mod._fs.prune_foreign_abi_extensions(str(tmp_path / "nope"))  # must not raise
+
+
 # --------------------------------------------------------------- _importable ---
 
 
@@ -299,6 +388,88 @@ def test_pip_install_replaces_entry_when_version_differs(
     # test_pip_install_prunes_superseded_dist_info_on_version_bump below
     # for the dedicated coverage of this behavior.
     assert not (deps_dir / "numpy-2.2.6.dist-info").exists()
+
+
+def test_pip_install_replaces_entry_with_foreign_abi_extension_despite_matching_version(
+    deps_mod, tmp_path, monkeypatch
+):
+    """Issue #540, first shape: dest's ``websockets`` package still
+    carries an extension module built for a PREVIOUS interpreter
+    (``cpython-313``), and pip re-resolves the SAME version this run
+    (nothing changed on PyPI). The version-only guard would call this
+    "already satisfied" and skip it forever, leaving the interpreter
+    unable to import the compiled artifact. ABI-aware: the mismatched
+    tag must force a real commit even though the version matches."""
+    deps_dir = tmp_path / "deps"
+    deps_dir.mkdir()
+    _make_pkg_dir(deps_dir, "websockets", marker="OLD-ABI")
+    (deps_dir / "websockets" / "speedups.cpython-313-darwin.so").write_bytes(b"old")
+    _make_dist_info(deps_dir, "websockets", "15.0")
+
+    def fake_run(cmd, **kwargs):
+        tmp_dir = Path(cmd[cmd.index("--target") + 1])
+        _make_pkg_dir(tmp_dir, "websockets", marker="NEW-ABI")
+        (tmp_dir / "websockets" / "speedups.cpython-314-darwin.so").write_bytes(b"new")
+        _make_dist_info(tmp_dir, "websockets", "15.0")  # same version as dest
+
+        class _Result:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        return _Result()
+
+    monkeypatch.setattr(
+        deps_mod._install._fs,
+        "current_extension_abi_suffix",
+        lambda: ".cpython-314-darwin.so",
+    )
+    monkeypatch.setattr(deps_mod._install.subprocess, "run", fake_run)
+    ok = deps_mod._pip_install(str(deps_dir), ["websockets==15.0"])
+    assert ok is True
+    pkg_dir = deps_dir / "websockets"
+    assert (pkg_dir / "speedups.cpython-314-darwin.so").exists()
+    assert not (pkg_dir / "speedups.cpython-313-darwin.so").exists()
+    assert "NEW-ABI" in (pkg_dir / "__init__.py").read_text(encoding="utf-8")
+
+
+def test_pip_install_prunes_orphaned_top_level_foreign_abi_extension(
+    deps_mod, tmp_path, monkeypatch
+):
+    """Issue #540, second shape: a `--target` install of a standalone
+    C-extension module (cffi's `_cffi_backend`, never wrapped in a
+    package dir) leaves the OLD interpreter's file sitting right next
+    to the freshly committed one -- distinct top-level names, so the
+    commit loop's per-entry logic never revisits the old one. The
+    orphan must be pruned once the whole batch has committed."""
+    deps_dir = tmp_path / "deps"
+    deps_dir.mkdir()
+    (deps_dir / "_cffi_backend.cpython-313-darwin.so").write_bytes(b"old")
+    _make_dist_info(deps_dir, "cffi", "1.17.1")
+
+    def fake_run(cmd, **kwargs):
+        tmp_dir = Path(cmd[cmd.index("--target") + 1])
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        (tmp_dir / "_cffi_backend.cpython-314-darwin.so").write_bytes(b"new")
+        _make_dist_info(tmp_dir, "cffi", "1.17.1")
+
+        class _Result:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        return _Result()
+
+    monkeypatch.setattr(
+        deps_mod._install._fs,
+        "current_extension_abi_suffix",
+        lambda: ".cpython-314-darwin.so",
+    )
+    monkeypatch.setattr(deps_mod._install.subprocess, "run", fake_run)
+    ok = deps_mod._pip_install(str(deps_dir), ["cffi==1.17.1"])
+    assert ok is True
+    assert (deps_dir / "_cffi_backend.cpython-314-darwin.so").exists()
+    assert not (deps_dir / "_cffi_backend.cpython-313-darwin.so").exists()
 
 
 # ------------------------------------------------- non-destructive commit ---

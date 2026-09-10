@@ -1,0 +1,113 @@
+# ADR-0794: scripts/wiki_rebucket_file_docs.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `scripts/wiki_rebucket_file_docs.py`; original SHA-256 `0d33cbf1fe423131c968ac10fd46af2698ac5cac6e3c0ed60163c7de6d642c3e`.
+
+## Original docstring, lines 2–46
+
+````text
+"""Re-bucket file-documentation notes — Phase 4.2 of ADR-2244.
+
+The 2026-05-12 audit found that ``codebase_analyze`` had been writing
+per-file documentation pages under ``notes/<domain>/<memory_id>-file-
+<file-slug>.md`` instead of the correct ``reference/<domain>/<file-slug>.md``.
+The misroute was fixed at the producer in #27 (Task #8) but the
+existing pages were never re-bucketed.
+
+Live count on the wiki: **8,734** file-doc notes across 10 domains.
+This script moves them to ``reference/`` with:
+
+  * A clean ``<file-slug>.md`` derived from the ``file:`` frontmatter
+    tag (which preserves the original source-tree path even when the
+    on-disk filename was truncated).
+  * Frontmatter rewritten to the modern schema:
+        kind: reference
+        lifecycle: seedling
+        audience: [developer]
+        provenance: auto-generated
+        generator:
+          model: cortex-codebase-analyze
+          version: v1
+          prompt_template: file-doc-v1
+          generated_at: <ISO-8601 from the original ``created`` field>
+  * A redirect stub at the original ``notes/`` path so inbound links
+    keep resolving via ``wiki_read``.
+
+Dry-run by default; ``--apply`` commits.
+
+Idempotency
+-----------
+
+A second --apply finds zero pages to re-bucket: the originals are now
+redirect stubs (skipped), and any new ``codebase_analyze`` output
+already lands in ``reference/`` directly thanks to #27. The script
+also skips pages whose target path already exists (collision).
+
+Requires
+--------
+
+Each source page must carry a stable frontmatter ``id`` from Phase 3
+(``scripts/wiki_backfill_ids.py --apply``). Pages without an id are
+reported and skipped — the source classifier from #27 always emits an
+id on new writes, but the existing population predates that.
+"""
+````
+
+## Original comment, lines 80–80
+
+````text
+# ``reference/<domain>/<slug>.md``
+````
+
+## Original comment, lines 82–82
+
+````text
+# original code path from the ``file:`` tag
+````
+
+## Original comment, lines 135–136
+
+````text
+# ``slugify("")`` returns ``"unknown"`` so an empty domain would route
+    # to ``reference/unknown/…``. Coerce to ``_general`` explicitly.
+````
+
+## Original docstring, lines 174–178
+
+````text
+"""Build the modern ``kind: reference`` frontmatter and append body.
+
+    Preserves: id, title, tags, created, updated, memory_id (when present).
+    Replaces: kind. Adds: lifecycle, audience, provenance, generator.
+    """
+````
+
+## Original comment, lines 207–207
+
+````text
+# Trace fields for migration audit.
+````
+
+## Reviewed remaining docstring (scripts/wiki_rebucket_file_docs.py, interim lines 2–17)
+
+````text
+Re-bucket file-documentation notes — Phase 4.2 of ADR-0794.
+
+Dry-run by default; ``--apply`` commits.
+
+Idempotency
+-----------
+
+Requires
+--------
+
+Each source page must carry a stable frontmatter ``id`` from Phase 3
+(``scripts/wiki_backfill_ids.py --apply``). Pages without an id are
+reported and skipped — the source classifier from #27 always emits an
+id on new writes, but the existing population predates that.
+
+source: ADR-0794
+````
+

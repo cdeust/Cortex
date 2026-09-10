@@ -70,8 +70,7 @@ def _format_edges(relationships: list[dict]) -> list[dict]:
 def _prune_edges(store: MemoryStore, prunable: list[dict]) -> int:
     """Delete prunable edges in a single batched DELETE.
 
-    Source: issue #13 — was per-row DELETE inside a loop.
-    """
+    source: ADR-0373"""
     ids = [int(e["id"]) for e in prunable if e.get("id") is not None]
     return store.delete_relationships_batch(ids)
 

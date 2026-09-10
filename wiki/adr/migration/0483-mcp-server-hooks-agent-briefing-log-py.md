@@ -1,0 +1,20 @@
+# ADR-0483: mcp_server/hooks/agent_briefing_log.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `mcp_server/hooks/agent_briefing_log.py`; original SHA-256 `f620e71c0bcf10374ddea380165a287e1d3ddae32d5444c3044a29ccd0d9e486`.
+
+## Original docstring, lines 1–8
+
+````text
+"""Stderr-only logging helper shared across the agent_briefing hook split.
+
+Extracted so the query module (``agent_briefing_query.py``) can log a
+degraded PG query without importing the hook's entry-point module
+(``agent_briefing.py``) — that direction would be a cycle, since the entry
+point imports the query module's functions. This module has zero
+dependents other than the agent_briefing split, so it sits below both.
+"""
+````
+

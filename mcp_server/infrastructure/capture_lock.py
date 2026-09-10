@@ -1,9 +1,6 @@
 """Deadline-bound launch-lock wait without polling or a busy spin.
 
-The daemon waiter owns a duplicate descriptor: timeout never closes a descriptor
-under a blocked flock call. Cancellation makes it release any later acquisition.
-Source: Python concurrent.futures.Future cancellation contract; flock(2).
-"""
+source: ADR-0509"""
 
 from __future__ import annotations
 
@@ -42,8 +39,7 @@ def wait_for_lock(descriptor: int, deadline: float) -> None:
         raise
     try:
         result.result(timeout=remaining(deadline))
-    # FutureTimeoutError became a builtin TimeoutError alias only in Python 3.11.
-    # remaining() can also expire before Future.result() starts waiting.
+    # source: ADR-0509
     except (FutureTimeoutError, TimeoutError):
         if result.cancel():
             raise TimeoutError("capture launch lock deadline exceeded") from None

@@ -1,12 +1,8 @@
 """Dev driver: run the ingest_codebase handler from the working tree.
 
-Exercises the exact repo code (not the installed plugin) against the
-production DB + the real upstream ai-architect-mcp-codebase binary, so the
-2026-06-11 pagination/wiki/dedup fixes can be verified live before a
-release. Not wired into the MCP server — invoke manually:
-
     uv run python scripts/dev_run_ingest.py /path/to/project [--force]
-"""
+
+source: ADR-0728"""
 
 from __future__ import annotations
 
@@ -15,7 +11,7 @@ import json
 import sys
 from mcp_server.handlers.ingest_codebase import handler
 
-_MIN_ARGC = 2  # source: structural — program name + <project_path>
+_MIN_ARGC = 2  # source: ADR-0728
 
 
 async def main() -> int:

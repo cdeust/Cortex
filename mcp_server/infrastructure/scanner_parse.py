@@ -67,8 +67,7 @@ def _extract_tools_from_content(content: Any, tools_used: set[str]) -> None:
                 tools_used.add(block["name"])
 
 
-# source: pre-existing tuned value, extracted unchanged (#197 family 3);
-# provenance not recorded at introduction
+# source: ADR-0596
 _MAX_USER_TEXT_CHARS = 4000
 
 
@@ -129,7 +128,9 @@ def build_conversation_record(
     file_path: Path,
     project_name: str,
 ) -> dict[str, Any]:
-    """Assemble a conversation record from extracted metadata and stats."""
+    """Assemble a conversation record from extracted metadata and stats.
+
+    source: ADR-0596"""
     all_text = stats["all_text"]
     st = stat_file(file_path)
 

@@ -1,0 +1,67 @@
+# ADR-0368: mcp_server/handlers/consolidation/memory_reheat_pass.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `mcp_server/handlers/consolidation/memory_reheat_pass.py`; original SHA-256 `11f154a706754fb3ce21d26469e227ad8bcaeeba797fcbcec3562f753a870be3`.
+
+## Original docstring, lines 1–15
+
+````text
+"""Deliberate-heat recalibration pass: one-shot raise of ``heat_base`` for
+active deliberate memories below the measured retrieval cliff (I6-D5,
+INC6.6).
+
+Composition root — wires ``core.memory_reheat`` (pure per-row decision)
+to infrastructure (``pg_store_memory_reheat``'s scan-and-probe query and
+CAS-guarded write). Mirrors ``memory_dedup_exact_pass.py``'s split (I6-D1
+precedent): pure decision in core, I/O in infrastructure, wiring here.
+
+One-shot campaign pass, not wired into ``consolidate``: I6-D5 explicitly
+scopes this as a single recalibration with a J+30 re-measurement, not a
+recurring maintenance job — whether periodic re-heat is needed is an open
+question for the user once the J+30 data exists (design doc §"Questions
+ouvertes" #4). Invoked by ``scripts/memory_reheat.py``.
+"""
+````
+
+## Original docstring, lines 99–133
+
+````text
+"""Raise ``heat_base`` for every active deliberate memory below ``target``.
+
+    Pre-condition:  ``store`` exposes ``batch_pool``
+                    (``psycopg_pool.ConnectionPool``), matching
+                    ``memory_dedup_exact_pass``/``memory_domain_backfill_
+                    pass``'s convention for maintenance sweeps.
+    Post-condition: for every active deliberate memory (source NOT IN the
+                    auto-capture/mechanical set, ``NOT is_stale`` —
+                    ``pg_store_memory_reheat.list_deliberate_below_
+                    target``'s exact scope) whose ``effective_heat`` <
+                    ``target`` at scan time: if
+                    ``core.memory_reheat.compute_reheat_target`` decides
+                    the row is reachable and needs a raise,
+                    ``heat_base`` is CAS-written to the computed value IFF
+                    ``apply`` is True (``reheated`` count + journal entry
+                    with before/after); if the row cannot reach ``target``
+                    even at ``heat_base=1.0`` (a genuine consolidation-
+                    stage ceiling), it is left untouched and counted in
+                    ``unreachable`` (also journaled, honestly, per §8 —
+                    the campaign does not fabricate reaching a target it
+                    cannot reach). ``apply=False`` performs the identical
+                    scan and per-row decision without writing (dry run) —
+                    ``reheated``/``unreachable``/journal are identical
+                    either way, so a caller can diff dry-run vs. applied
+                    output to confirm 1:1 correspondence (mirrors
+                    ``memory_dedup_exact_pass``'s dry-run contract). A
+                    concurrent write that changes a row's ``heat_base``
+                    between scan and write is counted in
+                    ``skipped_race`` and excluded from ``reheated`` (never
+                    silently dropped — logged for the caller to re-run).
+                    No row's ``heat_base`` is ever lowered
+                    (``core.memory_reheat.compute_reheat_target``'s
+                    ``max(heat_base_before, needed)`` floor) — the
+                    invariant every test in this campaign checks.
+    """
+````
+

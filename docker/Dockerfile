@@ -2,8 +2,8 @@
 #
 # Multi-stage build: Python 3.12 + PostgreSQL 17 + pgvector + Claude Code CLI
 #
-# Claude Code runs INSIDE the container with Cortex MCP pre-configured via
-# stdio. No HTTP bridge needed — same architecture as ai-architect-feedback-loop.
+# Run Claude Code inside the container with Cortex MCP configured over stdio.
+# source: ADR-0872
 #
 # Usage:
 #   docker build -t cortex-runtime -f docker/Dockerfile .
@@ -36,10 +36,8 @@ FROM python:3.14-slim-bookworm@sha256:9ab8d9c8514b44f90cf0029dd42fdd7e9e211e639c
 
 
 #
-# Replaced by what the script itself does, spelled out: fetch the signing
-# key, register the signed apt source, install the signed package. curl now
-# feeds `gpg --dearmor`, which is not an interpreter — nothing is executed.
-# apt then verifies the package signature against that key.
+# Fetch the signing key, register the signed apt source, and install the verified package.
+# source: ADR-0872
 #
 # source: ADR-0872
 
@@ -70,12 +68,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY docker/claude-code/package.json docker/claude-code/package-lock.json /opt/claude-code/
 RUN cd /opt/claude-code && npm ci --omit=dev --ignore-scripts
 
-# Python dependencies, hash-pinned. Every requirement in this file carries a
-# hash from uv.lock (scripts/generate_pip_constraints.py), including the
-# CPU-only torch build that keeps ~2GB of nvidia-cu13-* wheels out of the
-# image — that used to be a bare `--index-url` flag whose artifact no
-# lockfile described. `--require-hashes` makes pip refuse anything whose
-# bytes do not match.
+# Install the exported Python requirements with artifact hash verification.
+# source: ADR-0872
 #
 # source: ADR-0872
 
@@ -132,8 +126,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
        postgresql-17 postgresql-17-pgvector \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy Node.js + Claude CLI from builder. The CLI now lives in the project
-# directory `npm ci` installed it into, not in the global prefix.
+# Copy Node.js and the project-local Claude CLI from the builder.
+# source: ADR-0872
 COPY --from=builder /usr/bin/node /usr/bin/node
 COPY --from=builder /opt/claude-code /opt/claude-code
 RUN ln -sf /usr/bin/node /usr/bin/nodejs \

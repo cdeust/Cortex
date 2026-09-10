@@ -1,0 +1,110 @@
+# ADR-0740: scripts/install-plugin.sh implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `scripts/install-plugin.sh`; original SHA-256 `d98096fd885fdc2cf2acdfc9af0ca3c6884742cc1f38d9886f0b935db2562331`.
+
+## Original shell-comment, lines 48–57
+
+````text
+# On native Windows, CLAUDE_PLUGIN_ROOT (or $PWD) arrives in backslash form
+# (e.g. D:\a\Cortex\Cortex from GitHub Actions' github.workspace). Every
+# later use of PLUGIN_ROOT in this script concatenates it with a
+# forward-slash suffix ("$PLUGIN_ROOT/scripts/setup.py" etc.), which would
+# otherwise produce a mixed-separator path. Normalize once, here, via
+# cygpath (shipped with Git Bash/MSYS2) to the Windows mixed form
+# (drive letter + forward slashes, e.g. D:/a/Cortex/Cortex) so every
+# concatenation downstream is forward-slash-only and Windows programs
+# (native python.exe) still resolve it correctly. A no-op on macOS/Linux,
+# where cygpath doesn't exist. source: issue #113 CI run 29360566538.
+
+````
+
+## Original shell-comment, lines 115–116
+
+````text
+# CI/testing contract from issue #113: CORTEX_MEMORY_STORE_BACKEND=sqlite
+# forces the SQLite path (scripts/setup.py honors the same variable).
+
+````
+
+## Original shell-comment, lines 121–126
+
+````text
+# detect_existing_postgres — protect a working PostgreSQL install.
+# Returns 0 (and says why) when any of these hold:
+#   a) an operator-configured URL is present in the environment
+#   b) a prior install persisted backend=postgresql in the marker
+#   c) a local PostgreSQL answers on 127.0.0.1:5432 AND already has a
+#      cortex database (i.e. a previous full install provisioned it)
+
+````
+
+## Original shell-comment, lines 136–137
+
+````text
+    # 127.0.0.1:5432 mirrors memory_config.MemorySettings.DATABASE_URL,
+    # the default every previous plugin install provisioned against.
+
+````
+
+## Original shell-comment, lines 155–172
+
+````text
+# ── Phase 1: install ────────────────────────────────────────────────────
+#
+# SQLite (default): scripts/setup.py in SQLite mode on every OS —
+# Python deps + verification only; no PostgreSQL, no pgvector, no eager
+# embedding-model download (lazy on first use; see
+# mcp_server/infrastructure/embedding_engine.py).
+#
+# PostgreSQL (opt-in / protected existing install): the single,
+# most-upstream OS-dispatch point for that path — do not duplicate this
+# branch in setup.sh or plugin.json. manifest.json declares win32 as a
+# compatible platform, but scripts/setup.sh only knows how to provision
+# PostgreSQL via brew/apt (macOS/Linux) and previously failed with a
+# bare "Unsupported OS" on every other uname -s, including the
+# MINGW64_NT-*/MSYS_NT-*/CYGWIN_NT-* values Git Bash reports on native
+# Windows (fixes #113). Git Bash is the shell postInstall actually runs
+# under on Windows (plugin.json invokes `bash ...`), so on those uname
+# patterns we delegate to the already cross-platform scripts/setup.py
+# instead of scripts/setup.sh.
+
+````
+
+
+## Final non-Python residual audit
+
+### scripts/install-plugin.sh — pre-cleanup line 23
+
+````text
+#   2. Remove stale OTHER versions of Cortex installed elsewhere on the
+#      machine, so the freshly-installed plugin is the single source of
+#      truth.
+````
+
+### scripts/install-plugin.sh — pre-cleanup line 70
+
+````text
+# CURRENT_VERSION is read via an env var, NOT by interpolating $PLUGIN_JSON
+# into the -c source string. Splicing an arbitrary path into a Python
+# single-quoted string literal re-parses any backslash-letter sequence it
+# contains as a Python string escape — e.g. the "\a" in a GitHub Actions
+# Windows workspace path (D:\a\Cortex\Cortex) becomes ASCII BEL (0x07),
+# corrupting the path to D:\x07\Cortex\Cortex and failing to open it
+# (CI run 29360566538). Environment variables are passed as raw bytes with
+# no escape reinterpretation, so this is safe for any path content
+# (backslashes, spaces, quotes) on every OS, not just Windows.
+````
+
+### scripts/install-plugin.sh — pre-cleanup line 158
+
+````text
+# Persist the provisioned backend for scripts/launcher.py (marker is the
+# backend NAME only — never a URL, so no credentials touch disk here).
+# The path is computed with Path.home() INSIDE python, not interpolated
+# from $HOME: on Windows Git Bash $HOME is a POSIX-style path (/c/Users/x)
+# that native python.exe would misresolve, while Path.home() matches
+# exactly how backend_marker.py resolves the marker at read time.
+````

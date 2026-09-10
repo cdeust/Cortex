@@ -1,0 +1,92 @@
+---
+kind: adr
+number: 0565
+title: Preserve pg_store_schema design decisions
+status: accepted
+---
+
+# ADR-0565: pg_store_schema design decisions
+
+## Context
+
+Canonical migration of decision evidence from `mcp_server/infrastructure/pg_store_schema.py` under ADR-0056.
+The excerpts below preserve historical claims and citations verbatim; original ADR numbers are historical quotations, not current identity bindings.
+
+## Decision
+
+Keep the source implementation linked to this versioned decision record. Operational API documentation remains with the implementation.
+
+## Preserved decision evidence
+
+### module, original line 1
+
+````text
+Split out of pg_store.py (issue: 1384-line file over the 300-line §4.1
+cap) — this module owns the psycopg connection and both Phase 5
+connection pools (docs/program/phase-5-pool-admission-design.md):
+    * ``_interactive_pool`` — hot-path tools (recall, remember, etc.)
+    * ``_batch_pool`` — long-running writers (consolidate, wiki_pipeline)
+DDL/schema-migration (compute_ddl_hash, _init_schema) lives in the
+sibling ``pg_store_ddl`` module — this one is connection plumbing only.
+
+````
+
+### PgSchemaMixin, original line 34
+
+````text
+Connection creation and Phase 5 connection-pool lifecycle.
+````
+
+### _configure_pool_connection, original line 45
+
+````text
+        Registers the pgvector adapter so callers can bind `vector` params.
+        Idempotent across checkouts because the pool holds a dedicated
+        connection per worker thread.
+        
+````
+
+### interactive_pool, original line 85
+
+````text
+        See docs/program/phase-5-pool-admission-design.md §1.1 for the
+        full tool-class table.
+        
+````
+
+### acquire_interactive, original line 107
+
+````text
+        Use this for short-lived hot-path operations. For long-running
+        batch work (consolidate, wiki_pipeline) use ``acquire_batch``.
+        When ``POOL_DISABLED=true`` the store's persistent ``_conn`` is
+        yielded instead (pre-Phase-5 behavior, kill switch per §6).
+        
+````
+
+### _deallocate_all, original line 132
+
+````text
+        Called after schema initialization because CREATE OR REPLACE FUNCTION
+        can change stored procedure signatures, making psycopg's auto-prepared
+        plans stale (error: "cached plan must not change result type").
+        
+````
+
+### comment, original line 27
+
+````text
+# Explicit name (not __name__): _deallocate_all/_reconnect log under the
+# pg_store.py facade's logger namespace, unchanged by the module split —
+# preserves observable log output for any external log-name filter.
+````
+
+### comment, original line 42
+
+````text
+# ── Phase 5: connection pools ────────────────────────────────────────
+````
+
+## Consequences
+
+Review rationale and source changes together. Historical evidence is preserved rather than silently rewritten; executable Python structure is unchanged after removing docstrings.

@@ -1,0 +1,18 @@
+---
+title: "ADR-0661 — mcp_server/shared/progress.py rationale"
+status: accepted
+source: mcp_server/shared/progress.py
+---
+
+# ADR-0661 — mcp_server/shared/progress.py
+
+Migrated source rationale. The excerpts below are preserved verbatim from the source snapshot; historical identifiers inside quotations are not current identities.
+
+## ProgressReporter — original line 17 (docstring)
+
+````text
+    All methods are synchronous. Implementations may fire-and-forget
+    async dispatches internally, but callers see a plain sync interface
+    so they can be used from both async handlers and worker threads.
+    
+````

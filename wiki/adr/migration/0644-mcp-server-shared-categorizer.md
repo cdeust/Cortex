@@ -1,0 +1,17 @@
+---
+title: "ADR-0644 — mcp_server/shared/categorizer.py rationale"
+status: accepted
+source: mcp_server/shared/categorizer.py
+---
+
+# ADR-0644 — mcp_server/shared/categorizer.py
+
+Migrated source rationale. The excerpts below are preserved verbatim from the source snapshot; historical identifiers inside quotations are not current identities.
+
+## categorize — original line 102 (docstring)
+
+````text
+    Returns the highest-scoring category, with tie-breaking favoring
+    multi-word phrase matches. Defaults to "general" if no match.
+    
+````

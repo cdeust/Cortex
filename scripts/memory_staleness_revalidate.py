@@ -1,13 +1,6 @@
 #!/usr/bin/env python3
 """Re-validate file-existence staleness for memories — fleet-watch #110.
 
-Runs ``handlers.consolidation.memory_staleness_pass`` against the shared store:
-for every non-stale, file-referencing memory whose referenced paths no longer
-resolve on disk, sets ``is_stale=TRUE`` (mark-only; never de-stales — see the
-pass docstring). This makes the staleness the injection banners surface
-(age · grade · stale) actually fire, instead of waiting for a manual
-``validate_memory`` run.
-
 Usage
 -----
 
@@ -20,7 +13,8 @@ Apply the change to the DB::
     uv run python scripts/memory_staleness_revalidate.py --apply
 
 Idempotent: a re-run skips rows already marked stale (``include_stale=False``).
-"""
+
+source: ADR-0768"""
 
 from __future__ import annotations
 

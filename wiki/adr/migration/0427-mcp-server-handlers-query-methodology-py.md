@@ -1,0 +1,41 @@
+# ADR-0427: mcp_server/handlers/query_methodology.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `mcp_server/handlers/query_methodology.py`; original SHA-256 `3401a217a472712b78c11b036580bca889274a3042643868d621b908605d7952`.
+
+## Original comment, lines 27–27
+
+````text
+# source: hooks/session_start.py::_SQLITE_NOISE_TAGS, memory contract §8b.
+````
+
+## Original comment, lines 83–83
+
+````text
+# ── Memory helpers (lazy import to avoid circular deps at module level) ──
+````
+
+## Original comment, lines 170–175
+
+````text
+# Dedupe by content: trigger extraction at remember-time accumulates
+        # byte-identical reminders (measured 4-7 copies of the same content
+        # in one response; firedTriggers alone was 55.6% of a 262KB
+        # query_methodology payload — 2026-06-09 bounded-I/O audit). Every
+        # fired trigger still gets its triggered_count bumped; only one
+        # copy of each distinct content ships in the response.
+````
+
+## Original docstring, lines 289–294
+
+````text
+"""Fit the response to the host's tool-result budget.
+
+    Hot-memory / trigger contents are cut first (they carry ids for full
+    retrieval via recall); the assembled ``context`` string is the other
+    unbounded text (core/response_budget.py for the measured budget).
+    """
+````
+

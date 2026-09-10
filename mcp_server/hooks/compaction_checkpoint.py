@@ -63,12 +63,7 @@ def process_event(event: dict[str, Any] | None) -> None:
         new_epoch = store.increment_epoch()
         _log(f"Epoch incremented to {new_epoch}")
 
-        # Q2 alignment (decision 4255039 correction 7): Notification events
-        # carry the same {"session_id", "transcript_path", ...} envelope as
-        # every other Claude Code hook (session_start.py:49). Prefer the
-        # transcript-stem identity when available; the raw event session_id
-        # (defaulting to "auto-compaction" for synthetic/test events with no
-        # transcript_path) is the documented degradation, not a regression.
+        # source: ADR-0490
         ev = event or {}
         result = asyncio.run(
             checkpoint_handler(
@@ -128,10 +123,6 @@ if __name__ == "__main__":
     from mcp_server.hooks._store_lifecycle import close_shared_store_on_exit
 
     exit_if_headless_authoring_child()
-    # issue #398: closes the store before this one-shot process exits
-    # (see _store_lifecycle.py for the verified mechanism -- psycopg pool
-    # threads are daemon threads; the fragile path is __del__'s
-    # finalization-time join, which close() pre-empts by setting
-    # _closed=True while the interpreter is still alive).
+    # source: ADR-0490
     with close_shared_store_on_exit():
         main()

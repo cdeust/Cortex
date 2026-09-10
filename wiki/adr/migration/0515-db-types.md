@@ -1,0 +1,45 @@
+---
+kind: adr
+number: 0515
+title: Preserve db_types design decisions
+status: accepted
+---
+
+# ADR-0515: db_types design decisions
+
+## Context
+
+Canonical migration of decision evidence from `mcp_server/infrastructure/db_types.py` under ADR-0056.
+The excerpts below preserve historical claims and citations verbatim; original ADR numbers are historical quotations, not current identity bindings.
+
+## Decision
+
+Keep the source implementation linked to this versioned decision record. Operational API documentation remains with the implementation.
+
+## Preserved decision evidence
+
+### module, original line 1
+
+````text
+The wiki / memory query modules (``pg_store_wiki_*``, ``pg_store_memory_*``,
+``pg_store_near_dup``, ``pg_store_lesson_promotion``) take a ``conn``
+parameter that at runtime is either a psycopg connection (PostgreSQL) or a
+``PsycopgCompatConnection`` (SQLite, issue #206). Annotating those parameters
+as psycopg's ``Connection`` alone was a type lie: it switched checking off
+for every SQLite call path — the class of blindness behind the silent
+wiki-pipeline failure of issue #220. ``StoreConnection`` names the real
+contract once, so both halves are checked at every call site.
+````
+
+### module, original line 1
+
+````text
+TYPE_CHECKING-only: this module is imported for annotations, never at
+runtime, so it stays importable on installs without the ``[postgresql]``
+extra.
+
+````
+
+## Consequences
+
+Review rationale and source changes together. Historical evidence is preserved rather than silently rewritten; executable Python structure is unchanged after removing docstrings.

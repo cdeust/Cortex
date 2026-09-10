@@ -4,8 +4,7 @@ These run on any host: the OS-specific behavior is exercised by mocking
 ``os.sep`` and ``$HOME`` rather than requiring a Windows runner. The
 windows-latest CI job provides the real-NT proof on top of these.
 
-source: RAPPORT_INSTALLATION_CORTEX_WINDOWS.md §5.1, §5.2, §5.3
-"""
+source: ADR-1054"""
 
 from __future__ import annotations
 

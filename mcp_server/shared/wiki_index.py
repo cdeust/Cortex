@@ -7,8 +7,8 @@ from __future__ import annotations
 from mcp_server.shared.wiki_layout import PAGE_KINDS
 
 
-# source: structural — a wiki path is kind/filename (2 parts) or
-# kind/domain/filename (3 parts); see the build_index docstring below.
+# source: ADR-0680
+
 _FLAT_PATH_PARTS = 2
 _DOMAIN_SCOPED_PATH_PARTS = 3
 

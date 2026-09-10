@@ -27,9 +27,7 @@ def load_tokenizer(snapshot: Path):
     config = json.loads((snapshot / "sentence_bert_config.json").read_text())
     raw = json.loads((snapshot / "tokenizer.json").read_text())
     tokenizer = Tokenizer.from_file(str(snapshot / "tokenizer.json"))
-    # Serialized tokenizer.json contains old 128-token truncation/padding.
-    # source: ST Transformer preprocessing uses sentence_bert_config's limit,
-    # longest_first truncation and longest-batch padding (none for one item).
+    # source: ADR-0762
     tokenizer.no_padding()
     tokenizer.enable_truncation(
         max_length=config["max_seq_length"], strategy="longest_first", direction="right"

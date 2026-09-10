@@ -95,13 +95,7 @@ IGNORE_DIRS = {
     "site-packages",
     ".tox",
     ".nox",
-    # 2026-05-17 (user feedback): seed_project was producing wiki pages
-    # titled ``Spec: Entry point: .claude/worktrees/agent-a0ceb782/...``
-    # because per-agent git worktrees were treated as real source trees.
-    # A worktree is a transient build of the same code — seeding it
-    # creates N duplicate sets of stub pages. Same for ``.claude/``
-    # itself (settings, hooks, agent state) and for ``deps/`` vendored
-    # third-party trees we don't author.
+    # source: ADR-0446
     ".claude",
     "worktrees",
     "deps",
@@ -114,10 +108,7 @@ IGNORE_DIRS = {
     # path-based skip in seed_project_stages.is_test_fixture_path().
 }
 
-# 2026-05-17: path-fragment predicate complementing IGNORE_DIRS. Returns
-# True if the absolute path looks like a pytest temp fixture root or a
-# transient agent worktree — both should be silently rejected by
-# seed_project before any pages are generated.
+# source: ADR-0446
 TEST_FIXTURE_PATH_MARKERS = (
     "pytest-of-",
     "/private/var/folders/",

@@ -8,41 +8,7 @@ The multiplicative scaling factor is stored as a single scalar per
     effective_heat(m, t, factor) = LEAST(1.0, GREATEST(floor,
         heat_base * factor * POWER(decay_factor, α·t)))
 
-**M-D3 (7.1, 2026-07-10) — full stratification by write class.** Design
-doc ``scratchpad/memoire-qui-comprend-design.md`` §M-D3, arbitrage user:
-"stratification complète, pas l'exemption minimale". Confirmed empirically
-(SQL against dev DB, before this change): the class-blind fold at
-2026-07-10 19:22 wrote ``heat_base *= factor`` + reset
-``heat_base_set_at`` on **1021 rows in one UPDATE**, 511 of them
-``post_tool_capture`` (auto) and 510 of them deliberate-class sources
-(feature/lesson/bug-fix/benchmark/decision/...) — the fold's target-mean
-regulation was computed against the WHOLE domain's mean (92% auto by
-volume, I6 audit) and then applied to every row in that domain including
-the deliberate minority, collapsing the deliberate class's median
-``heat_base`` from 0.25 (post re-heat campaign, 15:13Z) to 0.1346 hours
-later. The re-heat campaign's own effect was erased same-day, not at the
-planned J+30 check.
-
-Every write class now gets its own health measurement AND its own fold
-verdict — not one aggregate computation with an exclusion predicate
-bolted onto it. See ``_REGULATED_CLASSES`` below for which classes are
-actually SCALED (currently: only ``auto``) and why — every non-regulated
-class's health is still measured and journaled, its fold verdict is just
-always "none" by documented doctrine, not by omission.
-
-This module owns the POLICY (which write class is measured/regulated,
-how the corpus is bucketed per cycle). The MECHANICS (scalar update,
-fold, bimodal cohort correction — the actual writes) live in
-``homeostatic_apply.py`` — split to keep both files under the 500-line
-cap (§4.1 coding standards), same precedent as
-``core/homeostatic_health.py``.
-
-References:
-    Turrigiano 2008 — multiplicative synaptic scaling (order-preserving)
-    Tetzlaff 2011 Eq. 3 — delta_w = alpha * w * (r_target - r_actual)
-    docs/program/phase-3-a3-migration-design.md §5
-    scratchpad/memoire-qui-comprend-design.md §M-D2, §M-D3
-"""
+source: ADR-0362"""
 
 from __future__ import annotations
 
@@ -58,37 +24,7 @@ logger = logging.getLogger(__name__)
 _TARGET_HEAT = homeostatic_apply.TARGET_HEAT
 _BIMODALITY_TRIGGER = homeostatic_apply.BIMODALITY_TRIGGER
 
-# M-D3 doctrine — which write classes are subject to target-mean
-# regulation (scalar update, fold, AND cohort correction; all three are
-# forms of the same mechanism: pulling a distribution toward
-# _TARGET_HEAT). No new numeric constants invented (§8 coding standards)
-# — this set is a class-membership decision, not a numeric one:
-#
-#   auto        REGULATED. This is the population the mechanism was
-#               validated for (ROC-AUC / Turrigiano-Tetzlaff assumptions
-#               both presume an ongoing, high-volume, statistically-
-#               exchangeable population competing for one heat budget —
-#               exactly the auto-capture flood, 92% of the corpus by
-#               volume, I6 audit).
-#   deliberate  NOT regulated. Individually-meaningful, low-volume
-#               witnesses (~5-8% of writes, audit) — not exchangeable,
-#               not flood-like. Regulating their mean toward the SAME
-#               set-point as the flood is the exact mechanism that
-#               re-suppressed the class this increment exists to fix
-#               (module docstring above).
-#   derived     NOT regulated. Near-empty today (0 rows, design-doc
-#               audit) and structurally bursty/capped (memify_derive caps
-#               20 attempts/run) — Welford moments on tiny N are
-#               statistically unstable, and duplication is already
-#               judged by the ``derived-rel:`` idempotence marker rather
-#               than a heat threshold (M-D2's "derived" write-gate row
-#               makes the same argument; regulation would measure the
-#               same wrong quantity here).
-#   mechanical  NOT regulated. One-shot bulk-import passes (backfill,
-#               seed, ingest, codebase scan) — not an ongoing rate. The
-#               "target firing rate" doctrine (Turrigiano 2008, Tetzlaff
-#               2011) has no referent for a single injection event; there
-#               is no runaway to defend against.
+# source: ADR-0057
 _REGULATED_CLASSES = frozenset({write_class.AUTO})
 
 
@@ -97,34 +33,18 @@ def run_homeostatic_cycle(
     memories: list[dict] | None = None,
 ) -> dict:
     """Measure health and (for regulated classes) update the homeostatic
-    factor / fold, independently per write class.
+        factor / fold, independently per write class.
 
-    Branching (per class, in ``_dispatch_class``):
-      1. class not regulated → verdict is always "none", health still
-         measured and reported (M-D3 doctrine, see ``_REGULATED_CLASSES``).
-      2. healthy AND unimodal → no-op.
-      3. bimodal → cohort correction (per-row writes via bump_heat_raw),
-         scoped to that class's own rows.
-      4. off-target → scalar factor update, fold if drift > log(2.0),
-         scoped to that class's own rows.
+        Returns:
+            Same top-level shape as before stratification
+            (scaling_applied/scaling_kind/health_score/mean_heat/std_heat/
+            bimodality/memories_scanned) mirroring the ``auto`` class's
+            outcome — existing callers that only look at the top level see
+            identical behavior to pre-M-D3 for the auto-dominated corpus.
+            Additive key ``by_class``: ``{class_name: outcome_dict}`` for
+            every class in ``write_class.ALL_WRITE_CLASSES``.
 
-    Phase 4: when the caller passes ``memories=None`` we compute the
-    health metrics via a streaming server-side cursor
-    (``store.iter_memories_for_decay``) + per-class Welford moments. Peak
-    memory is O(chunk_size) instead of O(N) — crucial at 66K+ memory
-    stores. When the caller passes a pre-loaded list (hot-path consolidate
-    sharing one snapshot across stages, or unit tests), we bucket it by
-    class directly.
-
-    Returns:
-        Same top-level shape as before stratification
-        (scaling_applied/scaling_kind/health_score/mean_heat/std_heat/
-        bimodality/memories_scanned) mirroring the ``auto`` class's
-        outcome — existing callers that only look at the top level see
-        identical behavior to pre-M-D3 for the auto-dominated corpus.
-        Additive key ``by_class``: ``{class_name: outcome_dict}`` for
-        every class in ``write_class.ALL_WRITE_CLASSES``.
-    """
+    source: ADR-0362"""
     try:
         if memories is None:
             class_health, class_domain_counts, class_thin, total = (
@@ -349,13 +269,7 @@ def _bucket_materialized_by_class(
 def _pick_dominant_domain(counts: dict[str, int]) -> str:
     """Pick the most-frequent domain key from a precomputed frequency map.
 
-    Same doctrine as before Phase 4: docs/program/phase-3-a3-migration-
-    design.md §5 describes one scalar UPDATE per cycle, keyed by domain —
-    M-D3 narrows this further to "one scalar UPDATE per (domain, class)
-    per cycle, keyed within that class's own rows" — not a new weighting
-    scheme, just the same rule applied within a class instead of across
-    the whole corpus.
-    """
+    source: ADR-0362"""
     if not counts:
         return ""
     return max(counts.items(), key=lambda kv: kv[1])[0]

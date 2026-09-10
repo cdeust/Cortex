@@ -1,11 +1,8 @@
 """wiki.pages DB operations — CRUD and lookups.
 
-Split out of ``pg_store_wiki.py`` (originally 890 lines, over the
-300-line file limit — CLAUDE.md "Code Quality Rules") purely for size
-compliance; no logic changed.
-
 Pure infrastructure — no core imports, no handler imports.
-"""
+
+source: ADR-0580"""
 
 from __future__ import annotations
 
@@ -26,19 +23,11 @@ from mcp_server.infrastructure.pg_store_wiki_sources import upsert_page_sources
 def upsert_page(conn: StoreConnection, page: dict[str, Any]) -> tuple[int, bool]:
     """Upsert a page row by rel_path.
 
-    Returns ``(page_id, was_modified)`` where ``was_modified`` is True
-    when the row was inserted or actually updated, False when the
-    body_hash matched and nothing changed.
+        Returns ``(page_id, was_modified)`` where ``was_modified`` is True
+        when the row was inserted or actually updated, False when the
+        body_hash matched and nothing changed.
 
-    Required fields: rel_path, slug, kind, title.
-    Optional: all other columns, including ``documents`` (list of
-    canonical source-file paths — ADR-0051) and ``documents_primary``
-    (defaults to the first entry of ``documents`` when omitted).
-    ``wiki.page_sources`` is refreshed unconditionally (even on a
-    body_hash no-op) so a frontmatter-only edit still lands, matching
-    how ``wiki.links`` is refreshed independently of body_hash in
-    ``wiki_migrate.migrate_wiki``.
-    """
+    source: ADR-0580"""
     required = ("rel_path", "slug", "kind", "title")
     for k in required:
         if k not in page:
@@ -51,9 +40,7 @@ def upsert_page(conn: StoreConnection, page: dict[str, Any]) -> tuple[int, bool]
         documents[0] if documents else None
     )
 
-    # Use xmax=0 (Postgres trick) to detect INSERT vs UPDATE: xmax is 0
-    # only on a fresh INSERT. We also OR in body_hash equality to detect
-    # no-op updates that the WHERE clause filtered out.
+    # source: ADR-0580
     sql = """
     INSERT INTO wiki.pages (
         memory_id, concept_id, rel_path, slug, kind, title, domain, domains,
@@ -148,17 +135,18 @@ def list_all_rel_paths(conn: StoreConnection) -> list[str]:
 def delete_pages_by_rel_path(conn: StoreConnection, rel_paths: list[str]) -> list[dict]:
     """Delete wiki.pages rows for the given rel_paths.
 
-    Cascades to wiki.links (src_page_id ON DELETE CASCADE), wiki.page_sources
-    (page_id ON DELETE CASCADE), and wiki.citations (page_id ON DELETE CASCADE)
-    per the FKs declared in pg_schema.py — no separate DELETE against those
-    tables is needed here.
+        Cascades to wiki.links (src_page_id ON DELETE CASCADE), wiki.page_sources
+        (page_id ON DELETE CASCADE), and wiki.citations (page_id ON DELETE CASCADE)
+        per the FKs declared in pg_schema.py — no separate DELETE against those
+        tables is needed here.
 
     Precondition: rel_paths identifies rows the caller has already decided
-    are safe to remove (e.g. no longer present on the filesystem).
-    Postcondition: every wiki.pages row matching rel_paths is gone; rows not
-    matching are untouched. Returns the deleted (id, rel_path) rows so the
-    caller can report exactly what was purged.
-    """
+        are safe to remove (e.g. no longer present on the filesystem). Postcondition:
+        every wiki.pages row matching rel_paths is gone; rows not
+        matching are untouched. Returns the deleted (id, rel_path) rows so the
+        caller can report exactly what was purged.
+
+    source: ADR-0580"""
     if not rel_paths:
         return []
     with conn.cursor(row_factory=DICT_ROW) as cur:

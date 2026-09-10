@@ -1,12 +1,6 @@
 """Conservative protection set for the launcher's dependency cleanup.
 
-Identity mapping and settings scopes are documented at
-https://code.claude.com/docs/en/plugins-reference . The registry's plugins ->
-list[installPath] shape is exercised by tests_py/infrastructure/
-test_pipeline_discovery.py. This cleanup additionally requires explicit scope
-and projectPath for project/local records; incomplete/unknown schemas refuse
-cleanup instead of interpreting missing information as uninstallation.
-"""
+source: ADR-0746"""
 
 from __future__ import annotations
 

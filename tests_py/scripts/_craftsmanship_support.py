@@ -16,11 +16,7 @@ minting a NEW ``Violation`` class each time — dataclass equality compares
 ``Violation`` from one load against one from another silently always
 disagrees. Loading once, here, and sharing the result closes that.
 
-The dotted, path-derived module name (``scripts.craftsmanship_rules``, not
-a bare name) is preserved for mutmut's trampoline — same idiom as
-``check_doc_claims.py``'s sibling loads (see that file's test for the full
-rationale).
-"""
+source: ADR-1025"""
 
 from __future__ import annotations
 

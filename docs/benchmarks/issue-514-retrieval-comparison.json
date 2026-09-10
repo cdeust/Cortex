@@ -1,0 +1,331 @@
+{
+  "issue": "https://github.com/cdeust/Cortex/issues/514",
+  "scope": "One full retrieval-only run per commit; consolidation disabled. Exact decision IDs measure wiki-only known-item coverage, not semantic ranking.",
+  "commits": {
+    "baseline": "e81735de3eb2248c134980008b2485d7d2a6dcc9",
+    "candidate": "0b70df184357345c110806a1ea1f3c0807e91294",
+    "final_pr_head": "47009d39c297b7e60ed529eec54a3541ede31e30",
+    "identical_candidate_and_final_tree": "a33c97eb3718e50fb204971a1b8fddf659eab8fe"
+  },
+  "comparison": {
+    "longmemeval-s": {
+      "n_questions": 500,
+      "n_runs_per_commit": 1,
+      "with_consolidation": false,
+      "overall_metrics": {
+        "overall_mrr": {
+          "baseline": 0.9049880952380952,
+          "candidate": 0.9056547619047619,
+          "delta_candidate_minus_baseline": 0.0006666666666667043
+        },
+        "overall_recall10": {
+          "baseline": 0.978,
+          "candidate": 0.98,
+          "delta_candidate_minus_baseline": 0.0020000000000000018
+        }
+      },
+      "categories": {
+        "category_mrr": {
+          "Single-session (user)": {
+            "baseline": 0.8347789115646259,
+            "candidate": 0.8347789115646259,
+            "delta_candidate_minus_baseline": 0.0
+          },
+          "Multi-session reasoning": {
+            "baseline": 0.9576023391812866,
+            "candidate": 0.9576023391812866,
+            "delta_candidate_minus_baseline": 0.0
+          },
+          "Single-session (preference)": {
+            "baseline": 0.6692592592592593,
+            "candidate": 0.6692592592592593,
+            "delta_candidate_minus_baseline": 0.0
+          },
+          "Temporal reasoning": {
+            "baseline": 0.9001969208736127,
+            "candidate": 0.9001969208736127,
+            "delta_candidate_minus_baseline": 0.0
+          },
+          "Knowledge updates": {
+            "baseline": 0.9089031339031339,
+            "candidate": 0.9131766381766381,
+            "delta_candidate_minus_baseline": 0.004273504273504147
+          },
+          "Single-session (assistant)": {
+            "baseline": 1.0,
+            "candidate": 1.0,
+            "delta_candidate_minus_baseline": 0.0
+          }
+        },
+        "category_recall10": {
+          "Single-session (user)": {
+            "baseline": 0.9571428571428572,
+            "candidate": 0.9571428571428572,
+            "delta_candidate_minus_baseline": 0.0
+          },
+          "Multi-session reasoning": {
+            "baseline": 0.9924812030075187,
+            "candidate": 0.9924812030075187,
+            "delta_candidate_minus_baseline": 0.0
+          },
+          "Single-session (preference)": {
+            "baseline": 0.9,
+            "candidate": 0.9,
+            "delta_candidate_minus_baseline": 0.0
+          },
+          "Temporal reasoning": {
+            "baseline": 0.9774436090225563,
+            "candidate": 0.9774436090225563,
+            "delta_candidate_minus_baseline": 0.0
+          },
+          "Knowledge updates": {
+            "baseline": 0.9871794871794872,
+            "candidate": 1.0,
+            "delta_candidate_minus_baseline": 0.012820512820512775
+          },
+          "Single-session (assistant)": {
+            "baseline": 1.0,
+            "candidate": 1.0,
+            "delta_candidate_minus_baseline": 0.0
+          }
+        }
+      }
+    },
+    "locomo": {
+      "n_questions": 1982,
+      "n_runs_per_commit": 1,
+      "with_consolidation": false,
+      "overall_metrics": {
+        "overall_mrr": {
+          "baseline": 0.7824299649223968,
+          "candidate": 0.7805615619944581,
+          "delta_candidate_minus_baseline": -0.0018684029279386616
+        },
+        "overall_recall10": {
+          "baseline": 0.8895055499495459,
+          "candidate": 0.8905146316851665,
+          "delta_candidate_minus_baseline": 0.0010090817356206427
+        }
+      },
+      "categories": {
+        "category_mrr": {
+          "multi_hop": {
+            "baseline": 0.7045974880087029,
+            "candidate": 0.6978699995055135,
+            "delta_candidate_minus_baseline": -0.006727488503189383
+          },
+          "temporal": {
+            "baseline": 0.534204623878537,
+            "candidate": 0.5434135610766045,
+            "delta_candidate_minus_baseline": 0.00920893719806759
+          },
+          "single_hop": {
+            "baseline": 0.7367133851176405,
+            "candidate": 0.7323243836541709,
+            "delta_candidate_minus_baseline": -0.004389001463469655
+          },
+          "open_domain": {
+            "baseline": 0.829497669063662,
+            "candidate": 0.8291834173225374,
+            "delta_candidate_minus_baseline": -0.00031425174112453824
+          },
+          "adversarial": {
+            "baseline": 0.8298046124279308,
+            "candidate": 0.8278115880133817,
+            "delta_candidate_minus_baseline": -0.0019930244145490716
+          }
+        },
+        "category_recall10": {
+          "multi_hop": {
+            "baseline": 0.8193146417445483,
+            "candidate": 0.8130841121495327,
+            "delta_candidate_minus_baseline": -0.006230529595015577
+          },
+          "temporal": {
+            "baseline": 0.7608695652173914,
+            "candidate": 0.7608695652173914,
+            "delta_candidate_minus_baseline": 0.0
+          },
+          "single_hop": {
+            "baseline": 0.9326241134751773,
+            "candidate": 0.9361702127659575,
+            "delta_candidate_minus_baseline": 0.0035460992907802025
+          },
+          "open_domain": {
+            "baseline": 0.9072532699167658,
+            "candidate": 0.9108204518430439,
+            "delta_candidate_minus_baseline": 0.00356718192627814
+          },
+          "adversarial": {
+            "baseline": 0.905829596412556,
+            "candidate": 0.905829596412556,
+            "delta_candidate_minus_baseline": 0.0
+          }
+        }
+      },
+      "n_conversations": 10
+    }
+  },
+  "regression_gate": {
+    "result": "PASS",
+    "exit_code": 0,
+    "tolerance": 0.005,
+    "tolerance_source": "benchmarks/lib/bench_regression.sh: REGRESSION_TOLERANCE default, unchanged",
+    "comparison_rule": "Each of the four overall metrics is rounded to four decimals; candidate minus baseline must be at least -0.005. Category metrics are not gated.",
+    "complete_question_counts_verified": {
+      "longmemeval-s": 500,
+      "locomo": 1982
+    },
+    "output": [
+      "REGRESSION CHECK longmemeval-s.overall_recall10: 0.9800 vs baseline 0.9780 (+0.0020) PASS",
+      "REGRESSION CHECK longmemeval-s.overall_mrr: 0.9057 vs baseline 0.9050 (+0.0007) PASS",
+      "REGRESSION CHECK locomo.overall_recall10: 0.8905 vs baseline 0.8895 (+0.0010) PASS",
+      "REGRESSION CHECK locomo.overall_mrr: 0.7806 vs baseline 0.7824 (-0.0018) PASS",
+      "",
+      "REGRESSION CHECK PASSED: no score regressed vs baseline beyond tolerance."
+    ]
+  },
+  "known_item_decision_ids": {
+    "benchmark": "decision_ids",
+    "scope": "wiki-only known-item source coverage; no PG ranking claim",
+    "baseline_ref": "e81735de3eb2248c134980008b2485d7d2a6dcc9",
+    "known_ids": [
+      "ADR-0001",
+      "ADR-0055",
+      "ADR-0056",
+      "ADR-2019",
+      "ADR-9999"
+    ],
+    "before": {
+      "n_queries": 5,
+      "ranks": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "recall_at_1": 0.0,
+      "mrr_at_10": 0.0
+    },
+    "after": {
+      "n_queries": 5,
+      "ranks": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "recall_at_1": 1.0,
+      "mrr_at_10": 1.0
+    },
+    "exact_path_calls": {
+      "embedding": 0,
+      "memory_store": 0,
+      "ap": 0,
+      "semantic_recall": 0
+    },
+    "passed": true
+  },
+  "published_floor_checks": {
+    "blocking": false,
+    "misses_per_run": {
+      "baseline": 3,
+      "candidate": 3
+    },
+    "output": {
+      "baseline": [
+        "FLOOR CHECK longmemeval-s.overall_recall10: 0.9780 vs floor 0.9820 (-0.0040) PASS",
+        "FLOOR CHECK longmemeval-s.overall_mrr: 0.9050 vs floor 0.9140 (-0.0090) FAIL",
+        "FLOOR CHECK locomo.overall_recall10: 0.8895 vs floor 0.9150 (-0.0255) FAIL",
+        "FLOOR CHECK locomo.overall_mrr: 0.7824 vs floor 0.8050 (-0.0226) FAIL"
+      ],
+      "candidate": [
+        "FLOOR CHECK longmemeval-s.overall_recall10: 0.9800 vs floor 0.9820 (-0.0020) PASS",
+        "FLOOR CHECK longmemeval-s.overall_mrr: 0.9057 vs floor 0.9140 (-0.0083) FAIL",
+        "FLOOR CHECK locomo.overall_recall10: 0.8905 vs floor 0.9150 (-0.0245) FAIL",
+        "FLOOR CHECK locomo.overall_mrr: 0.7806 vs floor 0.8050 (-0.0244) FAIL"
+      ]
+    },
+    "interpretation": "Both runs miss the same three published floors: LongMemEval MRR, LoCoMo recall@10 and LoCoMo MRR. Relative regression PASS does not establish that these absolute targets were met."
+  },
+  "reproducibility": {
+    "dataset_sha256": {
+      "benchmarks/longmemeval/longmemeval_s.json": {
+        "baseline": "08d8dad4be43ee2049a22ff5674eb86725d0ce5ff434cde2627e5e8e7e117894",
+        "candidate": "08d8dad4be43ee2049a22ff5674eb86725d0ce5ff434cde2627e5e8e7e117894"
+      },
+      "benchmarks/locomo/locomo10.json": {
+        "baseline": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4",
+        "candidate": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4"
+      }
+    },
+    "python_version": "3.12.11",
+    "packages": {
+      "datasets": "5.0.1",
+      "sentence-transformers": "5.6.1",
+      "torch": "2.13.0",
+      "psycopg": "3.3.5",
+      "psycopg-pool": "3.3.1"
+    },
+    "runtime_library_versions": {
+      "sentence-transformers": "5.6.1",
+      "torch": "2.13.0",
+      "numpy": "2.5.1",
+      "psycopg": "3.3.5",
+      "pgvector": "0.5.0",
+      "flashrank": "0.2.10"
+    },
+    "same_uv_lock_sha256": "e2bd852e875b20233275f0be9d884e69512141036c4aef1f7dd7eac494ef03bc",
+    "package_hash_scope": "The identical uv.lock records package archive hashes; manifests confirm matching installed versions. Installed wheel bytes were not independently hashed.",
+    "embedding_model_revision": "1110a243fdf4706b3f48f1d95db1a4f5529b4d41",
+    "reranker_active": true,
+    "reranker_model_sha256": "d3dd7b09fcf06b0c070081d6819b5effbb40b667bcad78b2d7543400271141d1",
+    "database_image": "pgvector/pgvector:pg16",
+    "database_image_digest": "sha256:ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b",
+    "separate_clean_containers": true,
+    "containers_removed": true,
+    "driver_exit_codes": {
+      "baseline": 0,
+      "candidate": 0
+    },
+    "driver_exit_evidence": "Both owning processes were polled to completion with exit code 0.",
+    "git_dirty": true,
+    "git_dirty_explanation": "Both manifests recorded git_dirty=true because a temporary driver sourced a transport-only Unix-socket adapter and generated result artifacts. The adapter changed PostgreSQL transport only; runtime code, benchmark logic, datasets, thresholds and container configuration stayed unchanged. Temporary drivers and containers were removed; tracked source remained unchanged. Untracked result artifacts do not alter the candidate tree.",
+    "driver_sha256": {
+      "baseline": {
+        "original": "c4cadd730f591a8c5faee3a12cb2ff2a2649e630cd92be2aec6c6714a5ee44b3",
+        "temporary_transport_driver": "77eedc54c6f30355a8138b75dec2e805e0f431d5393deb304e65589e80537db2"
+      },
+      "candidate": {
+        "original": "d8d0a29bc0178168ed0603c9e7772dacd8c96d806febe89d9ca99cea2475224d",
+        "temporary_transport_driver": "37e3084ef2229eb6b8ad42c0c3cc68920a3d0f8aae749bbb0e36132f4110d5c7"
+      }
+    },
+    "result_artifact_sha256": {
+      "baseline": {
+        "locomo.json": "02a612194d1153aad6950a0988212ae6fe4c921dc2bd235bad16b41e43b1d08b",
+        "longmemeval-s.json": "71bfef111b01c18e737b1635b6e583066a6b02c74ef81863b60e8f42cc768914"
+      },
+      "candidate": {
+        "decision-ids.json": "86d08682d1247e960f569c3691196a5a35aad2016b2894fd4ede3d26d99bfbbb",
+        "locomo.json": "8160fccf4a4eb83acb385c30df5119d7672d20b3233c67e35d3674a4953e730b",
+        "longmemeval-s.json": "b62fc5c4adb80ee042fbbfec6487da4a978761edbe78a119c52b03b4ce116705"
+      }
+    },
+    "reproduction": [
+      "Use separate checkouts of the public baseline commit and public final_pr_head commit (47009d39c297b7e60ed529eec54a3541ede31e30), the identical locked benchmark dependencies, the dataset hashes above, and the recorded model revisions. The measured candidate commit is a local-only snapshot; final_pr_head is its publicly fetchable, byte-identical tree equivalent.",
+      "Run bash benchmarks/reproduce.sh --only longmemeval,locomo --no-ablation separately in each checkout, with a separate clean PostgreSQL container per run. Do not set --quick, --limit, or --with-consolidation.",
+      "On the candidate, run uv run --extra benchmarks python -m benchmarks.decision_ids.run_bench --output decision-ids.json.",
+      "Compare the two complete result directories using check_regression in benchmarks/lib/bench_regression.sh and its existing 0.005 tolerance; verify question and conversation counts before accepting the result."
+    ]
+  },
+  "limitations": [
+    "Single run per commit; no confidence intervals or repeated-seed estimate. Small deltas do not establish a quality improvement.",
+    "Consolidation was disabled and called zero times. These runs do not validate production consolidation behavior or consolidation-only mechanisms.",
+    "The regression gate covers four overall metrics; some category deltas are larger than the tolerance and are reported without a per-category non-regression claim.",
+    "Both runs have three nonblocking published-floor misses. The result is relative non-regression under the existing gate, not attainment of those floors.",
+    "No latency, energy or throughput improvement is claimed from these runs."
+  ]
+}

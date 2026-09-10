@@ -1,11 +1,6 @@
 """Batch raw vectors only for prevalidated, store-independent bypass writes.
 
-No gate observations are frozen and no task, ContextVar or engine proxy is used.
-The continuation executes every original post-encode read/write sequentially.
-Ordinary input/validation/encoding errors are delivered at their original item.
-A BaseException during the batch propagates before prior items are committed;
-this is intentionally not an atomicity or interruption-equivalence guarantee.
-"""
+source: ADR-0437"""
 
 from __future__ import annotations
 
@@ -115,10 +110,7 @@ async def store_prepared(item: PreparedEncoding) -> dict:
 def file_reads_are_independent(paths: list[Path]) -> bool:
     """Keep live reads scalar if a preceding remember can replace their target.
 
-    Source: remember writes wiki pages and store files; resolving symlinks is
-    required because codebase_analyze's collector accepts regular-file links.
-    Resolution failures retain the original scalar read/error boundary.
-    """
+    source: ADR-0437"""
     try:
         settings = remember.get_memory_settings()
         roots = [
@@ -133,8 +125,7 @@ def file_reads_are_independent(paths: list[Path]) -> bool:
             if any(resolved.is_relative_to(root) for root in resolved_roots):
                 return False
             if resolved.exists() and resolved.stat().st_nlink > 1:
-                # source: Python os.stat_result.st_nlink counts hard links;
-                # multiple names could alias an owned mutable store file.
+                # source: ADR-0437
                 return False
         return True
     except Exception as exc:  # noqa: BLE001 — preserve original scalar path when disjointness cannot be established

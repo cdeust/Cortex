@@ -1,17 +1,6 @@
 """Craftsmanship rule 3 — layer-boundary imports, a TRUE whitelist.
 
-Rewritten after review found the prior version was a blacklist wearing a
-whitelist's name: it denied a short hardcoded list of specific imports
-(``os``, ``pathlib``, a few ``mcp_server.<layer>`` prefixes) and silently
-ALLOWED everything else — so `import numpy`, `import requests`, and
-`import scripts.legacy_bridge` inside `core/` all passed uncaught. The
-fix is structural, not a bigger blacklist: every import is now checked
-against what a layer is explicitly PERMITTED to reference (derived from
-``craftsmanship_layer_table.py``, itself parsed from
-``docs/module-inventory.md`` § Dependency Rules — never a second
-hardcoded copy of that table); anything not on the permitted list is a
-violation, covering all eight documented layers, not four.
-"""
+source: ADR-0724"""
 
 from __future__ import annotations
 
@@ -51,12 +40,7 @@ def _is_type_checking_test(test: ast.expr) -> bool:
 class _ImportCollector(ast.NodeVisitor):
     """Collects absolute, runtime-reachable dotted import module names.
 
-    Relative imports (``from . import x``, ``level > 0``) are skipped: they
-    resolve within the same package and cannot cross a layer boundary that
-    an absolute ``mcp_server.<layer>`` import would. Imports inside
-    ``if TYPE_CHECKING:`` are skipped too — a type-only forward reference
-    used for annotations, not a runtime dependency the layer rule polices.
-    """
+    source: ADR-0724"""
 
     def __init__(self) -> None:
         self.modules: list[str] = []
@@ -81,11 +65,7 @@ class _ImportCollector(ast.NodeVisitor):
 def _import_violates_layer(rule: LayerRule, module: str) -> bool:
     """True if ``module`` (dotted, absolute) breaks ``rule``'s whitelist.
 
-    Every branch is a permission CHECK, not a denial check: an import that
-    matches none of them falls through to the final ``return True`` — the
-    fix for the review finding that a permitted set with an implicit
-    "everything else is fine" default is not a whitelist.
-    """
+    source: ADR-0724"""
     parts = module.split(".")
     top, second = parts[0], (parts[1] if len(parts) > 1 else None)
     if top == "mcp_server" and second == rule.name:
@@ -96,10 +76,7 @@ def _import_violates_layer(rule: LayerRule, module: str) -> bool:
         if top in rule.stdlib_denied:
             return True
         return not rule.stdlib_allowed
-    # Third-party (neither `mcp_server.*` nor stdlib): permitted only for a
-    # "boundary" layer (infrastructure/validation/handlers/server/hooks) —
-    # Clean Architecture's adapter layers, where frameworks belong. A
-    # "pure" layer (shared/, core/, errors/) forbids it outright.
+    # source: ADR-0724
     return rule.is_pure
 
 

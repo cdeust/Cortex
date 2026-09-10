@@ -8,7 +8,8 @@ Contract under test:
     numbers" contract) and produces a mixture, not a constant column — the
     property that makes the trust-factor gated arm able to discriminate W
     (docs/provenance/trust-factor-calibration.md).
-"""
+
+source: ADR-0889"""
 
 from __future__ import annotations
 

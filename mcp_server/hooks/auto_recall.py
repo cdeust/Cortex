@@ -8,21 +8,6 @@ needed — memory just works.
 This is the core of the "seamless memory" experience: if Cortex is
 installed, every conversation has memory context automatically.
 
-Paper backing:
-  - Smith & Vela 2001: context reinstatement produces ~15-20% recall
-    boost (d=0.28). Injecting memories matching the current query
-    implements automatic context reinstatement.
-  - Bar 2007: proactive brain generates predictions from context
-    BEFORE conscious retrieval request.
-  - Collins & Loftus 1975: query text activates related memory nodes
-    via spreading activation.
-
-Source backing:
-  - Claude Code auto-memory (lesson 40): "findRelevantMemories" selects
-    up to 5 relevant files before the main agent responds. Same pattern.
-  - Claude Code hooks (lesson 10): UserPromptSubmit exit 0 injects
-    stdout into model context.
-
 Strategy:
   1. Receive user message text from stdin JSON
   2. Run a fast FTS query — PG plainto_tsquery, or SQLite FTS5 through
@@ -31,13 +16,6 @@ Strategy:
   3. If relevant memories found, format as compact context block
   4. Exit 0 → stdout injected into Claude's context
   5. If nothing found, exit 1 → no injection, no noise
-
-Performance constraints:
-  - Must complete within 3s (hook timeout)
-  - No embedding model load (takes 5-8s)
-  - FTS-only query (PG plainto_tsquery / SQLite FTS5, sub-100ms)
-  - Max 3 memories injected (keep context compact)
-  - Skip very short queries (<10 chars) to avoid noise
 
 Installation
 ------------
@@ -53,14 +31,7 @@ Add to ``~/.claude/settings.json`` under hooks::
         }
     }
 
-Invariants
-----------
-- Exit 0: stdout injected into model context (relevant memories found)
-- Exit 1: no injection (nothing relevant or query too short)
-- Must complete within 3s
-- Logs to stderr only
-- Never blocks user input (exit 2 reserved for validation hooks)
-"""
+source: ADR-0485"""
 
 from __future__ import annotations
 
@@ -86,8 +57,7 @@ _MAX_MEMORIES = 3
 _MIN_HEAT = 0.15
 _MIN_QUERY_LENGTH = 10
 _MAX_INJECTION_CHARS = 800  # Keep compact — don't flood context
-# source: pre-existing tuned values, extracted unchanged (#197 family 3);
-# provenance not recorded at introduction
+# source: ADR-0485
 _MIN_FTS_TERM_CHARS = 2
 _MAX_MEMORY_CHARS = 200
 
@@ -161,38 +131,28 @@ def _recall_memories(conn, query: str) -> list[dict]:
     """
     results = []
 
-    # Pass 1: FTS match with heat filter.
-    #
-    # `memories.heat` does NOT exist as a stored column — heat is computed
-    # via the effective_heat(m, NOW()) PL/pgSQL function which applies
-    # lazy A3 decay over heat_base + heat_base_set_at + stage + valence.
-    # Using effective_heat() here keeps this hook semantically aligned
-    # with production recall_memories() — same lazy-decay read path,
-    # just without the WRRF fusion (we only need a fast FTS prefilter).
-    # Source: pg_schema.py EFFECTIVE_HEAT_FN (lines 586-682).
+    # source: ADR-0485
     try:
         rows = conn.execute(
-            """
+            (
+                # source: ADR-0485
+                """
             SELECT m.id, m.content,
                    effective_heat(m, NOW()) AS heat,
                    m.domain, m.agent_context, m.is_protected,
                    m.created_at, m.source_attribution, m.is_stale,
                    ts_rank_cd(m.content_tsv, q) AS rank
-            -- JOIN current_memories: auto-recall injects content into the
-            -- session context — supersession chain heads only. The join
-            -- (not FROM the view) keeps m table-typed for effective_heat().
             FROM memories m
                  JOIN current_memories cm ON cm.id = m.id,
                  plainto_tsquery('english', %s) q
             WHERE m.content_tsv @@ q
               AND effective_heat(m, NOW()) >= %s
               AND NOT m.is_benchmark
-              -- Never re-inject a corrected (superseded) fact —
-              -- decision 4255039 correction 8.
               AND m.superseded_by_id IS NULL
             ORDER BY m.is_protected DESC, rank DESC, effective_heat(m, NOW()) DESC
             LIMIT %s
-            """,
+            """
+            ),
             (query[:200], _MIN_HEAT, _MAX_MEMORIES + 2),
         ).fetchall()
 
@@ -232,18 +192,7 @@ def _backend_is_sqlite() -> bool:
 def _fts_query_from_prompt(query: str) -> str:
     """Build a defensive FTS5 OR-query from the prompt's content words.
 
-    PG's ``plainto_tsquery`` strips stopwords and stems before matching;
-    SQLite FTS5's default unicode61 tokenizer does neither, so MATCHing
-    the raw prompt ANDs every token ("why is the deploy script...") and
-    almost never hits. Mirror the stopword strip with the shared
-    ``STOPWORDS`` list, then OR the remaining terms: FTS5 has no
-    stemming, so exact-token AND would drop the whole injection on one
-    morphological miss ("scripts" vs "script"); bm25 rank still sorts
-    multi-term matches first. Each term is double-quoted (FTS5 string
-    syntax) so user text can never inject FTS5 operators. Term count is
-    bounded upstream by the existing ``query[:200]`` cap — no new
-    constant introduced.
-    """
+    source: ADR-0485"""
     from mcp_server.shared.text import STOPWORDS  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
 
     # \W+ split mirrors shared.text._SPLIT_RE (kept private there).
@@ -288,8 +237,7 @@ def _recall_memories_sqlite(store, query: str) -> list[dict]:
                 "is_stale": bool(m.get("is_stale")),
             }
         )
-    # Protected (decision) memories first; stable sort keeps FTS rank
-    # order within each group — same ordering contract as the PG query.
+    # source: ADR-0485
     results.sort(key=lambda m: not m["protected"])
     return results[:_MAX_MEMORIES]
 
@@ -329,11 +277,7 @@ def _process_event_sqlite(event: dict[str, Any], query: str) -> None:
 def _render_memory_line(m: dict, now: datetime) -> str:
     """Render one memory as a bullet with a freshness suffix.
 
-    The suffix (age · provenance grade · stale marker; fleet-watch #110) makes
-    a months-old fact distinguishable from a fresh one — the failure the
-    harness-comparison rev.2 measured. Empty for memories lacking those fields,
-    so bare-memory call sites render exactly as before.
-    """
+    source: ADR-0485"""
     content = m["content"].replace("\n", " ").strip()
     if len(content) > _MAX_MEMORY_CHARS:
         content = content[: _MAX_MEMORY_CHARS - 3] + "..."
@@ -350,13 +294,7 @@ def _format_injection(
 ) -> tuple[str, list[dict]]:
     """Format memories as a compact context block for injection.
 
-    Keeps total injection under _MAX_INJECTION_CHARS to avoid flooding
-    the context window. Returns the block AND the memories that actually
-    fit — the injection receipt must mirror what is printed, never what
-    was fetched (parity invariant, decision 4255039 correction 11): a memory
-    is dropped on its full rendered line (freshness suffix included), so the
-    receipt mirrors exactly what is printed.
-    """
+    source: ADR-0485"""
     now = now or datetime.now(timezone.utc)
     lines = ["**Cortex context:**"]
     total_chars = len(lines[0])
@@ -429,10 +367,7 @@ def process_event(event: dict[str, Any]) -> None:
         if not injection:
             sys.exit(0)
 
-        # Receipt for exactly the memories that fit the injection budget
-        # (blame path T2, decision 4255039). Emitted before printing so
-        # the header line can carry the ⟦rcpt:id⟧ marker (correction 2);
-        # a failed write degrades to a marker-less injection.
+        # source: ADR-0485
         receipt_id = emit_hook_receipt(
             conn,
             [{"memory_id": m["id"]} for m in included],

@@ -1,0 +1,54 @@
+# ADR-0374: mcp_server/handlers/consolidation/sleep.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `mcp_server/handlers/consolidation/sleep.py`; original SHA-256 `ce34aa9b9331e49c8072c5f79560319846a9ee1fb74a11ce39b5771110fe5d44`.
+
+## Original docstring, lines 24–50
+
+````text
+"""Run deep sleep compute as an NREM/REM two-phase consolidation (F1).
+
+    The offline pass is routed through ``run_two_phase_consolidation``: an
+    NREM-like exact-replay phase (delegating verbatim to the existing
+    ``sleep_compute`` single pass — dream replay, summarization, re-embedding,
+    narration) followed by a REM-like recombination/abstraction phase (schema
+    formation + merge over any provided clusters). The NREM plan keys
+    (``replay_updates`` / ``stale_embeddings`` / ``cluster_summaries`` /
+    ``narration``) are unchanged, so the downstream apply steps are unaffected;
+    the split adds a ``sleep_phases`` block with per-phase counts.
+
+    F2 targeted reactivation. An optional ``cue`` (topic / tag / entity /
+    free-text) biases *which* memories preferentially replay in the NREM phase.
+    With no cue (the default) replay is chosen purely by heat, exactly as
+    pre-F2 — identity.
+
+    Ablation: ``CORTEX_ABLATE_SLEEP_PHASES=1`` (Mechanism.SLEEP_PHASES) skips
+    the REM phase, falling back to exactly the single-pass NREM consolidation.
+    ``CORTEX_ABLATE_TARGETED_REACTIVATION=1`` (Mechanism.TARGETED_REACTIVATION)
+    forces the cue off so replay selection is heat-only, as pre-F2.
+
+    When the consolidate handler pre-loads the memory list (issue #13) we
+    reduce over it directly. When called standalone (``memories is None``) we
+    STREAM via the chunked decay cursor so peak RAM is one chunk plus the
+    bounded replay/stale/narration accumulators — not the whole corpus (the
+    old ``get_all_memories_for_decay()`` materialized 500k+ rows at once).
+    """
+````
+
+## Original comment, lines 143–145
+
+````text
+# Minimum memories behind a narration for it to be worth storing.
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+````
+
+## Original comment, lines 175–176
+
+````text
+# M-D2 (7.4): dream-replay auto-narration — machine-
+                # synthesized, same rationale as CLS/memify.
+````
+

@@ -1,10 +1,6 @@
 """Stdlib, descriptor-bound filesystem access for explicit deps cleanup.
 
-Sources: https://docs.python.org/3/library/os.html#files-and-directories
-and https://docs.python.org/3/library/shutil.html#shutil.rmtree.
-Every ancestor is opened with O_NOFOLLOW; removal never receives an absolute
-path. Unsupported platforms fail closed, without changing normal launching.
-"""
+source: ADR-0745"""
 
 from __future__ import annotations
 

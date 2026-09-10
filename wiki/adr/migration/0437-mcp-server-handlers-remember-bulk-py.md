@@ -1,0 +1,38 @@
+# ADR-0437: mcp_server/handlers/remember_bulk.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `mcp_server/handlers/remember_bulk.py`; original SHA-256 `3cfce841bddbdf7a13ca313c66a66ba90085d8fb1e74a1254842406fec71bab4`.
+
+## Original docstring, lines 1–8
+
+````text
+"""Batch raw vectors only for prevalidated, store-independent bypass writes.
+
+No gate observations are frozen and no task, ContextVar or engine proxy is used.
+The continuation executes every original post-encode read/write sequentially.
+Ordinary input/validation/encoding errors are delivered at their original item.
+A BaseException during the batch propagates before prior items are committed;
+this is intentionally not an atomicity or interruption-equivalence guarantee.
+"""
+````
+
+## Original docstring, lines 116–121
+
+````text
+"""Keep live reads scalar if a preceding remember can replace their target.
+
+    Source: remember writes wiki pages and store files; resolving symlinks is
+    required because codebase_analyze's collector accepts regular-file links.
+    Resolution failures retain the original scalar read/error boundary.
+    """
+````
+
+## Original comment, lines 136–137
+
+````text
+# source: Python os.stat_result.st_nlink counts hard links;
+                # multiple names could alias an owned mutable store file.
+````
+

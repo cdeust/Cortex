@@ -1,0 +1,206 @@
+---
+kind: adr
+number: 0584
+title: Preserve pipeline_discovery design decisions
+status: accepted
+---
+
+# ADR-0584: pipeline_discovery design decisions
+
+## Context
+
+Canonical migration of decision evidence from `mcp_server/infrastructure/pipeline_discovery.py` under ADR-0056.
+The excerpts below preserve historical claims and citations verbatim; original ADR numbers are historical quotations, not current identity bindings.
+
+## Decision
+
+Keep the source implementation linked to this versioned decision record. Operational API documentation remains with the implementation.
+
+## Preserved decision evidence
+
+### module, original line 1
+
+````text
+Discover the ai-architect-mcp-codebase MCP server and wire it into
+Cortex's mcp-connections.json automatically.
+````
+
+### module, original line 1
+
+````text
+  1. Marketplace install (canonical): the AP plugin installed via
+     ``claude plugin install`` — resolved from ``installed_plugins.json``
+     the same way AP's own ``.mcp.json`` does. Always preferred so Cortex
+     spawns the exact plugin the user installed (no symlink, no drift).
+  2. Binaries on PATH: ``cortex-pipeline``, ``ai-architect-mcp-codebase``,
+     ``ai-architect-mcp-codebase``.
+  3. Sibling git checkout at ``../anthropic/ai-architect-mcp-codebase``
+     with a built Cargo release binary at
+     ``target/release/automatised-pipeline``.
+  4. Otherwise: no change to mcp-connections.json.
+````
+
+### module, original line 1
+
+````text
+If the file already exists AND already has a ``codebase`` server entry,
+every value the user set is kept — we never overwrite an explicit value.
+Two repairs still run on an existing entry: a stale command (binary no
+longer executable) drops the entry so discovery can re-run, and a
+MISSING ``callTimeoutMs`` is backfilled to 0 (no wall-clock cap) —
+entries written before the field existed inherited the client's 120s
+default cap, which killed live ingestions of large repos mid-flight.
+An explicit operator value, any int including a positive cap, is left
+untouched.
+````
+
+### module, original line 1
+
+````text
+Source: user directive "detected and guided, not all users will have a
+use of it". Pipeline is optional.
+
+````
+
+### _marketplace_pipeline_binary, original line 87
+
+````text
+    Mirrors AP's own ``.mcp.json``: read ``installed_plugins.json``, take the
+    plugin's ``installPath``, and point at ``target/release/<binary>``.
+    Returns None when AP isn't installed or its binary hasn't been
+    materialised yet (``bin/ensure-binary.sh`` runs on AP's first launch).
+    
+````
+
+### discover_pipeline_command, original line 139
+
+````text
+    Resolution order, canonical install first:
+      1. Marketplace install (installed_plugins.json) — the plugin the
+         user installed via ``claude plugin install``. Always preferred.
+      2. Self-installed symlink / PATH / sibling source checkout —
+         legacy fallbacks for users without the marketplace plugin.
+    
+````
+
+### _backfill_call_timeout, original line 183
+
+````text
+    Entries written before the field existed inherited the client's 120s
+    default cap, which kills any analyze of a large repo mid-flight.
+    Adding an absent field is not an overwrite — an explicit operator
+    value (any int, including a positive cap) is left untouched. A
+    byte-identical legacy autogen ``_comment`` is refreshed in the same
+    write so the file's own doc matches its actual policy.
+    
+````
+
+### comment, original line 58
+
+````text
+# Common source-checkout locations. Relative to each user's working dir
+# (the MCP server runs in the user's project root, so `..` is their
+# parent directory — a common monorepo sibling layout).
+````
+
+### comment, original line 70
+
+````text
+# Windows builds emit an .exe; list it first so it wins on NT. The
+# extension-less name is the Linux/macOS artifact.
+# source: RAPPORT_INSTALLATION_CORTEX_WINDOWS.md §5.5
+````
+
+### comment, original line 77
+
+````text
+# The AP plugin installed via its marketplace. This is the SAME source AP's
+# own .mcp.json resolves from: installed_plugins.json -> installPath ->
+# target/release/automatised-pipeline. Preferring it means Cortex spawns the
+# exact plugin the user installed — no self-built symlink, no version drift.
+````
+
+### comment, original line 82
+
+````text
+# Canonical first; a pre-v0.9.0 install is still resolvable behind it.
+````
+
+### comment, original line 113
+
+````text
+# Where the silent installer clones and builds the upstream source.
+# Living next to other methodology artefacts means cleanup is one rm -rf.
+````
+
+### comment, original line 121
+
+````text
+# The ``_comment`` written into mcp-connections.json. It states the actual
+# write policy: add missing entries, backfill missing fields, never
+# overwrite an explicit value. The legacy wording promised "never
+# overwrites" without naming the field backfill; when we backfill we also
+# refresh a byte-identical legacy comment (and only that — a user-edited
+# comment is theirs) so the file's own doc matches what happened to it.
+````
+
+### comment, original line 156
+
+````text
+# Legacy self-installed location.
+````
+
+### comment, original line 171
+
+````text
+# NTFS doesn't store Unix exec bits — st_mode & 0o111 is always 0
+            # on Windows, so the bit check would reject every valid binary.
+            # source: RAPPORT_INSTALLATION_CORTEX_WINDOWS.md §5.5
+````
+
+### comment, original line 221
+
+````text
+# Validate that the configured binary still exists. A user
+        # may have rm-rf'd the install dir, deleted the symlink, or
+        # moved the source repo. Stale entries silently break ingest;
+        # purge them so the install path can re-run.
+````
+
+### comment, original line 237
+
+````text
+# Stale entry: drop it so the discovery+install path runs.
+        # Other server entries (if any) are preserved.
+````
+
+### comment, original line 249
+
+````text
+# Auto-install path. If discovery fails, attempt a silent
+    # git-clone + cargo build (and rustup bootstrap if cargo missing)
+    # before giving up. Lazy import to avoid a module-load cycle —
+    # pipeline_installer imports from this module.
+````
+
+### comment, original line 270
+
+````text
+# 0 = no per-call timeout; fresh-codebase indexing of large
+        # trees can legitimately exceed any fixed bound. Liveness is
+        # governed by the child process and explicit cancellation.
+````
+
+## Consequences
+
+Review rationale and source changes together. Historical evidence is preserved rather than silently rewritten; executable Python structure is unchanged after removing docstrings.
+
+### module: completeness audit
+
+````text
+Runs on SessionStart so users who have the pipeline installed get the
+``codebase`` MCP server wired up without manual config editing. The
+discovery mirrors ``cortex-doctor``'s optional-capability probe:
+
+source: ADR-0584
+````

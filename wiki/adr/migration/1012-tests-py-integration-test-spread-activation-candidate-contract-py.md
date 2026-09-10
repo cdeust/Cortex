@@ -1,0 +1,58 @@
+# ADR-1012: tests_py/integration/test_spread_activation_candidate_contract.py design and historical evidence
+
+Status: accepted; existing test/harness evidence preserved during issue #514.
+
+Source `tests_py/integration/test_spread_activation_candidate_contract.py`, original SHA-256 `b94930d55f61658b14ecbd9f8487d19c5c7f0e661d8ea8d5054e4ce8f271f3fe`.
+Assertions and runtime fixture literals remain unchanged.
+
+## Original docstring, lines 1–46
+
+````text
+"""Real-PG contract test: SA-injected candidates vs WRRF candidates.
+
+Incident 2026-07-11 (garde x3 bench, LongMemEval, PID 99074): the first
+recall() call with EVENT_ORDER intent crashed --
+``TypeError: '<' not supported between instances of 'str' and
+'datetime.datetime'`` at ``pg_recall.py::_chronological_rerank``'s
+``sorted(candidates, key=lambda c: c.get("created_at", ""))``.
+
+Root cause, verified against the real PL/pgSQL + psycopg types (not
+inferred from the log alone -- see ADR-0054 addendum for the full trace):
+``store.recall_memories()`` (WRRF path) returned raw
+``dict(r)`` rows, leaving ``created_at`` a psycopg
+``datetime.datetime`` object; ``store.get_memory()`` (used by
+``spreading_activation_expand`` to build SA-injected candidates) already
+normalized it to an ISO string via ``_normalize_memory_row``. The two
+candidate types could never collide before SA was alive (WITH RECURSIVE
+was broken, ADR-0054 §1) -- one query's candidate list came from exactly
+one source. Once SA started actually injecting rows, a single list held
+both types and ``sorted()`` raised.
+
+Two bugs, one root: the SA-injection point built its candidate dict from
+a curated 6-field subset of ``store.get_memory()``'s row instead of the
+full WRRF contract (``recall_memories()``'s RETURNS TABLE: memory_id,
+content, score, heat, domain, created_at, store_type, tags, importance,
+surprise_score, emotional_valence, source, value, source_attribution).
+That silently dropped store_type/source/source_attribution/importance/
+surprise_score/emotional_valence/value from every SA-injected candidate
+-- e.g. ``recall_helpers.py``'s low-signal filter keys on
+``mem.get("source") == "post_tool_capture"``; a missing key always reads
+as ``None``, so an SA-injected auto-capture could never be filtered as
+low-signal, regardless of its real source.
+
+Fix (mcp_server/core/recall_pipeline.py::spreading_activation_expand,
+mcp_server/infrastructure/pg_store.py::recall_memories/_isoformat_datetime_fields):
+both readers now normalize created_at through the same helper, and the
+SA-injection dict is built as an explicit whitelist mirroring the WRRF
+contract's full field set (not a superset either -- get_memory() returns
+every ``memories`` column, including internal state like
+compression_level/write_class/superseded_by_id that must NOT leak into a
+candidate dict).
+
+This file is the contract test that would have caught both bugs before
+merge: it runs the real PL/pgSQL functions (recall_memories,
+spread_activation_memories) and compares the resulting candidate dicts
+key-for-key, type-for-type.
+"""
+````
+

@@ -12,8 +12,7 @@
 
 
 #
-# The contract URL is pinned to a full commit SHA, not a tag: the producer's
-# README is explicit that tags can be moved.
+# source: ADR-0811
 name: Upstream identity
 
 on:
@@ -21,7 +20,8 @@ on:
     branches: [main]
   pull_request:
   schedule:
-    # Weekly: catches a revocation published between our commits.
+    # Check weekly.
+    # source: ADR-0811
     - cron: "23 6 * * 1"
 
 permissions:
@@ -49,8 +49,8 @@ jobs:
       - name: Fetch the pinned contract
         run: |
           set -euo pipefail
-          # Outside the working tree: the contract lists revoked prefixes, and
-          # a scan of the repo must not find them in a file we just wrote.
+          # Download the contract outside the working tree.
+          # source: ADR-0811
           curl --fail --location --silent --show-error \
                --connect-timeout 5 --max-time 30 --retry 2 \
                "$CONTRACT_URL" -o "$RUNNER_TEMP/contract.json"

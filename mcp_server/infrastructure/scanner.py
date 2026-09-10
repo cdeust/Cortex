@@ -72,13 +72,13 @@ def read_head_tail(file_path: str | Path) -> list[dict]:
 def iter_tool_uses(file_path: str | Path):
     """Stream every assistant ``tool_use`` block from a JSONL session.
 
-    Unlike :func:`read_head_tail`, this scans the WHOLE file line-by-line,
-    so it captures tool invocations that occur in the middle of a long
-    session (the vast majority of Task/Bash/Edit usage).
+        Unlike :func:`read_head_tail`, this scans the WHOLE file line-by-line,
+        so it captures tool invocations that occur in the middle of a long
+        session (the vast majority of Task/Bash/Edit usage).
 
-    Yields dicts with keys ``{"name", "input", "line"}``. Invalid JSON
-    lines are skipped silently — matching the existing parser contract.
-    """
+    Yields dicts with keys ``{"name", "input", "line"}``.
+
+    source: ADR-0595"""
     fp = Path(file_path)
     if not fp.exists():
         return
@@ -134,9 +134,7 @@ def _parse_memory_file(
         return None
 
     st = stat_file(file_path)
-    # FrontmatterResult is a NamedTuple: attribute access, never string
-    # indexing — parsed["meta"] (Node.js-port drift) raised "tuple indices
-    # must be integers" on every memory .md file, swallowed by the caller.
+    # source: ADR-0595
     parsed = parse_yaml_frontmatter(content)
     meta = parsed.meta
 
@@ -273,15 +271,13 @@ def discover_conversations_for_projects(
     """Scoped conversation scan bounded to specific project directories.
 
     Precondition: project_ids names project directories as produced by
-    discover_conversations()/group_by_project() (entries under
-    CLAUDE_DIR/projects); limit > 0.
-    Postcondition: returns at most `limit` conversation records, drawn
-    only from JSONL files under the given project directories -- every
-    other project directory under CLAUDE_DIR/projects is left unscanned.
-    Stops as soon as `limit` is reached, so cost is bounded by `limit`
-    file reads rather than by the total session history size (unlike
-    discover_conversations(), which always walks every project).
-    """
+        discover_conversations()/group_by_project() (entries under
+        CLAUDE_DIR/projects); limit > 0. Postcondition: returns at most `limit`
+        conversation records, drawn
+        only from JSONL files under the given project directories -- every
+        other project directory under CLAUDE_DIR/projects is left unscanned.
+
+    source: ADR-0595"""
     if not project_ids or limit <= 0:
         return []
 

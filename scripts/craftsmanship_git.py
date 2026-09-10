@@ -3,16 +3,7 @@ listing changed/tracked files, and reading the baseline exactly as
 committed at a ref — the tamper-proof comparison source
 ``craftsmanship_baseline.py``'s module docstring explains the need for.
 
-Split out of ``check_craftsmanship.py`` to stay under the 300-line cap
-this gate enforces on everything else (self-application).
-
-Every function takes ``repo_root`` explicitly rather than reading a
-module-level constant: ``check_craftsmanship.py`` owns the one true
-``REPO_ROOT`` (patched by name in tests — ``mock.patch.object(gate,
-"REPO_ROOT", ...)``), and passing it through here means that patch keeps
-working after the split instead of silently operating on a second,
-un-patched copy.
-"""
+source: ADR-0723"""
 
 from __future__ import annotations
 
@@ -100,16 +91,7 @@ _PATH_ABSENT_MARKERS = ("does not exist in", "exists on disk, but not in")
 def _git_path_exists_at_ref(repo_root: Path, ref: str, relative_path: str) -> bool:
     """True if ``relative_path`` exists in the tree ``ref`` resolves to.
 
-    Self-audited after the two review-round findings that shared one root
-    cause (a control that fails OPEN when a signal is ambiguous, instead
-    of failing closed): swallowing every ``cat-file -e`` failure into a
-    bare False previously read an unrelated git error (corrupt object, a
-    ref that stopped resolving between the caller's earlier
-    ``rev-parse --verify`` and this call, disk failure) the exact same way
-    it read a genuinely absent path — silently handing
-    ``load_baseline_from_ref`` a bootstrap fallback to the tamperable
-    working-tree baseline. Distinguishes the two via git's own stderr.
-    """
+    source: ADR-0723"""
     result = subprocess.run(
         ["git", "cat-file", "-e", f"{ref}:{relative_path}"],
         cwd=repo_root,

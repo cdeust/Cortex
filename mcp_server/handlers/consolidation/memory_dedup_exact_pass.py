@@ -1,17 +1,7 @@
 """Dedup pass: collapse groups of byte-identical active memories onto
 their hottest member via supersession (I6-D1, INC6.3).
 
-Composition root — wires ``core.memory_dedup_exact`` (pure survivor
-election) to infrastructure (``pg_store_memory_dedup``'s group scan and
-CAS supersede-to-existing write). Mirrors
-``memory_domain_backfill_pass.py``'s split (I6-D3 precedent): pure
-decision in core, I/O in infrastructure, wiring here.
-
-One-shot campaign pass, not wired into ``consolidate``: the write-path
-dedup gate (``core/curation.py``) already prevents new exact duplicates
-going forward (I6 audit) — this pass drains the pre-existing stock.
-Invoked by ``scripts/memory_dedup_exact.py``.
-"""
+source: ADR-0366"""
 
 from __future__ import annotations
 
@@ -99,37 +89,7 @@ async def run_memory_dedup_exact_pass(
 ) -> dict[str, Any]:
     """Collapse every active exact-duplicate group onto its hottest member.
 
-    Pre-condition:  ``store`` exposes ``batch_pool``
-                    (``psycopg_pool.ConnectionPool``), matching how
-                    ``consolidate`` and ``memory_domain_backfill_pass``
-                    already borrow connections for maintenance sweeps.
-    Post-condition: for every scanned group of >= 2 active exact
-                    duplicates (``current_memories WHERE NOT is_stale``,
-                    grouped by normalized-content md5 — I6-D1's key),
-                    the member elected by
-                    ``core.memory_dedup_exact.elect_survivor`` (highest
-                    ``effective_heat``, tie-broken by earliest
-                    ``created_at``) is left untouched; every other member
-                    has ``superseded_by_id`` set to the survivor's id IFF
-                    ``apply`` is True. ``apply=False`` performs the same
-                    scan and election without writing (dry run) — the
-                    returned counts and journal are identical either way,
-                    so a caller can diff dry-run vs. applied output to
-                    confirm 1:1 correspondence (mirrors
-                    ``memory_domain_backfill_pass``'s dry-run contract).
-                    ``superseded_total`` is the number of edges actually
-                    written (or, in dry-run, the number that WOULD be
-                    written); a race that concurrently supersedes a
-                    survivor between scan and write is counted in
-                    ``skipped_race`` and excluded from
-                    ``superseded_total`` and the journal's
-                    ``superseded_ids`` (never silently dropped — logged
-                    for the caller to re-run). Never mutates content,
-                    tags, or domain on any row (I6-D1: "sans toucher au
-                    contenu"); ``journal[*].domains`` records the DISTINCT
-                    domains observed across the group for the campaign
-                    report only — it is not written back anywhere.
-    """
+    source: ADR-0366"""
 
     out: dict[str, Any] = {
         "scanned_rows": 0,

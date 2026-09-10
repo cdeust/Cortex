@@ -1,0 +1,49 @@
+# ADR-0703: scripts/aggregate_hook_timings.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `scripts/aggregate_hook_timings.py`; original SHA-256 `3246166237991a167ccdbd05f37fb53cdb8b215e87e68223a73fca29b2eac64b`.
+
+## Original docstring, lines 1–21
+
+````text
+"""Validate and aggregate measured PostToolUse timings; never executes hooks.
+
+Usage: python scripts/aggregate_hook_timings.py --before before.json \
+    --after after.json --plugin-before plugin-before.json \
+    --plugin-after plugin-after.json --output comparison.json
+
+Each input JSON report contains entrypoint ('module' or 'launcher'), python,
+platform, plugin_sha256, and cases: [{payload: {...}, samples: [...]}]. Each
+sample contains repetition (0..3), module (fully qualified), exit_code,
+user_seconds, system_seconds, wall_seconds, and max_rss_native.
+Alternatively provide time_log instead of those four metrics: the parser
+reads a real macOS /usr/bin/time -l stderr log, with LC_ALL=C.
+
+source: tasks/codex-green-remediation-plan.md §3/W2-1: four repetitions,
+first excluded; identical Read/Bash payloads and environment before/after.
+Sum user+system CPU across the hooks actually routed for each repetition.
+The wall sum is sequential work, NOT Claude latency: matching hooks run in
+parallel. Keep individual peak RSS values; their sum is not a measured peak.
+Routing source: https://code.claude.com/docs/en/hooks#matcher-patterns.
+Only the exact-name / pipe-separated matchers used here are supported.
+"""
+````
+
+## Original comment, lines 32–32
+
+````text
+# source: remediation plan §3, four repetitions and the first discarded.
+````
+
+## Original docstring, lines 48–52
+
+````text
+"""Parse BSD time's measured values; reject ambiguous or missing output.
+
+    source: apple-oss-distributions/shell_cmds, time/time.c (real/user/sys
+    summary and maximum resident set size output under -l).
+    """
+````
+

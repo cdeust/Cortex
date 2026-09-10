@@ -1,47 +1,8 @@
 """Doc-claim gate: the numbers the docs advertise must match the repository.
 
-Cortex advertises counts in prose — tools, references, mechanisms,
-tests. Each one is a claim a reader can check, and each one drifts silently:
-between 2026-07-12 and 2026-07-27 the tool count moved from 49 to 52 while
-README, CONTRIBUTING and the MCPB manifest still said 50, 43 and 49, and
-CONTRIBUTING advertised a ``mypy --strict`` gate the project has never run.
-Nothing failed, because nothing checked.
-
 This gate closes that at the point where the drift is introduced (every push
 and pull request), not at release time. It compares every advertised count
 against the one place that owns it:
-
-===================  =====================================================
-Claim                Owner
-===================  =====================================================
-tool counts          ``docs/mcp-tools.md`` header, itself pinned to the live
-                     registry by ``tests_py/test_main.py::
-                     test_standalone_baseline_is_52_tools``
-reference count      entries counted in ``docs/papers/bibliography.md``
-mechanism count      the count declared in that bibliography's header
-test count           ``assets/badge-tests.svg`` alone (issue #293) — the
-                     one artifact that still states an absolute figure. No
-                     prose file (nor ``.bestpractices.json``) states this
-                     count any more: a PR that adds tests would otherwise
-                     have to hand-edit six files to the same new number,
-                     and any two such PRs conflict on every one of them BY
-                     CONSTRUCTION. The badge is also not an exact fact —
-                     it is checked as a monotone FLOOR (``committed <=
-                     live``), because the true count is a property of the
-                     post-merge tree that no single branch can compute in
-                     advance; only an OVER-claim is reported. See
-                     ``doc_claim_structural.check_badge_floor``.
-===================  =====================================================
-
-Version-site coherence (``[project].version`` in ``pyproject.toml`` against
-every manifest, plugin, and badge occurrence that restates it) is NOT this
-gate's job any more — it moved to ``scripts/check_version_surfaces.py``,
-which is a strict superset of what this gate's own ``check_versions`` used
-to compare (issue #392).
-
-Release history is exempt: a line describing v4.13.0 may legitimately say
-"49 memory tools". Lines carrying a ``**vX.Y.Z`` marker, and files that are
-history by nature (CHANGELOG, docs/release-notes/), are skipped.
 
 A line may also state a number that counts something *other* than the
 advertised total, in a wording the claim patterns cannot tell apart ("12
@@ -56,15 +17,7 @@ Usage::
     python scripts/check_doc_claims.py                 # static claims
     python scripts/check_doc_claims.py --test-count 5571
 
-Split across scripts/doc_claim_sources.py (canonical readers),
-scripts/doc_claim_scan.py (claim scanning/comparison) and
-scripts/doc_claim_structural.py (badge + structural-integrity checks) —
-issue #293, Extract Function/Move Function — to stay under the repo's
-300-line file cap (docs/agent-guidance.md, Code Style); this module is the thin
-orchestrator each of those forwards through, and the only place ``read``/
-``SCANNED_FILES`` are defined (tests patch them here; see each sibling
-module's docstring for why they take these as parameters instead).
-"""
+source: ADR-0713"""
 
 from __future__ import annotations
 
@@ -75,9 +28,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-# Sibling modules, path-imported for the same reason generate_repo_badges.py
-# does it: resolves identically whether this runs as a script or is loaded
-# via importlib.util.spec_from_file_location from a test.
+# source: ADR-0713
 _SCRIPTS_DIR = str(Path(__file__).resolve().parent)
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
@@ -86,15 +37,13 @@ import doc_claim_sources  # noqa: E402
 import doc_claim_structural  # noqa: E402
 from doc_claim_sources import ClaimError  # noqa: E402  (re-export)
 
-# Files whose numbers describe the present. Release history lives elsewhere
-# (CHANGELOG.md, docs/release-notes/) and is deliberately not scanned.
+# source: ADR-0713
 SCANNED_FILES = (
     "README.md",
     "CONTRIBUTING.md",
     "SECURITY.md",
     "CLAUDE.md",
-    # The former CLAUDE.md body (moved 2026-09-08 so it is read on demand);
-    # its tool and module counts describe the present exactly as before.
+    # source: ADR-0713
     "docs/agent-guidance.md",
     "GOVERNANCE.md",
     "manifest.json",
@@ -104,52 +53,27 @@ SCANNED_FILES = (
     "docs/module-inventory.md",
     "docs/api-reference.md",
     "docs/papers/bibliography.md",
-    # The OpenSSF Best Practices answers are claims about the present too: they
-    # are transcribed into the questionnaire, so a stale number here is
-    # published to the badge. Three of its test counts had drifted two
-    # corrections behind the repository before it was scanned (2026-07-27).
+    # source: ADR-0713
     ".bestpractices.json",
-    # The MCP registry serves server.json's description verbatim, so a stale
-    # number here is published to every registry client. Only its `version`
-    # was asserted (check_versions) until its description was found still
-    # advertising "72 references" — two corrections behind the 97-reference
-    # bibliography — and shipped that way to the registry (2026-08-02).
+    # source: ADR-0713
     "server.json",
 )
 
 TOOL_CLAIM = re.compile(r"(\d+)\s+(?:memory|standalone|MCP)\s+tools\b")
 TOOL_TOTAL_CLAIM = re.compile(r"\((\d+)\s+(?:total\s+)?with\b[^)]*\)")
 REFERENCE_CLAIM = re.compile(r"(\d+)[-\s]reference\b")
-# `cited` is optional because the claim is written both ways ("36
-# neuroscience-grounded mechanisms" in CONTRIBUTING, "36 cited brain
-# mechanisms" in the README lede and "36 cited neuroscience mechanisms" in
-# server.json). Without it the qualified phrasings parsed as no claim at
-# all, so the README lede and the registry description were never asserted
-# against the canonical count (found 2026-08-02).
+# source: ADR-0713
 MECHANISM_CLAIM = re.compile(
     r"(\d+)\s+(?:cited\s+)?(?:neuroscience[- ]grounded|neuroscience|biological|brain)?"
     r"\s*mechanisms\b"
 )
-# Both the "N tests" and the "N-test suite" phrasings state the count. No
-# scanned file states this claim in prose any more (issue #293 — see the
-# module docstring's "test count" row); the pattern stays defined because
-# it is still the generic worked example scan_claims/check_counts's own
-# tests exercise, and tests_py/scripts/test_check_doc_claims.py asserts its
-# absence from the real tree as a standing regression guard (a re-added
-# hardcoded prose count would fail
-# RepositoryTests.test_no_prose_file_states_the_suite_size).
+# source: ADR-0713
 TEST_CLAIM = re.compile(r"(\d+)(?:\s+tests|-test suite)\b")
 
 
 def read(relative_path: str) -> str:
     # encoding="utf-8" is pinned explicitly, never the platform default:
-    # every scanned Markdown file uses non-ASCII prose (em dashes, arrows),
-    # and a locale-dependent default can mis-decode them on a non-UTF-8-
-    # default platform (Windows is in this project's own CI matrix) — see
-    # test_read_pins_utf8. "UTF-8" (verbatim uppercase) is a documented-
-    # equivalent spelling: codecs.lookup is case-insensitive (CPython
-    # Lib/encodings/aliases.py normalizes via .lower()), so it is the SAME
-    # codec, not a different one a wrong-encoding bug could reach.
+    # source: ADR-0713
     return (REPO_ROOT / relative_path).read_text(encoding="utf-8")
 
 
@@ -209,9 +133,7 @@ def collect_failures(test_count: int | None) -> list[str]:
     failures += check_no_conflict_markers()
     failures += check_scanned_json_parses()
     if test_count is not None:
-        # The tests badge is the ONLY test-count claim left (issue #293);
-        # see check_badge_floor's docstring for why it is a floor, not an
-        # exact match.
+        # source: ADR-0713
         failures += doc_claim_structural.check_badge_floor(
             "assets/badge-tests.svg",
             doc_claim_structural.TESTS_BADGE,
@@ -227,11 +149,7 @@ def main() -> int:
     parser.add_argument(
         "--test-count",
         type=int,
-        # Explicit, not load-bearing: argparse already defaults an unset
-        # optional argument with no `default` kwarg at all to None, so a
-        # mutant dropping this line is a documented equivalent (issue #235;
-        # rationale + verification in MainTests.test_the_parser_declares_
-        # the_modules_docstring_and_flag_help's docstring).
+        # source: ADR-0713
         default=None,
         help="live test count (from `pytest --collect-only -q`); skipped when absent",
     )

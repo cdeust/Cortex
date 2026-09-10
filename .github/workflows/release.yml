@@ -252,7 +252,8 @@ jobs:
           # cyclonedx-py ships in the cyclonedx-bom distribution.
           uv tool run --from cyclonedx-bom cyclonedx-py requirements \
             sbom-requirements.txt --output-format JSON --output-file hypermnesia-mcp.cdx.json
-          # Fail loudly if the ML stack is somehow absent — criterion 3 names it.
+          # Fail if the ML stack is absent.
+          # source: ADR-0808
           for pkg in torch transformers scipy scikit-learn; do
             grep -q "\"name\": \"$pkg\"" hypermnesia-mcp.cdx.json \
               || { echo "SBOM missing expected component: $pkg" >&2; exit 1; }
@@ -322,8 +323,8 @@ jobs:
         run: |
           set -euxo pipefail
           VERSION="$(python3 -c "import json;print(json.load(open('manifest.json'))['version'])")"
-          # The tag must describe the tree it is built from, or a user installing
-          # the asset gets a version the release notes do not describe.
+          # Require the tag to describe the build tree.
+          # source: ADR-0808
           if [ "v${VERSION}" != "${GITHUB_REF_NAME}" ]; then
             echo "manifest.json version ${VERSION} does not match tag ${GITHUB_REF_NAME}" >&2
             exit 1
@@ -335,12 +336,8 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           ls -la "${BUNDLE}"*
 
-      # The MCP registry's `mcpb` registryType requires the artifact's URL and
-      # its sha256 — neither of which exists until the bundle is built and its
-      # download URL is known. The committed server.json therefore keeps the
-      # pypi package (its identifier is version-addressable, not URL-addressed)
-      # and this step emits the resolved variant carrying BOTH packages, as a
-      # release asset to submit to the registry.
+      # Emit the registry variant containing the built MCPB URL and digest alongside the PyPI package.
+      # source: ADR-0808
       - name: Emit the resolved server.json (pypi + mcpb packages)
         run: |
           set -euxo pipefail
@@ -408,9 +405,8 @@ jobs:
     runs-on: ubuntu-latest
     # source: ADR-0808
     timeout-minutes: 1
-    # OIDC Trusted Publishing — no stored secret. Verified by PyPI against
-    # the trusted-publisher entry for (cdeust/Cortex, release.yml,
-    # environment=pypi). This is the same entry that published <= 3.14.7.
+    # Publish with the configured PyPI OIDC trusted publisher.
+    # source: ADR-0808
     environment:
       name: pypi
       url: https://pypi.org/p/hypermnesia-mcp
@@ -431,9 +427,8 @@ jobs:
 
         if: github.event_name == 'push'
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
-        # Best-effort channel: a rejected upload (already-exists, or the
-        # Trusted Publisher entry was removed) must NOT red-X the primary
-        # marketplace/GitHub release.
+        # Treat this upload channel as best-effort.
+        # source: ADR-0808
         continue-on-error: true
         with:
           verbose: true

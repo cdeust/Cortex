@@ -10,10 +10,7 @@ Skip pattern mirrors tests_py/integration/test_recall_e2e.py: import _USE_PG
 from conftest and apply pytestmark, so the module skips cleanly when PG is
 absent rather than erroring at collection.
 
-Source: arXiv 2604.16548 (retrieve-phase corruption; "Retrieval-time
-filtering alone is insufficient"). The assertions therefore read the ORDER
-produced by the ranking function, never a post-hoc filtered list.
-"""
+source: ADR-1011"""
 
 from __future__ import annotations
 

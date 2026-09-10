@@ -1,10 +1,6 @@
 """Thread-confined SQLite connections behind one stable store facade.
 
-SQLite defines transaction isolation at the connection boundary.  The MCP
-server executes synchronous handlers on worker threads, so each execution
-thread must own the connection whose commit or rollback ends its transaction.
-The handler scope then rolls back unfinished work before a worker is reused.
-"""
+source: ADR-0600"""
 
 from __future__ import annotations
 

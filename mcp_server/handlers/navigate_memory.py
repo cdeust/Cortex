@@ -221,6 +221,5 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     return result
 
 
-# Telemetry-instrumented public entry. Records latency / byte volume
-# / result count per call (Popper C6 read/write ratio audit).
+# source: ADR-0423
 handler = instrument("navigate_memory", _handler_impl, result_count_key="neighbors")

@@ -1,28 +1,4 @@
-"""AST-backed loader for the workflow graph (ADR-0046).
-
-Peer of ``workflow_graph_source_pg`` / ``workflow_graph_source_jsonl``.
-Calls the ``ai-architect-mcp-codebase`` MCP server via ``ap_bridge`` and
-returns builder-shaped dicts for symbol nodes and the AST edges
-(``defined_in``, ``calls``, ``imports``, ``member_of``).
-
-Constrained to the Cortex-known file set: AP may have indexed files
-that Cortex doesn't know about (e.g. vendored dependencies); we filter
-so the graph stays focused on what the user's sessions actually touch.
-
-Pure infrastructure — no core imports. When AP is disabled
-(``CORTEX_MEMORY_AP_ENABLED=0``) or unreachable, every loader returns
-``[]`` so the workflow graph degrades to the native in-process AST
-source in ``workflow_graph_source_native_ast``.
-
-Composition point over three separated concerns (issue #275 — this file
-previously held all three and exceeded the 300-line cap): ``ap_sync_loop``
-(cross-loop sync/drain primitive, ``_SyncLoop`` re-exported here),
-``workflow_graph_ast_symbols`` (AST symbol loading), and
-``workflow_graph_ast_edges`` (AST edge loading). The three private
-``_*_batches_async``/``_verify_symbols_async`` methods below stay thin
-instance-method delegates into those modules (not free functions) because
-tests monkeypatch them per-instance.
-"""
+"""source: ADR-0634"""
 
 from __future__ import annotations
 
@@ -63,9 +39,10 @@ class WorkflowGraphASTSource:
 
     @property
     def last_search_degraded_reason(self) -> str | None:
-        """Why the last ``search_codebase`` call degraded, or ``None`` if
-        it succeeded or was never attempted. Reads the bridge's own
-        recorded outcome — no second round-trip."""
+        """Return the recorded reason for the last degraded search, or None after
+        success or before any attempt.
+
+        source: ADR-0634"""
         return self._bridge.unavailable_reason
 
     def close(self) -> None:
@@ -80,16 +57,11 @@ class WorkflowGraphASTSource:
         self,
         file_paths: Iterable[str],
     ) -> Iterator[list[dict[str, Any]]]:
-        """Yield AST symbol rows one per-query batch (one AP ``query_graph``
-        per label per graph). Each yielded list is the result of a single
-        AP roundtrip; the caller sees batch *N* before batch *N+1*'s query
-        is issued, so the source-internal peak is one query's rows — never
-        the union across all ~21 label queries × graphs.
+        """Row shape per item: ``{file_path, qualified_name, symbol_type,
+                signature, language, line}``. ``domain`` is inferred downstream.
+                A corrupt/missing graph is skipped without aborting the stream.
 
-        Row shape per item: ``{file_path, qualified_name, symbol_type,
-        signature, language, line}``. ``domain`` is inferred downstream.
-        A corrupt/missing graph is skipped without aborting the stream.
-        """
+        source: ADR-0634"""
         if not is_enabled():
             return
         graph_paths = resolve_graph_paths()
@@ -106,13 +78,7 @@ class WorkflowGraphASTSource:
     ) -> list[dict[str, Any]]:
         """Full-set convenience over ``iter_symbols``.
 
-        Materializes every batch into one list for consumers that genuinely
-        need the whole set (the workflow_graph builder iterates ``ast_symbols``
-        once and the handler takes ``len(...)``). The streaming win is still
-        real: ``iter_symbols`` bounds the *source*-internal peak to one query
-        while this list is filled. Consumers that can iterate should call
-        ``iter_symbols`` directly to avoid the final materialization.
-        """
+        source: ADR-0634"""
         out: list[dict[str, Any]] = []
         for batch in self.iter_symbols(file_paths):
             out.extend(batch)
@@ -122,11 +88,10 @@ class WorkflowGraphASTSource:
         self,
         file_paths: Iterable[str],
     ) -> Iterator[list[dict[str, Any]]]:
-        """Yield CALLS / IMPORTS / MEMBER_OF / USES edge rows one per-query
-        batch (one AP ``query_graph`` per rel-table per graph, ~89 queries).
-        Same incremental contract as ``iter_symbols``: peak retained inside
-        the source is one rel-table's rows, not the union of all 89.
-        Empty ``file_paths`` means "no path filter"."""
+        """Yield CALLS, IMPORTS, MEMBER_OF, and USES rows one query batch at a
+        time. Empty file_paths disables path filtering.
+
+        source: ADR-0634"""
         if not is_enabled():
             return
         graph_paths = resolve_graph_paths()
@@ -139,9 +104,9 @@ class WorkflowGraphASTSource:
         self,
         file_paths: Iterable[str],
     ) -> list[dict[str, Any]]:
-        """Full-set convenience over ``iter_ast_edges`` (see ``load_symbols``
-        for why the final list is kept: the builder + handler ``len(...)``
-        genuinely need the whole edge set)."""
+        """Collect iter_ast_edges into a complete edge list.
+
+        source: ADR-0634"""
         out: list[dict[str, Any]] = []
         for batch in self.iter_ast_edges(file_paths):
             out.extend(batch)
@@ -154,10 +119,7 @@ class WorkflowGraphASTSource:
     ):
         """Async generator: one batch per (graph, label) AP query.
 
-        A failed query for one (graph, label) is skipped — one bad graph or
-        label never kills the whole stream, matching the prior swallow-and-
-        continue contract.
-        """
+        source: ADR-0634"""
         for gp in graph_paths:
             try:
                 async for batch in self._symbol_batches_async(gp, paths):
@@ -191,10 +153,7 @@ class WorkflowGraphASTSource:
     ) -> list[dict[str, Any]]:
         """Full-set per-graph drain of ``_symbol_batches_async``.
 
-        Kept list-returning because ``http_standalone_graph`` caches the
-        per-project symbol list and reports ``len(syms)`` — a genuine
-        full-set consumer (reported as needing-full-set in the C3 RCA).
-        """
+        source: ADR-0634"""
         out: list[dict[str, Any]] = []
         async for batch in self._symbol_batches_async(graph_path, paths):
             out.extend(batch)
@@ -216,12 +175,9 @@ class WorkflowGraphASTSource:
         limit: int = 20,
     ) -> list[dict[str, Any]]:
         """Forward ``search_codebase`` to AP and normalize to a flat
-        list of ``{id, qualified_name, file_path, score, snippet}``.
+                list of ``{id, qualified_name, file_path, score, snippet}``.
 
-        Phase 3 (ADR-0046). Returns ``[]`` when AP is disabled, no
-        graph_path is configured, or the call itself failed — check
-        ``last_search_degraded_reason`` afterwards to tell "AP found
-        nothing" (``None``) apart from "AP call failed" (set)."""
+        source: ADR-0634"""
         if not is_enabled() or not query or not query.strip():
             return []
         gp = resolve_graph_path()
@@ -235,11 +191,7 @@ class WorkflowGraphASTSource:
     def verify_symbols(self, qualnames: list[str]) -> dict[str, bool]:
         """Return ``{qualname: exists_in_ap}`` for each candidate.
 
-        Used by the wiki_verify handler (ADR-0046 Phase 2). Returns
-        ``{qname: False}`` for every input when AP is disabled OR no
-        graph_path is configured — the handler interprets that as
-        'verification skipped', not as confirmed staleness.
-        """
+        source: ADR-0634"""
         if not is_enabled():
             return {q: False for q in qualnames}
         gp = resolve_graph_path()
@@ -275,8 +227,10 @@ class WorkflowGraphASTSource:
         return out
 
     def _edge_batches_async(self, graph_path: str, paths: list[str]):
-        """Delegates to ``workflow_graph_ast_edges.edge_batches_async``
-        (same rationale as ``_symbol_batches_async`` above)."""
+        """Yield edge-query batches through
+        workflow_graph_ast_edges.edge_batches_async.
+
+        source: ADR-0634"""
         return edge_batches_async(self._bridge, graph_path, paths)
 
 

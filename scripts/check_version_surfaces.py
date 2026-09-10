@@ -1,8 +1,5 @@
 """Version-coherence gate: every version site in the repo must agree.
 
-Three gates already touch a version number, and each trusts a DIFFERENT
-canonical source:
-
 - ``check_doc_claims.py``'s (now removed) ``check_versions`` compared
   ``manifest.json``/``server.json``/``package.json``/the version badge
   against ``pyproject.toml``.
@@ -12,33 +9,11 @@ canonical source:
 - ``tests_py/scripts/test_cross_host_manifests.py`` compares four more
   manifests against ``package.json`` (not pyproject.toml either).
 
-Two sites were covered by NOTHING: ``server.json``'s
-``packages[0].version`` (the MCP-registry package entry, served to every
-registry client) and ``.claude-plugin/marketplace.json``'s
-``metadata.version``. A partial version bump can reach ``main`` and only be
-caught by the weekly ``marketplace-pins`` cron, which is not part of the
-``ci-green`` aggregate (issue #392).
-
-This module is the single authoritative source: every version site is
-compared against ONE canonical value, ``[project].version`` in
-``pyproject.toml`` (via ``doc_claim_sources.canonical_version``, the same
-reader ``check_doc_claims.py`` uses). ``SURFACES`` is DATA — a tuple of
-no-argument-bound check callables built by ``functools.partial`` over three
-small, pure functions (``_json_check``, ``_badge_check``,
-``_uv_lock_check``/``_marketplace_primary_plugin_check``) — so adding a 15th
-surface of an existing kind (another JSON file/key, another badge
-occurrence) is a one-line data edit, never a new branch in
-``check_version_surfaces`` itself (OCP).
-
-Badge parsing reuses ``doc_claim_structural.check_badge`` verbatim (fails
-closed on a missing file or an unmatched pattern) rather than reimplementing
-it; the pyproject version regex is reused from ``doc_claim_sources`` rather
-than re-derived here.
-
 Usage::
 
     python scripts/check_version_surfaces.py
-"""
+
+source: ADR-0717"""
 
 from __future__ import annotations
 
@@ -51,9 +26,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-# Sibling modules, path-imported for the same reason check_doc_claims.py does
-# it: resolves identically whether this runs as a script or is loaded via
-# importlib.util.spec_from_file_location from a test.
+# source: ADR-0717
 _SCRIPTS_DIR = str(Path(__file__).resolve().parent)
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
@@ -67,7 +40,7 @@ SurfaceCheck = Callable[[ReadFn, str], list[str]]
 
 def read(relative_path: str) -> str:
     # encoding="utf-8" pinned explicitly — see check_doc_claims.read's own
-    # docstring for why (non-ASCII prose, locale-dependent defaults).
+    # source: ADR-0717
     return (REPO_ROOT / relative_path).read_text(encoding="utf-8")
 
 
@@ -107,12 +80,25 @@ def _badge_check(
     )
 
 
-# The badge is a generated SVG (scripts/generate_repo_badges.py) that states
-# its version four times: the accessible aria-label, the <title> (reused
-# from doc_claim_structural.VERSION_BADGE below), and a drop-shadow + solid
-# <text> pair. Each occurrence can desync independently of the others (a
-# hand-edit, or a future template change to only one of them), so each is
-# its own surface rather than one "the badge" surface.
+# source: ADR-0717
+_README_BADGE_ALT = re.compile(r'alt="Version (\d+\.\d+\.\d+)"')
+
+
+def _readme_alt_check(read_fn: ReadFn, expected: str) -> list[str]:
+    """The README's version-badge alt text.
+
+    The badge SVG itself is generated and gated, but the alt text beside it in
+    the README is hand-written prose that nothing read. It drifted three minor
+    versions behind before anyone noticed (README said 4.17.1 at 4.20.0), which
+    is exactly the drift this module exists to prevent.
+
+    source: ADR-0717"""
+    return doc_claim_structural.check_badge(
+        "README.md", _README_BADGE_ALT, expected, "version badge alt text", read_fn
+    )
+
+
+# source: ADR-0717
 _BADGE_ARIA_LABEL = re.compile(r'aria-label="Version (\d+\.\d+\.\d+)"')
 _BADGE_SHADOW_TEXT = re.compile(r'fill-opacity="0.25"[^>]*>(\d+\.\d+\.\d+)</text>')
 _BADGE_SOLID_TEXT = re.compile(r'fill="#fff"[^>]*>(\d+\.\d+\.\d+)</text>')
@@ -121,11 +107,7 @@ _BADGE_SOLID_TEXT = re.compile(r'fill="#fff"[^>]*>(\d+\.\d+\.\d+)</text>')
 def _marketplace_primary_plugin_check(read_fn: ReadFn, expected: str) -> list[str]:
     """The self-hosted (primary) marketplace plugin entry's own version.
 
-    Selection rule mirrors check_marketplace_pins.main's own primary-entry
-    predicate (`source.strip("/") in ("", ".")`) verbatim, rather than
-    re-deriving a second notion of "the primary plugin" that could disagree
-    with it.
-    """
+    source: ADR-0717"""
     path = ".claude-plugin/marketplace.json"
     label = "primary plugin entry version"
     try:
@@ -157,11 +139,7 @@ _UV_LOCK_PACKAGE = "hypermnesia-mcp"
 def _uv_lock_check(read_fn: ReadFn, expected: str) -> list[str]:
     """The root `hypermnesia-mcp` package block's own version.
 
-    uv.lock is TOML, but read line-by-line rather than parsed: this repo's
-    floor is Python 3.10, where `tomllib` does not exist — the same
-    rationale scripts/generate_pip_constraints.py's lock_registries uses for
-    the identical [[package]]/name/version scan.
-    """
+    source: ADR-0717"""
     path = "uv.lock"
     label = f"{_UV_LOCK_PACKAGE} package block"
     name: str | None = None
@@ -186,7 +164,7 @@ def _uv_lock_check(read_fn: ReadFn, expected: str) -> list[str]:
     return []
 
 
-# One row per version site (16 sites across 12 files). Adding a 17th JSON
+# One row per version site (17 sites across 13 files). Adding another JSON
 # site or badge occurrence is a one-line addition here; only a genuinely new
 # FILE FORMAT (neither JSON, regex-matchable text, nor uv.lock's own shape)
 # would need a new `_..._check` function alongside it.
@@ -226,6 +204,7 @@ SURFACES: tuple[SurfaceCheck, ...] = (
     partial(_badge_check, doc_claim_structural.VERSION_BADGE, "<title>"),
     partial(_badge_check, _BADGE_SHADOW_TEXT, "shadow <text>"),
     partial(_badge_check, _BADGE_SOLID_TEXT, "solid <text>"),
+    _readme_alt_check,
     _uv_lock_check,
 )
 

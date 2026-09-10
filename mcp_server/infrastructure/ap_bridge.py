@@ -1,20 +1,12 @@
-"""Bridge to the ``ai-architect-mcp-codebase`` sibling MCP server (ADR-0046).
-
-AP is a Rust MCP server that indexes codebases into a property graph
+"""AP is a Rust MCP server that indexes codebases into a property graph
 (tree-sitter → LadybugDB → Louvain → BM25 + TF-IDF + RRF) and exposes
 23 tools. Cortex consumes a subset of those tools — indexing, graph
 queries, symbol lookup, search — to add AST-level depth to its
 workflow graph.
 
-Enabled by default (``MemorySettings.AP_ENABLED = True``) so the L6
-symbol ring has depth out of the box. Users cut token / subprocess
-cost by setting ``CORTEX_MEMORY_AP_ENABLED=0`` in their MCP config.
-When off, no connection is attempted, every call returns an empty
-result, and the workflow graph falls back to the native in-process
-AST source.
-
 Infrastructure layer only. No core imports.
-"""
+
+source: ADR-0501"""
 
 from __future__ import annotations
 
@@ -59,33 +51,19 @@ _AP_TOOLS = frozenset(
 def is_enabled() -> bool:
     """Return True when AP enrichment is active.
 
-    Single source of truth: ``MemorySettings.AP_ENABLED`` (reads
-    ``CORTEX_MEMORY_AP_ENABLED`` via pydantic-settings env prefix).
-    Default is ``True`` — the L6 symbol ring has depth out of the box.
-    Users who want to cut token / subprocess cost set
-    ``CORTEX_MEMORY_AP_ENABLED=0`` in their MCP server env block.
-
-    AP absence still degrades gracefully: ``APBridge.connect()`` returns
-    False silently and every tool call short-circuits to []; the native
-    in-process AST source fills the L6 ring.
-    """
+    source: ADR-0501"""
     try:
         return bool(get_memory_settings().AP_ENABLED)
     except Exception as exc:  # noqa: BLE001 — config unavailable (test import-order edge case): on-by-default; observable via silent_failure
         silent_failure.note("ap_bridge.settings_read", exc)
-        # Config system unavailable (e.g. test import-order edge case):
-        # fall back to the on-by-default contract.
+        # source: ADR-0501
         return True
 
 
 def resolve_graph_path() -> str | None:
     """Return a LadybugDB graph path (single-graph callers).
 
-    Preference order:
-      1. ``CORTEX_AP_GRAPH_PATH`` env var (explicit caller override).
-      2. The conventional legacy location ``$HOME/.cortex/ap_graph/graph``.
-      3. The first graph in the multi-project roster (``resolve_graph_paths``).
-    """
+    source: ADR-0501"""
     raw = (os.environ.get("CORTEX_AP_GRAPH_PATH") or "").strip()
     if raw:
         return raw
@@ -100,17 +78,11 @@ def resolve_graph_path() -> str | None:
 def resolve_graph_paths() -> list[str]:
     """Return every LadybugDB graph the visualization should query.
 
-    Cortex keeps AP-indexed graphs under TWO directory schemes — the
-    legacy ``~/.cortex/ap_graphs/<project>/graph`` (predates the AP CLI
-    rename) and the current ``~/.cache/cortex/code-graphs/<project>-<hash>/graph``
-    (where the in-tree ``ingest_codebase`` handler writes them). Both
-    must be scanned so a fresh install with no manual setup discovers
-    every graph the user already has.
+        Each candidate must exist (file or directory — AP's LadybugDB is a
+        single ``graph`` file with a ``graph.wal`` sibling, NOT a directory;
+        earlier filtering on ``is_dir`` silently dropped every valid graph).
 
-    Each candidate must exist (file or directory — AP's LadybugDB is a
-    single ``graph`` file with a ``graph.wal`` sibling, NOT a directory;
-    earlier filtering on ``is_dir`` silently dropped every valid graph).
-    """
+    source: ADR-0501"""
     paths: list[str] = []
     seen: set[str] = set()
 
@@ -141,23 +113,11 @@ def resolve_graph_paths() -> list[str]:
 def _resolve_command() -> dict | None:
     """Resolve the MCP-client config for AP.
 
-    Priority:
-      1. ``CORTEX_AP_COMMAND`` env var — full shell-free invocation
-         spec (JSON: ``{"command": "...", "args": [...]}``).
-      2. Methodology bin symlink — ``~/.claude/methodology/bin/mcp-server``
-         set up by Cortex's silent installer (pipeline_installer.py).
-         Basename ``mcp-server`` matches the MCPClient allowlist.
-      3. Installed-plugin resolution — read ``installed_plugins.json`` for
-         the ACTIVE ``ai-architect-mcp-codebase`` install and invoke its compiled
-         Rust binary at ``<installPath>/target/release/automatised-pipeline``.
-         This is the SAME source of truth the plugin's own ``.mcp.json``
-         launcher uses, so it picks the active version (e.g. 0.2.0 over a
-         stale 0.0.9) rather than guessing.
+        Returns None when no AP install can be discovered; callers treat
+        that as graceful degradation (ingest_codebase fails with the
+        standard McpConnectionError).
 
-    Returns None when no AP install can be discovered; callers treat
-    that as graceful degradation (ingest_codebase fails with the
-    standard McpConnectionError).
-    """
+    source: ADR-0501"""
     raw = os.environ.get("CORTEX_AP_COMMAND")
     if raw:
         try:
@@ -168,28 +128,18 @@ def _resolve_command() -> dict | None:
             return cfg
 
     home = Path.home()
-    # Methodology bin symlink (preferred — same path the live MCP
-    # server uses via mcp-connections.json).
+    # source: ADR-0501
     bin_path = home / ".claude/methodology/bin/mcp-server"
     if bin_path.is_file() and os.access(bin_path, os.X_OK):
-        # Full path is fine — MCPClient validates by basename against
-        # the command allowlist (which contains "mcp-server").
+        # source: ADR-0501
         return {"command": str(bin_path), "args": []}
-    # Installed-plugin resolution via installed_plugins.json.
-    #
-    # The compiled Rust MCP entrypoint is ``target/release/automatised-pipeline``
-    # — NOT anything under ``bin/`` (which holds only ``ensure-binary.sh``, a
-    # bash build helper). The previous probe globbed ``bin/*`` and ran
-    # ``node ensure-binary.sh`` → SyntaxError. Resolve the active install the
-    # way the plugin's launcher does. source: user report (two installs:
-    # 0.0.9 + 0.2.0; must pick the active one, not glob).
+    # source: ADR-0501
 
     installed = home / ".claude/plugins/installed_plugins.json"
     try:
         data = json.loads(installed.read_text(encoding="utf-8"))
         plugins = data.get("plugins", {}) if isinstance(data, dict) else {}
-        # Canonical key first: a host may still carry a pre-v0.9.0 install,
-        # but a current one must never lose to it.
+        # source: ADR-0501
         for plugin_key, binary_name in PLUGIN_KEY_BINARIES:
             entries = plugins.get(plugin_key)
             if not isinstance(entries, list) or not entries:
@@ -235,21 +185,13 @@ class APBridge:
         if not is_enabled():
             self._unavailable_reason = "disabled"
             return False
-        # Fast-path ONLY when the underlying client is ALSO still live.
-        # MCPClient self-closes after its idle timeout (default 5 min) and
-        # a failed call can drop the transport — but this bridge's
-        # ``_connected`` stayed True, so every later call short-circuited
-        # to a dead client and silently returned None until the process
-        # restarted (the "AST works, then stops" flakiness). Re-verify the
-        # client and reconnect on staleness. source: MCP handshake RCA,
-        # 2026-06-03.
+        # source: ADR-0501
         if self._connected and self._client is not None and self._client.connected:
             return True
         async with self._lock:
             if self._connected and self._client is not None and self._client.connected:
                 return True
-            # Drop a stale/dead client (idle-closed or errored) so we
-            # rebuild rather than reuse a torn-down transport.
+            # source: ADR-0501
             if self._client is not None and not self._client.connected:
                 self._client = None
             self._connected = False
@@ -258,16 +200,10 @@ class APBridge:
                 self._unavailable_reason = "no_command_resolved"
                 return False
             try:
-                # Disable the per-call timeout for AP. Fresh indexing of
-                # large codebases can exceed any fixed bound; liveness is
-                # governed by the child process and explicit cancellation.
-                # See mcp_client.py: callTimeoutMs=0 -> no asyncio.wait_for.
+                # source: ADR-0501
                 cfg = {**cfg, "callTimeoutMs": 0}
                 self._client = MCPClient(cfg)
-                # The upstream binary is not in the default allowlist.
-                # ``node`` is for the plugin-cache resolution path; the
-                # upstream names come from upstream_identity so this set
-                # cannot drift from the resolver above.
+                # source: ADR-0501
                 self._client._extra_allowed_commands = {
                     "node",
                     *ALLOWED_UPSTREAM_COMMANDS,
@@ -277,9 +213,7 @@ class APBridge:
                 self._unavailable_reason = None  # clear any stale poison
                 return True
             except (McpConnectionError, Exception) as exc:  # noqa: BLE001 — failure is reported to stderr; execution degrades, never crashes
-                # Leave _connected False so the NEXT call retries (cold-start
-                # / transient failures self-heal instead of poisoning the
-                # bridge for the process lifetime).
+                # source: ADR-0501
                 self._connected = False
                 self._client = None
                 self._unavailable_reason = f"{type(exc).__name__}: {exc}"
@@ -292,10 +226,7 @@ class APBridge:
     def _degrade(self, reason: str, note: str) -> None:
         """Record why the last AP call failed and emit the stderr note.
 
-        Shared by both ``call()`` except-branches (timeout, other
-        exception) — the caller always gets ``None`` back and
-        ``unavailable_reason`` always names why.
-        """
+        source: ADR-0501"""
         self._unavailable_reason = reason
         print(note, file=sys.stderr)
 
@@ -304,29 +235,20 @@ class APBridge:
     ) -> Any:
         """Call an AP tool. Returns ``None`` if AP is unavailable.
 
-        ``timeout_s`` bounds this single call with a wall-clock ceiling.
-        The client itself runs AP with ``callTimeoutMs=0`` (indexing may
-        legitimately exceed any fixed bound), so without this the only
-        backstop is the 600s wedge-silence window — far too slow for an
-        interactive read/lookup. Interactive wrappers pass
-        ``interactive_call_timeout_s()``; the indexing wrappers leave it
-        ``None`` (unbounded). A timeout degrades exactly like any other AP
-        failure: reason recorded, stderr note, ``None`` returned so callers
-        fall back to Cortex-only results.
-        """
+        source: ADR-0501"""
         if tool not in _AP_TOOLS:
             raise ValueError(f"AP tool not in allowlist: {tool!r}")
-        self._unavailable_reason = None  # this call's outcome is authoritative
+        self._unavailable_reason = None  # source: ADR-0501
         if not await self.connect():
             return None
-        if self._client is None:  # connect() success guarantees a client; defensive
+        if self._client is None:  # source: ADR-0501
             return None
         try:
             coro = self._client.call(tool, args or {})
             if timeout_s is not None:
                 return await asyncio.wait_for(coro, timeout=timeout_s)
             return await coro
-        except asyncio.TimeoutError:  # interactive ceiling hit — degrade, don't hang
+        except asyncio.TimeoutError:  # source: ADR-0501
             self._degrade(
                 f"TimeoutError: AP call {tool} exceeded {timeout_s:.0f}s",
                 f"[cortex] AP call {tool} timed out after {timeout_s:.0f}s "
@@ -340,14 +262,7 @@ class APBridge:
             )
             return None
 
-    # ── Convenience wrappers matching AP's MCP schema (src/tool_schemas.rs).
-    # All Stage-3a tools are scoped to a ``graph_path`` returned by
-    # index_codebase; callers pass it through or rely on the cached one.
-    # ── Interactive read-path tools carry a wall-clock ceiling
-    # (interactive_call_timeout_s) so a wedged-but-connected AP degrades to
-    # Cortex-only in seconds instead of stalling for the 600s wedge window.
-    # The indexing/write tools below (index_codebase, analyze_codebase,
-    # resolve_graph, cluster_graph, detect_changes) stay unbounded on purpose.
+    # source: ADR-0501
     async def health_check(self) -> Any:
         return await self.call(
             "health_check", {}, timeout_s=interactive_call_timeout_s()
@@ -362,10 +277,7 @@ class APBridge:
     ) -> Any:
         """Index ``path`` into a LadybugDB graph at ``output_dir``.
 
-        AP requires both ``path`` (source root) and ``output_dir``
-        (where ``graph/`` lives). Returns a dict including
-        ``graph_path``; subsequent calls must pass that path.
-        """
+        source: ADR-0501"""
         return await self.call(
             "index_codebase",
             {"path": path, "output_dir": output_dir, "language": language},
@@ -396,11 +308,9 @@ class APBridge:
 
     async def get_context(self, graph_path: str, qualified_name: str) -> Any:
         """360° symbol view: calls/called_by, imports/imported_by,
-        implements/implemented_by, uses/used_by, community, processes.
+                implements/implemented_by, uses/used_by, community, processes.
 
-        AP v0.0.9 keys this by ``qualified_name`` (``file::name``), not the
-        legacy ``symbol_id``. This is the full directional dependency view.
-        """
+        source: ADR-0501"""
         return await self.call(
             "get_context",
             {"graph_path": graph_path, "qualified_name": qualified_name},
@@ -410,9 +320,7 @@ class APBridge:
     async def get_processes(self, graph_path: str) -> Any:
         """All detected execution flows (causal chains) from entry points.
 
-        Each process: entry_point, entry_kind (main/test/handler/lib_entry),
-        depth, node_count. Requires cluster_graph to have run.
-        """
+        source: ADR-0501"""
         return await self.call(
             "get_processes",
             {"graph_path": graph_path},
@@ -457,12 +365,9 @@ class APBridge:
         diff_text: str | None = None,
     ) -> Any:
         """Git-diff impact (versioning): map changed lines → affected
-        symbols/communities/processes + a heuristic risk score.
+                symbols/communities/processes + a heuristic risk score.
 
-        AP v0.0.9 takes ``base_ref``/``head_ref`` (+ ``codebase_path`` when
-        running git internally) or raw ``diff_text`` — not legacy
-        ``base``/``head``.
-        """
+        source: ADR-0501"""
         args: dict = {"graph_path": graph_path}
         if diff_text is not None:
             args["diff_text"] = diff_text
@@ -493,9 +398,7 @@ class APBridge:
     ) -> Any:
         """All-in-one: runs index_codebase + resolve_graph + cluster_graph.
 
-        search_codebase (Stage 3d) requires all three to have run; use
-        this when you want Phase-3 unified search against a fresh index.
-        """
+        source: ADR-0501"""
         return await self.call(
             "analyze_codebase",
             {"path": path, "output_dir": output_dir, "language": language},
@@ -504,8 +407,7 @@ class APBridge:
     async def close(self) -> None:
         if self._client is not None:
             try:
-                # MCPClient.close() is SYNCHRONOUS — ``await self._client.close()``
-                # was ``await None`` → TypeError on every teardown.
+                # source: ADR-0501
                 self._client.close()
             except Exception as exc:  # noqa: BLE001 — teardown continues past a failed close
                 logger.debug("AP client close failed during teardown: %s", exc)

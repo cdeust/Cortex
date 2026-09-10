@@ -66,9 +66,7 @@ def build_response(
     interf: float,
 ) -> dict[str, Any]:
     """Build the full success response dict."""
-    # Normalize internal curation action vocab → schema-canonical enum.
-    # try_curation returns "create"/"link" (present-tense ops); the public
-    # schema documents past-tense outcomes (stored / merged / rejected).
+    # source: ADR-0441
     schema_action = {
         "create": "stored",
         "link": "stored",

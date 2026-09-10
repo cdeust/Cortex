@@ -22,10 +22,8 @@ for harness in "$SRC"/cortex/fuzz/fuzz_*.py; do
     compile_python_fuzzer "$harness"
 done
 
-# Ship each harness's committed corpus as its seed corpus. These are the
-# reproducers of bugs already found (see fuzz/corpus/*/repro-*) plus shape
-# seeds; starting from them keeps the fuzzer from rediscovering the shallow
-# surface on every run.
+# Ship each harness corpus as its seed corpus.
+# source: ADR-0796
 for corpus in "$SRC"/cortex/fuzz/corpus/*/; do
     name="$(basename "$corpus")"
     if [ -d "$corpus" ]; then

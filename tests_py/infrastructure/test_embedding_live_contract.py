@@ -1,12 +1,6 @@
 """End-to-end contract for the REAL all-MiniLM-L6-v2 embedding model.
 
-Why this file exists
---------------------
-Every other embedding test mocks ``sentence_transformers.SentenceTransformer``.
-A mock proves the wiring; it cannot prove the model still loads and computes
-after a dependency bump. That gap is not theoretical here:
-
-  * ``_EmbeddingLifecycleMixin._finalize_loaded`` SILENTLY reconciles a
+* ``_EmbeddingLifecycleMixin._finalize_loaded`` SILENTLY reconciles a
     dimension mismatch (``if actual_dim != self._dim: self._dim = actual_dim``).
     A model that started returning a different width would be accepted without
     a word, and every stored vector would change space.
@@ -32,7 +26,8 @@ in CI an unloadable model is a real defect and this file FAILS. On a
 contributor's machine the weights may legitimately be absent, so it skips.
 A silent skip in CI would make this file worthless, which is why the two cases
 are distinguished rather than both skipped.
-"""
+
+source: ADR-0981"""
 
 from __future__ import annotations
 
@@ -179,21 +174,12 @@ def test_live_encode_batch_agrees_with_single_encode(
     one query — so a divergence between them would compare stored vectors
     against query vectors from a different space, with nothing raising.
 
-    Agreement is asserted as an ordering, not as equality: each batch vector
-    must be closer to its OWN single-encoded counterpart than to any other
-    text's. Byte equality is not a property the model offers — a batched
-    forward pass reduces its matrix products in a different order from a
-    single one, so the two agree only to float32 rounding. Measured on CI run
-    30471706750 (Python 3.12, Linux, transformers 5.14.1): the two paths
-    produced vectors differing in the low-order bits of the float32 mantissa
-    (`\\xf9\\xbc...` vs `\\xff\\xbc...`) for the same text. An equality
-    assertion there tests the GEMM kernel, not Cortex.
-
     The ordering form still fails on everything that actually matters —
     wrong-order results, a different pooling, a truncated batch, or vectors
     landing in a different space — and carries no tolerance constant that
     could drift.
-    """
+
+    source: ADR-0981"""
     texts = [
         "the deployment pipeline failed during the migration step",
         "sourdough needs a longer bulk ferment in a cold kitchen",

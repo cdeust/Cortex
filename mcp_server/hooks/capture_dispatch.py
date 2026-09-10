@@ -24,7 +24,7 @@ def report_failure(
     logger.error("[cortex-capture-worker] %s", message)
     from mcp_server.core import telemetry  # noqa: PLC0415 — hook composition emits telemetry only on failure, no store/model import
 
-    # source: SI prefix milli; the caller measures elapsed monotonic seconds.
+    # source: ADR-0486
     telemetry.record(operation, latency_ms=elapsed * 1000.0, ok=False)
 
 
@@ -38,8 +38,7 @@ def _spawn(listener: socket.socket, lease: int) -> None:
         "--lease-fd",
         str(lease),
     ]
-    # The launcher already exposes private dependencies through PYTHONPATH.
-    # source: scripts/launcher.py main; Python subprocess pass_fds/start_new_session.
+    # source: ADR-0486
     subprocess.Popen(
         command,
         pass_fds=(listener.fileno(), lease),

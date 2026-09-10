@@ -29,8 +29,7 @@ from mcp_server.handlers.ingest_codebase import handler
 
 _console = Console()
 
-# source: pre-existing tuned value, extracted unchanged (#197 family 3);
-# provenance not recorded at introduction
+# source: ADR-0719
 _MAX_DIAGNOSTICS_SHOWN = 5
 
 

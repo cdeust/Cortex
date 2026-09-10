@@ -1,0 +1,55 @@
+---
+kind: adr
+number: 0548
+title: Preserve pg_store_entity_merge design decisions
+status: accepted
+---
+
+# ADR-0548: pg_store_entity_merge design decisions
+
+## Context
+
+Canonical migration of decision evidence from `mcp_server/infrastructure/pg_store_entity_merge.py` under ADR-0056.
+The excerpts below preserve historical claims and citations verbatim; original ADR numbers are historical quotations, not current identity bindings.
+
+## Decision
+
+Keep the source implementation linked to this versioned decision record. Operational API documentation remains with the implementation.
+
+## Preserved decision evidence
+
+### PgEntityMergeMixin, original line 25
+
+````text
+Atomic entity collapse on PostgreSQL.
+````
+
+### merge_entities, original line 28
+
+````text
+        Rewires every ``memory_entities`` link and ``relationships`` edge from
+        the alias to the survivor, drops self-loops the rewire creates, lets the
+        survivor absorb the alias's heat/recency (bounded ``GREATEST`` — never a
+        naive sum that would break the [0,1] heat invariant), then archives the
+        alias as a tombstone (``archived=TRUE, heat=0``) rather than deleting it,
+        so the merge stays auditable. All statements commit together or roll back.
+````
+
+### merge_entities, original line 28
+
+````text
+        No-op (``merged=False``) when the ids are equal, either entity is
+        missing, or either is an ``ast_symbol`` — code-symbol identity is
+        structural and must never be fuzzy-merged (graphify #1205; defense in
+        depth over the core engine's own exclusion).
+````
+
+### comment, original line 20
+
+````text
+# source: structural — the id-lookup fetches exactly the survivor + alias pair
+````
+
+## Consequences
+
+Review rationale and source changes together. Historical evidence is preserved rather than silently rewritten; executable Python structure is unchanged after removing docstrings.

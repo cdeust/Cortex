@@ -1,0 +1,63 @@
+---
+title: "ADR-0646 — mcp_server/shared/content_hardening.py rationale"
+status: accepted
+source: mcp_server/shared/content_hardening.py
+---
+
+# ADR-0646 — mcp_server/shared/content_hardening.py
+
+Migrated source rationale. The excerpts below are preserved verbatim from the source snapshot; historical identifiers inside quotations are not current identities.
+
+## module — original line 3 (docstring)
+
+````text
+Applied at every user-input boundary (remember, ingest_*, backfill) to
+prevent three classes of defect:
+````
+
+## module — original line 6 (docstring)
+
+````text
+  1. Unicode duplicate memories (NFC normalization).
+     "café" written as U+00E9 vs "cafe" + U+0301 hash-mismatches and
+     creates ghost duplicates. NFC composes to the precomposed form
+     consistently.
+````
+
+## module — original line 11 (docstring)
+
+````text
+  2. ReDoS amplification via adversarially long content.
+     Content is capped at CONTENT_MAX_BYTES (default 1 MB). A single
+     1-MB payload hitting a vulnerable regex can block the event loop
+     for seconds. Truncation is silent but logged via stderr.
+````
+
+## module — original line 16 (docstring)
+
+````text
+  3. Unicode control / format characters that break tsvector /
+     downstream DOM rendering. We strip:
+       - C0 controls except \\t \\n \\r
+       - C1 controls (U+0080–U+009F)
+       - BOM / ZWNBSP (U+FEFF)
+       - Bidi-override overrides (trojan source — CVE-2021-42574)
+````
+
+## module — original line 23 (docstring)
+
+````text
+Source:
+  * Unicode Standard Annex #15 (Normalization Forms)
+  * CVE-2021-42574 (Trojan Source bidi override injection)
+  * docs/program/phase-5-pool-admission-design.md §7 (hardening)
+
+````
+
+## _cap_bytes — original line 74 (docstring)
+
+````text
+    We encode, slice bytes, then decode with errors='ignore' so the
+    result is always valid UTF-8 (no orphaned continuation bytes).
+    
+````

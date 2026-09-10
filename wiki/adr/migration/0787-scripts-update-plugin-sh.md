@@ -1,0 +1,21 @@
+# ADR-0787: scripts/update-plugin.sh implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `scripts/update-plugin.sh`; original SHA-256 `6f2226c825ec447e7e681cc0f0d0b936ef2465be360862f51fb6002eb37b2630`.
+
+## Original shell-comment, lines 4–11
+
+````text
+# Force-update Cortex plugin to the latest version.
+#
+# Claude Code caches plugin versions and doesn't always pick up updates
+# from the marketplace. This script clears the stale cache and triggers
+# a fresh install.
+#
+# Usage:
+#   curl -sSL https://raw.githubusercontent.com/cdeust/Cortex/main/scripts/update-plugin.sh | bash
+
+````
+

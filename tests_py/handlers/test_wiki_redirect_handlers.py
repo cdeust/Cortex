@@ -1,9 +1,9 @@
-"""Handler-layer tests for redirect mechanics (ADR-2244 Phase 3.2).
+"""Handler-layer tests for wiki redirects.
 
-Exercises wiki_read (transparent follow), wiki_list / wiki_reindex
-(stub filtering), and wiki_rename (atomic move + stub creation) against
+Exercises transparent reading, stub filtering and atomic move-plus-stub creation against
 a temporary wiki root.
-"""
+
+source: ADR-0962"""
 
 from __future__ import annotations
 
@@ -193,9 +193,9 @@ def _auto_gen_page(page_id: str, title: str) -> str:
 
 
 def test_list_excludes_auto_generated_by_default(tmp_wiki: Path) -> None:
-    """Phase 5 of ADR-2244: ``provenance: auto-generated`` pages are
-    hidden from the default listing — at ~8,700 pages they would
-    dominate any view."""
+    """Auto-generated pages are hidden from the default listing.
+
+    source: ADR-0962"""
     pid_human = generate_page_id()
     pid_auto = generate_page_id()
     _write(tmp_wiki / "reference/cortex/curated.md", _page(pid_human, "Curated"))

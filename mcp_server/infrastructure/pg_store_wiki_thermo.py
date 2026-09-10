@@ -1,11 +1,8 @@
 """wiki.pages bulk thermodynamic-update DB operations.
 
-Split out of ``pg_store_wiki.py`` (originally 890 lines, over the
-300-line file limit — CLAUDE.md "Code Quality Rules") purely for size
-compliance; no logic changed.
-
 Pure infrastructure — no core imports, no handler imports.
-"""
+
+source: ADR-0582"""
 
 from __future__ import annotations
 
@@ -25,10 +22,7 @@ def list_pages_for_decay(
 ) -> list[dict]:
     """Pages eligible for a thermodynamic sweep.
 
-    Skips evergreen by default (never decays) and archived unless
-    ``include_archived`` is True (only useful to detect revivals,
-    which we handle via the citation trigger anyway).
-    """
+    source: ADR-0582"""
     states = ["active", "area"]
     if include_archived:
         states.append("archived")
@@ -102,11 +96,10 @@ def apply_staleness_decisions(conn: StoreConnection, decisions: list[Any]) -> in
 def get_claim_file_refs_for_pages(
     conn: StoreConnection, page_ids: list[int]
 ) -> dict[int, list[str]]:
-    """For each page, return the file paths cited by its source memory's claims.
+    """Joins wiki.pages → memories → wiki.claim_events; pulls evidence_refs
+        of kind='file'. Returns {page_id: [file_path, ...]}.
 
-    Joins wiki.pages → memories → wiki.claim_events; pulls evidence_refs
-    of kind='file'. Returns {page_id: [file_path, ...]}.
-    """
+    source: ADR-0582"""
     if not page_ids:
         return {}
     sql = """

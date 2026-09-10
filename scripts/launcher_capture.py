@@ -1,10 +1,6 @@
 """Exclude disabled captures before backend resolution and dependency bootstrap.
 
-The hook retains the exact decoded stdin text for admitted/invalid events.
-Reading a pipe consumes its OS descriptor: bootstrap children then see EOF,
-not the hook's JSON payload. StringIO intentionally restores the hook's text
-interface only; it does not claim to restore the original file descriptor.
-"""
+source: ADR-0743"""
 
 from __future__ import annotations
 

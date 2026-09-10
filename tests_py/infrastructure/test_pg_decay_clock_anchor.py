@@ -1,26 +1,14 @@
 """Live-PG behavior tests for the A3 decay-clock anchor in insert_memory.
 
-Root cause (benchmark module #6 campaign, 2026-06-30): ``insert_memory``
-let ``heat_base_set_at`` take its schema DEFAULT NOW(), so a
-historical-dated insert (an imported 2023 conversation, a benchmark
-haystack with multi-year timestamps) read ``hours_elapsed ≈ 0`` in
-``effective_heat()`` and the SQL forgetting law never engaged —
-``effective_heat ≡ heat_base`` regardless of decay law.
-
 The fix anchors ``heat_base_set_at`` to the event date (``created_at``)
 on insert. ``effective_heat()`` decays from
 ``COALESCE(heat_base_set_at, last_accessed, created_at)``; for a
 never-touched insert the faithful "last canonical touch" IS the event,
 so the clock now reads real elapsed time.
 
-These tests pin the two invariants of that fix:
-  - INV-FRESH: a fresh insert (created_at ≈ now) is a no-op —
-    effective_heat == heat_base (hours_elapsed ≈ 0).
-  - INV-AGED: a historical-dated insert engages the law —
-    effective_heat < heat_base (hours_elapsed > 0).
-
 Runs against cortex_test (conftest redirects DATABASE_URL).
-"""
+
+source: ADR-0986"""
 
 from __future__ import annotations
 

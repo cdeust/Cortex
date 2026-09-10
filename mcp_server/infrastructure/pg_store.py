@@ -1,30 +1,6 @@
 """PostgreSQL + pgvector memory store — composition root.
 
-Single storage backend for all memory operations. Retrieval logic lives
-in PL/pgSQL stored procedures. Benchmarks and production use the same
-code path.
-
-``PgMemoryStore`` is assembled from the ``Pg*Mixin`` classes below, each
-implementing one concern (connection/pool lifecycle, DDL migration,
-value serialization, the INSERT path, atomic supersession, heat
-writers, memory-metadata writers, search/retrieval) — split out of a
-single 1384-line file (over the 300-line §4.1 cap) along those
-boundaries. This module is the thin facade: it owns only construction
-(``__init__``) and teardown (``close``), plus re-exporting the
-module-level DDL helpers (``compute_ddl_hash``, ``read_schema_hash``,
-``_get_database_url``) that ``mcp_server.migrate`` — a standalone entry
-point that must decide "is the DB current" without constructing a full
-store — imports from this path.
-
-Phase 5 connection pools (docs/program/phase-5-pool-admission-design.md):
-    * ``_interactive_pool`` — hot-path tools (recall, remember, etc.)
-    * ``_batch_pool`` — long-running writers (consolidate, wiki_pipeline)
-    * ``_conn`` — persistent single connection kept for backward compat
-      with 281 existing call sites. New code should use
-      ``acquire_interactive()`` / ``acquire_batch()`` context managers.
-
-Requires: psycopg[binary]>=3.1, psycopg_pool>=3.2, pgvector>=0.3
-"""
+source: ADR-0538"""
 
 from __future__ import annotations
 
@@ -71,9 +47,7 @@ from mcp_server.infrastructure.pg_store_cls import PgClsMixin
 
 logger = logging.getLogger(__name__)
 
-# Re-exported for external callers (mcp_server.migrate, tests) that import
-# these module-level DDL helpers from this facade path — see module
-# docstring. Single source of truth stays pg_store_ddl.py.
+# source: ADR-0538
 __all__ = [
     "PgMemoryStore",
     "compute_ddl_hash",
@@ -115,12 +89,10 @@ class PgMemoryStore(
         self._url = database_url or _get_database_url()
         self._conn = self._create_connection()
         self._init_schema()
-        # Invalidate prepared statements after schema DDL — stored procedure
-        # signatures may have changed, making cached plans stale.
+        # source: ADR-0538
         self._deallocate_all()
         register_vector(self._conn)
-        # Phase 5 pools — lazy-constructed; opening on first acquire
-        # avoids paying pool-open cost for short-lived usages (tests).
+        # source: ADR-0538
         self._interactive_pool: ConnectionPool[psycopg.Connection[DictRow]] | None = (
             None
         )

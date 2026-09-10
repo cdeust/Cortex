@@ -1,10 +1,6 @@
 """PostgreSQL connection + the two-pass briefing query for agent_briefing.
 
-Split out of ``agent_briefing.py`` (issue #401 — that file exceeded the
-project's 300-line cap, docs/agent-guidance.md § Code Style) to isolate the hook's only
-I/O (PG connect + the two SELECT passes) from prompt parsing and
-event-processing control flow.
-"""
+source: ADR-0484"""
 
 from __future__ import annotations
 
@@ -49,28 +45,23 @@ def _fetch_agent_context(conn, agent_name: str, keywords: list[str]) -> list[dic
     if keywords:
         try:
             rows = conn.execute(
-                """
-                -- memories.heat is not a stored column; use
-                -- effective_heat(m, NOW()) for lazy A3 decay (matches
-                -- production recall_memories semantics).
-                -- Source: pg_schema.py EFFECTIVE_HEAT_FN.
+                (
+                    # source: ADR-0484
+                    """
                 SELECT m.id, m.content,
                        effective_heat(m, NOW()) AS heat,
                        m.agent_context
-                -- JOIN current_memories: briefing content — chain heads
-                -- only; join keeps m table-typed for effective_heat().
                 FROM memories m
                      JOIN current_memories cm ON cm.id = m.id
                 WHERE m.agent_context = %s
                   AND effective_heat(m, NOW()) >= %s
                   AND NOT m.is_benchmark
-                  -- Never brief an agent with a corrected (superseded)
-                  -- fact — decision 4255039 correction 8.
                   AND m.superseded_by_id IS NULL
                   AND m.content_tsv @@ plainto_tsquery('english', %s)
                 ORDER BY effective_heat(m, NOW()) DESC
                 LIMIT %s
-                """,
+                """
+                ),
                 (agent_name, _MIN_HEAT, " ".join(keywords[:5]), _MAX_MEMORIES),
             ).fetchall()
             for r in rows:
@@ -90,23 +81,23 @@ def _fetch_agent_context(conn, agent_name: str, keywords: list[str]) -> list[dic
     if remaining > 0:
         try:
             rows = conn.execute(
-                """
+                (
+                    # source: ADR-0484
+                    """
                 SELECT m.id, m.content,
                        effective_heat(m, NOW()) AS heat,
                        m.agent_context
-                -- JOIN current_memories: same pattern as pass 1.
                 FROM memories m
                      JOIN current_memories cm ON cm.id = m.id
                 WHERE m.is_protected = TRUE
                   AND m.is_global = TRUE
                   AND m.agent_context != %s
                   AND NOT m.is_benchmark
-                  -- Superseded decisions are corrected facts — never
-                  -- re-inject (decision 4255039 correction 8).
                   AND m.superseded_by_id IS NULL
                 ORDER BY effective_heat(m, NOW()) DESC
                 LIMIT %s
-                """,
+                """
+                ),
                 (agent_name, remaining),
             ).fetchall()
             for r in rows:

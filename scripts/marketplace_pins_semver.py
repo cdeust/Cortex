@@ -1,10 +1,6 @@
 """Semver parsing + local git-tag helpers for the marketplace pin gate.
 
-Split out of check_marketplace_pins.py (issue: that file crossed the
-300-line §4.1 cap once REGISTRY_VERSION_STALE was added). Offline, reads
-git only — the PIN_BEHIND_TAG detection path (AP #67) depends on this
-staying dependency-free of the network-facing modules.
-"""
+source: ADR-0758"""
 
 from __future__ import annotations
 

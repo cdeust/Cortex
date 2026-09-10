@@ -2,17 +2,10 @@
 
 Two modes:
 
-  Auto-sweep (default): scan all pending drafts, evaluate each via
-  draft_curator, transition status (pending → approved / rejected),
-  leave 'hold' drafts untouched for refinement.
-
-  Manual decision: wiki_curate({draft_id: 42, decision: "approved"})
-  forces a verdict regardless of the rule gate. Used when the user
-  has reviewed a draft personally.
-
 Composition root — wires draft_curator (pure logic) + pg_store_wiki
 (status update + memo). Never raises per-draft; collects errors.
-"""
+
+source: ADR-0457"""
 
 from __future__ import annotations
 
@@ -74,7 +67,11 @@ schema = {
                     "Strongly recommended for manual decisions."
                 ),
                 "examples": [
-                    "Reviewed against ADR-0042; matches the canonical decision",
+                    (
+                        # source: ADR-0457
+                        "Reviewed against ADR-0056; canonical wiki and generated "
+                        "mirror agree"
+                    ),
                     "Stale claim_events — superseded by memory 5123",
                 ],
             },
@@ -99,9 +96,7 @@ schema = {
 }
 
 
-# Cap on the held-draft examples included in the response payload.
-# source: pre-existing tuned value, extracted unchanged (#197 family 3);
-# provenance not recorded at introduction
+# source: ADR-0457
 _SAMPLE_HOLDS_CAP = 5
 
 
@@ -116,7 +111,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     conn = store._conn
     registry = load_registry(Path(WIKI_ROOT))
 
-    # Manual decision path
+    # source: ADR-0457
     if args.get("draft_id") is not None and args.get("decision"):
         draft_id = int(args["draft_id"])
         decision = args["decision"]

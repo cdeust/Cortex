@@ -1,0 +1,13 @@
+# ADR-0736: scripts/embedding_prefix_model_measure.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `scripts/embedding_prefix_model_measure.py`; original SHA-256 `a221fbdca5f79406770197295e077b4a81ffa22eaaf3e9f05e7a7f15b83b7fdb`.
+
+## Original comment, lines 10–10
+
+````text
+# source: green-remediation plan §3: four repetitions, discard the first.
+````
+

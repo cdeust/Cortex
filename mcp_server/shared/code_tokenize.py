@@ -1,28 +1,6 @@
 """Code-aware sub-token splitting for FTS indexing and query expansion.
 
-Cortex memories frequently carry code identifiers — ``normalizePaymentAmount``,
-``snake_case_id``, ``HTTPRequest``. SQLite's FTS5 ``unicode61`` tokenizer treats
-each of those as ONE opaque token, so a natural-language query for ``payment``
-never matches a memory that only wrote ``normalizePaymentAmount``.
-
-FTS5 custom tokenizers require a compiled C extension (the ``fts5_tokenizer``
-API is not reachable from Python's ``sqlite3``). This module achieves the same
-effect purely in Python, on both sides of the index:
-
-  * **index time** — ``augment_content`` appends the sub-tokens of every
-    identifier to the text handed to ``memories_fts``, so ``payment`` becomes a
-    first-class indexed term alongside the original ``normalizePaymentAmount``.
-  * **query time** — ``expand_fts_query`` rewrites each query word into an
-    ``("word" OR "sub1" OR "sub2")`` group, so a query that *contains* a
-    camelCase identifier still matches memories that stored the split words.
-
-Reference concept: the ``cbm_camel_split`` FTS5 tokenizer in the
-codebase-memory-mcp project (C). This is the same split rule (camelCase +
-snake_case + digit boundaries), realised as content/query rewriting rather than
-a native tokenizer.
-
-Pure utility — no I/O, no domain knowledge. Shared layer (stdlib only).
-"""
+source: ADR-0645"""
 
 from __future__ import annotations
 
@@ -56,7 +34,7 @@ def split_identifier(token: str) -> list[str]:
     """
     if not token:
         return []
-    # snake / kebab first so camel rules see clean segments
+    # source: ADR-0645
     text = token.replace("_", " ").replace("-", " ")
     text = _CAMEL_1.sub(r"\1 \2", text)
     text = _CAMEL_2.sub(r"\1 \2", text)
@@ -73,8 +51,8 @@ def _extra_subtokens(text: str) -> list[str]:
     first-seen order; single-part words contribute nothing (they already index).
     """
     words = _WORD_RE.findall(text)
-    # Seed with words already present verbatim (lowercased) so a sub-token that
-    # is also a standalone word is not re-appended.
+    # source: ADR-0645
+
     seen: set[str] = {w.lower() for w in words}
     extras: list[str] = []
     for word in words:

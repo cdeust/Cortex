@@ -1,11 +1,6 @@
 """User-mood wiring tests for PgMemoryStore.
 
-Closes the production no-op gap surfaced by Phase B calibration:
-``mcp_server/core/pg_recall.py:_get_user_mood(store)`` duck-types against
-``store.get_user_mood()`` and previously always returned None because no
-such method existed. These tests pin the new contract:
-
-  - ``get_user_mood()`` returns a scalar float in [-1, +1] (the bridge contract)
+- ``get_user_mood()`` returns a scalar float in [-1, +1] (the bridge contract)
   - ``set_user_mood()`` upserts and bumps ``updated_at``
   - ``get_user_mood_state()`` exposes both valence and arousal for future use
   - Out-of-range values are clamped at write time
@@ -15,8 +10,7 @@ pattern as ``test_pg_pool.py``. The DDL adds ``user_mood`` only via
 ``CREATE TABLE IF NOT EXISTS`` so an in-flight benchmark on the same DB
 is unaffected.
 
-Source: Bower, G.H. (1981). "Mood and Memory." Am. Psychologist 36(2).
-"""
+source: ADR-0997"""
 
 from __future__ import annotations
 

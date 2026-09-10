@@ -14,10 +14,7 @@ from typing import Protocol, runtime_checkable
 class ProgressReporter(Protocol):
     """Contract for reporting ingest progress to any sink.
 
-    All methods are synchronous. Implementations may fire-and-forget
-    async dispatches internally, but callers see a plain sync interface
-    so they can be used from both async handlers and worker threads.
-    """
+    source: ADR-0661"""
 
     def stage(self, name: str, index: int, total: int) -> None:
         """Signal entry into a named pipeline stage.

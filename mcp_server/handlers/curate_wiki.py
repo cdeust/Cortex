@@ -2,16 +2,6 @@
 
 Composition root for the auto-curator (``mcp_server.core.auto_curator``).
 
-Architecture — why this returns jobs instead of authoring directly:
-
-The user's Claude Code session is itself the authoring LLM (Opus 4.7).
-Rather than calling an external Anthropic API with a separate key (the
-key is the user's session and exposing it via env is fragile), this
-handler returns **structured authoring jobs** — clusters of PG memories
-paired with the structured prompt the LLM should consume. The in-session
-LLM reads the jobs, authors each page in turn, and writes them via
-``wiki_write``.
-
 That means the auto-curator's "auto" property comes from two things:
 
   1. The clustering and prompt-construction work happens without a human
@@ -31,7 +21,8 @@ The user directive this satisfies:
   > "The documentation you created now, should be auto created and auto
   > curated."
   > "the anthropic key should be using the user session"
-"""
+
+source: ADR-0384"""
 
 from __future__ import annotations
 
@@ -246,7 +237,7 @@ def _scan_existing_pages(wiki_root: Path) -> dict[str, list[str]]:
         # Drop common ID prefixes like "305772-" so the topic is the
         # human-readable part of the slug
         slug = re.sub(r"^\d+-", "", slug)
-        # Normalise "decision-" / "lesson-" / "convention-" prefixes
+        # source: ADR-0384
         slug = re.sub(r"^(decision|lesson|convention|spec|reference)-", "", slug)
         # Strip trailing common words ("md")
         slug = slug.replace("-md", "")
@@ -260,18 +251,9 @@ def _scan_existing_pages(wiki_root: Path) -> dict[str, list[str]]:
 async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Build authoring jobs from PG memory clusters + coverage gaps.
 
-    Two job sources are merged into a single ordered list:
+        Two job sources are merged into a single ordered list:
 
-      1. **Coverage jobs** (structural): per-project scope audit. Any
-         domain missing an architecture / services / api / data-flow /
-         operations / decisions page yields a coverage job. These come
-         first because a reader needs the structural anchor pages
-         before topic-specific pages make sense.
-
-      2. **Cluster jobs** (empirical): topic-cohesive memory clusters
-         that earn a page based on size and heat. These document what
-         the user actually worked on.
-    """
+    source: ADR-0384"""
     args = args or {}
 
     if bool(args.get("report_uncited_deliberate", False)):
@@ -291,8 +273,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     reauthor_jobs_max = int(args.get("reauthor_jobs_max") or 3)
 
     store = get_shared_store()
-    # Draw a memory pool. Recently-accessed memories are higher-signal
-    # candidates because they reflect what the user actively works on.
+    # source: ADR-0384
     if recent_only:
         # heads_only: wiki pages are authored from memory content —
         # supersession chain heads only.
@@ -308,8 +289,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
     existing_pages = _scan_existing_pages(Path(WIKI_ROOT))
     today = _today()
-    # Composition-root wiring (§5.2): core declares WikiPagePort, this
-    # handler builds the concrete os/pathlib-backed adapter (issue #314).
+    # source: ADR-0384
     wiki_page_port = build_wiki_page_port(str(WIKI_ROOT))
 
     # 1. Coverage jobs — top-down structural scopes.
@@ -386,9 +366,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         cluster_budget = max(0, limit - already_used)
         cluster_payload = [serialise_job(j) for j in cluster_jobs[:cluster_budget]]
 
-    # Order: coverage → reauthor → cluster. Coverage anchors the
-    # structural backbone, reauthor fixes existing pages, cluster fills
-    # in new topical material.
+    # source: ADR-0384
     payload = coverage_payload + reauthor_payload + cluster_payload
 
     if not payload and not memories:

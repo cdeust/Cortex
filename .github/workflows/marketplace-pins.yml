@@ -5,9 +5,7 @@ name: Marketplace pin gate
 
 
 #
-# Cron matters more than the PR trigger: pins go stale by INACTION, and
-# inaction never opens a PR. Weekly is bounded staleness (max 7 days),
-# vs unbounded before.
+# source: ADR-0805
 
 on:
   pull_request:

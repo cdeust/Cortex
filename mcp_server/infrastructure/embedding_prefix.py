@@ -1,13 +1,9 @@
-"""Guarded suffix elision for single-text BERT WordPiece encoding.
-
-BERT normalization preserves ASCII whitespace and WordPiece tokenizes whole
+"""BERT normalization preserves ASCII whitespace and WordPiece tokenizes whole
 pre-tokenized words independently. A complete-word prefix that already fills
 the model budget therefore preserves every model input. Unsupported tokenizer
 configurations retain the normal full-input path; tokenizer errors propagate.
 
-Sources: huggingface/tokenizers v0.22.2, normalizers/bert.rs,
-pre_tokenizers/bert.rs, models/wordpiece/mod.rs; measured W3-3 fixture below.
-"""
+source: ADR-0524"""
 
 from __future__ import annotations
 
@@ -16,9 +12,7 @@ import json
 from typing import Any
 
 
-# source: green-w3-3-guarded-prefix.md: maximum retained token end among the
-# 10k fixtures saturating the pinned model budget. A cost probe, NOT a safety
-# bound: complete-word and token-budget checks below decide every truncation.
+# source: ADR-0524
 _PROBE_CHARS = 1450
 _BOUNDARIES = " \t\r\n"
 
@@ -30,7 +24,7 @@ def _supported(config: dict) -> bool:
         return False
     if config.get("pre_tokenizer", {}).get("type") != "BertPreTokenizer":
         return False
-    # Raw, whitespace-free added tokens cannot straddle the chosen boundary.
+    # source: ADR-0524
     if any(
         token["normalized"] or any(char.isspace() for char in token["content"])
         for token in config.get("added_tokens", [])
@@ -72,9 +66,7 @@ class BertPrefix:
     def shorten(self, text: str) -> str:
         if len(text) <= _PROBE_CHARS:
             return text
-        # str.find avoids a regex scan of a long word that cannot be shortened.
-        # source: W3-3 boundary probe, same 16 boundaries, 25us -> 1.2us for
-        # the 10k unbroken-word fixture (four samples, first discarded).
+        # source: ADR-0524
         positions = [text.find(char, _PROBE_CHARS) for char in _BOUNDARIES]
         positions = [pos for pos in positions if pos >= 0]
         if not positions:
@@ -83,8 +75,7 @@ class BertPrefix:
         if end == len(text):
             return text
         prefix = text[:end]
-        # A conservative cost guard for whitespace-heavy fixtures. Keeping the
-        # full input is always exact, even if normalization expands characters.
+        # source: ADR-0524
         if len(prefix.strip()) < self.limit:
             return text
         tokens = self.tokenizer.encode(

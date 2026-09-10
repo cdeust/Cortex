@@ -1,0 +1,32 @@
+# ADR-0754: scripts/marketplace_pins_http.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `scripts/marketplace_pins_http.py`; original SHA-256 `70107c32329592963d2c86d5db95c60a8af4bf5212ff317c812eeba24687a9c6`.
+
+## Original docstring, lines 1–8
+
+````text
+"""Shared HTTP plumbing for the marketplace pin-staleness gate.
+
+Split out of check_marketplace_pins.py (issue: that file crossed the
+300-line §4.1 cap once REGISTRY_VERSION_STALE was added) — every module
+that talks to a JSON API (GitHub REST, the public MCP registry) shares
+this request-header builder, timeout, and the one HTTP status code they
+all treat specially.
+"""
+````
+
+## Original comment, lines 14–14
+
+````text
+# source: GitHub API p99 well below; matches prior gate rev
+````
+
+## Original comment, lines 16–16
+
+````text
+# source: RFC 9110 §15.5.5 — HTTP 404 Not Found
+````
+

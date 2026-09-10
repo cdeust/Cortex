@@ -1,15 +1,6 @@
 """Persistent PostToolUse cadence, independent of one-shot hook processes.
 
-All tool events count, including tools whose content is not captured. A
-stable counter lock protects atomic JSON replacements. A separate,
-non-blocking execution lock per Claude root serializes hook cascades without blocking
-counter writers. Contention/failure leaves due work for a later event.
-
-This is best effort, not exactly once: a crash after DB advancement but
-before its acknowledgement can repeat advancement. It never resets due
-work merely because another hook is executing a cascade. One invocation
-attempts at most one pending interval, keeping catch-up work bounded.
-"""
+source: ADR-0529"""
 
 from __future__ import annotations
 
@@ -25,24 +16,20 @@ from mcp_server.infrastructure.groomer_coordinator_io import (
 )
 from mcp_server.infrastructure.hook_counter_lock import counter_lock
 
-# source: post_tool_capture.py at 5de4f4a4; existing cadence preserved,
-# empirical tuning provenance was not recorded at introduction.
+# source: ADR-0529
 CASCADE_INTERVAL = 20
 
 
 def _session_directory(transcript_path: object) -> Path:
     """Use the same canonical transcript stem as injection_receipts.
 
-    source: injection_receipts.session_id_from_transcript, decision 4255039
-    correction 7 (148/200 fixture lines had a divergent event session_id).
-    Do not import that handler here: it eagerly imports the PG stack.
-    """
+    source: ADR-0529"""
     if not isinstance(transcript_path, str) or not transcript_path.strip():
         raise ValueError("cascade skipped: missing transcript identity")
     identity = Path(transcript_path).stem
     if not identity or "\x00" in identity:
         raise ValueError("cascade skipped: invalid transcript identity")
-    # Digest the identity, never interpret an external stem as a state path.
+    # source: ADR-0529
     key = hashlib.sha256(identity.encode("utf-8")).hexdigest()
     return METHODOLOGY_DIR / "hook-cascade" / key
 

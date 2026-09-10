@@ -49,6 +49,5 @@ def _rmtree_quiet(path: Path) -> None:
     try:
         shutil.rmtree(path, ignore_errors=True)
     except OSError:
-        # ignore_errors=True already swallows per-entry failures; this
-        # guards path-level errors (e.g. unstatable mount) the flag misses.
+        # source: ADR-0590
         pass

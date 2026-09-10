@@ -69,10 +69,9 @@ def extract_date_hints(text: str) -> list[str]:
     return list(hints)
 
 
-# Date-hint sub-tokens at or below this length are too generic to count as a
-# partial match.
-# source: pre-existing tuned value, extracted unchanged (#197 family 3);
-# provenance not recorded at introduction
+# source: ADR-0669
+
+# source: ADR-0669
 _MIN_HINT_TOKEN_LEN = 3
 
 
@@ -112,16 +111,7 @@ _EMBEDDED_ISO_RE = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
 def _try_parse_named_date(date_str: str) -> datetime | None:
     """Try DD Month YYYY and Month DD, YYYY formats.
 
-    Deliberately naive (noqa DTZ001 x3 below): every caller (parse_date,
-    compute_date_distance_score) only ever diffs two datetimes produced by
-    THIS module's own date-only parsing — no time-of-day, no tzinfo, on
-    either side of the subtraction. Making one of the three literal
-    ``datetime(...)`` constructions here aware while parse_date's ISO
-    branch (date-only, always naive after its ``.split("T")[0]``) stays
-    naive would raise on the very comparisons this function exists to
-    support. Unifying tz-awareness across the ISO and named-date paths is
-    a design change belonging in a dedicated fix, not this lint refactor.
-    """
+    source: ADR-0669"""
     m = _DD_MONTH_YYYY_RE.match(date_str)
     if m:
         try:

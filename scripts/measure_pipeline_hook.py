@@ -1,19 +1,10 @@
 """Measure the pipeline hook directly in fresh processes and isolated paths.
 
 Run only when the shared host is idle, once per before/after checkout:
-python scripts/measure_pipeline_hook.py --repo /path/to/checkout \
-    --python /path/to/prepared/venv/bin/python --output /tmp/hook-before
+python scripts/measure_pipeline_hook.py --repo /path/to/checkout     --python
+/path/to/prepared/venv/bin/python --output /tmp/hook-before
 
-This measures ``python -m``, not launcher dependency bootstrap. It never
-installs dependencies. Read and Bash are both rejected by this hook; an
-Edit with no graph still needs the canonical store lookup and is outside
-this probe. Import traces are separate from CPU samples.
-
-source: tasks/codex-green-remediation-plan.md §3, W2-1: four repetitions,
-discard the first; retain user+system CPU, wall time, and peak RSS.
-Measurement APIs: https://docs.python.org/3/library/os.html#os.wait4 and
-https://docs.python.org/3/library/resource.html#resource.getrusage.
-"""
+source: ADR-0764"""
 
 from __future__ import annotations
 
@@ -31,7 +22,7 @@ import time
 from urllib.parse import quote
 
 _MODULE = "mcp_server.hooks.pipeline_impact_bump"
-# source: remediation plan §3 — four repetitions, first discarded.
+# source: ADR-0764
 _REPETITIONS = 4
 _SOURCES = (
     "mcp_server/hooks/pipeline_impact_bump.py",
@@ -59,8 +50,7 @@ def _environment(repo: Path, sandbox: Path) -> dict[str, str]:
     socket_dir = sandbox.resolve() / "no-postgres"
     if socket_dir.exists():
         raise ValueError("The probe requires a nonexistent PostgreSQL socket directory")
-    # libpq accepts a percent-encoded Unix socket directory in the URI authority.
-    # An empty DSN would instead select the user's default database connection.
+    # source: ADR-0764
     dsn = f"postgresql://{quote(str(socket_dir), safe='')}/cortex_hook_probe"
     env.update(
         {

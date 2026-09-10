@@ -1,9 +1,6 @@
 """Request-local retrieval measurements; no changes to ranking or responses.
 
-ContextVar scopes measurements to the current async task/thread. Reset tokens
-also preserve the outer operation when an instrumented handler calls another.
-Source: Python contextvars documentation, ContextVar.set/reset and asyncio support.
-"""
+source: ADR-0668"""
 
 from __future__ import annotations
 
@@ -44,7 +41,10 @@ def retrieval_metrics() -> RetrievalMetrics:
 
 
 def set_retrieval_tier(tier: str) -> None:
-    """Record the route actually executed, rather than inferring from intent."""
+    """Record the route actually executed, rather than inferring from intent.
+
+    source: ADR-0668
+    """
     current = _metrics.get()
     if current is not None:
         current.tier = tier

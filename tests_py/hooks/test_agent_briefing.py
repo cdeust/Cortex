@@ -88,13 +88,7 @@ def test_agents_dir_with_no_parsable_names_falls_back(tmp_path, monkeypatch):
 def test_agents_dir_with_only_dispatch_falls_back_to_builtin_set(tmp_path, monkeypatch):
     """Regression for issue #400.
 
-    Under the plugin-only-dispatch architecture, ~/.claude/agents/ holds
-    exactly one file (dispatch.md, a router that "never does the work
-    itself" — see _NON_SPECIALIST_META_AGENTS). Before the fix, only an
-    ABSENT directory triggered the fallback; a present directory containing
-    only dispatch.md yielded a roster of {"dispatch"}, so "engineer" (and
-    every other specialist) was never briefable outside CI.
-    """
+    source: ADR-0967"""
     agents = tmp_path / "agents"
     agents.mkdir(parents=True)
     (agents / "dispatch.md").write_text("---\nname: dispatch\n---\n")

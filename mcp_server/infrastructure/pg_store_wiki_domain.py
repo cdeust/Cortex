@@ -1,12 +1,8 @@
 """wiki.pages domain-backfill DB operations (Volet 4).
 
-Reads catch-all pages and rewrites their ``domain`` column. Split into
-its own module (rather than added to ``pg_store_wiki_pages.py``) to keep
-each infrastructure file focused and under the size cap — no unrelated
-function is reopened.
-
 Pure infrastructure — no core imports, no handler imports.
-"""
+
+source: ADR-0576"""
 
 from __future__ import annotations
 
@@ -21,21 +17,15 @@ if TYPE_CHECKING:
 def list_catchall_pages_with_sources(
     conn: StoreConnection, known_domains: list[str], limit: int
 ) -> list[dict]:
-    """Pages whose domain isn't a registered project, with source paths.
+    """List pages whose domain is NULL or absent from known_domains.
 
-    Selects rows where ``domain`` is NULL or absent from
-    ``known_domains`` (the repo registry's canonical names) — these are
-    catch-all buckets (``uncategorized``, ``_general``, ``global``, ...)
-    that a caller wants to re-derive via ``core.wiki_domain_backfill``.
+    Pre-condition: known_domains contains canonical project domains; limit
+    bounds returned pages.
 
-    Pre-condition:  ``known_domains`` is the registered set of canonical
-                    project domains; ``limit`` bounds the per-cycle scan.
-    Post-condition: every returned row carries ``id``, ``domain`` (as
-                    currently stored, possibly None), and
-                    ``source_paths`` — the page's aggregated
-                    ``wiki.page_sources.source_path`` values (empty list
-                    when the page has none).
-    """
+    Post-condition: each result contains id, the stored domain, and aggregated
+    source_paths (an empty list when no source paths exist).
+
+    source: ADR-0576"""
     sql = """
     SELECT p.id, p.domain,
            COALESCE(array_agg(ps.source_path)
@@ -53,11 +43,13 @@ def list_catchall_pages_with_sources(
 
 
 def update_page_domain(conn: StoreConnection, page_id: int, domain: str) -> None:
-    """Overwrite one page's ``domain`` column.
+    """Set one wiki page’s domain.
 
-    Pre-condition:  ``page_id`` refers to an existing ``wiki.pages`` row.
-    Post-condition: ``wiki.pages.domain`` equals ``domain`` for that row.
-    """
+    Pre-condition: page_id identifies an existing wiki.pages row.
+
+    Post-condition: that row’s domain equals the supplied domain.
+
+    source: ADR-0576"""
     with conn.cursor() as cur:
         cur.execute(
             "UPDATE wiki.pages SET domain = %s WHERE id = %s", (domain, page_id)

@@ -1,10 +1,6 @@
 """Ingest-progress + session-checkpoint mixin for PgMemoryStore.
 
-Split out of pg_store_auxiliary.py (issue #407: 397 lines over the
-300-line §4.1 cap) — both tables serve the same "resume where we left
-off" concern: ingest_progress for streaming ingest runs, checkpoints
-for session working state.
-"""
+source: ADR-0540"""
 
 from __future__ import annotations
 
@@ -22,11 +18,9 @@ class PgCheckpointMixin(PgStoreHost):
     def get_ingest_progress(self, run_id: str) -> tuple[str, int]:
         """Return ``(last_key_committed, rows_committed)`` for ``run_id``.
 
-        Returns ``("", 0)`` when no checkpoint exists (fresh run). A resumed
-        ingest starts after ``last_key_committed``; because entity/edge writes
-        are idempotent (NOT EXISTS / ON CONFLICT), an advisory — possibly one
-        page stale — checkpoint is always safe.
-        """
+        Returns ``("", 0)`` when no checkpoint exists (fresh run).
+
+        source: ADR-0540"""
         row = self._execute(
             "SELECT last_key_committed, rows_committed FROM ingest_progress "
             "WHERE run_id = %s",

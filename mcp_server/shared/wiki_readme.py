@@ -1,26 +1,6 @@
 """Wiki README generation — plain-language top-level entry point.
 
-The wiki's technical content lives in `<kind>/<domain>/<slug>.md` files
-with templated front-matter + section structure — tech-ready, but dense.
-This module generates a top-level ``README.md`` that is readable by
-non-technical stakeholders:
-
-  * What the wiki IS (one paragraph, plain language).
-  * What lives WHERE (kind-labelled sections with a 1-line "what it's
-    for" summary, not "architecture decision record" jargon).
-  * How to NAVIGATE (auto-generated table of contents + link to the
-    detailed technical INDEX.md).
-  * When it was last GROOMED (builds trust: "this is current").
-
-Design principle: non-tech readers see plain language at the top;
-tech readers follow links down to the structured INDEX + per-page
-templates. No information is hidden from either audience — just
-presented at the right depth for each click.
-
-Source: user directive "wiki generation, folder and file management,
-keep this tidy, in order, readable by non tech while having all
-information needed for tech people".
-"""
+source: ADR-0685"""
 
 from __future__ import annotations
 
@@ -92,8 +72,8 @@ def _count_pages(page_paths: list[str]) -> dict[str, int]:
     return dict(counts)
 
 
-# source: structural — a domain-scoped page path is kind/domain/filename, so
-# fewer than three parts carries no domain (root-level page).
+# source: ADR-0685
+# source: ADR-0685
 _DOMAIN_SCOPED_PATH_PARTS = 3
 
 
@@ -169,8 +149,11 @@ def _render_domains(domain_counts: dict[str, int]) -> list[str]:
 
 
 def _render_navigation_and_contributors() -> list[str]:
-    """``## Go deeper`` + ``## For contributors`` — static boilerplate,
-    no input dependency (unlike the other three sections)."""
+    """``## Go deeper`` + ``## For contributors`` — static boilerplate, no input
+    dependency (unlike the other three sections).
+
+    source: ADR-0685
+    """
     return [
         "## Go deeper",
         "",
@@ -209,12 +192,7 @@ def build_plain_readme(
     Pure function — takes a list of wiki-relative page paths, returns
     Markdown. Caller writes to ``<wiki_root>/README.md``.
 
-    The output is stable (same input → same output, modulo the
-    ``generated_at`` timestamp) so it's safe to write on every reindex
-    without churning the git log. Composed from four section builders:
-    ``_render_readme_header``, ``_render_whats_here``, ``_render_domains``,
-    ``_render_navigation_and_contributors``.
-    """
+    source: ADR-0685"""
     if generated_at is None:
         generated_at = datetime.now(timezone.utc)
 

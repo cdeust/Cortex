@@ -46,11 +46,11 @@ jobs:
       - name: Regenerate badge
         run: python3 scripts/refresh_mcp_toplist_badge.py
 
-      # No-ops when the regenerated file is byte-identical to the committed
-      # one, which is the expected result most months.
+      # No-op when the regenerated badge is byte-identical.
+      # source: ADR-0806
       #
-      # BADGE_REFRESH_TOKEN is optional. Without it the PR is authored by
-      # GITHUB_TOKEN. That has two distinct consequences, not one:
+      # BADGE_REFRESH_TOKEN is optional; fall back to GITHUB_TOKEN.
+      # source: ADR-0806
       #
       # source: ADR-0806
 

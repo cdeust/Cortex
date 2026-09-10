@@ -1,14 +1,7 @@
 """Regression guard for the anti-537k branch of
 tests_py/_pg_safety_guards.py:guard_against_populated_db.
 
-Split out of test_conftest_guard.py (issue #276/#287 boy-scout follow-up
-— see test_guard_against_populated_db.py's docstring for the size-cap
-rationale this split serves). This class directly tests the critical
-branch the 2026-06-10 incident (537,396 production memories deleted)
-demonstrated was absent: a populated, non-test-named database MUST be
-blocked. Any change that weakens this branch must fail one of these
-tests, making that change visible in CI before it ships.
-"""
+source: ADR-1017"""
 
 from __future__ import annotations
 

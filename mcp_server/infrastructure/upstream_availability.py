@@ -1,15 +1,6 @@
 """Detect whether upstream MCP integrations are reachable.
 
-Gates the registration of the three upstream-dependent tools
-(``ingest_codebase`` + ``change_impact`` → ai-architect-mcp-codebase; ``ingest_prd``
-→ prd-spec-generator). On a standalone install with no upstream configured,
-these tools do not register — so every advertised tool works out of the box.
-
-source: Anthropic MCP Directory submission decision 2026-06-19 — the bundle
-presents 43 standalone tools; the 3 upstream-integration tools auto-register
-only when their upstream MCP server is actually present (mcp-connections.json
-entry, marketplace plugin, PATH binary, or sibling checkout).
-"""
+source: ADR-0620"""
 
 from __future__ import annotations
 
@@ -24,10 +15,7 @@ from mcp_server.infrastructure.file_io import read_json
 def _server_command_runnable(server_name: str) -> bool:
     """True when mcp-connections.json wires ``server_name`` to a runnable command.
 
-    A path-form command must exist and be executable; a bare command name must
-    resolve on PATH. A configured-but-broken entry reads as unavailable so the
-    gated tool is not advertised when it could only fail.
-    """
+    source: ADR-0620"""
     config = read_json(MCP_CONNECTIONS_PATH) or {}
     server = (config.get("servers") or {}).get(server_name)
     if not isinstance(server, dict):
@@ -42,15 +30,13 @@ def _server_command_runnable(server_name: str) -> bool:
 
 
 def codebase_upstream_available() -> bool:
-    """True when the ai-architect-mcp-codebase (``codebase``) MCP server is reachable.
+    """True when the ai-architect-mcp-codebase (``codebase``) MCP server is
+    reachable.
 
-    Either explicitly wired in mcp-connections.json, or discoverable via the
-    marketplace plugin / PATH binary / sibling source checkout.
-    """
+    source: ADR-0620"""
     if _server_command_runnable("codebase"):
         return True
-    # Lazy import: pipeline_discovery is infra-internal and heavier than this
-    # module; importing at call time keeps the gate cheap when already wired.
+    # source: ADR-0620
     from mcp_server.infrastructure.pipeline_discovery import (  # noqa: PLC0415 — documented deferral: pipeline_discovery is heavier than this module; the gate stays cheap when already wired
         discover_pipeline_command,
     )

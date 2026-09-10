@@ -1,0 +1,14 @@
+# ADR-0709: scripts/check_ci_file_count.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `scripts/check_ci_file_count.py`; original SHA-256 `9fd9fa03029ec8720e57a044227fe3f74cfbcb4f905d58125737a1e997138a72`.
+
+## Original comment, lines 11–12
+
+````text
+# source: https://docs.github.com/en/rest/pulls/pulls#list-pull-requests-files
+# The REST endpoint used by dorny/paths-filter returns at most 3000 files.
+````
+

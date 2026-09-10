@@ -10,14 +10,7 @@ exact same evidence (``resolve_cwd`` for ``directory_context``,
 logic, only a retrospective re-application of the existing write-time
 logic to rows it never ran against successfully.
 
-One-shot campaign pass, not wired into ``run_wiki_maintenance``/
-``consolidate``: unlike the wiki catch-all bucket (continuously
-repopulated by ongoing authoring), the root cause that produced
-domain-less memories was a Windows path-casing bug (issue #95) already
-fixed at the write path — this pass drains the pre-existing stock, it
-does not need to run on every consolidate cycle. Invoked by
-``scripts/memory_domain_backfill.py``.
-"""
+source: ADR-0367"""
 
 from __future__ import annotations
 
@@ -39,11 +32,7 @@ from mcp_server.infrastructure.pg_store_memory_domain import (
 
 logger = logging.getLogger(__name__)
 
-# Per-run scan cap — mirrors DEFAULT_BACKFILL_LIMIT's rationale in
-# wiki_source_backfill_pass.py: bounds one run's cost. The known stock is
-# ~1355 rows (I6 audit), comfortably under this cap in one pass; a second
-# invocation is a no-op by construction (list_domainless_memories only
-# returns rows still empty) if the stock ever exceeds it.
+# source: ADR-0367
 DEFAULT_MEMORY_DOMAIN_BACKFILL_LIMIT = 5000
 
 
@@ -107,34 +96,7 @@ async def run_memory_domain_backfill_pass(
 ) -> dict[str, Any]:
     """Re-derive and persist the domain for domain-less memories.
 
-    Pre-condition:  ``store`` exposes ``batch_pool``
-                    (``psycopg_pool.ConnectionPool``), matching how
-                    ``consolidate`` and ``wiki_domain_backfill_pass``
-                    already borrow connections for maintenance sweeps.
-                    ``resolve_directory``/``resolve_project_tag`` default
-                    to the production functions ``remember``/
-                    ``backfill_memories`` already use (dependency
-                    injection point for tests — coding-standards.md §5).
-                    ``include_orphans`` defaults to False (standard
-                    campaign behavior — orphans are terminal); set True
-                    only to deliberately rescan rows already tagged
-                    ``domain-orphan``, e.g. after a resolution-logic fix
-                    that could newly resolve some of them (INC6.2).
-    Post-condition: for every scanned domain-less memory where
-                    ``core.memory_domain_backfill.derive_memory_domain``
-                    finds a resolving source, ``memories.domain`` equals
-                    that derived domain IFF ``apply`` is True, and any
-                    pre-existing ``domain-orphan`` tag is removed
-                    (``update_memory_domain``'s contract). Rows with
-                    no resolving source are tagged ``domain-orphan``
-                    IFF ``apply`` is True. ``apply=False`` performs the
-                    same derivation without writing (dry run) — the
-                    returned counts and journal are identical either
-                    way, so a caller can diff dry-run vs. applied
-                    output to confirm 1:1 correspondence. Never
-                    overwrites a non-empty ``domain`` (enforced at the
-                    SQL layer, ``pg_store_memory_domain.py``).
-    """
+    source: ADR-0367"""
 
     resolve_directory = resolve_directory or _default_resolve_directory()
     resolve_project_tag = resolve_project_tag or _default_resolve_project_tag()

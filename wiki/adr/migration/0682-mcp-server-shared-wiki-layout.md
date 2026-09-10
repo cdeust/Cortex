@@ -1,0 +1,71 @@
+---
+title: "ADR-0682 — mcp_server/shared/wiki_layout.py rationale"
+status: accepted
+source: mcp_server/shared/wiki_layout.py
+---
+
+# ADR-0682 — mcp_server/shared/wiki_layout.py
+
+Migrated source rationale. The excerpts below are preserved verbatim from the source snapshot; historical identifiers inside quotations are not current identities.
+
+## module — original line 3 (docstring)
+
+````text
+The wiki is an authored long-form Markdown layer. Pages live under a
+supplied wiki root; this module only computes paths so the core layer
+stays filesystem-agnostic.
+````
+
+## module — original line 9 (docstring)
+
+````text
+    <root>/adr/NNNN-<slug>.md         architecture decision records
+    <root>/specs/<slug>.md            feature specs / PRDs / design docs
+    <root>/files/<path-slug>.md       per-file documentation
+    <root>/notes/<slug>.md            free-form notes / investigations
+    <root>/.generated/INDEX.md        auto-regenerated table of contents
+
+````
+
+## module — original line 21 (comment)
+
+````text
+# Modern kinds (ADR-2244 §4.1). Each drives a directory under wiki/ for
+# pages classified to that kind. New writes use these names exclusively.
+````
+
+## module — original line 34 (comment)
+
+````text
+# Legacy kinds — kept in PAGE_KINDS so existing pages remain readable and
+# wiki_list/wiki_read continue to function during the migration window.
+# New code SHOULD NOT route to these. See
+# ``mcp_server.shared.wiki_classification.LEGACY_KIND_TO_MODERN`` for the
+# read-time normalization map.
+````
+
+## module — original line 48 (comment)
+
+````text
+# Full set accepted by ``page_path`` / ``domain_page_path`` — modern + legacy
+# for backward-compat. Validation in higher layers (wiki_classification.py)
+# enforces modern-only on write.
+````
+
+## module — original line 55 (comment)
+
+````text
+# Trailing extension tokens to strip before slug consumers append ".md".
+# Without this strip, an input title that already looks like a filename
+# (e.g. "001-zero-dependencies.md") produced filenames like
+# "2234-001-zero-dependencies.md.md" because every caller in the wiki
+# layer appends ".md" unconditionally. Strip iteratively so e.g.
+# "foo.md.md" → "foo".
+````
+
+## module — original line 113 (comment)
+
+````text
+# source: structural — a page path is at minimum kind/filename, so fewer than
+# two parts cannot name a page.
+````

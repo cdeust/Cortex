@@ -1,10 +1,6 @@
 """Engram-slot allocation mixin for PgMemoryStore.
 
-Split out of pg_store_auxiliary.py (issue #407: 397 lines over the
-300-line §4.1 cap) — engram slot allocation (Josselyn & Tonegawa 2020)
-is its own concern, distinct from prospective/procedural/archive/
-cortical-schema storage.
-"""
+source: ADR-0546"""
 
 from __future__ import annotations
 
@@ -22,9 +18,7 @@ class PgEngramMixin(PgStoreHost):
         if existing >= num_slots:
             return
         slots = range(existing, num_slots)
-        # source: PostgreSQL 16 functions-srf.html / sql-insert.html.
-        # Preserve the existing range, excitability and conflict behavior;
-        # the first remember previously sent 5000 independent INSERTs.
+        # source: ADR-0546
         self._execute(
             "INSERT INTO engram_slots (slot_index, excitability) "
             "SELECT slot_index, 0.5 "
@@ -78,11 +72,7 @@ class PgEngramMixin(PgStoreHost):
     ) -> int:
         """Return the number of memories assigned to *slot_index*.
 
-        Lightweight alternative to ``get_memories_in_slot`` when only the
-        count is needed (e.g. the ``temporally_linked`` metric in engram
-        allocation).  *exclude_id* omits a specific memory from the count
-        so the caller doesn't need to guess whether it's committed yet.
-        """
+        source: ADR-0546"""
         if exclude_id is not None:
             row = self._execute(
                 "SELECT COUNT(*) AS c FROM memories WHERE slot_index = %s AND id != %s",

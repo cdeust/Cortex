@@ -20,13 +20,7 @@ def run_plasticity_cycle(
 ) -> dict:
     """Apply Hebbian LTP/LTD to knowledge graph edges.
 
-    `memories` may be pre-loaded by the consolidate handler (Phase B of
-    issue #13). When not provided, falls back to a broader hot-memory
-    window than before to avoid the co-access starvation documented in
-    the Feinstein/Feynman audit of darval's 66K run (previous limit=50
-    across 10,770 entities → 99.95% LTD was distribution collapse, not
-    plasticity).
-    """
+    source: ADR-0372"""
     try:
         entities = store.get_all_entities(min_heat=0.0)
         relationships = store.get_all_relationships()
@@ -76,18 +70,13 @@ def run_plasticity_cycle(
         }
 
 
-# Source: issue #13 — the previous limit=50 sampled ~0.5% of a 10k-
-# entity store which collapsed the co-access set. 2000 gives an order-
-# of-magnitude better sample while keeping the subsequent O(N_mem × N_ent)
-# substring loop under ~25M ops on darval's store size.
+# source: ADR-0372
 _CO_ACCESS_SAMPLE_CAP = 2000
 
-# Heat floor for the co-access sample (hot memories only).
-# source: pre-existing tuned value, extracted unchanged (#197 family 3);
-# provenance not recorded at introduction
+# source: ADR-0372
 _CO_ACCESS_MIN_HEAT = 0.1
 
-# source: structural — a co-access edge needs at least a pair of entities
+# source: ADR-0372
 _MIN_PAIR_ENTITIES = 2
 
 
@@ -180,9 +169,7 @@ def _apply_updates(
 ) -> tuple[int, int]:
     """Apply Hebbian weight updates via a single batched UPDATE.
 
-    Source: issue #13 — plasticity previously ran one UPDATE per edge
-    inside a loop. Batched path collapses 30k+ round-trips into one.
-    """
+    source: ADR-0372"""
     batch: list[tuple[int, float]] = []
     ltp_count = 0
     ltd_count = 0

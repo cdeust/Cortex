@@ -1,21 +1,6 @@
 """Domain mapping — resolves paths, slugs, and hints to canonical domain names.
 
-Builds the mapping dynamically from git repos discovered on the filesystem.
-No hardcoded domain list — git remote URLs are the structural invariant
-(they survive renames, moves, worktree creation).
-
-Algorithm (Rejewski + Shannon):
-  1. Discover git repos under ~/Developments
-  2. Group related repos by shared remote-URL name prefix
-  3. Build a slug decoder (encode known paths as slugs, match by prefix)
-  4. Build a fragment index (all substrings of known names)
-  5. Resolve: cwd → git_root → longest prefix match → canonical name
-
-Pure business logic — zero subprocess I/O. Root discovery and remote-URL
-lookup are pure-Python (filesystem walk + ``.git/config`` parsing) rather
-than shelling out to ``git``, to avoid the Windows subprocess pipe-handle
-deadlock described in cdeust/Cortex#91.
-"""
+source: ADR-0647"""
 
 from __future__ import annotations
 
@@ -24,12 +9,12 @@ from functools import lru_cache
 from pathlib import Path
 import os as _os
 
-# source: _shared_prefix comment — >= 4 chars lets "cortex" group
-# cortex-cowork but rejects "ai" from falsely grouping unrelated ai-* repos
+# source: ADR-0647
+
 _MIN_MEANINGFUL_FRAGMENT_CHARS = 4
 
-# source: pre-existing tuned value, extracted unchanged (#197 family 3);
-# provenance not recorded at introduction
+# source: ADR-0647
+# source: ADR-0647
 _MIN_SLUG_CHARS = 10
 
 
@@ -50,15 +35,7 @@ def _to_posix(path: Path) -> str:
     backslashes); on Windows it matches the form ``git`` itself prints
     (and that ``_git_root`` already normalizes to).
 
-    Single choke point for path-string construction in this module: every
-    producer of a path string that will later be compared against
-    ``_git_root``'s output (``RepoInfo.fs_path`` — the sole source of
-    ``DomainRegistry.path_to_repo`` keys, the slug index, and the prefix
-    match in ``resolve_domain``) must go through here, so the fast-path
-    lookup ``root in registry.path_to_repo`` (``resolve_domain`` /
-    ``resolve_cwd``) actually hits on Windows instead of silently falling
-    through to the slower prefix/fragment matching. source: cdeust/Cortex#93.
-    """
+    source: ADR-0647"""
     return str(path).replace("\\", "/")
 
 
@@ -75,28 +52,7 @@ def _get_remote_url(repo_path: Path) -> str:
     section, or ``''`` if the config file, the section, or the key is
     absent. Never raises.
 
-    Deliberately does zero subprocess I/O. ``subprocess.check_output``
-    with ``timeout=`` shells out to spawn a child process via pipes; on
-    Windows, a ``TimeoutExpired`` on that child triggers a *second*,
-    timeout-less ``communicate()`` inside CPython's own ``subprocess.run``
-    (subprocess.py:565) which can block forever if a concurrently-spawned
-    sibling process (e.g. the AP upstream bridge) inherited the pipe's
-    write handle — see cdeust/Cortex#91. Reading ``.git/config`` sidesteps
-    the whole class of failure; INI parsing of a config file we control
-    the shape of is simpler than shelling out regardless of platform.
-
-    Decision (worktree blind spot — superseded, see below): a linked
-    worktree's remotes live in the *main* repo's ``.git/config``. This
-    function still does NOT dereference a worktree's ``.git`` file itself
-    — ``_discover_repos`` (its only caller) still filters to
-    ``(item / ".git").is_dir()``, so a worktree's ``.git`` *file* is never
-    passed in here, and ``cfg.is_file()`` below fails safe if that ever
-    changes. Worktree resolution is instead handled one layer up, at
-    lookup time: ``_resolve_repo_for_root`` dereferences a worktree's
-    ``.git`` file to the *main* repo's root and reuses that repo's
-    already-discovered remote/canonical — no duplicate discovery, no
-    duplicate domain (cdeust/Cortex INC6.2).
-    """
+    source: ADR-0647"""
     try:
         cfg = repo_path / ".git" / "config"
         if not cfg.is_file():
@@ -174,8 +130,8 @@ def _shared_prefix(a: str, b: str) -> str:
     parts_a = a.split("-")
     parts_b = b.split("-")
     common: list[str] = []
-    # strict=False: a common-prefix scan over two hyphen-split domain ids of
-    # potentially different segment counts is defined to stop at the shorter.
+    # source: ADR-0647
+
     for pa, pb in zip(parts_a, parts_b, strict=False):
         if pa == pb:
             common.append(pa)
@@ -301,28 +257,12 @@ def _build_fragment_index(
 def _git_root(path: str) -> str | None:
     """Find the git repo root for a path by walking up to the nearest ``.git``.
 
-    precondition: ``path`` is a string; it need not exist on disk.
-    postcondition: returns the forward-slash-normalized absolute path of
-    the nearest ancestor of ``path`` (inclusive) that has a ``.git`` entry
-    — a directory for a normal clone, a *file* (``gitdir: <path>``) for a
-    linked worktree (``git-worktree(1)``) — or ``None`` if no such
-    ancestor exists up to the filesystem root or ``path`` cannot be
-    resolved. Reproduces ``git rev-parse --show-toplevel``'s answer (the
-    current worktree's root, not the common ``.git`` dir) for every shape
-    this registry's callers pass in: a subdirectory of a repo, a repo
-    root itself, or a path outside any repo. Does not reproduce
-    ``GIT_DIR``/``GIT_WORK_TREE`` env-var overrides or bare repositories —
-    neither shape is ever discovered by ``_discover_repos`` (it only
-    walks directories with a ``.git`` child), so neither is reachable here.
-
-    Deliberately does zero subprocess I/O — see ``_get_remote_url`` for
-    the Windows pipe-handle-inheritance deadlock (cdeust/Cortex#91) this
-    avoids. Forward-slash normalization matches what ``git`` itself
-    prints on Windows, and matches ``registry.path_to_repo``'s keys
-    (``RepoInfo.fs_path``, normalized via ``_to_posix`` at construction —
-    see cdeust/Cortex#93), so the ``root in registry.path_to_repo`` fast
-    path in ``resolve_domain``/``resolve_cwd`` hits on every platform.
-    """
+    precondition: path is a string and need not exist.
+    postcondition: returns the normalized absolute nearest ancestor with
+    a .git directory or worktree gitdir file. Returns None when no ancestor
+    exists or resolution fails. GIT_DIR/GIT_WORK_TREE overrides and bare
+    repositories are unsupported.
+    source: ADR-0647"""
     try:
         candidate = Path(path).resolve()
     except OSError:
@@ -336,24 +276,12 @@ def _git_root(path: str) -> str | None:
 def _dereference_worktree_gitdir(git_entry: Path) -> Path | None:
     """Resolve a linked worktree's ``.git`` file to its main repo's root.
 
-    precondition: ``git_entry`` is the ``.git`` path found at the root
-    ``_git_root`` returned (i.e. ``<git_root>/.git``) — may or may not
-    exist, may be a directory (normal clone) or a file (linked worktree,
-    ``git-worktree(1)``: ``gitdir: <path>`` where ``<path>`` is
-    ``<main>/.git/worktrees/<name>``).
-    postcondition: returns the main repo's root directory (the directory
-    ``_discover_repos`` would have registered) when ``git_entry`` is a
-    well-formed worktree gitdir-file. Returns ``None`` — never raises —
-    when ``git_entry`` is a directory (nothing to dereference, normal
-    clone), missing, unreadable, empty, or its content does not match the
-    expected ``<main>/.git/worktrees/<name>`` shape (relocated
-    ``.git/worktrees`` admin dir, corrupted file, non-worktree gitdir
-    pointer). Fail-safe by construction: every early return is ``None``,
-    so callers that only act on a non-``None`` result inherit today's
-    empty-domain behavior for anything this function cannot confidently
-    parse — no new failure mode is introduced. Pure filesystem read, zero
-    subprocess I/O (cdeust/Cortex#91 precedent).
-    """
+    precondition: git_entry is the .git path under the discovered root.
+    postcondition: returns the main repository root for a well-formed linked
+    worktree gitdir file. Returns None for directories, missing, unreadable,
+    empty, malformed, relocated, or non-worktree entries. Never raises;
+    performs filesystem reads without subprocess calls.
+    source: ADR-0647"""
     if not git_entry.is_file():
         return None
     try:
@@ -388,22 +316,12 @@ def _dereference_worktree_gitdir(git_entry: Path) -> Path | None:
 def _resolve_repo_for_root(root: str, registry: DomainRegistry) -> RepoInfo | None:
     """Look up the registered repo for a git root, dereferencing worktrees.
 
-    precondition: ``root`` is the forward-slash string ``_git_root``
-    returned for some path (the nearest ancestor with a ``.git`` entry).
-    ``registry`` is the current ``DomainRegistry``.
-    postcondition: if ``root`` is itself a registered repo (the common
-    case — a normal clone under a discovered dev root), returns its
-    ``RepoInfo`` directly. Otherwise, if ``root`` is a linked worktree
-    (its ``.git`` is a file), dereferences the gitdir pointer to the main
-    repo's root and returns *that* repo's ``RepoInfo`` — a cwd inside a
-    linked worktree resolves to the SAME domain as the main checkout,
-    never a new one (worktrees are never inserted into ``path_to_repo``
-    by ``_discover_repos``, so no duplicate domain can be created here).
-    Returns ``None`` if ``root`` is unregistered and not a resolvable
-    worktree of a registered repo, or the gitdir pointer cannot be parsed
-    (fail-safe, matches pre-existing behavior — caller falls through to
-    an empty domain).
-    """
+    precondition: root is the normalized nearest Git root; registry is the
+    current DomainRegistry.
+    postcondition: returns registered RepoInfo directly for known roots;
+    linked worktrees resolve to their registered main repository's RepoInfo.
+    Returns None for unregistered roots or unresolvable worktree pointers.
+    source: ADR-0647"""
     repo = registry.path_to_repo.get(root)
     if repo is not None:
         return repo
@@ -437,10 +355,7 @@ def _candidate_dev_roots() -> list[Path]:
       3. ``~/Documents/Developments`` — the common macOS Documents-nested layout.
       4. ``~/dev`` and ``~/code`` — common alternative parents.
 
-    The first directory that exists wins. Without this fallback the
-    registry returns zero repos on systems where the user keeps source
-    under ``~/Documents`` (a real layout in production today).
-    """
+    source: ADR-0647"""
 
     cands: list[Path] = []
     env = _os.environ.get("CORTEX_DEV_ROOT")
@@ -462,10 +377,7 @@ def _candidate_dev_roots() -> list[Path]:
 def _build_registry() -> DomainRegistry:
     """Build the complete domain registry from git repos. Cached at startup.
 
-    Scans every candidate dev root (see ``_candidate_dev_roots``) so the
-    registry works regardless of whether the user keeps repos at
-    ``~/Developments`` or ``~/Documents/Developments``.
-    """
+    source: ADR-0647"""
     repos: list[RepoInfo] = []
     seen_paths: set[str] = set()
     for dev_root in _candidate_dev_roots():
@@ -539,10 +451,8 @@ def resolve_domain(input_str: str) -> str:
     if best_frag:
         return best_frag
 
-    # 5. No match. For raw slugs (e.g. "-Users-cdeust-Developments-jarvis")
-    # returning the whole path-encoded string pollutes domain ids; strip the
-    # canonical "-Users-…-Developments-" / "-Documents-" prefix and return
-    # the trailing meaningful segment instead.
+    # source: ADR-0647
+
     if clean.startswith("-"):
         stripped = lower
         for prefix in (
@@ -580,9 +490,6 @@ def resolve_cwd(cwd: str) -> str:
         repo = _resolve_repo_for_root(root, registry)
         if repo:
             return repo.canonical
-    # If not in a known git repo, return '' so callers can fall through
-    # to explicit domain hints.  The old behaviour delegated to
-    # resolve_domain(cwd) which *always* returns non-empty (it falls
-    # back to the lowercased input), silently overriding any explicit
-    # domain the caller intended to use.
+    # source: ADR-0647
+
     return ""

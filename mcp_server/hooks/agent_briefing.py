@@ -4,50 +4,11 @@
 When the orchestrator or any parent agent spawns a subagent, this hook
 retrieves relevant memories for the spawned agent's task context.
 
-NOTE: SubagentStart hook context injection behavior is not fully documented
-in Claude Code. If exit 0 stdout is injected (like SessionStart), the
-briefing appears in the agent's context. If not, this hook still warms
-related memories via access timestamps, improving subsequent recall.
-Needs validation against Claude Code source.
-
-Paper backing:
-  - Smith & Vela 2001 "Environmental context-dependent memory" (meta-analysis):
-    context reinstatement at retrieval produces reliable memory benefit
-    (d=0.28, ~15-20% boost). Injecting task-relevant memories at agent
-    start implements context reinstatement.
-  - Wegner 1987 Transactive Memory Systems: directory knowledge — each
-    agent knows what the team knows. The briefing injects team decisions
-    plus agent-scoped prior work.
-  - Collins & Loftus 1975: spreading activation — task description
-    activates related memory nodes.
-
-Source backing:
-  - Claude Code agent-system (lesson 05): agents start with "a separate
-    LLM turn with its own tool pool, system prompt, model." Our briefing
-    augments that system prompt with memory context.
-  - Claude Code coordinator-mode (lesson 21): "Never delegate understanding.
-    Include file paths, line numbers, what specifically to change." Our
-    briefing automates this by recalling past context for the task.
-  - Zetetic team agents (cdeust/zetetic-team-subagents): orchestrator.md
-    already documents manual briefing via recall/get_causal_chain. This
-    hook automates that pattern.
-
-Strategy:
-  Extracts the task description from the agent prompt, runs a lightweight
-  PG recall (FTS + heat, no embedding to avoid latency), and injects
-  matching memories as a context prefix.
-
   Gated by:
     - Agent type must be a known, usable specialist (engineer, tester, etc.)
     - Task description must be non-empty
     - At least 1 relevant memory found
     - Max 3 memories injected (keep context compact)
-
-Module split (issue #401, 300-line cap): keyword extraction lives in
-``agent_briefing_keywords.py``, the PG connect + query in
-``agent_briefing_query.py`` (both re-exported via ``__all__``). Event
-gating and the specialist-roster loader stay here — the latter reads the
-``CLAUDE_DIR`` attribute the test suite monkeypatches on this module.
 
 Installation
 ------------
@@ -63,22 +24,14 @@ Add to ``~/.claude/settings.json`` under hooks::
         }
     }
 
-Note: SubagentStart is available in Claude Code. The hook receives:
-{
-    "session_id": "...",
-    "agent_name": "engineer",
-    "agent_type": "custom",
-    "prompt": "Fix the reranker score normalization...",
-    "cwd": "/path/to/project"
-}
-
 Invariants
 ----------
 - Exit 0: stdout injected into agent's context
 - Exit 1: skip (no relevant context)
 - Must complete within 5s
 - Logs to stderr only
-"""
+
+source: ADR-0481"""
 
 from __future__ import annotations
 
@@ -131,18 +84,7 @@ _FALLBACK_AGENTS: frozenset[str] = frozenset(
     }
 )
 
-# Reserved meta-agent names: agents whose declared job is to ROUTE work to
-# other agents rather than perform it, so a roster reduced to only them is
-# not a specialist set a briefing can scope memories to (treated as empty).
-#
-# A convention of the *consumer* environment, not a fact about this repo —
-# `dispatch.md` lives under the reader's own ~/.claude/agents/, not in this
-# repository, so no path/commit/digest here would be independently
-# verifiable. What IS verifiable and pinned by tests: agent_briefing falls
-# back when the discovered roster reduces to a router (see
-# test_agents_dir_with_only_dispatch_falls_back_to_builtin_set and the
-# end-to-end reproduction in test_hook_receipts.py). A reader without that
-# setup loses nothing — the name is filtered only when present, and logged.
+# source: ADR-0481
 _NON_SPECIALIST_META_AGENTS: frozenset[str] = frozenset({"dispatch"})
 
 # Matches `name: <slug>` or `name: "<slug>"` in agent-file YAML frontmatter.
@@ -167,21 +109,16 @@ def _parse_frontmatter_name(path: Path) -> str | None:
 def _load_specialist_agents() -> frozenset[str]:
     """Dynamically load agent slugs from ~/.claude/agents/ at module import.
 
-    Scans ~/.claude/agents/*.md and ~/.claude/agents/genius/*.md, parses the
-    `name:` frontmatter field of each, drops known non-specialist meta-agents
-    (_NON_SPECIALIST_META_AGENTS), and returns the frozen set. Falls back to
-    _FALLBACK_AGENTS whenever the resulting roster is empty — directory
-    absent (e.g., CI without install) and directory-present-but-degenerate
-    (e.g., plugin-only-dispatch, holding only dispatch.md) are the same
-    failure mode: no specialist to scope memories to. Cached for the process
-    lifetime — agents added after import need a restart to be picked up.
+        Scans ~/.claude/agents/*.md and ~/.claude/agents/genius/*.md, parses the
+        `name:` frontmatter field of each, drops known non-specialist meta-agents
+        (_NON_SPECIALIST_META_AGENTS), and returns the frozen set. Falls back to
+        _FALLBACK_AGENTS whenever the resulting roster is empty — directory
+        absent (e.g., CI without install) and directory-present-but-degenerate
+        (e.g., plugin-only-dispatch, holding only dispatch.md) are the same
+        failure mode: no specialist to scope memories to. Cached for the process
+        lifetime — agents added after import need a restart to be picked up.
 
-    Root is CLAUDE_DIR (default ~/.claude, overridable via CORTEX_CLAUDE_DIR
-    — mcp_server/infrastructure/config.py), the project's test-isolation
-    seam (issue #219). Each zetetic agent declares `memory_scope:` in
-    frontmatter, equal to the `agent_context` used in Cortex memory rows —
-    the briefing hook filters recall by it once agent_topic is set.
-    """
+    source: ADR-0481"""
     root = CLAUDE_DIR / "agents"
     names: set[str] = set()
     if root.is_dir():
@@ -203,8 +140,7 @@ def _load_specialist_agents() -> frozenset[str]:
 # ~/.claude/agents/ (116+ zetetic agents when installed).
 _SPECIALIST_AGENTS = _load_specialist_agents()
 
-# source: pre-existing tuned value, extracted unchanged (#197 family 3);
-# provenance not recorded at introduction
+# source: ADR-0481
 _MIN_PROMPT_CHARS = 20
 
 
@@ -237,11 +173,7 @@ def process_event(event: dict[str, Any]) -> None:
             _log(f"skip: no relevant memories for {agent_name}")
             sys.exit(0)
 
-        # Receipt for exactly the memories entering the agent's context
-        # (blame path T2, decision 4255039 correction 3 — SubagentStart
-        # is the fourth injecting channel). Emitted before rendering so
-        # the header can carry the ⟦rcpt:id⟧ marker (correction 2); a
-        # failed write degrades to a marker-less briefing.
+        # source: ADR-0481
         receipt_id = emit_hook_receipt(
             conn,
             [{"memory_id": m["id"]} for m in memories],

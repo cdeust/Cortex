@@ -1,13 +1,5 @@
 #!/usr/bin/env bash
-# Refresh scripts/rustup-init.sha256 with the current SHA256 of the
-# rustup bootstrap installer at https://sh.rustup.rs.
-#
-# Run AFTER manually auditing the upstream script. The hash is the
-# trust anchor for every fresh Cortex install — never refresh
-# blindly. Diff the bootstrap against the previous known-good copy
-# before committing the new digest.
-#
-# Usage:  bash scripts/refresh_rustup_hash.sh
+# source: ADR-0778
 
 set -euo pipefail
 

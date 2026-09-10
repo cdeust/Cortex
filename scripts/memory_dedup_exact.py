@@ -2,11 +2,6 @@
 """Collapse active memories with byte-identical content onto their
 hottest member via supersession — I6-D1, INC6.3.
 
-Runs ``handlers.consolidation.memory_dedup_exact_pass`` against the
-shared store and writes a campaign journal artifact (dup_key, elected
-survivor, superseded ids, group size, observed domains per group — the
-same "journalisation" shape as ``memory_domain_backfill.py``, I6-D3).
-
 Usage
 -----
 
@@ -18,12 +13,7 @@ Apply the change to the DB::
 
     uv run python scripts/memory_dedup_exact.py --apply
 
-The pass is idempotent: re-running after ``--apply`` finds zero groups
-left to collapse (``current_memories`` no longer contains the superseded
-rows, so the grouping query returns nothing for them), and never
-supersedes a row that is not still an open chain head at write time
-(``pg_store_memory_dedup.supersede_to_existing``'s CAS guard).
-"""
+source: ADR-0765"""
 
 from __future__ import annotations
 

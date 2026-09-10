@@ -1,10 +1,6 @@
 """Memory query mixin for PgMemoryStore: filtered reads, time-window queries.
 
-Streaming/chunked reads live in the sibling ``pg_store_query_stream``
-module and entity co-access JOIN queries in ``pg_store_co_access``
-(both split out by issue #407: this file was 401 lines over the
-300-line §4.1 cap).
-"""
+source: ADR-0560"""
 
 from __future__ import annotations
 
@@ -100,15 +96,7 @@ class PgQueryMixin(PgStoreHost):
     ) -> list[dict[str, Any]]:
         """Page through memories for validation, ``id`` order (I6-D6).
 
-        ``after_id`` is a cursor: pass the max ``id`` seen in the previous
-        page to continue. Ordering is by ``id ASC`` (not ``last_accessed``)
-        specifically so the cursor is stable across calls — last_accessed
-        can change between pages if a validation pass itself touches rows.
-        ``include_stale`` defaults False (unchanged behavior for existing
-        callers — assess_coverage, change_impact); validate_memory passes
-        True so a provenance re-check can rehabilitate (de-stale) a
-        memory whose references all resolve again.
-        """
+        source: ADR-0560"""
         rows = self._execute(
             "SELECT * FROM memories WHERE id > %s AND (NOT is_stale OR %s) "
             "ORDER BY id ASC LIMIT %s",
@@ -162,11 +150,7 @@ class PgQueryMixin(PgStoreHost):
     ) -> list[dict[str, Any]]:
         """Vector-ranked branch of ``search_by_tag_vector`` (embedding present).
 
-        current_memories: typed pool hits are inserted at rank 0 by the
-        caller — a superseded instruction/preference served here would
-        outrank its own correction, so exclusion at the source is the
-        only safe placement.
-        """
+        source: ADR-0560"""
         rows = self._execute(
             "SELECT *, (1.0 - (embedding <=> %s))::REAL AS score "
             "FROM current_memories "
@@ -202,12 +186,7 @@ class PgQueryMixin(PgStoreHost):
     ) -> list[dict[str, Any]]:
         """Vector search filtered by tag. Returns scored memories.
 
-        ENGRAM (arxiv 2511.12960): per-type retrieval pools guarantee
-        typed memories (preference, instruction) are not drowned out.
-        Delegates to ``_search_by_tag_vector_ranked`` /
-        ``_search_by_tag_vector_unranked`` depending on whether an
-        embedding was supplied.
-        """
+        source: ADR-0560"""
         emb = (
             np.frombuffer(query_embedding, dtype=np.float32)
             if query_embedding
@@ -220,14 +199,13 @@ class PgQueryMixin(PgStoreHost):
     def delete_memories_by_tag(self, tag: str, domain: str | None = None) -> int:
         """Delete memories with the given tag, optionally scoped to a domain.
 
-        precondition: tag is a non-empty string; domain is None or a non-empty string.
-        postcondition: returns the number of rows removed; rows removed iff their
-            tags JSONB contains [tag] AND (domain is None OR domain matches).
-            domain=None preserves global-purge behavior for callers that
-            actually want it (legacy contract). Caller is responsible for
-            passing domain when scope matters (e.g. seed_project, which is
-            per-repo by design — see issue #16).
-        """
+                precondition: tag is a non-empty string; domain is None or a
+                non-empty string.
+        postcondition: returns the number of rows removed; rows removed iff their tags
+        JSONB contains [tag] AND (domain is None OR domain matches). domain=None
+        preserves global-purge behavior for callers that actually want it.
+
+                source: ADR-0560"""
         if domain is None:
             cur = self._execute(
                 "DELETE FROM memories WHERE tags @> %s::jsonb",

@@ -17,9 +17,7 @@ class PgEntityMixin(PgStoreHost):
     def update_entities_heat_batch(self, updates: list[tuple[int, float]]) -> int:
         """Batch-update entity heat. Single round-trip, single commit.
 
-        Source: issue #13 — mirror of update_memories_heat_batch for the
-        entity decay path in consolidate.
-        """
+        source: ADR-0547"""
         if not updates:
             return 0
         ids = [int(u[0]) for u in updates]
@@ -48,12 +46,7 @@ class PgEntityMixin(PgStoreHost):
     def insert_entity(self, data: dict[str, Any]) -> int:
         """Insert an entity with case-canonical dedup.
 
-        If an entity with the same case-insensitive canonical name already
-        exists, return its id (idempotent upsert). Otherwise insert with
-        the canonicalized name. Source: Curie I4 audit (2026-04-16)
-        found 111 case-variant duplicate groups; policy defined in
-        `mcp_server/shared/entity_canonical.canonicalize_entity_name`.
-        """
+        source: ADR-0547"""
 
         canonical = canonicalize_entity_name(data["name"])
         origin = data.get("origin", "text_concept")
@@ -64,8 +57,7 @@ class PgEntityMixin(PgStoreHost):
             (canonical,),
         ).fetchone()
         if existing:
-            # ast_symbol is the safe superset: if any ingestion path says this
-            # name is a code symbol, keep it exempt from fuzzy dedup forever.
+            # source: ADR-0547
             if origin == "ast_symbol" and existing.get("origin") != "ast_symbol":
                 self._execute(
                     "UPDATE entities SET origin = 'ast_symbol' WHERE id = %s",
@@ -92,9 +84,7 @@ class PgEntityMixin(PgStoreHost):
     def get_entity_by_name(self, name: str) -> dict[str, Any] | None:
         """Case-insensitive entity lookup (post-canonicalization policy).
 
-        Looks up by LOWER(name) so callers don't need to know the
-        canonical casing. Source: Curie I4 audit (2026-04-16).
-        """
+        source: ADR-0547"""
         row = self._execute(
             "SELECT * FROM entities WHERE LOWER(name) = LOWER(%s) LIMIT 1", (name,)
         ).fetchone()
@@ -177,11 +167,10 @@ class PgEntityMixin(PgStoreHost):
     def get_memories_mentioning_entity(
         self, entity_name: str, limit: int = 20, heads_only: bool = False
     ) -> list[dict[str, Any]]:
-        """Shared primitive with mixed callers. heads_only routes the read
-        through the current_memories view (supersession chain heads only) on
-        BOTH branches (FTS + ILIKE fallback): content-serving callers
-        (get_causal_chain previews, assemble_context Phase 2) pass True.
-        """
+        """Fetch memories mentioning the entity. heads_only=True restricts both
+        full-text and fallback queries to current chain heads.
+
+        source: ADR-0547"""
         src = "current_memories" if heads_only else "memories"
         rows = self._execute(
             f"SELECT * FROM {src} "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
@@ -241,16 +230,13 @@ class PgEntityMixin(PgStoreHost):
     def get_entity_ids_for_memories(self, memory_ids: list[int]) -> dict[int, set[int]]:
         """Bulk fetch entity-id sets for many memories in one round trip.
 
-        Replaces N per-candidate ``get_entities_for_memory`` calls in the
-        dendritic-cluster stage with a single ``WHERE memory_id = ANY(%s)``
-        scan of ``memory_entities``. Returns ``{memory_id: {entity_id, ...}}``;
-        memories with no linked entities are absent from the dict (callers
-        should default to the empty set).
+                Replaces N per-candidate ``get_entities_for_memory`` calls in the
+                dendritic-cluster stage with a single ``WHERE memory_id = ANY(%s)``
+                scan of ``memory_entities``. Returns ``{memory_id: {entity_id, ...}}``;
+                memories with no linked entities are absent from the dict (callers
+                should default to the empty set).
 
-        Source: refactor of ``recall_pipeline.dendritic_modulate`` to use
-        real entity-set Jaccard (Jaccard 1912 set similarity) instead of
-        the content-token proxy.
-        """
+        source: ADR-0547"""
         if not memory_ids:
             return {}
         rows = self._execute(

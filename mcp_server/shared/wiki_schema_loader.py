@@ -1,25 +1,6 @@
 """Self-hosting wiki schema — data model + pure parsers (Phase 1.3 of redesign).
 
-The wiki describes its own schema. Kinds, classifier rules, views, and
-triggers all live as markdown pages under reserved folders:
-
-    wiki/_kinds/    — kind definitions (frontmatter: name, required_sections, ...)
-    wiki/_rules/    — classifier rules (markdown tables: pattern → kind)
-    wiki/_views/    — saved queries (fenced ``cortex-query`` blocks)
-    wiki/_triggers/ — trigger declarations
-
-This module declares the typed registries and the pure ``str -> dataclass``
-parsers for each file shape. It performs zero I/O — every parser here takes
-already-read file content as a plain string.
-
-Port-and-adapter split (issue #126): the previous single-file version of
-this module also walked the filesystem (via ``infrastructure.wiki_store``)
-to actually build a registry from a wiki root. That I/O orchestration now
-lives in ``mcp_server.infrastructure.wiki_schema_reader.load_registry`` —
-the adapter that reads files on disk and calls the parsers declared here.
-Composition roots (handlers, ``mcp_server/__main__.py``) import
-``load_registry`` from that infrastructure module, not from here.
-"""
+source: ADR-0686"""
 
 from __future__ import annotations
 
@@ -86,7 +67,7 @@ class TriggerDefinition:
     """A trigger declaration from wiki/_triggers/*.md."""
 
     name: str
-    event: str  # 'session_end' | 'memory_stored' | 'benchmark_run' | ...
+    event: str  # source: ADR-0686
     condition: str
     action: str
 
@@ -102,11 +83,9 @@ class WikiRegistry:
 
 
 def wiki_registry_known_kind_names(registry: "WikiRegistry") -> set[str]:
-    """A free function, not a method: mutmut categorically excludes the
-    body of any `@dataclass`-decorated class (`mutmut/mutation/
-    file_mutation.py:236`), so logic placed on `WikiRegistry` methods would
-    carry zero mutation coverage no matter how the test loader names the
-    module (issue #262 3rd pass; issue #282).
+    """Return the registered wiki kind names as a set.
+
+    source: ADR-0686
     """
     return set(registry.kinds.keys())
 
@@ -141,8 +120,8 @@ def parse_kind(rel_path: str, content: str) -> KindDefinition | None:
 _TABLE_ROW_RE = re.compile(r"^\|(.+)\|$", re.MULTILINE)
 
 
-# source: structural — a markdown table needs a header row plus a separator
-# row before any rule row can exist (see the row indexing below).
+# source: ADR-0686
+
 _MIN_TABLE_ROWS = 2
 
 
@@ -153,11 +132,8 @@ def _parse_rule_row(header_cells: list[str], row: str) -> ClassifierRule | None:
     cells = [c.strip() for c in row.split("|")]
     if len(cells) != len(header_cells):
         return None
-    # strict=True: the length check immediately above already guarantees
-    # equal lengths here. Documented equivalent mutant
-    # (coding-standards.md §12.1): the `continue` on the preceding line
-    # makes a mismatch unreachable at this point, so strict=True vs
-    # strict=False/None is not observable.
+    # source: ADR-0686
+
     r = dict(zip(header_cells, cells, strict=True))
     if not r.get("pattern") or not r.get("kind"):
         return None
@@ -226,7 +202,4 @@ def parse_trigger(rel_path: str, content: str) -> TriggerDefinition | None:
     )
 
 
-# The filesystem walk that builds a ``WikiRegistry`` from a wiki root is
-# I/O and lives in ``mcp_server.infrastructure.wiki_schema_reader.load_registry``
-# (issue #126) — it imports the dataclasses and parsers above and drives
-# them from files read via ``Path`` / ``infrastructure.wiki_store``.
+# source: ADR-0686

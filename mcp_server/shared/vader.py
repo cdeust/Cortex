@@ -1,16 +1,6 @@
 """Minimal VADER sentiment analysis for engineering text.
 
-Implements the core algorithm from:
-  Hutto CJ & Gilbert E (2014) "VADER: A Parsimonious Rule-based Model for
-  Sentiment Analysis of Social Media Text." ICWSM.
-
-Key components implemented:
-  - Engineering-domain lexicon (~50 terms with valence ratings [-4, +4])
-  - H4: Negation handling (N_SCALAR = -0.74)
-  - H3: Degree modifiers (booster words)
-  - VADER normalization: compound = x / sqrt(x^2 + alpha), alpha=15
-
-Pure utility — no I/O, no dependencies on core/infrastructure.
+source: ADR-0675
 """
 
 from __future__ import annotations
@@ -18,14 +8,13 @@ from __future__ import annotations
 import math
 import re
 
-# ── VADER constants (from Hutto & Gilbert 2014) ────────────────────────────
+# source: ADR-0675
 
 _ALPHA = 15  # normalization constant
 _N_SCALAR = -0.74  # negation scalar (H4)
 
-# ── Engineering-domain lexicon: term -> valence [-4, +4] ───────────────────
-# Modeled after VADER's crowd-sourced lexicon but tuned for software
-# engineering text. Valence magnitudes follow VADER's scale convention.
+# source: ADR-0675
+
 
 _LEXICON: dict[str, float] = {
     # Negative [-4, -1]  # noqa: ERA001 -- section-header comment, not code
@@ -96,8 +85,8 @@ _LEXICON: dict[str, float] = {
     "interesting": 1.5,
 }
 
-# ── Degree modifiers (H3): word -> scalar multiplier ───────────────────────
-# Values from VADER paper Table 3.
+# source: ADR-0675
+
 
 _BOOSTERS: dict[str, float] = {
     "very": 0.293,

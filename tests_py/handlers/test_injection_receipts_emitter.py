@@ -73,8 +73,7 @@ def test_store_failure_degrades_to_none() -> None:
 
 
 def test_unknown_channel_is_a_loud_contract_violation() -> None:
-    # T2 channel enum hardening (decision 4255039 correction 3): a
-    # channel outside the enum is a coding bug, not a degradation mode.
+    # source: ADR-0951
     store = _Store()
     with pytest.raises(ValueError):
         emit_injection_receipt(store, _mems(), channel="banner")
@@ -187,7 +186,7 @@ def test_receipt_marker_format() -> None:
 
 
 def test_enum_members_are_the_four_decided_channels() -> None:
-    # Decision 4255039 correction 3 fixed the enum at exactly these four.
+    # source: ADR-0951
     assert INJECTION_CHANNELS == {
         "recall",
         "session_start",

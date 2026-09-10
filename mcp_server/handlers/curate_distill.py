@@ -1,13 +1,6 @@
 """Handler: curate_distill — emit understanding-level distillation jobs
 the in-session LLM consumes (M-D8).
 
-Composition root for ``core.distillation`` + ``core.distillation_reporting``.
-Same role split as ``curate_wiki`` (the only distillation mechanism in this
-system that has ever produced anything, audited 2026-07-10): this handler
-assembles candidate "dossiers" — pre-existing evidence a lesson-shaped
-synthesis is possible — and the in-session LLM authors the WHY as a normal
-``remember`` call. This handler is READ-ONLY: it never writes a memory row.
-
 Three dossier kinds (design doc §M-D8):
   1. error_success  — an error-tagged memory paired with the nearest later
      success-tagged memory sharing lexical entities.
@@ -18,14 +11,7 @@ Three dossier kinds (design doc §M-D8):
      dominant entity (reuses ``core.auto_curator.build_clusters`` as-is —
      no second clustering implementation).
 
-Idempotence: each dossier carries a deterministic ``marker`` tag
-(``distill-of:<hash>``). Before emitting a job, this handler skips any
-dossier whose marker already appears on a stored ``lesson`` memory — the
-same skip-before-offer pattern ``memify_derive.py`` uses for
-``derived-rel:`` markers. This bounds server-side re-offering; it cannot
-force the LLM to include the marker tag when it writes (same trust
-boundary ``curate_wiki`` already accepts for ``wiki_write``).
-"""
+source: ADR-0383"""
 
 from __future__ import annotations
 
@@ -54,8 +40,7 @@ from mcp_server.observability import silent_failure
 
 logger = logging.getLogger(__name__)
 
-# Bounded scan sizes — mirrors memify_derive.py's _CANDIDATE_SCAN_LIMIT
-# (bounded-I/O convention, audit 2026-06-09).
+# source: ADR-0383
 _TAG_SCAN_LIMIT = 500
 _CO_ACCESS_SCAN_LIMIT = 200
 _MEMORY_PREVIEW_CAP = 200  # chars, matches navigate_memory's convention
@@ -163,11 +148,9 @@ def _tags_of(mem: dict[str, Any]) -> list[str]:
 
 def _existing_distill_markers(store: Any) -> set[str]:
     """Every ``distill-of:...`` marker already present on a stored
-    ``lesson`` memory. Degrades to the empty set on any failure — never
-    blocks job emission, mirrors
-    ``memify_derive._existing_derived_markers``'s posture, but records
-    the failure via `observability.silent_failure` instead of a silent
-    bare except (audit 2026-07-11)."""
+        ``lesson`` memory.
+
+    source: ADR-0383"""
     if not hasattr(store, "get_memories_by_tag"):
         return set()
     try:
@@ -255,12 +238,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     tagged by this handler. `jobs` is capped at `limit`, entries already
     covered by an existing `distill-of:` marker are excluded.
     """
-    # `or <default>` would silently discard an intentional falsy value
-    # (0, 0.0, "") — e.g. `min_avg_heat=0.0` (a legitimate "accept any
-    # heat" request) would otherwise be overwritten by
-    # MIN_AVG_HEAT_FOR_PAGE. Every numeric/string arg below is resolved
-    # via an explicit `is None` check instead (caught by
-    # test_entity_family_dossier_surfaced's `min_avg_heat=0.0` case).
+    # source: ADR-0383
     args = args or {}
     domain = args.get("domain") or None
     limit = args.get("limit")

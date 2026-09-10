@@ -1,9 +1,6 @@
 """Diagnostics/dashboard/grooming-staleness mixin for PgMemoryStore.
 
-Cascade stage transitions live in the sibling ``pg_store_consolidation_stage``
-module and CLS/oscillatory/interference queries in ``pg_store_cls`` (both
-split out by issue #407: this file was 406 lines over the 300-line §4.1 cap).
-"""
+source: ADR-0569"""
 
 from __future__ import annotations
 
@@ -40,16 +37,12 @@ class PgStatsMixin(PgStoreHost):
         return float(row["avg_heat"] or 0.0) if row else 0.0
 
     def signature_repeat_stats(self, signature: str) -> tuple[int, float | None]:
-        """Habituation (E1) read side: prior presentations of a stimulus.
+        """Return (repeat_count, hours_since_last) for the normalized stimulus
+        signature.
+        hours_since_last is None for an unseen signature. Returns (0, None) on error or
+        when the signature column is absent.
 
-        Returns ``(repeat_count, hours_since_last)`` for memories sharing this
-        normalised ``stimulus_signature`` — the count feeds the write gate's
-        response decrement (Rankin 2009) and the elapsed hours drive
-        spontaneous recovery. ``hours_since_last`` is None when the signature is
-        unseen. Best-effort: returns ``(0, None)`` on any error or when the
-        column is absent (a store predating habituation), so the gate treats an
-        un-migrated store as if nothing has habituated.
-        """
+                source: ADR-0569"""
         if not signature:
             return 0, None
         try:
@@ -68,15 +61,11 @@ class PgStatsMixin(PgStoreHost):
         return int(row["c"]), (float(hours) if hours is not None else None)
 
     def extinguished_count(self, threshold: float = 0.5) -> int:
-        """Extinction (E2) read side: count of deprecated-but-retained memories.
+        """Return the count of rows with extinction_strength at or above
+        threshold. Returns
+        0 on errors or when the column is absent. Rows are not modified.
 
-        Returns how many memories carry an inhibitory extinction tag at or above
-        ``threshold`` — the association is suppressed WITHOUT deletion (the row
-        is fully present, not is_stale), so it can spontaneously recover or be
-        reinstated (Bouton 2004). Best-effort: returns 0 on any error or when
-        the ``extinction_strength`` column is absent (a store predating
-        extinction), so an un-migrated store reports nothing extinguished.
-        """
+                source: ADR-0569"""
         try:
             row = self._execute(
                 "SELECT COUNT(*) AS c FROM memories "
@@ -132,15 +121,9 @@ class PgStatsMixin(PgStoreHost):
 
     def _grooming_tag_prefix_age(self, prefix: str) -> str | None:
         """MAX(created_at) among 'lesson'-tagged memories whose tags also
-        carry a ``prefix``-prefixed entry (e.g. 'distill-of:', 'promoted:').
+                carry a ``prefix``-prefixed entry (e.g. 'distill-of:', 'promoted:').
 
-        The 'lesson' prefilter is semantically required (curate_distill.py
-        and lesson_promotion.py both only ever tag their output 'lesson',
-        so it cannot exclude a true positive) and index-backed
-        (idx_memories_tags_gin); measured 18-23ms worst case (zero
-        matching rows -- the only state observed so far, 2026-07-11),
-        collapsing to sub-ms once any row matches.
-        """
+        source: ADR-0569"""
         row = self._execute(
             "SELECT MAX(created_at) AS last_ts FROM memories m "
             "WHERE m.tags @> '[\"lesson\"]'::jsonb "
@@ -153,15 +136,16 @@ class PgStatsMixin(PgStoreHost):
     def get_grooming_ages(self) -> dict[str, str | None]:
         """Last-executed timestamp for each judgment-level grooming kind.
 
-        Precondition: none.
-        Postcondition: returns {"wiki", "distillation", "promotion"} ->
-        ISO-8601 timestamp of the most recent judgment-level action of
-        that kind, or None if that kind has never executed in this
-        store. Read-only. wiki: MAX(wiki.pages.tended) -- ~0.4ms at 154
-        rows (EXPLAIN ANALYZE, 2026-07-11; no dedicated index needed at
-        this table size, sequential scan). distillation/promotion: see
-        ``_grooming_tag_prefix_age``.
-        """
+        Precondition: none. Postcondition: returns {"wiki", "distillation", "promotion"}
+        ->
+                ISO-8601 timestamp of the most recent judgment-level action of
+                that kind, or None if that kind has never executed in this
+                store. Read-only. wiki: MAX(wiki.pages.tended) -- ~0.4ms at 154
+                rows (EXPLAIN ANALYZE, 2026-07-11; no dedicated index needed at
+                this table size, sequential scan). distillation/promotion: see
+                ``_grooming_tag_prefix_age``.
+
+        source: ADR-0569"""
         wiki_row = self._execute(
             "SELECT MAX(tended) AS last_ts FROM wiki.pages"
         ).fetchone()

@@ -9,9 +9,7 @@ Modes:
   resolve a slice:      wiki_resolve({"limit": 100})
   resolve one memory:   wiki_resolve({"memory_id": 42})
 
-Composition root — never raises per-claim; collects errors in summary.
-Idempotent at the row level (entity / supersedes updates skip no-ops).
-"""
+source: ADR-0470"""
 
 from __future__ import annotations
 
@@ -109,13 +107,7 @@ def _fetch_claims(conn, memory_id: int | None, limit: int) -> list[dict]:
             "SELECT id, memory_id, text, claim_type, entity_ids, "
             "supersedes, extracted_at "
             "FROM wiki.claim_events "
-            # "unresolved" = no entities linked yet. Expressed through
-            # array_length rather than the PostgreSQL empty-array literal
-            # '{}': that literal never matches SQLite's JSON '[]', so this
-            # query returned zero rows on that backend and resolve was a
-            # permanent no-op (issue #206). COALESCE covers both the empty
-            # array (array_length -> NULL on PostgreSQL, 0 on SQLite) and
-            # a NULL column, identically on both.
+            # source: ADR-0470
             "WHERE COALESCE(array_length(entity_ids, 1), 0) = 0 "
             "ORDER BY id LIMIT %s"
         )
@@ -194,7 +186,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     entity_links_written = update_claim_entities(conn, entity_updates)
     supersedes_written = update_claim_supersedes(conn, sup_updates)
 
-    # Memo each supersedes + conflict for the audit trail
+    # source: ADR-0470
     for plan in sup_plans:
         insert_memo(
             conn,

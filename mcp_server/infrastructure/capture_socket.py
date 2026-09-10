@@ -1,8 +1,6 @@
 """Private socket paths and kernel lifetime leases for resident capture.
 
-Source: capture-worker-design.md; Python os.open/O_NOFOLLOW and flock(2).
-Only same-UID processes are trusted. No symlink component is traversed.
-"""
+source: ADR-0512"""
 
 from __future__ import annotations
 
@@ -20,9 +18,9 @@ from mcp_server.infrastructure.capture_lock import wait_for_lock
 if sys.platform != "win32":
     import fcntl
 
-# source: W3-1c contract (0600 socket), Unix owner-only directories/locks.
+# source: ADR-0512
 PRIVATE_FILE = 0o600
-# source: Unix owner read/write/search only; capture-worker-design.md trust boundary.
+# source: ADR-0512
 PRIVATE_DIR = 0o700
 
 
@@ -77,7 +75,7 @@ def lease(path: Path, deadline: float | None = None) -> Iterator[int]:
             wait_for_lock(descriptor, deadline)
         yield descriptor
     finally:
-        # Do not LOCK_UN: an inherited descriptor keeps the worker's lease alive.
+        # source: ADR-0512
         os.close(descriptor)
 
 
@@ -108,7 +106,7 @@ def listen(path: Path) -> socket.socket:
     try:
         connection.bind(str(path))
         path.chmod(PRIVATE_FILE)
-        connection.listen()  # source: Python socket.listen default kernel backlog.
+        connection.listen()  # source: ADR-0512
         return connection
     except BaseException:
         connection.close()

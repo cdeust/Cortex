@@ -1,0 +1,100 @@
+# ADR-0756: scripts/marketplace_pins_registry.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `scripts/marketplace_pins_registry.py`; original SHA-256 `ca99d6355c792d81455f47510d2d0ff1272a27daee06ad61dcccf169a504a567`.
+
+## Original docstring, lines 1–12
+
+````text
+"""Public MCP registry cross-check for the marketplace pin-staleness gate.
+
+Split out of check_marketplace_pins.py (issue: that file crossed the
+300-line §4.1 cap once this module was added). The public MCP registry
+(registry.modelcontextprotocol.io) is a THIRD version surface — independent
+of the marketplace pin and PyPI — that server.json's own "name" field
+names an entry for. Measured 2026-08-10: io.github.cdeust/hypermnesia-mcp
+was published at 4.17.1 while the tag/server.json/PyPI were already at
+4.17.2, invisible until queried directly (same failure shape as #179 and
+PIN_VERSION_UNPUBLISHED — a mandatory per-release step that lived only in
+prose, with nothing committed to run it or verify it happened).
+"""
+````
+
+## Original comment, lines 31–46
+
+````text
+# Same contract as PENDING_PINS (marketplace_pins_github.py): an entry
+# here degrades a real REGISTRY_VERSION_STALE finding to a named NOTICE
+# while a committed, tracked fix is in flight — never a placeholder,
+# never silent.
+#
+# One entry, not empty: the automated publish job
+# (.github/workflows/release.yml::publish-mcp-registry, added in the same
+# change as this check) only runs on a `v*` tag push. Merging this PR does
+# not push a new tag, so the registry stays at 4.17.1 — a real, currently
+# true gap, not a hypothetical one — until the next release tag runs that
+# job. Publishing the missing 4.17.2 entry out of band requires a
+# credential this agent does not hold (`mcp-publisher login` needs either
+# an interactive GitHub OAuth browser flow or a personal access token) and
+# was correctly refused when attempted; a maintainer with real
+# credentials, or the next tagged release, closes this. Remove this entry
+# once the registry serves >= the repo's authoritative version.
+````
+
+## Original docstring, lines 56–62
+
+````text
+"""[(name, version, is_latest), ...] for every registry entry matching
+    `search_term`; None when the registry has nothing for it.
+
+    The registry API has no exact-name lookup (verified 2026-08-10: a
+    `name=` query parameter is silently ignored, not a filter), so this
+    fetches by `search=` and the caller filters to the exact name it wants.
+    """
+````
+
+## Original comment, lines 149–157
+
+````text
+# source: https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json
+# definitions.ServerDetail.properties.description.{minLength,maxLength} —
+# fetched and read directly 2026-08-10, not copied from a report of it.
+# Real incident: ai-architect-mcp-codebase attempted to publish v0.9.1 with a
+# 144-char description and got a live 422 from the registry — the tag that
+# carries the violation can never be published; only a NEW tag with a
+# shortened description is a way out (the fix existed on `main` but not in
+# the tagged tree, so it published nothing). This offline check exists to
+# catch the same defect before a tag is ever cut, not after.
+````
+
+## Original docstring, lines 163–174
+
+````text
+"""Offline, schema-derived validity checks on server.json's own fields
+    — distinct from check_registry_version's cross-repo VERSION check.
+    Catches the class of defect that produces a 422 at publish time (schema
+    violation), which a version-only comparison cannot see: a server.json
+    can have the exactly-correct version and still be unpublishable.
+
+    Reads whatever server.json is on disk for the ref this gate is running
+    against (the PR branch, or `main` on push/cron) — the tree a FUTURE tag
+    will be cut from, which is the only tree this offline check can affect.
+    An already-tagged historical commit is immutable; this cannot and does
+    not claim to fix one, only to stop the next one from repeating it.
+    """
+````
+
+## Original docstring, lines 198–204
+
+````text
+"""Cross-check server.json's own registry `name` against what the
+    public MCP registry actually serves, AND server.json's own schema
+    validity (description length). Returns (failures, notices). Absent
+    server.json or a missing `name` field skips the version check — not
+    every repo on this marketplace publishes to the MCP registry — but the
+    schema check still runs whenever server.json exists, name or not.
+    """
+````
+

@@ -1,15 +1,6 @@
 """Fail CI Green unless every job succeeded or has a verified skip reason.
 
-The policy mirrors ci.yml: code, dependency or workflow PR changes run code
-jobs and Docker smoke. Pushes and dispatches also run those jobs; schedules
-run smoke but skip code jobs. Runtime/devcontainer builds require Docker
-changes, a schedule or a dispatch. The vendor CLI job skips fork PRs because
-it executes npm postinstall. Missing classifications and unknown jobs fail closed.
-
-Source: tasks/codex-green-remediation-plan.md W1-2/W1-4 and ci.yml predicates.
-GitHub's needs context exposes result and outputs for direct dependencies:
-https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#needs-context
-"""
+source: ADR-0711"""
 
 from __future__ import annotations
 
@@ -18,7 +9,7 @@ import os
 import sys
 from pathlib import Path
 
-# source: .github/workflows/ci.yml, jobs gated by changes and lint.
+# source: ADR-0711
 CODE_JOBS = frozenset(
     {
         "test",
@@ -35,7 +26,7 @@ DOCKER_BUILD_JOBS = frozenset({"docker-runtime-build", "devcontainer-build"})
 ALWAYS_JOBS = frozenset({"changes", "lint"})
 CONDITIONAL_JOBS = CODE_JOBS | DOCKER_BUILD_JOBS | {"docker-smoke"}
 EXPECTED_JOBS = ALWAYS_JOBS | CONDITIONAL_JOBS
-# source: .github/workflows/ci.yml changes.outputs and on triggers.
+# source: ADR-0711
 FILTERS = frozenset({"code", "docs", "docker", "workflows", "deps"})
 EVENTS = frozenset({"pull_request", "push", "workflow_dispatch", "schedule"})
 
@@ -82,16 +73,7 @@ def _required_jobs(flags: dict[str, bool], event_name: str, fork: bool) -> set[s
         required.add("docker-smoke")
     if flags["docker"] or event_name in ("schedule", "workflow_dispatch"):
         required.update(DOCKER_BUILD_JOBS)
-    # A docs-only PR must still run the one full-suite job. Part of that
-    # suite takes documentation as its INPUT — tests_py/scripts/
-    # test_codex_plugin_contract.py asserts on README.md's canonical published
-    # identities — so excluding '*.md' from `code` switched those guards off
-    # exactly when their subject changed. PR #509 was a README-only diff, every
-    # test job skipped, it merged green, and the push to main went red on that
-    # test across five jobs (run 34238410970, 2026-09-08; fixed by #510).
-    # Mirrors ci.yml's test-sqlite predicate, which carries the same note; this
-    # module and that predicate must stay in exact agreement (see the docstring
-    # on check_policy).
+    # source: ADR-0711
     if not full and event_name == "pull_request" and flags["docs"]:
         required.add("test-sqlite")
     if fork:

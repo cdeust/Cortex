@@ -1,9 +1,6 @@
 """Scalar LRU observations without changing batch inference context.
 
-Batch calls neither consume nor populate the scalar cache. The recorded neural
-counterexamples in docs/provenance/embedding-cache-capacity.md forbid sharing
-these contexts under the strict vector-identity requirement.
-"""
+source: ADR-0518"""
 
 from __future__ import annotations
 
@@ -21,12 +18,12 @@ class _EmbeddingCacheMixin(ABC):
     @staticmethod
     @abstractmethod
     def _cache_key(text: str) -> str:
-        """Provided by the existing embedding math mixin (ADR-0045 R5)."""
+        """Compute the cache key through the embedding math mixin.
+
+        source: ADR-0518"""
 
     def _cache_store(self, key: str, vector: bytes) -> None:
-        # source: Python's OrderedDict LRU recipe:
-        # https://docs.python.org/3.13/library/collections.html#ordereddict-examples-and-recipes
-        # Zero capacity is the no-cache control for the W3-4 measurement.
+        # source: ADR-0518
         if self._cache_max <= 0:
             return
         self._cache[key] = vector
@@ -35,12 +32,11 @@ class _EmbeddingCacheMixin(ABC):
             self._cache.popitem(last=False)
 
     def cache_info(self) -> dict[str, int]:
-        """Content-free cumulative observations; no capacity decision implied.
+        """Hits/misses count nonempty scalar lookups only. Batch calls do not
+                interact with this cache; batch_reuses remains zero. Failed scalar
+                lookups still count. Explicit warm_cache retains its existing behavior.
 
-        Hits/misses count nonempty scalar lookups only. Batch calls do not
-        interact with this cache; batch_reuses remains zero. Failed scalar
-        lookups still count. Explicit warm_cache retains its existing behavior.
-        """
+        source: ADR-0518"""
         return {
             "hits": self._cache_hits,
             "misses": self._cache_misses,

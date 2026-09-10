@@ -1,28 +1,7 @@
 """Handler: get_grooming_health — backlog + staleness for judgment-level
 grooming (wiki authoring, lesson distillation, lesson promotion).
 
-Motivation: the mechanical consolidate pass (purge/backfill/dashboards)
-already runs at every SessionEnd and is self-reporting via
-``consolidate``'s ``wiki`` stanza. The judgment-level work that actually
-produces new documentation/lessons/rules -- ``curate_wiki``,
-``curate_distill``, ``lesson_promotion`` -- has no equivalent staleness
-signal: the wiki went 76 days without a page being tended while the
-mechanical pass ran 91 times in the same window, and nothing surfaced
-that gap until it was measured by hand. This handler is that signal,
-read-only and on-demand.
-
-Composition root: wires ``core.grooming_health`` (pure staleness logic)
-to three existing read-only planners (``curate_wiki``, ``curate_distill``,
-``lesson_promotion``) for exact backlog counts, plus
-``PgStatsMixin.get_grooming_ages`` for last-run timestamps. Calls the
-three planners with their cheapest settings (job lists suppressed where
-the planner supports it); measured combined cost ~1s warm
-(curate_distill ~360ms + curate_wiki ~620ms + promotion count ~7ms +
-ages ~21ms, 2026-07-11, dev DB) — too expensive for the SessionStart hot
-path (see ``mcp_server.hooks.session_start._fetch_grooming_staleness``,
-which only pays the ~30ms ages cost), appropriate for an explicit
-on-demand diagnostic call.
-"""
+source: ADR-0394"""
 
 from __future__ import annotations
 
@@ -96,13 +75,7 @@ schema = {
 def _count_promotion_candidates(store: Any) -> int:
     """Backend dispatch for the promotion backlog count.
 
-    Composition-root concern: the eligibility query exists in two SQL
-    dialects (pg_store_lesson_promotion / sqlite_store_lesson_promotion,
-    same WHERE semantics) because jsonb operators have no SQLite
-    translation. The PG count previously ran unconditionally and raised
-    on the SQLite backend (the plugin default) — this handler was one of
-    the setup-run failures observed 2026-07-22.
-    """
+    source: ADR-0394"""
     if isinstance(store, SqliteMemoryStore):
         return count_promotion_candidates_sqlite(store._conn)
     return count_lesson_promotion_candidates(store._conn)

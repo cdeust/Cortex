@@ -1,25 +1,10 @@
 """Badge field specifications for scripts/generate_repo_badges.py.
 
-Extracted (issue #293, Extract Function/Move Function) to keep
-generate_repo_badges.py under the repo's 300-line file cap. Returns plain
-field dicts rather than `RepoBadge` instances: `RepoBadge` is a
-`@dataclass`-decorated class whose owning module matters to mutmut (see its
-docstring in generate_repo_badges.py), and generate_repo_badges.py's own
-tests load that module twice under two different dotted names (the direct
-`spec_from_file_location` load the test suite drives, plus whatever a bare
-`import generate_repo_badges` from a sibling would separately cache) — two
-non-identical `RepoBadge` classes existing side by side is a real, if
-usually harmless, risk (dataclass `__eq__`/`isinstance` compare by class
-identity). Keeping `RepoBadge` construction exclusively in
-generate_repo_badges.py and having this module hand back only primitive
-data (str/int, dict) sidesteps the question entirely: no class ever
-crosses this module boundary.
-"""
+source: ADR-0780"""
 
 from __future__ import annotations
 
-# The palette is assets/banner.svg's, shared with the MCP Toplist badge so
-# the README's badge row reads as one set rather than as a pile of styles.
+# source: ADR-0780
 _LABEL_FILL = "#3b3129"
 _LABEL_TEXT = "#f8f7f2"
 _MESSAGE_TEXT = "#fff"

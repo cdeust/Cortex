@@ -16,3 +16,11 @@ Source rationale preserved verbatim. Identifiers inside historical quotations ar
 -- gating will NOT reduce row count here. It tests the gating overhead when
 -- all rows actually change.
 ````
+
+## Final non-Python residual audit
+
+### benchmarks/hnsw_probe/phase1_b_e.sql — pre-cleanup line 2
+
+````text
+-- Expected to be fast (seconds each).
+````

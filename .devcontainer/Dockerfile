@@ -26,11 +26,8 @@ FROM python:3.14-slim@sha256:cad9a2c871761c413caa6fdd6441c783451e740a48aaeba60ae
 LABEL org.opencontainers.image.source="https://github.com/cdeust/Cortex"
 LABEL org.opencontainers.image.description="Cortex development container (issue #118)"
 
-# gcc/libpq-dev: same build deps as ../Dockerfile's builder stage (psycopg
-# has no manylinux wheel for every platform this image might run on).
-# postgresql-client: scripts/setup_db.py shells out to psql/createdb/
-# pg_isready (see that file) — required for postCreateCommand to work.
-# git: contributor workflow inside the container.
+# Build dependencies: gcc/libpq-dev, PostgreSQL client utilities, and git.
+# source: ADR-0797
 RUN apt-get update && apt-get install -y --no-install-recommends \
         gcc \
         libpq-dev \

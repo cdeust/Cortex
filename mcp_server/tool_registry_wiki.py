@@ -1,13 +1,6 @@
 """Tool registration: wiki authoring tools (10 tools).
 
-Registers the authoring surface that lets Claude maintain a first-class
-Markdown wiki (ADRs, specs, file docs, notes) alongside PostgreSQL
-memory. Pages are never derived from PG — they are authored via these
-tools and indexed in PG as protected pointer memories for recall.
-``wiki_migrate`` is the exception: it is the one-shot FS->PG sync +
-ghost-reconciliation job (see ``mcp_server.handlers.wiki_migrate``),
-exposed here so parity can be re-run and inspected without a shell.
-"""
+source: ADR-0700"""
 
 from __future__ import annotations
 
@@ -71,7 +64,8 @@ def _register_wiki_write(mcp: MCPServer) -> None:
         memory_ids: list[int] | None = None,
         project_root: str | None = None,
     ) -> dict[str, Any]:
-        """Author a wiki page (create/append/replace) with the provided markdown."""
+        """Author a wiki page using create, append, or replace mode."""
+        # source: ADR-0700
         return await safe_handler(
             wiki_write.handler,
             {
@@ -94,11 +88,11 @@ def _register_wiki_read(mcp: MCPServer) -> None:
         offset: int = 0,
         project_root: str | None = None,
     ) -> dict[str, Any]:
-        """Read the raw markdown of a wiki page by relative path.
+        """Read a wiki page by relative path.
 
-        Phase 3.2 of ADR-2244: redirect stubs are followed transparently
-        by default. Pass ``follow_redirects=False`` to read the stub itself.
-        """
+        Follows redirect stubs by default. Set ``follow_redirects=False`` to read
+        the stub itself."""
+        # source: ADR-0700
         return await safe_handler(
             wiki_read.handler,
             {
@@ -204,8 +198,8 @@ def _register_wiki_purge(mcp: MCPServer) -> None:
 def _register_wiki_verify(mcp: MCPServer) -> None:
     @mcp.tool(name="wiki_verify", **tool_kwargs(wiki_verify.schema))
     async def tool_wiki_verify(path: str | None = None) -> dict[str, Any]:
-        """Verify wiki-page symbol citations against AP's code graph
-        (ADR-0046 Phase 2)."""
+        """Verify wiki-page symbol citations against AP's code graph."""
+        # source: ADR-0700
         return await safe_handler(
             wiki_verify.handler,
             {"path": path} if path else {},
@@ -238,10 +232,9 @@ def _register_wiki_rename(mcp: MCPServer) -> None:
     ) -> dict[str, Any]:
         """Move a page and leave a redirect stub at the old path.
 
-        Phase 3.2 of ADR-2244 — the building block for Phase 4 bulk renames.
-        Requires the source page to have a stable frontmatter ``id`` (run
-        ``scripts/wiki_backfill_ids.py --apply`` first).
-        """
+        Requires a stable frontmatter ``id`` on the source page. Run
+        ``scripts/wiki_backfill_ids.py --apply`` first if the id is missing."""
+        # source: ADR-0700
         return await safe_handler(
             wiki_rename.handler,
             {

@@ -1,21 +1,6 @@
 """Wiki page public API — parsing, templates, and index building.
 
-Design intent: pages are *authored* content, not derived views. Templates
-provide sensible sections; the body is whatever the caller passes in.
-
-This module is the composed public entry point for wiki page handling. The
-implementation is split across cohesive collaborators:
-
-  * ``wiki_frontmatter`` — ``PageDocument``, ``parse_page``, ``render_page``
-    (YAML-ish frontmatter parsing/rendering).
-  * ``wiki_page_builders`` — ``build_adr``, ``build_spec``, ``build_note``,
-    ``build_file_doc``, ``build_lesson``, ``build_convention``,
-    ``build_reference``, and their shared maturity/sources helpers.
-  * ``wiki_index`` — ``build_index`` (INDEX.md generation).
-
-Every name importable from this module before the split remains importable
-from here — this is the module's public contract, not a compat shim.
-"""
+source: ADR-0684"""
 
 from __future__ import annotations
 

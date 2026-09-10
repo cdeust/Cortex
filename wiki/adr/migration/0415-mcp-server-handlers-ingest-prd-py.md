@@ -1,0 +1,60 @@
+# ADR-0415: mcp_server/handlers/ingest_prd.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `mcp_server/handlers/ingest_prd.py`; original SHA-256 `e96677b002cf3c2cc4dc3cacc5ddfc87d180cc4f31e9e8a092e4168102824280`.
+
+## Original docstring, lines 1–18
+
+````text
+"""Handler: ingest_prd — pull a PRD document into Cortex's store.
+
+Sources supported
+-----------------
+- ``path``          — absolute path to a markdown PRD file
+- ``content``       — raw markdown string
+- ``pipeline_id``   — prd-gen pipeline state id; fetches via upstream MCP
+
+Outputs into Cortex
+-------------------
+- Wiki page under ``specs/<slug>.md`` (kind=spec)
+- One memory for the PRD summary (tagged ``prd``, ``spec``)
+- One memory per extracted decision (tagged ``decision``)
+- One memory per extracted requirement (tagged ``requirement``)
+- Optional validation stats from prd-gen's ``validate_prd_document``
+
+Cortex consumes; prd-gen produces.
+"""
+````
+
+## Original comment, lines 143–146
+
+````text
+# prd-gen's get_pipeline_state is keyed by ``run_id`` (the pipeline run id)
+    # and needs format="full" to include the rendered PRD body. The public
+    # Cortex arg stays ``pipeline_id`` (its value IS the run id) — map it here.
+    # source: prd-gen tool schema (run_id required; format summary|full).
+````
+
+## Original comment, lines 199–201
+
+````text
+# Minimum bullet length worth keeping (filters list-marker noise).
+# source: pre-existing tuned value, extracted unchanged (#197 family 3);
+# provenance not recorded at introduction
+````
+
+## Original comment, lines 380–380
+
+````text
+# 4. Optional validation + prd-gen quality evidence.
+````
+
+## Original comment, lines 385–386
+
+````text
+# When the PRD came from a live prd-gen run, also record prd-gen's own
+    # quality history so the ingestion carries the upstream verification signal.
+````
+

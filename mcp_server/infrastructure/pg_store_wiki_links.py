@@ -1,11 +1,8 @@
 """wiki.links DB operations.
 
-Split out of ``pg_store_wiki.py`` (originally 890 lines, over the
-300-line file limit — CLAUDE.md "Code Quality Rules") purely for size
-compliance; no logic changed.
-
 Pure infrastructure — no core imports, no handler imports.
-"""
+
+source: ADR-0578"""
 
 from __future__ import annotations
 

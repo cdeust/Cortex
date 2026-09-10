@@ -29,3 +29,14 @@ Source rationale preserved verbatim. Identifiers inside historical quotations ar
 # steers a package past a bound another package's metadata still declares
 # (issue: PR #332, mpmath 1.4.1 vs sympy's `mpmath<1.4`).
 ````
+
+## Final non-Python residual audit
+
+### .clusterfuzzlite/build.sh — pre-cleanup line 25
+
+````text
+# Ship each harness's committed corpus as its seed corpus. These are the
+# reproducers of bugs already found (see fuzz/corpus/*/repro-*) plus shape
+# seeds; starting from them keeps the fuzzer from rediscovering the shallow
+# surface on every run.
+````

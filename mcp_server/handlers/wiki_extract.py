@@ -2,17 +2,14 @@
 
 MCP tool entry point. Modes:
 
-    extract one:  wiki_extract({"memory_id": 42})
-    extract all:  wiki_extract({})  — sweeps every memory not yet extracted
-    re-extract:   wiki_extract({"memory_id": 42, "force": true})
-
 Composition root — wires:
   - core/claim_extractor (pure logic, sentence → ClaimEvent)
   - infrastructure/pg_store_wiki (insert_claim_events, delete_claims_for_memory)
   - infrastructure/memory_store (load memory rows)
 
 Never raises on per-memory errors — collects them and returns in summary.
-"""
+
+source: ADR-0459"""
 
 from __future__ import annotations
 
@@ -94,7 +91,7 @@ def _memory_rows(conn, memory_id: int | None, limit: int, force: bool) -> list[d
         sql = "SELECT id, content, tags FROM memories ORDER BY id LIMIT %s"
         params = (limit,)
     else:
-        # Memories without any extracted claim_events yet
+        # source: ADR-0459
         sql = """
         SELECT m.id, m.content, m.tags
           FROM memories m
@@ -165,7 +162,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
                 entity_ids=[],  # entity ids attached by Phase 2.2 resolver
             )
             if force or memory_id is not None:
-                # Re-extraction: clear prior claims first to avoid duplicates
+                # source: ADR-0459
                 delete_claims_for_memory(store._conn, row["id"])
             if not claims:
                 continue

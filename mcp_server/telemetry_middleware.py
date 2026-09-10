@@ -1,9 +1,6 @@
 """Finalize existing operation samples from the MCP SDK's actual text response.
 
-The SDK converts handler exceptions to TextContent inside call_next. Measuring
-here includes those errors without reconstructing SDK messages or changing tool
-results. Source: mcp 2.0.0 MCPServer._handle_call_tool and ServerMiddleware.
-"""
+source: ADR-0690"""
 
 from __future__ import annotations
 

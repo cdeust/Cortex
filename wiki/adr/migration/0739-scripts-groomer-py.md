@@ -1,0 +1,91 @@
+# ADR-0739: scripts/groomer.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `scripts/groomer.py`; original SHA-256 `fc8f9d5897d6bbbd0f064bec044e80e8d446e7cd5c4d24de1c01148711eead20`.
+
+## Original docstring, lines 2–80
+
+````text
+"""Scheduled groomer — the judgment-level grooming session (G-3, "grooming
+continu" program).
+
+Design of record: scratchpad ``grooming-continu-design.md`` §4 Incrément 3
+("session planifiée headless, dry-run d'abord"). Depends on G-1 (headless
+write-path governance — every write this script's children can make goes
+through ``wiki_write.write_governed_page`` or an explicit ``remember`` MCP
+call, never a raw disk write) and G-4 (``get_grooming_health`` — the
+backlog/staleness signal this script reads before deciding to run).
+
+What this script does
+----------------------
+1. Calls ``get_grooming_health`` to read backlog + staleness for the
+   ``wiki`` and ``distillation`` legs (``core.grooming_health.legs_due``
+   decides which legs are actually due — stale AND non-empty backlog).
+2. **Wiki leg**: drains curation-gap/anchor pages via the EXISTING
+   ``headless_authoring.run_headless_authoring_cycle`` — the ``claude -p``
+   child returns markdown TEXT that this process writes through the
+   governed path (G-1). Bounded by ``CORTEX_HEADLESS_MAX_FILE_DRAINS`` /
+   ``CORTEX_HEADLESS_MAX_ANCHOR_DRAINS`` (existing env-tunable policy
+   caps, default 8+8 — not new constants).
+3. **Distillation leg**: fetches up to ``--distill-limit`` jobs from
+   ``curate_distill`` (default 5 — reusing that handler's OWN existing
+   default, ``curate_distill.py``'s ``limit = 5 if limit is None``, not an
+   invented number) and drains them via
+   ``handlers.consolidation.distill_drain.run_distill_drain_cycle`` — here
+   the ``claude -p`` child calls ``remember`` itself over MCP, using the
+   prompt ``curate_distill`` already built (``build_distill_prompt``,
+   INC7.8) verbatim plus an advisory no-promotion reminder.
+4. **Promotion**: NEVER executed. ``lesson_promotion.handler`` is never
+   imported or called anywhere in this script or in the modules it calls
+   (grep-verified in ``test_groomer_never_calls_lesson_promotion``). Its
+   backlog count (already surfaced by ``get_grooming_health``, itself a
+   read-only ``COUNT(*)``, not the promotion handler) is only ever
+   reported in the journal for a human to act on.
+
+KNOWN SCOPE GAP (documented honestly, not silently papered over): the
+``wiki`` leg's due/not-due DECISION uses ``get_grooming_health``'s
+``wiki`` staleness, which is itself sourced from ``curate_wiki``'s
+CLUSTER/coverage/reauthor backlog (``total_clusters_eligible``) — but the
+leg this script actually RUNS when wiki is due is
+``headless_authoring.run_headless_authoring_cycle``, which drains a
+DIFFERENT queue entirely: pages carrying ``curation_gaps`` frontmatter and
+missing anchor pages (design doc §1.4 — headless_authoring's scope was
+always narrower than ``curate_wiki``'s cluster jobs, and this script does
+not change that). A "wiki is stale" signal therefore does not guarantee
+``run_headless_authoring_cycle`` finds anything to drain, and a fresh
+``wiki.pages.tended`` timestamp does not mean the cluster backlog shrank.
+Extending ``headless_authoring`` to also drain ``curate_wiki``'s
+cluster/coverage/reauthor jobs (the design doc's original, larger
+Incrément-3 sketch) is explicitly OUT OF SCOPE for this increment — it
+reuses the existing G-1-governed mechanism as-is, per this increment's own
+brief. Track this gap before assuming the ``wiki`` staleness alarm and the
+wiki leg's actual output are tightly coupled.
+
+Combined worst-case cost per apply run, both legs at full budget: up to
+16 wiki ``claude -p`` calls (8 file-doc + 8 anchor, existing caps) + 5
+distillation calls = 21 calls, each independently capped at
+``CORTEX_HEADLESS_USD_BUDGET`` (default $5) and
+``CORTEX_HEADLESS_BUDGET_SEC`` (default 300s) PER LEG — so up to $10 / up
+to ~10 minutes wall-clock per scheduled run in the worst case, consistent
+with the design doc's own §3(a) estimate ("15-25 appels claude -p,
+≈5-10 USD/run"). Tune via the existing ``CORTEX_HEADLESS_*`` env vars;
+this script introduces no new budget knobs.
+
+Dry-run is the default: with no ``--apply`` flag, this script only reads
+(``get_grooming_health`` + a bounded ``curate_distill`` preview call, both
+READ_ONLY handlers) and reports what it WOULD do. ``--apply`` additionally
+requires ``CORTEX_HEADLESS_AUTHORING=1`` set in the environment (matching
+``wiki_maintenance._headless_authoring_enabled``'s existing opt-in gate) —
+refuses to write otherwise, even with ``--apply`` passed.
+
+A campaign journal (JSON + Markdown, same shape as
+``scripts/wiki_citation_seed.py``'s pattern) is written to
+``docs/campaigns/`` on every run, dry-run or apply.
+
+See ``docs/groomer-scheduling.md`` for the launchd installation procedure,
+cadence justification, and the active-session guard rail.
+"""
+````
+

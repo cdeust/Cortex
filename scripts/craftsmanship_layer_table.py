@@ -1,12 +1,5 @@
 """Parses `docs/module-inventory.md` § Dependency Rules into layer rules.
 
-Fixes a DRY violation flagged in review: the previous implementation
-hardcoded a Python copy of this table (`FORBIDDEN_SECOND_COMPONENT`), which
-diverges from the documented table silently the moment either one changes.
-This module makes the markdown table itself the single source of truth —
-`craftsmanship_imports.py` derives its whitelist from what this module
-parses, never from a second hand-maintained copy.
-
 Table shape (`docs/module-inventory.md`)::
 
     | Layer | May Import | Must NOT Import |
@@ -17,26 +10,7 @@ Table shape (`docs/module-inventory.md`)::
 
 Each row becomes a `LayerRule`:
 
-- ``allowed_layers`` — the TRUE WHITELIST for ``mcp_server.<layer>`` imports,
-  taken from the "May Import" column's layer-name tokens. An import to any
-  ``mcp_server.*`` layer NOT in this set is a violation — this is the fix
-  for the review finding that the old blacklist let `scripts.legacy_bridge`-
-  style stray project imports straight through.
-- ``is_pure`` — True when the "May Import" cell literally ends in the word
-  "only" (``"Python stdlib only"``, ``"shared/ only"``) — a textual signal
-  already present in the table, not an invented classification. A pure
-  layer forbids third-party packages entirely (Clean Architecture: `core/`
-  and `shared/` carry zero I/O and zero framework coupling); a non-pure
-  ("boundary") layer — infrastructure, validation, handlers, server, hooks
-  — is exactly where adapters and third-party drivers are expected to
-  live, so third-party imports there are not a craftsmanship violation.
-- ``stdlib_allowed`` — False only for the "nothing" cell (`errors/`);
-  stdlib is the ambient default everywhere else, since no layer can avoid
-  using the language's own control-flow/typing primitives.
-- ``stdlib_denied`` — specific stdlib modules named in "Must NOT Import"
-  as a slash-joined list (``"os/pathlib"`` for `core/`) — the one piece of
-  information the "May Import" column cannot express on its own.
-"""
+source: ADR-0725"""
 
 from __future__ import annotations
 
@@ -97,11 +71,7 @@ def _parse_may_import(cell: str) -> tuple[frozenset[str], bool, bool]:
 def _parse_must_not_stdlib(cell: str) -> frozenset[str]:
     """Extract stdlib module bans from a "Must NOT Import" cell.
 
-    A token is a stdlib-module list (not a layer reference) when it
-    contains an internal "/" — e.g. "os/pathlib" — as opposed to a layer
-    reference, which never contains an internal slash in this column (only
-    "May Import" ever uses a trailing "layer/" spelling).
-    """
+    source: ADR-0725"""
     denied: set[str] = set()
     for raw_token in cell.split(","):
         token = _strip_parenthetical(raw_token)
@@ -144,15 +114,7 @@ def _check_header_present(markdown: str) -> None:
 def _extract_row_lines(markdown: str) -> list[str]:
     """Return the table's raw data-row lines (header separator excluded).
 
-    Only a line that ISN'T EVEN TRYING to be a table row (doesn't start
-    with ``|``) ends the table — the fix for the review finding that a
-    prior version treated ANY unmatched line, including a malformed row in
-    the MIDDLE of the table, as "the table ended", silently dropping that
-    row and every row after it (reproduced: one broken row after
-    ``validation/`` silently removed ``errors/``, ``handlers/``,
-    ``server/`` and ``hooks/`` from enforcement — four of eight layers,
-    zero signal, no error).
-    """
+    source: ADR-0725"""
     rows: list[str] = []
     in_table = False
     for line in markdown.splitlines():
@@ -173,14 +135,7 @@ def _extract_row_lines(markdown: str) -> list[str]:
 def parse_layer_rules(markdown: str) -> dict[str, LayerRule]:
     """Parse the § Dependency Rules table into layer name -> LayerRule.
 
-    Fails loudly and completely, never partially — see
-    ``_extract_row_lines`` for why a malformed row raises instead of
-    silently truncating the table, and the row-count check below (a
-    structural self-check independent of that one) for why a duplicate
-    layer name silently overwriting an earlier dict entry also raises.
-    Also raises if the table header itself is missing (section renamed or
-    removed) or matched but produced zero rows.
-    """
+    source: ADR-0725"""
     _check_header_present(markdown)
     row_lines = _extract_row_lines(markdown)
     rules: dict[str, LayerRule] = {}

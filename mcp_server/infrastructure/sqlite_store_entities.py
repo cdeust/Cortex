@@ -163,9 +163,7 @@ class SqliteEntityMixin:
         routes BOTH branches (FTS5 + LIKE fallback) through current_memories.
         """
         src = "current_memories" if heads_only else "memories"
-        # Try FTS5 first — expand the entity name into its code-aware sub-tokens
-        # so a camelCase / snake_case entity still matches its split index terms
-        # (issue #169).
+        # source: ADR-0607
 
         match = expand_fts_query(entity_name)
         rows = (

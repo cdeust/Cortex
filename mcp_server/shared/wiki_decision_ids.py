@@ -1,4 +1,7 @@
-"""Canonical decision identity (issue #514, ADR-0056), independent of storage."""
+"""Canonical decision identity, independent of storage.
+
+source: ADR-0677
+"""
 
 from __future__ import annotations
 
@@ -6,9 +9,9 @@ import re
 
 _TOKEN = re.compile(r"ADR-([0-9]{4})")
 _FILENAME = re.compile(r"([0-9]{4})-([A-Za-z0-9][A-Za-z0-9_.-]*)\.md")
-# source: issue #514 identity contract; four decimal digits, zero is invalid.
+# source: ADR-0677
 MAX_DECISION_NUMBER = 9999
-# source: issue #514; preserve the published repository ADR identities.
+# source: ADR-0677
 RESERVED_DECISION_NUMBER = 55
 
 
@@ -22,7 +25,10 @@ def parse_decision_id(text: str) -> int | None:
 
 
 def decision_id(number: int) -> str:
-    """Render a validated decision number without silently extending its width."""
+    """Render a validated decision number without silently extending its width.
+
+    source: ADR-0677
+    """
     if isinstance(number, bool) or not isinstance(number, int):
         raise ValueError("decision number must be an integer")
     if not 1 <= number <= MAX_DECISION_NUMBER:

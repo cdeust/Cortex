@@ -1,4 +1,4 @@
-"""Deterministic project decision mirrors. # source: ADR-0056"""
+"""source: ADR-0625"""
 
 from __future__ import annotations
 

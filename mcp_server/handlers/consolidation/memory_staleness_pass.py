@@ -1,12 +1,5 @@
 """Bounded file-existence staleness re-validation pass (fleet-watch #110).
 
-``is_stale`` is the signal the injection banners now surface (age · grade ·
-stale), but it only ever got *set* on file grounds by the manual
-``validate_memory`` tool — so a memory referencing a file that was moved or
-deleted stayed ``is_stale=FALSE`` until someone ran the tool by hand.
-harness-comparison rev.2 measured exactly this: Harness B served facts months
-stale with no stale flag.
-
 This pass makes the flag fire automatically: it pages non-stale,
 file-referencing memories, re-checks whether their referenced paths still
 exist, and marks ``is_stale`` via the same pure assessment
@@ -21,10 +14,7 @@ Existence only — content-change detection (a file that still exists but diverg
 from what the memory claims) needs per-ref content hashing and is a separate
 #110 seam.
 
-Composition root: pure decision (``assess_staleness``) + an injected filesystem
-resolver + store I/O. Script-invoked (``scripts/memory_staleness_revalidate.py``),
-bounded per run, NOT on the commit critical path or the hot consolidate cycle.
-"""
+source: ADR-0369"""
 
 from __future__ import annotations
 
@@ -35,15 +25,9 @@ from mcp_server.core.staleness import assess_staleness, extract_file_references
 
 logger = logging.getLogger(__name__)
 
-# Per-run scan cap — bounds one run's FS+DB cost. A run that hits the cap
-# resumes from the id cursor on the next invocation.
-# source: mirrors DEFAULT_MEMORY_DOMAIN_BACKFILL_LIMIT = 5000
-#   (memory_domain_backfill_pass.py) — a chosen per-run bound, not a measured
-#   value; adjust with the corpus size.
+# source: ADR-0369
 DEFAULT_STALENESS_SCAN_LIMIT = 5000
-# Page size for the id-cursor scan.
-# source: get_all_memories_for_validation default page (pg_store_queries.py:94)
-#   is 1000; reused here for parity with the existing validation read path.
+# source: ADR-0369
 _PAGE = 1000
 
 ResolveExistingFn = Callable[[list[str], str], set[str]]

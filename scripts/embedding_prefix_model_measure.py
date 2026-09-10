@@ -7,7 +7,7 @@ import os
 import time
 from pathlib import Path
 
-# source: green-remediation plan §3: four repetitions, discard the first.
+# source: ADR-0736
 REPETITIONS = 4
 
 

@@ -1,24 +1,6 @@
 """Tool registration: ingestion tools.
 
-ingest_codebase — pulls from ai-architect-mcp-codebase MCP
-change_impact   — pulls from ai-architect-mcp-codebase MCP (ADR-0046)
-ingest_prd      — pulls from prd-spec-generator MCP
-ingest_findings — reads AP findings artifacts directly off disk (INC5.1)
-ingest_document — reads .docx / Confluence export files off disk (issue #192)
-
-Cortex consumes upstream artefacts; it does not drive those pipelines. The
-MCP-calling tools (ingest_codebase, change_impact, ingest_prd) are
-CONDITIONALLY registered: each only registers when its upstream MCP server
-is reachable (see register()). ``ingest_findings`` and ``ingest_document``
-are registered UNCONDITIONALLY: neither calls an upstream MCP server
-(ingest_findings reads runs/<run_id>/ off disk per ADR-0052 D1;
-ingest_document reads a .docx zip or a Confluence XHTML export off disk per
-issue #192), so there is no upstream-availability flag to gate them on. On a
-standalone install with no upstream configured, ingest_findings still
-registers but returns {"ingested": false, "reason": "output_dir_not_resolved"}
-until AP artifacts exist on disk; ingest_document works fully offline.
-source: Anthropic MCP Directory submission decision 2026-06-19.
-"""
+source: ADR-0696"""
 
 from __future__ import annotations
 
@@ -57,13 +39,7 @@ SCHEMAS: dict[str, dict] = {
 def register(mcp: MCPServer, *, codebase: bool = True, prd: bool = True) -> None:
     """Register the upstream-integration tools, gated by upstream availability.
 
-    ``codebase`` registers ingest_codebase + change_impact (both consume the
-    ai-architect-mcp-codebase ``codebase`` MCP). ``prd`` registers ingest_prd (it
-    consumes the prd-spec-generator ``prd-gen`` MCP). The composition root
-    (__main__) passes the real availability; both default True so any other
-    caller keeps the full set. When a flag is False the corresponding tools are
-    NOT advertised — the standalone tool set is exactly what works without an
-    upstream. source: Anthropic MCP Directory submission decision 2026-06-19.
+    source: ADR-0696
 
     ``ingest_findings`` and ``ingest_document`` always register (see module
     docstring — both file-only, no upstream MCP dependency to gate on).
@@ -91,13 +67,10 @@ def _register_ingest_codebase(mcp: MCPServer) -> None:
     ) -> dict[str, Any]:
         """Ingest upstream codebase analysis into Cortex.
 
-        No caps. Pulls every Function/Method/Struct/process the upstream
-        graph holds, projects them all into Cortex memories + KG.
-
-        ctx is injected by MCPServer when the client supports progress reporting.
-        Progress dispatches to the main loop via run_coroutine_threadsafe because
-        the handler body runs on a worker thread (asyncio.to_thread in safe_handler).
-        """
+        Pulls every Function/Method/Struct/process into Cortex memories and
+        knowledge-graph records without caps. ``ctx`` receives progress reports
+        when the MCP client supports them."""
+        # source: ADR-0696
         # Build the progress reporter bound to THIS event loop before handing
         # off to the worker thread (asyncio.to_thread). The worker thread must
         # NOT call get_running_loop() — it has its own fresh loop.
@@ -132,7 +105,8 @@ def _register_change_impact(mcp: MCPServer) -> None:
         expand_impact: bool = False,
         apply_heat_bump: bool = False,
     ) -> dict[str, Any]:
-        """Report memories affected by a commit's code changes (ADR-0046 P4)."""
+        """Report memories affected by a commit's code changes."""
+        # source: ADR-0696
         return await safe_handler(
             change_impact.handler,
             {
@@ -206,7 +180,8 @@ def _register_ingest_document(mcp: MCPServer) -> None:
         title: str | None = None,
         domain: str | None = None,
     ) -> dict[str, Any]:
-        """Ingest a .docx or Confluence export into Cortex (issue #192)."""
+        """Ingest a .docx or Confluence export into Cortex."""
+        # source: ADR-0696
         return await safe_handler(
             ingest_document.handler,
             {

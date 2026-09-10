@@ -1,12 +1,6 @@
 """Best-effort wiki-tree reindex after a write.
 
-Split out of wiki_store.py (issue: 439 lines over the 300-line §4.1
-cap, pre-existing before the layer-violation fix that also touched this
-file) — regenerating ``.generated/INDEX.md``/``README.md`` and cleaning
-up superseded id-prefixed pages is a distinct "post-write housekeeping"
-concern from the write/read primitives (``write_page``/``read_page``)
-that live in ``wiki_store.py``.
-"""
+source: ADR-0628"""
 
 from __future__ import annotations
 
@@ -21,12 +15,10 @@ from mcp_server.infrastructure.wiki_pages_listing import list_pages
 
 
 def _refresh_readme_if_safe(root: Path, page_paths: list[str]) -> None:
-    """README half of ``try_reindex``: only overwrite if the file is
-    absent or still carries the auto-generated marker — never clobber a
-    hand-written README. An unreadable README also blocks the write
-    (issue #197 sweep: falling through to overwrite on a read failure
-    was the actual regression this guards against).
-    """
+    """Refresh README only when it is absent or contains the generated marker.
+    Leave handwritten or unreadable README files untouched.
+
+    source: ADR-0628"""
     readme_path = root / "README.md"
     auto_marker = "<!-- cortex-wiki-readme: auto-generated -->"
     should_write = True
@@ -47,17 +39,10 @@ def _refresh_readme_if_safe(root: Path, page_paths: list[str]) -> None:
 def try_reindex(root: Path) -> None:
     """Best-effort index rebuild after wiki write.
 
-    Produces three artefacts:
-      * ``<root>/.generated/INDEX.md`` — structured TOC grouped by
-        domain then kind (for tech readers).
-      * ``<root>/README.md``           — plain-language top-level
-        entry point (for non-tech readers); see ``_refresh_readme_if_safe``.
-      * cleans up superseded ``{id}-{slug}.md`` files via
-        ``cleanup_id_prefixed_pages``.
+        Called from the composition root (``mcp_server.handlers.wiki_memory_sync``)
+        after a memory-promotion write, in addition to any future direct caller.
 
-    Called from the composition root (``mcp_server.handlers.wiki_memory_sync``)
-    after a memory-promotion write, in addition to any future direct caller.
-    """
+    source: ADR-0628"""
     try:
         page_paths = list_pages(root)
         index_md = build_index(page_paths)

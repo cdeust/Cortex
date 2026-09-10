@@ -1,14 +1,6 @@
 """Wiki pipeline Intermediate Representations (Phase 1 of redesign).
 
-Each IR is a named, inspectable boundary between pipeline phases:
-
-    transcript → [ClaimEvent] → [Concept] → [DraftPage] → [ApprovedPage] → rendered
-
-These are Pydantic models (v2) so they round-trip JSON for DB storage
-(JSONB columns) and MCP tool payloads, and validate at the boundary.
-
-Pure data — no I/O. Imports: shared + stdlib only.
-"""
+source: ADR-0681"""
 
 from __future__ import annotations
 
@@ -18,8 +10,8 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
-# ── Phase output: transcript → ClaimEvent ─────────────────────────────
-# Extracted from a raw session / memory. Atomic, timestamped, citable.
+# source: ADR-0681
+
 
 ClaimType = Literal[
     "assertion",
@@ -58,14 +50,7 @@ class ClaimEvent(BaseModel):
 class EvidenceRef(BaseModel):
     """A pointer to supporting evidence for a claim.
 
-    Kinds:
-      - file: a source file in the repo (path + optional line range)
-      - commit: a git commit SHA
-      - paper: arxiv / DOI / URL
-      - memory: another memory this claim derives from
-      - claim: another claim that supports this one
-      - benchmark: a named benchmark result
-    """
+    source: ADR-0681"""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -74,9 +59,8 @@ class EvidenceRef(BaseModel):
     context: str | None = None
 
 
-# ── Phase output: ClaimEvents → Concept ───────────────────────────────
-# Emergent candidate knowledge node. Strauss axial coding.
-# Sits between memories and pages.
+# source: ADR-0681
+
 
 ConceptStatus = Literal[
     "candidate",
@@ -89,7 +73,9 @@ ConceptStatus = Literal[
 
 
 class AxialSlots(BaseModel):
-    """The four axial-coding slots per Strauss & Corbin.
+    """Represent the four axial-coding slots.
+
+    source: ADR-0681
 
     A concept graduates from candidate → saturating when at least
     three of the four slots are non-empty.
@@ -225,9 +211,8 @@ class ApprovedPage(BaseModel):
     tended: datetime | None = None
 
 
-# ── Curation memo (Strauss memoing) ────────────────────────────────────
-# Every pipeline decision writes a memo. Audit trail for the
-# grounded-theory process.
+# source: ADR-0681
+
 
 MemoSubject = Literal["concept", "draft", "page", "claim"]
 
@@ -235,10 +220,7 @@ MemoSubject = Literal["concept", "draft", "page", "claim"]
 class CurationMemo(BaseModel):
     """The grounded-theory memoing layer.
 
-    Captures *why* a decision was made: the inputs considered, the
-    alternatives rejected, and the confidence. Without this, grounded
-    theory is not grounded.
-    """
+    source: ADR-0681"""
 
     model_config = ConfigDict(extra="forbid")
 

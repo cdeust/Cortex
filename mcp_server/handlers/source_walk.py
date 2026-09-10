@@ -4,17 +4,7 @@ A single home for the ``os.walk`` idiom that skips ignored directories
 (``node_modules``, ``.venv``, ``deps``, ``site-packages``, …) by pruning
 ``dirnames`` in place so they are **never descended into**.
 
-Why this exists: ``Path.rglob("*")`` cannot prune mid-iteration — it
-enumerates every entry under an ignored directory and leaves the caller to
-reject them afterwards. On a repo carrying a vendored tree (a 154M ``deps/``
-of ~8K files, a ``node_modules``), that post-filter walk stalls for minutes
-on the event loop. The same asymmetry caused the wiki-drift hang
-(``core/wiki_drift.py``); this module is the ingestion-side counterpart.
-
-``os.walk(followlinks=False)`` with ``dirnames[:] = [...]`` is the canonical
-cross-platform idiom and is required on Windows to avoid traversing NTFS
-junctions and reparse points.
-"""
+source: ADR-0448"""
 
 from __future__ import annotations
 

@@ -5,24 +5,17 @@ against the documented Claude Code plugin contract.
 Source: https://code.claude.com/docs/en/plugins-reference,
 section "Environment variables":
 
-  > ${CLAUDE_PLUGIN_ROOT}: ... Both are substituted inline anywhere they
+> ${CLAUDE_PLUGIN_ROOT}: ... Both are substituted inline anywhere they
   > appear in skill content, agent content, hook commands, monitor
   > commands, and MCP or LSP server configs.
 
 And the canonical example in the same reference:
 
-  "plugin-database": {
+"plugin-database": {
     "command": "${CLAUDE_PLUGIN_ROOT}/servers/db-server",
     "args": ["--config", "${CLAUDE_PLUGIN_ROOT}/config.json"],
     "env": { "DB_PATH": "${CLAUDE_PLUGIN_ROOT}/data" }
   }
-
-History of this contract:
-
-Discord 2026-05-09: prior config used a Python `-c` one-liner that
-read ~/.claude/plugins/installed_plugins.json and execvp'd into the
-launcher. Failure modes were silent because `python3 -c` swallowed stack
-traces. The fix routes through the documented substitution mechanism.
 
 2026-06-12: the config moved from a repo-root `.mcp.json` (referenced by
 plugin.json as "./.mcp.json") to an inline object in plugin.json. Reason:
@@ -40,7 +33,8 @@ This test guards against regression to either failure mode: the inline
 precondition than the contract — a specific marketplace key in
 installed_plugins.json) and the reintroduction of a repo-root
 `.mcp.json`.
-"""
+
+source: ADR-1042"""
 
 from __future__ import annotations
 

@@ -8,15 +8,6 @@ inhibits the Rac1 forgetting circuit (Davis & Zhong 2017, Neuron 95:490-503).
 
 Per active memory that is neither pinned nor replayed this cycle:
 
-  - ``chronic`` = the core ``chronic_interference`` over the NEWER overlapping
-    neighbours: a REDUNDANCY-GATED excess noisy-OR that counts only genuine
-    near-duplicates (sim ≥ τ_dup = curation.MERGE_THRESHOLD), excluding the ~0.5
-    background band of 384-dim embeddings. This is the saturation fix — a plain
-    noisy-OR over the 10 nearest newer neighbours saturated to ≈1.0 for 99.6% of
-    memories and marked 46% of the corpus stale in one cycle. The gating lives in
-    pure core (the store returns raw per-neighbour similarities), unit-testable
-    without a database (SRP).
-
   - ``accum`` = the leaky integrator over cycles: ``λ·accum_{t-1} + chronic ×
     stage_vulnerability × cortical_availability(hippocampal_dependency)``.
     Permanent forgetting requires *sustained* pressure (accum ≥ Θ_accum),
@@ -32,20 +23,9 @@ Per active memory that is neither pinned nor replayed this cycle:
     its age (``acute_age_hours``), feeding the stage-independent transient DAMB
     block (Sabandal, Berry & Davis 2021, Nature 591:426-430).
 
-Effects, both reversible (the two circuits read disjoint signals and never
-chain — Sabandal 2021 tested and rejected transient→permanent conversion):
-
-  - permanent (Rac1) → ``mark_memory_stale(True)``: the row persists as a
-    residual engram, reinstated when the trace is reactivated.
-  - transient (DAMB) → ``heat × (1 - acute_overlap)``: retrieval suppression
-    whose magnitude rides the *measured* interferer salience. No biological
-    rate law exists for this magnitude at the hours/days timescale and the
-    salience effect is ordinal only (Berry, Phan & Davis 2018, PMC6239218), so
-    the suppression is scaled by the interferer overlap itself rather than an
-    invented constant; heat recovers on re-access.
-
 Ablation-gated by ``Mechanism.ACTIVE_FORGETTING``.
-"""
+
+source: ADR-0360"""
 
 from __future__ import annotations
 
@@ -63,11 +43,7 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 
 logger = logging.getLogger(__name__)
 
-# Newer-neighbor fan-out for the chronic aggregate. Bounds I/O only: the gated
-# noisy-OR counts only near-duplicates, so this caps how much of a long similar-
-# neighbor tail is scanned — it is NOT a biological rate constant. Matches the
-# store's default KNN width.
-# source: I/O bound; mirrors search_vectors default top_k (pg_store.py)
+# source: ADR-0360
 NEIGHBOR_K = 10
 
 

@@ -1,0 +1,51 @@
+# ADR-0392: mcp_server/handlers/forget.py implementation decisions
+
+Status: accepted; preserved from the existing implementation during issue #514.
+
+These are historical implementation records, not new algorithm or threshold choices.
+Source: `mcp_server/handlers/forget.py`; original SHA-256 `5af4182801a4cfbb8309c5f91b8c41a2af980b26c13dcdebdeba8653da63a568`.
+
+## Original comment, lines 118–120
+
+````text
+# Soft delete is recoverable, so the raw content must survive with
+            # it. Reported explicitly rather than omitted so a caller can tell
+            # "kept on purpose" from "we forgot to look" (issue #366).
+````
+
+## Original comment, lines 124–128
+
+````text
+# ── Hard delete: cross-substrate, and the two orderings below are
+    # load-bearing (issue #366).
+    #
+    # The artifact path must be read BEFORE the row goes — it lives in the
+    # memory body, which is about to be unreachable.
+````
+
+## Original comment, lines 139–140
+
+````text
+# The reference check must run AFTER the row is gone, or the memory being
+    # forgotten counts itself as a live referrer and nothing is ever collected.
+````
+
+## Original docstring, lines 158–164
+
+````text
+"""Remove wiki claim_events derived from ``memory_id``; return the count.
+
+    Never raises: a wiki table that is absent or unreachable (SQLite installs
+    without the wiki schema, a degraded connection) must not block the deletion
+    the user asked for. Returns 0 when nothing was removed, and logs the reason
+    so a silent miss is still observable.
+    """
+````
+
+## Original comment, lines 174–175
+
+````text
+# Telemetry-instrumented public entry. Records latency / byte volume
+# / result count per call (Popper C6 read/write ratio audit).
+````
+

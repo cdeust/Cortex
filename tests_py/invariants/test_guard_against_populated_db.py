@@ -1,25 +1,12 @@
 """Regression guard for tests_py/_pg_safety_guards.py:guard_against_populated_db
 — the non-blocking behavioral branches.
 
-Incident 2026-06-10: 537,396 production memories were deleted because the
-guard was absent.  This test suite prevents a future change from silently
-disabling or weakening the guard by verifying each branch in complete
-isolation — WITHOUT a real PostgreSQL connection.
-
 Contract under test:
     1. CORTEX_TEST_ALLOW_POPULATED=1  -> always returns (bypass override).
     2. DB URL name is *_test / *_bench / *_test_*  -> returns (trusted name).
     3. DB URL is not a test name, try PG:
        a. psycopg.connect raises any exception  -> returns (SQLite fallback).
        b. memories count == 0                   -> returns (empty DB is safe).
-
-The count > 0 (BLOCKED) branch — the one the incident demonstrated was
-absent — has its own file, `test_guard_blocks_populated_db.py`: it is the
-single most safety-critical branch here, and splitting it out keeps this
-file (and that one) under coding-standards.md §4.1's 300-line cap. The
-guard's structural integrity (can the function itself be silently removed
-or its module-level call site weakened?) is pinned separately in
-`test_guard_against_populated_db_structural.py`.
 
 All branches use unittest.mock only.  No real PG connection is opened.
 
@@ -38,7 +25,8 @@ function.
 each test so the ``import psycopg`` inside the guard returns the fake.
 ``pytest.exit`` is patched on the real ``pytest`` object in sys.modules so the
 ``import pytest; pytest.exit(...)`` path inside the guard calls the mock.
-"""
+
+source: ADR-1015"""
 
 from __future__ import annotations
 

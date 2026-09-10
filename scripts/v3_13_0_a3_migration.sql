@@ -2,30 +2,27 @@
 -- ============================================================================
 -- Cortex v3.13.0 — Phase 3 A3 atomic migration (lazy heat)
 --
--- Source: docs/program/phase-3-a3-migration-design.md §1 (schema migration).
--- Invariants: I1 (heat ∈ [0,1]), I2 (one canonical writer), I5 (stage decay
--- exponents in effective_heat), I10 (still applies at pool layer).
+-- source: ADR-0877
+
+
 --
--- What this DDL does:
---   1. Rename memories.heat → memories.heat_base + add CHECK bounds.
---   2. Add memories.heat_base_set_at (provenance timestamp for the bump).
---   3. Add memories.no_decay (anchor + import-pin flag).
---   4. Create homeostatic_state table (one row per domain, scalar factor).
---   5. Monthly RANGE partition memories on created_at (Thompson D1).
---   6. Per-partition HNSW / GIN / B-tree indexes (pgvector #875 mitigation).
---   7. ensure_memory_partition_for() helper for auto-creation.
+-- source: ADR-0877
+
+
+
+
+
+
+
 --
--- What this DDL does NOT do (that's steps 2-8 of the spec):
---   - Add effective_heat() function (step 2 lands that in pg_schema.py).
---   - Rewrite recall_memories() (step 6).
---   - Delete decay_memories() (step 7).
---   - Flip the A3_LAZY_HEAT flag (step 9).
+-- This DDL leaves effective_heat(), recall_memories(), decay_memories(), and A3_LAZY_HEAT unchanged.
+-- source: ADR-0877
 --
 -- Safety:
 --   - Wrapped in a single BEGIN/COMMIT with 30-min statement_timeout.
 --   - Every DDL is IF NOT EXISTS or DROP IF EXISTS (idempotent re-run).
---   - INSERT INTO copy of memories → partitioned memories; tested on
---     darval-scale 66K in ~4 minutes per spec §1.3.
+--   - Copy memories into the partitioned table.
+-- source: ADR-0877
 --   - Companion rollback at scripts/v3_13_0_a3_rollback.sql.
 --
 -- Runbook:
@@ -65,8 +62,8 @@ ALTER TABLE memories
     ADD COLUMN IF NOT EXISTS heat_base_set_at TIMESTAMPTZ,
     ADD COLUMN IF NOT EXISTS no_decay BOOLEAN NOT NULL DEFAULT FALSE;
 
--- Back-populate heat_base_set_at from last_accessed (Lamport §3: the last
--- known causal touch is our best proxy for when heat_base was last valid).
+-- Back-populate heat_base_set_at from last_accessed.
+-- source: ADR-0877
 UPDATE memories
    SET heat_base_set_at = COALESCE(last_accessed, created_at, NOW())
  WHERE heat_base_set_at IS NULL;
@@ -76,7 +73,7 @@ ALTER TABLE memories ALTER COLUMN heat_base_set_at SET DEFAULT NOW();
 
 -- ----------------------------------------------------------------------------
 -- 1.3 Homeostatic state (one row per domain, scalar factor).
--- Feynman: heat is a function, not a state — the cycle adjusts a scalar.
+-- source: ADR-0877
 -- ----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS homeostatic_state (
     domain     TEXT PRIMARY KEY,
@@ -85,10 +82,10 @@ CREATE TABLE IF NOT EXISTS homeostatic_state (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Seed default per-domain rows discovered from memories. Readers MUST
--- still COALESCE((SELECT factor FROM homeostatic_state WHERE domain=…), 1.0)
--- because new domains arriving between seed and first homeostatic run
--- would otherwise miss their row.
+-- source: ADR-0877
+
+
+
 INSERT INTO homeostatic_state (domain, factor)
 SELECT DISTINCT COALESCE(domain, ''), 1.0
   FROM memories
@@ -96,10 +93,8 @@ SELECT DISTINCT COALESCE(domain, ''), 1.0
 ON CONFLICT (domain) DO NOTHING;
 
 -- ----------------------------------------------------------------------------
--- 1.4 Monthly RANGE partition on memories.created_at (Thompson D1).
--- Strategy: rename memories → memories_pre_a3, create new partitioned
--- memories with IDENTICAL schema, INSERT INTO to copy data, drop old.
--- For stores < 1M rows this finishes in ≤5 min per spec §1.3.
+-- Create monthly RANGE partitions on memories.created_at and copy the existing rows.
+-- source: ADR-0877
 -- ----------------------------------------------------------------------------
 DO $$ DECLARE
     is_partitioned BOOLEAN;
@@ -121,7 +116,7 @@ BEGIN
     EXECUTE 'CREATE TABLE memories (LIKE memories_pre_a3 INCLUDING ALL) '
             'PARTITION BY RANGE (created_at)';
 
-    -- Pre-create 12 partitions from current month forward + 1 historical.
+    -- source: ADR-0877
     FOR i IN 0..11 LOOP
         DECLARE
             start_d DATE := (date_trunc('month', NOW()) + (i || ' months')::interval)::DATE;
@@ -134,8 +129,8 @@ BEGIN
         END;
     END LOOP;
 
-    -- Historical catch-all for pre-current-month data. Keeps all darval-era
-    -- memories queryable without rewriting them into monthly partitions.
+    -- source: ADR-0877
+
     EXECUTE 'CREATE TABLE IF NOT EXISTS memories_historical '
             'PARTITION OF memories '
             'FOR VALUES FROM (MINVALUE) TO (%L)',
@@ -148,12 +143,12 @@ BEGIN
     DROP TABLE memories_pre_a3 CASCADE;
 END $$;
 
--- ----------------------------------------------------------------------------
--- 1.5 Per-partition indexes. Smaller indexes = faster UPDATE maintenance.
--- pgvector #875 mitigation: HNSW re-insert cost scales with partition size,
--- not total store. B-tree(heat_base) preserves ORDER BY usability for
--- the recall hot CTE post-A3.
--- ----------------------------------------------------------------------------
+-- source: ADR-0877
+
+
+
+
+
 DO $$ DECLARE r RECORD;
 BEGIN
     FOR r IN
@@ -183,10 +178,10 @@ BEGIN
     END LOOP;
 END $$;
 
--- ----------------------------------------------------------------------------
--- 1.6 Auto-create next month's partition on demand. Called at start of
--- consolidate so no cron needed.
--- ----------------------------------------------------------------------------
+-- source: ADR-0877
+
+
+
 CREATE OR REPLACE FUNCTION ensure_memory_partition_for(target DATE)
 RETURNS VOID AS $$
 DECLARE

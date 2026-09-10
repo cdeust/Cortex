@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Collection
 
-# source: post_tool_capture's existing full-output tools, moved without changes.
+# source: ADR-0477
 HIGH_VALUE_TOOLS = {"Edit", "Write", "Bash", "MultiEdit", "NotebookEdit"}
 
 
@@ -13,10 +13,7 @@ def capture_skip_reason(
 ) -> str | None:
     """Return a visible skip reason, or None to retain the existing pipeline.
 
-    source: green-remediation W3-1b; owner keeps full as the unset default.
-    No value normalization: misspellings must not silently enable capture.
-    The hook supplies its existing high-value set instead of a second list.
-    """
+    source: ADR-0477"""
     if mode == "full":
         return None
     if mode == "off":

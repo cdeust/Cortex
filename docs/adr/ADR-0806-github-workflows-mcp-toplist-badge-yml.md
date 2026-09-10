@@ -73,3 +73,19 @@ Source rationale preserved verbatim. Identifiers inside historical quotations ar
 #      it — which sidesteps both (1) and (2) since a PAT-authored PR
 #      is not GITHUB_TOKEN-authored.
 ````
+
+## Final non-Python residual audit
+
+### .github/workflows/mcp-toplist-badge.yml — pre-cleanup line 49
+
+````text
+      # No-ops when the regenerated file is byte-identical to the committed
+      # one, which is the expected result most months.
+````
+
+### .github/workflows/mcp-toplist-badge.yml — pre-cleanup line 52
+
+````text
+      # BADGE_REFRESH_TOKEN is optional. Without it the PR is authored by
+      # GITHUB_TOKEN. That has two distinct consequences, not one:
+````

@@ -8,8 +8,7 @@ from pathlib import Path
 import sys
 
 
-# source: https://docs.github.com/en/rest/pulls/pulls#list-pull-requests-files
-# The REST endpoint used by dorny/paths-filter returns at most 3000 files.
+# source: ADR-0709
 API_FILE_LIMIT = 3000
 
 

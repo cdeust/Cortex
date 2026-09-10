@@ -9,25 +9,11 @@ Usage:
     python3 scripts/setup.py                                # PostgreSQL path
     CORTEX_MEMORY_STORE_BACKEND=sqlite python3 scripts/setup.py   # SQLite path
 
-SQLite mode (the Claude Code plugin's zero-config DEFAULT since the
-sqlite-first install change; scripts/install-plugin.sh invokes this
-script with CORTEX_MEMORY_STORE_BACKEND=sqlite on every OS):
-    Skips PostgreSQL provisioning, schema setup, and the eager
-    embedding-model pre-cache entirely. The store schema auto-creates on
-    first open (SqliteMemoryStore._init_schema) and the embedding model
-    downloads lazily on first encode (~100 MB, one-time — source:
-    embedding_engine._ensure_model; size figure per PRIVACY.md /
-    scripts/setup.sh step 5). Result: Python deps + verification only.
-    This same flag is what gives the Windows postInstall path CI
-    coverage on a runner with no PostgreSQL server (source: issue #113).
+Dependency install (install_deps) resolves ``requirements/setup.txt``, the
+generated hash-pinned closure, with --no-deps/--require-hashes and never
+--upgrade. source: ADR-1059
 
-PostgreSQL mode (default when the flag is unset — the --postgres opt-in
-path of scripts/install-plugin.sh on Windows, and the manual
-cross-platform path):
-    PostgreSQL must already be installed and running:
-      https://www.postgresql.org/download/windows/
-      Also install pgvector: https://github.com/pgvector/pgvector#windows
-"""
+source: ADR-0782"""
 
 from __future__ import annotations
 
@@ -136,12 +122,11 @@ def run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
 # ── Step 1: Python version check ──────────────────────────────────────
 
 
-# source: pyproject.toml requires-python = ">=3.10"
+# source: ADR-0782
 _MIN_PY_MAJOR = 3
 _MIN_PY_MINOR = 10
 
-# source: structural — the probe counts the two required extensions
-# ('vector', 'pg_trgm'); both present == 2 rows
+# source: ADR-0782
 _REQUIRED_PG_EXTENSIONS = 2
 
 
@@ -211,27 +196,24 @@ def check_postgresql() -> None:
 # ── Step 3: Python dependencies ───────────────────────────────────────
 
 
+# The same generated, hash-pinned closure scripts/setup.sh installs (see
+# scripts/pip_constraint_sets.py, entry "setup.txt") — never a hand list.
+_SETUP_CONSTRAINTS = PROJECT_DIR / "requirements" / "setup.txt"
+
+
 def install_deps() -> None:
     step("Python dependencies")
 
     os.makedirs(DEPS_DIR, exist_ok=True)
 
-    packages = [
-        "mcp>=2.0.0",
-        "pydantic>=2.0.0",
-        "pydantic-settings>=2.0.0",
-        "numpy>=1.24.0",
-        "psycopg[binary]>=3.1",
-        "pgvector>=0.3",
-        "sentence-transformers>=2.2.0",
-        "flashrank>=0.2.0",
-        "datasets>=2.14.0",
-        "networkx>=3.0",
-        "tree-sitter>=0.24.0",
-        "tree-sitter-language-pack>=0.24.0",
-    ]
-
     print("Installing Python packages...")
+    # --no-deps: the constraint file IS the fully uv-resolved closure;
+    # letting pip re-derive it aborts with ResolutionImpossible on the
+    # mpmath override pyproject.toml declares (ADR-1059).
+    # --require-hashes: every line in the file is hash-pinned.
+    # No --upgrade: this directory may be on a live server's sys.path
+    # (ADR-0749); skip-if-present is safe under concurrency, replace-in-
+    # place is not.
     result = run(
         [
             sys.executable,
@@ -241,7 +223,10 @@ def install_deps() -> None:
             "-q",
             "--target",
             DEPS_DIR,
-            *packages,
+            "--no-deps",
+            "--require-hashes",
+            "-r",
+            str(_SETUP_CONSTRAINTS),
         ]
     )
 
@@ -402,9 +387,7 @@ def verify() -> None:
 
     sys.path.insert(0, DEPS_DIR)
 
-    # SQLite mode (see module docstring): no PostgreSQL server is
-    # provisioned, so skip the PG-specific checks rather than reporting a
-    # false failure for a step that was intentionally not run.
+    # source: ADR-0782
     checks = _sqlite_checks() if SKIP_POSTGRES else _postgres_checks()
     checks += _model_checks()
 

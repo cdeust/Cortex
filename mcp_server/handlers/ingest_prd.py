@@ -6,16 +6,9 @@ Sources supported
 - ``content``       — raw markdown string
 - ``pipeline_id``   — prd-gen pipeline state id; fetches via upstream MCP
 
-Outputs into Cortex
--------------------
-- Wiki page under ``specs/<slug>.md`` (kind=spec)
-- One memory for the PRD summary (tagged ``prd``, ``spec``)
-- One memory per extracted decision (tagged ``decision``)
-- One memory per extracted requirement (tagged ``requirement``)
-- Optional validation stats from prd-gen's ``validate_prd_document``
-
 Cortex consumes; prd-gen produces.
-"""
+
+source: ADR-0415"""
 
 from __future__ import annotations
 
@@ -140,10 +133,7 @@ async def _fetch_prd(args: dict[str, Any]) -> tuple[str, str]:
     if content:
         return content, "content"
 
-    # prd-gen's get_pipeline_state is keyed by ``run_id`` (the pipeline run id)
-    # and needs format="full" to include the rendered PRD body. The public
-    # Cortex arg stays ``pipeline_id`` (its value IS the run id) — map it here.
-    # source: prd-gen tool schema (run_id required; format summary|full).
+    # source: ADR-0415
     payload = await call_upstream(
         _UPSTREAM_SERVER,
         "get_pipeline_state",
@@ -196,9 +186,7 @@ _REQUIREMENT_HEADINGS = {
 }
 
 
-# Minimum bullet length worth keeping (filters list-marker noise).
-# source: pre-existing tuned value, extracted unchanged (#197 family 3);
-# provenance not recorded at introduction
+# source: ADR-0415
 _MIN_BULLET_CHARS = 8
 
 
@@ -377,13 +365,12 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.debug("PRD summary memory insert failed: %s", exc)
 
-    # 4. Optional validation + prd-gen quality evidence.
+    # source: ADR-0415
     validation = None
     quality_history = None
     if args.get("validate"):
         validation = await _maybe_validate(text)
-    # When the PRD came from a live prd-gen run, also record prd-gen's own
-    # quality history so the ingestion carries the upstream verification signal.
+    # source: ADR-0415
     if source == "pipeline_id":
         quality_history = await _fetch_quality_history()
 

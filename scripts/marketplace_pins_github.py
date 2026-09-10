@@ -1,14 +1,6 @@
 """GitHub-source pin checks for the marketplace pin-staleness gate.
 
-Split out of check_marketplace_pins.py (issue: that file crossed the
-300-line §4.1 cap once REGISTRY_VERSION_STALE was added). Covers pins
-shaped ``{"source": "github", "repo": ..., "version": ..., "sha": ...}``:
-does a release matching the pinned version exist at all
-(PIN_VERSION_UNPUBLISHED), is it the latest one (PIN_BEHIND_RELEASE), and
-is the optional pinned ``sha`` reachable from the repo's default branch
-(PIN_SHA_UNREACHABLE). See check_marketplace_pins.py's module docstring
-for the full failure-class catalogue and the incidents each one closes.
-"""
+source: ADR-0753"""
 
 from __future__ import annotations
 
@@ -25,25 +17,14 @@ if _scripts_dir not in sys.path:
 from marketplace_pins_http import HTTP_NOT_FOUND, API_TIMEOUT_S, api_headers  # noqa: E402
 from marketplace_pins_semver import parse_semver  # noqa: E402
 
-# Same contract as PENDING_REGISTRY (marketplace_pins_registry.py): an
-# entry here degrades a real PIN_VERSION_UNPUBLISHED finding to a named
-# NOTICE while a committed, tracked fix is in flight — never a
-# placeholder, never silent. Empty here because the one entry this gate
-# needed (cdeust/cortex-viz#130) resolved within the same change that
-# introduced the mechanism — merged, tagged v3.1.0, published to PyPI,
-# verified 2026-08-10.
+# source: ADR-0753
 PENDING_PINS: dict[str, str] = {}
 
 
 def list_release_tags(repo: str) -> list[str] | None:
     """Raw tag_name of every published release (<=100); None if repo has none (404).
 
-    The full list, not just "latest": PIN_VERSION_UNPUBLISHED needs to test
-    set-membership (does a tag matching the pin exist AT ALL), which a
-    latest-only fetch cannot answer — a pin can be simultaneously "not the
-    latest" AND "not published either", and only the full list tells them
-    apart from "published but superseded".
-    """
+    source: ADR-0753"""
     req = urllib.request.Request(
         f"https://api.github.com/repos/{repo}/releases?per_page=100",
         headers=api_headers(),
@@ -58,17 +39,9 @@ def list_release_tags(repo: str) -> list[str] | None:
     return [r.get("tag_name", "") for r in releases]
 
 
-# source: GitHub REST "Compare two commits" — `status` is exactly one of
-# ahead / behind / identical / diverged.
-# https://docs.github.com/rest/commits/commits#compare-two-commits
-#
-# compare/BASE...HEAD describes HEAD relative to BASE. With BASE = the default
-# branch, `identical` means the pin IS the branch tip and `behind` means it is
-# an ancestor of it — both reachable. `ahead` and `diverged` mean the pin
-# carries commits the branch does not: an unmerged PR head, which stops being
-# reachable the moment that PR is squash-merged.
+# source: ADR-0753
 REACHABLE_FROM_DEFAULT = frozenset({"identical", "behind"})
-SHA_DISPLAY_LEN = 12  # source: git's default core.abbrev floor for readable logs
+SHA_DISPLAY_LEN = 12  # source: ADR-0753
 
 
 def default_branch(repo: str) -> str | None:
@@ -140,9 +113,9 @@ def _check_unpublished_github_pin(
     name: str, repo: str, pin: str, latest_tag: str, pending: dict[str, str]
 ):
     """The PIN_VERSION_UNPUBLISHED branch of `check_github_pin`, split out to
-    keep the caller under the §4.2 method-size cap. `pending` degrades this
-    to a named NOTICE for a release genuinely in flight — never silence.
-    """
+        keep the caller under the §4.2 method-size cap.
+
+    source: ADR-0753"""
     if name in pending:
         return (
             None,

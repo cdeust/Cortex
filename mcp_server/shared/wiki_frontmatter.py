@@ -1,9 +1,6 @@
 """Wiki page frontmatter parser + PageDocument model — pure, deterministic.
 
-Parses YAML-style frontmatter (``---``…``---``) into a plain dict so
-handlers can round-trip metadata without depending on a YAML library, and
-renders a ``PageDocument`` back to markdown text.
-"""
+source: ADR-0678"""
 
 from __future__ import annotations
 
@@ -53,38 +50,20 @@ def _strip_inline_list(value: str) -> list[str]:
     return [item.strip() for item in inner.split(",") if item.strip()]
 
 
-# source: structural — a quoted scalar needs both an opening and a closing
-# quote character, so it is at least two characters long.
+# source: ADR-0678
+
 _MIN_QUOTED_SCALAR_LEN = 2
 
 
 def _clean_scalar_value(key: str, raw_stripped: str) -> str:
     """Normalize a non-list frontmatter scalar value.
 
-    precondition: ``raw_stripped`` is the whitespace-trimmed text found
-    after the FIRST ``:`` on a frontmatter line (i.e. ``line.partition(":")``
-    already removed exactly one ``<key>:`` label); ``raw_stripped`` is
-    non-empty and is not an inline ``[...]`` list (both handled by the
-    caller before this is reached).
-    postcondition: returns ``raw_stripped`` with (a) a duplicated leading
-    ``"<key>: "`` label removed, at most once, matched case-insensitively
-    against ``key`` — this repairs content where the author's own
-    frontmatter emission echoed the key a second time inside its value
-    (observed on disk: ``title: title: "Public API surface: ..."``,
-    written verbatim by an LLM-authored page routed through
-    ``write_governed_page``, which persists caller-supplied markdown
-    without re-deriving frontmatter); (b) one matching pair of surrounding
-    quote characters (``"`` or ``'``) removed, mirroring the quote-stripping
-    the block-list branch (``items.append(...strip("\"'"))``, above) and
-    ``_strip_inline_list`` already perform for list values — the scalar
-    branch previously had no equivalent, so a value legitimately quoted
-    per YAML convention because it contains a colon (e.g.
-    ``title: "Public API surface: automatised-pipeline"``) kept its
-    literal quote characters. A value that merely starts with the key
-    name as a normal word (e.g. ``title: titleist golf clubs``) is
-    unaffected — the duplicate-label check requires the exact
-    ``"<key>:"`` token, not just a shared prefix.
-    """
+    precondition: raw_stripped is the non-empty trimmed text after the first
+    frontmatter colon and is not an inline [...] list.
+    postcondition: removes at most one leading case-insensitive <key>: label
+    and one matching pair of surrounding quotes. A normal word sharing the
+    key prefix without the exact <key>: token remains unchanged.
+    source: ADR-0678"""
     value = raw_stripped
     dup_prefix = f"{key}:"
     if value.lower().startswith(dup_prefix.lower()):
@@ -101,10 +80,7 @@ def _clean_scalar_value(key: str, raw_stripped: str) -> str:
 def _collect_block_list(lines: list[str], start: int) -> tuple[list[str], int]:
     """Peek ahead from ``start`` for indented ``  - item`` lines.
 
-    Returns ``(items, next_idx)`` — ``next_idx`` is the first line past the
-    collected block (unchanged from ``start`` when no items were found, so
-    the caller can distinguish "block list" from "empty scalar").
-    """
+    source: ADR-0678"""
     items: list[str] = []
     j = start
     while j < len(lines):

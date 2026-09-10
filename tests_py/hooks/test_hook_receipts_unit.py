@@ -1,4 +1,4 @@
-"""DB-free unit tests for the T2 hook receipt plumbing (decision 4255039).
+"""DB-free unit tests for the T2 hook receipt plumbing.
 
 Complements the PG-gated end-to-end tests in test_hook_receipts.py with
 the branches those tests cannot reach deterministically:
@@ -11,7 +11,8 @@ the branches those tests cannot reach deterministically:
 * the marker-less degradation rendering — a failed receipt write yields
   receipt_id=None and the banner must render WITHOUT a marker (I/O is
   the only named degradation mode; the injection itself never breaks).
-"""
+
+source: ADR-0972"""
 
 from __future__ import annotations
 

@@ -33,7 +33,7 @@ class _CountingOutput:
 
     def write(self, text: str) -> int:
         written = self._stream.write(text)
-        # source: UTF-8 encoding of the text accepted by TextIO.write.
+        # source: ADR-0480
         self.bytes_out += len(text[:written].encode("utf-8"))
         return written
 
@@ -85,8 +85,7 @@ def _observe_output() -> Iterator[_CountingOutput | _CountingBuffer]:
         raise
     finally:
         try:
-            # TextIOWrapper may defer encoding until flush; count that output
-            # before restoring the original binary write method.
+            # source: ADR-0480
             _flush_output(stream, failed)
         finally:
             stream.buffer.write = counter.write_original
@@ -114,13 +113,13 @@ def _run_observed(op: str, hook: Callable[[], None]) -> None:
                 hook()
             ok = True
         except SystemExit as exc:
-            # source: Python sys.exit: None and zero signal successful exit.
+            # source: ADR-0480
             ok = exc.code is None or exc.code == 0
             raise
         finally:
             telemetry.record(
                 op,
-                # source: SI conversion, one second equals 1000 milliseconds.
+                # source: ADR-0480
                 latency_ms=(time.perf_counter() - started) * 1000,
                 bytes_out=output.bytes_out,
                 ok=ok,

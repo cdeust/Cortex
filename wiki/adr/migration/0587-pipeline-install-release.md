@@ -1,0 +1,114 @@
+---
+kind: adr
+number: 0587
+title: Preserve pipeline_install_release design decisions
+status: accepted
+---
+
+# ADR-0587: pipeline_install_release design decisions
+
+## Context
+
+Canonical migration of decision evidence from `mcp_server/infrastructure/pipeline_install_release.py` under ADR-0056.
+The excerpts below preserve historical claims and citations verbatim; original ADR numbers are historical quotations, not current identity bindings.
+
+## Decision
+
+Keep the source implementation linked to this versioned decision record. Operational API documentation remains with the implementation.
+
+## Preserved decision evidence
+
+### module, original line 1
+
+````text
+  1. Query GitHub Releases API for ``cdeust/ai-architect-mcp-codebase``.
+  2. Match an asset for the host platform (os/arch).
+  3. Download tarball + companion ``.sha256`` file.
+  4. Verify SHA256 before extracting.
+  5. Extract the binary, install at ``~/.claude/methodology/bin/mcp-server``.
+````
+
+### module, original line 1
+
+````text
+If any step fails (404, no matching asset, hash mismatch, network), we
+return ``unavailable`` and the caller falls through to the source build
+path. Failure here is NEVER fatal — it's a fast path, not a substitute.
+````
+
+### module, original line 1
+
+````text
+Asset naming convention (upstream contract)
+-------------------------------------------
+- ``<name>-{os}-{arch}.tar.gz`` containing the binary at the archive root.
+  Assets are matched by the ``-{os}-{arch}`` suffix, so the producer may
+  rename or version-prefix them; the member name is what must be recognised,
+  and it is read from upstream_identity.BINARY_NAMES.
+- ``<name>-{os}-{arch}.tar.gz.sha256`` carrying the hex digest.
+- ``{os}`` ∈ {macos, linux}; ``{arch}`` ∈ {x86_64, aarch64}.
+
+````
+
+### _http_get, original line 71
+
+````text
+    No shell, no curl — keeps the supply-chain story unchanged when the
+    fast path is unavailable (the source-build fallback handles its own
+    git/cargo network).
+    
+````
+
+### _verify_and_extract, original line 109
+
+````text
+    Refuses tar entries that escape dest_dir (path-traversal guard).
+    
+````
+
+### try_install_prebuilt, original line 140
+
+````text
+    Always-non-fatal: ``unavailable`` is the default when anything goes
+    wrong. Callers fall through to the source-build path.
+    
+````
+
+### comment, original line 50
+
+````text
+# source: FIPS 180-4 — a SHA-256 digest is 32 bytes = 64 hex characters
+````
+
+### comment, original line 122
+
+````text
+# Path-traversal guard: each resolved member path must
+            # remain a child of dest_dir.
+````
+
+### comment, original line 128
+
+````text
+# filter="data" enforces safe extraction (no symlinks
+                # outside dest, no special files, no setuid bits) —
+                # required default in Python 3.14, opt-in earlier.
+                # PEP 706 / CVE-2007-4559.
+````
+
+### comment, original line 190
+
+````text
+# Move the verified binary into the methodology bin dir under a
+        # versioned name so subsequent fast-path installs don't clash.
+````
+
+### comment, original line 197
+
+````text
+# Atomic symlink swap: link-to-temp + os.replace.
+````
+
+## Consequences
+
+Review rationale and source changes together. Historical evidence is preserved rather than silently rewritten; executable Python structure is unchanged after removing docstrings.

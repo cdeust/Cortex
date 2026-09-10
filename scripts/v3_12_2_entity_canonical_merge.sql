@@ -1,13 +1,13 @@
--- scripts/v3_12_2_entity_canonical_merge.sql
--- ============================================================================
--- Cortex v3.12.2 — Entity Case-Variant Dedup Migration
--- Source: Curie I4 completeness audit (2026-04-16)
--- Spec: mcp_server/shared/entity_canonical.py (canonicalize_entity_name policy)
+-- source: ADR-0876
+
+
+
+
 --
--- Problem (pre-migration):
---   Entity extraction did not case-canonicalize names at insert time, so
---   `Output` and `OUTPUT` and `output` all created separate rows.
---   Curie audit found 111 duplicate groups across 196 entity rows.
+-- source: ADR-0876
+
+
+
 --
 -- What this script does:
 --   1. Identify duplicate groups: entities sharing LOWER(name).
@@ -19,11 +19,11 @@
 --   6. Update the survivor's name to the canonical form per policy
 --      (name.title() when all-caps and length ≥ 4; else preserve).
 --
--- Safety:
---   - Wrapped in a single BEGIN/COMMIT so partial failure rolls back.
---   - ON CONFLICT DO NOTHING guards the composite PK constraints.
---   - Pre-verification count + post-verification zero-duplicates assertion.
---   - Idempotent: re-running after success is a no-op.
+-- source: ADR-0876
+
+
+
+
 --
 -- Runbook:
 --   1. pg_dump -Fc -t memory_entities -t entities -t relationships -d cortex \

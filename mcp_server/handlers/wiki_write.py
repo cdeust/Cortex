@@ -6,15 +6,6 @@ atomic write to ``infrastructure.wiki_store``. After a successful write,
 stores a protected PG pointer memory tagged ``wiki`` so ``recall`` can
 surface the page like any other memory.
 
-I6-D7/INC6.8 ("flux avant" citations): this is the completion handler
-for ``curate_wiki``'s authoring jobs — the in-session LLM reads a job's
-``memory_ids``/``supporting_memory_ids``, decides which of them it
-actually used while authoring, and passes THAT subset back here via
-``memory_ids``. Two additional best-effort side effects fire after a
-successful write, mirroring ``wiki_read``'s ``_cite_page`` contract
-(same degrade-to-no-op discipline, same "the write already succeeded
-on disk, this is pure observability" boundary):
-
   1. Sync the page into ``wiki.pages`` synchronously (reuses
      ``wiki_migrate.page_row_from_md`` + ``upsert_page`` — the same
      row-shape ``wiki_migrate``'s batch sweep would produce later).
@@ -24,7 +15,8 @@ on disk, this is pure observability" boundary):
      per memory_id — dedup key is ``(page_id, memory_id)``, distinct
      from ``wiki_read``'s ``(page_id, session_id)`` key (see
      ``insert_citation``'s docstring, pg_store_wiki_notes.py).
-"""
+
+source: ADR-0475"""
 
 from __future__ import annotations
 
@@ -256,10 +248,7 @@ async def write_governed_page(
 ) -> dict[str, Any]:
     """Write global wiki content and best-effort pointer/citation metadata.
 
-    Source: ADR-0056 (governance contract). Storage normalizes frontmatter;
-    malformed open fences propagate, while ordinary write errors are returned.
-    Project branch publication uses project_wiki instead to avoid global state.
-    """
+    source: ADR-0475"""
     try:
         result = write_page(root, rel_path, content, mode=mode)
     except WikiExistsError:
@@ -267,10 +256,7 @@ async def write_governed_page(
     except WikiMissingError:
         return {"error": f"page does not exist: {rel_path}"}
     except UnclosedFrontmatterError:
-        # Propagate uncaught (see docstring) — narrower than the ValueError
-        # catch below, which must not swallow this one. write_page now
-        # raises it from its own normalize_frontmatter call (issue #110
-        # moved that call down from this function).
+        # source: ADR-0475
         raise
     except (ValueError, OSError) as exc:
         return {"error": f"write failed: {exc}"}
@@ -279,9 +265,7 @@ async def write_governed_page(
 
     citations_written = _sync_page_and_cite(rel_path, content, memory_ids or [])
 
-    # Advisory prose measurement (issue #166): generated pages carry an
-    # AI-writing-tell report so authoring quality is visible at write time.
-    # Never blocks the write; empty report is omitted to keep responses lean.
+    # source: ADR-0475
     findings = scan_prose(content)
     response: dict[str, Any] = {
         "path": result.path,

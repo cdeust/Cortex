@@ -12,13 +12,13 @@ import re
 
 from mcp_server.infrastructure.pg_schema import MEMORIES_STORAGE_OPTIONS_DDL
 
-# source: green-remediation §3 requires >=30,000 rows for isolated PG work.
+# source: ADR-0774
 MIN_ROWS = 30_000
-# source: same plan §3: four repetitions, discard the first.
+# source: ADR-0774
 REPETITIONS = 4
-# source: PostgreSQL SQL lexical syntax, default NAMEDATALEN minus terminator.
+# source: ADR-0774
 MAX_IDENTIFIER_BYTES = 63
-# source: PostgreSQL CREATE TABLE storage parameters, valid range/default.
+# source: ADR-0774
 MIN_FILLFACTOR = 10
 DEFAULT_FILLFACTOR = 100
 
@@ -54,15 +54,13 @@ SELECT '{table}' AS trial, reloptions FROM pg_class WHERE oid='{table}'::regclas
 
 
 def validate(schema: str, fillfactors: list[int], rows: int, passes: int) -> None:
-    # source: PostgreSQL identifiers are at most 63 bytes by default; these
-    # restricted ASCII names are reserved solely for this disposable task.
+    # source: ADR-0774
     if (
         not re.fullmatch(r"w3_5_[a-z0-9_]+", schema)
         or len(schema) > MAX_IDENTIFIER_BYTES
     ):
         raise ValueError("schema must be an ASCII w3_5_ identifier of <=63 bytes")
-    # source: PostgreSQL CREATE TABLE: fillfactor valid range 10..100,
-    # default 100. The baseline is required, no lower candidate is invented.
+    # source: ADR-0774
     if not fillfactors or DEFAULT_FILLFACTOR not in fillfactors:
         raise ValueError("include the default fillfactor 100 as baseline")
     if any(
@@ -138,10 +136,7 @@ SELECT '{table}' AS trial, '{phase}' AS phase,
 
 
 def update_pass(table: str, workload: str, pass_number: int) -> str:
-    # source: pg_store_consolidation_stage.increment_replay_count; the other
-    # writer follows pg_store_heat.bump_heat_raw's two-column UPDATE shape.
-    # Heat endpoints 0/1 are its existing CHECK bounds, used to force a change;
-    # this synthetic control does not claim to reproduce the traffic mix.
+    # source: ADR-0774
     assignment = "replay_count = replay_count + 1"
     indexed_check = ""
     if workload == "indexed":

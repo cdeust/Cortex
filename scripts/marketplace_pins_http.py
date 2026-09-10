@@ -1,19 +1,14 @@
 """Shared HTTP plumbing for the marketplace pin-staleness gate.
 
-Split out of check_marketplace_pins.py (issue: that file crossed the
-300-line §4.1 cap once REGISTRY_VERSION_STALE was added) — every module
-that talks to a JSON API (GitHub REST, the public MCP registry) shares
-this request-header builder, timeout, and the one HTTP status code they
-all treat specially.
-"""
+source: ADR-0754"""
 
 from __future__ import annotations
 
 import os
 
-API_TIMEOUT_S = 15  # source: GitHub API p99 well below; matches prior gate rev
+API_TIMEOUT_S = 15  # source: ADR-0754
 
-# source: RFC 9110 §15.5.5 — HTTP 404 Not Found
+# source: ADR-0754
 HTTP_NOT_FOUND = 404
 
 

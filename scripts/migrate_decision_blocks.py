@@ -1,9 +1,6 @@
 """Inventory long decision comments; extract only an explicitly reviewed block.
 
-Inventory never changes files. Apply requires the exact content hash, a new ADR
-ID, title and filename slug. Runtime docstrings are inventoried but never moved:
-changing __doc__ is not a comment-only refactor. See issue #514 / ADR-0056.
-"""
+source: ADR-0769"""
 
 from __future__ import annotations
 
@@ -25,7 +22,7 @@ from mcp_server.infrastructure.wiki_decision_index import decision_index  # noqa
 from mcp_server.shared.wiki_decision_ids import parse_decision_id  # noqa: E402
 from scripts.decision_migration_io import persist_extraction  # noqa: E402
 
-# source: issue #514 investigation: decision blocks of 25+ lines are candidates.
+# source: ADR-0769
 MIN_BLOCK_LINES = 25
 _DECISION = re.compile(
     r"\b(decision|rationale|rejected|trade-?off|why)\b", re.IGNORECASE

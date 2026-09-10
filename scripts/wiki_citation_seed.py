@@ -2,18 +2,6 @@
 """Seed ``wiki.citations`` for pages created before the flow-forward
 write-path landed — M-D7, INC7.7.
 
-Runs ``handlers.consolidation.wiki_citation_seed_pass`` against the
-shared store and writes a campaign journal artifact (page_id, memory_id,
-domain, reliability tier, outcome per row — the same journalisation
-shape as ``memory_reheat.py``, I6-D5).
-
-Scope (see the campaign report / ``core.wiki_citation_seed`` module
-docstring for the full reliability audit): only the HIGH-reliability
-source is seeded — pages whose ``wiki.pages.memory_id`` already carries
-an FK-constrained pointer to their authoring memory. ``wiki.page_sources``
-(file edges) and inferred tags/links are deliberately EXCLUDED — they
-cannot produce a memory_id without fabricating provenance.
-
 Usage
 -----
 
@@ -39,7 +27,8 @@ requires ``session_id <> ''``)::
 The pass is idempotent: re-running after ``--apply`` finds every seeded
 pair already in ``wiki.citations``, so ``seeded`` is 0 on immediate
 re-run (confirmed by this campaign's idempotence test).
-"""
+
+source: ADR-0792"""
 
 from __future__ import annotations
 

@@ -25,6 +25,7 @@ schema = {
     "title": "Drill down",
     "annotations": NON_IDEMPOTENT_WRITE,
     "description": (
+        # source: ADR-0390
         "Descend one level into a fractal memory cluster previously "
         "returned by `recall_hierarchical`: an L2 root cluster expands to "
         "its L1 sub-clusters; an L1 cluster expands to the individual "
@@ -37,10 +38,10 @@ schema = {
         "tree), and `recall_hierarchical` (entry point that builds the "
         "tree). Not read-only: every surfaced memory is recorded as a "
         "hippocampal replay event — access_count/replay_count increment "
-        "and hippocampal_dependency decays (CLS-B, Ketz et al. 2023) — so "
-        "repeat calls are not idempotent (`track_replay_event`, "
-        "`replay_tracking.py`). Latency <100ms. Returns {cluster_id, "
-        "level, children: [{id, label, members?, content?}]}."
+        "and hippocampal_dependency decays — so repeat calls are not "
+        "idempotent (`track_replay_event`, `replay_tracking.py`). Latency "
+        "<100ms. Returns {cluster_id, level, children: [{id, label, "
+        "members?, content?}]}."
     ),
     "inputSchema": {
         "type": "object",
@@ -109,9 +110,7 @@ def _fetch_candidate_memories(
             domain, min_heat=min_heat, limit=500, heads_only=True
         )
 
-    # No-domain path: same 500-row bound as the domain path above. The
-    # previous full-table materialization + Python heat filter was the
-    # last uncapped scan in this handler (bounded-I/O audit 2026-06-09).
+    # source: ADR-0390
     return store.get_hot_memories(min_heat=min_heat, limit=500, heads_only=True)
 
 
@@ -213,6 +212,5 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     }
 
 
-# Telemetry-instrumented public entry. Records latency / byte volume
-# / result count per call (Popper C6 read/write ratio audit).
+# source: ADR-0390
 handler = instrument("drill_down", _handler_impl, result_count_key="children")
