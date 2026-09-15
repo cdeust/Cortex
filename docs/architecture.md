@@ -134,7 +134,7 @@ for current file counts per layer.
 
 | Module | Purpose |
 |---|---|
-| `query_router.py` | Intent classification (temporal/causal/semantic/entity) + 6-signal WRRF fusion |
+| `query_router.py` | Deprecated shim (ADR-0234); intent now comes from `query_intent.py`, signal weights from `pg_recall_weights.py` |
 | `hdc_encoder.py` | 1024D bipolar hyperdimensional computing (bind/bundle/permute/similarity) |
 | `cognitive_map.py` | Successor Representation co-access graph + 2D projection |
 | `hopfield.py` | Hopfield network for content-addressable recall |
@@ -204,7 +204,7 @@ for current file counts per layer.
 | Module | Purpose |
 |---|---|
 | `remember.py` | Store memory through 4-signal predictive coding gate |
-| `recall.py` | Retrieve memories via 6-signal WRRF fusion |
+| `recall.py` | Retrieve memories: 5-signal server-side fusion, post-fusion reranks, FlashRank |
 | `consolidate.py` | Run maintenance: decay, compression, CLS, sleep compute |
 | `checkpoint.py` | Save/restore working state for hippocampal replay |
 | `narrative.py` | Generate project narrative from memories |

@@ -32,6 +32,7 @@ Implement a thermodynamic memory architecture in three tiers, each building on t
 ### Tier 2 -- Navigation & Retrieval
 
 - **6-signal WRRF fusion**: vector similarity + FTS5 BM25 + thermodynamic heat + Hopfield associative + HDC hyperdimensional + Successor Representation co-access
+  - *Note, 2026-09-15 (#562):* this is the original design. The shipped read path fuses five signals inside the database (vector, full-text, trigram, heat, recency): a weighted sum of max-normalised scores on PostgreSQL (`recall_memories()` in `mcp_server/infrastructure/pg_schema.py`), rank-based WRRF on SQLite without the trigram signal (`mcp_server/infrastructure/sqlite_store_search.py`). Hopfield and HDC run after fusion (`mcp_server/core/pg_recall_stages.py`); Successor Representation is not on the `recall` path.
 - **HDC encoder** (`hdc_encoder.py`): 1024-dimensional bipolar hypervectors for content-addressable similarity
 - **Cognitive map** (`cognitive_map.py`): Successor Representation transition matrix from co-access patterns + 2D eigendecomposition projection
 - **Fractal hierarchy** (`fractal.py`): L0/L1/L2 hierarchical clustering for multi-scale recall

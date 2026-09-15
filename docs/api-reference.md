@@ -142,7 +142,7 @@ Store a memory through the predictive coding write gate.
 
 ### `recall`
 
-Retrieve memories using 6-signal WRRF fusion (vector + FTS5 + heat + Hopfield + HDC + SR).
+Retrieve memories by fusing five signals server-side (vector, full-text, trigram, heat, recency; the SQLite backend has no trigram signal), then Hopfield, HDC and spreading-activation reranks, then FlashRank.
 
 **Input Schema:**
 

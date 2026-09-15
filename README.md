@@ -217,8 +217,9 @@ Recall@10 is the share of questions whose answer-bearing session appears in the 
 retrieved sessions. MRR (mean reciprocal rank) rewards finding that session near the top. These
 numbers describe retrieval only; they do not measure whether an LLM writes a correct answer.
 
-Retrieval fuses five signals through weighted reciprocal-rank fusion, then reranks with a
-cross-encoder: vector similarity, full-text search, trigram match, heat and recency. LoCoMo
+Retrieval fuses vector similarity, full-text search, trigram match, heat and recency, then
+reranks with a cross-encoder. PostgreSQL combines the signals as a weighted sum; SQLite uses
+weighted reciprocal-rank fusion and has no trigram signal. LoCoMo
 and BEAM results, the ablations and the floor gates are in [benchmarks/](benchmarks/).
 
 ## Storage

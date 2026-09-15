@@ -26,7 +26,7 @@ upstream MCP server is configured (55 total with both present).
 | `record_session_end` | Incremental profile update + session critique | <200ms |
 | `explore_features` | Interpretability exploration (features, attribution, persona, crosscoder) | <100ms |
 | `remember` | Store a memory through the 4-signal predictive coding gate | <100ms |
-| `recall` | Retrieve memories via 6-signal WRRF fusion | <200ms |
+| `recall` | Retrieve memories: 5-signal server-side fusion, post-fusion reranks, FlashRank | <200ms |
 | `consolidate` | Run maintenance: decay, compression, CLS, sleep compute | <5s |
 | `checkpoint` | Save/restore working state for hippocampal replay | <100ms |
 | `narrative` | Generate project narrative from stored memories | <500ms |
@@ -139,9 +139,10 @@ table above — the catalogue and the command ship in the same commit.
 
 1. **Route**: Intent classification (temporal/causal/semantic/entity/knowledge_update/multi_hop)
 2. **Enrich**: Doc2Query expansion + concept synonyms
-3. **Fuse**: PL/pgSQL `recall_memories()` — WRRF fusion of vector + FTS + trigram + heat + recency (server-side)
-4. **Rerank**: FlashRank cross-encoder (client-side, top-3x candidates)
-5. **Filter**: Neuro-symbolic rules → ranked results
+3. **Fuse**: PL/pgSQL `recall_memories()` fuses vector, FTS (`ts_rank_cd`), trigram, heat and recency server-side as a weighted sum of max-normalised scores. The SQLite backend fuses vector, FTS5, heat and recency by rank, w/(k + rank), with no trigram signal
+4. **Recollect**: Hopfield completion, HDC, optional spreading activation, dendritic, emotional and mood reranks, reconsolidation, each blended by RRF k = 60
+5. **Rerank**: FlashRank cross-encoder (client-side, top-3x candidates)
+6. **Filter**: Neuro-symbolic rules → ranked results
 
 ### Cognitive Profile Pipeline
 

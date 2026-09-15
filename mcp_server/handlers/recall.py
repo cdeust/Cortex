@@ -2,7 +2,7 @@
 
 Composition root wiring infrastructure to core retrieval logic.
 
-Base retrieval uses pg_recall (intent-adaptive PG WRRF + FlashRank reranking).
+Base retrieval uses pg_recall (intent-adaptive 5-signal fusion + FlashRank reranking).
 Production enrichments layer on top: prospective memory injection,
 co-activation Hebbian learning, neuro-symbolic rules, strategic ordering.
 """
@@ -179,8 +179,9 @@ schema = {
     },
     "description": (
         "Retrieve memories from the Cortex store using intent-adaptive PG "
-        "recall (server-side WRRF fusion of vector + FTS + trigram + heat + "
-        "recency) followed by FlashRank cross-encoder reranking and "
+        "recall (server-side fusion of vector + FTS + trigram + heat + recency: "
+        "a weighted sum on PostgreSQL, rank-based WRRF on SQLite) followed "
+        "by FlashRank cross-encoder reranking and "
         "production enrichments (prospective memory injection, Hebbian "
         "co-activation strengthening, neuro-symbolic rules, strategic ordering "
         "to mitigate Lost-in-the-Middle, Liu et al. 2023). Use this before "
@@ -209,7 +210,7 @@ schema = {
                 "description": (
                     "Natural-language query describing what to retrieve. Free "
                     "text; intent (temporal/causal/semantic/entity/multi-hop) "
-                    "is auto-classified to weight the WRRF signals."
+                    "is auto-classified to weight the fusion signals."
                 ),
                 "examples": [
                     "why did we choose pgvector over Pinecone?",
@@ -292,7 +293,7 @@ schema = {
                 "description": (
                     # source: ADR-0430
                     "Opt in to cross-domain memories in the spreading-activation "
-                    "entity-graph expansion stage only. The primary WRRF search "
+                    "entity-graph expansion stage only. The primary fused search "
                     "remains scoped to ``domain``. When true, expansion may inject "
                     "memories from other domains reachable through shared entities. "
                     "Defaults to false. Orthogonal to ``sa_mode``."
@@ -317,7 +318,7 @@ schema = {
                 "items": {"type": "string"},
                 "description": (
                     "Positive tag filter (OR): keep only memories that carry "
-                    "at least one of the listed tags. Applied after the WRRF "
+                    "at least one of the listed tags. Applied after the fused "
                     "recall pipeline, at the same stage as the low-signal "
                     'filter. Pass ``tags_any=["archival"]`` to retrieve only '
                     "archival-tier memories."
@@ -330,7 +331,7 @@ schema = {
                 "items": {"type": "string"},
                 "description": (
                     "Positive tag filter (AND): keep only memories that carry "
-                    "ALL of the listed tags. Applied after the WRRF recall "
+                    "ALL of the listed tags. Applied after the fused recall "
                     "pipeline, at the same stage as the low-signal filter."
                 ),
                 "default": [],

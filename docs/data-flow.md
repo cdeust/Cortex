@@ -53,46 +53,56 @@ For any language not listed, structural error markers still work, and the univer
 
 ## Memory Read Path (`recall`)
 
-The read path uses intent-aware routing and multi-signal fusion.
+The read path classifies the query's intent, fuses five signals inside the
+database, then reranks. Paths below are relative to `mcp_server/`.
 
 ```mermaid
 flowchart TD
-    Q[recall query] --> QE[Query Enrichment]
-    QE -->|Doc2Query| QE1[Synthetic sub-questions]
-    QE -->|Concept expansion| QE2[Synonym terms]
-    QE1 & QE2 --> R[Query Router]
-    R -->|classify intent| S{Intent Type}
-    S -->|temporal| W1[Boost time signals]
-    S -->|causal| W2[Boost causal graph]
-    S -->|semantic| W3[Boost vector similarity]
-    S -->|entity| W4[Boost entity graph]
-    W1 & W2 & W3 & W4 --> F[6-Signal WRRF Fusion]
-    F --> F1[Signal 1: Vector similarity]
-    F --> F2[Signal 2: FTS5 full-text]
-    F --> F3[Signal 3: Thermodynamic heat]
-    F --> F4[Signal 4: Hopfield associative]
-    F --> F5[Signal 5: HDC hyperdimensional]
-    F --> F6[Signal 6: SR co-access]
-    F1 & F2 & F3 & F4 & F5 & F6 --> RR[Reciprocal Rank Fusion]
-    RR --> MR[Neuro-symbolic Rules]
-    MR --> RES[Ranked Results]
+    Q[recall query] --> X{ADR-NNNN or memory id?}
+    X -->|yes| EX[Exact lookup, no fusion]
+    X -->|no| I[Intent classification, regex]
+    I --> W[Per-intent weights: fts, heat, ngram, recency]
+    W --> F[5-signal fusion in recall_memories]
+    F --> F1[Vector cosine, pgvector]
+    F --> F2[Full-text, ts_rank_cd or FTS5]
+    F --> F3[Trigram, PostgreSQL only]
+    F --> F4[Effective heat]
+    F --> F5[Recency]
+    F1 & F2 & F3 & F4 & F5 --> RC[Recollection reranks, RRF k = 60]
+    RC --> CE[FlashRank cross-encoder]
+    CE --> MR[Nudges, neuro-symbolic rules, ordering]
+    MR --> RES[Ranked results]
 
-    style R fill:#d946ef,color:#000
+    style I fill:#d946ef,color:#000
     style F fill:#06b6d4,color:#000
     style RES fill:#22c55e,color:#000
-    style QE fill:#f59e0b,color:#000
 ```
+
+On PostgreSQL, `recall_memories()` combines the five signals as a weighted
+sum of max-normalised scores (`infrastructure/pg_schema.py`). On SQLite, the
+fusion is rank-based, w/(k + rank), over vector, FTS5, heat and recency, with
+no trigram signal (`infrastructure/sqlite_store_search.py`).
 
 ### Retrieval Signals
 
+Fused inside the database:
+
 | Signal | Module | What it measures |
 |---|---|---|
-| Vector similarity | `embedding_engine.py` | Cosine similarity between query and memory embeddings |
-| FTS5 full-text | `memory_store.py` | SQLite FTS5 BM25 ranking |
-| Thermodynamic heat | `thermodynamics.py` | Current heat value (recency + importance) |
-| Hopfield associative | `hopfield.py` | Content-addressable recall via energy minimization |
-| HDC hyperdimensional | `hdc_encoder.py` | 1024D bipolar hypervector similarity |
-| SR co-access | `cognitive_map.py` | Successor Representation transition probabilities |
+| Vector similarity | `infrastructure/pg_schema.py` | pgvector cosine distance between query and memory embeddings |
+| Full-text | `infrastructure/pg_schema.py` | `ts_rank_cd` on PostgreSQL, FTS5 on SQLite |
+| Trigram | `infrastructure/pg_schema.py` | `pg_trgm` similarity (PostgreSQL only) |
+| Thermodynamic heat | `infrastructure/pg_schema.py` | `effective_heat()`, decay computed at read time |
+| Recency | `infrastructure/pg_schema.py` | exponential decay on the memory's age |
+
+Applied after fusion, each blended by RRF k = 60 (`core/pg_recall_stages.py`,
+`core/recall_pipeline.py`):
+
+| Rerank | Module | What it measures |
+|---|---|---|
+| Hopfield completion | `core/hopfield.py` | Content-addressable recall via energy minimization |
+| HDC | `core/hdc_encoder.py` | 1024D bipolar hypervector similarity |
+| Spreading activation | `core/spreading_activation.py` | Entity-graph expansion, when `sa_mode` is `augment` |
 
 ### Intent Classification
 

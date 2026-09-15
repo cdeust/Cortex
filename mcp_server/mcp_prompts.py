@@ -42,7 +42,7 @@ SESSION_RECALL = _Spec(
         ),
         _Step(
             "recall",
-            "Pull memories relevant to your focus via the 6-signal WRRF fusion.",
+            "Pull memories relevant to your focus via recall's 5-signal fusion.",
         ),
         _Step(
             "unified_search",

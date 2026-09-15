@@ -6,71 +6,21 @@ description: "Per-layer module inventory for mcp_server/ — extracted from CLAU
 
 Layer-by-layer catalogue of `mcp_server/`. This file is the curated/documented
 subset that existed in CLAUDE.md before the #114 refactor — every module below
-was already described there; nothing has been dropped. Counts below are
-**measured**, not carried over from the prior (stale) prose, per the
-zetetic source rule:
+was already described there; nothing has been dropped.
+
+Per-layer file counts are not recorded here. They change with every module
+added, split or moved, and a count written into this page drifts without any
+gate noticing: the four counts it carried until issue #563 no longer matched
+the tree. Measure a layer when you need the number:
 
 ```
-# source: measured on 2026-07-29 via
-#   find mcp_server/<layer> -name "*.py" | grep -v __init__ | grep -v __pycache__ | wc -l
-# infrastructure/ re-measured 2026-07-30 (issue #275 split added 4 modules,
-#   net file count +4; no infrastructure/ files were deleted)
-# core/ re-measured 2026-07-30 (issue #228 behaviour-preserving split of
-#   core/context_assembly/condensers.py, over the 300-line §4.1 cap, into
-#   condense_text/condense_code/condense_structured/condense_dispatch/
-#   condense_stage.py + a thin re-export facade; net file count +5, no
-#   core/ files were deleted)
-# core/ re-measured 2026-07-30 (issue #201: core/context_assembly/
-#   active_retrieval.py deleted — no call site in production or benchmark
-#   code, none in git history, none in any unmerged branch; net file
-#   count -1)
-# shared/+core/+infrastructure/+handlers/ all re-measured 2026-08-10
-#   (issue #406: temporal.py/temporal_normalize.py/temporal_timezones.py/
-#   near_dup_calibration.py/write_class.py moved core/ -> shared/, all
-#   five stdlib-only with infrastructure/ call sites that could not
-#   legally import core/ -- shared/ +5, core/ -5)
-# infrastructure/ re-measured 2026-08-10 (issue: pg_store.py, 1384 lines,
-#   split into 16 Pg*Mixin modules behind a thin facade, net +15; issue
-#   #407: pg_store_auxiliary.py, 397 lines, split into 6 modules and
-#   deleted, net +5; pg_store_queries.py, 401 lines, split into 3
-#   modules, net +2; pg_store_stats.py, 406 lines, split into 3 modules,
-#   net +2; pg_store_search.py, pushed to 301 lines by the #399
-#   trust-term port (review-caught, PR #409 round 2), split into 2
-#   modules, net +1 -- infrastructure/ net +25 from the pre-split
-#   baseline of 93; the core/ and handlers/ deltas beyond the #406
-#   move are unrelated drift accumulated upstream, not attributable to
-#   either change)
-# shared/+core/+infrastructure/ re-measured 2026-08-10 (issue: PR #409
-#   review round 3 rejected "declared violation" as an acceptance
-#   criterion for infrastructure/wiki_store.py + wiki_schema_reader.py
-#   importing core/ — the real defect was wiki-generation domain logic
-#   mixed with storage access, not a misdirected import. Fix: the
-#   8-module pure wiki_pages/wiki_frontmatter/wiki_layout/wiki_readme/
-#   wiki_index/wiki_page_builders/wiki_frontmatter_validation/
-#   wiki_schema_loader cluster moved core/ -> shared/ (stdlib-only,
-#   zero I/O, same #406 rationale); the one non-pure dependency
-#   (core.wiki_sync.build_from_memory, real classifier judgment) is now
-#   called from a new composition root, handlers/wiki_memory_sync.py,
-#   which wires it to wiki_store.py's write primitives — infrastructure/
-#   no longer imports core/ anywhere. wiki_store.py (439 lines,
-#   pre-existing debt surfaced by this fix) also split under the
-#   300-line cap into wiki_pages_listing.py + wiki_reindex_io.py.
-#   shared/ +8, core/ -8, infrastructure/ +2 (wiki_pages_listing.py,
-#   wiki_reindex_io.py), handlers/ +1 (wiki_memory_sync.py, a
-#   composition-root helper, not a registered tool)
-shared/           39 files   (23 documented below — curated subset)
-core/            220 files   (~87 documented below — curated subset, incl. core/streaming, core/context_assembly)
-infrastructure/  120 files   (52 documented below — curated subset)
-handlers/        139 files   (55 registered tools — see docs/mcp-tools.md — + composition-root helpers)
+find mcp_server/<layer> -name "*.py" ! -name "__init__.py" ! -path "*__pycache__*" | wc -l
 ```
 
-The prior CLAUDE.md text asserted "108 modules" for `core/` and similar
-counts for the other layers; that was a session-authored estimate, not a
-measured one, and had drifted from the actual tree. The counts above are the
-corrected, sourced figures. The module descriptions that follow remain a
-**curated subset** (the modules judged worth a one-line description at the
-time they were documented) — not a 1:1 listing of every file in the layer.
-Treat gaps as "undocumented," not "does not exist."
+The module descriptions that follow are a **curated subset** (the modules
+judged worth a one-line description when they were documented), not a 1:1
+listing of every file in the layer. Treat gaps as "undocumented," not "does
+not exist." The registered tools are listed in `docs/mcp-tools.md`.
 
 ## Dependency Rules
 
