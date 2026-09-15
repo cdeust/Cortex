@@ -90,10 +90,12 @@ def validate_captures(cases: list[dict], records: list[dict]) -> None:
 def load_runtime(root: Path):
     # Delayed imports: CLI help, parsing and guard tests never load Cortex/ML.
     from mcp.server.mcpserver import MCPServer  # noqa: PLC0415 — explicit measurement entrypoint
+    from mcp_server.composition_root import wire_composition_root  # noqa: PLC0415 — source: issue #560
     from mcp_server.infrastructure import config  # noqa: PLC0415 — validate paths before handler imports
     from mcp_server.infrastructure.memory_config import get_memory_settings  # noqa: PLC0415 — explicit measurement entrypoint
     from mcp_server.infrastructure.memory_store import reset_shared_store  # noqa: PLC0415 — cleanup owned isolated stores
 
+    wire_composition_root()
     settings = get_memory_settings()
     paths = (settings.DB_PATH, settings.SQLITE_FALLBACK_PATH, config.PROFILES_PATH)
     if settings.STORE_BACKEND != "sqlite" or any(

@@ -81,6 +81,9 @@ if __name__ == "__main__":
     from mcp_server.hooks._store_lifecycle import close_shared_store_on_exit
 
     exit_if_headless_authoring_child()
+    from mcp_server.composition_root import wire_composition_root  # noqa: PLC0415 — source: issue #560
+
+    wire_composition_root()
     # source: ADR-0492
     with close_shared_store_on_exit():
         main()

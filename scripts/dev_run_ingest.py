@@ -9,7 +9,10 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
+from mcp_server.composition_root import wire_composition_root  # source: issue #560
 from mcp_server.handlers.ingest_codebase import handler
+
+wire_composition_root()
 
 _MIN_ARGC = 2  # source: ADR-0728
 

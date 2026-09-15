@@ -29,7 +29,11 @@ from benchmarks.locomo.data import (
     load_locomo,
     parse_evidence_refs,
 )
-from mcp_server.handlers import consolidate as consolidate_handler
+from mcp_server.composition_root import wire_composition_root  # noqa: E402 — source: issue #560
+
+wire_composition_root()
+
+from mcp_server.handlers import consolidate as consolidate_handler  # noqa: E402
 
 # source: ADR-0848
 # source: ADR-0848

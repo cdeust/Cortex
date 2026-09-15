@@ -127,8 +127,10 @@ def _run_consolidation_pass() -> float:
     """
     # source: ADR-0850
 
+    from mcp_server.composition_root import wire_composition_root  # noqa: PLC0415 — source: issue #560
     from mcp_server.handlers import consolidate as consolidate_handler  # noqa: PLC0415 — source: ADR-0850
 
+    wire_composition_root()
     t0 = time.monotonic()
     asyncio.run(consolidate_handler.handler({}))
     return time.monotonic() - t0

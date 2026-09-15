@@ -13,7 +13,14 @@ from __future__ import annotations
 import argparse
 import sys
 
-from mcp_server.core.entity_dedup import FUZZY_ELIGIBLE_TYPES, deduplicate_entities
+from mcp_server.composition_root import wire_composition_root  # noqa: E402 — source: issue #560
+
+wire_composition_root()
+
+from mcp_server.core.entity_dedup import (  # noqa: E402
+    FUZZY_ELIGIBLE_TYPES,
+    deduplicate_entities,
+)
 
 # Deterministic fixture: real-world spelling/spacing/typo variants that the
 # exact-name + case policy misses. Used when no DB is available.

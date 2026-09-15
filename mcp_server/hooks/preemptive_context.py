@@ -188,4 +188,9 @@ if __name__ == "__main__":
     )
 
     exit_if_headless_authoring_child()
+    from mcp_server.composition_root import (  # noqa: PLC0415 — source: issue #560
+        wire_composition_root,
+    )
+
+    wire_composition_root()
     main()

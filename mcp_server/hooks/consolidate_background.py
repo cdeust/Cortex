@@ -95,15 +95,31 @@ def _run_cycle(handler, args: dict[str, Any]) -> dict[str, Any]:  # noqa: ANN001
 
 def _log_wiki_summary(result: dict[str, Any]) -> None:
     """Echo the wiki maintenance block to stderr so the log file shows
-    what changed this cycle."""
+    what changed this cycle.
+
+    handlers/consolidation/wiki_maintenance.py catches each of its
+    sub-tasks' exceptions individually (so one broken sub-task cannot
+    kill the whole consolidate cycle) and records them as a nested
+    ``{"status": "error: ..."}`` rather than a top-level dict key --
+    handler()'s own overall-status check (``"error" in v`` on each
+    top-level stats entry) never sees these, so they would otherwise be
+    silent past this log line too. Surfacing dashboards' status here is
+    the only place an operator would learn dashboard generation failed
+    (issue #560 review, 2026-09-16).
+    """
     wiki = result.get("wiki")
     if not isinstance(wiki, dict):
         return
+    dashboards = wiki.get("dashboards", {})
+    dash_status = dashboards.get("status") or (
+        f"written={dashboards['written']}" if "written" in dashboards else "absent"
+    )
     print(
         f"[bg-consolidate] wiki: "
         f"stub purged={wiki.get('stub', {}).get('purged', 0)} "
         f"classifier purged={wiki.get('classifier', {}).get('purged', 0)} "
-        f"pending_total={wiki.get('pending_total', 0)}",
+        f"pending_total={wiki.get('pending_total', 0)} "
+        f"dashboards={dash_status}",
         file=sys.stderr,
     )
 
@@ -142,6 +158,9 @@ if __name__ == "__main__":
     from mcp_server.hooks._store_lifecycle import close_shared_store_on_exit
 
     exit_if_headless_authoring_child()
+    from mcp_server.composition_root import wire_composition_root  # noqa: PLC0415 — source: issue #560
+
+    wire_composition_root()
     # source: ADR-0491
     with close_shared_store_on_exit():
         main()

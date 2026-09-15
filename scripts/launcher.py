@@ -147,6 +147,13 @@ def main() -> None:
     # Change to plugin root
     os.chdir(plugin_root)
 
+    # source: issue #560 -- wire every core/ seam before running ANY
+    # target module; this bootstrap is shared by the server and every
+    # hook (ADR-0742), so it is their one common composition root.
+    from mcp_server.composition_root import wire_composition_root  # noqa: PLC0415
+
+    wire_composition_root()
+
     # Run the target module
     sys.argv = [module] + [a for a in sys.argv[2:] if a != "--install-deps"]
     try:

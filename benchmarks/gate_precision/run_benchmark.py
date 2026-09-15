@@ -23,9 +23,13 @@ os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from benchmarks.lib.bench_db import BenchmarkDB
-from mcp_server.core import write_gate_calibration
-from mcp_server.infrastructure.memory_config import get_memory_settings
-from mcp_server.handlers.remember_helpers import evaluate_gate
+from mcp_server.composition_root import wire_composition_root  # noqa: E402 — source: issue #560
+
+wire_composition_root()
+
+from mcp_server.core import write_gate_calibration  # noqa: E402
+from mcp_server.infrastructure.memory_config import get_memory_settings  # noqa: E402
+from mcp_server.handlers.remember_helpers import evaluate_gate  # noqa: E402
 
 DATA_PATH = Path(__file__).parent.parent / "longmemeval" / "longmemeval_s.json"
 RESULTS_DIR = Path(__file__).parent.parent / "results" / "gate_precision"

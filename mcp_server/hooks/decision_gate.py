@@ -174,4 +174,7 @@ if __name__ == "__main__":
     from mcp_server.hooks._headless_guard import exit_if_headless_authoring_child
 
     exit_if_headless_authoring_child()
+    from mcp_server.composition_root import wire_composition_root  # noqa: PLC0415 — source: issue #560
+
+    wire_composition_root()
     sys.exit(main())

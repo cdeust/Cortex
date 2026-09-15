@@ -42,6 +42,10 @@ from pathlib import Path
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
+from mcp_server.composition_root import wire_composition_root  # noqa: E402 — source: issue #560
+
+wire_composition_root()
+
 from mcp_server.handlers.consolidation.wiki_citation_seed_pass import (  # noqa: E402
     DEFAULT_SEED_SCAN_LIMIT,
     run_wiki_citation_seed_pass,

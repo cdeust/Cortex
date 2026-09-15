@@ -29,6 +29,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from mcp_server.composition_root import wire_composition_root  # noqa: E402 — source: issue #560
+
+wire_composition_root()
+
 from mcp_server.handlers.wiki_migrate import page_row_from_md  # noqa: E402
 from mcp_server.infrastructure.config import WIKI_ROOT  # noqa: E402
 from mcp_server.infrastructure.memory_config import get_memory_settings  # noqa: E402

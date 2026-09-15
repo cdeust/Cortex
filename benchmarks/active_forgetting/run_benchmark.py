@@ -14,6 +14,10 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 
 # The core under test (the same functions production calls).
+from mcp_server.composition_root import wire_composition_root  # noqa: E402 — source: issue #560
+
+wire_composition_root()
+
 from mcp_server.core.active_forgetting import (  # noqa: E402
     ACUTE_OVERLAP_THRESHOLD,
     ACUTE_RECENCY_WINDOW_HOURS,

@@ -14,8 +14,12 @@ import subprocess
 import tempfile
 from unittest.mock import AsyncMock, Mock, patch
 
-from mcp_server.handlers import recall, unified_search
-from mcp_server.infrastructure.wiki_decision_index import write_decision_index
+from mcp_server.composition_root import wire_composition_root  # noqa: E402 — source: issue #560
+
+wire_composition_root()
+
+from mcp_server.handlers import recall, unified_search  # noqa: E402
+from mcp_server.infrastructure.wiki_decision_index import write_decision_index  # noqa: E402
 
 # source: ADR-0819
 BASELINE_REF = "e81735de3eb2248c134980008b2485d7d2a6dcc9"

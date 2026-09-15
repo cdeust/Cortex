@@ -50,6 +50,10 @@ from typing import Any
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
+from mcp_server.composition_root import wire_composition_root  # noqa: E402 — source: issue #560
+
+wire_composition_root()
+
 from mcp_server.core.grooming_health import legs_due  # noqa: E402
 from mcp_server.handlers.get_grooming_health import handler as health_handler  # noqa: E402
 from mcp_server.handlers.curate_distill import handler as distill_handler  # noqa: E402

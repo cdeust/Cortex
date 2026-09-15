@@ -37,6 +37,10 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from mcp_server.composition_root import wire_composition_root  # noqa: E402 — source: issue #560
+
+wire_composition_root()
+
 from mcp_server.core.wiki_identity import (  # noqa: E402
     ensure_page_id,
     extract_page_id,
