@@ -2689,11 +2689,6 @@
     },
     {
       "file": "mcp_server/core/wiki_axis_registry.py",
-      "kind": "layer-violation",
-      "detail": "pathlib"
-    },
-    {
-      "file": "mcp_server/core/wiki_axis_registry.py",
       "kind": "method-size",
       "detail": "_parse_axis_value_file"
     },
@@ -2731,16 +2726,6 @@
       "file": "mcp_server/core/wiki_coverage.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"
-    },
-    {
-      "file": "mcp_server/core/wiki_coverage.py",
-      "kind": "layer-violation",
-      "detail": "os"
-    },
-    {
-      "file": "mcp_server/core/wiki_coverage.py",
-      "kind": "method-size",
-      "detail": "_index_wiki_file_references"
     },
     {
       "file": "mcp_server/core/wiki_coverage.py",

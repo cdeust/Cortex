@@ -4,13 +4,61 @@ source: ADR-0297"""
 
 from __future__ import annotations
 
-import os
 import re
+import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Final
 
-from mcp_server.shared.platform import to_posix
-import time
+from mcp_server.shared.wiki_skip_directories import SKIP_DIRECTORIES
+
+# Composition-root injection seam (core may not import os or perform I/O;
+# issue #560). Real implementations live in
+# mcp_server/infrastructure/wiki_coverage_fs.py, wired once via
+# configure_wiki_coverage_filesystem (mcp_server/__main__.py for
+# production, tests_py/conftest.py for the test session).
+StatPage = Callable[[str, str], "tuple[int, float] | None"]
+MarkdownFileSizes = Callable[[str], "dict[str, int]"]
+DomainKindMembership = Callable[[str, "frozenset[str]"], "dict[str, list[str]]"]
+WalkSourceFiles = Callable[[str, "frozenset[str]", "frozenset[str]"], "list[str]"]
+WalkMarkdownContents = Callable[[str], "list[str]"]
+
+_stat_page: StatPage | None = None
+_markdown_file_sizes: MarkdownFileSizes | None = None
+_domain_kind_membership: DomainKindMembership | None = None
+_walk_source_files: WalkSourceFiles | None = None
+_walk_markdown_contents: WalkMarkdownContents | None = None
+
+
+def configure_wiki_coverage_filesystem(
+    *,
+    stat_page: StatPage,
+    markdown_file_sizes: MarkdownFileSizes,
+    domain_kind_membership: DomainKindMembership,
+    walk_source_files: WalkSourceFiles,
+    walk_markdown_contents: WalkMarkdownContents,
+) -> None:
+    """Composition-root hook: register the real wiki-coverage filesystem ops.
+
+    source: ADR-0297 (issue #560)"""
+    global \
+        _stat_page, \
+        _markdown_file_sizes, \
+        _domain_kind_membership, \
+        _walk_source_files, \
+        _walk_markdown_contents
+    _stat_page = stat_page
+    _markdown_file_sizes = markdown_file_sizes
+    _domain_kind_membership = domain_kind_membership
+    _walk_source_files = walk_source_files
+    _walk_markdown_contents = walk_markdown_contents
+
+
+def _unconfigured(what: str) -> RuntimeError:
+    return RuntimeError(
+        f"wiki_coverage {what} provider not configured — call "
+        "configure_wiki_coverage_filesystem() at the composition root first"
+    )
 
 
 # Minimum useful page size in bytes. Below this, a page is a stub —
@@ -907,19 +955,20 @@ def _has_substantive_anchor(
     or None if no anchor exists.
 
     source: ADR-0297"""
+    if _stat_page is None:
+        raise _unconfigured("stat_page")
 
     for directory in directories:
         for filename in anchor_filenames:
             rel = f"{directory}/{domain}/{filename}"
-            full = os.path.join(wiki_root, rel)
-            try:
-                st = os.stat(full)
-            except OSError:
+            stat = _stat_page(wiki_root, rel)
+            if stat is None:
                 continue
-            if st.st_size < _MIN_PAGE_BYTES:
+            size, mtime = stat
+            if size < _MIN_PAGE_BYTES:
                 continue
             if max_age_days is not None:
-                age_days = (time.time() - st.st_mtime) / 86400.0
+                age_days = (time.time() - mtime) / 86400.0
                 if age_days > max_age_days:
                     continue
             return rel
@@ -937,20 +986,13 @@ def _count_substantive_pages(
     Used to detect scopes that are "covered by accumulation" — many ADRs
     cover the ``decisions`` scope even without an anchor file.
     """
+    if _markdown_file_sizes is None:
+        raise _unconfigured("markdown_file_sizes")
     count = 0
     for directory in directories:
-        dom_path = os.path.join(wiki_root, directory, domain)
-        if not os.path.isdir(dom_path):
-            continue
-        for entry in os.listdir(dom_path):
-            if not entry.endswith(".md"):
-                continue
-            full = os.path.join(dom_path, entry)
-            try:
-                if os.path.getsize(full) >= _MIN_PAGE_BYTES:
-                    count += 1
-            except OSError:
-                continue
+        dom_path = f"{wiki_root}/{directory}/{domain}"
+        sizes = _markdown_file_sizes(dom_path)
+        count += sum(1 for size in sizes.values() if size >= _MIN_PAGE_BYTES)
     return count
 
 
@@ -1068,23 +1110,14 @@ def list_domains(wiki_root: str) -> list[str]:
     kinds contain it as a subdirectory. Reserved buckets (``_general``,
     bare years) are filtered.
     """
-    if not os.path.isdir(wiki_root):
-        return []
-    counts: dict[str, int] = {}
-    for kind in _KNOWN_KINDS:
-        kind_dir = os.path.join(wiki_root, kind)
-        if not os.path.isdir(kind_dir):
-            continue
-        try:
-            entries = os.listdir(kind_dir)
-        except OSError:
-            continue
-        for entry in entries:
-            if not _is_plausible_domain(entry):
-                continue
-            if os.path.isdir(os.path.join(kind_dir, entry)):
-                counts[entry] = counts.get(entry, 0) + 1
-    return sorted(d for d, c in counts.items() if c >= _MIN_KIND_DIRS_FOR_DOMAIN)
+    if _domain_kind_membership is None:
+        raise _unconfigured("domain_kind_membership")
+    memberships = _domain_kind_membership(wiki_root, _KNOWN_KINDS)
+    return sorted(
+        entry
+        for entry, kinds in memberships.items()
+        if _is_plausible_domain(entry) and len(kinds) >= _MIN_KIND_DIRS_FOR_DOMAIN
+    )
 
 
 def audit_all_domains(
@@ -1134,34 +1167,10 @@ _SOURCE_EXTENSIONS: Final[frozenset[str]] = frozenset(
 )
 
 # Directories never worth scanning — vendored deps, build artifacts,
-# generated caches, IDE state.
-_SKIP_DIRECTORIES: Final[frozenset[str]] = frozenset(
-    {
-        "node_modules",
-        ".git",
-        ".venv",
-        "venv",
-        "env",
-        "deps",
-        "site-packages",
-        "__pycache__",
-        ".mypy_cache",
-        ".pytest_cache",
-        ".ruff_cache",
-        "dist",
-        "build",
-        "target",
-        ".next",
-        ".turbo",
-        "coverage",
-        ".cache",
-        ".tox",
-        ".eggs",
-        ".gradle",
-        ".idea",
-        ".vscode",
-    }
-)
+# generated caches, IDE state. Shared with
+# mcp_server/infrastructure/wiki_drift_fs.py (issue #560; infrastructure
+# may not import core, so this pure data lives in shared/).
+_SKIP_DIRECTORIES: Final[frozenset[str]] = SKIP_DIRECTORIES
 
 
 def _project_source_root(domain: str) -> str | None:
@@ -1190,24 +1199,9 @@ def list_source_files(root: str) -> list[str]:
     Filters out vendored deps, build artefacts, and non-source
     extensions. Returns an empty list when ``root`` doesn't exist.
     """
-    if not os.path.isdir(root):
-        return []
-    out: list[str] = []
-    for dirpath, dirnames, filenames in os.walk(root):
-        # source: ADR-0297
-        dirnames[:] = [
-            d for d in dirnames if d not in _SKIP_DIRECTORIES and not d.startswith(".")
-        ]
-        for f in filenames:
-            ext = os.path.splitext(f)[1].lower()
-            if ext not in _SOURCE_EXTENSIONS:
-                continue
-            full = os.path.join(dirpath, f)
-            # source: ADR-0297
-
-            rel = to_posix(os.path.relpath(full, root))
-            out.append(rel)
-    return out
+    if _walk_source_files is None:
+        raise _unconfigured("walk_source_files")
+    return _walk_source_files(root, _SKIP_DIRECTORIES, _SOURCE_EXTENSIONS)
 
 
 def _index_wiki_file_references(
@@ -1224,36 +1218,24 @@ def _index_wiki_file_references(
         full directory prefix.
 
     source: ADR-0297"""
+    if _walk_markdown_contents is None:
+        raise _unconfigured("walk_markdown_contents")
     paths: set[str] = set()
     basenames: set[str] = set()
-    if not os.path.isdir(wiki_root):
-        return paths, basenames
+    _ = domain  # reserved for future scoping
 
     # File-path-shaped tokens: at least one slash, has a source extension,
     # ends at whitespace or punctuation.
     path_re = re.compile(
         r"[\w./\-]+\.(?:py|ts|tsx|js|jsx|go|rs|rb|java|kt|swift|cpp|cc|c|h|hpp|cs|sql)\b"
     )
-    _ = domain  # reserved for future scoping
 
-    for dirpath, dirnames, filenames in os.walk(wiki_root):
-        dirnames[:] = [
-            d for d in dirnames if not d.startswith(".") and not d.startswith("_")
-        ]
-        for f in filenames:
-            if not f.endswith(".md"):
-                continue
-            full = os.path.join(dirpath, f)
-            try:
-                with open(full, encoding="utf-8", errors="ignore") as fp:
-                    text = fp.read()
-            except OSError:
-                continue
-            for m in path_re.finditer(text):
-                token = m.group(0).lstrip("./").strip()
-                if "/" in token:
-                    paths.add(token)
-                basenames.add(os.path.basename(token))
+    for text in _walk_markdown_contents(wiki_root):
+        for m in path_re.finditer(text):
+            token = m.group(0).lstrip("./").strip()
+            if "/" in token:
+                paths.add(token)
+            basenames.add(token.rsplit("/", 1)[-1])
     return paths, basenames
 
 
@@ -1302,7 +1284,7 @@ def audit_files(wiki_root: str, domain: str) -> FileCoverage:
     uncovered: list[str] = []
     covered = 0
     for rel in files:
-        bn = os.path.basename(rel)
+        bn = rel.rsplit("/", 1)[-1]
         if rel in paths_ref or bn in basenames_ref:
             covered += 1
         else:
