@@ -161,6 +161,18 @@ def _resolved_origin(args: dict[str, Any], write_class: str) -> str:
     return origin
 
 
+def _is_attested_decision(content: str, origin: str, write_class: str) -> bool:
+    """A decision cue counts for team scope only on a considered write
+    (deliberate class) from an origin allowed content-derived privileges.
+
+    source: ADR-0200"""
+    return (
+        write_class == write_class_module.DELIBERATE
+        and capture_origin.may_bypass_write_gate_on_content(origin)
+        and thermodynamics.is_decision_content(content)
+    )
+
+
 def _prepare_request(args: dict, store: MemoryStore, write_class: str) -> GateRequest:
     domain = _resolve_domain(args.get("directory", ""), args.get("domain", ""))
     origin = _resolved_origin(args, write_class)
@@ -286,8 +298,7 @@ async def _handler_impl(
         tags,
         explicit=bool(is_global),
         team_decision=propagates_to_team(
-            thermodynamics.is_decision_content(content)
-            and capture_origin.may_bypass_write_gate_on_content(resolved_origin),
+            _is_attested_decision(content, resolved_origin, resolved_write_class),
             agent_topic or "",
         ),
     )

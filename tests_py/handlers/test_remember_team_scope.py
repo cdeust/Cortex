@@ -63,3 +63,17 @@ class TestDecisionPropagation:
         )
         assert result["stored"] is True, result
         assert bool(_row(result["memory_id"])["is_global"]) is False
+
+    def test_auto_capture_decision_never_propagates(self):
+        """Unattended tool-output capture is not a considered decision, even
+        under a connection-rooted agent topic that tags every write."""
+        result = _remember(
+            content="Decision: we decided to keep the retry loop in the "
+            "worker (team-scope test d)",
+            agent_topic="cortex",
+            write_class="auto",
+            origin_tool="Bash",
+            force=True,
+        )
+        assert result["stored"] is True, result
+        assert bool(_row(result["memory_id"])["is_global"]) is False

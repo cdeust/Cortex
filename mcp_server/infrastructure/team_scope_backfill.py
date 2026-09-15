@@ -5,8 +5,9 @@ decision written under an agent context is marked is_global), so decisions
 already stored carry is_global = FALSE. ``is_protected`` was set at write
 time from the same decision cue the rule reads, which makes it the stored
 trace of that cue. The rule applies only to origins allowed to claim a
-content-derived privilege (capture_origin: deliberate, local_action), as on
-the write path; legacy and unknown rows keep their scope. Anchored rows are
+content-derived privilege (capture_origin: deliberate, local_action) and to
+deliberate writes, as on the write path; legacy and unknown rows keep their
+scope. Anchored rows are
 excluded: ``anchor`` sets is_protected as an explicit act with its own
 is_global argument, not as a decision cue. Idempotent: a second run matches
 no row.
@@ -29,6 +30,7 @@ WHERE is_protected = TRUE
   AND COALESCE(agent_context, '') <> ''
   AND superseded_by_id IS NULL
   AND capture_origin IN ('deliberate', 'local_action')
+  AND write_class = 'deliberate'
   AND NOT COALESCE(tags @> '["_anchor"]'::jsonb, FALSE);
 """
 
@@ -41,5 +43,6 @@ WHERE is_protected = 1
   AND COALESCE(agent_context, '') <> ''
   AND superseded_by_id IS NULL
   AND capture_origin IN ('deliberate', 'local_action')
+  AND write_class = 'deliberate'
   AND COALESCE(tags, '') NOT LIKE '%"_anchor"%'
 """

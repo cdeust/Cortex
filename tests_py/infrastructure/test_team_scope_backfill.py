@@ -23,6 +23,7 @@ _CASES = [
     ("unprotected", {"is_protected": False}, False),
     ("network", {"capture_origin": "network"}, False),
     ("legacy", {"capture_origin": "legacy"}, False),
+    ("auto", {"write_class": "auto"}, False),
 ]
 
 
@@ -34,6 +35,7 @@ def _row(label: str, overrides: dict) -> dict:
         "is_global": False,
         "agent_context": "cortex",
         "capture_origin": "deliberate",
+        "write_class": "deliberate",
     }
     data.update(overrides)
     return data
