@@ -9,11 +9,13 @@ Usage:
     python3 scripts/setup.py                                # PostgreSQL path
     CORTEX_MEMORY_STORE_BACKEND=sqlite python3 scripts/setup.py   # SQLite path
 
-Dependency install (install_deps) resolves ``requirements/setup.txt``, the
-generated hash-pinned closure, with --no-deps/--require-hashes and never
---upgrade. source: ADR-1059
+Dependency install (install_deps) installs ``requirements/setup.txt``, the
+generated hash-pinned closure, through the launcher's scratch-and-commit
+path (``scripts/launcher_deps.py``), never with a direct ``--target``.
 
-source: ADR-0782"""
+source: ADR-0782
+source: ADR-1059
+source: ADR-1063"""
 
 from __future__ import annotations
 
@@ -204,29 +206,14 @@ _SETUP_CONSTRAINTS = PROJECT_DIR / "requirements" / "setup.txt"
 def install_deps() -> None:
     step("Python dependencies")
 
-    os.makedirs(DEPS_DIR, exist_ok=True)
-
     print("Installing Python packages...")
-    # --no-deps: the constraint file IS the fully uv-resolved closure;
-    # letting pip re-derive it aborts with ResolutionImpossible on the
-    # mpmath override pyproject.toml declares (ADR-1059).
-    # --require-hashes: every line in the file is hash-pinned.
-    # No --upgrade: this directory may be on a live server's sys.path
-    # (ADR-0749); skip-if-present is safe under concurrency, replace-in-
-    # place is not.
     result = run(
         [
             sys.executable,
-            "-m",
-            "pip",
-            "install",
-            "-q",
-            "--target",
-            DEPS_DIR,
-            "--no-deps",
-            "--require-hashes",
-            "-r",
+            str(SCRIPT_DIR / "launcher_deps.py"),
+            "--requirement",
             str(_SETUP_CONSTRAINTS),
+            DEPS_DIR,
         ]
     )
 

@@ -6,6 +6,21 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **An installer upgrade leaves one version of each package in `deps/` (#573).**
+  `scripts/setup.sh` (the `--postgres` path of `install-plugin.sh`) and
+  `scripts/setup.py` ran `pip install --target` straight into the persistent
+  deps directory. pip skipped every package directory that already existed but
+  still added the new `*.dist-info`, so the 4.21.0 → 4.22.0 upgrade kept
+  sentence-transformers 5.6.1 code under 6.0.1 metadata and failed verification
+  on tokenizers. Both installers now go through the launcher's scratch-and-commit
+  install (`python3 scripts/launcher_deps.py --requirement FILE DEPS_DIR`), under
+  the launcher's lock, which replaces changed entries and prunes superseded
+  `*.dist-info` (ADR-1063). A distribution with several `*.dist-info` is no
+  longer read as satisfied, so re-running `install-plugin.sh` also repairs a
+  directory an earlier upgrade left mixed.
+
 ## [4.22.0] - 2026-09-15
 
 ### Fixed

@@ -3,40 +3,44 @@ hash-pinned constraint file, not a hand-written package list — issue #538.
 
 Prior state: ``install_deps()`` built its own ``packages = ["mcp>=2.0.0",
 ...]`` list of loose version ranges and passed it straight to ``pip
-install --target``. No pin, no hash, no reference to uv.lock. That is
-the SQLite-backend path on every OS and the PostgreSQL path on Windows —
-the default zero-config install. ``requirements/setup.txt`` (exported
-from uv.lock by scripts/generate_pip_constraints.py) exists precisely to
-avoid this drift and is what scripts/setup.sh already installs.
+install --target``. No pin, no hash, no reference to uv.lock.
 
-This test inspects the actual argv ``install_deps()`` passes to pip (via
-the module's ``run`` hook, mocked so no network call happens) and asserts:
+Since issue #573 ``install_deps()`` no longer calls pip itself: it hands
+``requirements/setup.txt`` to ``scripts/launcher_deps.py``, which installs
+into scratch and commits entry by entry. The first test inspects that argv
+(via the module's ``run`` hook, mocked so no process starts); the second
+inspects the pip argv the launcher builds for the file:
   - the source is ``-r requirements/setup.txt``, not a Python list literal
   - ``--no-deps`` is present (ADR-1059: pip must not re-derive the graph
     uv's ``[tool.uv] override-dependencies`` already resolved)
   - ``--require-hashes`` is present
-  - ``--upgrade`` is absent (ADR-1059: this directory may be on a live
-    MCP server's sys.path; skip-if-present is safe under concurrency,
-    replace-in-place is not)
+  - ``--upgrade`` is absent and ``--target`` is the scratch directory, never
+    the deps directory a live MCP server may hold on ``sys.path``
   - no hand-written ``name>=version`` requirement specifier reaches pip
 
-source: ADR-1059"""
+source: ADR-1059
+source: ADR-1063"""
 
 from __future__ import annotations
 
 import importlib.util
 import re
+import subprocess
+import sys
 from pathlib import Path
 from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SETUP_MODULE_PATH = REPO_ROOT / "scripts" / "setup.py"
+SCRIPTS_DIR = REPO_ROOT / "scripts"
+SETUP_MODULE_PATH = SCRIPTS_DIR / "setup.py"
 LOCK_EXPORT_PATH = REPO_ROOT / "requirements" / "setup.txt"
 
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
+import launcher_pip  # noqa: E402
+
 # A hand-written loose requirement specifier: NAME>=X.Y.Z (optionally with
-# an extras marker like psycopg[binary]). Matches what the old hand list
-# used ("mcp>=2.0.0", "psycopg[binary]>=3.1", ...); must never appear in
-# the argv install_deps() hands to pip.
+# an extras marker like psycopg[binary]); must never reach pip.
 _LOOSE_SPEC = re.compile(r"^[A-Za-z0-9_.-]+(\[[a-z]+\])?>=[0-9]")
 
 
@@ -50,7 +54,7 @@ def _load_setup_module():
     return module
 
 
-def test_install_deps_resolves_from_the_generated_constraint_file():
+def test_install_deps_hands_the_generated_file_to_the_launcher():
     mod = _load_setup_module()
     fake_run = mock.Mock(return_value=mock.Mock(returncode=0, stderr=""))
     with mock.patch.object(mod, "run", fake_run):
@@ -59,40 +63,44 @@ def test_install_deps_resolves_from_the_generated_constraint_file():
     fake_run.assert_called_once()
     (argv,), _kwargs = fake_run.call_args
 
-    # The source is the generated constraint file, not an inline list.
-    assert "-r" in argv, argv
-    source = argv[argv.index("-r") + 1]
+    assert Path(argv[1]) == SCRIPTS_DIR / "launcher_deps.py", argv
+    source = argv[argv.index("--requirement") + 1]
     assert Path(source) == LOCK_EXPORT_PATH, (
         f"install_deps() reads {source!r}, expected the generated "
         f"{LOCK_EXPORT_PATH} (scripts/pip_constraint_sets.py, entry "
         f'"setup.txt")'
     )
-
-    assert "--no-deps" in argv, (
-        "install_deps() must pass --no-deps: the constraint file is the "
-        "fully uv-resolved closure and pip re-deriving it aborts with "
-        "ResolutionImpossible on the mpmath override (ADR-1059)"
+    assert argv[-1] == mod.DEPS_DIR
+    assert "--target" not in argv, (
+        "install_deps() must not install into DEPS_DIR directly: pip then "
+        "keeps the old package directories under the new *.dist-info "
+        "(issue #573)"
     )
-    assert "--require-hashes" in argv, (
-        "install_deps() must pass --require-hashes: every line in the "
-        "generated constraint file is hash-pinned"
-    )
-    assert "--upgrade" not in argv, (
-        "install_deps() must NOT pass --upgrade: DEPS_DIR may be on a "
-        "live MCP server's sys.path (ADR-0749) and pip's delete-then-"
-        "rewrite under --upgrade is not safe there (ADR-1059)"
-    )
-
-    # No hand-written loose specifier reaches pip.
     hand_written = [arg for arg in argv if _LOOSE_SPEC.match(arg)]
-    assert not hand_written, (
-        f"install_deps() still passes hand-written version ranges to pip: "
-        f"{hand_written} — these must come only from {LOCK_EXPORT_PATH}"
+    assert not hand_written, hand_written
+
+
+def test_launcher_installs_the_file_hashed_without_deps_into_scratch(tmp_path):
+    deps_dir = str(tmp_path / "deps")
+    completed = subprocess.CompletedProcess([], 0, "", "")
+    with mock.patch.object(
+        launcher_pip.subprocess, "run", return_value=completed
+    ) as run:
+        launcher_pip.install_requirements(deps_dir, str(LOCK_EXPORT_PATH))
+
+    (argv,), _kwargs = run.call_args
+    assert Path(argv[argv.index("-r") + 1]) == LOCK_EXPORT_PATH
+    assert "--no-deps" in argv, (
+        "the constraint file is the fully uv-resolved closure and pip "
+        "re-deriving it aborts with ResolutionImpossible (ADR-1059)"
     )
+    assert "--require-hashes" in argv
+    assert "--upgrade" not in argv
+    assert argv[argv.index("--target") + 1] == launcher_pip.scratch_dir(deps_dir)
 
 
 def test_generated_constraint_file_exists_and_is_hash_pinned():
-    """Guard the fixture itself: the file the test above points at must be
+    """Guard the fixture itself: the file the tests above point at must be
     the real generated, hashed export, not an empty/missing placeholder."""
     assert LOCK_EXPORT_PATH.is_file()
     text = LOCK_EXPORT_PATH.read_text(encoding="utf-8")

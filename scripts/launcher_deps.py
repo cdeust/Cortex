@@ -3,12 +3,15 @@
 
 Public entry points used by launcher.py: ``ensure_deps`` (base runtime,
 every entry point) and ``ensure_all_deps`` (base + ML stack, SessionStart
-only).
+only). ``install_requirements``, also run as ``python3 launcher_deps.py -r
+FILE DEPS_DIR``, is the installers' path into the same directory.
 
-source: ADR-0747"""
+source: ADR-0747
+source: ADR-1063"""
 
 from __future__ import annotations
 
+import argparse
 import contextlib
 import json
 import os
@@ -219,3 +222,25 @@ def ensure_all_deps(deps_dir: str) -> None:
             "flashrank", deps_dir
         ):
             _write_stamp(deps_dir, "ml", ml_pins)
+
+
+def install_requirements(deps_dir: str, requirements: str) -> bool:
+    """Install a generated closure file for scripts/setup.sh and setup.py.
+
+    source: ADR-1063"""
+    os.makedirs(deps_dir, exist_ok=True)
+    _sweep_stale_backups(deps_dir)
+    with _deps_lock(deps_dir):
+        return _install.install_requirements(deps_dir, requirements)
+
+
+def main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(description=install_requirements.__doc__)
+    parser.add_argument("--requirement", "-r", required=True)
+    parser.add_argument("deps_dir")
+    args = parser.parse_args(argv)
+    return 0 if install_requirements(args.deps_dir, args.requirement) else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

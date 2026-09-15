@@ -215,18 +215,9 @@ if [ "$PY_MAJOR" -lt 3 ] || ([ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 10 ]); t
 fi
 ok "Python $PY_VERSION"
 
-# Install all dependencies to project deps directory
-echo "Installing Python packages..."
-mkdir -p "$DEPS_DIR"
-
-# source: ADR-0783
-# source: ADR-1059
-if ! python3 -m pip install -q --target "$DEPS_DIR" \
-    --no-deps --require-hashes -r "$PROJECT_DIR/requirements/setup.txt"; then
-    fail "Dependency install failed (see pip output above)"
-fi
-
-ok "Python packages installed"
+# source: ADR-1063
+source "$SCRIPT_DIR/lib/install_python_deps.sh"
+install_python_deps_step "$SCRIPT_DIR" "$PROJECT_DIR/requirements/setup.txt" "$DEPS_DIR"
 
 # ── Step 4: Database setup ──────────────────────────────────────────────
 

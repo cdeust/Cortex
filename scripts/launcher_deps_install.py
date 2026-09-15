@@ -200,7 +200,7 @@ def pip_install(
     A failed commit preserves scratch entries for recovery; no success stamp is
     allowed by the caller when this function returns False.
     """
-    tmp_dir = f"{deps_dir}.tmp-{os.getpid()}"
+    tmp_dir = _pip.scratch_dir(deps_dir)
     normalized = [constraint_without_extras(spec) for spec in constraints or []]
     try:
         process = _pip.resolve(deps_dir, packages, normalized)
@@ -212,6 +212,31 @@ def pip_install(
         )
         _cleanup_scratch(tmp_dir)
         return False
+    return _commit_install(process, tmp_dir, deps_dir)
+
+
+def install_requirements(deps_dir: str, requirements: str) -> bool:
+    """Install a hash-pinned closure file through scratch and commit.
+
+        Precondition: ``requirements`` is a generated constraint file
+        (``requirements/setup.txt``). Postcondition: True iff every entry
+        committed, leaving one ``*.dist-info`` per distribution it pins;
+        False leaves ``deps_dir`` as it was for every uncommitted entry.
+
+    source: ADR-1063"""
+    tmp_dir = _pip.scratch_dir(deps_dir)
+    try:
+        process = _pip.install_requirements(deps_dir, requirements)
+    except OSError as exc:
+        print(f"[cortex-launcher] dependency install failed: {exc}", file=sys.stderr)
+        _cleanup_scratch(tmp_dir)
+        return False
+    return _commit_install(process, tmp_dir, deps_dir)
+
+
+def _commit_install(
+    process: subprocess.CompletedProcess[str], tmp_dir: str, deps_dir: str
+) -> bool:
     if process.returncode:
         _report_failure(process)
         _cleanup_scratch(tmp_dir)

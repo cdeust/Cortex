@@ -93,6 +93,28 @@ def test_dist_info_versions_missing_dir_returns_empty(deps_mod, tmp_path):
     assert deps_mod._dist_info_versions(str(tmp_path / "nope")) == {}
 
 
+def _listdir_with_last(monkeypatch, last: str) -> None:
+    """Pin ``os.listdir`` to return ``last`` after its siblings."""
+    real = os.listdir
+    monkeypatch.setattr(
+        os, "listdir", lambda path: sorted(real(path), key=lambda n: n == last)
+    )
+
+
+@pytest.mark.parametrize("last", ["numpy-2.2.6.dist-info", "numpy-2.4.4.dist-info"])
+def test_dist_info_versions_omits_a_distribution_with_several_dist_infos(
+    deps_mod, tmp_path, monkeypatch, last
+):
+    """Issue #573: two ``*.dist-info`` for one distribution leave its
+    installed version unknown, whichever one the directory lists last."""
+    _make_dist_info(tmp_path, "numpy", "2.2.6")
+    _make_dist_info(tmp_path, "numpy", "2.4.4")
+    _make_dist_info(tmp_path, "flashrank", "0.2.10")
+    _listdir_with_last(monkeypatch, last)
+    assert deps_mod._dist_info_versions(str(tmp_path)) == {"flashrank": "0.2.10"}
+    assert not deps_mod._dist_info_satisfies(str(tmp_path), "numpy==2.4.4")
+
+
 # ----------------------------------------------------- foreign-ABI detection ---
 
 
@@ -388,6 +410,33 @@ def test_pip_install_replaces_entry_when_version_differs(
     # test_pip_install_prunes_superseded_dist_info_on_version_bump below
     # for the dedicated coverage of this behavior.
     assert not (deps_dir / "numpy-2.2.6.dist-info").exists()
+
+
+def test_pip_install_repairs_old_code_under_new_metadata(
+    deps_mod, tmp_path, monkeypatch
+):
+    """Issue #573: a direct ``--target`` upgrade left the old package
+    directory next to both the old and the new ``*.dist-info``. With the
+    new one listed last, the idempotence guard read the pinned version and
+    skipped the stale code; it must replace it instead."""
+    deps_dir = tmp_path / "deps"
+    deps_dir.mkdir()
+    _make_pkg_dir(deps_dir, "numpy", marker="OLD")
+    _make_dist_info(deps_dir, "numpy", "2.2.6")
+    _make_dist_info(deps_dir, "numpy", "2.4.4")
+    _listdir_with_last(monkeypatch, "numpy-2.4.4.dist-info")
+
+    def fake_run(cmd, **kwargs):
+        tmp_dir = Path(cmd[cmd.index("--target") + 1])
+        _make_pkg_dir(tmp_dir, "numpy", marker="NEW")
+        _make_dist_info(tmp_dir, "numpy", "2.4.4")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(deps_mod._install.subprocess, "run", fake_run)
+    assert deps_mod._pip_install(str(deps_dir), ["numpy==2.4.4"]) is True
+    assert "NEW" in (deps_dir / "numpy" / "__init__.py").read_text(encoding="utf-8")
+    dist_infos = sorted(p.name for p in deps_dir.glob("numpy-*.dist-info"))
+    assert dist_infos == ["numpy-2.4.4.dist-info"]
 
 
 def test_pip_install_replaces_entry_with_foreign_abi_extension_despite_matching_version(

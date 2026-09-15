@@ -82,17 +82,21 @@ def parse_pip_spec(spec: str) -> tuple[str, str]:
 
 
 def dist_info_versions(dir_path: str) -> dict[str, str]:
-    """Map normalized dist key -> version for every ``*.dist-info`` child.
+    """Map normalized dist key -> version for every distribution that has
+    exactly one ``*.dist-info`` child.
 
     Precondition: none; a missing or unreadable directory yields an empty map.
-    Postcondition: read-only, without side effects.
+    Postcondition: read-only, without side effects. A distribution with
+    several ``*.dist-info`` children is absent from the map: its installed
+    version is unknown, so nothing may treat it as satisfied.
 
-    source: ADR-0748"""
-    versions: dict[str, str] = {}
+    source: ADR-0748
+    source: ADR-1063"""
+    found: dict[str, set[str]] = {}
     try:
         children = os.listdir(dir_path)
     except OSError:
-        return versions
+        return {}
     for name in children:
         if not name.endswith(".dist-info"):
             continue
@@ -100,8 +104,10 @@ def dist_info_versions(dir_path: str) -> dict[str, str]:
         dist_name, _, version = base.rpartition("-")
         if not dist_name:
             continue
-        versions[normalize_dist_key(dist_name)] = version
-    return versions
+        found.setdefault(normalize_dist_key(dist_name), set()).add(version)
+    return {
+        key: versions.pop() for key, versions in found.items() if len(versions) == 1
+    }
 
 
 def entry_dist_key(entry: str) -> str:

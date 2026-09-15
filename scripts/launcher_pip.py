@@ -76,6 +76,24 @@ def _install(
     return process
 
 
+def scratch_dir(deps_dir: str) -> str:
+    """The per-process pip ``--target`` a commit later moves into ``deps_dir``."""
+    return f"{deps_dir}.tmp-{os.getpid()}"
+
+
+def _pip_command(*arguments: str) -> list[str]:
+    return [
+        sys.executable,
+        "-m",
+        "pip",
+        "install",
+        "-q",
+        "--index-url",
+        "https://pypi.org/simple/",
+        *arguments,
+    ]
+
+
 def resolve(
     deps_dir: str, packages: list[str], constraints: list[str]
 ) -> subprocess.CompletedProcess[str]:
@@ -85,17 +103,25 @@ def resolve(
         constraints = [*constraints, _pins.TORCH_CPU_SPEC]
     with constraint_args(deps_dir, constraints) as arguments:
         with _cpu.local_targets(deps_dir, packages, environment) as targets:
-            command = [
-                sys.executable,
-                "-m",
-                "pip",
-                "install",
-                "-q",
-                "--index-url",
-                "https://pypi.org/simple/",
-                *arguments,
-                "--target",
-                f"{deps_dir}.tmp-{os.getpid()}",
-                *targets,
-            ]
+            command = _pip_command(
+                *arguments, "--target", scratch_dir(deps_dir), *targets
+            )
             return _install(command, environment)
+
+
+def install_requirements(
+    deps_dir: str, requirements: str
+) -> subprocess.CompletedProcess[str]:
+    """Install a generated, hash-pinned closure file into scratch.
+
+    source: ADR-1059
+    source: ADR-1063"""
+    command = _pip_command(
+        "--target",
+        scratch_dir(deps_dir),
+        "--no-deps",
+        "--require-hashes",
+        "-r",
+        requirements,
+    )
+    return _install(command, clean_environment())
