@@ -326,10 +326,24 @@ def get_registry() -> AxisRegistry:
     Cached after first call. Use ``reset_registry`` to force a reload —
     e.g. after the user edits a schema file and wants the change to
     take effect immediately.
+
+    Raises RuntimeError if no composition root ever called
+    ``configure_default_wiki_root`` -- an explicitly-configured provider
+    that itself returns None (no wiki root available in this session) is
+    a legitimate value and returns defaults-only, same as before; a
+    provider that was simply never wired is a bug, not a valid "no wiki
+    root" answer, and must not silently collapse to the same defaults-only
+    behavior (CLAUDE.md: no silent fallbacks; issue #560 review, 2026-09-16).
     """
     global _REGISTRY_CACHE
     if _REGISTRY_CACHE is None:
-        wiki_root = _WIKI_ROOT_PROVIDER() if _WIKI_ROOT_PROVIDER is not None else None
+        if _WIKI_ROOT_PROVIDER is None:
+            raise RuntimeError(
+                "wiki_axis_registry: no wiki-root provider configured -- "
+                "call configure_default_wiki_root() at this process's "
+                "composition root before get_registry()"
+            )
+        wiki_root = _WIKI_ROOT_PROVIDER()
         _REGISTRY_CACHE = load_axis_registry(wiki_root)
     return _REGISTRY_CACHE
 

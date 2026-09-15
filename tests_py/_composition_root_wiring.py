@@ -6,7 +6,10 @@ cap (coding-standards.md §4).
 
 from __future__ import annotations
 
-from mcp_server.core.wiki_axis_registry import configure_schema_file_reader
+from mcp_server.core.wiki_axis_registry import (
+    configure_default_wiki_root,
+    configure_schema_file_reader,
+)
 from mcp_server.core.wiki_coverage import configure_wiki_coverage_filesystem
 from mcp_server.core.wiki_coverage_dashboard import configure_dashboard_filesystem
 from mcp_server.core.wiki_drift import configure_wiki_drift_filesystem
@@ -32,6 +35,10 @@ from mcp_server.infrastructure.wiki_drift_fs import (
     wiki_page_mtime,
 )
 
+# No real wiki root in the test session (isolation matches conftest.py's
+# real-data-root redirection); explicit, not a missing-configuration
+# fallback -- get_registry() still raises if this call is ever skipped.
+configure_default_wiki_root(lambda: None)
 configure_schema_file_reader(read_schema_files)
 configure_wiki_coverage_filesystem(
     stat_page=stat_page,

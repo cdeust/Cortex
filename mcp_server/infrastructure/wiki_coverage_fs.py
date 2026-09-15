@@ -4,7 +4,7 @@ core.wiki_coverage.configure_wiki_coverage_filesystem —
 mcp_server/__main__.py for production, tests_py/conftest.py for the test
 session.
 
-source: ADR-0297, issue #560
+source: ADR-0297 (issue #560)
 """
 
 from __future__ import annotations
