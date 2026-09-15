@@ -64,10 +64,10 @@ def test_every_registered_tool_matches_its_handler_schema_exactly() -> None:
     for tool_name, wrapper_params in live.items():
         handler_schema = schemas.get(tool_name)
         if handler_schema is None:
-            # No handler-schema entry to compare against (would itself be
-            # a bug for any real tool, but merged_schemas()'s own callers
-            # already assume every registered tool has one — nothing this
-            # test needs to invent a separate assertion for).
+            failures.append(
+                f"{tool_name}: registered with no handler schema entry, so its "
+                f"client-visible parameters have no contract to be checked against"
+            )
             continue
         handler_props = set(
             handler_schema.get("inputSchema", {}).get("properties", {}).keys()
