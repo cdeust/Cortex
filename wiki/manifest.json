@@ -3423,6 +3423,10 @@
     "ADR-1063": {
       "mirror": "ADR-1063-route-the-installers-dependency-step-through-the-launcher-s-scratch-and-commit-i.md",
       "path": "adr/cortex/1063-route-the-installers-dependency-step-through-the-launcher-s-scratch-and-commit-i.md"
+    },
+    "ADR-1064": {
+      "mirror": "ADR-1064-read-the-owners-of-each-deps-entry-from-the-scratch-record-files.md",
+      "path": "adr/cortex/1064-read-the-owners-of-each-deps-entry-from-the-scratch-record-files.md"
     }
   },
   "project": "cortex",

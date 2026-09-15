@@ -20,6 +20,7 @@ _SCRIPTS_DIR = str(Path(__file__).resolve().parent)
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 import launcher_deps_fs as _fs  # noqa: E402
+import launcher_deps_record as _record  # noqa: E402
 import launcher_pip as _pip  # noqa: E402
 import launcher_torch_cpu as _cpu  # noqa: E402
 
@@ -107,28 +108,36 @@ def commit_entry(tmp_dir: str, deps_dir: str, entry: str) -> str | None:
 
 def _entry_already_satisfied(
     entry: str,
+    owners: frozenset[str],
     tmp_versions: dict[str, str],
     dest_versions: dict[str, str],
     deps_dir: str,
 ) -> bool:
-    """Idempotence guard: true iff ``dest``
-        already has the exact version ``tmp_dir`` resolved for ``entry`` --
-        protects a locked, already-correct transitive dep (e.g. numpy under
-        a running MCP server) from ever entering the rmtree/replace path --
-        AND ``dest``'s copy carries no extension module built for a
-        foreign interpreter ABI: a version match is not enough when the
-        version-unchanged package embeds a compiled artifact tagged for
-        the interpreter that installed it last, not the one running now.
-        Version mismatch is checked first (cheap, no filesystem walk)
-        before the ABI walk runs at all.
+    """Idempotence guard: true iff every distribution in ``owners`` (those
+        whose scratch ``RECORD`` lists ``entry``) is in ``dest`` at the
+        exact version ``tmp_dir`` resolved -- protects a locked,
+        already-correct transitive dep (e.g. numpy under a running MCP
+        server) from ever entering the rmtree/replace path -- AND ``dest``
+        holds ``entry`` AND ``dest``'s copy carries no extension module
+        built for a foreign interpreter ABI: a version match is not enough
+        when the version-unchanged package embeds a compiled artifact
+        tagged for the interpreter that installed it last, not the one
+        running now. An entry no ``RECORD`` owns is never satisfied.
+        Versions are checked first (cheap, no filesystem walk) before the
+        ABI walk runs at all.
 
     source: ADR-0749
-    source: ADR-1061"""
-    key = _fs.entry_dist_key(entry)
-    tmp_v = tmp_versions.get(key)
-    if tmp_v is None or dest_versions.get(key) != tmp_v:
+    source: ADR-1061
+    source: ADR-1064"""
+    if not owners:
         return False
+    for dist_key in owners:
+        tmp_v = tmp_versions.get(dist_key)
+        if tmp_v is None or dest_versions.get(dist_key) != tmp_v:
+            return False
     dest_path = os.path.join(deps_dir, entry)
+    if not os.path.lexists(dest_path):
+        return False
     return not _fs.entry_has_foreign_abi_extension(dest_path)
 
 
@@ -145,12 +154,17 @@ def _commit_resolved_entries(tmp_dir: str, deps_dir: str) -> tuple[bool, str | N
         far.
 
     source: ADR-0749
-    source: ADR-1061"""
+    source: ADR-1061
+    source: ADR-1064"""
+    owners = _record.entry_owners(tmp_dir)
     tmp_versions = _fs.dist_info_versions(tmp_dir)
     dest_versions = _fs.dist_info_versions(deps_dir)
     committed_dist_infos: list[str] = []
     for entry in os.listdir(tmp_dir):
-        if _entry_already_satisfied(entry, tmp_versions, dest_versions, deps_dir):
+        entry_owners = owners.get(entry, frozenset())
+        if _entry_already_satisfied(
+            entry, entry_owners, tmp_versions, dest_versions, deps_dir
+        ):
             continue
         try:
             commit_entry(tmp_dir, deps_dir, entry)

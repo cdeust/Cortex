@@ -20,6 +20,16 @@ adheres to [Semantic Versioning](https://semver.org/).
   `*.dist-info` (ADR-1063). A distribution with several `*.dist-info` is no
   longer read as satisfied, so re-running `install-plugin.sh` also repairs a
   directory an earlier upgrade left mixed.
+- **Re-running an install on an up-to-date `deps/` replaces nothing (#575).**
+  The launcher's idempotence guard found an entry's distribution from the
+  entry's name, so every entry named differently from its distribution was
+  replaced on every install: `yaml`, `sklearn`, `google`, `bin`, the shared
+  `__pycache__`, and so on. On a clone of a 4.22.0 deps directory that was 27 of
+  213 entries, with 977 `.pyc` files rewritten. The guard now reads each entry's
+  owners from the scratch install's `RECORD` files and skips the entry when
+  every owner is already at the resolved version (ADR-1064). The same clone now
+  comes out byte-identical. An entry deleted from `deps/` while its metadata
+  stays at the pin is now restored instead of skipped.
 
 ## [4.22.0] - 2026-09-15
 

@@ -1,0 +1,39 @@
+---
+created: 2026-09-15T21:39:46Z
+kind: adr
+number: 1064
+status: accepted
+tags: [packaging, pip, installer, idempotence, issue-575]
+title: Read the owners of each deps entry from the scratch RECORD files
+---
+# ADR-1064: Read the owners of each deps entry from the scratch RECORD files
+
+## Status
+
+accepted
+
+## Context
+
+`_commit_resolved_entries` (`scripts/launcher_deps_install.py`) commits each top-level entry of the `deps.tmp-<pid>` scratch directory into `deps/`, and skips an entry when `_entry_already_satisfied` finds it already installed at the resolved version (ADR-0749, ADR-1061). The guard derived the distribution from the entry's name (`launcher_deps_fs.entry_dist_key`). An entry whose name is not its distribution's therefore had no version and was replaced on every install: `yaml` and `_yaml` (PyYAML), `sklearn`, `attr`, `dateutil`, `jwt`, `fitz`, `google` (protobuf), `functorch` and `torchgen` (torch), the top-level `__pycache__` shared by `six`, `sympy`, `texttable`, `threadpoolctl` and `typing_extensions`, and `bin`, `include` and `share`.
+
+Since ADR-1063 both installers go through this path, so every re-run of `install-plugin.sh` paid for it (issue #575). Measured on 2026-09-15 on an APFS clone of the maintainer's 4.22.0 deps directory (Python 3.14.4, macOS 26, `requirements/setup.txt` at 42652417): the guard at origin/main replaced 27 of 213 entries and rewrote 977 `.pyc` files, with every source file unchanged.
+
+Each `*.dist-info/RECORD` lists every file its distribution installed (packaging specification, *Recording installed projects*). Under `pip --target`, pip installs into a home scheme whose purelib is `<home>/lib/python`, then moves every child of `<home>` into the target (`_handle_target_dir`, pip 26.0.1). A console script is recorded as `../../bin/<name>` and lands in the target's `bin` entry. The 4.22.0 deps directory holds 29 such `../../bin` rows, one `../../include` row and one `../../share` row.
+
+## Decision
+
+The guard reads the owners of each entry from the scratch directory's `RECORD` files. `scripts/launcher_deps_record.py` provides `entry_owners(dir)`, which maps each top-level entry to the normalized dist keys whose `RECORD` lists a path under it. A `../../<entry>/...` path counts for `<entry>`, and a path that lands outside the target counts for no entry.
+
+`_entry_already_satisfied(entry, owners, ...)` is true only when all of these hold: the entry has at least one owner; every owner is in `deps/` at the version the scratch install resolved; `deps/` still holds the entry; and its copy carries no extension module built for another interpreter's ABI (ADR-1061). The owners come from scratch alone, and their versions come from the `*.dist-info` names on both sides (`dist_info_versions`). A distribution with several `*.dist-info` in `deps/` still has no known version (ADR-1063), so every entry it owns is replaced.
+
+An entry that no readable `RECORD` lists is never satisfied and is always replaced. pip writes a `RECORD` for every wheel it installs, so this case only arises for a damaged scratch directory, and replacing the entry is the safe direction. In the 4.22.0 deps directory every one of the 211 entries has at least one owner; only the two `.cortex-deps-stamp-*.json` files, which no install writes, have none.
+
+## Consequences
+
+Easier: a re-run against a directory that already matches the pins replaces no entry. On the clone described above, the new guard replaced 0 of 213 entries and left the tree byte-identical to the live directory. `tests_py/scripts/test_installer_rerun_keeps_entries.py` checks this with real pip, offline. It installs a distribution whose import name differs from its distribution name and which ships a console script, plus two distributions sharing a namespace directory. A same-version re-run keeps every inode, and a version bump of one owner replaces exactly the entries that owner shares. The churn recorded as a consequence of ADR-1063 is gone.
+
+Easier: an entry deleted from `deps/` while its metadata stays at the pinned version is restored on the next install. The name-based guard skipped such an entry whenever its name matched its distribution.
+
+Harder: the guard reads every scratch `RECORD` once per install. `entry_owners` over the 4.22.0 deps directory took 36 to 38 ms across five warm runs on the same machine, against a pip install of the closure measured in tens of seconds.
+
+Unchanged: a shared entry that is not satisfied is still replaced as a whole by its scratch copy. When the scratch install covers only part of the entry's owners in `deps/` (a partial launcher install), the files of the owners that scratch did not install leave with the old copy. The name-based guard did this on every run for every shared entry; this guard does it only when one of the scratch owners changed.

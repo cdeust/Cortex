@@ -54,11 +54,15 @@ def deps_mod():
 
 
 def _make_dist_info(root: Path, dist_name: str, version: str) -> None:
+    """A ``*.dist-info`` whose ``RECORD`` lists the ``dist_name`` package, as
+    pip writes one for every install (the guard reads owners from it)."""
     d = root / f"{dist_name}-{version}.dist-info"
     d.mkdir(parents=True, exist_ok=True)
     (d / "METADATA").write_text(
         f"Name: {dist_name}\nVersion: {version}\n", encoding="utf-8"
     )
+    listed = [f"{dist_name}/__init__.py", f"{d.name}/METADATA", f"{d.name}/RECORD"]
+    (d / "RECORD").write_text("".join(f"{p},,\n" for p in listed), encoding="utf-8")
 
 
 def _make_pkg_dir(root: Path, pkg_name: str, marker: str = "x") -> None:
