@@ -177,14 +177,23 @@ def _commit_resolved_entries(tmp_dir: str, deps_dir: str) -> tuple[bool, str | N
             return False, entry
         if entry.endswith(".dist-info"):
             committed_dist_infos.append(entry)
-    # Residue 2: only reached once the WHOLE tmp_dir has committed.
+    _prune_after_full_commit(deps_dir, committed_dist_infos)
+    return True, None
+
+
+def _prune_after_full_commit(deps_dir: str, committed_dist_infos: list[str]) -> None:
+    """Prune what the commit loop leaves behind; only called once the WHOLE
+        ``tmp_dir`` has committed.
+
+    source: ADR-0748
+    source: ADR-1061"""
+    # Residue 2: every stale sibling of a freshly committed `.dist-info`.
     for entry in committed_dist_infos:
         _fs.prune_superseded_dist_info(deps_dir, entry)
     # Issue #540, second shape: a `--target` install can leave a loose
     # top-level extension file, tagged for an interpreter no longer
-    # running, that no `.dist-info` owns and this loop never revisits.
+    # running, that no `.dist-info` owns and the commit loop never revisits.
     _fs.prune_foreign_abi_extensions(deps_dir)
-    return True, None
 
 
 def _cleanup_scratch(tmp_dir: str) -> None:
