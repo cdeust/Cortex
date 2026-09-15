@@ -44,11 +44,11 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     # PostgreSQL batched writer.
     ("infrastructure/pg_store_heat.py", 121),
     # SQLite anchor transfer.
-    ("infrastructure/sqlite_store.py", 477),
+    ("infrastructure/sqlite_store.py", 481),
     # SQLite single-row writer.
-    ("infrastructure/sqlite_store.py", 504),
+    ("infrastructure/sqlite_store.py", 508),
     # SQLite batched writer.
-    ("infrastructure/sqlite_store.py", 561),
+    ("infrastructure/sqlite_store.py", 565),
     # Homeostatic fold.
     ("handlers/consolidation/homeostatic_apply.py", 184),
     # Anchor pin.

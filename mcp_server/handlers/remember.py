@@ -16,7 +16,7 @@ from mcp_server.shared import write_class as write_class_module
 from mcp_server.errors import ValidationError
 from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.core.domain_detector import detect_domain
-from mcp_server.core.global_detector import detect_global
+from mcp_server.core.global_detector import propagates_to_team, resolve_global_scope
 from mcp_server.handlers.remember_helpers import (
     apply_modulations,
     evaluate_gate,
@@ -281,11 +281,16 @@ async def _handler_impl(
     )
     _enrich_mod_with_gate(mod, gate)
 
-    # Auto-detect global when not explicitly set
-    if not is_global:
-        is_global, _global_score, global_reason = detect_global(content, tags)
-    else:
-        global_reason = "explicit"
+    is_global, global_reason = resolve_global_scope(
+        content,
+        tags,
+        explicit=bool(is_global),
+        team_decision=propagates_to_team(
+            thermodynamics.is_decision_content(content)
+            and capture_origin.may_bypass_write_gate_on_content(resolved_origin),
+            agent_topic or "",
+        ),
+    )
 
     mid: int | None
     if supersedes_id is not None:

@@ -53,6 +53,9 @@ from mcp_server.infrastructure.sqlite_store_stats import SqliteStatsMixin
 from mcp_server.observability import silent_failure
 from mcp_server.shared.code_tokenize import augment_content
 from mcp_server.infrastructure.embedding_engine import current_embedding_mode
+from mcp_server.infrastructure.team_scope_backfill import (
+    TEAM_DECISION_BACKFILL_SQLITE,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -150,6 +153,7 @@ class SqliteMemoryStore(
             backfill = COLUMN_BACKFILLS.get((table, column))
             if backfill is not None:
                 self._conn.execute(backfill)
+        self._conn.execute(TEAM_DECISION_BACKFILL_SQLITE)
         self._migrate_fts_code_tokenize()
 
     def _migrate_fts_code_tokenize(self) -> None:

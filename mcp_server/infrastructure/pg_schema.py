@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast
 
+from mcp_server.infrastructure.team_scope_backfill import TEAM_DECISION_BACKFILL_PG
+
 if TYPE_CHECKING:
     from typing_extensions import LiteralString
 
@@ -1922,6 +1924,7 @@ def get_all_ddl() -> list[LiteralString]:
         PROCEDURAL_SKILLS_DDL,
         # source: ADR-0537
         MIGRATIONS_DDL,
+        TEAM_DECISION_BACKFILL_PG,
         MEMORIES_STORAGE_OPTIONS_DDL,
         # source: ADR-0537
         CURRENT_MEMORIES_VIEW_DDL,

@@ -12,6 +12,7 @@ from mcp_server.core.memory_decomposer import (
 )
 from mcp_server.observability import silent_failure
 from mcp_server.core import knowledge_graph, write_post_store
+from mcp_server.core.global_detector import propagates_to_team
 
 
 def ingest_memory(
@@ -87,9 +88,9 @@ def ingest_memory(
         # source: ADR-0200
 
         agent_ctx = memory.get("agent_context", "")
-        is_global = memory.get("is_global", False)
-        if auto_protect and agent_ctx and not is_benchmark:
-            is_global = True  # TMS coordination: decisions propagate
+        is_global = memory.get("is_global", False) or propagates_to_team(
+            auto_protect, agent_ctx
+        )
 
         mid = store.insert_memory(
             {

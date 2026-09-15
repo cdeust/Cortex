@@ -255,3 +255,35 @@ def _category_for_phrase(phrase: str) -> str:
             if p == phrase:
                 return cat
     return "unknown"
+
+
+def propagates_to_team(is_decision: bool, agent_context: str) -> bool:
+    """True when a decision written under an agent context must be team-visible.
+
+    Transactive Memory Systems (Wegner 1987): the team knows WHAT was decided
+    regardless of WHO decided it, so the decision is marked is_global.
+
+    source: ADR-0200"""
+    return is_decision and bool(agent_context)
+
+
+def resolve_global_scope(
+    content: str,
+    tags: list[str],
+    *,
+    explicit: bool,
+    team_decision: bool,
+) -> tuple[bool, str]:
+    """Return (is_global, reason) for a new memory.
+
+    An explicit request wins, then team propagation of decisions (the caller
+    evaluates propagates_to_team), then the content detector.
+
+    source: ADR-0200
+    source: ADR-0184"""
+    if explicit:
+        return True, "explicit"
+    if team_decision:
+        return True, "team_decision"
+    detected, _score, reason = detect_global(content, tags)
+    return detected, reason

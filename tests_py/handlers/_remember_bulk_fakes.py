@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 import numpy as np
 
-from mcp_server.core import write_gate_calibration
+from mcp_server.core import global_detector, write_gate_calibration
 from mcp_server.handlers import remember
 from mcp_server.handlers._telemetry_wrap import instrument
 from tests_py.handlers._preflight_fakes import Store
@@ -20,8 +20,16 @@ from tests_py.handlers.test_remember_batch_handler import handler_patches
 FIXTURES = Path(__file__).parents[1] / "fixtures" / "w3_4"
 
 
+# Names a frozen reference body imported at its own revision that the live
+# module no longer imports (#561 moved remember's scope logic into
+# global_detector.resolve_global_scope); supplied so the oracle runs unchanged.
+_FROZEN_IMPORTS: dict[str, dict] = {
+    "remember": {"detect_global": global_detector.detect_global},
+}
+
+
 def original(module, name: str) -> dict:
-    namespace = dict(vars(module))
+    namespace = {**vars(module), **_FROZEN_IMPORTS.get(name, {})}
     source = (FIXTURES / f"{name}.py.txt").read_text()
     exec(compile(source, str(FIXTURES / name), "exec"), namespace)
     return namespace
