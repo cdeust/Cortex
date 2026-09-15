@@ -16,6 +16,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -32,7 +34,16 @@ def test_ablation_runner_import_wires_the_seam_and_disables_the_mechanism():
     """The exact path benchmarks/lib/ablation_runner.py exercises:
     import it (which imports benchmarks.lib._composition_root_wiring for
     its side effect), set CORTEX_ABLATE_<NAME>=1 via its own
-    _set_ablation_env helper, and prove is_mechanism_disabled sees it."""
+    _set_ablation_env helper, and prove is_mechanism_disabled sees it.
+
+    ablation_runner imports benchmarks/lib/db_snapshot.py, which needs
+    psycopg: the runner only exists for PostgreSQL benchmark databases, so
+    the SQLite-only CI job cannot import it. The PostgreSQL test jobs run
+    this test."""
+    pytest.importorskip(
+        "psycopg",
+        reason="benchmarks/lib/ablation_runner.py requires the postgresql extra",
+    )
     script = """
 import benchmarks.lib.ablation_runner as runner
 from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
