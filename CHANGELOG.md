@@ -66,8 +66,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 ### Dependencies
 
 - sentence-transformers 5.6.1 → 6.0.1 (#533), xxhash 3.8.1 → 4.0.1 (#532),
-  anyio 4.15.1, fsspec 2026.7.0, pydantic-core 2.48.0, sse-starlette 3.4.11
-  (#531), hashgraph-online/ai-plugin-scanner-action 1.2.624 (#529).
+  anyio 4.15.0 → 4.15.1 and sse-starlette 3.4.10 → 3.4.11 (#531),
+  hashgraph-online/ai-plugin-scanner-action 1.2.624 (#529). Corrected on
+  2026-09-15: this entry first also listed fsspec 2026.7.0 and pydantic-core
+  2.48.0 from #531's title; #531's diff changes only anyio and
+  sse-starlette, and uv.lock pins fsspec 2026.6.0 and pydantic-core 2.46.5.
 
 ## [4.21.0] - 2026-09-10
 
