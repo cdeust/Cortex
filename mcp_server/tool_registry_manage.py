@@ -84,6 +84,8 @@ def _register_validate_memory(mcp: MCPServer) -> None:
         base_dir: str | None = None,
         staleness_threshold: float = 0.5,
         dry_run: bool = False,
+        after_id: int = 0,
+        url_check_limit: int = 10,
     ) -> dict[str, Any]:
         """Validate memories against current filesystem state."""
         return await safe_handler(
@@ -95,6 +97,8 @@ def _register_validate_memory(mcp: MCPServer) -> None:
                 "base_dir": base_dir or "",
                 "staleness_threshold": staleness_threshold,
                 "dry_run": dry_run,
+                "after_id": after_id,
+                "url_check_limit": url_check_limit,
             },
             tool_name="validate_memory",
         )
@@ -108,6 +112,7 @@ def _register_rate_memory(mcp: MCPServer) -> None:
     async def tool_rate_memory(
         memory_id: int,
         useful: bool,
+        query: str | None = None,
     ) -> dict[str, Any]:
         """Rate a memory as useful or not to update metamemory confidence."""
         return await safe_handler(
@@ -115,6 +120,7 @@ def _register_rate_memory(mcp: MCPServer) -> None:
             {
                 "memory_id": memory_id,
                 "useful": useful,
+                "query": query,
             },
             tool_name="rate_memory",
         )
@@ -152,6 +158,7 @@ def _register_anchor(mcp: MCPServer) -> None:
     async def tool_anchor(
         memory_id: int,
         reason: str | None = None,
+        is_global: bool = False,
     ) -> dict[str, Any]:
         """Mark a memory as compaction-resistant (heat=1.0)."""
         return await safe_handler(
@@ -159,6 +166,7 @@ def _register_anchor(mcp: MCPServer) -> None:
             {
                 "memory_id": memory_id,
                 "reason": reason or "",
+                "is_global": is_global,
             },
             tool_name="anchor",
         )

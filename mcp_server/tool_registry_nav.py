@@ -59,6 +59,7 @@ def _register_recall_hierarchical(mcp: MCPServer) -> None:
         max_results: int = 10,
         min_heat: float = 0.05,
         cluster_threshold: float = 0.6,
+        memory_ids: list[int] | None = None,
     ) -> dict[str, Any]:
         """Retrieve memories using fractal hierarchy."""
         return await safe_handler(
@@ -69,6 +70,7 @@ def _register_recall_hierarchical(mcp: MCPServer) -> None:
                 "max_results": max_results,
                 "min_heat": min_heat,
                 "cluster_threshold": cluster_threshold,
+                "memory_ids": memory_ids,
             },
             tool_name="recall_hierarchical",
         )
@@ -131,6 +133,7 @@ def _register_get_causal_chain(mcp: MCPServer) -> None:
         relationship_types: list[str] | None = None,
         max_depth: int = 3,
         direction: str = "both",
+        max_edges: int = 200,
     ) -> dict[str, Any]:
         """Trace entity relationships through the knowledge graph."""
         return await safe_handler(
@@ -141,6 +144,7 @@ def _register_get_causal_chain(mcp: MCPServer) -> None:
                 "relationship_types": relationship_types,
                 "max_depth": max_depth,
                 "direction": direction,
+                "max_edges": max_edges,
             },
             tool_name="get_causal_chain",
         )

@@ -64,6 +64,12 @@ def _register_curate_wiki(mcp: MCPServer) -> None:
         min_avg_heat: float = 0.3,
         recent_only: bool = True,
         memory_pool_size: int = 500,
+        include_coverage: bool = True,
+        coverage_jobs_max: int = 4,
+        include_reauthor: bool = True,
+        reauthor_jobs_max: int = 3,
+        report_uncited_deliberate: bool = False,
+        uncited_deliberate_limit: int = 20,
     ) -> dict[str, Any]:
         """Return structured authoring jobs for the in-session LLM to author."""
         return await safe_handler(
@@ -75,6 +81,12 @@ def _register_curate_wiki(mcp: MCPServer) -> None:
                 "min_avg_heat": min_avg_heat,
                 "recent_only": recent_only,
                 "memory_pool_size": memory_pool_size,
+                "include_coverage": include_coverage,
+                "coverage_jobs_max": coverage_jobs_max,
+                "include_reauthor": include_reauthor,
+                "reauthor_jobs_max": reauthor_jobs_max,
+                "report_uncited_deliberate": report_uncited_deliberate,
+                "uncited_deliberate_limit": uncited_deliberate_limit,
             },
             tool_name="curate_wiki",
         )

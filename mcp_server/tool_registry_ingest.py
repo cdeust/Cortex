@@ -63,6 +63,7 @@ def _register_ingest_codebase(mcp: MCPServer) -> None:
         output_dir: str | None = None,
         language: str = "auto",
         force_reindex: bool = False,
+        ingest_docs: bool = True,
         ctx: Context | None = None,
     ) -> dict[str, Any]:
         """Ingest upstream codebase analysis into Cortex.
@@ -87,6 +88,7 @@ def _register_ingest_codebase(mcp: MCPServer) -> None:
                 "output_dir": output_dir,
                 "language": language,
                 "force_reindex": force_reindex,
+                "ingest_docs": ingest_docs,
                 "top_symbols": None,
                 "top_processes": None,
             },

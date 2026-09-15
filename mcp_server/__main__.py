@@ -40,6 +40,7 @@ from mcp_server import (
     tool_registry_ingest,
     tool_registry_manage,
     tool_registry_memory,
+    tool_registry_memory_maintenance,
     tool_registry_nav,
     tool_registry_wiki,
 )
@@ -95,6 +96,7 @@ def merged_schemas() -> dict[str, dict]:
     return {
         **tool_registry_core.SCHEMAS,
         **tool_registry_memory.SCHEMAS,
+        **tool_registry_memory_maintenance.SCHEMAS,
         **tool_registry_manage.SCHEMAS,
         **tool_registry_nav.SCHEMAS,
         **tool_registry_advanced.SCHEMAS,
@@ -109,6 +111,7 @@ def register_all(mcp: MCPServer, *, codebase: bool, prd: bool) -> None:
     source: ADR-0093"""
     tool_registry_core.register(mcp)
     tool_registry_memory.register(mcp)
+    tool_registry_memory_maintenance.register(mcp)
     tool_registry_manage.register(mcp)
     tool_registry_nav.register(mcp)
     tool_registry_advanced.register(mcp)

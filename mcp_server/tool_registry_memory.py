@@ -1,6 +1,9 @@
-"""Tool registration: Tier 1 memory read/write tools (9 tools).
+"""Tool registration: Tier 1 memory read/write tools (remember, recall,
+unified_search).
 
-Registers remember, recall, checkpoint, consolidation, and diagnostics tools.
+Maintenance/diagnostics tools (checkpoint, consolidate, narrative, etc.)
+split out to tool_registry_memory_maintenance.py — see that module's
+docstring and docs/module-inventory.md's 300-line file cap.
 """
 
 from __future__ import annotations
@@ -9,18 +12,7 @@ from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 
-from mcp_server.handlers import (
-    checkpoint,
-    consolidate,
-    get_grooming_health,
-    get_telemetry,
-    import_sessions,
-    memory_stats,
-    narrative,
-    recall,
-    remember,
-    unified_search,
-)
+from mcp_server.handlers import recall, remember, unified_search
 from mcp_server.infrastructure.memory_config import root_agent_topic
 from mcp_server.tool_error_handler import safe_handler
 from mcp_server.handlers._tool_meta import tool_kwargs
@@ -31,29 +23,15 @@ from mcp_server.handlers._tool_meta import tool_kwargs
 SCHEMAS: dict[str, dict] = {
     "remember": remember.schema,
     "recall": recall.schema,
-    "memory_stats": memory_stats.schema,
-    "checkpoint": checkpoint.schema,
-    "narrative": narrative.schema,
-    "consolidate": consolidate.schema,
-    "import_sessions": import_sessions.schema,
     "unified_search": unified_search.schema,
-    "get_telemetry": get_telemetry.schema,
-    "get_grooming_health": get_grooming_health.schema,
 }
 
 
 def register(mcp: MCPServer) -> None:
-    """Register Tier 1 memory read/write tools on the MCPServer instance."""
+    """Register remember, recall, and unified_search on the MCPServer instance."""
     _register_remember(mcp)
     _register_recall(mcp)
-    _register_memory_stats(mcp)
-    _register_checkpoint(mcp)
-    _register_narrative(mcp)
-    _register_consolidate(mcp)
-    _register_import_sessions(mcp)
     _register_unified_search(mcp)
-    _register_get_telemetry(mcp)
-    _register_get_grooming_health(mcp)
 
 
 def _register_remember(mcp: MCPServer) -> None:
@@ -72,6 +50,9 @@ def _register_remember(mcp: MCPServer) -> None:
             supersedes_id: int | None = None,
             write_class: str | None = None,
             origin_tool: str | None = None,
+            is_global: bool = False,
+            created_at: str | None = None,
+            initial_heat: float | None = None,
         ) -> dict[str, Any]:
             """Store a memory through the predictive coding write gate."""
             return await safe_handler(
@@ -86,6 +67,9 @@ def _register_remember(mcp: MCPServer) -> None:
                     "supersedes_id": supersedes_id,
                     "write_class": write_class,
                     "origin_tool": origin_tool,
+                    "is_global": is_global,
+                    "created_at": created_at,
+                    "initial_heat": initial_heat,
                 },
                 tool_name="remember",
             )
@@ -107,6 +91,9 @@ def _register_remember(mcp: MCPServer) -> None:
         supersedes_id: int | None = None,
         write_class: str | None = None,
         origin_tool: str | None = None,
+        is_global: bool = False,
+        created_at: str | None = None,
+        initial_heat: float | None = None,
     ) -> dict[str, Any]:
         """Store a memory through the predictive coding write gate."""
         return await safe_handler(
@@ -122,9 +109,55 @@ def _register_remember(mcp: MCPServer) -> None:
                 "supersedes_id": supersedes_id,
                 "write_class": write_class,
                 "origin_tool": origin_tool,
+                "is_global": is_global,
+                "created_at": created_at,
+                "initial_heat": initial_heat,
             },
             tool_name="remember",
         )
+
+
+async def _do_recall(
+    rooted: bool,
+    query: str,
+    domain: str | None,
+    directory: str | None,
+    max_results: int,
+    min_heat: float,
+    agent_topic: str | None,
+    include_related: bool,
+    format: str,
+    memory_id: int | None,
+    content_offset: int,
+    project_root: str | None,
+    exact_id: bool,
+    include_low_signal: bool,
+    cross_domain: bool,
+    sa_mode: str,
+    tags_any: list[str] | None,
+    tags_all: list[str] | None,
+) -> dict[str, Any]:
+    """Shared recall dispatch; ``rooted`` forces agent_topic=None."""
+    payload = {
+        "query": query,
+        "domain": domain,
+        "directory": directory,
+        "max_results": max_results,
+        "min_heat": min_heat,
+        "agent_topic": None if rooted else agent_topic,
+        "include_related": include_related,
+        "format": format,
+        "memory_id": memory_id,
+        "content_offset": content_offset,
+        "project_root": project_root,
+        "exact_id": exact_id,
+        "include_low_signal": include_low_signal,
+        "cross_domain": cross_domain,
+        "sa_mode": sa_mode,
+        "tags_any": tags_any or [],
+        "tags_all": tags_all or [],
+    }
+    return await safe_handler(recall.handler, payload, tool_name="recall")
 
 
 def _register_recall(mcp: MCPServer) -> None:
@@ -145,24 +178,32 @@ def _register_recall(mcp: MCPServer) -> None:
             content_offset: int = 0,
             project_root: str | None = None,
             exact_id: bool = False,
+            include_low_signal: bool = False,
+            cross_domain: bool = False,
+            sa_mode: str = "tail",
+            tags_any: list[str] | None = None,
+            tags_all: list[str] | None = None,
         ) -> dict[str, Any]:
             """Retrieve memories using multi-signal fusion."""
-            return await safe_handler(
-                recall.handler,
-                {
-                    "query": query,
-                    "domain": domain,
-                    "directory": directory,
-                    "max_results": max_results,
-                    "min_heat": min_heat,
-                    "include_related": include_related,
-                    "format": format,
-                    "memory_id": memory_id,
-                    "content_offset": content_offset,
-                    "project_root": project_root,
-                    "exact_id": exact_id,
-                },
-                tool_name="recall",
+            return await _do_recall(
+                True,
+                query,
+                domain,
+                directory,
+                max_results,
+                min_heat,
+                None,
+                include_related,
+                format,
+                memory_id,
+                content_offset,
+                project_root,
+                exact_id,
+                include_low_signal,
+                cross_domain,
+                sa_mode,
+                tags_any,
+                tags_all,
             )
 
         return
@@ -184,170 +225,32 @@ def _register_recall(mcp: MCPServer) -> None:
         content_offset: int = 0,
         project_root: str | None = None,
         exact_id: bool = False,
+        include_low_signal: bool = False,
+        cross_domain: bool = False,
+        sa_mode: str = "tail",
+        tags_any: list[str] | None = None,
+        tags_all: list[str] | None = None,
     ) -> dict[str, Any]:
         """Retrieve memories using multi-signal fusion."""
-        return await safe_handler(
-            recall.handler,
-            {
-                "query": query,
-                "domain": domain,
-                "directory": directory,
-                "max_results": max_results,
-                "min_heat": min_heat,
-                "agent_topic": agent_topic,
-                "include_related": include_related,
-                "format": format,
-                "memory_id": memory_id,
-                "content_offset": content_offset,
-                "project_root": project_root,
-                "exact_id": exact_id,
-            },
-            tool_name="recall",
-        )
-
-
-def _register_memory_stats(mcp: MCPServer) -> None:
-    @mcp.tool(
-        name="memory_stats",
-        **tool_kwargs(memory_stats.schema),
-    )
-    async def tool_memory_stats() -> dict[str, Any]:
-        """Memory system diagnostics."""
-        return await safe_handler(memory_stats.handler, {}, tool_name="memory_stats")
-
-
-def _register_checkpoint(mcp: MCPServer) -> None:
-    @mcp.tool(
-        name="checkpoint",
-        **tool_kwargs(checkpoint.schema),
-    )
-    async def tool_checkpoint(
-        action: str,
-        directory: str | None = None,
-        current_task: str | None = None,
-        files_being_edited: list[str] | None = None,
-        key_decisions: list[str] | None = None,
-        open_questions: list[str] | None = None,
-        next_steps: list[str] | None = None,
-        active_errors: list[str] | None = None,
-        custom_context: str | None = None,
-        session_id: str | None = None,
-    ) -> dict[str, Any]:
-        """Save or restore working state for hippocampal replay."""
-        return await safe_handler(
-            checkpoint.handler,
-            {
-                "action": action,
-                "directory": directory or "",
-                "current_task": current_task or "",
-                "files_being_edited": files_being_edited or [],
-                "key_decisions": key_decisions or [],
-                "open_questions": open_questions or [],
-                "next_steps": next_steps or [],
-                "active_errors": active_errors or [],
-                "custom_context": custom_context or "",
-                "session_id": session_id or "default",
-            },
-            tool_name="checkpoint",
-        )
-
-
-def _register_narrative(mcp: MCPServer) -> None:
-    @mcp.tool(
-        name="narrative",
-        **tool_kwargs(narrative.schema),
-    )
-    async def tool_narrative(
-        directory: str | None = None,
-        domain: str | None = None,
-        brief: bool = False,
-    ) -> dict[str, Any]:
-        """Generate project narrative from stored memories."""
-        return await safe_handler(
-            narrative.handler,
-            {
-                "directory": directory,
-                "domain": domain,
-                "brief": brief,
-            },
-            tool_name="narrative",
-        )
-
-
-def _register_consolidate(mcp: MCPServer) -> None:
-    @mcp.tool(
-        name="consolidate",
-        **tool_kwargs(consolidate.schema),
-    )
-    async def tool_consolidate(
-        decay: bool = True,
-        compress: bool = True,
-        cls: bool = True,
-        memify: bool = True,
-        deep: bool = False,
-    ) -> dict[str, Any]:
-        """Run memory maintenance: decay, compression, CLS, memify."""
-        return await safe_handler(
-            consolidate.handler,
-            {
-                "decay": decay,
-                "compress": compress,
-                "cls": cls,
-                "memify": memify,
-                "deep": deep,
-            },
-            tool_name="consolidate",
-        )
-
-
-def _register_import_sessions(mcp: MCPServer) -> None:
-    @mcp.tool(
-        name="import_sessions",
-        **tool_kwargs(import_sessions.schema),
-    )
-    async def tool_import_sessions(
-        project: str | None = None,
-        domain: str | None = None,
-        min_importance: float = 0.4,
-        max_sessions: int = 0,
-        dry_run: bool = False,
-    ) -> dict[str, Any]:
-        """Import conversation history into the memory store.
-
-        Streams JSONL files using head and tail windows."""
-        # source: ADR-0698
-        return await safe_handler(
-            import_sessions.handler,
-            {
-                "project": project or "",
-                "domain": domain or "",
-                "min_importance": min_importance,
-                "max_sessions": max_sessions,
-                "dry_run": dry_run,
-            },
-            tool_name="import_sessions",
-        )
-
-
-def _register_get_telemetry(mcp: MCPServer) -> None:
-    @mcp.tool(
-        name="get_telemetry",
-        **tool_kwargs(get_telemetry.schema),
-    )
-    async def tool_get_telemetry() -> dict[str, Any]:
-        """Return per-op counters + read/write ratio (Popper C6)."""
-        return await safe_handler(get_telemetry.handler, {}, tool_name="get_telemetry")
-
-
-def _register_get_grooming_health(mcp: MCPServer) -> None:
-    @mcp.tool(
-        name="get_grooming_health",
-        **tool_kwargs(get_grooming_health.schema),
-    )
-    async def tool_get_grooming_health() -> dict[str, Any]:
-        """Backlog + staleness for wiki/distillation/promotion grooming."""
-        return await safe_handler(
-            get_grooming_health.handler, {}, tool_name="get_grooming_health"
+        return await _do_recall(
+            False,
+            query,
+            domain,
+            directory,
+            max_results,
+            min_heat,
+            agent_topic,
+            include_related,
+            format,
+            memory_id,
+            content_offset,
+            project_root,
+            exact_id,
+            include_low_signal,
+            cross_domain,
+            sa_mode,
+            tags_any,
+            tags_all,
         )
 
 
@@ -363,6 +266,8 @@ def _register_unified_search(mcp: MCPServer) -> None:
         k: int = 60,
         project_root: str | None = None,
         exact_id: bool = False,
+        cross_domain: bool = False,
+        sa_mode: str = "tail",
     ) -> dict[str, Any]:
         """Fuse Cortex recall with AP code search using reciprocal rank fusion."""
         # source: ADR-0698
@@ -375,6 +280,8 @@ def _register_unified_search(mcp: MCPServer) -> None:
                 "k": k,
                 "project_root": project_root,
                 "exact_id": exact_id,
+                "cross_domain": cross_domain,
+                "sa_mode": sa_mode,
             },
             tool_name="unified_search",
         )
