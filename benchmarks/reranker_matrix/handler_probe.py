@@ -70,7 +70,12 @@ def store_reply(observations: dict):
 
 
 def fetch_stage(multiplier: int, observations: dict):
-    ns = {"trusted_origins_at_read": lambda: (), "UNTRUSTED_ORIGIN_FACTOR": 1.0}
+    # untrusted_origin_factor: renamed from the UNTRUSTED_ORIGIN_FACTOR
+    # module constant to a function, issue #560 (core/ may not import os).
+    ns = {
+        "trusted_origins_at_read": lambda: (),
+        "untrusted_origin_factor": lambda: 1.0,
+    }
     original = source_function(
         "mcp_server/core/pg_recall_context.py", "_wrrf_fetch", ns
     )

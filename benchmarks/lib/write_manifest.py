@@ -97,6 +97,7 @@ def reranker_fields() -> dict:
     try:
         # noqa: PLC0415 — ImportError-probe boundary: the except arm IS the
         # degraded mode (reranker_state "unresolved" in the manifest).
+        import benchmarks.lib._composition_root_wiring  # noqa: PLC0415,F401 — source: issue #560
         from mcp_server.core.reranker import (  # noqa: PLC0415
             ensure_reranker_loaded,
             model_sha256,

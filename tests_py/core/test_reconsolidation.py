@@ -1,15 +1,31 @@
 """Tests for mcp_server.core.reconsolidation — memory lability after retrieval."""
 
+import posixpath
+
 import pytest
 from datetime import datetime, timezone, timedelta
 
 from mcp_server.core.reconsolidation import (
+    _posix_dirname,
     compute_mismatch,
     decide_action,
     merge_content,
     compute_plasticity_decay,
     update_stability,
 )
+
+
+class TestPosixDirname:
+    """core/reconsolidation.py may not import os (issue #560); pin the
+    pure-string replacement equal to posixpath.dirname (a test, not core,
+    may import posixpath)."""
+
+    @pytest.mark.parametrize(
+        "path",
+        ["a/b/c", "a/b/", "a", "/a/b", "", "/a", "a//b", "./a/b", "/src", "/"],
+    )
+    def test_matches_posixpath_dirname(self, path):
+        assert _posix_dirname(path) == posixpath.dirname(path)
 
 
 class TestComputeMismatch:

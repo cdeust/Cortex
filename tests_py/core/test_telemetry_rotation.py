@@ -17,8 +17,11 @@ class TestTelemetryRotation(unittest.TestCase):
     ) -> None:
         script = """
 import json
+import os
 from mcp_server.core import telemetry
+from mcp_server.core.environment import configure_core_environment_reader
 from mcp_server.shared import log_rotation
+configure_core_environment_reader(os.environ.get)
 telemetry.record('fixture', latency_ms=1, bytes_in=2, bytes_out=3)
 log_rotation.MAX_LOG_BYTES = telemetry._LOG_PATH.stat().st_size
 telemetry.record('fixture', latency_ms=4, bytes_in=5, bytes_out=6)
@@ -46,8 +49,11 @@ print(json.dumps(telemetry.snapshot()))
 
     def test_write_failure_still_emits_diagnostic_and_preserves_counters(self) -> None:
         script = """
+import os
 from mcp_server.core import telemetry
-telemetry._LOG_PATH.mkdir()
+from mcp_server.core.environment import configure_core_environment_reader
+configure_core_environment_reader(os.environ.get)
+telemetry._LOG_PATH.mkdir(parents=True)
 telemetry.record('fixture', latency_ms=1)
 print(telemetry.snapshot()['fixture']['count'])
 """

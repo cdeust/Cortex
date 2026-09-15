@@ -14,6 +14,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 
+import benchmarks.lib._composition_root_wiring  # noqa: E402,F401 — source: issue #560
 import psycopg  # noqa: E402
 
 from benchmarks.forgetting_curve import criteria  # noqa: E402

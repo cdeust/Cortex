@@ -24,6 +24,10 @@ source: issue #560
 
 from __future__ import annotations
 
+import os
+
+from mcp_server.core.environment import configure_core_environment_reader
+from mcp_server.core.reranker_model import configure_reranker_filesystem
 from mcp_server.core.wiki_axis_registry import (
     configure_default_wiki_root,
     configure_schema_file_reader,
@@ -32,6 +36,11 @@ from mcp_server.core.wiki_coverage import configure_wiki_coverage_filesystem
 from mcp_server.core.wiki_coverage_dashboard import configure_dashboard_filesystem
 from mcp_server.core.wiki_drift import configure_wiki_drift_filesystem
 from mcp_server.infrastructure.config import WIKI_ROOT
+from mcp_server.infrastructure.reranker_cache import (
+    reranker_cache_dir,
+    reranker_model_exists,
+    reranker_model_sha256,
+)
 from mcp_server.infrastructure.wiki_axis_fs import read_schema_files
 from mcp_server.infrastructure.wiki_coverage_fs import (
     domain_kind_membership,
@@ -54,21 +63,23 @@ from mcp_server.infrastructure.wiki_drift_fs import (
     wiki_page_mtime,
 )
 
-_WIRED = False
-
 
 def wire_composition_root() -> None:
     """Wire every core/ injection seam to its real implementation.
 
     Precondition: none.
-    Postcondition: every seam this module knows about is configured;
-    idempotent — a second call is a no-op, so every entry point can call
-    this unconditionally without coordinating with any other caller.
+    Postcondition: every seam this module knows about is configured.
+    Idempotent: a second call re-applies the same bindings (a few global
+    assignments), so every entry point can call it unconditionally, and a
+    seam reset by a test is restored by the next call.
 
     source: issue #560"""
-    global _WIRED
-    if _WIRED:
-        return
+    configure_core_environment_reader(os.environ.get)
+    configure_reranker_filesystem(
+        cache_dir=reranker_cache_dir,
+        model_exists=reranker_model_exists,
+        model_sha256=reranker_model_sha256,
+    )
     configure_default_wiki_root(lambda: str(WIKI_ROOT))
     configure_schema_file_reader(read_schema_files)
     configure_wiki_coverage_filesystem(
@@ -91,4 +102,3 @@ def wire_composition_root() -> None:
         wiki_root_is_dir=wiki_root_is_dir,
         write_dashboard_pages=write_dashboard_pages,
     )
-    _WIRED = True

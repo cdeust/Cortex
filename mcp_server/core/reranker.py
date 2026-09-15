@@ -12,6 +12,7 @@ from mcp_server.core.reranker_model import (
     _MODEL_NAME,
     _OFFLINE_ENV,
     RerankerStatus,
+    _model_exists,
     _model_path,
     _offline_requested,
     model_sha256,
@@ -68,7 +69,7 @@ def _ensure_reranker() -> Any:
         return None
     cache = reranker_cache_dir()
     try:
-        if _offline_requested() and not _model_path().is_file():
+        if _offline_requested() and not _model_exists():
             raise FileNotFoundError(
                 f"{_OFFLINE_ENV} is set and the cached model file is absent "
                 f"({_model_path()}); refusing to download it, because "

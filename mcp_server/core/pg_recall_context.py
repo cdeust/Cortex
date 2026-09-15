@@ -12,7 +12,7 @@ from mcp_server.core.capture_origin import trusted_origins_at_read
 from mcp_server.core.pg_recall_weights import compute_pg_weights
 from mcp_server.core.query_intent import classify_query_intent
 from mcp_server.core.recall_pipeline import familiarity_triage
-from mcp_server.core.retrieval_dispatch import UNTRUSTED_ORIGIN_FACTOR
+from mcp_server.core.retrieval_dispatch import untrusted_origin_factor
 from mcp_server.shared.memory_embeddings import MemoryEmbeddings
 
 
@@ -105,5 +105,5 @@ def _wrrf_fetch(ctx: RecallContext, weights: dict) -> list[dict]:
         include_globals=ctx.include_globals,
         # source: ADR-0218
         trusted_origins=trusted_origins_at_read(),
-        untrusted_factor=UNTRUSTED_ORIGIN_FACTOR,
+        untrusted_factor=untrusted_origin_factor(),
     )

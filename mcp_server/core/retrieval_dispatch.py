@@ -4,9 +4,9 @@ source: ADR-0247"""
 
 from __future__ import annotations
 
-import os
 from typing import Any, Callable
 
+from mcp_server.core.environment import read_environment_variable
 from mcp_server.core.query_decomposition import decompose_query
 from mcp_server.core.query_intent import QueryIntent
 from mcp_server.core.reranker import rerank_results
@@ -18,10 +18,23 @@ from mcp_server.shared.telemetry_context import set_retrieval_tier
 # source: ADR-0247
 
 
-_UNTRUSTED_FACTOR_OVERRIDE = os.environ.get("CORTEX_UNTRUSTED_ORIGIN_FACTOR")
-UNTRUSTED_ORIGIN_FACTOR = (
-    float(_UNTRUSTED_FACTOR_OVERRIDE) if _UNTRUSTED_FACTOR_OVERRIDE else 0.7
-)
+# Resolved lazily on first use (not at module-def time; see
+# core/environment.py) and cached forever after, matching the pre-#560
+# "read at import" behavior. Fail-fast parsing preserved: a malformed
+# value still raises ValueError. source: issue #560
+_untrusted_origin_factor_cache: float | None = None
+
+
+def untrusted_origin_factor() -> float:
+    """The trust-discount factor applied to untrusted-origin candidates.
+
+    source: ADR-0247 (issue #560)"""
+    global _untrusted_origin_factor_cache
+    if _untrusted_origin_factor_cache is None:
+        override = read_environment_variable("CORTEX_UNTRUSTED_ORIGIN_FACTOR")
+        _untrusted_origin_factor_cache = float(override) if override else 0.7
+    return _untrusted_origin_factor_cache
+
 
 SIMPLE_INTENTS = {
     QueryIntent.GENERAL,

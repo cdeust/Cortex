@@ -10,6 +10,7 @@ readiness).
 
 from __future__ import annotations
 
+import pytest
 
 from mcp_server.doctor import (
     CHECKS,
@@ -20,6 +21,7 @@ from mcp_server.doctor import (
     _python_version,
     _sqlite_store,
     active_checks,
+    ensure_reranker_ready,
     run,
 )
 
@@ -91,3 +93,72 @@ class TestBackendAwareChecks:
             memory_config.get_memory_settings.cache_clear()
         assert check.ok is True
         assert "memories" in check.detail
+
+
+class TestEnsureRerankerReady:
+    """core/reranker_model.py's filesystem seam (issue #560) is unwired
+    unless a composition root configured it first; ensure_reranker_ready()
+    is the one bare scripts (CI's reranker preload, this test) must call
+    instead of core.reranker.ensure_reranker_loaded() directly. Regression
+    cover for the 2026-09-15 CI failure: `.github/actions/test-suite`'s
+    preload step called the unwired core function and raised RuntimeError
+    on every Python version. Asserts the wiring only, not a downloaded
+    model: the SQLite CI job does not preload FlashRank, so asserting
+    `status.state == "loaded"` here failed in that job (2026-09-16
+    review)."""
+
+    @staticmethod
+    def _reset_reranker_state(reranker, reranker_model):
+        """Simulate a bare script that never imported __main__.py or
+        conftest.py's composition-root wiring, and force a fresh load
+        attempt regardless of what earlier tests already cached. Returns
+        the saved state for restoration."""
+        saved = (
+            reranker_model._cache_dir_provider,
+            reranker_model._model_exists_provider,
+            reranker_model._model_sha256_provider,
+            reranker._flashrank_instance,
+            reranker._flashrank_failed,
+            reranker._flashrank_load_error,
+        )
+        reranker_model._cache_dir_provider = None
+        reranker_model._model_exists_provider = None
+        reranker_model._model_sha256_provider = None
+        reranker._flashrank_instance = None
+        reranker._flashrank_failed = False
+        reranker._flashrank_load_error = None
+        return saved
+
+    @staticmethod
+    def _restore_reranker_state(reranker, reranker_model, saved):
+        (
+            reranker_model._cache_dir_provider,
+            reranker_model._model_exists_provider,
+            reranker_model._model_sha256_provider,
+            reranker._flashrank_instance,
+            reranker._flashrank_failed,
+            reranker._flashrank_load_error,
+        ) = saved
+
+    def test_self_wires_and_loads_even_when_the_seam_was_reset(self):
+        from mcp_server.core import reranker, reranker_model
+
+        saved = self._reset_reranker_state(reranker, reranker_model)
+        try:
+            with pytest.raises(RuntimeError, match="not configured"):
+                reranker_model.reranker_cache_dir()
+
+            # Assert the wiring, not a downloaded model: the SQLite CI job
+            # does not preload FlashRank, so status.state could legitimately
+            # be "failed" there. What this test must prove is that the
+            # seam is configured -- reranker_cache_dir() no longer raises,
+            # regardless of whether the real model file is on disk.
+            status = ensure_reranker_ready()
+
+            assert status is not None
+            assert reranker_model._cache_dir_provider is not None
+            assert reranker_model._model_exists_provider is not None
+            assert reranker_model._model_sha256_provider is not None
+            reranker_model.reranker_cache_dir()  # must not raise
+        finally:
+            self._restore_reranker_state(reranker, reranker_model, saved)

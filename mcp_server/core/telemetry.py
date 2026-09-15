@@ -6,18 +6,17 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import threading
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any, Protocol, TypedDict, runtime_checkable
 
+from mcp_server.core.environment import read_environment_variable
 from mcp_server.shared.telemetry_context import retrieval_metrics
-from mcp_server.shared.log_rotation import open_rotating_log
+from mcp_server.shared.log_rotation import methodology_log_path, open_rotating_log
 
 logger = logging.getLogger(__name__)
 
@@ -59,16 +58,13 @@ def set_exporter(exporter: TelemetryExporter | None) -> None:
 # source: ADR-0282
 
 
-_root_override = os.environ.get("CORTEX_CLAUDE_DIR", "").strip()
-_LOG_PATH = (
-    (Path(_root_override).expanduser() if _root_override else Path.home() / ".claude")
-    / "methodology"
-    / "telemetry.jsonl"
-)
-try:
-    _LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-except OSError:
-    logger.warning("Cannot create telemetry directory: %s", _LOG_PATH.parent)
+# methodology_log_path (shared/, permitted) applies the same
+# $CORTEX_CLAUDE_DIR/$HOME resolution this module used to duplicate; core
+# never touches os/pathlib itself (issue #560). No eager mkdir here:
+# open_rotating_log() below already creates the parent directory on every
+# write, so a duplicate check at import time added no signal, only a
+# second place for the same failure to be reported.
+_LOG_PATH = methodology_log_path("telemetry.jsonl")
 
 _lock = threading.Lock()
 _counters: dict[str, dict[str, float | int]] = {}
@@ -114,7 +110,7 @@ def capture_records() -> Iterator[list[TelemetrySample]]:
 
 def _disabled() -> bool:
     """source: ADR-0282"""
-    return os.environ.get("CORTEX_TELEMETRY_DISABLED") == "1"
+    return read_environment_variable("CORTEX_TELEMETRY_DISABLED") == "1"
 
 
 def record(

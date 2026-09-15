@@ -20,6 +20,7 @@ from mcp_server.shared.telemetry_context import operation_metrics
 
 logger = logging.getLogger(__name__)
 
+
 if TYPE_CHECKING:
     from _typeshed import ReadableBuffer
 

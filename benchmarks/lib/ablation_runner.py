@@ -28,6 +28,7 @@ _ROOT = Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
+import benchmarks.lib._composition_root_wiring  # noqa: E402,F401 — source: issue #560
 from mcp_server.core import ablation as _ablation  # noqa: E402
 from mcp_server.core.ablation import Mechanism  # noqa: E402
 from benchmarks.lib.db_snapshot import (  # noqa: E402

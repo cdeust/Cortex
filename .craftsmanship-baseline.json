@@ -629,11 +629,6 @@
     },
     {
       "file": "mcp_server/core/ablation.py",
-      "kind": "layer-violation",
-      "detail": "os"
-    },
-    {
-      "file": "mcp_server/core/ablation.py",
       "kind": "unsourced-constant",
       "detail": "_CRITICAL_IMPACT_THRESHOLD"
     },
@@ -1001,11 +996,6 @@
       "file": "mcp_server/core/conflict_monitor.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"
-    },
-    {
-      "file": "mcp_server/core/conflict_monitor.py",
-      "kind": "layer-violation",
-      "detail": "os"
     },
     {
       "file": "mcp_server/core/conflict_monitor.py",
@@ -1773,11 +1763,6 @@
       "detail": "mcp_server.observability"
     },
     {
-      "file": "mcp_server/core/pg_recall_weights.py",
-      "kind": "layer-violation",
-      "detail": "os"
-    },
-    {
       "file": "mcp_server/core/platt_calibration.py",
       "kind": "method-size",
       "detail": "fit_platt"
@@ -1889,11 +1874,6 @@
     },
     {
       "file": "mcp_server/core/recall_pipeline.py",
-      "kind": "layer-violation",
-      "detail": "os"
-    },
-    {
-      "file": "mcp_server/core/recall_pipeline.py",
       "kind": "method-size",
       "detail": "_resolve_query_entity_ids"
     },
@@ -1956,11 +1936,6 @@
       "file": "mcp_server/core/reconsolidation.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"
-    },
-    {
-      "file": "mcp_server/core/reconsolidation.py",
-      "kind": "layer-violation",
-      "detail": "os"
     },
     {
       "file": "mcp_server/core/reconsolidation.py",
@@ -2043,24 +2018,9 @@
       "detail": "REFIT_EVERY"
     },
     {
-      "file": "mcp_server/core/reranker_model.py",
-      "kind": "layer-violation",
-      "detail": "os"
-    },
-    {
-      "file": "mcp_server/core/reranker_model.py",
-      "kind": "layer-violation",
-      "detail": "pathlib"
-    },
-    {
       "file": "mcp_server/core/retrieval_dispatch.py",
       "kind": "layer-violation",
       "detail": "mcp_server.observability"
-    },
-    {
-      "file": "mcp_server/core/retrieval_dispatch.py",
-      "kind": "layer-violation",
-      "detail": "os"
     },
     {
       "file": "mcp_server/core/retrieval_dispatch.py",
@@ -2508,24 +2468,9 @@
       "detail": "_DEFAULT_TRIGGER_IMPORTANCE"
     },
     {
-      "file": "mcp_server/core/telemetry.py",
-      "kind": "layer-violation",
-      "detail": "os"
-    },
-    {
-      "file": "mcp_server/core/telemetry.py",
-      "kind": "layer-violation",
-      "detail": "pathlib"
-    },
-    {
       "file": "mcp_server/core/thermodynamics.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"
-    },
-    {
-      "file": "mcp_server/core/thermodynamics.py",
-      "kind": "layer-violation",
-      "detail": "os"
     },
     {
       "file": "mcp_server/core/thermodynamics.py",

@@ -6,7 +6,6 @@ source: ADR-0134"""
 from __future__ import annotations
 
 import math
-import os as _os
 import re
 from dataclasses import dataclass
 from typing import Any
@@ -28,21 +27,6 @@ _MIN_CANDIDATES: int = 2
 # Softmax temperature. 1.0 = use the raw scores; higher flattens the
 # distribution (more apparent competition), lower sharpens it.
 _SOFTMAX_TEMPERATURE: float = 1.0
-
-
-def _env_float(name: str, default: float) -> float:
-    """Read a float from ``os.environ[name]`` falling back to ``default``.
-
-    Malformed values fall back silently — this is a tuning knob, not a
-    load-bearing input, and a bad env var must never fail a recall.
-    """
-    raw = _os.environ.get(name)
-    if raw is None:
-        return default
-    try:
-        return float(raw)
-    except (TypeError, ValueError):
-        return default
 
 
 # ── Lexical polarity / topic helpers ──────────────────────────────────────────

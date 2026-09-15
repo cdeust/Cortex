@@ -4,7 +4,6 @@ source: ADR-0236"""
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Literal
@@ -28,6 +27,19 @@ def _temporal_distance(memory_last_accessed: str | None) -> float:
         return min(hours / 168.0, 1.0)  # normalize to 1 week
     except (ValueError, TypeError):
         return 0.5
+
+
+def _posix_dirname(path: str) -> str:
+    """Pure-string equivalent of ``posixpath.dirname`` (core may not import
+    os; issue #560). ``memory_directory``/``current_directory`` are
+    project-relative posix-style strings, never raw OS paths.
+
+    source: issue #560"""
+    sep_index = path.rfind("/") + 1
+    head = path[:sep_index]
+    if head and head != "/" * len(head):
+        head = head.rstrip("/")
+    return head
 
 
 def _tag_divergence(memory_tags: set[str], context_tokens: set[str]) -> float:
@@ -62,7 +74,7 @@ def compute_mismatch(
 
     if memory_directory == current_directory:
         dir_distance = 0.0
-    elif os.path.dirname(memory_directory) == os.path.dirname(current_directory):
+    elif _posix_dirname(memory_directory) == _posix_dirname(current_directory):
         dir_distance = 0.5
     else:
         dir_distance = 1.0

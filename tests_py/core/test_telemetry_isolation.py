@@ -11,7 +11,10 @@ import sys
 def test_fresh_process_respects_configuration_root(tmp_path):
     isolated = tmp_path / "claude"
     script = (
+        "import os; "
         "from mcp_server.core import telemetry; "
+        "from mcp_server.core.environment import configure_core_environment_reader; "
+        "configure_core_environment_reader(os.environ.get); "
         "telemetry.record('fixture', latency_ms=0); "
         "print(telemetry.summary()['log_path'])"
     )

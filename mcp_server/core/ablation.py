@@ -4,9 +4,10 @@ source: ADR-0095"""
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 from enum import Enum
+
+from mcp_server.core.environment import read_environment_variable
 
 
 def is_mechanism_disabled(mechanism: "Mechanism | str") -> bool:
@@ -14,7 +15,11 @@ def is_mechanism_disabled(mechanism: "Mechanism | str") -> bool:
 
     source: ADR-0095
 
-    Reads os.environ on every call.
+    Reads the injected environment reader (mcp_server.core.environment) on
+    every call, never memoized. Raises RuntimeError if no composition root
+    configured the reader yet -- see that module's docstring for why a
+    silent "treat as unset" default is not acceptable here (it would make
+    ablation studies silently measure the un-ablated system).
 
     source: ADR-0095
 
@@ -25,7 +30,7 @@ def is_mechanism_disabled(mechanism: "Mechanism | str") -> bool:
         name = mechanism.name
     else:
         name = str(mechanism).upper().replace("-", "_")
-    return os.environ.get(f"CORTEX_ABLATE_{name}") == "1"
+    return read_environment_variable(f"CORTEX_ABLATE_{name}") == "1"
 
 
 class Mechanism(Enum):

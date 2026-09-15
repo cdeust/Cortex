@@ -5,9 +5,8 @@ source: ADR-0221
 
 from __future__ import annotations
 
-import os as _os
-
 from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
+from mcp_server.core.environment import read_environment_variable
 from mcp_server.core.query_intent import QueryIntent
 
 # source: ADR-0221
@@ -74,8 +73,8 @@ def compute_pg_weights(
     if overrides:
         base.update(overrides)
     if (
-        _os.environ.get("CORTEX_DECAY_DISABLED") == "1"
-        or _os.environ.get("CORTEX_HEAT_CONSTANT")
+        read_environment_variable("CORTEX_DECAY_DISABLED") == "1"
+        or read_environment_variable("CORTEX_HEAT_CONSTANT")
         or is_mechanism_disabled(Mechanism.ADAPTIVE_DECAY)
     ):
         base["heat"] = 0.0

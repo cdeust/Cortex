@@ -1,5 +1,6 @@
 """Tests for mcp_server.core.reranker — FlashRank cross-encoder + confidence."""
 
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -140,7 +141,7 @@ class TestRerankerCacheDir:
 
     def test_honors_xdg_cache_home(self, monkeypatch, tmp_path):
         monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
-        assert reranker_cache_dir() == tmp_path / "flashrank"
+        assert reranker_cache_dir() == str(tmp_path / "flashrank")
 
     def test_falls_back_to_home_cache(self, monkeypatch):
         monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
@@ -216,7 +217,7 @@ class TestModelSha256:
 
     def test_returns_hex_digest_when_model_present(self, monkeypatch, tmp_path):
         monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
-        model_path = reranker_mod._model_path()
+        model_path = Path(reranker_mod._model_path())
         model_path.parent.mkdir(parents=True, exist_ok=True)
         model_path.write_bytes(b"fake-onnx-weights")
         digest = model_sha256()
@@ -288,8 +289,9 @@ class TestOfflineGuard:
         monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
         path = reranker_mod._model_path()
         if present:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(b"not-a-real-onnx")
+            path_obj = Path(path)
+            path_obj.parent.mkdir(parents=True, exist_ok=True)
+            path_obj.write_bytes(b"not-a-real-onnx")
         return path
 
     def test_unset_env_does_not_request_offline(self, monkeypatch):

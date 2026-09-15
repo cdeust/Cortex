@@ -137,8 +137,8 @@ def test_cell_model_cache_and_state_restore_without_changing_defaults(tmp_path):
     ):
         with selected_cell(cell("l2-2x")):
             assert model._MODEL_NAME == ranker._MODEL_NAME == cell("l2-2x").model.name
-            assert (
-                model._model_path() == tmp_path / model._MODEL_NAME / model._MODEL_FILE
+            assert model._model_path() == str(
+                tmp_path / model._MODEL_NAME / model._MODEL_FILE
             )
             ranker._flashrank_instance = object()
     assert model._MODEL_NAME == ranker._MODEL_NAME == original

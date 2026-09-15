@@ -63,6 +63,8 @@ def _run(args: argparse.Namespace) -> dict[str, object]:
     # source: ADR-0822
     if str(REPO) not in sys.path:
         sys.path.insert(0, str(REPO))
+    import benchmarks.lib._composition_root_wiring  # noqa: PLC0415,F401 — source: issue #560
+
     # Deferred: these modules require NumPy and the optional embedding stack.
     from benchmarks.energy import measurement, workload  # noqa: PLC0415
 

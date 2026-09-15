@@ -13,6 +13,8 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 
+import benchmarks.lib._composition_root_wiring  # noqa: E402,F401 — source: issue #560
+
 # The core under test (the same functions production calls).
 from mcp_server.hooks.wiring import wire_composition_root  # noqa: E402 — source: issue #560
 

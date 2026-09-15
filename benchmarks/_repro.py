@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from typing import Any
 from importlib.metadata import version
 from mcp_server.core.reranker import ensure_reranker_loaded, model_sha256
+import benchmarks.lib._composition_root_wiring  # noqa: F401 — source: issue #560
 
 
 def _git_sha() -> str:

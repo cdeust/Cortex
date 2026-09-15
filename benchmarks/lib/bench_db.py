@@ -24,6 +24,7 @@ from mcp_server.core.pg_recall import (
 from mcp_server.core.reranker import ensure_reranker_loaded
 from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
 from mcp_server.infrastructure.pg_store import PgMemoryStore
+import benchmarks.lib._composition_root_wiring  # noqa: F401 — source: issue #560
 
 
 def _apply_capture_origin_mix(memories: list[dict[str, Any]]) -> None:

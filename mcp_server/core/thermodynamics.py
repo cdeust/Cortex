@@ -5,7 +5,6 @@ source: ADR-0283"""
 from __future__ import annotations
 
 import math
-import os
 import re
 from collections import Counter
 from datetime import datetime, timezone
@@ -13,15 +12,26 @@ from datetime import datetime, timezone
 from mcp_server.core import content_cues
 from mcp_server.shared.vader import vader_compound
 from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
+from mcp_server.core.environment import read_environment_variable
 from mcp_server.core.value_learning import retention_bonus
 
 # source: ADR-0283
 
 
-_DECAY_FACTOR_OVERRIDE = os.environ.get("CORTEX_DECAY_LAMBDA")
-_DECAY_FACTOR_DEFAULT = (
-    float(_DECAY_FACTOR_OVERRIDE) if _DECAY_FACTOR_OVERRIDE else 0.95
-)
+# Resolved lazily on first use (not at module-def time; see
+# core/environment.py) and cached forever after, matching the pre-#560
+# "read at import" behavior. Fail-fast parsing preserved: a malformed
+# value still raises ValueError. source: issue #560
+_decay_factor_default_cache: float | None = None
+
+
+def _decay_factor_default() -> float:
+    global _decay_factor_default_cache
+    if _decay_factor_default_cache is None:
+        override = read_environment_variable("CORTEX_DECAY_LAMBDA")
+        _decay_factor_default_cache = float(override) if override else 0.95
+    return _decay_factor_default_cache
+
 
 # ── Edmundson cue word sets ───────────────────────────────────────────────
 # Bonus words: domain-specific high-importance indicators (positive cue)
@@ -220,13 +230,15 @@ def compute_decay(
     confidence: float = 1.0,
     value: float = 0.5,
     *,
-    decay_factor: float = _DECAY_FACTOR_DEFAULT,
+    decay_factor: float | None = None,
     importance_decay_factor: float = 0.998,
     emotional_decay_resistance: float = 0.5,
 ) -> float:
     """Exponential forgetting: heat(t) = heat(0) * λ^t  (Ebbinghaus 1885).
 
     source: ADR-0283"""
+    if decay_factor is None:
+        decay_factor = _decay_factor_default()
     if hours_elapsed <= 0:
         return current_heat
 

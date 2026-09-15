@@ -12,11 +12,34 @@ from typing import Callable
 
 from mcp_server.observability import silent_failure
 from mcp_server.shared.platform import home_dir
+from mcp_server.core.reranker import ensure_reranker_loaded
+from mcp_server.hooks.wiring import wire_composition_root
 from mcp_server.handlers.admission import DEFAULT_SEMAPHORE
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 from mcp_server.infrastructure.backend_marker import effective_backend
 from mcp_server.doctor_mcp import run_mcp
+
+
+def ensure_reranker_ready():
+    """Self-wiring FlashRank preload for standalone callers (CI, `python -m
+    mcp_server.doctor`) that never import mcp_server/__main__.py.
+
+    Precondition: none.
+    Postcondition: core/reranker_model.py's filesystem seam is configured
+    (idempotent — safe to call more than once per process) before
+    ``ensure_reranker_loaded`` runs. Calling ``core.reranker.
+    ensure_reranker_loaded`` directly from a bare script raises
+    RuntimeError instead of loading, because nothing configured the seam
+    first (issue #560 CI regression, 2026-09-15:
+    `.github/actions/test-suite`'s reranker preload step did exactly that
+    and failed on every Python version). This is the composition root for
+    that preload — mcp_server/doctor.py already imports both core and
+    infrastructure freely, unlike core/ or infrastructure/ themselves.
+
+    source: ADR-0244 (issue #560)"""
+    wire_composition_root()
+    return ensure_reranker_loaded()
 
 
 class Check:

@@ -32,6 +32,7 @@ from benchmarks.lib.fusion import (
 )
 from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
 from mcp_server.core.reranker import reranker_cache_dir
+import benchmarks.lib._composition_root_wiring  # noqa: F401 — source: issue #560
 
 logger = logging.getLogger(__name__)
 

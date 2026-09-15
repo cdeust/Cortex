@@ -6,10 +6,10 @@ source: ADR-0235
 from __future__ import annotations
 
 import logging
-import os as _os
 from typing import Any
 
 from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
+from mcp_server.core.environment import read_environment_float
 from mcp_server.core.capture_origin import ORIGIN_UNKNOWN, is_trusted_at_read
 from mcp_server.observability import silent_failure
 from mcp_server.core import dual_process_retrieval as dpr, hopfield, conflict_monitor
@@ -49,43 +49,25 @@ _MIN_RERANK_CANDIDATES: int = 2
 _ENTITY_FALLBACK_TOKEN_MIN_LEN: int = 4
 
 
-def _env_float(name: str, default: float) -> float:
-    """Read a float from ``os.environ[name]`` falling back to ``default``.
-
-    source: ADR-0235"""
-    raw = _os.environ.get(name)
-    if raw is None:
-        return default
-    try:
-        return float(raw)
-    except ValueError:
-        return default
+# Lazily-resolved, process-lifetime-cached tuning knobs (env-var overrides).
+# Deferred to first *use* rather than read at module-def time (the
+# pre-#560 behavior): core/environment.py's reader is wired by the
+# composition root (__main__.py/conftest.py) possibly after this module is
+# first imported transitively, so reading at def time could silently miss
+# a real operator override. Nothing changes these vars after process
+# startup, so "resolved on first call, cached forever" is observably
+# identical to "resolved at import" for every caller. source: issue #560
+_TUNING_CACHE: dict[str, float] = {}
 
 
-# source: ADR-0235
+def _tuning_float(name: str, default: float) -> float:
+    """Resolve+cache one env-var tuning knob for the process lifetime.
 
+    source: issue #560"""
+    if name not in _TUNING_CACHE:
+        _TUNING_CACHE[name] = read_environment_float(name, default)
+    return _TUNING_CACHE[name]
 
-_HOPFIELD_BETA: float = _env_float("CORTEX_HOPFIELD_BETA", 0.30)
-# source: ADR-0235
-
-_HDC_BETA: float = _env_float("CORTEX_HDC_BETA", 0.20)
-# source: ADR-0235
-
-_SA_BETA: float = _env_float("CORTEX_SA_BETA", 0.25)
-
-# source: ADR-0235
-
-
-_DENDRITIC_DELTA: float = _env_float("CORTEX_DENDRITIC_DELTA", 0.10)
-
-# source: ADR-0235
-
-
-_EMOTIONAL_RETRIEVAL_BETA: float = _env_float("CORTEX_EMOTIONAL_RETRIEVAL_BETA", 0.20)
-# source: ADR-0235
-
-
-_MOOD_CONGRUENT_BETA: float = _env_float("CORTEX_MOOD_CONGRUENT_BETA", 0.15)
 
 # source: ADR-0235
 
@@ -206,7 +188,7 @@ def hopfield_complete(
     embedding_dim: int,
     *,
     hopfield_beta: float = 8.0,
-    blend_beta: float = _HOPFIELD_BETA,
+    blend_beta: float | None = None,
 ) -> list[dict[str, Any]]:
     """Reorder candidates by Hopfield attention rank, RRF-blended with WRRF.
 
@@ -216,6 +198,8 @@ def hopfield_complete(
     ``softmax(beta * X · query)``; we blend that rank with the WRRF rank.
 
     source: ADR-0235"""
+    if blend_beta is None:
+        blend_beta = _tuning_float("CORTEX_HOPFIELD_BETA", 0.30)
     if is_mechanism_disabled(Mechanism.HOPFIELD):
         return candidates
     if not candidates or q_emb is None:
@@ -258,7 +242,7 @@ def hdc_rerank(
     candidates: list[dict[str, Any]],
     query: str,
     *,
-    blend_beta: float = _HDC_BETA,
+    blend_beta: float | None = None,
 ) -> list[dict[str, Any]]:
     """Reorder candidates by HDC similarity, RRF-blended with WRRF.
 
@@ -266,6 +250,8 @@ def hdc_rerank(
     (bundle of word atoms + bigram binds); HDC similarity = dot/dim.
 
     source: ADR-0235"""
+    if blend_beta is None:
+        blend_beta = _tuning_float("CORTEX_HDC_BETA", 0.20)
     if is_mechanism_disabled(Mechanism.HDC):
         return candidates
     if not candidates:
@@ -410,7 +396,7 @@ def spreading_activation_expand(
     max_depth: int = 3,
     max_results: int = 50,
     min_heat: float = 0.05,
-    blend_beta: float = _SA_BETA,
+    blend_beta: float | None = None,
 ) -> list[dict[str, Any]]:
     """AUGMENT mode: expand the candidate pool with SA-reachable memories,
     then RRF blend (can reorder and outrank existing candidates).
@@ -420,6 +406,8 @@ def spreading_activation_expand(
     Disabled when ``CORTEX_ABLATE_SPREADING_ACTIVATION=1`` — returns
     input unchanged.
     """
+    if blend_beta is None:
+        blend_beta = _tuning_float("CORTEX_SA_BETA", 0.25)
     if not candidates:
         return candidates
     sa = _run_spread_activation(
@@ -597,11 +585,13 @@ def dendritic_modulate(
     query: str,
     store: Any = None,
     *,
-    delta: float = _DENDRITIC_DELTA,
+    delta: float | None = None,
 ) -> list[dict[str, Any]]:
     """Apply branch-affinity multiplicative modulation to candidate scores.
 
     source: ADR-0235"""
+    if delta is None:
+        delta = _tuning_float("CORTEX_DENDRITIC_DELTA", 0.10)
     if is_mechanism_disabled(Mechanism.DENDRITIC_CLUSTERS):
         return candidates
     if not candidates or delta <= 0.0:
@@ -654,7 +644,7 @@ def emotional_retrieval_rerank(
     candidates: list[dict[str, Any]],
     query: str,
     *,
-    blend_beta: float = _EMOTIONAL_RETRIEVAL_BETA,
+    blend_beta: float | None = None,
     valence_floor: float = _EMOTIONAL_QUERY_VALENCE_FLOOR,
 ) -> list[dict[str, Any]]:
     """Rerank by query-valence ↔ candidate-valence congruence.
@@ -666,6 +656,8 @@ def emotional_retrieval_rerank(
     *query's* valence (per-recall), not a session-level user mood state.
 
     source: ADR-0235"""
+    if blend_beta is None:
+        blend_beta = _tuning_float("CORTEX_EMOTIONAL_RETRIEVAL_BETA", 0.20)
     if is_mechanism_disabled(Mechanism.EMOTIONAL_RETRIEVAL):
         return candidates
     if not candidates:
@@ -912,7 +904,7 @@ def mood_congruent_rerank(
     candidates: list[dict[str, Any]],
     user_mood: float | None,
     *,
-    blend_beta: float = _MOOD_CONGRUENT_BETA,
+    blend_beta: float | None = None,
 ) -> list[dict[str, Any]]:
     """Rerank by user-mood ↔ candidate-valence congruence.
 
@@ -928,6 +920,8 @@ def mood_congruent_rerank(
     query text's inferred valence).
 
     source: ADR-0235"""
+    if blend_beta is None:
+        blend_beta = _tuning_float("CORTEX_MOOD_CONGRUENT_BETA", 0.15)
     if is_mechanism_disabled(Mechanism.MOOD_CONGRUENT_RERANK):
         return candidates
     if user_mood is None or not candidates:

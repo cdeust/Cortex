@@ -202,7 +202,7 @@ runs:
       shell: bash
       run: |
         for attempt in 1 2 3 4 5; do
-          python -c "from mcp_server.core.reranker import ensure_reranker_loaded as e; s = e(); assert s.state == 'loaded', s" && exit 0
+          python -c "from mcp_server.doctor import ensure_reranker_ready as e; s = e(); assert s.state == 'loaded', s" && exit 0
           echo "FlashRank pre-download attempt ${attempt} failed; retrying in $((attempt * 10))s" >&2
           sleep $((attempt * 10))
         done
