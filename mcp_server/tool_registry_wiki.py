@@ -67,22 +67,8 @@ def _register_wiki_write(mcp: MCPServer) -> None:
         tags: list[str] | None = None,
         memory_ids: list[int] | None = None,
         project_root: str | None = None,
-        title: str | None = None,
-        summary: str | None = None,
-        body: str | None = None,
     ) -> dict[str, Any]:
-        """Author a wiki page using create, append, or replace mode.
-
-        title/summary/body are declared on wiki_write's own inputSchema
-        (template-rendering fields) but are NOT yet consumed by
-        wiki_write.handler() — a pre-existing gap in the handler
-        (verified: no `args.get("title"|"summary"|"body")` read anywhere
-        in wiki_write.py), predating this schema-parity fix and outside
-        its blast radius. Forwarded here so they reach the handler args
-        dict unchanged, ready for whichever future change wires
-        kind-based template rendering (build_adr/build_spec/
-        build_file_doc/build_note) into the handler.
-        """
+        """Author a wiki page using create, append, or replace mode."""
         # source: ADR-0700
         return await safe_handler(
             wiki_write.handler,
@@ -93,9 +79,6 @@ def _register_wiki_write(mcp: MCPServer) -> None:
                 "tags": tags or [],
                 "memory_ids": memory_ids or [],
                 "project_root": project_root,
-                "title": title,
-                "summary": summary,
-                "body": body,
             },
             tool_name="wiki_write",
         )

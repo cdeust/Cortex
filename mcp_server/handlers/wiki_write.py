@@ -96,9 +96,10 @@ schema = {
             "content": {
                 "type": "string",
                 "description": (
-                    "Raw markdown content. Used when structured fields "
-                    "(title/summary/body) are not provided. Markdown is preserved "
-                    "verbatim."
+                    "Raw markdown content, the final page body. Required — "
+                    "render it yourself (e.g. via wiki_adr for ADRs) before "
+                    "calling this tool; wiki_write does not render from "
+                    "structured fields. Markdown is preserved verbatim."
                 ),
             },
             "mode": {
@@ -110,22 +111,6 @@ schema = {
                 "enum": ["create", "append", "replace"],
                 "default": "create",
                 "examples": ["create", "append"],
-            },
-            "title": {
-                "type": "string",
-                "description": "Page title (used when rendering from template).",
-                "examples": ["Recall regression triaged 2026-04-12"],
-            },
-            "summary": {
-                "type": "string",
-                "description": (
-                    "One-paragraph summary placed near the top of the rendered page."
-                ),
-                "examples": ["FlashRank ONNX cache divergence; clearing fixed it."],
-            },
-            "body": {
-                "type": "string",
-                "description": "Main markdown body inserted into the template.",
             },
             "tags": {
                 "type": "array",
