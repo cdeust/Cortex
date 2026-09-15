@@ -6,6 +6,69 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [4.22.0] - 2026-09-15
+
+### Fixed
+
+- **Every handler parameter is reachable over MCP (#559).** The client-visible
+  schema of a tool is derived from its hand-written wrapper in
+  `mcp_server/tool_registry_*.py`, and 13 of 54 wrappers had drifted from their
+  handler's `inputSchema`. `recall` dropped `tags_any`, `tags_all`,
+  `include_low_signal`, `cross_domain` and `sa_mode`, so the host protocol's
+  `recall(tags_any=["archival"])` could not be called. `remember` dropped
+  `is_global`, `created_at` and `initial_heat`, so the remember-global skill's
+  `is_global: true` never reached the handler. The same gap affected `anchor`,
+  `consolidate`, `curate_wiki`, `get_causal_chain`, `ingest_codebase`,
+  `rate_memory`, `recall_hierarchical`, `unified_search`, `validate_memory`
+  and `wiki_purge`. `tests_py/handlers/test_tool_schema_parity.py` now asserts
+  exact equality, in both directions, for every tool of a server built with
+  every upstream gate open. `wiki_write`'s `title`, `summary` and `body`, which
+  the handler never read, are removed from its contract.
+
+- **Decisions written under an agent context reach Team Decisions (#561).**
+  ADR-0200's rule (a decision stored with an agent topic is marked
+  `is_global`) ran only in `core/memory_ingest.py`, which only benchmarks and
+  tests call. On the live store, 233 current protected agent-scoped rows were
+  local and 1 was global, so the SessionStart block and the subagent briefing
+  almost never found one. `core/team_scope.py` now applies the rule on the
+  `remember` path, for deliberate writes from a trusted origin only (a fetched
+  page or an automatic capture carrying a decision cue does not propagate). A
+  one-shot, idempotent backfill applies the same rule to rows stored before the
+  fix; on the maintainer's store it matched 131 rows.
+
+- **`core/` performs no I/O (#560).** The 17 modules under `mcp_server/core/`
+  that imported `os` or `pathlib` no longer do. Environment flags
+  (`CORTEX_ABLATE_*`, `CORTEX_DECAY_DISABLED`, `CORTEX_*_BETA`, ...), the
+  FlashRank model cache and the wiki filesystem reads move behind seams that
+  raise when unwired, and one function,
+  `mcp_server.hooks.wiring.wire_composition_root()`, wires them all. The
+  server, `scripts/launcher.py`, every hook, every benchmark runner and every
+  script reaching core call it; a test enumerates those entry points. An
+  unwired read that returned "unset" would have made every ablation run
+  measure the un-ablated system, so it fails loudly instead. The background
+  consolidation spawned by SessionStart now reports the dashboard outcome
+  (`dashboards=written=N` or the error) instead of defaulting to `ok`. Measured
+  with `benchmarks/reproduce.sh --no-regression --no-ablation` against the
+  previous `main`: LongMemEval-S R@10 0.9800 (+0.0000), MRR 0.9057 (+0.0005);
+  LoCoMo R@10 0.8890 (-0.0005), MRR 0.7801 (-0.0014), within tolerance.
+
+- **The documentation describes the recall fusion the code runs (#562).**
+  PostgreSQL fuses five signals (vector, `ts_rank_cd` full text, trigram,
+  effective heat, recency) as a weighted sum of max-normalised scores; SQLite
+  uses rank-based WRRF without the trigram signal; Hopfield and HDC run after
+  fusion. The docs, the `recall` tool description and one MCP prompt said
+  "6-signal WRRF". ADR-013 keeps its original text with a dated note.
+
+- **`docs/module-inventory.md` no longer stores per-layer file counts (#563).**
+  The four counts had drifted from the tree; the page gives the measurement
+  command instead.
+
+### Dependencies
+
+- sentence-transformers 5.6.1 → 6.0.1 (#533), xxhash 3.8.1 → 4.0.1 (#532),
+  anyio 4.15.1, fsspec 2026.7.0, pydantic-core 2.48.0, sse-starlette 3.4.11
+  (#531), hashgraph-online/ai-plugin-scanner-action 1.2.624 (#529).
+
 ## [4.21.0] - 2026-09-10
 
 ### Fixed
