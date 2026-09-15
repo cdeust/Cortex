@@ -198,7 +198,7 @@ def _fetch_team_decisions(conn, exclude_ids: set) -> list[dict]:
         Implements the directory layer of Transactive Memory Systems
         (Wegner 1987): team members know WHAT was decided, regardless
         of WHO decided it. Decisions auto-propagate via is_global=TRUE,
-        set at write time by global_detector.propagates_to_team.
+        set at write time by team_scope.is_team_decision.
 
     source: ADR-0498"""
     try:

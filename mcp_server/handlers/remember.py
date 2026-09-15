@@ -16,7 +16,8 @@ from mcp_server.shared import write_class as write_class_module
 from mcp_server.errors import ValidationError
 from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.core.domain_detector import detect_domain
-from mcp_server.core.global_detector import propagates_to_team, resolve_global_scope
+from mcp_server.core.global_detector import resolve_global_scope
+from mcp_server.core.team_scope import is_team_decision
 from mcp_server.handlers.remember_helpers import (
     apply_modulations,
     evaluate_gate,
@@ -161,18 +162,6 @@ def _resolved_origin(args: dict[str, Any], write_class: str) -> str:
     return origin
 
 
-def _is_attested_decision(content: str, origin: str, write_class: str) -> bool:
-    """A decision cue counts for team scope only on a considered write
-    (deliberate class) from an origin allowed content-derived privileges.
-
-    source: ADR-0200"""
-    return (
-        write_class == write_class_module.DELIBERATE
-        and capture_origin.may_bypass_write_gate_on_content(origin)
-        and thermodynamics.is_decision_content(content)
-    )
-
-
 def _prepare_request(args: dict, store: MemoryStore, write_class: str) -> GateRequest:
     domain = _resolve_domain(args.get("directory", ""), args.get("domain", ""))
     origin = _resolved_origin(args, write_class)
@@ -297,9 +286,8 @@ async def _handler_impl(
         content,
         tags,
         explicit=bool(is_global),
-        team_decision=propagates_to_team(
-            _is_attested_decision(content, resolved_origin, resolved_write_class),
-            agent_topic or "",
+        team_decision=is_team_decision(
+            content, resolved_origin, resolved_write_class, agent_topic or ""
         ),
     )
 

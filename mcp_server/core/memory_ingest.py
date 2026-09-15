@@ -12,7 +12,7 @@ from mcp_server.core.memory_decomposer import (
 )
 from mcp_server.observability import silent_failure
 from mcp_server.core import knowledge_graph, write_post_store
-from mcp_server.core.global_detector import propagates_to_team
+from mcp_server.core.team_scope import propagates_to_team
 
 
 def ingest_memory(

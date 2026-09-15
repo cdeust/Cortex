@@ -4,7 +4,8 @@ source: ADR-0200"""
 
 from __future__ import annotations
 
-from mcp_server.core.global_detector import propagates_to_team, resolve_global_scope
+from mcp_server.core.global_detector import resolve_global_scope
+from mcp_server.core.team_scope import is_team_decision, propagates_to_team
 
 _DECISION = "Decision: we keep the ledger layout because the dossier needs it"
 _PLAIN = "plain note about the weather in the fixture"
@@ -47,3 +48,26 @@ class TestResolveGlobalScope:
         )
         assert is_global is True
         assert reason.startswith("global_")
+
+
+class TestIsTeamDecision:
+    def test_deliberate_trusted_decision_under_agent(self):
+        assert is_team_decision(_DECISION, "deliberate", "deliberate", "cortex")
+
+    def test_local_action_origin_is_trusted(self):
+        assert is_team_decision(_DECISION, "local_action", "deliberate", "cortex")
+
+    def test_network_origin_is_refused(self):
+        assert not is_team_decision(_DECISION, "network", "deliberate", "cortex")
+
+    def test_unknown_origin_is_refused(self):
+        assert not is_team_decision(_DECISION, "unknown", "deliberate", "cortex")
+
+    def test_auto_capture_is_refused(self):
+        assert not is_team_decision(_DECISION, "local_action", "auto", "cortex")
+
+    def test_plain_content_is_not_a_decision(self):
+        assert not is_team_decision(_PLAIN, "deliberate", "deliberate", "cortex")
+
+    def test_no_agent_context_stays_local(self):
+        assert not is_team_decision(_DECISION, "deliberate", "deliberate", "")
