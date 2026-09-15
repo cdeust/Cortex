@@ -659,16 +659,6 @@
     },
     {
       "file": "mcp_server/core/abstention_gate.py",
-      "kind": "layer-violation",
-      "detail": "cortex_beam_abstain"
-    },
-    {
-      "file": "mcp_server/core/abstention_gate.py",
-      "kind": "layer-violation",
-      "detail": "pathlib"
-    },
-    {
-      "file": "mcp_server/core/abstention_gate.py",
       "kind": "method-size",
       "detail": "filter_by_abstention"
     },
@@ -906,11 +896,6 @@
       "file": "mcp_server/core/codebase_communities.py",
       "kind": "layer-violation",
       "detail": "networkx"
-    },
-    {
-      "file": "mcp_server/core/codebase_graph.py",
-      "kind": "layer-violation",
-      "detail": "pathlib"
     },
     {
       "file": "mcp_server/core/codebase_graph.py",

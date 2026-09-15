@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import PurePosixPath
 
 from mcp_server.core.codebase_parser import FileAnalysis, ImportInfo, SymbolDef
 from mcp_server.core.codebase_graph import (
@@ -11,8 +12,41 @@ from mcp_server.core.codebase_graph import (
     detect_communities,
     compute_impact,
     build_call_edges,
+    _posix_normalize,
+    _posix_parent,
 )
 from mcp_server.core.codebase_type_resolver import resolve_type_references
+
+
+class TestPosixPathHelpers:
+    """core/codebase_graph.py may not import pathlib (issue #560); these pure
+    string helpers must match PurePosixPath semantics exactly — the test
+    imports pathlib itself (a test, not core, may) to pin the equivalence."""
+
+    _CASES = [
+        "a/b/../c",
+        "./a",
+        "a//b",
+        "",
+        "a/",
+        "/c.py",
+        "a/b/c.py",
+        "c.py",
+        "/a/b",
+        ".",
+        "/",
+        "a",
+        "/a",
+    ]
+
+    def test_normalize_matches_purepath(self) -> None:
+        for case in self._CASES:
+            assert _posix_normalize(case) == str(PurePosixPath(case)), case
+
+    def test_parent_matches_purepath(self) -> None:
+        for case in self._CASES:
+            assert _posix_parent(case) == str(PurePosixPath(case).parent), case
+
 
 _has_networkx = True
 try:

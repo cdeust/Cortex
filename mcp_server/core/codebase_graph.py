@@ -4,10 +4,6 @@ source: ADR-0127"""
 
 from __future__ import annotations
 
-from pathlib import PurePosixPath
-
-# source: ADR-0127
-
 from mcp_server.core.codebase_communities import (
     compute_centrality,
     detect_communities,
@@ -18,6 +14,39 @@ from mcp_server.core.codebase_parser import FileAnalysis
 __all__ = ["compute_centrality", "detect_communities", "detect_god_nodes"]
 
 # ── Import resolution ─────────────────────────────────────────────────────
+
+
+def _posix_normalize(path: str) -> str:
+    """Pure-string equivalent of ``str(PurePosixPath(path))`` (no filesystem
+    access). Collapses empty/"." segments, keeps ".." literal, keeps a
+    leading "/". Pinned equal to PurePosixPath by
+    tests_py/core/test_codebase_graph.py::TestPosixPathHelpers.
+
+    source: issue #560 (core/ may not import pathlib)
+    """
+    if not path:
+        return "."
+    is_abs = path.startswith("/")
+    segments = [seg for seg in path.split("/") if seg not in ("", ".")]
+    if not segments:
+        return "/" if is_abs else "."
+    body = "/".join(segments)
+    return f"/{body}" if is_abs else body
+
+
+def _posix_parent(path: str) -> str:
+    """Pure-string equivalent of ``PurePosixPath(path).parent``; "." and "/"
+    are their own parent. source: issue #560 (core/ may not import pathlib)
+    """
+    normalized = _posix_normalize(path)
+    if normalized in (".", "/"):
+        return normalized
+    is_abs = normalized.startswith("/")
+    segments = normalized[1:].split("/") if is_abs else normalized.split("/")
+    if len(segments) <= 1:
+        return "/" if is_abs else "."
+    parent_body = "/".join(segments[:-1])
+    return f"/{parent_body}" if is_abs else parent_body
 
 
 def resolve_import_to_file(
@@ -39,7 +68,7 @@ def resolve_import_to_file(
     """
     candidates = _build_candidates(module, importing_file, is_relative)
     for candidate in candidates:
-        normalized = str(PurePosixPath(candidate))
+        normalized = _posix_normalize(candidate)
         if normalized in known_files:
             return normalized
     return None
@@ -54,7 +83,7 @@ def _build_candidates(
     candidates: list[str] = []
 
     if is_relative:
-        base_dir = str(PurePosixPath(importing_file).parent)
+        base_dir = _posix_parent(importing_file)
         clean = module.lstrip(".")
         if clean:
             rel = clean.replace(".", "/")
@@ -184,8 +213,6 @@ def build_resolved_call_edges(
         ``[(caller_file, caller_qname, callee_file, callee_qname), ...]``.
         The fourth position is the full qualified callee name, e.g. Foo.baz.
     source: ADR-0127"""
-    # source: ADR-0127
-
     symbol_to_qname: dict[str, tuple[str, str]] = {}
     for analysis in analyses:
         for sym in analysis.definitions:

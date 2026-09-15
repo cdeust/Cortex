@@ -24,6 +24,53 @@ class TestAbstentionGate:
         assert len(result) == 2
         assert scores == [1.0, 1.0]
 
+    def test_no_classifier_factory_disables_filtering(self, monkeypatch):
+        """No injected factory (the composition-root seam) means no filtering,
+        matching the historical "model not installed" fallback — proves the
+        os/pathlib-free core function never silently loads a classifier on
+        its own. source: issue #560"""
+        from mcp_server.core import abstention_gate
+
+        monkeypatch.setattr(abstention_gate, "_classifier", None)
+        monkeypatch.setattr(abstention_gate, "_load_attempted", False)
+
+        candidates = [{"memory_id": 1, "content": "test"}]
+        result, scores = filter_by_abstention(
+            "query", candidates, classifier_factory=None
+        )
+        assert len(result) == 1
+        assert scores == [1.0]
+
+    def test_classifier_factory_is_invoked_and_memoized(self, monkeypatch):
+        """Injecting a factory (infrastructure's runtime seam) makes the
+        classifier take effect; a second call reuses the memoized instance
+        without invoking the factory again. source: issue #560"""
+        from mcp_server.core import abstention_gate
+
+        monkeypatch.setattr(abstention_gate, "_classifier", None)
+        monkeypatch.setattr(abstention_gate, "_load_attempted", False)
+
+        class MockClf:
+            def predict_batch(self, pairs):
+                return [0.9] * len(pairs)
+
+        calls = {"n": 0}
+
+        def factory():
+            calls["n"] += 1
+            return MockClf()
+
+        candidates = [{"memory_id": 1, "content": "test"}]
+        result, scores = filter_by_abstention(
+            "query", candidates, classifier_factory=factory
+        )
+        assert scores == [0.9]
+        assert calls["n"] == 1
+
+        # Second call: memoized, factory not invoked again.
+        filter_by_abstention("query", candidates, classifier_factory=factory)
+        assert calls["n"] == 1
+
     def test_keep_at_least_returns_top_n(self, monkeypatch):
         """When threshold filters everything, keep_at_least falls back to top-N."""
         from mcp_server.core import abstention_gate

@@ -5,7 +5,7 @@ source: ADR-0097"""
 from __future__ import annotations
 
 import logging
-from pathlib import Path
+from collections.abc import Callable
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -19,12 +19,25 @@ _load_attempted = False
 
 DEFAULT_THRESHOLD = 0.45
 
+# A classifier factory performs filesystem I/O (model cache lookup, possible
+# download) and therefore must be supplied by the composition root — see
+# mcp_server.infrastructure.abstention_classifier.load_abstention_classifier.
+# source: issue #560 (core/ may not import os/pathlib)
+ClassifierFactory = Callable[[], Any | None]
 
-def _get_classifier() -> Any:
-    """Lazy-load the abstention classifier.
 
-    Returns None if the model isn't available — caller should treat
-    that as "no filtering" (return all results unchanged).
+def _get_classifier(classifier_factory: ClassifierFactory | None) -> Any:
+    """Lazy-load the abstention classifier via an injected factory.
+
+    Precondition: ``classifier_factory``, when provided, returns a loaded
+    classifier or ``None`` on failure/absence; it may perform I/O (that I/O
+    lives in infrastructure/, never here).
+    Postcondition: memoizes the first non-``None`` result (or the fact that
+    loading was attempted) in module state, exactly as before this seam was
+    introduced — the "reads/attempts once per process" caching semantics
+    are unchanged. Returns ``None`` if the model isn't available or no
+    factory was given — caller should treat that as "no filtering" (return
+    all results unchanged).
     """
     global _classifier, _load_attempted
 
@@ -34,28 +47,11 @@ def _get_classifier() -> Any:
         return None
 
     _load_attempted = True
-    try:
-        # Lazy import — package is optional
-        from cortex_beam_abstain import (  # noqa: PLC0415 # pyright: ignore[reportMissingImports] — source: ADR-0097
-            AbstentionClassifier,
-        )
-
-        cache = Path.home() / ".cache" / "cortex-abstention" / "model.onnx"
-        if cache.exists():
-            _classifier = AbstentionClassifier(model_path=cache)
-        else:
-            _classifier = AbstentionClassifier()  # auto-download
+    if classifier_factory is None:
+        return None
+    _classifier = classifier_factory()
+    if _classifier is not None:
         logger.info("Abstention classifier loaded")
-    except ImportError:
-        logger.debug(
-            "cortex-beam-abstain not installed; abstention gate disabled. "
-            "Install: pip install cortex-beam-abstain"
-        )
-        _classifier = None
-    except Exception as e:  # noqa: BLE001 — source: ADR-0097
-        logger.warning("Failed to load abstention classifier: %s", e)
-        _classifier = None
-
     return _classifier
 
 
@@ -64,6 +60,7 @@ def filter_by_abstention(
     candidates: list[dict[str, Any]],
     threshold: float = DEFAULT_THRESHOLD,
     keep_at_least: int = 0,
+    classifier_factory: ClassifierFactory | None = None,
 ) -> tuple[list[dict[str, Any]], list[float]]:
     """Filter retrieval results using the abstention classifier.
 
@@ -73,6 +70,10 @@ def filter_by_abstention(
         threshold: Minimum relevance score to keep a result (default 0.45).
         keep_at_least: Minimum results retained, even below the threshold;
             zero enables strict filtering and may return no results.
+        classifier_factory: Composition-root-supplied loader (see
+            mcp_server.infrastructure.abstention_classifier); omit to run
+            with abstention filtering disabled (candidates pass through
+            unchanged), e.g. in tests.
     source: ADR-0097
 
     Returns:
@@ -83,7 +84,7 @@ def filter_by_abstention(
     if not candidates:
         return [], []
 
-    clf = _get_classifier()
+    clf = _get_classifier(classifier_factory)
     if clf is None:
         # Model unavailable — return everything unchanged
         return candidates, [1.0] * len(candidates)
@@ -112,10 +113,13 @@ def should_abstain(
     query: str,
     candidates: list[dict[str, Any]],
     threshold: float = DEFAULT_THRESHOLD,
+    classifier_factory: ClassifierFactory | None = None,
 ) -> bool:
     """Quick check: should the system return empty results entirely?
 
     True when ALL candidates score below threshold (no relevant match).
     """
-    filtered, _ = filter_by_abstention(query, candidates, threshold)
+    filtered, _ = filter_by_abstention(
+        query, candidates, threshold, classifier_factory=classifier_factory
+    )
     return len(filtered) == 0
