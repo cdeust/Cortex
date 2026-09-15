@@ -4,7 +4,6 @@ source: ADR-0302"""
 
 from __future__ import annotations
 
-import os
 import re
 from typing import Iterable
 
@@ -21,8 +20,27 @@ _DEFAULT_TAGS: tuple[str, ...] = (
 )
 
 
+def _splitext(path: str) -> str:
+    """Pure-string equivalent of ``os.path.splitext(path)[1]`` (posix
+    semantics; core may not import os, issue #560). Leading-dots-only
+    prefixes (``.hidden``, ``..double``) have no extension, matching
+    cpython's genericpath._splitext.
+
+    source: issue #560"""
+    basename = path.rsplit("/", 1)[-1]
+    dot_index = basename.rfind(".")
+    if dot_index <= 0:
+        return ""
+    i = 0
+    while i < dot_index:
+        if basename[i] != ".":
+            return basename[dot_index:]
+        i += 1
+    return ""
+
+
 def _detect_language(path: str) -> str:
-    ext = os.path.splitext(path)[1].lower()
+    ext = _splitext(path).lower()
     return {
         ".py": "python",
         ".ts": "typescript",

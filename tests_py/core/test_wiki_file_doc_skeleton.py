@@ -10,8 +10,13 @@ that observable page shape, not the extraction internals.
 
 from __future__ import annotations
 
+import os.path
+
+import pytest
+
 from mcp_server.core.wiki_curation_gaps import FILE_DOC_SECTIONS
 from mcp_server.core.wiki_file_doc_skeleton import (
+    _splitext,
     _detect_language,
     _extract_imports,
     _extract_symbols,
@@ -146,3 +151,25 @@ def test_markers_are_distinct_from_purge_targeted_stub_markers():
     page = _build("")
     assert "_(to be filled)_" not in page
     assert "_To be written._" not in page
+
+
+class TestSplitext:
+    """core/wiki_file_doc_skeleton.py may not import os (issue #560); pin
+    the pure-string replacement equal to os.path.splitext (a test, not
+    core, may import os.path)."""
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "a/b/c.py",
+            "a/b.tar.gz",
+            "noext",
+            ".hidden",
+            "a/.hidden.py",
+            "a.b.c",
+            "..double",
+            "",
+        ],
+    )
+    def test_matches_os_path_splitext(self, path):
+        assert _splitext(path) == os.path.splitext(path)[1]

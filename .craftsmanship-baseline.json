@@ -2759,18 +2759,8 @@
     },
     {
       "file": "mcp_server/core/wiki_coverage_dashboard.py",
-      "kind": "layer-violation",
-      "detail": "pathlib"
-    },
-    {
-      "file": "mcp_server/core/wiki_coverage_dashboard.py",
       "kind": "method-size",
       "detail": "render_dashboard"
-    },
-    {
-      "file": "mcp_server/core/wiki_coverage_dashboard.py",
-      "kind": "method-size",
-      "detail": "write_dashboards"
     },
     {
       "file": "mcp_server/core/wiki_curation_gaps.py",
@@ -2784,11 +2774,6 @@
     },
     {
       "file": "mcp_server/core/wiki_drift.py",
-      "kind": "layer-violation",
-      "detail": "os"
-    },
-    {
-      "file": "mcp_server/core/wiki_drift.py",
       "kind": "method-size",
       "detail": "audit_page_drift"
     },
@@ -2799,18 +2784,8 @@
     },
     {
       "file": "mcp_server/core/wiki_file_doc_skeleton.py",
-      "kind": "layer-violation",
-      "detail": "os"
-    },
-    {
-      "file": "mcp_server/core/wiki_file_doc_skeleton.py",
       "kind": "method-size",
       "detail": "build_file_doc"
-    },
-    {
-      "file": "mcp_server/core/wiki_groomer.py",
-      "kind": "layer-violation",
-      "detail": "pathlib"
     },
     {
       "file": "mcp_server/core/wiki_groomer.py",

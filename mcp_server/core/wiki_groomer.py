@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from pathlib import PurePosixPath
 from typing import Any
 
 from mcp_server.shared.wiki_layout import PAGE_KINDS
@@ -92,6 +91,21 @@ def parse_frontmatter(content: str) -> tuple[dict[str, Any], str]:
 # ── Auditor ──────────────────────────────────────────────────────────────
 
 
+def _first_path_segment(path: str) -> str | None:
+    """Pure-string equivalent of ``PurePosixPath(path).parts[0]`` for a
+    relative path (core may not import pathlib; issue #560)."""
+    segments = [s for s in path.split("/") if s]
+    return segments[0] if segments else None
+
+
+def _path_stem(path: str) -> str:
+    """Pure-string equivalent of ``PurePosixPath(path).stem`` (core may not
+    import pathlib; issue #560)."""
+    name = path.rsplit("/", 1)[-1]
+    dot = name.rfind(".")
+    return name[:dot] if dot > 0 else name
+
+
 def infer_kind_from_path(page_path: str) -> str | None:
     """Infer page kind from the wiki-relative path.
 
@@ -99,10 +113,9 @@ def infer_kind_from_path(page_path: str) -> str | None:
     ``specs/phase5.md`` → ``specs``.
     ``<unknown>/x.md``  → None.
     """
-    parts = PurePosixPath(page_path).parts
-    if not parts:
+    first = _first_path_segment(page_path)
+    if first is None:
         return None
-    first = parts[0]
     return first if first in PAGE_KINDS else None
 
 
@@ -169,7 +182,7 @@ def audit_page(page_path: str, content: str) -> PageAudit:
             )
 
     # 3. Naming convention on the slug.
-    slug = PurePosixPath(page_path).stem
+    slug = _path_stem(page_path)
     pattern, description = naming_convention(kind)
     if not re.match(pattern, slug):
         audit.issues.append(

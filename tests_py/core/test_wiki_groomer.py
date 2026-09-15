@@ -7,15 +7,48 @@ conventions".
 
 from __future__ import annotations
 
+from pathlib import PurePosixPath
+
 import pytest
 
 from mcp_server.core.wiki_groomer import (
+    _first_path_segment,
+    _path_stem,
     audit_page,
     audit_wiki,
     infer_kind_from_path,
     page_audit_has_issues,
     parse_frontmatter,
 )
+
+
+class TestPurePathHelpers:
+    """core/wiki_groomer.py may not import pathlib (issue #560); pin the
+    pure-string replacements equal to PurePosixPath (a test, not core, may
+    import pathlib)."""
+
+    @pytest.mark.parametrize(
+        "path", ["adr/0042-foo.md", "specs/phase5.md", "x.md", "", "a/b/c.md"]
+    )
+    def test_first_segment_matches_purepath_parts(self, path):
+        parts = PurePosixPath(path).parts
+        expected = parts[0] if parts else None
+        assert _first_path_segment(path) == expected
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "adr/0042-foo.md",
+            "foo.tar.gz",
+            "foo",
+            ".hidden",
+            "a/b/.hidden.md",
+            "noext",
+            "a.b.c",
+        ],
+    )
+    def test_stem_matches_purepath_stem(self, path):
+        assert _path_stem(path) == PurePosixPath(path).stem
 
 
 class TestFrontmatterParser:

@@ -47,8 +47,13 @@ from mcp_server import (
 from mcp_server.core import telemetry
 from mcp_server.telemetry_middleware import TelemetryMiddleware
 from mcp_server.tool_profile_middleware import ToolProfileMiddleware
-from mcp_server.core.wiki_axis_registry import configure_default_wiki_root
+from mcp_server.core.wiki_axis_registry import (
+    configure_default_wiki_root,
+    configure_schema_file_reader,
+)
 from mcp_server.core.wiki_classifier import configure_user_rules_provider
+from mcp_server.core.wiki_coverage_dashboard import configure_dashboard_filesystem
+from mcp_server.core.wiki_drift import configure_wiki_drift_filesystem
 from mcp_server.handlers._tool_meta import apply_output_schemas, apply_param_docs
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.mcp_client_pool import close_all
@@ -57,13 +62,41 @@ from mcp_server.infrastructure.upstream_availability import (
     codebase_upstream_available,
     prd_upstream_available,
 )
+from mcp_server.infrastructure.wiki_axis_fs import read_schema_files
+from mcp_server.infrastructure.wiki_dashboard_fs import (
+    count_curation_gaps_under,
+    domain_dirs_under,
+    kind_page_counts,
+    wiki_root_is_dir,
+    write_dashboard_pages,
+)
+from mcp_server.infrastructure.wiki_drift_fs import (
+    iter_wiki_markdown_pages,
+    read_wiki_page,
+    source_file_exists_under,
+    wiki_page_mtime,
+)
 from mcp_server.infrastructure.wiki_schema_reader import load_registry
 
 # source: ADR-0093
 
 
 configure_default_wiki_root(lambda: WIKI_ROOT)
+configure_schema_file_reader(read_schema_files)
 configure_user_rules_provider(lambda: load_registry(WIKI_ROOT).rules)
+configure_wiki_drift_filesystem(
+    read_page=read_wiki_page,
+    page_mtime=wiki_page_mtime,
+    file_exists_under=source_file_exists_under,
+    iter_pages=iter_wiki_markdown_pages,
+)
+configure_dashboard_filesystem(
+    count_curation_gaps=count_curation_gaps_under,
+    kind_page_counts=kind_page_counts,
+    domain_dirs_under=domain_dirs_under,
+    wiki_root_is_dir=wiki_root_is_dir,
+    write_dashboard_pages=write_dashboard_pages,
+)
 
 # source: ADR-0093
 

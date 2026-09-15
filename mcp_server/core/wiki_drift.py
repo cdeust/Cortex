@@ -4,15 +4,52 @@ source: ADR-0301"""
 
 from __future__ import annotations
 
-import os
 import re
 import time
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from typing import Final
 
-from mcp_server.shared.platform import to_posix
 from mcp_server.shared.wiki_source_paths import extract_document_paths
-from mcp_server.core.wiki_coverage import _SKIP_DIRECTORIES
+
+# Composition-root injection seam (core may not import os or perform I/O;
+# issue #560): the real implementations live in
+# mcp_server/infrastructure/wiki_drift_fs.py, wired once via
+# configure_wiki_drift_filesystem (mcp_server/__main__.py for production,
+# tests_py/conftest.py for the test session).
+ReadPage = Callable[[str, str], "str | None"]
+PageMtime = Callable[[str, str], float]
+FileExistsUnder = Callable[[str, str], bool]
+IterPages = Callable[[str], Iterable[str]]
+
+_read_page: ReadPage | None = None
+_page_mtime: PageMtime | None = None
+_file_exists_provider: FileExistsUnder | None = None
+_iter_pages: IterPages | None = None
+
+
+def configure_wiki_drift_filesystem(
+    *,
+    read_page: ReadPage,
+    page_mtime: PageMtime,
+    file_exists_under: FileExistsUnder,
+    iter_pages: IterPages,
+) -> None:
+    """Composition-root hook: register the real wiki-drift filesystem ops.
+
+    source: ADR-0301 (issue #560)"""
+    global _read_page, _page_mtime, _file_exists_provider, _iter_pages
+    _read_page = read_page
+    _page_mtime = page_mtime
+    _file_exists_provider = file_exists_under
+    _iter_pages = iter_pages
+
+
+def _unconfigured(what: str) -> RuntimeError:
+    return RuntimeError(
+        f"wiki_drift {what} provider not configured — call "
+        "configure_wiki_drift_filesystem() at the composition root first"
+    )
 
 
 @dataclass
@@ -194,19 +231,9 @@ def _file_exists_under(source_root: str, cited: str) -> bool:
     """Does ``cited`` resolve to an actual file under ``source_root``?
 
     source: ADR-0301"""
-    full = os.path.join(source_root, cited)
-    if os.path.isfile(full):
-        return True
-    bn = os.path.basename(cited)
-    # source: ADR-0301
-
-    for _dirpath, dirnames, filenames in os.walk(source_root):
-        dirnames[:] = [
-            d for d in dirnames if d not in _SKIP_DIRECTORIES and not d.startswith(".")
-        ]
-        if bn in filenames:
-            return True
-    return False
+    if _file_exists_provider is None:
+        raise _unconfigured("file_exists_under")
+    return _file_exists_provider(source_root, cited)
 
 
 def _required_sections_for(kind: str) -> tuple[str, ...]:
@@ -225,11 +252,10 @@ def audit_page_drift(
     in sync.
 
     source: ADR-0301"""
-    full = os.path.join(wiki_root, page_rel_path)
-    try:
-        with open(full, encoding="utf-8", errors="ignore") as fp:
-            text = fp.read()
-    except OSError:
+    if _read_page is None or _page_mtime is None:
+        raise _unconfigured("read_page/page_mtime")
+    text = _read_page(wiki_root, page_rel_path)
+    if text is None:
         return None
 
     kind, domain = _kind_and_domain_from_path(page_rel_path)
@@ -254,10 +280,7 @@ def audit_page_drift(
 
     # source: ADR-0301
 
-    try:
-        page_mtime = os.path.getmtime(full)
-    except OSError:
-        page_mtime = 0.0
+    page_mtime = _page_mtime(wiki_root, page_rel_path)
     now_ts = now if now is not None else time.time()
     drift.age_days = (now_ts - page_mtime) / 86400.0 if page_mtime else 0.0
     if drift.age_days > max_age_days and cited:
@@ -297,29 +320,19 @@ def audit_wiki_drift(
     """Walk every wiki page and return those that need re-authoring.
 
     source: ADR-0301"""
+    if _iter_pages is None:
+        raise _unconfigured("iter_pages")
     drifts: list[PageDrift] = []
-    if not os.path.isdir(wiki_root):
-        return drifts
-    for dirpath, dirnames, filenames in os.walk(wiki_root):
-        dirnames[:] = [
-            d for d in dirnames if not d.startswith(".") and not d.startswith("_")
-        ]
-        for f in filenames:
-            if not f.endswith(".md"):
-                continue
-            full = os.path.join(dirpath, f)
-            # source: ADR-0301
-
-            rel = to_posix(os.path.relpath(full, wiki_root))
-            kind, domain = _kind_and_domain_from_path(rel)
-            if not domain or not kind:
-                continue
-            if domain_filter and domain != domain_filter:
-                continue
-            src_root = source_root_resolver(domain) if domain else None
-            d = audit_page_drift(wiki_root, rel, src_root, max_age_days=max_age_days)
-            if d is not None:
-                drifts.append(d)
-                if limit is not None and len(drifts) >= limit:
-                    return drifts
+    for rel in _iter_pages(wiki_root):
+        kind, domain = _kind_and_domain_from_path(rel)
+        if not domain or not kind:
+            continue
+        if domain_filter and domain != domain_filter:
+            continue
+        src_root = source_root_resolver(domain) if domain else None
+        d = audit_page_drift(wiki_root, rel, src_root, max_age_days=max_age_days)
+        if d is not None:
+            drifts.append(d)
+            if limit is not None and len(drifts) >= limit:
+                return drifts
     return drifts

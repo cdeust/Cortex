@@ -4,9 +4,8 @@ source: ADR-0298"""
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Iterable
 
 from mcp_server.core.wiki_coverage import (
     audit_domain,
@@ -14,6 +13,54 @@ from mcp_server.core.wiki_coverage import (
 )
 from mcp_server.observability import silent_failure
 from mcp_server.shared.domain_mapping import _build_registry
+
+# Composition-root injection seam (core may not import os/pathlib or
+# perform I/O; issue #560). Real implementations live in
+# mcp_server/infrastructure/wiki_dashboard_fs.py, wired once via
+# configure_dashboard_filesystem (mcp_server/__main__.py for production,
+# tests_py/conftest.py for the test session).
+CountGaps = Callable[[str], "tuple[int, int]"]
+KindPageCounts = Callable[[str, str], "dict[str, int]"]
+DomainDirsUnder = Callable[[str, str], "list[str]"]
+IsDir = Callable[[str], bool]
+WriteDashboardPages = Callable[[str, "dict[str, str]"], "dict[str, str]"]
+
+_count_curation_gaps: CountGaps | None = None
+_kind_page_counts_provider: KindPageCounts | None = None
+_domain_dirs_under: DomainDirsUnder | None = None
+_wiki_root_is_dir: IsDir | None = None
+_write_dashboard_pages: WriteDashboardPages | None = None
+
+
+def configure_dashboard_filesystem(
+    *,
+    count_curation_gaps: CountGaps,
+    kind_page_counts: KindPageCounts,
+    domain_dirs_under: DomainDirsUnder,
+    wiki_root_is_dir: IsDir,
+    write_dashboard_pages: WriteDashboardPages,
+) -> None:
+    """Composition-root hook: register the real dashboard filesystem ops.
+
+    source: ADR-0298 (issue #560)"""
+    global \
+        _count_curation_gaps, \
+        _kind_page_counts_provider, \
+        _domain_dirs_under, \
+        _wiki_root_is_dir, \
+        _write_dashboard_pages
+    _count_curation_gaps = count_curation_gaps
+    _kind_page_counts_provider = kind_page_counts
+    _domain_dirs_under = domain_dirs_under
+    _wiki_root_is_dir = wiki_root_is_dir
+    _write_dashboard_pages = write_dashboard_pages
+
+
+def _unconfigured(what: str) -> RuntimeError:
+    return RuntimeError(
+        f"wiki_coverage_dashboard {what} provider not configured — call "
+        "configure_dashboard_filesystem() at the composition root first"
+    )
 
 
 @dataclass(frozen=True)
@@ -48,53 +95,22 @@ def _scope_slot_statuses(wiki_root: str, domain: str) -> list[SlotStatus]:
     return out
 
 
-def _count_curation_gaps_under(domain_dir: Path) -> tuple[int, int]:
+def _count_curation_gaps_under(domain_dir: str) -> tuple[int, int]:
     """Walk a domain's pages and return ``(total_pages, total_open_gaps)``.
 
-    Open gaps come from each page's frontmatter ``curation_gaps``
-    list — produced by the file-doc skeleton generator. This is the
-    actuator-facing metric: how much work is queued.
-    """
-    if not domain_dir.is_dir():
-        return 0, 0
-    total = 0
-    gaps = 0
-    for md in domain_dir.rglob("*.md"):
-        total += 1
-        try:
-            text = md.read_text(encoding="utf-8", errors="ignore")
-        except OSError:
-            continue
-        if not text.startswith("---"):
-            continue
-        end = text.find("\n---", 3)
-        if end < 0:
-            continue
-        block = text[3:end]
-        in_list = False
-        for line in block.splitlines():
-            if line.startswith("curation_gaps:"):
-                in_list = True
-                continue
-            if in_list:
-                if line.startswith((" ", "\t")) and line.lstrip().startswith("- "):
-                    gaps += 1
-                else:
-                    in_list = False
-    return total, gaps
+    source: ADR-0298"""
+    if _count_curation_gaps is None:
+        raise _unconfigured("count_curation_gaps")
+    return _count_curation_gaps(str(domain_dir))
 
 
-def _kind_page_counts(wiki_root: Path, domain: str) -> dict[str, int]:
-    """Count pages per kind directory for a domain."""
-    counts: dict[str, int] = {}
-    for kind_dir in wiki_root.iterdir():
-        if not kind_dir.is_dir() or kind_dir.name.startswith((".", "_")):
-            continue
-        target = kind_dir / domain
-        if not target.is_dir():
-            continue
-        counts[kind_dir.name] = sum(1 for p in target.rglob("*.md") if p.is_file())
-    return counts
+def _kind_page_counts(wiki_root: str, domain: str) -> dict[str, int]:
+    """Count pages per kind directory for a domain.
+
+    source: ADR-0298"""
+    if _kind_page_counts_provider is None:
+        raise _unconfigured("kind_page_counts")
+    return _kind_page_counts_provider(str(wiki_root), domain)
 
 
 # source: ADR-0298
@@ -107,21 +123,18 @@ def render_dashboard(wiki_root: str, domain: str) -> str:
     """Render the dashboard Markdown for one project.
 
     source: ADR-0298"""
-    wiki_path = Path(wiki_root)
+    if _domain_dirs_under is None:
+        raise _unconfigured("domain_dirs_under")
     slot_statuses = _scope_slot_statuses(wiki_root, domain)
     file_cov = audit_files(wiki_root, domain)
-    domain_dirs: list[Path] = [
-        kd / domain
-        for kd in wiki_path.iterdir()
-        if kd.is_dir() and not kd.name.startswith((".", "_"))
-    ]
+    domain_dirs = _domain_dirs_under(str(wiki_root), domain)
     total_pages = 0
     total_gaps = 0
     for d in domain_dirs:
         t, g = _count_curation_gaps_under(d)
         total_pages += t
         total_gaps += g
-    kind_counts = _kind_page_counts(wiki_path, domain)
+    kind_counts = _kind_page_counts(wiki_root, domain)
 
     covered = sum(1 for s in slot_statuses if s.covered)
     total = len(slot_statuses)
@@ -235,7 +248,7 @@ def render_dashboard(wiki_root: str, domain: str) -> str:
 
 
 def write_dashboards(
-    wiki_root: str | Path,
+    wiki_root: str,
     *,
     domains: Iterable[str] | None = None,
 ) -> dict[str, str]:
@@ -244,8 +257,9 @@ def write_dashboards(
     Returns a map of ``domain -> written_path`` for the dashboards
     actually emitted. Failures are logged but don't abort the batch.
     """
-    wiki_path = Path(wiki_root)
-    if not wiki_path.is_dir():
+    if _wiki_root_is_dir is None or _write_dashboard_pages is None:
+        raise _unconfigured("wiki_root_is_dir/write_dashboard_pages")
+    if not _wiki_root_is_dir(str(wiki_root)):
         return {}
     if domains is None:
         try:
@@ -253,37 +267,5 @@ def write_dashboards(
         except Exception as exc:  # noqa: BLE001 — source: ADR-0298
             silent_failure.note("wiki_coverage_dashboard.registry", exc)
             return {}
-    target_dir = wiki_path / "_dashboards"
-    target_dir.mkdir(parents=True, exist_ok=True)
-    out: dict[str, str] = {}
-    for d in domains:
-        page = render_dashboard(str(wiki_path), d)
-        path = target_dir / f"{d}.md"
-        try:
-            path.write_text(page, encoding="utf-8")
-            out[d] = str(path)
-        except OSError:
-            continue
-    # Also write an index pointing at each dashboard.
-    index = [
-        "---",
-        "title: Coverage dashboards",
-        "kind: reference",
-        "scope: coverage-index",
-        "provenance: auto-generated",
-        "---",
-        "",
-        "# Coverage dashboards",
-        "",
-        "_One page per project, regenerated on every consolidate cycle._",
-        "",
-        "| Project | Dashboard |",
-        "|---|---|",
-    ]
-    for d in sorted(out.keys()):
-        index.append(f"| {d} | [`_dashboards/{d}.md`](_dashboards/{d}.md) |")
-    try:
-        (target_dir / "_index.md").write_text("\n".join(index) + "\n", encoding="utf-8")
-    except OSError:
-        pass
-    return out
+    pages = {d: render_dashboard(str(wiki_root), d) for d in domains}
+    return _write_dashboard_pages(str(wiki_root), pages)

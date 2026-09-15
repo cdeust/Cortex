@@ -7,7 +7,6 @@ from __future__ import annotations
 import difflib
 import re
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Callable, Final, Iterable
 
 # ── Axis names ──────────────────────────────────────────────────────────
@@ -23,7 +22,6 @@ AXES: Final[tuple[str, ...]] = (
     AXIS_PROVENANCE,
 )
 
-_SCHEMA_FOLDER: Final[str] = "_schema"
 
 
 # ── Data model ──────────────────────────────────────────────────────────
@@ -206,35 +204,25 @@ def _truthy(v: object) -> bool:
     return str(v).strip().lower() in {"true", "yes", "1"}
 
 
-def load_axis_registry(wiki_root: Path | str | None = None) -> AxisRegistry:
+def load_axis_registry(wiki_root: str | None = None) -> AxisRegistry:
     """Build the registry: defaults + any user ``wiki/_schema/`` files.
 
     User files override defaults with the same name. Missing folders
     yield only the defaults. Never raises — malformed files are skipped.
     """
+    if _SCHEMA_FILE_READER is None:
+        raise RuntimeError(
+            "wiki_axis_registry schema_file_reader not configured — call "
+            "configure_schema_file_reader() at the composition root first"
+        )
     registry = build_default_registry()
-    if wiki_root is None:
-        return registry
-
-    root = Path(wiki_root).expanduser()
-    schema_root = root / _SCHEMA_FOLDER
-    if not schema_root.is_dir():
-        return registry
-
-    for axis_dir in schema_root.iterdir():
-        if not axis_dir.is_dir():
-            continue
-        axis = axis_dir.name.lower()
+    for axis_dir_name, file_path, text in _SCHEMA_FILE_READER(wiki_root):
+        axis = axis_dir_name.lower()
         if axis not in AXES and axis not in {f"{a}s" for a in AXES}:
             continue
-        for md in axis_dir.glob("*.md"):
-            try:
-                text = md.read_text(encoding="utf-8", errors="ignore")
-            except OSError:
-                continue
-            parsed = _parse_axis_value_file(str(md), text)
-            if parsed is not None:
-                _ingest(registry, parsed)
+        parsed = _parse_axis_value_file(file_path, text)
+        if parsed is not None:
+            _ingest(registry, parsed)
     return registry
 
 
@@ -306,16 +294,31 @@ def match_axis(
 
 
 _REGISTRY_CACHE: AxisRegistry | None = None
-_WIKI_ROOT_PROVIDER: Callable[[], Path | str | None] | None = None
+_WIKI_ROOT_PROVIDER: Callable[[], "str | None"] | None = None
+
+# Composition-root injection seam for the _schema/ file reads (core may
+# not import os/pathlib or perform I/O; issue #560). Real implementation
+# lives in mcp_server/infrastructure/wiki_axis_fs.py, wired once via
+# configure_schema_file_reader.
+SchemaFileReader = Callable[["str | None"], "list[tuple[str, str, str]]"]
+_SCHEMA_FILE_READER: SchemaFileReader | None = None
 
 
-def configure_default_wiki_root(provider: Callable[[], Path | str | None]) -> None:
+def configure_default_wiki_root(provider: Callable[[], "str | None"]) -> None:
     """Composition-root injection point: register how to obtain the
     default wiki root used by the lazy ``get_registry()`` singleton.
 
     source: ADR-0292"""
     global _WIKI_ROOT_PROVIDER
     _WIKI_ROOT_PROVIDER = provider
+
+
+def configure_schema_file_reader(reader: SchemaFileReader) -> None:
+    """Composition-root hook: register the real ``_schema/`` file reader.
+
+    source: ADR-0292 (issue #560)"""
+    global _SCHEMA_FILE_READER
+    _SCHEMA_FILE_READER = reader
 
 
 def get_registry() -> AxisRegistry:
