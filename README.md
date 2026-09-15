@@ -400,6 +400,15 @@ Clean Architecture, concentric layers: `server → handlers → core ← shared`
 [docs/agent-guidance.md](docs/agent-guidance.md) is the map;
 [docs/mcp-tools.md](docs/mcp-tools.md) is the tool reference.
 
+<p align="center">
+  <img src="assets/how-cortex-works.svg" alt="A Claude Code session reaches Cortex through two doors: plugin hooks, and MCP tools that go through the server layers. Both wire core's seams through one composition-root function; infrastructure writes to PostgreSQL, SQLite or files under ~/.claude/methodology." width="100%">
+</p>
+
+[Where Claude's memories go](https://ai-architect.tools/notes/how-cortex-remembers)
+follows a memory from the hook that captures it to the recall that brings it back, and a decision
+from its ADR file to the session that reads it, with every claim linked to the lines of the
+v4.22.0 release ([en français](https://ai-architect.tools/fr/notes/how-cortex-remembers)).
+
 ## Limits worth knowing before you install
 
 - The automatic behaviour is Claude Code plugin machinery. Elsewhere you call the tools
