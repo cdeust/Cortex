@@ -17,7 +17,7 @@ import argparse
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from mcp_server.composition_root import wire_composition_root  # noqa: E402 — source: issue #560
+from mcp_server.hooks.wiring import wire_composition_root  # noqa: E402 — source: issue #560
 from mcp_server.core.wiki_coverage import _project_source_root, list_source_files
 from mcp_server.core.wiki_file_doc_skeleton import build_file_doc
 from mcp_server.infrastructure.config import WIKI_ROOT

@@ -1,6 +1,6 @@
 """Static entry-point enumeration (issue #560 review, 2026-09-16): every
 real process entry point that can reach a core/ injection seam must call
-mcp_server.composition_root.wire_composition_root(). Enumerated
+mcp_server.hooks.wiring.wire_composition_root(). Enumerated
 mechanically -- reading .claude-plugin/plugin.json's hook commands and
 scanning scripts/benchmarks for imports of mcp_server.core/handlers --
 instead of a hand-maintained list, so a new entry point added later
@@ -21,6 +21,8 @@ _WIRE_CALL_RE = re.compile(r"^\s*(?:\w+\.)?wire_composition_root\(\)", re.MULTIL
 _CORE_IMPORT_RE = re.compile(
     r"^\s*(?:from|import)\s+mcp_server\.(?:core|handlers)\b", re.MULTILINE
 )
+# A real top-level main block, not the phrase quoted in a docstring.
+_MAIN_BLOCK_RE = re.compile(r'^if __name__ == "__main__":', re.MULTILINE)
 _HOOK_MODULE_RE = re.compile(r"mcp_server\.hooks\.([A-Za-z_][\w]*)")
 
 
@@ -78,9 +80,7 @@ def test_every_hook_with_a_main_block_wires_the_composition_root():
     real process entry point regardless of how it gets invoked."""
     hook_files = sorted((REPO_ROOT / "mcp_server" / "hooks").glob("*.py"))
     entry_points = [
-        p
-        for p in hook_files
-        if '__name__ == "__main__"' in p.read_text(encoding="utf-8")
+        p for p in hook_files if _MAIN_BLOCK_RE.search(p.read_text(encoding="utf-8"))
     ]
     assert entry_points, "no hooks/*.py have a __main__ block -- broken test"
     missing = [p for p in entry_points if not _calls_wire(p)]
@@ -107,7 +107,7 @@ def test_every_benchmark_run_script_reaching_core_wires_the_composition_root():
     """No benchmarks/**/run_*.py imports mcp_server.core/handlers on this
     (wiki-only) branch, so this enumerates an empty set today; once
     issue #568's benchmark bootstrap ports onto
-    mcp_server.composition_root, any run_*.py it wires will satisfy this
+    mcp_server.hooks.wiring, any run_*.py it wires will satisfy this
     the same way (directly or by importing that bootstrap)."""
     run_scripts = sorted((REPO_ROOT / "benchmarks").glob("**/run_*.py"))
     reaching = [p for p in run_scripts if _reaches_core(p)]

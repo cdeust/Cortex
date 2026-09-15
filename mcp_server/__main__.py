@@ -44,7 +44,7 @@ from mcp_server import (
     tool_registry_nav,
     tool_registry_wiki,
 )
-from mcp_server.composition_root import wire_composition_root
+from mcp_server.hooks.wiring import wire_composition_root
 from mcp_server.core import telemetry
 from mcp_server.telemetry_middleware import TelemetryMiddleware
 from mcp_server.tool_profile_middleware import ToolProfileMiddleware

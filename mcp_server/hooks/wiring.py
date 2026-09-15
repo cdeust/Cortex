@@ -2,26 +2,22 @@
 seams (issue #560: core/ may not import os/pathlib or perform I/O).
 
 Every core/ seam needs its real implementation wired before any core
-function using it runs — wire_composition_root() wires all of them in
-one place, idempotently. Every real entry point calls it exactly once:
-mcp_server/__main__.py, scripts/launcher.py (the plugin-installed
-server AND every hook route through it, ADR-0742), every hook script's
-own ``if __name__ == "__main__":`` block (covers session_start.py's
-documented fallback to a bare ``python -m mcp_server.hooks.X`` when
-launcher.py is not found on disk), the test session
-(tests_py/_composition_root_wiring.py), and every benchmark/script that
-reaches core directly.
+function using it runs. wire_composition_root() wires all of them in one
+place, idempotently, and every real process entry point calls it once:
+mcp_server/__main__.py, scripts/launcher.py, every hook script's own
+``if __name__ == "__main__":`` block, the test session
+(tests_py/_composition_root_wiring.py), and every benchmark or script
+that reaches core directly.
 
-This module sits at the top level next to __main__.py and doctor.py, not
-inside core/ or infrastructure/ — it may import both freely, which is
-exactly the composition-root's job.
+Why it lives in hooks/: the wiring must import both core/ and
+infrastructure/, and hook processes must be able to import it. The layer
+table (docs/module-inventory.md § Dependency Rules) lets hooks/ import
+core and infrastructure but not handlers/ or a top-level module, so
+hooks/ is the one layer every entry point can reach that may do this job.
 
-The wiki-root default (``WIKI_ROOT``) is the SAME real value in every
-context, production or test: conftest.py redirects ``CORTEX_CLAUDE_DIR``
-to an isolated throwaway directory before any mcp_server import, so
-``WIKI_ROOT`` resolves under that directory during tests (no ``_schema/``
-folder there, so behavior matches the historical "no override" default)
-without a separate test-only code path.
+The wiki-root default (``WIKI_ROOT``) is the same real value in every
+context: conftest.py redirects ``CORTEX_CLAUDE_DIR`` to a throwaway
+directory before any mcp_server import, so tests need no separate path.
 
 source: issue #560
 """

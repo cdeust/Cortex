@@ -319,11 +319,13 @@ def _capture_enabled(event: dict[str, Any]) -> bool:
 def _dispatch_with_store_cleanup(event: dict[str, Any]) -> None:
     """CLI lifecycle scope starts only after the mode admits this event.
 
-    source: issue #560 -- process_event() below wires
-    mcp_server.composition_root itself, right after its own identical
-    capture-mode gate; not duplicated here."""
+    source: issue #560 -- core seams are wired here, after the capture-mode
+    gate, so excluded events never import core or infrastructure (W3-1b)."""
     if not _capture_enabled(event):
         return
+    from mcp_server.hooks.wiring import wire_composition_root  # noqa: PLC0415 — source: issue #560
+
+    wire_composition_root()
     from mcp_server.hooks._store_lifecycle import close_shared_store_on_exit  # noqa: PLC0415 — W3-1b: no teardown store import for excluded events
 
     # source: ADR-0495
@@ -335,11 +337,6 @@ def process_event(event: dict[str, Any]) -> None:
     """Process a PostToolUse event and optionally store a memory."""
     if not _capture_enabled(event):
         return
-    from mcp_server.composition_root import (  # noqa: PLC0415 — source: issue #560, W3-1b: no core/infrastructure import for excluded events
-        wire_composition_root,
-    )
-
-    wire_composition_root()
     tool_name = event.get("tool_name", "")
     tool_input = event.get("tool_input") or {}
     cwd = event.get("cwd", "")
@@ -404,8 +401,4 @@ if __name__ == "__main__":
     )
 
     exit_if_headless_authoring_child()
-    # source: issue #560 -- wiring lives in _dispatch_with_store_cleanup,
-    # AFTER the capture-mode gate, not here: this block runs even for
-    # excluded events, which must not import core/infrastructure at all
-    # (W3-1b, tests_py/hooks/test_capture_mode_processes.py).
     main(_dispatch_with_store_cleanup)

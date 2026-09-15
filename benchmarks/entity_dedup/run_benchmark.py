@@ -13,7 +13,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from mcp_server.composition_root import wire_composition_root  # noqa: E402 — source: issue #560
+from mcp_server.hooks.wiring import wire_composition_root  # noqa: E402 — source: issue #560
 
 wire_composition_root()
 

@@ -14,7 +14,7 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 
 # The core under test (the same functions production calls).
-from mcp_server.composition_root import wire_composition_root  # noqa: E402 — source: issue #560
+from mcp_server.hooks.wiring import wire_composition_root  # noqa: E402 — source: issue #560
 
 wire_composition_root()
 

@@ -28,7 +28,7 @@ from benchmarks.beam.data import (
     turns_to_memories,
 )
 from benchmarks.lib.bench_db import BenchmarkDB
-from mcp_server.composition_root import wire_composition_root  # noqa: E402 — source: issue #560
+from mcp_server.hooks.wiring import wire_composition_root  # noqa: E402 — source: issue #560
 
 wire_composition_root()
 
