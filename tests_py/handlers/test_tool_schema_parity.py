@@ -11,7 +11,7 @@ though the handler-level schema documents it — and the reverse drift
 as dangerous: a client can pass it, FastMCP will accept it, and the
 handler will silently ignore it forever.
 
-This test iterates ``mcp.list_tools()`` — the live, post-registration
+This test iterates ``list_tools()`` of a fully registered server — the post-registration
 truth — and asserts, for EVERY registered tool with a handler schema
 entry, that the wrapper's parameter set and the handler's own
 ``inputSchema["properties"]`` are exactly equal, with NO per-tool
@@ -23,17 +23,20 @@ that mode and forces the scope at the handler boundary instead (see
 
 Measured at a3b3a79d (pre-fix): 13 of 54 tools dropped handler-declared
 properties — this test fails on that commit and passes after the #559
-fix. ``ingest_prd``'s ``SCHEMAS`` entry exists but the tool itself is
-conditionally registered (gated on ``prd_upstream_available()``); it is
-skipped here rather than asserted on, matching ``merged_schemas()``'s
-own model of "one static schema map, a possibly-smaller live tool set".
+fix. The server under test is built fresh with every upstream gate open
+(``register_all(codebase=True, prd=True)``, the same deterministic pattern
+as ``tests_py/test_main.py``), so the gated tools (``ingest_codebase``,
+``change_impact``, ``ingest_prd``) are checked on every machine instead of
+only where their upstream MCP servers happen to be installed.
 """
 
 from __future__ import annotations
 
 import asyncio
 
-from mcp_server.__main__ import merged_schemas, mcp
+from mcp.server.mcpserver import MCPServer
+
+from mcp_server.__main__ import merged_schemas, register_all
 from mcp_server.infrastructure.memory_config import root_agent_topic
 
 # agent_topic is DELIBERATELY omitted from the "rooted" remember/recall
@@ -53,7 +56,9 @@ def _live_tools() -> dict[str, set[str]]:
     ``.input_schema`` (the wire-level ``mcp.types.Tool`` field mcp 2.0.0
     uses — was ``.parameters`` under FastMCP; verified against the
     installed mcp==2.0.0, 2026-08-10)."""
-    tools = asyncio.run(mcp.list_tools())
+    server = MCPServer(name="parity", version="0.0.0")
+    register_all(server, codebase=True, prd=True)
+    tools = asyncio.run(server.list_tools())
     return {t.name: set(t.input_schema.get("properties", {}).keys()) for t in tools}
 
 
@@ -89,14 +94,10 @@ def test_every_registered_tool_matches_its_handler_schema_exactly() -> None:
     assert not failures, "\n".join(failures)
 
 
-def test_every_tool_name_in_schemas_is_either_registered_or_gated() -> None:
-    """Every ``merged_schemas()`` entry either has a live registered tool,
-    or is a known upstream-gated tool (``ingest_prd``, registered only
-    when ``prd_upstream_available()``) — never a stale/typo'd map key."""
-    schemas = merged_schemas()
-    live_names = set(_live_tools())
-    unaccounted = set(schemas) - live_names - {"ingest_prd"}
+def test_every_tool_name_in_schemas_is_registered() -> None:
+    """With every gate open, each ``merged_schemas()`` entry has a registered
+    tool — never a stale or misspelled map key."""
+    unaccounted = set(merged_schemas()) - set(_live_tools())
     assert not unaccounted, (
-        f"schema map declares tool(s) with no registered wrapper and no "
-        f"known gating: {sorted(unaccounted)}"
+        f"schema map declares tool(s) with no registered wrapper: {sorted(unaccounted)}"
     )
