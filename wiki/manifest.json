@@ -3427,6 +3427,10 @@
     "ADR-1064": {
       "mirror": "ADR-1064-read-the-owners-of-each-deps-entry-from-the-scratch-record-files.md",
       "path": "adr/cortex/1064-read-the-owners-of-each-deps-entry-from-the-scratch-record-files.md"
+    },
+    "ADR-1065": {
+      "mirror": "ADR-1065-refining-a-wiki-draft-leaves-its-confidence-as-the-source-claims-set-it.md",
+      "path": "adr/cortex/1065-refining-a-wiki-draft-leaves-its-confidence-as-the-source-claims-set-it.md"
     }
   },
   "project": "cortex",

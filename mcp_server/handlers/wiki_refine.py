@@ -195,7 +195,8 @@ async def handler_get(args: dict[str, Any] | None = None) -> dict[str, Any]:
 schema_refine = {
     "description": (
         "Submit a refined draft (lead, sections, optional title). Updates "
-        "wiki.drafts in place; records an audit memo. Phase 2.3 (Path B)."
+        "wiki.drafts in place; records an audit memo. The draft's confidence "
+        "is left as its source claims set it (ADR-1065). Phase 2.3 (Path B)."
     ),
     "inputSchema": {
         "type": "object",
@@ -297,7 +298,6 @@ async def handler_refine(args: dict[str, Any] | None = None) -> dict[str, Any]:
         frontmatter=args.get("frontmatter"),
         synth_model=synth_model,
         synth_prompt=synth_prompt,
-        confidence=0.85,  # LLM-refined drafts get a confidence bump
     )
 
     if updated:
@@ -312,7 +312,7 @@ async def handler_refine(args: dict[str, Any] | None = None) -> dict[str, Any]:
             decision="refined_llm",
             rationale=rationale,
             inputs={"synth_model": synth_model, "synth_prompt_hash": prompt_hash},
-            confidence=0.85,
+            confidence=float(draft["confidence"]),
             author="claude_refine",
         )
         conn.commit()

@@ -8,6 +8,15 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Refining a wiki draft no longer raises its confidence (#578).**
+  `handler_refine` (`mcp_server/handlers/wiki_refine.py`) wrote a fixed 0.85
+  into every refined draft and its `refined_llm` memo, which put the draft past
+  the curator's 0.6 approve threshold whatever the confidence of its source
+  claims. A refined draft now keeps the confidence the synthesizer derived from
+  its claims, and the memo records that value (ADR-1065). The handler is not
+  registered as an MCP tool, so no draft reached the overwrite through the
+  server.
+
 - **An installer upgrade leaves one version of each package in `deps/` (#573).**
   `scripts/setup.sh` (the `--postgres` path of `install-plugin.sh`) and
   `scripts/setup.py` ran `pip install --target` straight into the persistent
