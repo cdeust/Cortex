@@ -37,7 +37,7 @@ Easier: a page row can no longer carry prose under an empty key, and the curator
 
 `tests_py/shared/test_wiki_sections.py` covers the four functions over dicts, `Section` objects, missing fields and non-text values. `tests_py/handlers/test_wiki_compile_sections_mirror.py` compiles a draft holding a blank heading, a missing heading and a numeric heading, and asserts the mirror holds only the titled section while the published Markdown omits the orphan prose. `tests_py/core/test_draft_curator_sections.py` drives four malformed shapes through `evaluate_draft`. `test_duplicate_headings_are_refused` covers the refine entry point. Three of those fail on the previous code, one of them with the `AttributeError`.
 
-Changed, for malformed data only: the renderer used to coerce with `str()`, so a numeric heading rendered as `7` and a numeric body rendered under its heading. Both are now dropped, a whitespace-only body renders empty, and a padded heading renders stripped. A well-formed draft renders exactly as before, checked case by case against the previous loop.
+Changed, for malformed data only: the renderer used to coerce with `str()`. A section whose heading is not text is now dropped outright, where it used to render under a heading such as `7`. A section whose body is not text keeps its place under its valid heading and renders with an empty body, where the number used to appear. A whitespace-only body renders empty and a padded heading renders stripped. A well-formed draft renders exactly as before, checked case by case against the previous loop.
 
 Harder: a consumer that wanted the raw sections, with their unusable entries, has to read the draft column itself. None does.
 
