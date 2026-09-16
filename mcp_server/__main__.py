@@ -7,6 +7,7 @@ Usage:
 """
 
 # ruff: noqa: E402 — backend selection must precede settings-dependent imports.
+# File-wide: the resolver call requires the same exemption for 14 existing imports.
 
 from __future__ import annotations
 

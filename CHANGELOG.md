@@ -55,6 +55,13 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Claude and direct MCP startup honour the same saved backend (#600).** A
+  saved SQLite selection was honoured by the Claude launcher while direct
+  console/module startup could select a reachable PostgreSQL server, sending
+  the two hosts to different stores. Direct startup now resolves the saved
+  selection before loading memory settings, preserving explicit overrides.
+  Existing databases are not migrated or merged.
+
 - **Procedural skills are stored on the default backend too (#596).** The
   `procedural_skills` table existed only on PostgreSQL, so on SQLite the
   session-end writer mined its skills and lost every one to an
