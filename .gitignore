@@ -63,7 +63,7 @@ traces/
 # .claude/worktrees/ this project's rule names, and the directory was one
 # `git add -A` away from being committed (observed 2026-09-16 while
 # reviewing PR #600).
-.Codex/
+/.Codex/
 tasks/
 benchmarks/snapshots/
 .memsearch/

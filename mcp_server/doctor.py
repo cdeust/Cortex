@@ -19,6 +19,10 @@ from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 from mcp_server.infrastructure.backend_marker import effective_backend
 from mcp_server.doctor_mcp import run_mcp
+from mcp_server.shared.subprocess_safe import run_with_hard_timeout
+
+# source: validate_memory.py:29 precedent (_GIT_CHECK_TIMEOUT_S)
+_WORKTREE_LIST_TIMEOUT_S = 2.0
 
 
 def ensure_reranker_ready():
@@ -247,6 +251,109 @@ def _codebase_pipeline() -> Check:
     )
 
 
+def _worktree_list() -> list[dict[str, object]] | None:
+    """Parse ``git worktree list --porcelain``, main worktree first.
+
+    precondition: none — safe to call outside a git checkout.
+    postcondition: returns one dict per worktree block, in the order git
+    printed them (the main worktree is always first — git-worktree(1)
+    section list). Each dict carries ``path`` (str), ``bare`` (bool),
+    ``prunable`` (bool). Returns ``None`` when ``git`` is missing, the cwd
+    isn't a git checkout, or the command times out — every failure mode
+    of ``run_with_hard_timeout`` collapses to the same "not applicable"
+    signal, never a raised exception.
+
+    source: ADR-1079"""
+    out = run_with_hard_timeout(
+        ["git", "worktree", "list", "--porcelain"],
+        cwd=Path.cwd(),
+        timeout=_WORKTREE_LIST_TIMEOUT_S,
+    )
+    if out is None:
+        return None
+    entries: list[dict[str, object]] = []
+    current: dict[str, object] | None = None
+    for line in out.splitlines():
+        if line.startswith("worktree "):
+            if current is not None:
+                entries.append(current)
+            current = {
+                "path": line[len("worktree ") :].strip(),
+                "bare": False,
+                "prunable": False,
+            }
+        elif line == "bare" and current is not None:
+            current["bare"] = True
+        elif line.startswith("prunable") and current is not None:
+            current["prunable"] = True
+    if current is not None:
+        entries.append(current)
+    return entries or None
+
+
+def _worktree_locations() -> Check:
+    """Optional: WARN when a registered worktree lives outside
+    ``<main-worktree>/.claude/worktrees/``.
+
+    Reports only — never fixes, never moves the worktree, never fails
+    doctor's exit code (``optional=True``). The allowed root is derived
+    from the FIRST entry ``git worktree list --porcelain`` prints (always
+    the main worktree, per git-worktree(1) section list), never from
+    ``git rev-parse --show-toplevel`` — that call resolves to the linked
+    worktree's own path when run from inside one, which would flag every
+    sibling worktree as a false positive.
+
+    source: ADR-1079 (rule reported: docs/agent-guidance.md:160-166)"""
+    entries = _worktree_list()
+    if not entries:
+        return Check(
+            "worktree locations (optional)", True, "not a git checkout", optional=True
+        )
+
+    main = entries[0]
+    if main.get("bare"):
+        return Check(
+            "worktree locations (optional)",
+            True,
+            "bare repository — rule not applicable",
+            optional=True,
+        )
+
+    allowed_root = (Path(str(main["path"])) / ".claude" / "worktrees").resolve()
+    outside = [
+        str(Path(str(e["path"])).resolve())
+        for e in entries[1:]
+        if not e.get("prunable")
+        and not _under(Path(str(e["path"])).resolve(), allowed_root)
+    ]
+
+    if not outside:
+        return Check(
+            "worktree locations (optional)",
+            True,
+            f"all worktrees under {allowed_root}",
+            optional=True,
+        )
+    return Check(
+        "worktree locations (optional)",
+        False,
+        f"outside {allowed_root}: {', '.join(outside)}",
+        "Move or remove these worktrees — the only allowed location is "
+        "<repo>/.claude/worktrees/<name>/ "
+        "(source: docs/agent-guidance.md:160-166).",
+        optional=True,
+    )
+
+
+def _under(path: Path, root: Path) -> bool:
+    """True iff ``path`` is ``root`` or a descendant of it (both resolved)."""
+    try:
+        path.relative_to(root)
+        return True
+    except ValueError:
+        return False
+
+
 def _i10_config() -> Check:
     """Verify pool config respects I10 invariant without opening a pool."""
     try:
@@ -301,6 +408,7 @@ CHECKS: list[Callable[[], Check]] = [
     _methodology_dir,
     _i10_config,
     _codebase_pipeline,  # optional — doesn't fail doctor
+    _worktree_locations,  # optional — doesn't fail doctor
 ]
 
 SQLITE_CHECKS: list[Callable[[], Check]] = [
@@ -309,6 +417,7 @@ SQLITE_CHECKS: list[Callable[[], Check]] = [
     _methodology_dir,
     _i10_config,
     _codebase_pipeline,  # optional — doesn't fail doctor
+    _worktree_locations,  # optional — doesn't fail doctor
 ]
 
 

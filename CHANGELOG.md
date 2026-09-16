@@ -94,6 +94,20 @@ adheres to [Semantic Versioning](https://semver.org/).
   selection before loading memory settings, preserving explicit overrides.
   Existing databases are not migrated or merged.
 
+- **`.gitignore`'s `.Codex/` rule was unanchored, so it matched at any
+  depth (#601 follow-up, ADR-1079).** `git status` silently swallowed any
+  nested `.Codex` directory anywhere in the tree, not just the repo-root
+  one PR #601 intended. Anchored to `/.Codex/`. The condition that rule
+  was hiding — a git worktree outside `.claude/worktrees/`, the only
+  location `docs/agent-guidance.md` names — is now reported, never
+  silenced: `python -m mcp_server.doctor` (and `check_setup`,
+  `/preflight`) gained an optional, non-blocking `worktree locations`
+  check that lists any `git worktree list --porcelain` entry outside
+  `<main-worktree>/.claude/worktrees/`, sourced from the main worktree's
+  own listing rather than `git rev-parse --show-toplevel` (which
+  resolves to a linked worktree's own path and would false-positive on
+  every sibling). The worktree itself is left exactly where it is.
+
 - **Procedural skills are stored on the default backend too (#596).** The
   `procedural_skills` table existed only on PostgreSQL, so on SQLite the
   session-end writer mined its skills and lost every one to an

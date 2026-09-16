@@ -10,6 +10,8 @@ readiness).
 
 from __future__ import annotations
 
+import subprocess
+
 import pytest
 
 from mcp_server.doctor import (
@@ -20,6 +22,7 @@ from mcp_server.doctor import (
     _pg_driver,
     _python_version,
     _sqlite_store,
+    _worktree_locations,
     active_checks,
     ensure_reranker_ready,
     run,
@@ -93,6 +96,66 @@ class TestBackendAwareChecks:
             memory_config.get_memory_settings.cache_clear()
         assert check.ok is True
         assert "memories" in check.detail
+
+
+@pytest.fixture
+def real_git_repo(tmp_path):
+    """Bare-bones repo with an initial commit, git identity set explicitly
+    (CI runners have none) — mirrors
+    tests_py/handlers/test_auto_task_record_writer_git_commits.py's
+    module-local fixture rather than importing across modules."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"], cwd=repo, check=True
+    )
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=repo, check=True)
+    (repo / "a.txt").write_text("hello\n")
+    subprocess.run(["git", "add", "a.txt"], cwd=repo, check=True)
+    subprocess.run(
+        ["git", "commit", "-q", "-m", "initial commit"], cwd=repo, check=True
+    )
+    return repo
+
+
+class TestWorktreeLocations:
+    """source: ADR-1079 — the check reports docs/agent-guidance.md:160-166,
+    never blocks (optional=True), never rewrites the rule."""
+
+    def test_main_checkout_only_passes(self, real_git_repo, monkeypatch):
+        monkeypatch.chdir(real_git_repo)
+        check = _worktree_locations()
+        assert check.ok is True
+        assert check.optional is True
+
+    def test_not_a_git_checkout_passes(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)  # plain dir, no .git
+        check = _worktree_locations()
+        assert check.ok is True
+        assert check.optional is True
+
+    def test_flags_worktree_outside_claude_worktrees(self, real_git_repo, monkeypatch):
+        subprocess.run(
+            ["git", "worktree", "add", "-q", ".claude/worktrees/good", "-b", "good"],
+            cwd=real_git_repo,
+            check=True,
+        )
+        outside = real_git_repo.parent / "outside-wt"
+        subprocess.run(
+            ["git", "worktree", "add", "-q", str(outside), "-b", "bad"],
+            cwd=real_git_repo,
+            check=True,
+        )
+        monkeypatch.chdir(real_git_repo)
+
+        check = _worktree_locations()
+
+        assert check.ok is False
+        assert check.optional is True
+        good_path = str((real_git_repo / ".claude" / "worktrees" / "good").resolve())
+        assert good_path not in check.detail
+        assert str(outside.resolve()) in check.detail
 
 
 class TestEnsureRerankerReady:

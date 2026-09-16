@@ -3484,6 +3484,10 @@
       "mirror": "ADR-1078-resolve-saved-backend-before-direct-mcp-startup-imports.md",
       "path": "adr/cortex/1078-resolve-saved-backend-before-direct-mcp-startup-imports.md"
     },
+    "ADR-1079": {
+      "mirror": "ADR-1079-report-out-of-convention-git-worktrees-as-an-optional-doctor-warn.md",
+      "path": "adr/cortex/1079-report-out-of-convention-git-worktrees-as-an-optional-doctor-warn.md"
+    },
     "ADR-1080": {
       "mirror": "ADR-1080-inject-only-the-sessions-project-and-global-memories-in-session-hooks.md",
       "path": "adr/cortex/1080-inject-only-the-sessions-project-and-global-memories-in-session-hooks.md"
