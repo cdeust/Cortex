@@ -19,6 +19,11 @@ from pathlib import Path
 from typing import Any
 
 from mcp_server.handlers._tool_meta import NON_IDEMPOTENT_WRITE, READ_ONLY
+from mcp_server.shared.wiki_sections import (
+    body_of,
+    heading_of,
+    titled_sections,
+)
 from mcp_server.infrastructure.wiki_schema_reader import load_registry
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.memory_config import get_memory_settings
@@ -285,11 +290,6 @@ def _content_refusal(args: dict[str, Any]) -> str | None:
     return None
 
 
-def _is_text(value: Any) -> bool:
-    """Non-blank text. A section's heading and body are both of that shape."""
-    return isinstance(value, str) and bool(value.strip())
-
-
 def _validate_against_contract(
     sections: list[dict], required_sections: list[str]
 ) -> list[str]:
@@ -300,17 +300,21 @@ def _validate_against_contract(
     registered wrapper's signature, so the check belongs here (ADR-1070).
     """
     errors: list[str] = []
-    headings = {s["heading"].strip() for s in sections if _is_text(s.get("heading"))}
+    headings = {heading for heading, _ in titled_sections(sections)}
     for req in required_sections:
         if req not in headings:
             errors.append(f"required section missing: {req!r}")
+    seen: set[str] = set()
     for index, section in enumerate(sections):
-        heading = section.get("heading")
-        if not _is_text(heading):
+        heading = heading_of(section)
+        if heading is None:
             errors.append(f"section {index}: heading must be non-blank text")
-        if not _is_text(section.get("body")):
-            name = heading if _is_text(heading) else index
-            errors.append(f"section {name!r} has empty body")
+        elif heading in seen:
+            errors.append(f"duplicate section heading: {heading!r}")
+        else:
+            seen.add(heading)
+        if not body_of(section):
+            errors.append(f"section {heading if heading else index!r} has empty body")
     return errors
 
 

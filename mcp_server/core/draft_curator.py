@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from mcp_server.shared.wiki_schema_loader import KindDefinition
+from mcp_server.shared.wiki_sections import titled_sections
 
 CurationVerdict = Literal["approved", "rejected", "hold"]
 
@@ -58,12 +59,8 @@ def _section_is_filled(body: str) -> bool:
 
 def _missing_required_sections(sections: list, required: list[str]) -> list[str]:
     """Return the subset of required sections that are missing or empty."""
-    by_heading: dict[str, str] = {}
-    for s in sections:
-        # accept either Pydantic Section or dict
-        heading = getattr(s, "heading", None) or s.get("heading", "")
-        body = getattr(s, "body", None) or s.get("body", "")
-        by_heading[heading.strip()] = body
+    # Section or dict, either field possibly absent or not text (ADR-1071)
+    by_heading: dict[str, str] = dict(titled_sections(sections))
     missing: list[str] = []
     for h in required:
         body = by_heading.get(h)

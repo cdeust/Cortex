@@ -62,3 +62,14 @@ def test_a_blank_heading_never_satisfies_a_required_section() -> None:
     )
 
     assert "required section missing: 'Context'" in errors
+
+
+def test_duplicate_headings_are_refused() -> None:
+    sections = [
+        {"heading": "Context", "body": "first"},
+        {"heading": " Context ", "body": "second"},
+    ]
+
+    errors = _validate_against_contract(sections, [])
+
+    assert errors == ["duplicate section heading: 'Context'"]

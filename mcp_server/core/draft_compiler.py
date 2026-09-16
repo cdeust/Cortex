@@ -8,6 +8,7 @@ import re
 from datetime import datetime, timezone
 
 from mcp_server.shared.wiki_layout import slugify
+from mcp_server.shared.wiki_sections import titled_sections
 
 _FRONTMATTER_KEYS_ORDER = (
     "title",
@@ -165,12 +166,8 @@ def compile_draft(
     body_parts.append(f"# {title}\n")
     if lead:
         body_parts.append(f"{lead}\n")
-    for s in sections:
-        heading = s.get("heading") if isinstance(s, dict) else getattr(s, "heading", "")
-        body = s.get("body") if isinstance(s, dict) else getattr(s, "body", "")
-        if not heading:
-            continue
-        body_parts.append(_section_md(str(heading), str(body or "")))
+    for heading, body in titled_sections(sections):
+        body_parts.append(_section_md(heading, body))
 
     if backlinks:
         body_parts.append("## See also\n")

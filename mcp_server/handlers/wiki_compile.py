@@ -36,6 +36,7 @@ from mcp_server.infrastructure.pg_store_wiki import (
 )
 from mcp_server.infrastructure.wiki_store import write_page
 from mcp_server.shared.wiki_source_paths import extract_document_paths
+from mcp_server.shared.wiki_sections import titled_sections
 
 
 schema = {
@@ -152,12 +153,9 @@ def _publish_one(conn, draft: dict, *, dry_run: bool) -> dict:
         "status": frontmatter.get("status", "seedling"),
         "lifecycle_state": frontmatter.get("lifecycle_state", "active"),
         "lead": (draft.get("lead") or "").strip(),
-        "sections": {
-            (s.get("heading") if isinstance(s, dict) else getattr(s, "heading", "")): (
-                s.get("body") if isinstance(s, dict) else getattr(s, "body", "")
-            )
-            for s in (draft.get("sections") or [])
-        },
+        # The mirror holds what the page holds: a section with no usable
+        # heading is not on the page (ADR-1071).
+        "sections": dict(titled_sections(draft.get("sections"))),
         "body": markdown,
         "body_hash": body_hash(markdown),
         "documents": documents,

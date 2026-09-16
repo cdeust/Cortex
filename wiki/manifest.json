@@ -3451,6 +3451,10 @@
     "ADR-1070": {
       "mirror": "ADR-1070-a-draft-section-carries-a-heading-and-a-body-both-text.md",
       "path": "adr/cortex/1070-a-draft-section-carries-a-heading-and-a-body-both-text.md"
+    },
+    "ADR-1071": {
+      "mirror": "ADR-1071-one-reading-of-a-draft-section-for-every-consumer.md",
+      "path": "adr/cortex/1071-one-reading-of-a-draft-section-for-every-consumer.md"
     }
   },
   "project": "cortex",

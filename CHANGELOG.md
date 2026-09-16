@@ -51,6 +51,14 @@ adheres to [Semantic Versioning](https://semver.org/).
   client-visible schema comes from the registered wrapper's signature. Both
   fields are now validated as non-blank text, and a number for either returns a
   validation error instead of raising `AttributeError` (ADR-1070).
+- **The wiki.pages mirror holds what the page holds (#589).** The Markdown
+  renderer dropped a section with no heading while `handlers/wiki_compile.py`
+  mirrored it into `wiki.pages.sections` under an empty key, so a file and its
+  row described the same page differently, and `core/draft_curator.py` raised
+  `AttributeError` on a heading that was not text. The four readings of a
+  section now come from one place, `mcp_server/shared/wiki_sections.py`, and
+  `wiki_refine_draft` also refuses two sections carrying the same heading,
+  which the mirror's mapping silently deduped (ADR-1071).
 - **Refining a wiki draft no longer raises its confidence (#578).**
   `handler_refine` (`mcp_server/handlers/wiki_refine.py`) wrote a fixed 0.85
   into every refined draft and its `refined_llm` memo, which put the draft past
