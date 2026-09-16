@@ -204,9 +204,11 @@ schema_refine = {
         "draft's confidence is left as its source claims set it (ADR-1065), "
         "so refining never moves a draft past `wiki_curate`'s approve "
         "threshold. Sections are refused unless they satisfy the kind "
-        "contract returned by `wiki_get_draft`, and a call carrying none of "
-        "title/lead/sections/frontmatter is refused whole, writing neither "
-        "the draft nor a memo (ADR-1068). Phase 2.3 (Path B)."
+        "contract returned by `wiki_get_draft`. A call carrying none of "
+        "title/lead/sections/frontmatter is refused whole, and so is one "
+        "whose value for any of them is empty: blanking a field is not a "
+        "refinement (ADR-1068, ADR-1069). A refused call writes neither the "
+        "draft nor a memo. Phase 2.3 (Path B)."
     ),
     "annotations": NON_IDEMPOTENT_WRITE,
     "inputSchema": {
@@ -251,9 +253,36 @@ schema_refine = {
 
 
 # A refinement carries content. Without one of these the call would write
-# only synth_model and an audit memo saying a model refined nothing.
-# See ADR-1068 for the refusal.
+# only synth_model and an audit memo saying a model refined nothing, and an
+# empty one would blank the field it names. See ADR-1068 and ADR-1069.
 _CONTENT_FIELDS = ("title", "lead", "sections", "frontmatter")
+
+
+def _is_empty(value: Any) -> bool:
+    """A value that carries nothing: blank text, empty list, empty mapping."""
+    if isinstance(value, str):
+        return not value.strip()
+    return not value
+
+
+def _content_refusal(args: dict[str, Any]) -> str | None:
+    """Why this call refines nothing, or None when it carries a refinement."""
+    provided = {
+        field: args[field] for field in _CONTENT_FIELDS if args.get(field) is not None
+    }
+    if not provided:
+        return f"nothing to refine: pass at least one of {', '.join(_CONTENT_FIELDS)}"
+    empty = [
+        field
+        for field in _CONTENT_FIELDS
+        if field in provided and _is_empty(provided[field])
+    ]
+    if empty:
+        return (
+            f"empty value for: {', '.join(empty)}. A refinement carries content; "
+            "blanking a field is not one."
+        )
+    return None
 
 
 def _validate_against_contract(
@@ -284,14 +313,9 @@ async def handler_refine(args: dict[str, Any] | None = None) -> dict[str, Any]:
     if draft is None:
         return {"error": f"draft {draft_id} not found"}
 
-    if all(args.get(field) is None for field in _CONTENT_FIELDS):
-        return {
-            "error": (
-                f"nothing to refine: pass at least one of {', '.join(_CONTENT_FIELDS)}"
-            ),
-            "draft_id": int(draft_id),
-            "updated": False,
-        }
+    refusal = _content_refusal(args)
+    if refusal is not None:
+        return {"error": refusal, "draft_id": int(draft_id), "updated": False}
 
     sections = args.get("sections")
     if sections is not None:

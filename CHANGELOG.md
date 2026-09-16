@@ -34,6 +34,13 @@ adheres to [Semantic Versioning](https://semver.org/).
   the draft's `synth_model` and wrote a `refined_llm` memo recording a
   refinement that never happened. Such a call now returns an error and writes
   neither the draft nor the memo (ADR-1068).
+- **A wiki draft refinement carrying an empty value is refused (#585).** The
+  ADR-1068 refusal tested `is None`, so `lead: ""`, `title: "   "`,
+  `sections: []` and `frontmatter: {}` were written over the draft: a blanked
+  lead reads as a placeholder to the curator, which subtracts 0.25 from the
+  draft's score, and an empty frontmatter drops the synthesizer's `updated`
+  stamp. The handler now refuses the call and names every field whose value is
+  empty (ADR-1069).
 - **Refining a wiki draft no longer raises its confidence (#578).**
   `handler_refine` (`mcp_server/handlers/wiki_refine.py`) wrote a fixed 0.85
   into every refined draft and its `refined_llm` memo, which put the draft past

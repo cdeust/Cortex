@@ -3443,6 +3443,10 @@
     "ADR-1068": {
       "mirror": "ADR-1068-a-wiki-draft-refinement-must-carry-content.md",
       "path": "adr/cortex/1068-a-wiki-draft-refinement-must-carry-content.md"
+    },
+    "ADR-1069": {
+      "mirror": "ADR-1069-an-empty-value-is-not-a-wiki-draft-refinement.md",
+      "path": "adr/cortex/1069-an-empty-value-is-not-a-wiki-draft-refinement.md"
     }
   },
   "project": "cortex",

@@ -114,6 +114,43 @@ async def test_a_refine_carrying_no_content_writes_nothing(sqlite_store):
     assert _memo_count(sqlite_store._conn, draft_id) == memos_before
 
 
+@pytest.mark.parametrize(
+    ("payload", "named"),
+    [
+        ({"lead": ""}, "lead"),
+        ({"title": "   "}, "title"),
+        ({"sections": []}, "sections"),
+        ({"frontmatter": {}}, "frontmatter"),
+        ({"lead": REFINED_LEAD, "title": ""}, "title"),
+    ],
+    ids=["blank-lead", "blank-title", "no-sections", "no-frontmatter", "one-of-two"],
+)
+@pytest.mark.asyncio
+async def test_a_refine_carrying_an_empty_value_writes_nothing(
+    sqlite_store, payload, named
+):
+    """Issue #585: `is None` let an empty value through, and writing it blanked
+    the field it named while a memo recorded a refinement."""
+    from mcp_server.handlers.wiki_refine import handler_refine
+    from mcp_server.infrastructure.pg_store_wiki import get_draft
+
+    draft_id = await _weak_pending_draft(sqlite_store)
+    before = get_draft(sqlite_store._conn, draft_id)
+    memos_before = _memo_count(sqlite_store._conn, draft_id)
+
+    out = await handler_refine({"draft_id": draft_id, **payload})
+
+    assert out["updated"] is False
+    assert named in out["error"]
+    after = get_draft(sqlite_store._conn, draft_id)
+    assert after["lead"] == before["lead"]
+    assert after["title"] == before["title"]
+    assert after["sections"] == before["sections"]
+    assert after["frontmatter"] == before["frontmatter"]
+    assert after["synth_model"] == before["synth_model"]
+    assert _memo_count(sqlite_store._conn, draft_id) == memos_before
+
+
 @pytest.mark.asyncio
 async def test_refine_keeps_the_draft_confidence(sqlite_store):
     from mcp_server.handlers.wiki_refine import handler_refine
