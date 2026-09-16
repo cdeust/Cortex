@@ -4383,11 +4383,6 @@
       "detail": "_install_locked"
     },
     {
-      "file": "mcp_server/infrastructure/scanner.py",
-      "kind": "file-size",
-      "detail": "exceeds 300-line cap"
-    },
-    {
       "file": "mcp_server/infrastructure/sqlite_schema.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"

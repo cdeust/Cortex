@@ -10,6 +10,7 @@ source: ADR-1072
 from __future__ import annotations
 
 import json
+import pathlib
 
 import pytest
 
@@ -142,3 +143,17 @@ def test_a_record_whose_message_is_not_an_object_is_counted_not_a_crash(
 
     assert activity["tool_sequence"] == ["Bash"]
     assert activity["turn_count"] == 2
+
+
+@pytest.mark.parametrize(
+    "path", [12345, 3.5, True, ["/tmp/s.jsonl"], {"path": "/tmp/s.jsonl"}]
+)
+def test_a_path_that_is_not_a_path_is_refused(path) -> None:
+    """The hook event's JSON envelope is untyped, like the transcript."""
+    assert transcript_activity(path) == {"tool_sequence": [], "turn_count": 0}
+
+
+def test_a_path_object_still_works(tmp_path) -> None:
+    transcript = _write(tmp_path / "s.jsonl", [_assistant("Read")])
+
+    assert transcript_activity(pathlib.Path(transcript))["tool_sequence"] == ["Read"]

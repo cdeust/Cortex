@@ -20,6 +20,15 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **One transcript reader, and it refuses a non-path (#591 follow-up).**
+  `scanner.iter_tool_uses` streamed the same assistant `tool_use` blocks as
+  `infrastructure/transcript_activity.py` and had no caller anywhere in the
+  repository; it carried the two crashes the review of #592 closed in the new
+  module. It is deleted. `transcript_activity` now returns its empty result
+  for a `transcript_path` that is neither text nor a path, where it raised
+  `TypeError`: the value comes from the hook event's untyped JSON envelope and
+  runs in a path with no exception handler (ADR-1073).
+
 - **Procedural learning finally has an input (#591).** Every session entry was
   written with `toolsUsed: []` and `turnCount: 0`, because the SessionEnd
   payload carries neither and `hooks/session_lifecycle.py` read them from it:

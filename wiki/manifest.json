@@ -3459,6 +3459,10 @@
     "ADR-1072": {
       "mirror": "ADR-1072-a-session-entry-carries-the-tool-sequence-read-from-its-transcript.md",
       "path": "adr/cortex/1072-a-session-entry-carries-the-tool-sequence-read-from-its-transcript.md"
+    },
+    "ADR-1073": {
+      "mirror": "ADR-1073-reading-a-transcript-has-one-implementation-and-refuses-a-non-path.md",
+      "path": "adr/cortex/1073-reading-a-transcript-has-one-implementation-and-refuses-a-non-path.md"
     }
   },
   "project": "cortex",

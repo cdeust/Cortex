@@ -15,6 +15,7 @@ source: ADR-1072"""
 from __future__ import annotations
 
 import json
+from os import PathLike
 from pathlib import Path
 from typing import Any
 
@@ -55,10 +56,12 @@ def transcript_activity(transcript_path: str | Path | None) -> dict[str, Any]:
     that does not parse as JSON, or parses as anything other than an object,
     is skipped and the rest of the file is still read — this runs inside the
     SessionEnd hook, where an exception would cost the session its log entry
-    and its profile update.
+    and its profile update. A `transcript_path` that is neither text nor a
+    path is refused the same way, since it comes from the hook event's own
+    JSON envelope and nothing there is typed.
     """
     empty: dict[str, Any] = {"tool_sequence": [], "turn_count": 0}
-    if not transcript_path:
+    if not transcript_path or not isinstance(transcript_path, (str, PathLike)):
         return empty
     path = Path(transcript_path)
     sequence: list[str] = []
