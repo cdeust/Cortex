@@ -55,8 +55,12 @@ def extract_metadata_fields(raw_records: list[dict]) -> dict[str, Any]:
     }
 
 
-def _extract_tools_from_content(content: Any, tools_used: set[str]) -> None:
-    """Extract tool names from assistant message content blocks."""
+def _extract_tools_from_content(content: Any, tool_sequence: list[str]) -> None:
+    """Append the tool names of one assistant message, in call order.
+
+    Order and repetition are the evidence procedural mining reads
+    (ADR-1072); a set would describe a sequence nobody performed.
+    """
     if isinstance(content, list):
         for block in content:
             if (
@@ -64,7 +68,7 @@ def _extract_tools_from_content(content: Any, tools_used: set[str]) -> None:
                 and block.get("type") == "tool_use"
                 and block.get("name")
             ):
-                tools_used.add(block["name"])
+                tool_sequence.append(block["name"])
 
 
 # source: ADR-0596
@@ -75,7 +79,7 @@ def extract_message_stats(raw_records: list[dict]) -> dict[str, Any]:
     """Extract per-message statistics: counts, tools, text content."""
     user_count = 0
     assistant_count = 0
-    tools_used: set[str] = set()
+    tool_sequence: list[str] = []
     first_message = None
     all_text_parts: list[str] = []
     all_text_len = 0
@@ -98,13 +102,13 @@ def extract_message_stats(raw_records: list[dict]) -> dict[str, Any]:
         if rec.get("type") == "assistant":
             assistant_count += 1
             _extract_tools_from_content(
-                (rec.get("message") or {}).get("content"), tools_used
+                (rec.get("message") or {}).get("content"), tool_sequence
             )
 
     return {
         "user_count": user_count,
         "assistant_count": assistant_count,
-        "tools_used": tools_used,
+        "tools_used": tool_sequence,
         "first_message": first_message,
         "all_text": " ".join(all_text_parts) or None,
     }
@@ -147,7 +151,7 @@ def build_conversation_record(
         "userCount": stats["user_count"],
         "assistantCount": stats["assistant_count"],
         "turnCount": stats["assistant_count"],
-        "toolsUsed": list(stats["tools_used"]),
+        "toolsUsed": list(stats["tools_used"]),  # ordered, ADR-1072
         "duration": compute_duration(meta["first_timestamp"], meta["last_timestamp"]),
         "fileSize": st.st_size if st else None,
     }

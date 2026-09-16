@@ -333,3 +333,75 @@ class TestMain:
         main()
         mock_tomb.assert_called_once_with()
         mock_pe.assert_not_called()
+
+
+class TestSessionEntryActivity:
+    """Issue #591: the payload carries no tools; its transcript does."""
+
+    def _transcript(self, tmp_path):
+        records = [
+            {"type": "user", "message": {"content": "fix the bug"}},
+            {
+                "type": "assistant",
+                "message": {
+                    "content": [
+                        {"type": "tool_use", "name": "Read", "input": {}},
+                        {"type": "tool_use", "name": "Edit", "input": {}},
+                    ]
+                },
+            },
+            {
+                "type": "assistant",
+                "message": {
+                    "content": [{"type": "tool_use", "name": "Bash", "input": {}}]
+                },
+            },
+        ]
+        path = tmp_path / "abc123.jsonl"
+        path.write_text(
+            "\n".join(json.dumps(record) for record in records) + "\n",
+            encoding="utf-8",
+        )
+        return str(path)
+
+    def test_entry_is_filled_from_the_transcript(self, tmp_path):
+        from mcp_server.hooks.session_lifecycle import _build_session_entry
+
+        entry = _build_session_entry(
+            {
+                "session_id": "abc123",
+                "transcript_path": self._transcript(tmp_path),
+                "cwd": "/tmp/project",
+            },
+            "my-project",
+        )
+
+        assert entry["toolsUsed"] == ["Read", "Edit", "Bash"]
+        assert entry["turnCount"] == 2
+
+    def test_the_event_wins_when_it_carries_the_fields(self, tmp_path):
+        from mcp_server.hooks.session_lifecycle import _build_session_entry
+
+        entry = _build_session_entry(
+            {
+                "session_id": "abc123",
+                "transcript_path": self._transcript(tmp_path),
+                "cwd": "/tmp/project",
+                "tools_used": ["Write"],
+                "turn_count": 9,
+            },
+            "my-project",
+        )
+
+        assert entry["toolsUsed"] == ["Write"]
+        assert entry["turnCount"] == 9
+
+    def test_no_transcript_leaves_the_entry_empty(self):
+        from mcp_server.hooks.session_lifecycle import _build_session_entry
+
+        entry = _build_session_entry(
+            {"session_id": "abc123", "cwd": "/tmp/project"}, "my-project"
+        )
+
+        assert entry["toolsUsed"] == []
+        assert entry["turnCount"] == 0

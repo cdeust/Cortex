@@ -15,6 +15,7 @@ from typing import Any
 
 from mcp_server.infrastructure.config import CLAUDE_DIR
 from mcp_server.infrastructure.file_io import list_dir, read_text_file, stat_file
+from mcp_server.infrastructure.transcript_activity import transcript_activity
 from mcp_server.infrastructure.scanner_parse import (
     build_conversation_record,
     extract_message_stats,
@@ -201,6 +202,10 @@ def _parse_conversation_file(
 
     if stats["user_count"] + stats["assistant_count"] == 0:
         return None
+
+    # head+tail sampling would splice two halves of the session into one
+    # sequence; the tool order comes from the whole file (ADR-1072).
+    stats["tools_used"] = transcript_activity(file_path)["tool_sequence"]
 
     return build_conversation_record(meta, stats, file_path, project_name)
 

@@ -52,6 +52,7 @@ try:
         load_session_log,
         save_session_log,
     )
+    from mcp_server.infrastructure.transcript_activity import transcript_activity
     from mcp_server.shared.categorizer import categorize
     from mcp_server.shared.project_ids import (
         cwd_to_project_id,
@@ -173,6 +174,14 @@ def _build_session_entry(event: dict[str, Any], domain_id: str) -> dict[str, Any
 
     source: ADR-0497"""
     keywords = event.get("keywords") or []
+    tools = event.get("tools_used") or []
+    turns = event.get("turn_count") or 0
+    if not tools or not turns:
+        # The SessionEnd payload carries neither; its transcript does
+        # (ADR-1072).
+        activity = transcript_activity(event.get("transcript_path"))
+        tools = tools or activity["tool_sequence"]
+        turns = turns or activity["turn_count"]
     return {
         "sessionId": session_id_from_transcript(event.get("transcript_path"))
         or event["session_id"],
@@ -181,8 +190,8 @@ def _build_session_entry(event: dict[str, Any], domain_id: str) -> dict[str, Any
         "project": event.get("project") or cwd_to_project_id(event.get("cwd")),
         "cwd": event.get("cwd"),
         "duration": event.get("duration"),
-        "turnCount": event.get("turn_count", 0),
-        "toolsUsed": event.get("tools_used") or [],
+        "turnCount": turns,
+        "toolsUsed": tools,
         "category": categorize(" ".join(keywords)) if keywords else "general",
         "entryKeywords": keywords,
     }

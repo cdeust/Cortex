@@ -161,7 +161,8 @@ class TestDiscoverConversationsForProjects:
         result = discover_conversations_for_projects(["proj-a"], limit=20)
 
         assert len(result) == 1
-        assert result[0]["toolsUsed"] == ["Read"]
+        # order and repetition preserved: two assistant turns, two calls
+        assert result[0]["toolsUsed"] == ["Read", "Read"]
 
     def test_never_touches_unrequested_project_dirs(self, tmp_path, monkeypatch):
         monkeypatch.setattr("mcp_server.infrastructure.scanner.CLAUDE_DIR", tmp_path)

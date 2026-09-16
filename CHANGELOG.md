@@ -20,6 +20,19 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Procedural learning finally has an input (#591).** Every session entry was
+  written with `toolsUsed: []` and `turnCount: 0`, because the SessionEnd
+  payload carries neither and `hooks/session_lifecycle.py` read them from it:
+  413 of 413 entries in the live log, so `procedural_skills` held 0 rows and
+  `recall_skills` always returned nothing. The entry is now filled from the
+  session's own transcript, in call order with repetitions, which is what
+  `mine_skills` reads (`infrastructure/transcript_activity.py`, ADR-1072). The
+  scanner's import path kept tool names in a set built from a head-and-tail
+  sample; it now takes the ordered sequence from the whole file. Measured over
+  374 transcripts: 206 carry a sequence, mining returns 796 skills in 0.02 s,
+  and a session end reads one transcript in about 4.5 ms. Proficiency stays at
+  0.5 until sessions record an outcome.
+
 - **The launcher installs from an interpreter that has no pip (#582).**
   Every install ran `sys.executable -m pip`, so from a `uv venv` (no pip module
   by design) the plugin's private `deps/` directory could not be filled at all:
