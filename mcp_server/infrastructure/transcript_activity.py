@@ -43,7 +43,10 @@ def transcript_activity(transcript_path: str | Path | None) -> dict[str, Any]:
 
     An unreadable, missing or malformed transcript yields an empty sequence
     and a zero count: the caller keeps whatever the event supplied. A line
-    that does not parse as JSON is skipped, the rest of the file still read.
+    that does not parse as JSON, or parses as anything other than an object,
+    is skipped and the rest of the file is still read — this runs inside the
+    SessionEnd hook, where an exception would cost the session its log entry
+    and its profile update.
     """
     empty: dict[str, Any] = {"tool_sequence": [], "turn_count": 0}
     if not transcript_path:
@@ -60,7 +63,7 @@ def transcript_activity(transcript_path: str | Path | None) -> dict[str, Any]:
                     record = json.loads(line)
                 except ValueError:
                     continue
-                if record.get("type") != "assistant":
+                if not isinstance(record, dict) or record.get("type") != "assistant":
                     continue
                 turns += 1
                 if len(sequence) < MAX_TOOL_SEQUENCE:

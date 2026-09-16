@@ -99,3 +99,24 @@ def test_the_sequence_is_capped(tmp_path) -> None:
 
     assert len(activity["tool_sequence"]) == MAX_TOOL_SEQUENCE
     assert activity["turn_count"] == 1
+
+
+def test_a_json_array_file_is_not_a_crash(tmp_path) -> None:
+    """A whole-file JSON array parses line by line into lists, not dicts."""
+    path = tmp_path / "s.json"
+    path.write_text(
+        json.dumps([_assistant("Read"), {"type": "assistant", "message": {}}]),
+        encoding="utf-8",
+    )
+
+    assert transcript_activity(str(path)) == {"tool_sequence": [], "turn_count": 0}
+
+
+def test_a_non_object_line_is_skipped(tmp_path) -> None:
+    path = tmp_path / "s.jsonl"
+    path.write_text(
+        '"assistant"\n' + "[1, 2, 3]\n" + json.dumps(_assistant("Bash")) + "\n",
+        encoding="utf-8",
+    )
+
+    assert transcript_activity(str(path))["tool_sequence"] == ["Bash"]
