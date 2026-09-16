@@ -41,6 +41,15 @@ adheres to [Semantic Versioning](https://semver.org/).
   draft's score, and an empty frontmatter drops the synthesizer's `updated`
   stamp. The handler now refuses the call and names every field whose value is
   empty (ADR-1069).
+- **A draft section must carry a heading and a body, both text (#587).**
+  `_validate_against_contract` checked the kind's required headings and each
+  section's body, never a section's own heading, so for a kind with no required
+  section a heading of `"   "`, or a section with no heading key at all, was
+  written to the draft and `wiki_compile` rendered it untitled. The nested
+  `required: [heading, body]` of the tool schema is documentation: the
+  client-visible schema comes from the registered wrapper's signature. Both
+  fields are now validated as non-blank text, and a number for either returns a
+  validation error instead of raising `AttributeError` (ADR-1070).
 - **Refining a wiki draft no longer raises its confidence (#578).**
   `handler_refine` (`mcp_server/handlers/wiki_refine.py`) wrote a fixed 0.85
   into every refined draft and its `refined_llm` memo, which put the draft past

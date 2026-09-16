@@ -152,6 +152,39 @@ async def test_a_refine_carrying_an_empty_value_writes_nothing(
 
 
 @pytest.mark.asyncio
+async def test_a_headless_section_writes_nothing_even_without_a_contract(
+    sqlite_store, monkeypatch
+):
+    """Issue #587: for a kind with no required section, a section with a blank
+    heading reached the draft and `wiki_compile` rendered it untitled."""
+    from mcp_server.handlers import wiki_refine
+    from mcp_server.infrastructure.pg_store_wiki import get_draft
+
+    draft_id = await _weak_pending_draft(sqlite_store)
+    before = get_draft(sqlite_store._conn, draft_id)
+    memos_before = _memo_count(sqlite_store._conn, draft_id)
+    monkeypatch.setattr(
+        wiki_refine,
+        "_kind_contract",
+        lambda registry, kind: {"kind": kind, "required_sections": []},
+    )
+
+    out = await wiki_refine.handler_refine(
+        {
+            "draft_id": draft_id,
+            "sections": [{"heading": "   ", "body": "real prose"}],
+        }
+    )
+
+    assert out["error"] == "validation failed"
+    assert any("heading" in e for e in out["validation_errors"])
+    after = get_draft(sqlite_store._conn, draft_id)
+    assert after["sections"] == before["sections"]
+    assert after["synth_model"] == before["synth_model"]
+    assert _memo_count(sqlite_store._conn, draft_id) == memos_before
+
+
+@pytest.mark.asyncio
 async def test_refine_keeps_the_draft_confidence(sqlite_store):
     from mcp_server.handlers.wiki_refine import handler_refine
     from mcp_server.infrastructure.pg_store_wiki import get_draft

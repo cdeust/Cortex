@@ -3447,6 +3447,10 @@
     "ADR-1069": {
       "mirror": "ADR-1069-an-empty-value-is-not-a-wiki-draft-refinement.md",
       "path": "adr/cortex/1069-an-empty-value-is-not-a-wiki-draft-refinement.md"
+    },
+    "ADR-1070": {
+      "mirror": "ADR-1070-a-draft-section-carries-a-heading-and-a-body-both-text.md",
+      "path": "adr/cortex/1070-a-draft-section-carries-a-heading-and-a-body-both-text.md"
     }
   },
   "project": "cortex",

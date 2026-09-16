@@ -285,18 +285,32 @@ def _content_refusal(args: dict[str, Any]) -> str | None:
     return None
 
 
+def _is_text(value: Any) -> bool:
+    """Non-blank text. A section's heading and body are both of that shape."""
+    return isinstance(value, str) and bool(value.strip())
+
+
 def _validate_against_contract(
     sections: list[dict], required_sections: list[str]
 ) -> list[str]:
-    """Return a list of human-readable validation errors."""
+    """Return a list of human-readable validation errors.
+
+    A section carries a heading and a body, both non-blank text. The tool
+    schema says so, but the client-visible schema is derived from the
+    registered wrapper's signature, so the check belongs here (ADR-1070).
+    """
     errors: list[str] = []
-    headings = {s.get("heading", "").strip() for s in sections}
+    headings = {s["heading"].strip() for s in sections if _is_text(s.get("heading"))}
     for req in required_sections:
         if req not in headings:
             errors.append(f"required section missing: {req!r}")
-    for s in sections:
-        if not s.get("body", "").strip():
-            errors.append(f"section {s.get('heading')!r} has empty body")
+    for index, section in enumerate(sections):
+        heading = section.get("heading")
+        if not _is_text(heading):
+            errors.append(f"section {index}: heading must be non-blank text")
+        if not _is_text(section.get("body")):
+            name = heading if _is_text(heading) else index
+            errors.append(f"section {name!r} has empty body")
     return errors
 
 
