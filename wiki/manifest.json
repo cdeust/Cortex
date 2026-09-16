@@ -3463,6 +3463,10 @@
     "ADR-1073": {
       "mirror": "ADR-1073-reading-a-transcript-has-one-implementation-and-refuses-a-non-path.md",
       "path": "adr/cortex/1073-reading-a-transcript-has-one-implementation-and-refuses-a-non-path.md"
+    },
+    "ADR-1074": {
+      "mirror": "ADR-1074-the-sqlite-test-job-s-budget-is-set-from-its-measured-p90.md",
+      "path": "adr/cortex/1074-the-sqlite-test-job-s-budget-is-set-from-its-measured-p90.md"
     }
   },
   "project": "cortex",

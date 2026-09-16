@@ -28,6 +28,16 @@ adheres to [Semantic Versioning](https://semver.org/).
   for a `transcript_path` that is neither text nor a path, where it raised
   `TypeError`: the value comes from the hook event's untyped JSON envelope and
   runs in a path with no exception handler (ADR-1073).
+- **A slow runner no longer turns `main` red (#594).** The `Test (SQLite
+  backend)` job's `timeout-minutes: 10` left 1.7x headroom over its measured
+  p90, and two runs of 2026-09-16 exceeded it: `main` at `a981f935` (cancelled
+  at 616 s, 74 % of the suite) and PR #584's first attempt (610 s). Both passed
+  on a rerun, in 416 s and 276 s. Measured over that day's 21 job executions,
+  every attempt counted: 18 successes from 234 s to 416 s, median 328 s, p90
+  348 s, and three non-successes, the two timeouts plus a 47 s cancellation
+  from a superseded push. The budget is now 20 minutes, 3.4x that p90 and
+  about twice the point where both timeouts fired, with the measurement
+  recorded beside the number (ADR-1074).
 
 - **Procedural learning finally has an input (#591).** Every session entry was
   written with `toolsUsed: []` and `turnCount: 0`, because the SessionEnd
