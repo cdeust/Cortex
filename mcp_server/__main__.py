@@ -6,12 +6,19 @@ Usage:
     python -m mcp_server
 """
 
+# ruff: noqa: E402 — backend selection must precede settings-dependent imports.
+
 from __future__ import annotations
 
+import os
 import signal
 import sys
 
-# source: ADR-0093
+from mcp_server.infrastructure.backend_marker import apply_backend_resolution
+
+# source: ADR-0505 — direct console/module launches must resolve the saved
+# backend before registry imports instantiate MemorySettings, just as launcher.py.
+apply_backend_resolution(os.environ)
 
 
 try:  # pragma: no cover — defensive; sentence-transformers is mandatory

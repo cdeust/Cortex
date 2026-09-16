@@ -31,11 +31,20 @@ codex plugin add hypermnesia-mcp-codex@cortex-codex-plugins
 
 Restart the ChatGPT desktop app and start a new task so Codex loads the new
 plugin components. The plugin uses `uvx`, so `uv` must be available on `PATH`.
-The first launch installs both storage drivers. Cortex tries PostgreSQL first
-at the configured `DATABASE_URL` (or its local `cortex` default), then falls
-back to SQLite only when no explicit PostgreSQL target was supplied and the
-default server is unavailable. An explicitly configured but unreachable
-`DATABASE_URL` remains an error rather than silently redirecting writes.
+The first launch installs both storage drivers. In this source checkout (pending
+release), direct MCP startup reads the
+same `~/.claude/methodology/backend.json` selection as the Claude launcher
+before loading memory settings. `CORTEX_CLAUDE_DIR` relocates that shared
+configuration root. Explicit `CORTEX_MEMORY_STORE_BACKEND`, then
+`CORTEX_BACKEND`, then a non-empty `DATABASE_URL` or
+`CORTEX_MEMORY_DATABASE_URL` take precedence over the saved selection.
+
+Without a saved selection or explicit backend, Cortex keeps its existing
+`auto` behavior: PostgreSQL first, then SQLite only when no explicit PostgreSQL
+target was supplied and the default server is unavailable. An explicitly
+configured but unreachable database URL remains an error rather than silently
+redirecting writes. Both hosts must use the same configuration root and storage
+settings to share memories; this does not merge previously separate stores.
 
 An optional prewarm can download the package before restarting Codex; it is a
 startup optimization, not an installation prerequisite:
@@ -86,3 +95,6 @@ authentication and per-user or per-organization isolation, reviewable tool
 metadata, domain verification, operational monitoring, and the applicable
 privacy and legal material. None of those remote-deployment claims are made by
 this local package.
+
+See [shared memory and decisions](shared-host-memory.md) for the common storage
+and ADR-root contract, opt-in authoring, and the limits of the handoff tests.
