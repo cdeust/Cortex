@@ -16,7 +16,7 @@ accepted
 
 ## Context
 
-`_validate_against_contract` (`mcp_server/handlers/wiki_refine.py`) checked two things about the sections a caller submits: that every heading the kind requires is present, and that no body is blank. It never checked a section's own heading. For a kind that declares no required section, a section such as `{"heading": "   ", "body": "real prose"}`, or `{}` itself, passed validation and was written to the draft, and `wiki_compile` then rendered a section with no title (issue #587).
+`_validate_against_contract` (`mcp_server/handlers/wiki_refine.py`) checked two things about the sections a caller submits: that every heading the kind requires is present, and that no body is blank. It never checked a section's own heading. For a kind that declares no required section, a section such as `{"heading": "   ", "body": "real prose"}`, or `{}` itself, passed validation and was written to the draft (issue #587). The published Markdown drops such a section, since `core/draft_compiler.py` skips a section with no heading, but `handlers/wiki_compile.py` mirrors the draft's sections into `wiki.pages.sections` with no such guard, so the page row keeps the prose under an empty key.
 
 The tool's `inputSchema` declares `required: [heading, body]` for a section, but the client-visible schema is derived from the registered wrapper's signature, `list[dict[str, Any]] | None`, and `_tool_meta.apply_param_docs` only merges descriptions into it. That nested `required` is therefore documentation, not enforcement, and a section missing its heading is a reachable client input. The review of PR #586 demonstrated both shapes end to end on a `note` draft.
 

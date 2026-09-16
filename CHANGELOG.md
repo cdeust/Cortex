@@ -45,7 +45,8 @@ adheres to [Semantic Versioning](https://semver.org/).
   `_validate_against_contract` checked the kind's required headings and each
   section's body, never a section's own heading, so for a kind with no required
   section a heading of `"   "`, or a section with no heading key at all, was
-  written to the draft and `wiki_compile` rendered it untitled. The nested
+  written to the draft, where `wiki_compile` mirrors it into `wiki.pages.sections`
+  under an empty key (the published Markdown drops it). The nested
   `required: [heading, body]` of the tool schema is documentation: the
   client-visible schema comes from the registered wrapper's signature. Both
   fields are now validated as non-blank text, and a number for either returns a
