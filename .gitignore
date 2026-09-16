@@ -59,6 +59,11 @@ traces/
 # be committed — its deny list is only irremovable-from-local if it ships.
 .claude/*
 !.claude/settings.json
+# Codex puts its own worktrees under .Codex/worktrees/ rather than the
+# .claude/worktrees/ this project's rule names, and the directory was one
+# `git add -A` away from being committed (observed 2026-09-16 while
+# reviewing PR #600).
+.Codex/
 tasks/
 benchmarks/snapshots/
 .memsearch/
