@@ -291,34 +291,24 @@ def _worktree_list() -> list[dict[str, object]] | None:
     return entries or None
 
 
-def _worktree_locations() -> Check:
-    """Optional: WARN when a registered worktree lives outside
-    ``<main-worktree>/.claude/worktrees/``.
+def _worktree_classification(entries: list[dict[str, object]]) -> tuple[bool, str]:
+    """Classify worktree ``entries`` (``_worktree_list()`` output, main
+    first) against the allowed-location rule.
 
-    Reports only — never fixes, never moves the worktree, never fails
-    doctor's exit code (``optional=True``). The allowed root is derived
-    from the FIRST entry ``git worktree list --porcelain`` prints (always
-    the main worktree, per git-worktree(1) section list), never from
-    ``git rev-parse --show-toplevel`` — that call resolves to the linked
-    worktree's own path when run from inside one, which would flag every
-    sibling worktree as a false positive.
+    postcondition: ``ok`` is True for "not a git checkout" (empty
+    ``entries``), a bare main repo, and full compliance; False carries
+    every offending resolved path in ``detail``. The allowed root is
+    derived from ``entries[0]`` (the main worktree — always first, per
+    git-worktree(1) section list), never from ``git rev-parse
+    --show-toplevel``, which resolves to a linked worktree's own path
+    when run from inside one and would false-positive on every sibling.
 
-    source: ADR-1079 (rule reported: docs/agent-guidance.md:160-166)"""
-    entries = _worktree_list()
+    source: ADR-1079 (rule: docs/agent-guidance.md:160-166)"""
     if not entries:
-        return Check(
-            "worktree locations (optional)", True, "not a git checkout", optional=True
-        )
-
+        return True, "not a git checkout"
     main = entries[0]
     if main.get("bare"):
-        return Check(
-            "worktree locations (optional)",
-            True,
-            "bare repository — rule not applicable",
-            optional=True,
-        )
-
+        return True, "bare repository — rule not applicable"
     allowed_root = (Path(str(main["path"])) / ".claude" / "worktrees").resolve()
     outside = [
         str(Path(str(e["path"])).resolve())
@@ -326,23 +316,27 @@ def _worktree_locations() -> Check:
         if not e.get("prunable")
         and not _under(Path(str(e["path"])).resolve(), allowed_root)
     ]
-
     if not outside:
-        return Check(
-            "worktree locations (optional)",
-            True,
-            f"all worktrees under {allowed_root}",
-            optional=True,
-        )
-    return Check(
-        "worktree locations (optional)",
-        False,
-        f"outside {allowed_root}: {', '.join(outside)}",
-        "Move or remove these worktrees — the only allowed location is "
-        "<repo>/.claude/worktrees/<name>/ "
-        "(source: docs/agent-guidance.md:160-166).",
-        optional=True,
+        return True, f"all worktrees under {allowed_root}"
+    return False, f"outside {allowed_root}: {', '.join(outside)}"
+
+
+def _worktree_locations() -> Check:
+    """Optional: WARN when a registered worktree lives outside
+    ``<main-worktree>/.claude/worktrees/``. Reports only — never fixes,
+    never moves the worktree, never fails doctor's exit code
+    (``optional=True``).
+
+    source: ADR-1078 (rule reported: docs/agent-guidance.md:160-166)"""
+    ok, detail = _worktree_classification(_worktree_list() or [])
+    fix = (
+        ""
+        if ok
+        else "Move or remove these worktrees — the only allowed location "
+        "is <repo>/.claude/worktrees/<name>/ "
+        "(source: docs/agent-guidance.md:160-166)."
     )
+    return Check("worktree locations (optional)", ok, detail, fix, optional=True)
 
 
 def _under(path: Path, root: Path) -> bool:
