@@ -100,6 +100,7 @@ adheres to [Semantic Versioning](https://semver.org/).
   the main checkout as its root even when called from a linked checkout.
   Outside worktrees produce a warning without changing the exit code.
   NUL-delimited Git output preserves newlines and spaces in their paths.
+  Failed Git invocations produce an optional warning with a retry command.
 
 - **Procedural skills are stored on the default backend too (#596).** The
   `procedural_skills` table existed only on PostgreSQL, so on SQLite the

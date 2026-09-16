@@ -260,8 +260,8 @@ def _worktree_list() -> list[dict[str, object]] | None:
     section list). Each dict carries ``path`` (str), ``bare`` (bool),
     ``prunable`` (bool). Returns ``None`` when ``git`` is missing, the cwd
     isn't a git checkout, or the command times out — every failure mode
-    of ``run_with_hard_timeout`` collapses to the same "not applicable"
-    signal, never a raised exception.
+    of ``run_with_hard_timeout`` collapses to the same "inspection unavailable"
+    signal, never a raised exception. Empty successful output returns [].
 
     source: ADR-1079"""
     out = run_with_hard_timeout(
@@ -288,14 +288,14 @@ def _worktree_list() -> list[dict[str, object]] | None:
             current["prunable"] = True
     if current is not None:
         entries.append(current)
-    return entries or None
+    return entries
 
 
 def _worktree_classification(entries: list[dict[str, object]]) -> tuple[bool, str]:
     """Classify worktree ``entries`` (``_worktree_list()`` output, main
     first) against the allowed-location rule.
 
-    postcondition: ``ok`` is True for "not a git checkout" (empty
+    postcondition: ``ok`` is True for "no registered worktrees" (empty
     ``entries``), a bare main repo, and full compliance; False carries
     every offending resolved path in ``detail``. The allowed roots are
     derived from ``entries[0]`` (the main worktree — always first, per
@@ -305,7 +305,7 @@ def _worktree_classification(entries: list[dict[str, object]]) -> tuple[bool, st
 
     source: ADR-1079 (rule: docs/agent-guidance.md, What NOT to do)"""
     if not entries:
-        return True, "not a git checkout"
+        return True, "no registered worktrees"
     main = entries[0]
     if main.get("bare"):
         return True, "bare repository — rule not applicable"
@@ -335,7 +335,18 @@ def _worktree_locations() -> Check:
     (``optional=True``).
 
     source: ADR-1079 (rule reported: docs/agent-guidance.md, What NOT to do)"""
-    ok, detail = _worktree_classification(_worktree_list() or [])
+    entries = _worktree_list()
+    if entries is None:
+        return Check(
+            "worktree locations (optional)",
+            False,
+            "Unable to inspect worktree locations: not a Git checkout, "
+            "Git unavailable, or command failed.",
+            "Run from a Git checkout with Git available; retry "
+            "git worktree list --porcelain -z.",
+            optional=True,
+        )
+    ok, detail = _worktree_classification(entries)
     fix = (
         ""
         if ok

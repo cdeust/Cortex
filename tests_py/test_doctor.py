@@ -169,10 +169,11 @@ class TestWorktreeLocations:
         assert check.ok is True
         assert check.optional is True
 
-    def test_not_a_git_checkout_passes(self, tmp_path, monkeypatch):
+    def test_not_a_git_checkout_warns(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)  # plain dir, no .git
         check = _worktree_locations()
-        assert check.ok is True
+        assert check.ok is False
+        assert "Unable to inspect" in check.detail
         assert check.optional is True
 
     @pytest.mark.skipif(

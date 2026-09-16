@@ -27,3 +27,5 @@ Derive the roots from the first worktree in `git worktree list --porcelain -z`, 
 Positive: the owner sees worktrees outside both host directories via 'python -m mcp_server.doctor', check_setup, and the preflight command without git status noise. Negative: a marketplace user running doctor inside an unrelated repo that happens to keep worktrees elsewhere will see an advisory WARN naming a Cortex-authored convention; the fix text makes that source explicit so it reads as advisory, not a bug report.
 
 Git porcelain uses NUL record delimiters with `-z`; parsing those delimiters preserves literal newlines and trailing spaces in paths (git-worktree(1), Porcelain Format). A real-Git regression verifies that an outside worktree with both characters is reported by its exact path.
+
+A failed Git invocation produces an optional WARN that lists the possible causes and provides the Git command to retry. The existing subprocess helper returns no failure category, so the diagnostic does not claim a specific cause. Successful empty output is reported as no registered worktrees.
