@@ -280,8 +280,8 @@ was the drift #114 was filed against).
 
 ## handlers/ — Composition roots
 
-54 standalone tools + 3 upstream-integration tools conditionally registered
-(57 total) + a `handlers/consolidation/` subpackage + per-tool helpers. See
+57 standalone tools + 3 upstream-integration tools conditionally registered
+(60 total) + a `handlers/consolidation/` subpackage + per-tool helpers. See
 `docs/mcp-tools.md` for the full tool catalogue with purpose and target
 latency.
 

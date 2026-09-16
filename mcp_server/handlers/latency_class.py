@@ -53,6 +53,10 @@ _LATENCY_CLASS: dict[str, LatencyClass] = {
     "add_rule": "interactive",
     "create_trigger": "interactive",
     "sync_instructions": "interactive",
+    # Prediction records: one row per call, no scan
+    "predict": "interactive",
+    "resolve_prediction": "interactive",
+    "calibration": "interactive",
     # Wiki read/navigate stays interactive (single-page granularity)
     "wiki_read": "interactive",
     "wiki_list": "interactive",

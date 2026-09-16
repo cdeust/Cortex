@@ -1,4 +1,4 @@
-"""MCP tool profiles — which of Cortex's 54 tools a session registers.
+"""MCP tool profiles — which of Cortex's 57 tools a session registers.
 
 source: ADR-0693"""
 

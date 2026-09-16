@@ -1,6 +1,6 @@
 # API Reference — MCP Tool Schemas
 
-This document describes the input schemas, response formats, and error codes for the tools detailed below. It is a schema reference, not the catalogue: the complete surface is 54 standalone tools (57 with the optional upstream integrations), listed with tier and target latency in [`mcp-tools.md`](mcp-tools.md).
+This document describes the input schemas, response formats, and error codes for the tools detailed below. It is a schema reference, not the catalogue: the complete surface is 57 standalone tools (60 with the optional upstream integrations), listed with tier and target latency in [`mcp-tools.md`](mcp-tools.md).
 
 ## Protocol
 

@@ -52,6 +52,9 @@ _NO_UPSTREAM_TOOLS = {
     "ingest_document",  # issue #192: offline document ingest
     "wiki_get_draft",  # issue #579: Path B draft refinement
     "wiki_refine_draft",
+    "predict",  # issue #597: prediction records
+    "resolve_prediction",
+    "calibration",
 }
 
 # Extracted to the cortex-viz MCP — never registered by this server.
@@ -100,16 +103,18 @@ class TestMain:
             # Cortex-side wrapper.
             mock_anyio_run.assert_called_once_with(mcp.run_stdio_async)
 
-    def test_standalone_baseline_is_54_tools(self):
-        """With no upstream available, exactly the 54 standalone tools register.
+    def test_standalone_baseline_is_57_tools(self):
+        """With no upstream available, exactly the 57 standalone tools register.
 
-        54 = the 49 tools re-derived 2026-07-12 (fix/bare-container-contract,
+        57 = the 49 tools re-derived 2026-07-12 (fix/bare-container-contract,
         live DB-less `tools/list` round-trip) + `wiki_migrate` (FS→PG wiki
         parity, commit 4be298a3) + `check_setup` (doctor.py facade, issue
         #115) + `ingest_document` (offline .docx / Confluence export ingest,
         issue #192 — file-only, no upstream to gate on) + `wiki_get_draft`
         and `wiki_refine_draft` (Path B draft refinement, defined since
-        ADR-0467 and exposed by ADR-1066, issue #579). The 3
+        ADR-0467 and exposed by ADR-1066, issue #579) + `predict`,
+        `resolve_prediction` and `calibration` (prediction records and their
+        Brier score, ADR-1076, issue #597). The 3
         upstream-integration tools (ingest_codebase, change_impact,
         ingest_prd) MUST NOT be advertised — every advertised tool then works
         out of the box.
@@ -118,7 +123,7 @@ class TestMain:
         names = _tool_names(codebase=False, prd=False)
         # The upstream-integration tools are gated OFF.
         assert names.isdisjoint(_UPSTREAM_TOOLS)
-        assert len(names) == 54
+        assert len(names) == 57
 
     def test_standalone_surface_holds_every_no_upstream_tool(self):
         """What that baseline is made of, and what it must never hold."""
@@ -126,18 +131,18 @@ class TestMain:
         assert _NO_UPSTREAM_TOOLS <= names
         assert names.isdisjoint(_EXTRACTED_TOOLS)
 
-    def test_with_upstreams_registers_57_tools(self):
+    def test_with_upstreams_registers_60_tools(self):
         """When both upstreams are available, the 3 integration tools register."""
         names = _tool_names(codebase=True, prd=True)
         assert _UPSTREAM_TOOLS <= names
-        assert len(names) == 57
+        assert len(names) == 60
 
     def test_codebase_only_adds_two_tools(self):
         """codebase upstream gates ingest_codebase + change_impact together."""
         names = _tool_names(codebase=True, prd=False)
         assert {"ingest_codebase", "change_impact"} <= names
         assert "ingest_prd" not in names
-        assert len(names) == 56
+        assert len(names) == 59
 
     def test_mcp_server_name_and_version(self):
         assert mcp.name == "methodology-agent"

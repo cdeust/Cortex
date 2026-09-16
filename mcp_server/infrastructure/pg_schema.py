@@ -623,6 +623,37 @@ CREATE TABLE IF NOT EXISTS procedural_skills (
 );
 """
 
+# source: the decision recorded as ADR number 1076
+PREDICTIONS_DDL = """
+CREATE TABLE IF NOT EXISTS predictions (
+    id              SERIAL PRIMARY KEY,
+    claim           TEXT NOT NULL,
+    prediction      TEXT NOT NULL,
+    test            TEXT NOT NULL,
+    confidence      REAL NOT NULL
+                    CHECK (confidence >= 0.0 AND confidence <= 1.0),
+    domain          TEXT NOT NULL DEFAULT '',
+    directory       TEXT NOT NULL DEFAULT '',
+    memory_id       INTEGER REFERENCES memories(id) ON DELETE SET NULL,
+    status          TEXT NOT NULL DEFAULT 'open'
+                    CHECK (status IN ('open', 'resolved')),
+    verdict         TEXT
+                    CHECK (verdict IN ('confirmed', 'refuted', 'abandoned')),
+    observed        TEXT,
+    source_kind     TEXT
+                    CHECK (source_kind IN ('review', 'ci', 'test', 'manual')),
+    source_ref      TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    resolved_at     TIMESTAMPTZ,
+    CHECK (
+        (status = 'open' AND verdict IS NULL AND source_ref IS NULL)
+        OR (status = 'resolved' AND verdict IS NOT NULL
+            AND source_kind IS NOT NULL AND source_ref IS NOT NULL)
+    )
+);
+"""
+
+
 # ── Indexes ───────────────────────────────────────────────────────────────
 
 INDEXES_DDL = """
@@ -1922,6 +1953,7 @@ def get_all_ddl() -> list[LiteralString]:
         WIKI_LINK_TRIGGER_DDL,
         SUPPORT_TABLES_DDL,
         PROCEDURAL_SKILLS_DDL,
+        PREDICTIONS_DDL,
         # source: ADR-0537
         MIGRATIONS_DDL,
         TEAM_DECISION_BACKFILL_PG,

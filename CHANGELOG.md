@@ -8,6 +8,23 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Prediction records, and a score for the confidences they carry (#597).**
+  Cortex stored what happened and never what was expected, so nothing it held
+  could turn out wrong in a way it noticed: 796 procedural skills mined from
+  the maintainer's transcripts all sit at proficiency 0.5 because no session
+  records an outcome. Three tools now close that loop. `predict` writes a
+  falsifiable prediction with the confidence held before the outcome is known;
+  `resolve_prediction` settles it against an observation, naming the verdict,
+  the kind of source that decided it and a reference to that source; and
+  `calibration` returns the Brier score with the 0.25 a constant 0.5 forecast
+  earns, plus the per-band frequencies the mean cannot show. Cortex never
+  fetches the evidence and knows nothing about any forge or review
+  convention, which is what makes the contract work in any repository
+  (ADR-1076). The table lives on both backends. Standalone tool count 54 to
+  57, 60 with both upstream integrations.
+
+### Added
+
 - **The Path B draft tools are exposed over MCP (#579).** `wiki_get_draft`
   and `wiki_refine_draft` had existed as handlers since ADR-0467 without ever
   being registered, so no client could call them and `wiki_get_draft`'s own

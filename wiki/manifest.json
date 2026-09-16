@@ -3471,6 +3471,10 @@
     "ADR-1075": {
       "mirror": "ADR-1075-procedural-skills-are-stored-on-both-backends.md",
       "path": "adr/cortex/1075-procedural-skills-are-stored-on-both-backends.md"
+    },
+    "ADR-1076": {
+      "mirror": "ADR-1076-a-prediction-is-written-open-and-resolved-against-evidence-the-caller-supplies.md",
+      "path": "adr/cortex/1076-a-prediction-is-written-open-and-resolved-against-evidence-the-caller-supplies.md"
     }
   },
   "project": "cortex",
