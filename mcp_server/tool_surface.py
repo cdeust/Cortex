@@ -53,3 +53,16 @@ def standalone_tool_names() -> frozenset[str]:
         names.update(registry.SCHEMAS)
     names.update(set(tool_registry_ingest.SCHEMAS) - UPSTREAM_TOOL_NAMES)
     return frozenset(names)
+
+
+def full_tool_bounds() -> tuple[int, int]:
+    """How many tools a full profile may advertise: without, then with upstreams.
+
+    The host-contract verifier used to state these as literals and one went
+    stale through a whole count move (ADR-1066), failing only three tools
+    later. It now reads them here, inside a function, because importing this
+    module pulls the MCP SDK and the `mcp-host-config` CI job installs the
+    host CLIs without it.
+    """
+    standalone = len(standalone_tool_names())
+    return standalone, standalone + len(UPSTREAM_TOOL_NAMES)

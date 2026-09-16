@@ -26,7 +26,7 @@ A literal that is right for a while, then wrong, and only caught when it drifts 
 
 `mcp_server/tool_surface.py` reads the surface from the registry modules themselves: `standalone_tool_names()` is the union of their `SCHEMAS` maps minus the three gated names, and `UPSTREAM_TOOL_NAMES` holds those three. It imports registries only, never the server, so a caller pays no MCP startup for a count.
 
-`scripts/verify_mcp_hosts.py` derives its bounds from that module rather than stating them. The remaining copies are prose for humans, and the doc-claim gate already cross-checks them against the pinned test name.
+`scripts/verify_mcp_hosts.py` derives its bounds from that module rather than stating them, through a thin `full_tool_bounds()` that imports it late. The late import is load-bearing: reading the registries pulls the MCP SDK, and the `mcp-host-config` CI job installs the three host CLIs with no Python dependencies and verifies lean profiles only. A module-scope import broke that job, and a test now imports the script with `mcp` blocked to keep it importable without the SDK. The remaining copies are prose for humans, and the doc-claim gate already cross-checks them against the pinned test name.
 
 ## Consequences
 
