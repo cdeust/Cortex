@@ -10,11 +10,41 @@ source: ADR-1077
 from __future__ import annotations
 
 import asyncio
+import subprocess
+import sys
+import textwrap
 
 from mcp.server.mcpserver import MCPServer
 
 from mcp_server.__main__ import register_all
 from mcp_server.tool_surface import UPSTREAM_TOOL_NAMES, standalone_tool_names
+
+
+# find_spec, not the pre-PEP 451 find_module/load_module pair: CPython
+# ignores a finder that lacks find_spec, so a blocker written the old way
+# blocks nothing and the test passes against the very commit that broke
+# CI. Measured on 3.12 before this was corrected (#599 review).
+_SDK_FREE_IMPORT_PROBE = textwrap.dedent("""
+        import importlib
+        import sys
+
+        class Blocker:
+            def find_spec(self, name, path=None, target=None):
+                if name == "mcp" or name.startswith("mcp."):
+                    raise ImportError(name)
+                return None
+
+        sys.meta_path.insert(0, Blocker())
+        sys.path.insert(0, ".")
+        try:
+            import mcp  # the blocker must actually block
+        except ImportError:
+            pass
+        else:
+            raise AssertionError("the probe's blocker did not block the SDK")
+        importlib.import_module("scripts.verify_mcp_hosts")
+        print("imported")
+    """)
 
 
 def _live(*, codebase: bool, prd: bool) -> set[str]:
@@ -60,27 +90,8 @@ def test_the_verifier_imports_without_the_mcp_sdk() -> None:
     Importing `mcp_server.tool_surface` at module scope pulled the SDK
     through the registries and broke that job (issue #597).
     """
-    import subprocess
-    import sys
-    import textwrap
-
-    probe = textwrap.dedent("""
-        import sys
-        class Blocker:
-            def find_module(self, name, path=None):
-                blocked = name == "mcp" or name.startswith("mcp.")
-                return self if blocked else None
-            def load_module(self, name):
-                raise ImportError(name)
-        sys.meta_path.insert(0, Blocker())
-        sys.path.insert(0, ".")
-        import importlib
-        importlib.import_module("scripts.verify_mcp_hosts")
-        print("imported")
-    """)
-
     result = subprocess.run(
-        [sys.executable, "-c", probe], capture_output=True, text=True
+        [sys.executable, "-c", _SDK_FREE_IMPORT_PROBE], capture_output=True, text=True
     )
 
     assert result.returncode == 0, result.stderr
