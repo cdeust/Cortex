@@ -14,12 +14,16 @@ accepted
 
 ## Context
 
-PR #601 anchored .gitignore's .Codex/ rule to the repo root, which hides Codex-created worktrees living outside .claude/worktrees/ from git status without resolving the condition docs/agent-guidance.md:160-166 names as the only allowed location. The owner decided the worktree itself stays where it is; what was missing was visibility of the condition to the owner.
+PR #601 left an unanchored `.Codex/` ignore rule. The repository guidance previously allowed only `.claude/worktrees/`, while the current Codex instructions mandate `.Codex/worktrees/`. Each host needs its own repository-local directory.
 
 ## Decision
 
-Add an optional (WARN, never FAIL) doctor check, mcp_server/doctor.py, that lists git worktrees registered by 'git worktree list --porcelain' whose path is not under <main-worktree>/.claude/worktrees/. The allowed root is derived from the first worktree block of that same command (the main worktree is always listed first per git-worktree(1) section list), never from 'git rev-parse --show-toplevel', which resolves to the linked worktree when run from inside one and would false-positive on every sibling worktree. The check never blocks doctor's exit code and its fix text cites docs/agent-guidance.md:160-166 as the source of the rule it reports.
+Anchor the ignore rule to `/.Codex/`. Add an optional doctor warning for registered worktrees outside both `<main-worktree>/.claude/worktrees/` and `<main-worktree>/.Codex/worktrees/`. Keep the existing Claude convention and honor the current Codex instructions. Update the repository guidance to name both host locations.
+
+Derive the roots from the first worktree in `git worktree list --porcelain -z`, which git-worktree(1) documents as the main worktree. This also works from a linked checkout. Skip bare repositories and prunable entries. The check never moves a worktree and never changes the doctor exit code.
 
 ## Consequences
 
-Positive: the owner sees the condition (e.g. .Codex/worktrees/... on this machine today) via 'python -m mcp_server.doctor', check_setup, and the preflight command without git status noise. Negative: a marketplace user running doctor inside an unrelated repo that happens to keep worktrees elsewhere will see an advisory WARN naming a Cortex-authored convention; the fix text makes that source explicit so it reads as advisory, not a bug report.
+Positive: the owner sees worktrees outside both host directories via 'python -m mcp_server.doctor', check_setup, and the preflight command without git status noise. Negative: a marketplace user running doctor inside an unrelated repo that happens to keep worktrees elsewhere will see an advisory WARN naming a Cortex-authored convention; the fix text makes that source explicit so it reads as advisory, not a bug report.
+
+Git porcelain uses NUL record delimiters with `-z`; parsing those delimiters preserves literal newlines and trailing spaces in paths (git-worktree(1), Porcelain Format). A real-Git regression verifies that an outside worktree with both characters is reported by its exact path.

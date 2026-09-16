@@ -252,7 +252,7 @@ def _codebase_pipeline() -> Check:
 
 
 def _worktree_list() -> list[dict[str, object]] | None:
-    """Parse ``git worktree list --porcelain``, main worktree first.
+    """Parse ``git worktree list --porcelain -z``, main worktree first.
 
     precondition: none — safe to call outside a git checkout.
     postcondition: returns one dict per worktree block, in the order git
@@ -265,7 +265,7 @@ def _worktree_list() -> list[dict[str, object]] | None:
 
     source: ADR-1079"""
     out = run_with_hard_timeout(
-        ["git", "worktree", "list", "--porcelain"],
+        ["git", "worktree", "list", "--porcelain", "-z"],
         cwd=Path.cwd(),
         timeout=_WORKTREE_LIST_TIMEOUT_S,
     )
@@ -273,12 +273,12 @@ def _worktree_list() -> list[dict[str, object]] | None:
         return None
     entries: list[dict[str, object]] = []
     current: dict[str, object] | None = None
-    for line in out.splitlines():
+    for line in out.split("\0"):
         if line.startswith("worktree "):
             if current is not None:
                 entries.append(current)
             current = {
-                "path": line[len("worktree ") :].strip(),
+                "path": line[len("worktree ") :],
                 "bare": False,
                 "prunable": False,
             }
@@ -297,44 +297,51 @@ def _worktree_classification(entries: list[dict[str, object]]) -> tuple[bool, st
 
     postcondition: ``ok`` is True for "not a git checkout" (empty
     ``entries``), a bare main repo, and full compliance; False carries
-    every offending resolved path in ``detail``. The allowed root is
+    every offending resolved path in ``detail``. The allowed roots are
     derived from ``entries[0]`` (the main worktree — always first, per
     git-worktree(1) section list), never from ``git rev-parse
     --show-toplevel``, which resolves to a linked worktree's own path
     when run from inside one and would false-positive on every sibling.
 
-    source: ADR-1079 (rule: docs/agent-guidance.md:160-166)"""
+    source: ADR-1079 (rule: docs/agent-guidance.md, What NOT to do)"""
     if not entries:
         return True, "not a git checkout"
     main = entries[0]
     if main.get("bare"):
         return True, "bare repository — rule not applicable"
-    allowed_root = (Path(str(main["path"])) / ".claude" / "worktrees").resolve()
+    allowed_roots = [
+        (Path(str(main["path"])) / host / "worktrees").resolve()
+        for host in (".claude", ".Codex")
+    ]
     outside = [
         str(Path(str(e["path"])).resolve())
         for e in entries[1:]
         if not e.get("prunable")
-        and not _under(Path(str(e["path"])).resolve(), allowed_root)
+        and not any(
+            _under(Path(str(e["path"])).resolve(), root) for root in allowed_roots
+        )
     ]
+    allowed = " or ".join(map(str, allowed_roots))
     if not outside:
-        return True, f"all worktrees under {allowed_root}"
-    return False, f"outside {allowed_root}: {', '.join(outside)}"
+        return True, f"all worktrees under {allowed}"
+    return False, f"outside {allowed}: {', '.join(outside)}"
 
 
 def _worktree_locations() -> Check:
     """Optional: WARN when a registered worktree lives outside
-    ``<main-worktree>/.claude/worktrees/``. Reports only — never fixes,
+    the host-specific ``.claude/worktrees`` or ``.Codex/worktrees``.
+    Reports only — never fixes,
     never moves the worktree, never fails doctor's exit code
     (``optional=True``).
 
-    source: ADR-1078 (rule reported: docs/agent-guidance.md:160-166)"""
+    source: ADR-1079 (rule reported: docs/agent-guidance.md, What NOT to do)"""
     ok, detail = _worktree_classification(_worktree_list() or [])
     fix = (
         ""
         if ok
-        else "Move or remove these worktrees — the only allowed location "
-        "is <repo>/.claude/worktrees/<name>/ "
-        "(source: docs/agent-guidance.md:160-166)."
+        else "Move or remove these worktrees — the allowed locations "
+        "are <repo>/.claude/worktrees/<name>/ or <repo>/.Codex/worktrees/<name>/ "
+        "(source: docs/agent-guidance.md, What NOT to do)."
     )
     return Check("worktree locations (optional)", ok, detail, fix, optional=True)
 
