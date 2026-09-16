@@ -82,6 +82,38 @@ def _refined_memo_confidence(conn, draft_id: int) -> float:
     return float(row["confidence"] if isinstance(row, dict) else row[0])
 
 
+def _memo_count(conn, draft_id: int) -> int:
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT COUNT(*) AS memo_count FROM wiki.memos "
+            "WHERE subject_type = %s AND subject_id = %s",
+            ("draft", draft_id),
+        )
+        row = cur.fetchone()
+    return int(row["memo_count"] if isinstance(row, dict) else row[0])
+
+
+@pytest.mark.asyncio
+async def test_a_refine_carrying_no_content_writes_nothing(sqlite_store):
+    """Issue #583: a call with only a draft_id refined nothing, yet stamped
+    synth_model and left a memo saying a model had refined the draft."""
+    from mcp_server.handlers.wiki_refine import handler_refine
+    from mcp_server.infrastructure.pg_store_wiki import get_draft
+
+    draft_id = await _weak_pending_draft(sqlite_store)
+    before = get_draft(sqlite_store._conn, draft_id)
+    memos_before = _memo_count(sqlite_store._conn, draft_id)
+
+    out = await handler_refine({"draft_id": draft_id})
+
+    assert out["updated"] is False
+    assert "nothing to refine" in out["error"]
+    after = get_draft(sqlite_store._conn, draft_id)
+    assert after["synth_model"] == before["synth_model"]
+    assert after["lead"] == before["lead"]
+    assert _memo_count(sqlite_store._conn, draft_id) == memos_before
+
+
 @pytest.mark.asyncio
 async def test_refine_keeps_the_draft_confidence(sqlite_store):
     from mcp_server.handlers.wiki_refine import handler_refine

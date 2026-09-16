@@ -3435,6 +3435,14 @@
     "ADR-1066": {
       "mirror": "ADR-1066-expose-the-path-b-draft-tools-from-their-own-registry-module.md",
       "path": "adr/cortex/1066-expose-the-path-b-draft-tools-from-their-own-registry-module.md"
+    },
+    "ADR-1067": {
+      "mirror": "ADR-1067-resolve-pip-from-the-interpreter-then-from-the-stdlib-bundled-wheel.md",
+      "path": "adr/cortex/1067-resolve-pip-from-the-interpreter-then-from-the-stdlib-bundled-wheel.md"
+    },
+    "ADR-1068": {
+      "mirror": "ADR-1068-a-wiki-draft-refinement-must-carry-content.md",
+      "path": "adr/cortex/1068-a-wiki-draft-refinement-must-carry-content.md"
     }
   },
   "project": "cortex",

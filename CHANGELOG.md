@@ -20,6 +20,20 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **The launcher installs from an interpreter that has no pip (#582).**
+  Every install ran `sys.executable -m pip`, so from a `uv venv` (no pip module
+  by design) the plugin's private `deps/` directory could not be filled at all:
+  `[cortex-launcher] dependency install failed: <python>: No module named pip`.
+  `launcher_pip.pip_entry()` now resolves the installed module first, then the
+  pip wheel the standard library bundles for `ensurepip`, run in place from the
+  wheel so nothing is installed into the interpreter, and otherwise raises an
+  error naming that interpreter (ADR-1067). Measured on a `uv venv`, Python
+  3.13.7: the 12 installer tests pass where 11 errored in setup.
+- **A wiki draft refinement carrying no content is refused (#583).**
+  `wiki_refine_draft` accepted a call with nothing but a `draft_id`: it stamped
+  the draft's `synth_model` and wrote a `refined_llm` memo recording a
+  refinement that never happened. Such a call now returns an error and writes
+  neither the draft nor the memo (ADR-1068).
 - **Refining a wiki draft no longer raises its confidence (#578).**
   `handler_refine` (`mcp_server/handlers/wiki_refine.py`) wrote a fixed 0.85
   into every refined draft and its `refined_llm` memo, which put the draft past

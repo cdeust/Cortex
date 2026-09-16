@@ -204,7 +204,9 @@ schema_refine = {
         "draft's confidence is left as its source claims set it (ADR-1065), "
         "so refining never moves a draft past `wiki_curate`'s approve "
         "threshold. Sections are refused unless they satisfy the kind "
-        "contract returned by `wiki_get_draft`. Phase 2.3 (Path B)."
+        "contract returned by `wiki_get_draft`, and a call carrying none of "
+        "title/lead/sections/frontmatter is refused whole, writing neither "
+        "the draft nor a memo (ADR-1068). Phase 2.3 (Path B)."
     ),
     "annotations": NON_IDEMPOTENT_WRITE,
     "inputSchema": {
@@ -248,6 +250,12 @@ schema_refine = {
 }
 
 
+# A refinement carries content. Without one of these the call would write
+# only synth_model and an audit memo saying a model refined nothing.
+# See ADR-1068 for the refusal.
+_CONTENT_FIELDS = ("title", "lead", "sections", "frontmatter")
+
+
 def _validate_against_contract(
     sections: list[dict], required_sections: list[str]
 ) -> list[str]:
@@ -275,6 +283,15 @@ async def handler_refine(args: dict[str, Any] | None = None) -> dict[str, Any]:
     draft = get_draft(conn, int(draft_id))
     if draft is None:
         return {"error": f"draft {draft_id} not found"}
+
+    if all(args.get(field) is None for field in _CONTENT_FIELDS):
+        return {
+            "error": (
+                f"nothing to refine: pass at least one of {', '.join(_CONTENT_FIELDS)}"
+            ),
+            "draft_id": int(draft_id),
+            "updated": False,
+        }
 
     sections = args.get("sections")
     if sections is not None:

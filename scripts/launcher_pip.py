@@ -4,6 +4,7 @@ source: ADR-0751"""
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import subprocess
 import sys
@@ -81,11 +82,48 @@ def scratch_dir(deps_dir: str) -> str:
     return f"{deps_dir}.tmp-{os.getpid()}"
 
 
+def bundled_pip_wheel() -> Path | None:
+    """The pip wheel the standard library carries for ``ensurepip``, if any.
+
+    CPython ships one under ``ensurepip/_bundled`` (packaging specification,
+    *ensurepip — Bootstrapping the pip installer*); Debian's `python3-minimal`
+    removes the package entirely, which is the ``None`` case.
+
+    source: ADR-1067"""
+    spec = importlib.util.find_spec("ensurepip")
+    if spec is None or not spec.origin:
+        return None
+    wheels = sorted((Path(spec.origin).parent / "_bundled").glob("pip-*.whl"))
+    return wheels[-1] if wheels else None
+
+
+def pip_entry() -> list[str]:
+    """How to run pip on this interpreter, in order of preference.
+
+    An installed ``pip`` module first. Otherwise the stdlib's bundled wheel,
+    run in place from its own path — a wheel is a zip Python imports directly,
+    so this installs nothing and leaves the interpreter untouched. A venv made
+    by ``uv venv`` or ``python -m venv --without-pip`` has no pip module and
+    reaches the second case (issue #582).
+
+    Raises ``FileNotFoundError`` when the interpreter has neither.
+
+    source: ADR-1067"""
+    if importlib.util.find_spec("pip") is not None:
+        return [sys.executable, "-m", "pip"]
+    wheel = bundled_pip_wheel()
+    if wheel is None:
+        raise FileNotFoundError(
+            f"{sys.executable} has no pip module and its standard library "
+            "bundles no pip wheel for ensurepip. Install pip for that "
+            "interpreter, or run the launcher with one that has it."
+        )
+    return [sys.executable, str(wheel / "pip")]
+
+
 def _pip_command(*arguments: str) -> list[str]:
     return [
-        sys.executable,
-        "-m",
-        "pip",
+        *pip_entry(),
         "install",
         "-q",
         "--index-url",
