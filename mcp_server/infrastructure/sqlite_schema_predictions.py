@@ -36,7 +36,9 @@ CREATE TABLE IF NOT EXISTS predictions (
     CHECK (
         (status = 'open' AND verdict IS NULL AND source_ref IS NULL)
         OR (status = 'resolved' AND verdict IS NOT NULL
-            AND source_kind IS NOT NULL AND source_ref IS NOT NULL)
+            AND source_kind IS NOT NULL
+            AND source_ref IS NOT NULL AND source_ref <> ''
+            AND observed IS NOT NULL AND observed <> '')
     )
 )
 """

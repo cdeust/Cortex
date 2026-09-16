@@ -28,7 +28,7 @@ A `predictions` table, on both backends, holds the claim, the prediction in fals
 
 The caller supplies the evidence and Cortex never fetches it. That is what makes the contract repository-agnostic: a host maps its own review convention onto the same four fields, and nothing in the schema names a forge or a marker.
 
-`core/calibration.py` scores the resolved rows: the Brier score (Brier 1950), reported beside the 0.25 a constant 0.5 forecast earns so the number reads without the literature, plus the reliability breakdown per confidence band, which says how often predictions in that band actually held. An abandoned prediction is counted apart and scored nowhere: its test was never run, so it says nothing about calibration.
+`core/calibration.py` scores the resolved rows with the mean squared distance between confidence and outcome, the single-probability scale `scikit-learn` and most contemporary writing call the Brier score; Brier's own 1950 paper sums over both categories of a binary event and reports exactly twice this number, which ranks forecasters identically. It is reported beside the 0.25 a constant 0.5 forecast earns on this scale so the number reads without the literature, plus the reliability breakdown per confidence band, which says how often predictions in that band actually held. An abandoned prediction is counted apart and scored nowhere: its test was never run, so it says nothing about calibration.
 
 Three tools, registered from `tool_registry_predictions.py`: `predict`, `resolve_prediction`, `calibration`. The standalone count moves from 54 to 57, 60 with both upstream integrations.
 

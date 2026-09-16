@@ -1,11 +1,17 @@
 """Calibration scoring over resolved predictions.
 
 A prediction carries the confidence its author held when writing it. Once an
-outcome is observed, that confidence can be scored: the Brier score is the
-mean squared distance between the stated confidence and what happened
-(Brier 1950, *Verification of forecasts expressed in terms of probability*,
-Monthly Weather Review 78(1), the strictly proper scoring rule for binary
-events).
+outcome is observed, that confidence can be scored by the mean squared
+distance between the two.
+
+The scale here is the single-probability one, mean((p - o)^2), which is what
+scikit-learn's `brier_score_loss` and most contemporary writing call the
+Brier score. Brier's own 1950 paper (*Verification of forecasts expressed in
+terms of probability*, Monthly Weather Review 78(1)) sums over both
+categories of a binary event and therefore reports exactly twice this
+number. The ranking of forecasters is identical either way; only the
+constants differ, and every reference point below is stated on the scale
+this module computes.
 
 Two reference points make a Brier score readable. A forecaster who always
 says 0.5 scores exactly 0.25, whatever happens; anyone above that number is
@@ -24,9 +30,11 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
-# Brier's own reference point: the score a constant 0.5 forecast earns,
-# which is what an author who never commits is worth.
-# source: Brier 1950, Monthly Weather Review 78(1), section 2
+# The score a constant 0.5 forecast earns on this scale, whatever happens,
+# which is what an author who never commits is worth: mean((0.5 - o)^2) =
+# 0.25 for any sequence of outcomes in {0, 1}.
+# source: arithmetic, pinned by
+# test_always_saying_half_scores_the_uninformative_reference
 UNINFORMATIVE_BRIER = 0.25
 
 # Reliability bands. Ten would be finer, but a band needs resolved
@@ -59,10 +67,19 @@ def brier_score(pairs: Iterable[tuple[float, float]]) -> float | None:
 
 
 def _band_of(confidence: float) -> tuple[float, float]:
-    """The band a confidence falls in, upper edge inclusive at the top."""
-    for low, high in zip(BAND_EDGES, BAND_EDGES[1:], strict=False):
-        if confidence < high or high == BAND_EDGES[-1]:
+    """The band a confidence falls in, upper edge inclusive at the top.
+
+    Raises ValueError outside [0, 1] rather than folding the value into an
+    edge band: a confidence is a probability, both table CHECK constraints
+    refuse anything else, and a silent bucket would make the reliability
+    diagram lie about what it measured.
+    """
+    if not 0.0 <= confidence <= 1.0:
+        raise ValueError(f"confidence outside [0, 1]: {confidence}")
+    for low, high in zip(BAND_EDGES[:-1], BAND_EDGES[1:], strict=True):
+        if confidence < high:
             return (low, high)
+    # Only a confidence of exactly 1.0 reaches here: the top band holds it.
     return (BAND_EDGES[-2], BAND_EDGES[-1])
 
 

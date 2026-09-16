@@ -16,8 +16,10 @@ adheres to [Semantic Versioning](https://semver.org/).
   falsifiable prediction with the confidence held before the outcome is known;
   `resolve_prediction` settles it against an observation, naming the verdict,
   the kind of source that decided it and a reference to that source; and
-  `calibration` returns the Brier score with the 0.25 a constant 0.5 forecast
-  earns, plus the per-band frequencies the mean cannot show. Cortex never
+  `calibration` returns the mean squared distance between confidence and
+  outcome, the scale most contemporary writing calls the Brier score (Brier's
+  1950 paper reports twice it), with the 0.25 a constant 0.5 forecast earns
+  and the per-band frequencies the mean cannot show. Cortex never
   fetches the evidence and knows nothing about any forge or review
   convention, which is what makes the contract work in any repository
   (ADR-1076). The table lives on both backends. Standalone tool count 54 to

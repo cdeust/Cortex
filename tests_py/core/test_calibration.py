@@ -84,3 +84,10 @@ def test_a_report_with_nothing_scored_has_no_brier() -> None:
     assert report["scored"] == 0
     assert report["brier"] is None
     assert report["reliability"] == []
+
+
+@pytest.mark.parametrize("confidence", [-0.01, 1.01, 2.0])
+def test_a_confidence_outside_zero_to_one_is_refused(confidence) -> None:
+    """A silent bucket would make the reliability diagram lie (#597 review)."""
+    with pytest.raises(ValueError, match="outside"):
+        reliability([(confidence, 1.0)])

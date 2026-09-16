@@ -219,3 +219,24 @@ def test_the_three_tools_are_registered() -> None:
     assert set(tools) == {"predict", "resolve_prediction", "calibration"}
     assert tools["calibration"].annotations.read_only_hint is True
     assert tools["predict"].annotations.read_only_hint is False
+
+
+@pytest.mark.asyncio
+async def test_the_table_itself_refuses_an_empty_reference(sqlite_store) -> None:
+    """Defence in depth: the handler refuses it, and so does the schema."""
+    import sqlite3
+
+    from mcp_server.infrastructure.prediction_store import insert_prediction
+
+    conn = sqlite_store._conn
+    prediction_id = insert_prediction(
+        conn, {"claim": "c", "prediction": "p", "test": "t", "confidence": 0.5}
+    )
+
+    with pytest.raises(sqlite3.IntegrityError):
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE predictions SET status = 'resolved', verdict = 'confirmed', "
+                "observed = 'x', source_kind = 'ci', source_ref = '' WHERE id = %s",
+                (prediction_id,),
+            )

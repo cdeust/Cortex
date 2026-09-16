@@ -72,7 +72,7 @@ Omitting `project_root` retains the global wiki scope.
 | `recall_skills` | Recall learned procedural skills by situation | <200ms |
 | `why` | Resolve ⟦rcpt:id⟧ injection receipts into presence-in-context evidence (blame path, decision 4255039) | <100ms |
 
-## Tier 3 — Automation & Intelligence (13 tools)
+## Tier 3 — Automation & Intelligence (16 tools)
 
 | Tool | Purpose | Target Latency |
 |---|---|---|
@@ -89,6 +89,9 @@ Omitting `project_root` retains the global wiki scope.
 | `predict` | Record a falsifiable prediction with the confidence held before its outcome is known | <50ms |
 | `resolve_prediction` | Settle an open prediction against an observation, naming the evidence that decided it | <50ms |
 | `calibration` | Brier score and reliability bands over the resolved predictions | <100ms |
+| `ingest_findings` | Ingest an ai-architect findings run off disk: a verified finding becomes a wiki page with receipt memos, a non-verified one a low-confidence hypothesis memory (ADR-0410) | varies |
+| `lesson_promotion` | Promote recurring lessons out of episodic memory (M-D6) | <500ms |
+| `get_grooming_health` | Grooming backlog counts and staleness ages per judgment-level kind (INC G-4) | ~1s |
 
 ## Tier 4 — Wiki (12 tools)
 
