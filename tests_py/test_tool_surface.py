@@ -38,3 +38,15 @@ def test_the_host_contract_bounds_follow_the_surface() -> None:
 
     assert MIN_FULL_TOOL_COUNT == len(standalone_tool_names())
     assert MAX_FULL_TOOL_COUNT == MIN_FULL_TOOL_COUNT + len(UPSTREAM_TOOL_NAMES)
+
+
+def test_the_docker_smoke_floor_follows_the_surface() -> None:
+    """The last bare literal: a shell default nothing tied to the registries."""
+    import pathlib
+    import re
+
+    script = pathlib.Path("scripts/docker_smoke.sh").read_text(encoding="utf-8")
+    match = re.search(r'MIN_TOOL_COUNT="\$\{CORTEX_SMOKE_MIN_TOOLS:-(\d+)\}"', script)
+
+    assert match, "docker_smoke.sh no longer declares MIN_TOOL_COUNT as expected"
+    assert int(match.group(1)) == len(standalone_tool_names())

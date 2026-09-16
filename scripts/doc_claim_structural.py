@@ -142,3 +142,41 @@ def check_scanned_json_parses(
         except json.JSONDecodeError as error:
             failures.append(f"{relative_path}: not valid JSON — {error}")
     return failures
+
+
+# The marketplace entry advertises the surface to every install, and its
+# description also recounts the plugin's version history, where past counts
+# are quotations rather than claims. Only the current sentence is checked,
+# and it must exist: a gate that cannot find its subject must fail.
+# source: the decision recorded as ADR number 1077
+MARKETPLACE_TOOL_COUNTS = re.compile(r"(\d+) MCP tools \((\d+) with the optional")
+MARKETPLACE_PATH = ".claude-plugin/marketplace.json"
+
+
+def check_marketplace_tool_counts(
+    read_fn: ReadFn, standalone: int, total: int
+) -> list[str]:
+    """The marketplace description's current tool counts, nothing else."""
+    try:
+        text = read_fn(MARKETPLACE_PATH)
+    except OSError as exc:
+        return [f"{MARKETPLACE_PATH}: unreadable ({exc})"]
+    match = MARKETPLACE_TOOL_COUNTS.search(text)
+    if match is None:
+        return [
+            f"{MARKETPLACE_PATH}: no 'N MCP tools (M with the optional ...' "
+            "sentence found; the gate has lost its subject"
+        ]
+    found_standalone, found_total = (int(group) for group in match.groups())
+    failures = []
+    if found_standalone != standalone:
+        failures.append(
+            f"{MARKETPLACE_PATH}: advertises {found_standalone} tools, "
+            f"canonical is {standalone}"
+        )
+    if found_total != total:
+        failures.append(
+            f"{MARKETPLACE_PATH}: advertises {found_total} tools with "
+            f"integrations, canonical is {total}"
+        )
+    return failures

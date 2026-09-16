@@ -551,7 +551,15 @@ class CollectFailuresTests(unittest.TestCase):
     CONSISTENT = (
         "52 memory tools (55 total with upstream).\n"
         "A 2-reference bibliography of 36 mechanisms.\n"
+        # The count also lives inside the pinned test's NAME, where no space
+        # precedes the digits; its own family is checked since ADR-1077.
+        "Pinned by tests_py/test_main.py::test_standalone_baseline_is_52_tools.\n"
     )
+
+    # The marketplace description states the surface to every install and is
+    # checked on its own, not through SCANNED_FILES, because the same field
+    # recounts the plugin's version history (ADR-1077).
+    MARKETPLACE = '{"description": "52 MCP tools (55 with the optional bits)"}'
 
     def setUp(self):
         self._real_read = gate.read
@@ -568,6 +576,7 @@ class CollectFailuresTests(unittest.TestCase):
             "tests_py/test_main.py": PINNED_TEST,
             "docs/papers/bibliography.md": BIBLIOGRAPHY,
             "README.md": readme or '<img src="assets/badge-tests.svg" alt="tests">\n',
+            ".claude-plugin/marketplace.json": self.MARKETPLACE,
         }
         # None omits the file entirely (a missing-badge scenario); any other
         # string is spliced into the <title> as-is, so a non-digit value

@@ -15,7 +15,14 @@ adheres to [Semantic Versioning](https://semver.org/).
   CI jobs on a number nothing had updated. `mcp_server/tool_surface.py` now
   reads the surface from the registry modules and the verifier derives its
   bounds from it, with a test pinning both against what `register_all`
-  actually registers.
+  actually registers. The review of that fix found three more copies, all
+  older than it: `.bestpractices.json` named the pinned test at 52 inside an
+  identifier, where the claim regex could not see it; `.claude-plugin/
+  marketplace.json` advertised 50 tools to every install and was scanned by
+  nothing; and the docker-smoke floor was a bare literal. The first two are
+  corrected and now gate-checked, the marketplace one by a targeted check
+  because that same field also recounts the plugin's version history, and the
+  third is pinned by a test.
 
 - **Prediction records, and a score for the confidences they carry (#597).**
   Cortex stored what happened and never what was expected, so nothing it held

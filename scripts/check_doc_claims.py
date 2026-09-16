@@ -69,6 +69,11 @@ MECHANISM_CLAIM = re.compile(
 )
 # source: ADR-0713
 TEST_CLAIM = re.compile(r"(\d+)(?:\s+tests|-test suite)\b")
+# The pinned test name carries the standalone count inside an identifier,
+# where no space precedes the digits, so TOOL_CLAIM never saw it and it
+# sat stale at 52 across two count moves.
+# source: the decision recorded as ADR number 1077
+PINNED_TEST_NAME_CLAIM = re.compile(r"test_standalone_baseline_is_(\d+)_tools")
 
 
 def read(relative_path: str) -> str:
@@ -127,6 +132,12 @@ def collect_failures(test_count: int | None) -> list[str]:
     standalone, total = canonical_tool_counts()
     failures = check_counts(TOOL_CLAIM, standalone, "tools")
     failures += check_counts(TOOL_TOTAL_CLAIM, total, "tools with integrations")
+    failures += check_counts(
+        PINNED_TEST_NAME_CLAIM, standalone, "tools in the pinned test name"
+    )
+    failures += doc_claim_structural.check_marketplace_tool_counts(
+        read, standalone, total
+    )
     failures += check_counts(REFERENCE_CLAIM, canonical_reference_count(), "references")
     failures += check_counts(MECHANISM_CLAIM, canonical_mechanism_count(), "mechanisms")
     failures += check_no_hotlinked_badges()
