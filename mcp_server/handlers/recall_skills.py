@@ -98,7 +98,10 @@ schema = {
 
 @runtime_checkable
 class _ProceduralSkillsStore(Protocol):
-    """Capability contract for the procedural-skills subsystem (PG-only).
+    """Capability contract for the procedural-skills subsystem.
+
+    Both backends implement it since ADR-1075; the Protocol stays because
+    the handler is written against the capability, not against a store.
 
     source: ADR-0433"""
 
