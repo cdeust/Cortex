@@ -3467,6 +3467,10 @@
     "ADR-1074": {
       "mirror": "ADR-1074-the-sqlite-test-job-s-budget-is-set-from-its-measured-p90.md",
       "path": "adr/cortex/1074-the-sqlite-test-job-s-budget-is-set-from-its-measured-p90.md"
+    },
+    "ADR-1075": {
+      "mirror": "ADR-1075-procedural-skills-are-stored-on-both-backends.md",
+      "path": "adr/cortex/1075-procedural-skills-are-stored-on-both-backends.md"
     }
   },
   "project": "cortex",

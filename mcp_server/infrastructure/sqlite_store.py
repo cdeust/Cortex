@@ -42,6 +42,9 @@ from mcp_server.infrastructure.sqlite_store_entity_merge import (
 )
 from mcp_server.infrastructure.sqlite_store_grooming import SqliteGroomingMixin
 from mcp_server.infrastructure.sqlite_store_mood import SqliteMoodMixin
+from mcp_server.infrastructure.sqlite_store_procedural import (
+    SqliteProceduralMixin,
+)
 from mcp_server.infrastructure.sqlite_store_queries import SqliteQueryMixin
 from mcp_server.infrastructure.sqlite_store_receipts import SqliteReceiptsMixin
 from mcp_server.infrastructure.sqlite_store_relationships import (
@@ -105,6 +108,7 @@ class SqliteMemoryStore(
     SqliteGroomingMixin,
     SqliteAuxiliaryMixin,
     SqliteMoodMixin,
+    SqliteProceduralMixin,
     SqliteSearchMixin,
 ):
     """SQLite + FTS5 + sqlite-vec storage engine for Cortex memory system."""

@@ -6,6 +6,9 @@ source: ADR-0602"""
 
 from __future__ import annotations
 
+from mcp_server.infrastructure.sqlite_schema_procedural import (
+    get_procedural_ddl,
+)
 from mcp_server.infrastructure.sqlite_schema_wiki import get_wiki_ddl
 
 # ── Core Tables ───────────────────────────────────────────────────────────
@@ -358,6 +361,7 @@ def get_all_ddl() -> list[str]:
         USER_MOOD_SEED_DDL,
         *INDEXES_DDL,
         # source: ADR-0602
+        *get_procedural_ddl(),
         *get_wiki_ddl(),
     ]
 

@@ -20,6 +20,15 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Procedural skills are stored on the default backend too (#596).** The
+  `procedural_skills` table existed only on PostgreSQL, so on SQLite the
+  session-end writer mined its skills and lost every one to an
+  `AttributeError` its caller swallowed, leaving `recall_skills` permanently
+  empty on the backend plugin installs use. SQLite gets the table and the two
+  operations, mirroring the PostgreSQL columns (ADR-1075); an existing
+  database picks the table up on its next open. Proficiency still sits at 0.5
+  for every skill: nothing records a session outcome yet (#597).
+
 - **One transcript reader, and it refuses a non-path (#591 follow-up).**
   `scanner.iter_tool_uses` streamed the same assistant `tool_use` blocks as
   `infrastructure/transcript_activity.py` and had no caller anywhere in the
