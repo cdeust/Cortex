@@ -3475,6 +3475,10 @@
     "ADR-1076": {
       "mirror": "ADR-1076-a-prediction-is-written-open-and-resolved-against-evidence-the-caller-supplies.md",
       "path": "adr/cortex/1076-a-prediction-is-written-open-and-resolved-against-evidence-the-caller-supplies.md"
+    },
+    "ADR-1077": {
+      "mirror": "ADR-1077-the-advertised-tool-count-is-read-from-the-registries.md",
+      "path": "adr/cortex/1077-the-advertised-tool-count-is-read-from-the-registries.md"
     }
   },
   "project": "cortex",

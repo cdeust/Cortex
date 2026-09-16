@@ -41,14 +41,23 @@ from scripts.mcp_host_client import (  # noqa: E402
 )
 
 from mcp_server.tool_profiles import LEAN_TOOL_NAMES  # noqa: E402
+from mcp_server.tool_surface import (  # noqa: E402
+    UPSTREAM_TOOL_NAMES,
+    standalone_tool_names,
+)
 
 
 CLIENTS = ("claude-code", "gemini-cli", "codex-cli")
 PROFILES: tuple[Literal["full", "lean"], ...] = ("full", "lean")
 STORAGE_SELECTIONS: tuple[Literal["sqlite", "auto"], ...] = ("sqlite", "auto")
+# The floor is what this tree registers without an upstream, read from the
+# registries themselves rather than copied: a literal here went stale when
+# the count moved 52 -> 54 (ADR-1066) and only failed the build three tools
+# later, when it moved to 57 (issue #597).
 # source: ADR-0788
-MIN_FULL_TOOL_COUNT = 52
-MAX_FULL_TOOL_COUNT = MIN_FULL_TOOL_COUNT + 3
+# The correction is recorded as ADR number 1077.
+MIN_FULL_TOOL_COUNT = len(standalone_tool_names())
+MAX_FULL_TOOL_COUNT = MIN_FULL_TOOL_COUNT + len(UPSTREAM_TOOL_NAMES)
 
 
 def _result(

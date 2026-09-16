@@ -8,6 +8,15 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **The host-contract verifier counts the tools the server registers
+  (ADR-1077).** `scripts/verify_mcp_hosts.py` held its own floor of 52 with a
+  ceiling three above, so it stayed right through the move to 54 (ADR-1066)
+  and only failed when the prediction tools took the count to 57, blocking two
+  CI jobs on a number nothing had updated. `mcp_server/tool_surface.py` now
+  reads the surface from the registry modules and the verifier derives its
+  bounds from it, with a test pinning both against what `register_all`
+  actually registers.
+
 - **Prediction records, and a score for the confidences they carry (#597).**
   Cortex stored what happened and never what was expected, so nothing it held
   could turn out wrong in a way it noticed: 796 procedural skills mined from
