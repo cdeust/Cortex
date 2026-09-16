@@ -26,6 +26,15 @@ from typing import Any
 MAX_TOOL_SEQUENCE = 2000
 
 
+def _message_content(record: dict) -> Any:
+    """The record's message content, or None when the record is not shaped
+    the way a transcript record is. Nothing here trusts a field's type:
+    every level of a hand-written or truncated transcript can hold anything.
+    """
+    message = record.get("message")
+    return message.get("content") if isinstance(message, dict) else None
+
+
 def _tool_names(content: Any) -> list[str]:
     if not isinstance(content, list):
         return []
@@ -67,8 +76,7 @@ def transcript_activity(transcript_path: str | Path | None) -> dict[str, Any]:
                     continue
                 turns += 1
                 if len(sequence) < MAX_TOOL_SEQUENCE:
-                    content = (record.get("message") or {}).get("content")
-                    sequence.extend(_tool_names(content))
+                    sequence.extend(_tool_names(_message_content(record)))
     except OSError:
         return empty
     return {"tool_sequence": sequence[:MAX_TOOL_SEQUENCE], "turn_count": turns}

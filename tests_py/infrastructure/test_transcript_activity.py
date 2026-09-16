@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from mcp_server.infrastructure.transcript_activity import (
     MAX_TOOL_SEQUENCE,
     transcript_activity,
@@ -120,3 +122,23 @@ def test_a_non_object_line_is_skipped(tmp_path) -> None:
     )
 
     assert transcript_activity(str(path))["tool_sequence"] == ["Bash"]
+
+
+@pytest.mark.parametrize(
+    "message",
+    ["not a dict", [1, 2, 3], 7, True],
+    ids=["string", "list", "number", "bool"],
+)
+def test_a_record_whose_message_is_not_an_object_is_counted_not_a_crash(
+    tmp_path, message
+) -> None:
+    """Every level of a transcript record can hold anything (issue #591)."""
+    transcript = _write(
+        tmp_path / "s.jsonl",
+        [{"type": "assistant", "message": message}, _assistant("Bash")],
+    )
+
+    activity = transcript_activity(transcript)
+
+    assert activity["tool_sequence"] == ["Bash"]
+    assert activity["turn_count"] == 2
