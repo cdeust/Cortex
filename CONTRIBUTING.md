@@ -9,7 +9,7 @@ the canonical list) backing the algorithms. Every change is held to that bar.
 
 ## What this project is
 
-A Python 3.10+ MCP server with **52 standalone tools** (55 with the optional
+A Python 3.10+ MCP server with **54 standalone tools** (57 with the optional
 ai-architect-mcp-codebase + prd-spec-generator integrations) and **9 automatic
 hooks**, persisting to a local SQLite store by default or to PostgreSQL +
 pgvector when configured. Implements rate-distortion forgetting,
@@ -242,14 +242,14 @@ mechanically for the modules it is scoped to.
 
 ## Adding an MCP tool
 
-52 standalone tools currently (55 with the optional upstream integrations). Adding a new one:
+54 standalone tools currently (57 with the optional upstream integrations). Adding a new one:
 
 1. **Define the JSON schema** in the tool's module-level decorator.
 2. **Implement the handler** following the `BaseTool` protocol.
 3. **Add to the tool registry** at the canonical registration site.
 4. **Document in [`docs/mcp-tools.md`](docs/mcp-tools.md)** with the tool's
    purpose, tier and target latency, and update the standalone tool count
-   there — `tests_py/test_main.py::test_standalone_baseline_is_52_tools` pins
+   there — `tests_py/test_main.py::test_standalone_baseline_is_54_tools` pins
    it, and `scripts/check_doc_claims.py` fails the build if the docs disagree.
 5. **Add a unit test** for the tool's contract.
 6. **Add an integration test** if the tool touches the database.

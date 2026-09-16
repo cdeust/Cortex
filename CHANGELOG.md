@@ -6,6 +6,18 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **The Path B draft tools are exposed over MCP (#579).** `wiki_get_draft`
+  and `wiki_refine_draft` had existed as handlers since ADR-0467 without ever
+  being registered, so no client could call them and `wiki_get_draft`'s own
+  instructions named a tool `tools/list` never advertised. They now register
+  from `mcp_server/tool_registry_wiki_drafts.py`, a module of their own so
+  `tool_registry_wiki.py` stays inside the 300-line cap (ADR-1066): reading a
+  draft is read-only, submitting refined prose is a non-idempotent write, and
+  both are interactive-class. The standalone tool count moves from 52 to 54
+  (57 with both upstream integrations).
+
 ### Fixed
 
 - **Refining a wiki draft no longer raises its confidence (#578).**

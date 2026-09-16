@@ -4,15 +4,16 @@ description: "MCP tool catalogue (tiers, purpose, target latency) + slash comman
 
 # MCP Tools
 
-52 standalone tools register unconditionally; 3 more register only when an
-upstream MCP server is configured (55 total with both present).
+54 standalone tools register unconditionally; 3 more register only when an
+upstream MCP server is configured (57 total with both present).
 
 ```
-# source: tests_py/test_main.py::test_standalone_baseline_is_52_tools
+# source: tests_py/test_main.py::test_standalone_baseline_is_54_tools
 #   verified 2026-07-12 by a live DB-less `tools/list` stdio round-trip
 #   against `bare-container-contract` + `wiki_migrate`, commit 4be298a3;
 #   bumped to 51 by `check_setup` (issue #115), to 52 by `ingest_document`
-#   (offline .docx / Confluence export ingest, issue #192).
+#   (offline .docx / Confluence export ingest, issue #192), to 54 by
+#   `wiki_get_draft` + `wiki_refine_draft` (Path B, ADR-1066, issue #579).
 ```
 
 ## Tier 1 — Core Memory & Profiling (22 tools)
@@ -84,7 +85,7 @@ Omitting `project_root` retains the global wiki scope.
 | `curate_distill` | Return understanding-level distillation dossiers (error->success, co-access, entity family) for the LLM to author `lesson` memories from (M-D8) | ~200-500ms |
 | `ingest_document` | Ingest a .docx or Confluence storage-format XHTML export into the memory/wiki store, with provenance + idempotent re-ingest (issue #192). File-based, no upstream needed | varies |
 
-## Tier 4 — Wiki (10 tools)
+## Tier 4 — Wiki (12 tools)
 
 | Tool | Purpose | Target Latency |
 |---|---|---|
@@ -98,13 +99,15 @@ Omitting `project_root` retains the global wiki scope.
 | `wiki_reindex` | Rebuild wiki contents and exact-ID indexes; explicit project mode also regenerates ADR mirrors | varies |
 | `wiki_purge` | Permanently delete a wiki page | <50ms |
 | `wiki_migrate` | Reconcile wiki.pages against FS (backfill + ghost purge) | varies |
+| `wiki_get_draft` | Fetch a pending draft with its source claims and kind contract, or list pending drafts (Path B) | <50ms |
+| `wiki_refine_draft` | Submit refined prose for a draft; records an audit memo, leaves its confidence as the claims set it (Path B) | <100ms |
 
 ## Upstream-integration tools (3, conditionally registered)
 
 These register only when their upstream MCP server is configured, bringing
-the total to 55: `ingest_codebase` + `change_impact` (ai-architect-mcp-codebase)
+the total to 57: `ingest_codebase` + `change_impact` (ai-architect-mcp-codebase)
 and `ingest_prd` (ai-architect-mcp-spec). With no upstream present, exactly the
-**52 standalone tools** above register. Driving the ai-architect pipeline
+**54 standalone tools** above register. Driving the ai-architect pipeline
 end-to-end (formerly `run_pipeline`) is **not** part of this server — it
 lives in the ai-architect-mcp-codebase MCP.
 

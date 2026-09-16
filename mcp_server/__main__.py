@@ -43,6 +43,7 @@ from mcp_server import (
     tool_registry_memory_maintenance,
     tool_registry_nav,
     tool_registry_wiki,
+    tool_registry_wiki_drafts,
 )
 from mcp_server.hooks.wiring import wire_composition_root
 from mcp_server.core import telemetry
@@ -101,6 +102,7 @@ def merged_schemas() -> dict[str, dict]:
         **tool_registry_nav.SCHEMAS,
         **tool_registry_advanced.SCHEMAS,
         **tool_registry_wiki.SCHEMAS,
+        **tool_registry_wiki_drafts.SCHEMAS,
         **tool_registry_ingest.SCHEMAS,
     }
 
@@ -116,6 +118,7 @@ def register_all(mcp: MCPServer, *, codebase: bool, prd: bool) -> None:
     tool_registry_nav.register(mcp)
     tool_registry_advanced.register(mcp)
     tool_registry_wiki.register(mcp)
+    tool_registry_wiki_drafts.register(mcp)
     tool_registry_ingest.register(mcp, codebase=codebase, prd=prd)
     # source: ADR-0093
 

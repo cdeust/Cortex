@@ -3431,6 +3431,10 @@
     "ADR-1065": {
       "mirror": "ADR-1065-refining-a-wiki-draft-leaves-its-confidence-as-the-source-claims-set-it.md",
       "path": "adr/cortex/1065-refining-a-wiki-draft-leaves-its-confidence-as-the-source-claims-set-it.md"
+    },
+    "ADR-1066": {
+      "mirror": "ADR-1066-expose-the-path-b-draft-tools-from-their-own-registry-module.md",
+      "path": "adr/cortex/1066-expose-the-path-b-draft-tools-from-their-own-registry-module.md"
     }
   },
   "project": "cortex",

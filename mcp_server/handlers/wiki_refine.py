@@ -18,6 +18,7 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
+from mcp_server.handlers._tool_meta import NON_IDEMPOTENT_WRITE, READ_ONLY
 from mcp_server.infrastructure.wiki_schema_reader import load_registry
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.memory_config import get_memory_settings
@@ -36,8 +37,12 @@ from mcp_server.infrastructure.pg_store_wiki import (
 schema_get = {
     "description": (
         "Fetch a draft + its source claims + the kind contract so the "
-        "caller (LLM) can refine it. Phase 2.3 (Path B)."
+        "caller (LLM) can refine it, or list the pending drafts. Phase 2.3 "
+        "(Path B): `wiki_synthesize` fills wiki.drafts from routed claims, "
+        "this hands one to the caller, and `wiki_refine_draft` takes the "
+        "prose back. Read-only."
     ),
+    "annotations": READ_ONLY,
     "inputSchema": {
         "type": "object",
         "properties": {
@@ -195,9 +200,13 @@ async def handler_get(args: dict[str, Any] | None = None) -> dict[str, Any]:
 schema_refine = {
     "description": (
         "Submit a refined draft (lead, sections, optional title). Updates "
-        "wiki.drafts in place; records an audit memo. The draft's confidence "
-        "is left as its source claims set it (ADR-1065). Phase 2.3 (Path B)."
+        "wiki.drafts in place; records an audit memo, one row per call. The "
+        "draft's confidence is left as its source claims set it (ADR-1065), "
+        "so refining never moves a draft past `wiki_curate`'s approve "
+        "threshold. Sections are refused unless they satisfy the kind "
+        "contract returned by `wiki_get_draft`. Phase 2.3 (Path B)."
     ),
+    "annotations": NON_IDEMPOTENT_WRITE,
     "inputSchema": {
         "type": "object",
         "required": ["draft_id"],

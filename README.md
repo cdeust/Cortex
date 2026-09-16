@@ -28,7 +28,7 @@ default, or PostgreSQL + pgvector if you prefer. No LLM in the retrieval loop, a
 leaves localhost unless you configure an integration that does. Your project's memory is a
 file you own and can delete.
 
-**Cross-platform is how it is built.** One stdio MCP server and the same 52 tools on Claude
+**Cross-platform is how it is built.** One stdio MCP server and the same 54 tools on Claude
 Code, in the Claude Desktop bundle, under Claude Cowork, and on every local stdio MCP host
 listed in the table below. What differs per host is stated there, not discovered after
 install.
@@ -40,7 +40,7 @@ files. We hold that intent to the
 publish **no CO₂ or energy figure**, because we have not measured one.
 [What we do and do not claim ↓](#green-software-engineering)
 
-> **36 neuroscience mechanisms · 52 memory tools · 9 lifecycle hooks · a self-curating per-project wiki — all local, all open-source, MIT.**
+> **36 neuroscience mechanisms · 54 memory tools · 9 lifecycle hooks · a self-curating per-project wiki — all local, all open-source, MIT.**
 
 ## Install
 
@@ -177,7 +177,7 @@ TTL-based caches; some details may fade while the principle remains useful.
 
 In Claude Code that is automatic: nine lifecycle hooks inject context at session start, recall
 per prompt, capture as you work, checkpoint before compaction, and run a per-project wiki that
-curates itself. In any other stdio MCP host you call the same 52 tools yourself, or 55 when
+curates itself. In any other stdio MCP host you call the same 54 tools yourself, or 57 when
 the optional `ai-architect-mcp-codebase` and `ai-architect-mcp-spec` integrations are present.
 
 ## Does the retrieval work
@@ -234,7 +234,7 @@ bash <plugin-dir>/scripts/install-plugin.sh --postgres
 |  | SQLite (default) | PostgreSQL 15+ |
 |---|---|---|
 | Setup | none | pgvector, pg_trgm |
-| All 52 tools | yes | yes |
+| All 54 tools | yes | yes |
 | Retrieval contract | identical | identical |
 | Fusion | in-process | server-side PL/pgSQL |
 | ANN index | none | pgvector HNSW |
@@ -251,7 +251,7 @@ are Claude Code plugin machinery; the server never imports or requires them at s
 
 | Capability | Claude Code plugin | Local stdio hosts (Gemini CLI, Codex CLI, ChatGPT desktop, Cursor, Windsurf, VS Code, Agents SDK) | ChatGPT web |
 |---|---|---|---|
-| All 52 memory tools (`remember`, `recall`, wiki, navigation, consolidation, triggers, rules) | ✅ | ✅ | ❌ no remote HTTPS endpoint is shipped |
+| All 54 memory tools (`remember`, `recall`, wiki, navigation, consolidation, triggers, rules) | ✅ | ✅ | ❌ no remote HTTPS endpoint is shipped |
 | SQLite default store / PostgreSQL opt-in | ✅ | ✅ | ❌ would need a remote deployment and a per-user storage and auth model |
 | Auto-capture of significant tool output | ✅ PostToolUse hook | ❌ store explicitly with `remember` | ❌ |
 | Session-start context injection | ✅ SessionStart hook | ❌ call `recall` yourself | ❌ |

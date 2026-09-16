@@ -19,6 +19,48 @@ from mcp_server.__main__ import (
 # availability (source: MCP Directory submission decision 2026-06-19).
 _UPSTREAM_TOOLS = {"ingest_codebase", "change_impact", "ingest_prd"}
 
+# Tools that register without any upstream: the core memory and profiling
+# set, the wiki authoring set, and the ones added since the 2026-07-12
+# re-derivation of the baseline.
+_NO_UPSTREAM_TOOLS = {
+    "query_methodology",
+    "detect_domain",
+    "rebuild_profiles",
+    "list_domains",
+    "record_session_end",
+    "explore_features",
+    "remember",
+    "recall",
+    "memory_stats",
+    "checkpoint",
+    "consolidate",
+    "narrative",
+    "import_sessions",
+    "codebase_analyze",  # native AST — no upstream needed
+    "unified_search",  # ap_bridge degrades to native AST
+    "wiki_verify",
+    "get_telemetry",
+    "wiki_write",
+    "wiki_rename",
+    "wiki_migrate",
+    "why",  # blame path T3: the receipt resolver
+    "ingest_findings",  # INC5.1: disk-based AP findings consumer
+    "lesson_promotion",  # M-D6 (7.6): PG-only
+    "curate_distill",  # INC7.8/M-D8: distillation dossiers
+    "get_grooming_health",  # INC G-4: grooming backlog telemetry
+    "check_setup",  # issue #115: doctor.py facade
+    "ingest_document",  # issue #192: offline document ingest
+    "wiki_get_draft",  # issue #579: Path B draft refinement
+    "wiki_refine_draft",
+}
+
+# Extracted to the cortex-viz MCP — never registered by this server.
+_EXTRACTED_TOOLS = {
+    "get_methodology_graph",
+    "open_visualization",
+    "query_workflow_graph",
+}
+
 
 def _tool_names(*, codebase: bool, prd: bool) -> set[str]:
     """Build a fresh server with explicit availability flags; return tool names.
@@ -58,77 +100,44 @@ class TestMain:
             # Cortex-side wrapper.
             mock_anyio_run.assert_called_once_with(mcp.run_stdio_async)
 
-    def test_standalone_baseline_is_52_tools(self):
-        """With no upstream available, exactly the 52 standalone tools register.
+    def test_standalone_baseline_is_54_tools(self):
+        """With no upstream available, exactly the 54 standalone tools register.
 
-        52 = the 49 tools re-derived 2026-07-12 (fix/bare-container-contract,
+        54 = the 49 tools re-derived 2026-07-12 (fix/bare-container-contract,
         live DB-less `tools/list` round-trip) + `wiki_migrate` (FS→PG wiki
         parity, commit 4be298a3) + `check_setup` (doctor.py facade, issue
         #115) + `ingest_document` (offline .docx / Confluence export ingest,
-        issue #192 — file-only, no upstream to gate on). The 3
+        issue #192 — file-only, no upstream to gate on) + `wiki_get_draft`
+        and `wiki_refine_draft` (Path B draft refinement, defined since
+        ADR-0467 and exposed by ADR-1066, issue #579). The 3
         upstream-integration tools (ingest_codebase, change_impact,
         ingest_prd) MUST NOT be advertised — every advertised tool then works
         out of the box.
         source: MCP Directory submission decision 2026-06-19.
         """
         names = _tool_names(codebase=False, prd=False)
-        # Core memory / profiling / wiki tools are always present.
-        assert "query_methodology" in names
-        assert "detect_domain" in names
-        assert "rebuild_profiles" in names
-        assert "list_domains" in names
-        assert "record_session_end" in names
-        assert "explore_features" in names
-        assert "remember" in names
-        assert "recall" in names
-        assert "memory_stats" in names
-        assert "checkpoint" in names
-        assert "consolidate" in names
-        assert "narrative" in names
-        assert "import_sessions" in names
-        assert "codebase_analyze" in names  # native AST — no upstream needed
-        assert "unified_search" in names  # ap_bridge degrades to native AST
-        assert "wiki_verify" in names
-        assert "get_telemetry" in names
-        assert "wiki_write" in names
-        assert "wiki_rename" in names
-        assert "wiki_migrate" in names
-        # Extracted to cortex-viz MCP — never registered here.
-        assert "get_methodology_graph" not in names
-        assert "open_visualization" not in names
-        assert "query_workflow_graph" not in names
-        # Blame path T3: the receipt resolver is a standalone tool.
-        assert "why" in names
-        # INC5.1: the AP findings consumer is disk-based, always registered.
-        assert "ingest_findings" in names
-        # M-D6 (7.6): lesson_promotion is PG-only, no upstream needed.
-        assert "lesson_promotion" in names
-        # INC7.8/M-D8: distillation dossiers, disk/DB only, no upstream.
-        assert "curate_distill" in names
-        # INC G-4: grooming backlog + staleness telemetry, PG-only, no
-        # upstream needed.
-        assert "get_grooming_health" in names
-        # Issue #115: doctor.py facade, no upstream needed.
-        assert "check_setup" in names
-        # Issue #192: offline document ingest (.docx / Confluence export),
-        # file-only, no upstream needed.
-        assert "ingest_document" in names
         # The upstream-integration tools are gated OFF.
         assert names.isdisjoint(_UPSTREAM_TOOLS)
-        assert len(names) == 52
+        assert len(names) == 54
 
-    def test_with_upstreams_registers_55_tools(self):
+    def test_standalone_surface_holds_every_no_upstream_tool(self):
+        """What that baseline is made of, and what it must never hold."""
+        names = _tool_names(codebase=False, prd=False)
+        assert _NO_UPSTREAM_TOOLS <= names
+        assert names.isdisjoint(_EXTRACTED_TOOLS)
+
+    def test_with_upstreams_registers_57_tools(self):
         """When both upstreams are available, the 3 integration tools register."""
         names = _tool_names(codebase=True, prd=True)
         assert _UPSTREAM_TOOLS <= names
-        assert len(names) == 55
+        assert len(names) == 57
 
     def test_codebase_only_adds_two_tools(self):
         """codebase upstream gates ingest_codebase + change_impact together."""
         names = _tool_names(codebase=True, prd=False)
         assert {"ingest_codebase", "change_impact"} <= names
         assert "ingest_prd" not in names
-        assert len(names) == 54
+        assert len(names) == 56
 
     def test_mcp_server_name_and_version(self):
         assert mcp.name == "methodology-agent"

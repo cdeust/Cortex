@@ -4,7 +4,7 @@
 set -euo pipefail
 
 # source: ADR-0732
-MIN_TOOL_COUNT="${CORTEX_SMOKE_MIN_TOOLS:-52}"
+MIN_TOOL_COUNT="${CORTEX_SMOKE_MIN_TOOLS:-54}"
 IMAGE="${CORTEX_SMOKE_IMAGE:-cortex-smoke:local}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SKIP_BUILD=0
