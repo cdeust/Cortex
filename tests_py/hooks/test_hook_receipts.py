@@ -299,8 +299,8 @@ def test_agent_briefing_emits_receipt_with_marker(_db) -> None:
     )
     # Pass 2 (TMS directory layer): a team decision of the SAME project from
     # ANOTHER agent enters the briefing regardless of keywords — it must
-    # be attested by the same receipt, ranked after the agent-scoped pass.
-    # source: ADR-1083
+    # be attested by the same receipt, ranked after the agent-scoped pass
+    # (project scope per ADR-1083).
     team_id = _seed(
         _db,
         "HOOKRCPT_TEST team decision on rollout gates",
