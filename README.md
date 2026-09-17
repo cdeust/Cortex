@@ -277,9 +277,10 @@ banners, auto-recall, auto-capture, checkpoints and every memory tool work on bo
 The server is host-agnostic. Any host that can launch a stdio process gets the full tool
 surface on the default SQLite store. What is not portable are the nine lifecycle hooks, which
 are Claude Code plugin machinery; the server never imports or requires them at startup. The
-Codex plugin deliberately starts the server with `--profile lean` so its first `uvx` handshake
-stays inside the host's startup budget (measured in [docs/codex-plugin.md](docs/codex-plugin.md));
-the direct registration below gives Codex the full surface.
+Codex plugin deliberately starts the server with `--profile lean`: the full tool surface is the
+largest fixed token cost a session pays before the user types anything (ADR-0693, issue #177),
+and the plugin keeps that cost to ten tools; the direct registration below gives Codex the full
+surface.
 
 | Capability | Claude Code plugin | Codex plugin (`hypermnesia-mcp-codex`) | Codex `codex mcp add`, Gemini CLI, Cursor, Windsurf, VS Code, Agents SDK | ChatGPT web |
 |---|---|---|---|---|
@@ -294,7 +295,7 @@ the direct registration below gives Codex the full surface.
 | Compaction checkpoints | ✅ | ❌ | ❌ | ❌ |
 | Autonomous wiki cycle | ✅ | ❌ `consolidate` by hand; `curate_wiki` needs the full profile | ❌ run `consolidate` / `curate_wiki` manually | ❌ |
 | Cognitive profiling (`query_methodology`) | ✅ | ⚠️ profiles are mined from Claude Code session logs under `~/.claude/`; without them the profile is empty | ⚠️ same | ❌ |
-| Worktree directory (repository convention, `docs/agent-guidance.md`) | `.claude/worktrees/<name>/` | `.Codex/worktrees/<name>/` (ignored at the repository root since #601) | n/a | n/a |
+| Worktree directory | `.claude/worktrees/<name>/`, the location `docs/agent-guidance.md` names | `.Codex/worktrees/<name>/`, where Codex puts its own; ignored at the repository root since #601 | n/a | n/a |
 
 On Claude Code memory is ambient: hooks capture and inject automatically. On every other host
 memory is tool-driven: the agent stores and retrieves when instructed, and nothing happens
