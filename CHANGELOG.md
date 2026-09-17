@@ -8,6 +8,18 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **A console entry point runs any Cortex lifecycle hook from the installed
+  wheel (#605).** A Codex plugin ships only its own directory, so it cannot
+  reach this repository's `scripts/launcher.py` the way the Claude Code
+  plugin does. `hypermnesia-mcp-hook`, a new `[project.scripts]` entry
+  backed by `mcp_server/hooks/entry.py`, validates its module argument
+  against the ten hook names `.claude-plugin/plugin.json` wires, resolves
+  the storage backend the same way the server does, and dispatches to the
+  named hook's own `__main__` unchanged. A Codex plugin can then call
+  `uvx --from "hypermnesia-mcp[postgresql,sqlite]" hypermnesia-mcp-hook
+  <module>` directly. This changes nothing for the Claude Code plugin,
+  which keeps using `scripts/launcher.py`.
+
 - **The host-contract verifier counts the tools the server registers
   (ADR-1077).** `scripts/verify_mcp_hosts.py` held its own floor of 52 with a
   ceiling three above, so it stayed right through the move to 54 (ADR-1066)

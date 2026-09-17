@@ -77,6 +77,9 @@ Repository = "https://github.com/cdeust/Cortex"
 #
 cortex-doctor = "mcp_server.doctor:run"
 hypermnesia-mcp = "mcp_server.__main__:main"
+# source: CHANGELOG.md Unreleased, ADR number 0874 uses this same interim
+# form for the two scripts above until the console-entry-point ADR lands
+hypermnesia-mcp-hook = "mcp_server.hooks.entry:main"
 
 [project.optional-dependencies]
 postgresql = [
