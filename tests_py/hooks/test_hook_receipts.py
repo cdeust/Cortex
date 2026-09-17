@@ -290,12 +290,14 @@ def test_auto_recall_emits_receipt_with_marker(_db) -> None:
 # ── agent_briefing (subprocess, end-to-end) ───────────────────────────────
 
 
+def _seed_engineer(conn, content: str, **kwargs) -> int:
+    """An engineer-authored row in the project the briefing events name."""
+    return _seed(conn, content, agent="engineer", directory="/tmp", **kwargs)
+
+
 def test_agent_briefing_emits_receipt_with_marker(_db) -> None:
-    mid = _seed(
-        _db,
-        "HOOKRCPT_TEST zephyrine quantalum brokerage reconciliation ledger",
-        agent="engineer",
-        directory="/tmp",
+    mid = _seed_engineer(
+        _db, "HOOKRCPT_TEST zephyrine quantalum brokerage reconciliation ledger"
     )
     # Pass 2 (TMS directory layer): a team decision of the SAME project from
     # ANOTHER agent enters the briefing regardless of keywords — it must
@@ -374,11 +376,8 @@ def test_agent_briefing_falls_back_when_only_dispatch_agent_is_installed(
     pattern).
 
     source: ADR-0971"""
-    mid = _seed(
-        _db,
-        "HOOKRCPT_TEST corvidae plangent isotherm dossier archive",
-        agent="engineer",
-        directory="/tmp",
+    mid = _seed_engineer(
+        _db, "HOOKRCPT_TEST corvidae plangent isotherm dossier archive"
     )
 
     agents_dir = tmp_path / "agents"
@@ -465,18 +464,9 @@ def test_channel_enum_migration_restores_dropped_constraint(_db) -> None:
 def test_agent_briefing_skips_superseded_prior_work(_db) -> None:
     # Correction 8 on the briefing path: the agent-scoped pass must not
     # brief with a corrected fact.
-    current = _seed(
-        _db,
-        "HOOKRCPT_TEST ombrelline daguerre synthesis current",
-        agent="engineer",
-        directory="/tmp",
-    )
-    stale = _seed(
-        _db,
-        "HOOKRCPT_TEST ombrelline daguerre synthesis stale",
-        agent="engineer",
-        directory="/tmp",
-        superseded_by=current,
+    current = _seed_engineer(_db, "HOOKRCPT_TEST ombrelline daguerre synthesis current")
+    stale = _seed_engineer(
+        _db, "HOOKRCPT_TEST ombrelline daguerre synthesis stale", superseded_by=current
     )
 
     result = _run_hook(
