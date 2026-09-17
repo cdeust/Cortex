@@ -157,3 +157,39 @@ def test_a_path_object_still_works(tmp_path) -> None:
     transcript = _write(tmp_path / "s.jsonl", [_assistant("Read")])
 
     assert transcript_activity(pathlib.Path(transcript))["tool_sequence"] == ["Read"]
+
+
+def test_the_codex_dispatch_peek_does_not_change_a_claude_transcripts_result(
+    tmp_path,
+) -> None:
+    """The rollout-vs-Claude dispatch added for Codex peeks a transcript's
+    first record before choosing a reader (ADR-1081); every Claude Code
+    fixture shape above must come out unchanged by that peek."""
+    fixtures = [
+        [
+            {"type": "user", "message": {"content": "fix it"}},
+            _assistant("Read", "Read"),
+            {"type": "user", "message": {"content": "now test"}},
+            _assistant("Edit"),
+            _assistant("Bash", "Read"),
+        ],
+        [
+            {"type": "user", "message": {"content": "hello"}},
+            {"type": "assistant", "message": {"content": "hi"}},
+        ],
+        [_assistant("Read")],
+    ]
+    for index, records in enumerate(fixtures):
+        transcript = _write(tmp_path / f"golden-{index}.jsonl", records)
+        # source: golden values pinned from the same fixtures' assertions
+        # above, before the Codex-rollout dispatch existed (ADR-1081).
+        expected = [
+            {
+                "tool_sequence": ["Read", "Read", "Edit", "Bash", "Read"],
+                "turn_count": 3,
+            },
+            {"tool_sequence": [], "turn_count": 1},
+            {"tool_sequence": ["Read"], "turn_count": 1},
+        ][index]
+
+        assert transcript_activity(transcript) == expected

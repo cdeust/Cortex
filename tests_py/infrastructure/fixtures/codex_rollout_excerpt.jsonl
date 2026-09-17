@@ -1,0 +1,40 @@
+{"timestamp": "2026-09-01T00:00:00.000Z", "ordinal": 0, "type": "session_meta", "payload": {"session_id": "00000000-0000-0000-0000-000000000000", "id": "00000000-0000-0000-0000-000000000000", "timestamp": "2026-09-01T00:00:00.000Z", "cwd": "/Users/example/project", "originator": "codex-tui", "cli_version": "0.0.0", "source": "cli", "thread_source": "user", "model_provider": "openai"}}
+{"timestamp": "2026-09-01T00:00:01.000Z", "ordinal": 1, "type": "event_msg", "payload": {"type": "task_started"}}
+{"timestamp": "2026-09-01T00:00:02.000Z", "ordinal": 2, "type": "response_item", "payload": {"type": "message", "id": "msg_1", "role": "developer", "content": [{"type": "input_text", "text": "# AGENTS.md instructions\nredacted"}]}}
+{"timestamp": "2026-09-01T00:00:03.000Z", "ordinal": 3, "type": "response_item", "payload": {"type": "message", "id": "msg_2", "role": "user", "content": [{"type": "input_text", "text": "<environment_context> redacted </environment_context>"}]}}
+{"timestamp": "2026-09-01T00:00:04.000Z", "ordinal": 4, "type": "response_item", "payload": {"type": "message", "id": "msg_3", "role": "user", "content": [{"type": "input_text", "text": "fix the failing test"}]}}
+{"timestamp": "2026-09-01T00:00:05.000Z", "ordinal": 5, "type": "world_state", "payload": {"redacted": true}}
+{"timestamp": "2026-09-01T00:00:06.000Z", "ordinal": 6, "type": "turn_context", "payload": {"redacted": true}}
+{"timestamp": "2026-09-01T00:00:07.000Z", "ordinal": 7, "type": "response_item", "payload": {"type": "reasoning", "id": "rs_1", "summary": []}}
+{"timestamp": "2026-09-01T00:00:07.500Z", "ordinal": 70, "type": "event_msg", "payload": {"type": "thread_settings_applied"}}
+{"timestamp": "2026-09-01T00:00:08.000Z", "ordinal": 8, "type": "response_item", "payload": {"type": "custom_tool_call", "id": "ctc_1", "name": "exec", "call_id": "call_1", "input": "await tools.exec_command({command: [\"pytest\", \"-q\"]});"}}
+{"timestamp": "2026-09-01T00:00:09.000Z", "ordinal": 9, "type": "event_msg", "payload": {"type": "item_completed"}}
+{"timestamp": "2026-09-01T00:00:10.000Z", "ordinal": 10, "type": "response_item", "payload": {"type": "custom_tool_call_output", "call_id": "call_1", "output": "1 failed, 3 passed"}}
+{"timestamp": "2026-09-01T00:00:11.000Z", "ordinal": 11, "type": "token_usage_record", "payload": {"input_tokens": 100}}
+{"timestamp": "2026-09-01T00:00:11.500Z", "ordinal": 110, "type": "token_usage_record", "payload": {"input_tokens": 140}}
+{"timestamp": "2026-09-01T00:00:12.000Z", "ordinal": 12, "type": "response_item", "payload": {"type": "reasoning", "id": "rs_2", "summary": []}}
+{"timestamp": "2026-09-01T00:00:12.500Z", "ordinal": 120, "type": "response_item", "payload": {"type": "reasoning", "id": "rs_3", "summary": []}}
+{"timestamp": "2026-09-01T00:00:13.000Z", "ordinal": 13, "type": "response_item", "payload": {"type": "custom_tool_call", "id": "ctc_2", "name": "exec", "call_id": "call_2", "input": "await tools.exec_command({command: [\"git\", \"diff\"]});"}}
+{"timestamp": "2026-09-01T00:00:14.000Z", "ordinal": 14, "type": "event_msg", "payload": {"type": "item_completed"}}
+{"timestamp": "2026-09-01T00:00:15.000Z", "ordinal": 15, "type": "response_item", "payload": {"type": "custom_tool_call_output", "call_id": "call_2", "output": "diff redacted"}}
+{"timestamp": "2026-09-01T00:00:15.500Z", "ordinal": 150, "type": "event_msg", "payload": {"type": "token_count", "info": {"total_tokens": 620}}}
+{"timestamp": "2026-09-01T00:00:16.000Z", "ordinal": 16, "type": "response_item", "payload": {"type": "function_call", "id": "fc_1", "name": "send_message", "namespace": "collaboration", "arguments": "{\"to\":\"reviewer\",\"body\":\"redacted\"}", "call_id": "call_3"}}
+{"timestamp": "2026-09-01T00:00:17.000Z", "ordinal": 17, "type": "response_item", "payload": {"type": "function_call_output", "call_id": "call_3", "output": "{\"status\":\"sent\"}"}}
+{"timestamp": "2026-09-01T00:00:17.500Z", "ordinal": 170, "type": "token_usage_record", "payload": {"input_tokens": 210}}
+{"timestamp": "2026-09-01T00:00:18.000Z", "ordinal": 18, "type": "inter_agent_communication_metadata", "payload": {"redacted": true}}
+{"timestamp": "2026-09-01T00:00:19.000Z", "ordinal": 19, "type": "response_item", "payload": {"type": "message", "id": "msg_4", "role": "assistant", "content": [{"type": "output_text", "text": "Running the tests, then fixing."}]}}
+{"timestamp": "2026-09-01T00:00:20.000Z", "ordinal": 20, "type": "event_msg", "payload": {"type": "token_count", "info": {"total_tokens": 500}}}
+{"timestamp": "2026-09-01T00:00:20.500Z", "ordinal": 200, "type": "response_item", "payload": {"type": "reasoning", "id": "rs_4", "summary": []}}
+{"timestamp": "2026-09-01T00:00:21.000Z", "ordinal": 21, "type": "response_item", "payload": {"type": "message", "id": "msg_5", "role": "user", "content": [{"type": "input_text", "text": "looks good, ship it"}]}}
+{"timestamp": "2026-09-01T00:00:21.500Z", "ordinal": 210, "type": "event_msg", "payload": {"type": "item_completed"}}
+{"timestamp": "2026-09-01T00:00:22.000Z", "ordinal": 22, "type": "response_item", "payload": {"type": "custom_tool_call", "id": "ctc_3", "name": "exec", "call_id": "call_4", "input": "await tools.exec_command({command: [\"git\", \"push\"]});"}}
+{"timestamp": "2026-09-01T00:00:23.000Z", "ordinal": 23, "type": "event_msg", "payload": {"type": "item_completed"}}
+{"timestamp": "2026-09-01T00:00:23.500Z", "ordinal": 230, "type": "token_usage_record", "payload": {"input_tokens": 260}}
+{"timestamp": "2026-09-01T00:00:24.000Z", "ordinal": 24, "type": "response_item", "payload": {"type": "custom_tool_call_output", "call_id": "call_4", "output": "pushed"}}
+{"timestamp": "2026-09-01T00:00:24.500Z", "ordinal": 240, "type": "inter_agent_communication_metadata", "payload": {"redacted": true}}
+{"timestamp": "2026-09-01T00:00:25.000Z", "ordinal": 25, "type": "response_item", "payload": {"type": "agent_message", "id": "am_1", "text": "Pushed to origin/main."}}
+{"timestamp": "2026-09-01T00:00:25.500Z", "ordinal": 250, "type": "event_msg", "payload": {"type": "token_count", "info": {"total_tokens": 700}}}
+{"timestamp": "2026-09-01T00:00:26.000Z", "ordinal": 26, "type": "response_item", "payload": {"type": "message", "id": "msg_6", "role": "assistant", "content": [{"type": "output_text", "text": "Pushed. Done."}]}}
+{"timestamp": "2026-09-01T00:00:26.500Z", "ordinal": 260, "type": "token_usage_record", "payload": {"input_tokens": 300}}
+{"timestamp": "2026-09-01T00:00:27.000Z", "ordinal": 27, "type": "event_msg", "payload": {"type": "task_complete"}}
+{"timestamp": "2026-09-01T00:00:28.000Z", "ordinal": 28, "type": "compacted", "payload": {"message": "redacted summary"}}

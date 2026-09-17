@@ -27,14 +27,20 @@ Add to ``~/.claude/settings.json`` under hooks::
 Invariants
 ----------
 - Reads event from stdin (single JSON line)
+- The session-log row is written before consolidation is spawned, and
+  consolidation runs detached (this module re-invoked with
+  ``--consolidate <mode>``, not awaited) — this process's own budget under
+  Codex is 1 s soft / 3 s hard, well under a consolidation cycle's cost
 - Non-blocking: exits quickly even if profile update fails
 - Logs to stderr only
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
+import subprocess
 import sys
 from datetime import datetime, timezone
 from typing import Any
@@ -54,6 +60,8 @@ try:
     )
     from mcp_server.infrastructure.transcript_activity import transcript_activity
     from mcp_server.shared.categorizer import categorize
+    from mcp_server.shared.log_rotation import methodology_log_path, open_rotating_log
+    from mcp_server.shared.platform import python_executable
     from mcp_server.shared.project_ids import (
         cwd_to_project_id,
         domain_id_from_label,
@@ -67,7 +75,6 @@ except ImportError as _imp_exc:
         file=sys.stderr,
     )
     sys.exit(1)
-import asyncio
 
 _LOG_PREFIX = "[methodology-hook]"
 
@@ -107,42 +114,89 @@ def _resolve_domain(event: dict[str, Any], profiles: dict) -> str:
 
 
 # source: ADR-0497
-# source: ADR-0497
-# noqa: ERA001
 _SHORT_SESSION_TURNS = 5
+# source: ADR-0497
 _LONG_SESSION_TURNS = 20
 
 
-def _run_consolidation(turn_count: int = 0) -> None:
-    """Run memory consolidation ("dream" cycle) at session end.
+def _consolidation_mode(turn_count: int) -> str:
+    """Depth of the "dream" cycle a session of this length earns.
 
-        Implements automatic consolidation inspired by:
-          - Borbely 1982: two-process model — consolidation pressure accumulates
-            with new memories, fires when threshold exceeded.
-          - Tononi & Cirelli 2003 (SHY): wakefulness (session activity) builds
-            synaptic weight; consolidation restores homeostasis.
-          - Dewar et al. 2012: rest after encoding boosts long-term retention.
-          - McClelland et al. 1995 (CLS): interleaved replay for hippocampal →
-            cortical transfer.
-
-        Non-blocking: logs errors but never raises.
+    Borbely 1982 (two-process model): consolidation pressure accumulates
+    with waking activity. A short session gets the cheap decay-only pass;
+    a long one gets decay + compress + CLS replay (McClelland et al. 1995).
 
     source: ADR-0497"""
+    if turn_count < _SHORT_SESSION_TURNS:
+        return "light"
+    if turn_count < _LONG_SESSION_TURNS:
+        return "standard"
+    return "full"
+
+
+_CONSOLIDATE_FLAG = "--consolidate"
+# source: ADR-1082 — argv[0] (module) + _CONSOLIDATE_FLAG + <mode>
+_CONSOLIDATE_ARGC = 3
+
+
+def _spawn_consolidation(turn_count: int = 0) -> None:
+    """Spawn the session's "dream" cycle as a detached subprocess and
+    return without waiting on it, at the depth ``_consolidation_mode``
+    selects. Re-invokes this module with ``--consolidate <mode>`` rather
+    than ``consolidate_background`` (also a detached launcher): that
+    module's cycle and stamp are SessionStart's periodic sweep, a
+    different concern from a per-session turn-gated one (ADR-1082).
+
+    precondition: the caller has already written the session-log row —
+    everything from here runs outside SessionEnd's own timeout (Codex:
+    1 s soft / 3 s hard, well under a consolidation cycle's cost).
+    postcondition: a fully-detached subprocess (own process group, stdio
+    -> ``consolidate.log``) exists; this returns before it has run
+    anything. Never raises — a spawn failure is logged and swallowed,
+    matching every other SessionEnd helper's non-fatal contract.
+
+    source: ADR-1082"""
+    mode = _consolidation_mode(turn_count)
+    try:
+        cmd = [
+            python_executable(),
+            "-m",
+            "mcp_server.hooks.session_lifecycle",
+            _CONSOLIDATE_FLAG,
+            mode,
+        ]
+        log_path = methodology_log_path("consolidate.log")
+        with open_rotating_log(log_path) as log:
+            subprocess.Popen(  # noqa: S603 — cmd built from trusted sources
+                cmd,
+                stdin=subprocess.DEVNULL,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+        _log(f"consolidation spawned (mode={mode}) -> {log_path}")
+    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
+        _log(f"consolidation spawn failed (non-fatal): {exc}")
+
+
+def _run_consolidation_cycle(mode: str) -> None:
+    """Run one consolidation cycle at ``mode``'s depth — the body of the
+    detached subprocess ``_spawn_consolidation`` starts.
+
+    precondition: called from this module's own detached subprocess, after
+    ``wire_composition_root`` has already run (same ``__main__`` guard
+    every hook uses). postcondition: never raises past this function — a
+    handler failure is logged and swallowed; nothing waits on this
+    subprocess's exit code.
+
+    source: ADR-1082"""
+    args = {
+        "light": {"decay": True, "compress": False},
+        "standard": {"decay": True, "compress": True},
+        "full": {"decay": True, "compress": True, "cls": True},
+    }.get(mode, {"decay": True, "compress": False})
     try:
         from mcp_server.handlers.consolidate import handler as consolidate_handler  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
-
-        # Gate consolidation depth by session activity
-        # (Borbely 1982: pressure accumulates with waking activity)
-        if turn_count < _SHORT_SESSION_TURNS:
-            args = {"decay": True, "compress": False}
-            mode = "light"
-        elif turn_count < _LONG_SESSION_TURNS:
-            args = {"decay": True, "compress": True}
-            mode = "standard"
-        else:
-            # Full dream cycle: decay + compress + CLS replay
-            args = {"decay": True, "compress": True, "cls": True}
-            mode = "full"
 
         result = asyncio.run(consolidate_handler(args))
         decayed = result.get("decay", {}).get("memories_decayed", 0)
@@ -154,7 +208,7 @@ def _run_consolidation(turn_count: int = 0) -> None:
             f"Dream ({mode}): {decayed} decayed, {compressed} compressed"
             + (f", {cls_count} CLS abstractions" if cls_count else "")
         )
-    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
+    except Exception as exc:  # noqa: BLE001 — detached subprocess boundary — nothing waits on this exit code
         _log(f"Consolidation failed (non-fatal): {exc}")
 
 
@@ -299,11 +353,22 @@ def process_event(event: dict[str, Any] | None) -> None:
     else:
         _log(f'No profile for domain "{domain_id}", logged session only')
 
-    _run_consolidation(turn_count=event.get("turn_count", 0))
+    _spawn_consolidation(turn_count=event.get("turn_count", 0))
 
 
 def main() -> None:
-    """Entry point — read JSON event from stdin and process it."""
+    """Entry point.
+
+    ``argv[1] == "--consolidate"`` means this process is the detached
+    subprocess ``_spawn_consolidation`` started — it runs the named
+    cycle and returns, reading no stdin, since nothing spawned it with a
+    SessionEnd event to process. Otherwise this is a normal SessionEnd
+    invocation: read the JSON event from stdin and process it.
+    """
+    if len(sys.argv) >= _CONSOLIDATE_ARGC and sys.argv[1] == _CONSOLIDATE_FLAG:
+        _run_consolidation_cycle(sys.argv[2])
+        return
+
     # Registry tombstone (T2-H2) runs first and unconditionally: the
     # window ended regardless of whether stdin carries a usable event.
     _tombstone_session_registry()

@@ -3491,6 +3491,14 @@
     "ADR-1080": {
       "mirror": "ADR-1080-inject-only-the-sessions-project-and-global-memories-in-session-hooks.md",
       "path": "adr/cortex/1080-inject-only-the-sessions-project-and-global-memories-in-session-hooks.md"
+    },
+    "ADR-1081": {
+      "mirror": "ADR-1081-read-a-codex-rollout-the-same-way-a-claude-transcript-is-read.md",
+      "path": "adr/cortex/1081-read-a-codex-rollout-the-same-way-a-claude-transcript-is-read.md"
+    },
+    "ADR-1082": {
+      "mirror": "ADR-1082-sessionend-writes-its-session-log-before-it-detaches-consolidation.md",
+      "path": "adr/cortex/1082-sessionend-writes-its-session-log-before-it-detaches-consolidation.md"
     }
   },
   "project": "cortex",

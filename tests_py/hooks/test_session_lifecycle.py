@@ -9,6 +9,9 @@ from unittest.mock import patch
 from mcp_server.hooks.session_lifecycle import (
     process_event,
     _resolve_domain,
+    _consolidation_mode,
+    _run_consolidation_cycle,
+    _spawn_consolidation,
     _tombstone_session_registry,
     main,
     MAX_SESSION_LOG_ENTRIES,
@@ -245,6 +248,132 @@ class TestProcessEvent:
         process_event({"session_id": "raw-only-id", "cwd": "/tmp"})
         entry = mock_ssl.call_args[0][0]["sessions"][0]
         assert entry["sessionId"] == "raw-only-id"
+
+
+class TestConsolidationMode:
+    """The turn-gated depth ADR-0497 chose stays the same after the spawn
+    moved consolidation into a subprocess (ADR-1082)."""
+
+    def test_a_short_session_is_light(self):
+        assert _consolidation_mode(0) == "light"
+        assert _consolidation_mode(4) == "light"
+
+    def test_a_medium_session_is_standard(self):
+        assert _consolidation_mode(5) == "standard"
+        assert _consolidation_mode(19) == "standard"
+
+    def test_a_long_session_is_full(self):
+        assert _consolidation_mode(20) == "full"
+        assert _consolidation_mode(200) == "full"
+
+
+class TestSpawnConsolidation:
+    """Consolidation moved from an in-process ``asyncio.run`` to a detached
+    subprocess so a Codex SessionEnd (1 s soft / 3 s hard timeout) is not
+    blocked by a consolidation cycle (ADR-1082)."""
+
+    @patch("mcp_server.hooks.session_lifecycle.subprocess.Popen")
+    def test_the_launcher_gets_the_same_mode_the_turn_count_earns(
+        self, mock_popen, tmp_path, monkeypatch
+    ):
+        monkeypatch.setenv("CORTEX_CLAUDE_DIR", str(tmp_path))
+
+        _spawn_consolidation(turn_count=12)
+
+        cmd = mock_popen.call_args[0][0]
+        assert cmd[-3:] == [
+            "mcp_server.hooks.session_lifecycle",
+            "--consolidate",
+            "standard",
+        ]
+        assert mock_popen.call_args.kwargs["start_new_session"] is True
+        # Never waited on: a session end that blocked on a "dream" cycle is
+        # exactly the bug this spawn replaces.
+        mock_popen.return_value.wait.assert_not_called()
+
+    @patch("mcp_server.hooks.session_lifecycle.subprocess.Popen")
+    def test_a_spawn_failure_does_not_raise(self, mock_popen, tmp_path, monkeypatch):
+        monkeypatch.setenv("CORTEX_CLAUDE_DIR", str(tmp_path))
+        mock_popen.side_effect = OSError("no such file or directory")
+
+        _spawn_consolidation(turn_count=1)  # must not raise
+
+    @patch(
+        "mcp_server.hooks.session_lifecycle.subprocess.Popen",
+        side_effect=OSError("simulated launcher failure"),
+    )
+    @patch("mcp_server.hooks.session_lifecycle.save_profile")
+    @patch("mcp_server.hooks.session_lifecycle.save_session_log")
+    @patch(
+        "mcp_server.hooks.session_lifecycle.load_session_log",
+        return_value=_session_log(),
+    )
+    @patch(
+        "mcp_server.hooks.session_lifecycle.load_profiles",
+        return_value=_empty_profiles(),
+    )
+    def test_the_session_log_row_exists_even_when_the_launcher_fails(
+        self, mock_lp, mock_lsl, mock_ssl, mock_sp, mock_popen, tmp_path, monkeypatch
+    ):
+        """Pins the order: the log write (``save_session_log``) happens
+        before the detached consolidation spawn, so a launcher that raises
+        (standing in for one that hangs past Codex's SessionEnd timeout,
+        since ``Popen`` itself never blocks on the child) never costs the
+        session its log entry."""
+        monkeypatch.setenv("CORTEX_CLAUDE_DIR", str(tmp_path))
+
+        process_event({"session_id": "s-spawn-fails", "cwd": "/tmp"})
+
+        mock_ssl.assert_called_once()
+        entry = mock_ssl.call_args[0][0]["sessions"][0]
+        assert entry["sessionId"] == "s-spawn-fails"
+        mock_popen.assert_called_once()
+
+
+class TestConsolidateSubprocessDispatch:
+    """The process ``_spawn_consolidation`` starts is this module again,
+    with ``--consolidate <mode>`` — ``main`` must route to the cycle
+    runner instead of trying to read a SessionEnd event from stdin."""
+
+    @patch("mcp_server.hooks.session_lifecycle._run_consolidation_cycle")
+    @patch("mcp_server.hooks.session_lifecycle.process_event")
+    def test_the_consolidate_flag_skips_stdin_entirely(
+        self, mock_pe, mock_cycle, monkeypatch
+    ):
+        monkeypatch.setattr("sys.argv", ["session_lifecycle", "--consolidate", "full"])
+
+        main()
+
+        mock_cycle.assert_called_once_with("full")
+        mock_pe.assert_not_called()
+
+    @staticmethod
+    def _closing_run(coro, *, result=None, error=None):
+        """Stand in for ``asyncio.run`` without actually scheduling the
+        real handler coroutine — closing it avoids the unrelated
+        "coroutine was never awaited" warning a bare Mock would leave."""
+        coro.close()
+        if error is not None:
+            raise error
+        return result if result is not None else {}
+
+    def test_a_handler_failure_does_not_raise(self):
+        with patch(
+            "mcp_server.hooks.session_lifecycle.asyncio.run",
+            side_effect=lambda coro: self._closing_run(
+                coro, error=RuntimeError("simulated handler failure")
+            ),
+        ):
+            _run_consolidation_cycle("light")  # must not raise
+
+    def test_an_unrecognized_mode_degrades_to_light(self):
+        with patch(
+            "mcp_server.hooks.session_lifecycle.asyncio.run",
+            side_effect=self._closing_run,
+        ) as mock_run:
+            _run_consolidation_cycle("not-a-real-mode")
+
+        mock_run.assert_called_once()
 
 
 class TestTombstoneSessionRegistry:

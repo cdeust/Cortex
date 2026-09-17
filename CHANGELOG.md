@@ -8,6 +8,19 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **A session's tool sequence and turn count come from a Codex rollout too
+  (ADR-1081, #610).** `infrastructure/transcript_activity.py` read only
+  Claude Code's `{"type": "assistant", ...}` transcript shape, so a Codex
+  SessionEnd fed `mine_skills` nothing: a Codex rollout's tool calls are
+  `response_item` records of payload type `function_call` or
+  `custom_tool_call`, not `assistant` message content, and the reader
+  matched none of them. `transcript_activity` now peeks a transcript's
+  first record — `type == "session_meta"` routes to a new
+  `infrastructure/transcript_rollout.rollout_activity`, everything else
+  routes unchanged to the existing Claude reader — and the rollout reader
+  yields the same two fields in file order, repetitions included, capped
+  at the same `MAX_TOOL_SEQUENCE`.
+
 - **Codex hook events normalise into what the lifecycle hooks already read
   (#608).** `hypermnesia-mcp-hook` (#605) ran a hook module unchanged
   against whatever stdin carried, so a Codex `apply_patch` or
@@ -83,6 +96,17 @@ adheres to [Semantic Versioning](https://semver.org/).
   (57 with both upstream integrations).
 
 ### Fixed
+
+- **SessionEnd writes its session-log row before it consolidates, not
+  after (ADR-1082, #610).** `hooks/session_lifecycle.py` ran
+  `asyncio.run(consolidate_handler(...))` in-process after the log write,
+  which cost nothing extra under Claude Code (SessionEnd has no enforced
+  timeout there) but risked the whole hook under Codex, where SessionEnd
+  has a 1 s soft / 3 s hard timeout well under a consolidation cycle's
+  cost. Consolidation now runs in a detached `consolidate_launch`
+  subprocess (`Popen`, `start_new_session=True`, not waited on), spawned
+  after the log write, at the same light/standard/full depth the turn
+  count already gated it to.
 
 - **Session-start and per-prompt injection stay inside the session's project
   (#604).** `auto_recall` and `session_start` queried memories with no
