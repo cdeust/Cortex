@@ -1,7 +1,8 @@
 """Team scope of decisions: Transactive Memory Systems (Wegner 1987).
 
 The team knows WHAT was decided regardless of WHO decided it, so a
-decision written under an agent context is marked is_global.
+decision written under an agent context is marked is_team_decision.
+Project scope remains unchanged (source: ADR-1083).
 
 source: ADR-0200"""
 

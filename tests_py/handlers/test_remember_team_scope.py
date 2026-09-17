@@ -1,9 +1,9 @@
-"""remember propagates decisions written under an agent context (#561).
+"""remember keeps team decisions project-scoped (#611).
 
 Through the real handler, on whichever backend conftest selected, so the row
 the SessionStart "Team Decisions" query reads is the one asserted on.
 
-source: ADR-0200"""
+source: ADR-1083"""
 
 from __future__ import annotations
 
@@ -21,7 +21,8 @@ def _row(memory_id: int) -> dict:
 
     with _get_store()._conn.cursor() as cur:
         cur.execute(
-            "SELECT is_global, is_protected, agent_context FROM memories WHERE id = %s",
+            "SELECT is_team_decision, is_global, is_protected, agent_context "
+            "FROM memories WHERE id = %s",
             (memory_id,),
         )
         row = cur.fetchone()
@@ -30,17 +31,18 @@ def _row(memory_id: int) -> dict:
 
 
 class TestDecisionPropagation:
-    def test_decision_with_agent_topic_is_global(self):
+    def test_decision_with_agent_topic_stays_project_scoped(self):
         result = _remember(
             content="Decision: we keep the ledger layout because the dossier "
             "page reads better with ruled rows (team-scope test a)",
             agent_topic="cortex",
         )
         assert result["stored"] is True, result
-        assert result.get("global_reason") == "team_decision"
+        assert not result.get("is_global", False)
         row = _row(result["memory_id"])
+        assert bool(row["is_team_decision"]) is True
         assert bool(row["is_protected"]) is True
-        assert bool(row["is_global"]) is True
+        assert bool(row["is_global"]) is False
 
     def test_decision_without_agent_topic_stays_local(self):
         result = _remember(
@@ -48,7 +50,9 @@ class TestDecisionPropagation:
             "page reads better with ruled rows (team-scope test b)",
         )
         assert result["stored"] is True, result
-        assert bool(_row(result["memory_id"])["is_global"]) is False
+        row = _row(result["memory_id"])
+        assert not row["is_global"]
+        assert not row["is_team_decision"]
 
     def test_network_origin_decision_never_propagates(self):
         """A fetched page carrying a decision cue must not reach every
@@ -62,7 +66,9 @@ class TestDecisionPropagation:
             force=True,
         )
         assert result["stored"] is True, result
-        assert bool(_row(result["memory_id"])["is_global"]) is False
+        row = _row(result["memory_id"])
+        assert not row["is_global"]
+        assert not row["is_team_decision"]
 
     def test_auto_capture_decision_never_propagates(self):
         """Unattended tool-output capture is not a considered decision, even
@@ -76,4 +82,6 @@ class TestDecisionPropagation:
             force=True,
         )
         assert result["stored"] is True, result
-        assert bool(_row(result["memory_id"])["is_global"]) is False
+        row = _row(result["memory_id"])
+        assert not row["is_global"]
+        assert not row["is_team_decision"]

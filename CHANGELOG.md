@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Team decisions retain their project scope (#611, ADR-1083). A separate
+  `is_team_decision` marker grants visibility across project agents without
+  setting `is_global`. SessionStart and agent briefings enforce project scope,
+  ingestion preserves the directory, and initialization no longer promotes
+  team decisions to global scope. Existing global rows have a dry-run-first
+  reclassification script.
+
 ## [4.23.0] - 2026-09-17
 
 ### Added

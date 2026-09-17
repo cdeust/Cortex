@@ -12,7 +12,7 @@ from mcp_server.core.memory_decomposer import (
 )
 from mcp_server.observability import silent_failure
 from mcp_server.core import knowledge_graph, write_post_store
-from mcp_server.core.team_scope import propagates_to_team
+from mcp_server.core.team_scope import is_team_decision
 
 
 def ingest_memory(
@@ -88,8 +88,11 @@ def ingest_memory(
         # source: ADR-0200
 
         agent_ctx = memory.get("agent_context", "")
-        is_global = memory.get("is_global", False) or propagates_to_team(
-            auto_protect, agent_ctx
+        team_decision = not is_benchmark and is_team_decision(
+            chunk_content,
+            memory.get("capture_origin", "unknown"),
+            memory.get("write_class", "deliberate"),
+            agent_ctx,
         )
 
         mid = store.insert_memory(
@@ -108,7 +111,10 @@ def ingest_memory(
                 "is_benchmark": is_benchmark,
                 "is_protected": auto_protect,
                 "agent_context": agent_ctx,
-                "is_global": is_global,
+                "is_global": memory.get("is_global", False),
+                "is_team_decision": team_decision,  # source: ADR-1083
+                "directory_context": memory.get("directory_context", ""),
+                "write_class": memory.get("write_class", "deliberate"),
                 # source: ADR-0200
                 "capture_origin": memory.get("capture_origin", "unknown"),
             }

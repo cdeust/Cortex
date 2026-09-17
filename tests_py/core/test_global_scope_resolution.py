@@ -1,6 +1,6 @@
-"""resolve_global_scope: explicit request, team propagation, detector (#561).
+"""Global detection is independent of project team visibility (#611).
 
-source: ADR-0200"""
+source: ADR-1083"""
 
 from __future__ import annotations
 
@@ -24,27 +24,28 @@ class TestPropagatesToTeam:
 
 class TestResolveGlobalScope:
     def test_explicit_request_wins(self):
-        assert resolve_global_scope(_PLAIN, [], explicit=True, team_decision=False) == (
+        assert resolve_global_scope(_PLAIN, [], explicit=True) == (
             True,
             "explicit",
         )
 
-    def test_team_decision_is_global(self):
-        assert resolve_global_scope(
-            _DECISION, [], explicit=False, team_decision=True
-        ) == (True, "team_decision")
+    def test_decision_content_stays_local(self):
+        assert resolve_global_scope(_DECISION, [], explicit=False) == (
+            False,
+            "not_global",
+        )
 
     def test_no_team_decision_falls_back_to_detector(self):
-        assert resolve_global_scope(
-            _DECISION, [], explicit=False, team_decision=False
-        ) == (False, "not_global")
+        assert resolve_global_scope(_DECISION, [], explicit=False) == (
+            False,
+            "not_global",
+        )
 
     def test_detector_still_marks_cross_project_content(self):
         is_global, reason = resolve_global_scope(
             "Coding standard: always use dependency injection and clean architecture",
             ["global"],
             explicit=False,
-            team_decision=False,
         )
         assert is_global is True
         assert reason.startswith("global_")

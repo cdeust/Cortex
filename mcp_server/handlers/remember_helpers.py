@@ -694,6 +694,7 @@ def insert_and_post_process(
     emb_engine: EmbeddingEngine,
     agent_context: str = "",
     is_global: bool = False,
+    team_decision: bool = False,
     created_at: str | None = None,
     write_class: str = "deliberate",
     origin: str = capture_origin.ORIGIN_UNKNOWN,
@@ -742,6 +743,7 @@ def insert_and_post_process(
     )
     record["agent_context"] = agent_context
     record["is_global"] = is_global
+    record["is_team_decision"] = team_decision  # source: ADR-1083
     record["write_class"] = write_class
     # source: ADR-0438
     record["capture_origin"] = origin

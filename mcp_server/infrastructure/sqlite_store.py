@@ -340,12 +340,12 @@ class SqliteMemoryStore(
                 separation_index, interference_score,
                 schema_match_score, schema_id,
                 hippocampal_dependency, is_benchmark, agent_context,
-                is_global, supersedes_id, source_attribution,
+                is_global, is_team_decision, supersedes_id, source_attribution,
                 stimulus_signature, extinction_strength, write_class,
                 capture_origin
             ) VALUES (
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )""",
             (
                 content,
@@ -374,6 +374,7 @@ class SqliteMemoryStore(
                 int(data.get("is_benchmark", False)),
                 data.get("agent_context", ""),
                 int(data.get("is_global", False)),
+                int(data.get("is_team_decision", False)),
                 data.get("supersedes_id"),
                 data.get("source_attribution", "unknown"),
                 data.get("stimulus_signature", ""),
@@ -902,6 +903,7 @@ class SqliteMemoryStore(
             "compressed",
             "is_benchmark",
             "is_global",
+            "is_team_decision",
             "is_active",
             "is_causal",
             "archived",

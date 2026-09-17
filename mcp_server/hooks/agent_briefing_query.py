@@ -7,6 +7,7 @@ from __future__ import annotations
 import os
 
 from mcp_server.hooks.agent_briefing_log import _log
+from mcp_server.shared.project_scope import project_ancestors
 
 _DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://localhost:5432/cortex")
 _MAX_MEMORIES = 3
@@ -28,18 +29,21 @@ def _connect():
         return None
 
 
-def _fetch_agent_context(conn, agent_name: str, keywords: list[str]) -> list[dict]:
+def _fetch_agent_context(
+    conn, agent_name: str, keywords: list[str], project_root: str | None = None
+) -> list[dict]:
     """Fetch relevant memories for agent briefing.
 
     Two-pass query:
     1. Agent-scoped memories (agent_context matches) — prior work by this specialist
-    2. Team decisions (is_protected + is_global) — cross-agent knowledge (TMS directory)
+    2. Project team decisions, regardless of the authoring agent.
 
     Uses FTS plainto_tsquery for speed (no embedding model needed).
     Each result keeps the memory ``id`` — the injection receipt (T2)
     records exactly which memories entered the agent's context.
     """
     results = []
+    ancestors = project_ancestors(project_root)  # source: ADR-1083
 
     # Pass 1: Agent-scoped memories matching keywords
     if keywords:
@@ -55,6 +59,7 @@ def _fetch_agent_context(conn, agent_name: str, keywords: list[str]) -> list[dic
                      JOIN current_memories cm ON cm.id = m.id
                 WHERE m.agent_context = %s
                   AND effective_heat(m, NOW()) >= %s
+                  AND (m.is_global = TRUE OR m.directory_context = ANY(%s::TEXT[]))
                   AND NOT m.is_benchmark
                   AND m.superseded_by_id IS NULL
                   AND m.content_tsv @@ plainto_tsquery('english', %s)
@@ -62,7 +67,13 @@ def _fetch_agent_context(conn, agent_name: str, keywords: list[str]) -> list[dic
                 LIMIT %s
                 """
                 ),
-                (agent_name, _MIN_HEAT, " ".join(keywords[:5]), _MAX_MEMORIES),
+                (
+                    agent_name,
+                    _MIN_HEAT,
+                    ancestors,
+                    " ".join(keywords[:5]),
+                    _MAX_MEMORIES,
+                ),
             ).fetchall()
             for r in rows:
                 results.append(
@@ -76,7 +87,7 @@ def _fetch_agent_context(conn, agent_name: str, keywords: list[str]) -> list[dic
         except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
             _log(f"agent-scoped query failed: {exc}")
 
-    # Pass 2: Team decisions (protected + global)
+    # Pass 2: Decisions shared across agents within project scope
     remaining = _MAX_MEMORIES - len(results)
     if remaining > 0:
         try:
@@ -89,16 +100,16 @@ def _fetch_agent_context(conn, agent_name: str, keywords: list[str]) -> list[dic
                        m.agent_context
                 FROM memories m
                      JOIN current_memories cm ON cm.id = m.id
-                WHERE m.is_protected = TRUE
-                  AND m.is_global = TRUE
+                WHERE m.is_team_decision = TRUE
                   AND m.agent_context != %s
+                  AND (m.is_global = TRUE OR m.directory_context = ANY(%s::TEXT[]))
                   AND NOT m.is_benchmark
                   AND m.superseded_by_id IS NULL
                 ORDER BY effective_heat(m, NOW()) DESC
                 LIMIT %s
                 """
                 ),
-                (agent_name, remaining),
+                (agent_name, ancestors, remaining),
             ).fetchall()
             for r in rows:
                 results.append(

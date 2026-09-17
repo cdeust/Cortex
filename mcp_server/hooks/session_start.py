@@ -211,15 +211,10 @@ def _fetch_anchors(conn, project_root: str | None = None) -> list[dict]:
     return anchors
 
 
-def _fetch_team_decisions(conn, exclude_ids: set) -> list[dict]:
-    """Fetch auto-protected decision memories visible across agents.
-
-        Implements the directory layer of Transactive Memory Systems
-        (Wegner 1987): team members know WHAT was decided, regardless
-        of WHO decided it. Decisions auto-propagate via is_global=TRUE,
-        set at write time by team_scope.is_team_decision.
-
-    source: ADR-0498"""
+def _fetch_team_decisions(
+    conn, exclude_ids: set, project_root: str | None = None
+) -> list[dict]:
+    """Fetch team decisions within the current project. source: ADR-1083"""
     try:
         rows = conn.execute(
             # source: ADR-0498
@@ -230,11 +225,13 @@ def _fetch_team_decisions(conn, exclude_ids: set) -> list[dict]:
             # for effective_heat().
             "effective_heat(m, NOW()) AS heat "
             "FROM memories m JOIN current_memories cm ON cm.id = m.id "
-            "WHERE m.is_protected = TRUE AND m.is_global = TRUE "
+            "WHERE m.is_team_decision = TRUE AND NOT m.is_benchmark "
+            "AND (m.is_global = TRUE OR m.directory_context = ANY(%s::TEXT[])) "
             "AND m.agent_context != '' "
             # source: ADR-0498
             "AND m.superseded_by_id IS NULL "
             "ORDER BY effective_heat(m, NOW()) DESC LIMIT 5",
+            (project_ancestors(project_root),),
         ).fetchall()
     except Exception as exc:  # noqa: BLE001 — hook boundary; failure is logged to the hook log, the banner degrades
         _log(f"team-decision fetch failed (non-fatal): {exc}")
@@ -1264,7 +1261,7 @@ def main() -> None:
     anchors = _fetch_anchors(conn, project_root)
     anchor_ids = {a["id"] for a in anchors}
     hot = _fetch_hot_memories(conn, anchor_ids, project_root)
-    team_decisions = _fetch_team_decisions(conn, anchor_ids)
+    team_decisions = _fetch_team_decisions(conn, anchor_ids, project_root)
     checkpoint = _fetch_checkpoint(conn)
     pending_curations = _count_pending_curations(conn)
     stale_grooming = _fetch_grooming_staleness(conn)

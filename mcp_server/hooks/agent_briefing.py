@@ -36,6 +36,7 @@ source: ADR-0481"""
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -56,6 +57,7 @@ from mcp_server.hooks.agent_briefing_query import (
     _fetch_agent_context,
 )
 from mcp_server.infrastructure.config import CLAUDE_DIR
+from mcp_server.shared.project_scope import resolve_project_root
 
 __all__ = [
     "_DATABASE_URL",
@@ -168,7 +170,9 @@ def process_event(event: dict[str, Any]) -> None:
         sys.exit(0)
 
     try:
-        memories = _fetch_agent_context(conn, agent_name, keywords)
+        memories = _fetch_agent_context(
+            conn, agent_name, keywords, resolve_project_root(event, os.environ)
+        )
         if not memories:
             _log(f"skip: no relevant memories for {agent_name}")
             sys.exit(0)

@@ -211,7 +211,7 @@ def test_no_keywords_skips_the_agent_scoped_query():
 
     assert conn.execute.call_count == 1, "only the team-decisions query ran"
     sql = conn.execute.call_args[0][0]
-    assert "is_protected" in sql
+    assert "is_team_decision" in sql
 
 
 def test_memory_content_is_truncated_to_300_chars():

@@ -3499,6 +3499,10 @@
     "ADR-1082": {
       "mirror": "ADR-1082-sessionend-writes-its-session-log-before-it-detaches-consolidation.md",
       "path": "adr/cortex/1082-sessionend-writes-its-session-log-before-it-detaches-consolidation.md"
+    },
+    "ADR-1083": {
+      "mirror": "ADR-1083-separate-project-team-decisions-from-global-knowledge.md",
+      "path": "adr/cortex/1083-separate-project-team-decisions-from-global-knowledge.md"
     }
   },
   "project": "cortex",

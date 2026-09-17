@@ -77,6 +77,7 @@ CREATE TABLE IF NOT EXISTS memories (
     is_benchmark BOOLEAN DEFAULT FALSE,
     agent_context TEXT DEFAULT '',
     is_global BOOLEAN DEFAULT FALSE,
+    is_team_decision BOOLEAN NOT NULL DEFAULT FALSE,
     supersedes_id   INTEGER REFERENCES memories(id) ON DELETE SET NULL,
     superseded_by_id INTEGER REFERENCES memories(id) ON DELETE SET NULL,
     -- source: ADR-0537
@@ -1387,6 +1388,9 @@ $$ LANGUAGE plpgsql STABLE;
 # ── Migrations ───────────────────────────────────────────────────────────
 
 MIGRATIONS_DDL = """
+-- source: ADR-1083
+ALTER TABLE memories ADD COLUMN IF NOT EXISTS
+    is_team_decision BOOLEAN NOT NULL DEFAULT FALSE;
 -- source: ADR-0537
 DO $$
 BEGIN

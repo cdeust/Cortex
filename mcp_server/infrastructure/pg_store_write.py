@@ -29,7 +29,7 @@ class PgWriteMixin(PgStoreHost):
                 separation_index, interference_score,
                 schema_match_score, schema_id,
                 hippocampal_dependency, is_benchmark, agent_context,
-                is_global, stage_entered_at,
+                is_global, is_team_decision, stage_entered_at,
                 arousal, dominant_emotion, supersedes_id,
                 source_attribution, stimulus_signature, extinction_strength,
                 write_class, capture_origin
@@ -44,7 +44,7 @@ class PgWriteMixin(PgStoreHost):
                 %(separation_index)s, %(interference_score)s,
                 %(schema_match_score)s, %(schema_id)s,
                 %(hippocampal_dependency)s, %(is_benchmark)s, %(agent_context)s,
-                %(is_global)s, %(stage_entered_at)s,
+                %(is_global)s, %(is_team_decision)s, %(stage_entered_at)s,
                 %(arousal)s, %(dominant_emotion)s, %(supersedes_id)s,
                 %(source_attribution)s, %(stimulus_signature)s, %(extinction_strength)s,
                 %(write_class)s, %(capture_origin)s
@@ -106,6 +106,7 @@ class PgWriteMixin(PgStoreHost):
             "is_benchmark": data.get("is_benchmark", False),
             "agent_context": data.get("agent_context", ""),
             "is_global": data.get("is_global", False),
+            "is_team_decision": data.get("is_team_decision", False),
             "stage_entered_at": data.get("stage_entered_at") or created_at,
             "arousal": data.get("arousal", 0.0),
             "dominant_emotion": data.get("dominant_emotion", "neutral"),

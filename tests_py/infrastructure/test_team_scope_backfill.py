@@ -1,6 +1,6 @@
-"""One-shot team-scope backfill for decisions stored before #561.
+"""Initialization marks legacy team decisions without promoting global scope.
 
-source: ADR-0200"""
+source: ADR-1083"""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from mcp_server.infrastructure.team_scope_backfill import (
     TEAM_DECISION_BACKFILL_SQLITE,
 )
 
-# (label, row overrides, expected is_global after the backfill)
+# (label, row overrides, expected is_team_decision after the backfill)
 _CASES = [
     ("decision", {}, True),
     ("anchored", {"tags": ["_anchor"]}, False),
@@ -41,11 +41,12 @@ def _row(label: str, overrides: dict) -> dict:
     return data
 
 
-def _is_global(conn, memory_id: int) -> bool:
+def _is_team(conn, memory_id: int) -> bool:
     row = conn.execute(
-        "SELECT is_global FROM memories WHERE id = %s", (memory_id,)
+        "SELECT is_team_decision, is_global FROM memories WHERE id = %s", (memory_id,)
     ).fetchone()
-    return bool(row["is_global"])
+    assert not row["is_global"]
+    return bool(row["is_team_decision"])
 
 
 def test_sql_origin_list_matches_the_write_path():
@@ -84,7 +85,10 @@ def test_sqlite_store_init_backfills_pre_fix_decisions(sqlite_path):
 
     reopened = SqliteMemoryStore(sqlite_path)
     for label, _, expected in _CASES:
-        assert _is_global(reopened._conn, ids[label]) is expected, label
+        assert _is_team(reopened._conn, ids[label]) is expected, label
+    assert reopened._conn.execute(TEAM_DECISION_BACKFILL_SQLITE).rowcount == 0
+    reopened.close()
+    store.close()
 
 
 def test_pg_backfill_statement():
@@ -102,4 +106,22 @@ def test_pg_backfill_statement():
         )
     store._conn.execute(TEAM_DECISION_BACKFILL_PG)
     for label, _, expected in _CASES:
-        assert _is_global(store._conn, ids[label]) is expected, label
+        assert _is_team(store._conn, ids[label]) is expected, label
+    assert store._conn.execute(TEAM_DECISION_BACKFILL_PG).rowcount == 0
+
+
+def test_sqlite_upgrade_adds_team_marker_without_global_promotion(tmp_path):
+    from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
+
+    path = str(tmp_path / "legacy.db")
+    store = SqliteMemoryStore(path)
+    mid = store.insert_memory(_row("legacy-schema", {}))
+    store._conn.execute("ALTER TABLE memories DROP COLUMN is_team_decision")
+    store._conn.commit()
+    store.close()
+    reopened = SqliteMemoryStore(path)
+    try:
+        assert _is_team(reopened._conn, mid)
+        assert reopened._conn.execute(TEAM_DECISION_BACKFILL_SQLITE).rowcount == 0
+    finally:
+        reopened.close()

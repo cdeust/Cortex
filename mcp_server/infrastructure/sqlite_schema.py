@@ -68,7 +68,8 @@ CREATE TABLE IF NOT EXISTS memories (
     hippocampal_dependency  REAL DEFAULT 1.0,
     is_benchmark            INTEGER DEFAULT 0,
     agent_context           TEXT DEFAULT '',
-    is_global               INTEGER DEFAULT 0
+    is_global               INTEGER DEFAULT 0,
+    is_team_decision         INTEGER NOT NULL DEFAULT 0
 );
 """
 
@@ -378,6 +379,8 @@ MIGRATIONS: list[tuple[str, str, str]] = [
     ("memories", "is_benchmark", "INTEGER DEFAULT 0"),
     ("memories", "agent_context", "TEXT DEFAULT ''"),
     ("memories", "is_global", "INTEGER DEFAULT 0"),
+    # source: ADR-1083 (project visibility).
+    ("memories", "is_team_decision", "INTEGER NOT NULL DEFAULT 0"),
     ("memories", "stage_entered_at", "TEXT"),
     # source: ADR-0602
     ("prospective_memories", "created_by", "TEXT NOT NULL DEFAULT ''"),

@@ -286,9 +286,6 @@ async def _handler_impl(
         content,
         tags,
         explicit=bool(is_global),
-        team_decision=is_team_decision(
-            content, resolved_origin, resolved_write_class, agent_topic or ""
-        ),
     )
 
     mid: int | None
@@ -335,6 +332,9 @@ async def _handler_impl(
         emb_engine,
         agent_context=agent_topic,
         is_global=is_global,
+        team_decision=is_team_decision(
+            content, resolved_origin, resolved_write_class, agent_topic or ""
+        ),
         created_at=created_at,
         write_class=resolved_write_class,
         origin=resolved_origin,

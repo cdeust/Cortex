@@ -82,3 +82,22 @@ class TestCaptureOriginPassthrough:
         assert len(ids) >= 1
         origins = {_fetch_capture_origin(store, mid) for mid in ids}
         assert origins == {"deliberate"}
+
+
+def test_ingested_team_decision_keeps_project(store):
+    ids = ingest_memory(
+        {
+            "content": "Decision: retain the ledger layout",
+            "agent_context": "engineer",
+            "directory_context": "/tmp/project-a",
+            "capture_origin": "deliberate",
+        },
+        store,
+        _NullEmbeddings(),
+        domain="test",
+        decompose=False,
+    )
+    row = store.get_memory(ids[0])
+    assert row["directory_context"] == "/tmp/project-a"
+    assert row["is_team_decision"]
+    assert not row["is_global"]
