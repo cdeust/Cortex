@@ -40,10 +40,12 @@ Reclassify legacy global rows with an idempotent, explicit operator script.
 Run a dry-run first and verify a PostgreSQL custom-format backup before
 applying to production. Legacy rows do not persist the reason for the
 global flag. Operators can preserve IDs known to have been explicitly
-global through `keep_global_ids`; otherwise evaluate the existing content
-detector and clear `is_global` when it
-does not confirm cross-project content, setting the team marker for a
-decision with an agent context. Preserve row IDs, history and supersession.
+global through `keep_global_ids`, and the content detector also preserves a
+row. Otherwise `is_global` is cleared only for the rows ADR-0200 promoted: a
+decision written under an agent context, which receives the team marker. Any
+other global row is kept and reported, because an explicit act the script
+cannot see made it global; the owner can clear one by ID through
+`clear_global_ids`. Preserve row IDs, history and supersession.
 
 An empty directory context is never a project wildcard. Resolve it only
 from a domain with an unambiguous, verified project-directory mapping,
