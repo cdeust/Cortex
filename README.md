@@ -294,7 +294,7 @@ the direct registration below gives Codex the full surface.
 | Compaction checkpoints | ✅ | ❌ | ❌ | ❌ |
 | Autonomous wiki cycle | ✅ | ❌ `consolidate` by hand; `curate_wiki` needs the full profile | ❌ run `consolidate` / `curate_wiki` manually | ❌ |
 | Cognitive profiling (`query_methodology`) | ✅ | ⚠️ profiles are mined from Claude Code session logs under `~/.claude/`; without them the profile is empty | ⚠️ same | ❌ |
-| Worktree convention checked by `doctor` | `.claude/worktrees/<name>/` | `.Codex/worktrees/<name>/` (ignored at the repository root since #601) | n/a | n/a |
+| Worktree directory (repository convention, `docs/agent-guidance.md`) | `.claude/worktrees/<name>/` | `.Codex/worktrees/<name>/` (ignored at the repository root since #601) | n/a | n/a |
 
 On Claude Code memory is ambient: hooks capture and inject automatically. On every other host
 memory is tool-driven: the agent stores and retrieves when instructed, and nothing happens
