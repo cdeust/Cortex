@@ -44,6 +44,7 @@ class ScopeMappings:
     domains: dict[str, str]
     memories: dict[str, str]
     keep_global_ids: frozenset[int]
+    clear_global_ids: frozenset[int] = frozenset()
 
 
 def load_mappings(path: Path | None) -> ScopeMappings:
@@ -52,8 +53,11 @@ def load_mappings(path: Path | None) -> ScopeMappings:
         "domains",
         "memories",
         "keep_global_ids",
+        "clear_global_ids",
     }:
-        raise ValueError("mappings require domains, memories and/or keep_global_ids")
+        raise ValueError(
+            "mappings accept domains, memories, keep_global_ids, clear_global_ids"
+        )
     domains, memories = data.get("domains", {}), data.get("memories", {})
     for mapping in (domains, memories):
         if not isinstance(mapping, dict):
@@ -70,10 +74,15 @@ def load_mappings(path: Path | None) -> ScopeMappings:
                 raise ValueError(f"project directory must be canonical: {directory}")
     if any(not key.isdecimal() for key in memories):
         raise ValueError("memory mapping keys must be decimal IDs")
-    keep = data.get("keep_global_ids", [])
-    if not isinstance(keep, list) or any(type(item) is not int for item in keep):
-        raise ValueError("keep_global_ids must be a list of integers")
-    return ScopeMappings(domains, memories, frozenset(keep))
+    id_lists = []
+    for key in ("keep_global_ids", "clear_global_ids"):
+        ids = data.get(key, [])
+        if not isinstance(ids, list) or any(type(item) is not int for item in ids):
+            raise ValueError(f"{key} must be a list of integers")
+        id_lists.append(frozenset(ids))
+    if id_lists[0] & id_lists[1]:
+        raise ValueError("an id cannot be both kept and cleared")
+    return ScopeMappings(domains, memories, id_lists[0], id_lists[1])
 
 
 def classify(row: ScopeRow, mappings: ScopeMappings) -> ScopeChange:
@@ -90,10 +99,16 @@ def classify(row: ScopeRow, mappings: ScopeMappings) -> ScopeChange:
             row.id, "", row.is_global, row.is_team_decision, "unresolved_project"
         )
     detected, _, _ = detect_global(row.content, row.tags)
-    global_scope = row.id in mappings.keep_global_ids or detected
-    team = row.is_team_decision or (
-        bool(row.agent_context) and is_decision_content(row.content)
-    )
+    # Only the ADR-0200 promotion is undone: a decision written under an agent
+    # context. Any other global row was made global by an explicit act this
+    # script cannot see, so it stays global. source: ADR-1083
+    promoted = bool(row.agent_context) and is_decision_content(row.content)
+    kept = row.id in mappings.keep_global_ids or detected
+    cleared = row.id in mappings.clear_global_ids  # the owner's explicit call
+    global_scope = kept or (row.is_global and not promoted and not cleared)
+    team = row.is_team_decision or promoted
+    if global_scope and not kept:
+        reason = "global_origin_not_the_defect"
     return ScopeChange(row.id, directory, global_scope, team, reason)
 
 
@@ -120,6 +135,11 @@ def make_report(rows: list[ScopeRow], mappings: ScopeMappings) -> dict:
             change.id for change in changes if change.reason == "unresolved_project"
         ],
         "retained_global_ids": [change.id for change in changes if change.is_global],
+        "unexplained_global_ids": [
+            change.id
+            for change in changes
+            if change.reason == "global_origin_not_the_defect"
+        ],
         "changes": [asdict(change) for change in updates],
     }
 

@@ -80,6 +80,36 @@ def test_nondecision_and_existing_marker(row, mappings):
     assert not classify(replace(row, agent_context=""), mappings).is_team_decision
 
 
+def test_a_global_row_the_defect_could_not_have_produced_stays_global(row, mappings):
+    """ADR-0200 promoted decisions written under an agent context. A global
+    row with no agent context, or with non-decision content, was made global
+    by an explicit act: clearing it would lose the owner's intent (#611)."""
+    explicit = replace(
+        row, content="The parser uses XML.", agent_context="", is_global=True
+    )
+    kept = classify(explicit, mappings)
+    assert kept.is_global
+    assert kept.reason == "global_origin_not_the_defect"
+    no_agent = classify(replace(row, agent_context="", is_global=True), mappings)
+    assert no_agent.is_global
+    promoted = classify(replace(row, is_global=True), mappings)
+    assert not promoted.is_global
+    assert promoted.is_team_decision
+
+
+def test_the_owner_can_clear_a_global_the_script_would_keep(row):
+    explicit = replace(row, content="The parser uses XML.", is_global=True)
+    owner = ScopeMappings({}, {}, frozenset(), frozenset({1}))
+    assert not classify(explicit, owner).is_global
+
+
+def test_an_id_cannot_be_both_kept_and_cleared(tmp_path):
+    file = tmp_path / "mappings.json"
+    file.write_text(json.dumps({"keep_global_ids": [7], "clear_global_ids": [7]}))
+    with pytest.raises(ValueError, match="both kept and cleared"):
+        load_mappings(file)
+
+
 def test_mapping_validation(tmp_path):
     file = tmp_path / "mappings.json"
     file.write_text(

@@ -103,7 +103,37 @@ as requested by the reclassification plan.
 6. Run both acceptance hooks from the updated installed plugin. Require
    4353879 absent in anthropic-partnership and present in japonais-2027, and
    no japonais-2027 row in the parent's Team Decisions block. Do not claim
-   the issue fixed in a release or publish the LinkedIn draft before this.
+   the issue fixed in a release before this.
+
+## Rerun after review (2026-09-17)
+
+The review of #613 found that `classify()` cleared `is_global` on any resolved
+row the detector did not confirm, including rows the ADR-0200 promotion could
+not have produced (no agent context, or no decision content). Those rows were
+made global by an explicit act the script cannot see. The rule is now narrower:
+only a decision written under an agent context loses global scope. Every other
+global row is kept and listed under `unexplained_global_ids`, and the owner can
+clear one through `clear_global_ids` in the mappings file.
+
+The figures above predate that change. The same archive was restored into a
+fresh database and the whole sequence repeated with the approved mapping of
+4353879 supplied from the first pass:
+
+| Measurement | Result |
+| --- | --- |
+| Global candidates | 160 |
+| Dry-run changes | 93 |
+| Applied changes | 93 |
+| Changes proposed on the second run | 0 |
+| Retained globals | 67 |
+| of which unresolved project | 46 |
+| of which kept as not produced by the defect | 6 |
+| Non-benchmark rows before and after | 47,041 |
+
+The six kept rows are 4349818, 4353551, 4353795, 4353809, 4353915 and 4361406.
+Each has an agent context and content the decision cue does not match, so the
+script leaves the call to the owner. The apply step refused to run until the
+`is_team_decision` column existed on the restored copy, as designed.
 
 ## Python compatibility
 
@@ -127,5 +157,4 @@ uses its concrete class as a postponed return annotation, with no new dependency
 | Transaction rollback and marker refusal | real PostgreSQL and SQLite script tests |
 | Missing/invalid backup, missing table data, full decode | script backup validation tests and full archive restore |
 
-No merge, release, production reclassification, LinkedIn publication, or
-message to Denis is performed by this change. Task B is a separate session.
+No merge, release or production reclassification is performed by this change.
