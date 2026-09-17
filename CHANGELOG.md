@@ -8,6 +8,24 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Codex hook events normalise into what the lifecycle hooks already read
+  (#608).** `hypermnesia-mcp-hook` (#605) ran a hook module unchanged
+  against whatever stdin carried, so a Codex `apply_patch` or
+  `exec_command`/`shell_command` event reached `decision_gate`,
+  `preemptive_context`, `pipeline_impact_bump` and the rest in a shape none
+  of them read `tool_name` or `tool_input` for. `mcp_server/hooks/host_event.py`
+  now normalises one host event into the Claude-shaped event(s) each module
+  already reads before `entry.py` dispatches: `apply_patch` expands into
+  one Edit/Write event per file operation via the new fail-closed
+  `mcp_server/hooks/host_patch.py` parser (ported from the same owner's
+  zetetic-team-subagents `hooks/lib/host_events.py`, MIT licensed);
+  `exec_command`/`shell_command` become a `Bash` event with `workdir`
+  resolved against `cwd`; `SubagentStart` maps `agent_type` to
+  `agent_name`. A Claude Code event passes through byte-identical. A patch
+  that cannot be translated without losing edit information is refused,
+  matching how `decision_gate`/`no_deps_gate` already fail closed: exit 2
+  on a `PreToolUse` event, exit 1 with a stderr line otherwise.
+
 - **A console entry point runs any Cortex lifecycle hook from the installed
   wheel (#605).** A Codex plugin ships only its own directory, so it cannot
   reach this repository's `scripts/launcher.py` the way the Claude Code

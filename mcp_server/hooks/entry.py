@@ -8,10 +8,12 @@ module's CHANGELOG entry) as
 <module>``. ``main()`` validates ``<module>`` against the allowlist below,
 resolves the storage backend the way ``mcp_server/__main__.py`` does for
 the server, wires the composition root the way ``scripts/launcher.py``
-does before dispatching (issue number 560), and dispatches to the named
-hook's own ``__main__`` block via ``runpy`` -- unchanged, so its headless
-guard and its own re-wiring still run exactly as they do under
-``scripts/launcher.py``.
+does before dispatching (issue number 560), reads the one stdin event and
+normalizes it (``mcp_server.hooks.host_event``) into the Claude-shaped
+event(s) the hook already reads, and dispatches to the named hook's own
+``__main__`` block via ``runpy`` once per derived event (``host_dispatch``)
+-- unchanged, so its headless guard and its own re-wiring still run exactly
+as they do under ``scripts/launcher.py``.
 
 No ``chdir`` (uvx does not need one), no dependency installation (uvx owns
 dependencies), no capture preflight (``post_tool_capture.py`` already
@@ -21,11 +23,11 @@ applies its own skip check).
 from __future__ import annotations
 
 import os
-import runpy
 import sys
 from pathlib import Path
 from typing import MutableMapping
 
+from mcp_server.hooks.host_dispatch import PRE_TOOL_USE, derive_events, run_event
 from mcp_server.infrastructure.backend_marker import apply_backend_resolution
 
 # The eleven hook modules the Claude Code plugin manifest wires
@@ -84,14 +86,16 @@ def main() -> None:
 
     Precondition: none (argv may be missing its module argument).
     Postcondition: exits 2 with nothing on stdout when argv[1] is absent or
-    not in HOOK_MODULES; otherwise wires every core/ injection seam
-    (issue number 560, mirroring ``scripts/launcher.py`` lines 150-155 --
-    the hook's own ``__main__`` re-wires too, but a hook body can run
-    before that block returns control here), then runs
-    ``mcp_server.hooks.<module>`` as ``__main__`` and exits with that
-    hook's own exit code, or 1 on any exception the hook itself did not
-    turn into a SystemExit (mirrors ``scripts/launcher.py`` lines
-    159-167).
+    not in HOOK_MODULES; otherwise wires every core/ injection seam (issue
+    number 560, mirroring ``scripts/launcher.py`` lines 150-155), then runs
+    ``mcp_server.hooks.<module>`` once per event derived from stdin. For a
+    ``PreToolUse`` event the first non-zero exit among the derived events
+    wins and stops further dispatch (an ``apply_patch`` with several file
+    operations must not apply the second once the first is blocked);
+    otherwise every derived event runs and the last exit code wins. stdout
+    from every run passes through untouched. ``CLAUDE_PROJECT_ROOT`` is set
+    from the event's ``cwd`` only when it was not already set (the Claude
+    launcher's cwd is the plugin root, so an existing value must win).
     """
     name = sys.argv[1] if len(sys.argv) > 1 else None
     if name not in HOOK_MODULES:
@@ -105,14 +109,17 @@ def main() -> None:
     wire_composition_root()
 
     module = f"mcp_server.hooks.{name}"
-    sys.argv = [module]
-    try:
-        runpy.run_module(module, run_name="__main__", alter_sys=True)
-    except SystemExit:
-        raise
-    except Exception as exc:  # noqa: BLE001 - dispatch boundary; reported, never crashes
-        print(f"[hypermnesia-mcp-hook] Failed to run {module}: {exc}", file=sys.stderr)
-        sys.exit(1)
+    raw = sys.stdin.read()
+    payloads, hook_event_name, cwd = derive_events(module, raw)
+    if cwd and "CLAUDE_PROJECT_ROOT" not in os.environ:
+        os.environ["CLAUDE_PROJECT_ROOT"] = cwd
+
+    code = 0
+    for payload in payloads:
+        code = run_event(module, payload)
+        if hook_event_name == PRE_TOOL_USE and code != 0:
+            break
+    sys.exit(code)
 
 
 if __name__ == "__main__":
