@@ -41,8 +41,6 @@ adheres to [Semantic Versioning](https://semver.org/).
   (ADR-1076). The table lives on both backends. Standalone tool count 54 to
   57, 60 with both upstream integrations.
 
-### Added
-
 - **The Path B draft tools are exposed over MCP (#579).** `wiki_get_draft`
   and `wiki_refine_draft` had existed as handlers since ADR-0467 without ever
   being registered, so no client could call them and `wiki_get_draft`'s own
