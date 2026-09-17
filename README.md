@@ -173,7 +173,7 @@ resolve_prediction({ prediction_id: 12, verdict: "confirmed",
 // → { prediction_id: 12, verdict: "confirmed", resolved: true }
 calibration()
 // → { scored: 9, brier: 0.11, uninformative_brier: 0.25, confirmed: 7, refuted: 2,
-//     reliability: [{ band: [0.7, 0.8], resolved: 4, mean_confidence: 0.78,
+//     reliability: [{ band: [0.6, 0.8], resolved: 4, mean_confidence: 0.78,
 //                     observed_frequency: 0.75 }, ...] }
 ```
 
@@ -285,7 +285,7 @@ the direct registration below gives Codex the full surface.
 |---|---|---|---|---|
 | Tool surface | all 57 tools | the 10-tool `lean` profile: `remember`, `recall`, `unified_search`, `recall_hierarchical`, `consolidate`, `memory_stats`, `check_setup`, `wiki_read`, `wiki_list`, `query_methodology` | all 57 tools (`full` is the default profile) | ❌ no remote HTTPS endpoint is shipped |
 | SQLite default store / PostgreSQL opt-in | ✅ | ✅ | ✅ | ❌ would need a remote deployment and a per-user storage and auth model |
-| One store for Claude Code and Codex | ✅ writes the selection to `~/.claude/methodology/backend.json` | ✅ reads that selection at startup (#600) | ✅ same rule for any direct startup sharing the configuration root | ❌ |
+| One store for Claude Code and Codex | ✅ writes the selection to `~/.claude/methodology/backend.json` | ✅ reads that selection at startup (#600, from the release after 4.22.0) | ✅ same rule for any direct startup sharing the configuration root | ❌ |
 | Predictions and calibration (`predict`, `resolve_prediction`, `calibration`) | ✅ | ❌ not in `lean`; use the direct registration | ✅ | ❌ |
 | Wiki writes, ADRs, triggers, rules, codebase ingestion | ✅ | ❌ not in `lean` | ✅ | ❌ |
 | Auto-capture of significant tool output | ✅ PostToolUse hook | ❌ store explicitly with `remember` | ❌ same | ❌ |
@@ -315,7 +315,8 @@ gemini extensions install https://github.com/cdeust/Cortex
 
 **Codex and ChatGPT desktop** have a native plugin with a 10-tool lean surface. It reads the
 same saved backend selection as the Claude Code launcher (`~/.claude/methodology/backend.json`),
-so both hosts write to one store; explicit `CORTEX_MEMORY_STORE_BACKEND` or a database URL
+so both hosts write to one store (from the release after 4.22.0; the plugin launches the
+published package); explicit `CORTEX_MEMORY_STORE_BACKEND`, `CORTEX_BACKEND` or a database URL
 still wins. Pre-install
 the package once so the plugin's first `uvx` handshake reuses the local uv cache instead of
 spending its startup budget downloading a Python environment:
