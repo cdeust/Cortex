@@ -50,6 +50,7 @@ from mcp_server.handlers.injection_receipts import (
 )
 from mcp_server.hooks._telemetry import observe_hook
 from mcp_server.shared.freshness import provenance_suffix
+from mcp_server.shared.project_scope import memory_matches_project, resolve_project_root
 
 _LOG_PREFIX = "[cortex-auto-recall]"
 _DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://localhost:5432/cortex")
@@ -119,7 +120,7 @@ def _connect():
         return None
 
 
-def _recall_memories(conn, query: str) -> list[dict]:
+def _recall_memories(conn, query: str, project_root: str | None = None) -> list[dict]:
     """Fast FTS-based recall against PG. No embedding model needed.
 
     Uses plainto_tsquery for natural language matching against the
@@ -127,7 +128,10 @@ def _recall_memories(conn, query: str) -> list[dict]:
     important memories.
 
     Each result keeps the memory ``id`` — the injection receipt (T2)
-    records exactly which memories entered the context.
+    records exactly which memories entered the context. Rows outside
+    ``project_root`` (and not global) are dropped after the fetch, the
+    same ``memory_matches_project`` rule the SQLite path and session_start
+    apply (issue #604).
     """
     results = []
 
@@ -141,6 +145,7 @@ def _recall_memories(conn, query: str) -> list[dict]:
                    effective_heat(m, NOW()) AS heat,
                    m.domain, m.agent_context, m.is_protected,
                    m.created_at, m.source_attribution, m.is_stale,
+                   m.directory_context, m.is_global,
                    ts_rank_cd(m.content_tsv, q) AS rank
             FROM memories m
                  JOIN current_memories cm ON cm.id = m.id,
@@ -157,6 +162,10 @@ def _recall_memories(conn, query: str) -> list[dict]:
         ).fetchall()
 
         for r in rows:
+            if not memory_matches_project(
+                r.get("directory_context"), bool(r.get("is_global")), project_root
+            ):
+                continue
             results.append(
                 {
                     "id": r["id"],
@@ -204,11 +213,14 @@ def _fts_query_from_prompt(query: str) -> str:
     return " OR ".join(f'"{t}"' for t in terms)
 
 
-def _recall_memories_sqlite(store, query: str) -> list[dict]:
+def _recall_memories_sqlite(
+    store, query: str, project_root: str | None = None
+) -> list[dict]:
     """FTS-based recall through the SQLite store — no embedding load.
 
     Mirror of the PG ``_recall_memories`` contract: FTS prefilter +
-    heat floor, protected-first ordering, benchmark rows excluded.
+    heat floor, protected-first ordering, benchmark rows excluded, and
+    the same ``memory_matches_project`` scoping (issue #604).
     ``search_fts`` already restricts to supersession chain heads and
     non-stale rows (current_memories join) and returns [] on any FTS5
     error.
@@ -220,6 +232,10 @@ def _recall_memories_sqlite(store, query: str) -> list[dict]:
     for memory_id, _score in store.search_fts(fts_query, limit=_MAX_MEMORIES + 2):
         m = store.get_memory(memory_id)
         if not m or m.get("is_benchmark"):
+            continue
+        if not memory_matches_project(
+            m.get("directory_context"), bool(m.get("is_global")), project_root
+        ):
             continue
         heat = float(m.get("heat") or 0.0)
         if heat < _MIN_HEAT:
@@ -244,11 +260,17 @@ def _recall_memories_sqlite(store, query: str) -> list[dict]:
 
 def _process_event_sqlite(event: dict[str, Any], query: str) -> None:
     """Inject relevant memories from the SQLite store; exit 0 always."""
+    project_root = resolve_project_root(event, os.environ)
+    if project_root is None:
+        _log(
+            "project root unresolved (no CLAUDE_PROJECT_ROOT, no event cwd), "
+            "restricting to global memories"
+        )
     try:
         from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
 
         store = get_shared_store()
-        memories = _recall_memories_sqlite(store, query)
+        memories = _recall_memories_sqlite(store, query, project_root)
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"sqlite recall failed (non-fatal): {exc}")
         sys.exit(0)
@@ -358,8 +380,15 @@ def process_event(event: dict[str, Any]) -> None:
     if conn is None:
         sys.exit(0)
 
+    project_root = resolve_project_root(event, os.environ)
+    if project_root is None:
+        _log(
+            "project root unresolved (no CLAUDE_PROJECT_ROOT, no event cwd), "
+            "restricting to global memories"
+        )
+
     try:
-        memories = _recall_memories(conn, query)
+        memories = _recall_memories(conn, query, project_root)
         if not memories:
             sys.exit(0)
 

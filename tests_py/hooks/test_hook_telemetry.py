@@ -234,7 +234,7 @@ def _patch_auto_main(monkeypatch):
     monkeypatch.setattr(
         auto_recall,
         "_recall_memories",
-        lambda conn, query: [{"id": 1, "content": "Décision 🧠"}],
+        lambda conn, query, project_root=None: [{"id": 1, "content": "Décision 🧠"}],
     )
     monkeypatch.setattr(auto_recall, "emit_hook_receipt", lambda *args, **kwargs: 9)
 

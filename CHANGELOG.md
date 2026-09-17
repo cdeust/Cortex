@@ -53,6 +53,20 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Session-start and per-prompt injection stay inside the session's project
+  (#604).** `auto_recall` and `session_start` queried memories with no
+  project predicate, so a session under one project received the hot and
+  protected memories of every other project the store held. Both hooks now
+  apply one rule, shared across the PostgreSQL and SQLite paths
+  (`mcp_server/shared/project_scope.py`, ADR-1080): a memory is injected
+  when it is global, or its `directory_context` is the session's project
+  root or an ancestor of it. An empty `directory_context` is not a
+  wildcard. The project root comes from `CLAUDE_PROJECT_ROOT` or the hook
+  event's `cwd`; when neither is available the hook logs that it could not
+  resolve one and injects globals only, never everything. Team decisions
+  stay global by design and are unaffected. The `recall` tool's own
+  behaviour is unchanged.
+
 - **Claude and direct MCP startup honour the same saved backend (#600).** A
   saved SQLite selection was honoured by the Claude launcher while direct
   console/module startup could select a reachable PostgreSQL server, sending

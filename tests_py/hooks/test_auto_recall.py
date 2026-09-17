@@ -34,6 +34,13 @@ import pytest
 from tests_py.conftest import _USE_PG_STORE, _TEST_DB_URL  # type: ignore
 
 
+# The event "cwd" every seeded row's directory_context is written against
+# (issue #604) -- distinct from the subprocess's OS-level cwd (repo_root,
+# used only so the hook's own imports resolve), since resolve_project_root
+# reads the event field, not os.getcwd().
+_SEEDED_CWD = "/tmp/cortex-autorecall-test-project"
+
+
 pytestmark = pytest.mark.skipif(
     # Gated on the EFFECTIVE backend, not reachability: these fixtures seed
     # PostgreSQL directly (raw DSN / PG-only migrations) while the product
@@ -67,6 +74,9 @@ def _seeded_db():
         conn.execute(
             "DELETE FROM memories WHERE content LIKE %s", ("AUTORECALL_TEST%",)
         )
+        # directory_context matches _run_hook's payload "cwd" (issue #604):
+        # these seeded rows are project-scoped, not global, so the hook's
+        # project predicate must see the session's project to inject them.
         rows = [
             ("AUTORECALL_TEST freight delivery routing optimization", 0.9, False),
             ("AUTORECALL_TEST quantum entanglement laboratory protocol", 0.8, False),
@@ -75,9 +85,9 @@ def _seeded_db():
         for content, heat_base, is_benchmark in rows:
             conn.execute(
                 "INSERT INTO memories (content, heat_base, heat_base_set_at, "
-                "is_benchmark, plasticity, no_decay) "
-                "VALUES (%s, %s, NOW(), %s, 1.0, FALSE)",
-                (content, heat_base, is_benchmark),
+                "is_benchmark, plasticity, no_decay, directory_context) "
+                "VALUES (%s, %s, NOW(), %s, 1.0, FALSE, %s)",
+                (content, heat_base, is_benchmark, _SEEDED_CWD),
             )
     finally:
         conn.close()
@@ -100,8 +110,15 @@ def _seeded_db():
         pass
 
 
-def _run_hook(prompt: str, db_url: str) -> subprocess.CompletedProcess:
+def _run_hook(
+    prompt: str, db_url: str, cwd_override: str | None = None
+) -> subprocess.CompletedProcess:
     """Pipe a prompt JSON to the hook subprocess and capture output.
+
+    ``cwd_override`` sets the event's "cwd" field (the session's project
+    root, per resolve_project_root) -- distinct from the subprocess's own
+    OS-level working directory, fixed below to repo_root so the hook's
+    imports resolve.
 
     No local `timeout=` (issue #402): a fixed wall-clock bound makes the
     verdict depend on machine load, not on the hook's contract. A
@@ -113,7 +130,8 @@ def _run_hook(prompt: str, db_url: str) -> subprocess.CompletedProcess:
     """
     env = os.environ.copy()
     env["DATABASE_URL"] = db_url
-    payload = json.dumps({"prompt": prompt})
+    env.pop("CLAUDE_PROJECT_ROOT", None)
+    payload = json.dumps({"prompt": prompt, "cwd": cwd_override or _SEEDED_CWD})
     repo_root = os.path.dirname(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     )
@@ -167,3 +185,75 @@ def test_auto_recall_does_not_crash_on_short_query(_seeded_db: str) -> None:
     result = _run_hook("ok", _seeded_db)
     assert result.returncode == 0
     assert result.stdout.strip() == ""
+
+
+# ── Project scoping (issue #604) ────────────────────────────────────────
+
+
+@pytest.fixture()
+def _scope_seeded_db():
+    """Four rows exercising every branch of memory_matches_project."""
+    from mcp_server.infrastructure.pg_store import PgMemoryStore
+
+    PgMemoryStore(database_url=_TEST_DB_URL)
+
+    import psycopg
+
+    conn = psycopg.connect(_TEST_DB_URL, autocommit=True)
+    try:
+        conn.execute("DELETE FROM memories WHERE content LIKE %s", ("SCOPETEST%",))
+        rows = [
+            ("SCOPETEST belongs to another project", "/other/project", False),
+            ("SCOPETEST is a global decision", "", True),
+            ("SCOPETEST lives at an ancestor of the session cwd", _SEEDED_CWD, False),
+            ("SCOPETEST has an empty directory_context", "", False),
+        ]
+        for content, directory_context, is_global in rows:
+            conn.execute(
+                "INSERT INTO memories (content, heat_base, heat_base_set_at, "
+                "is_benchmark, plasticity, no_decay, directory_context, is_global) "
+                "VALUES (%s, 0.9, NOW(), FALSE, 1.0, FALSE, %s, %s)",
+                (content, directory_context, is_global),
+            )
+    finally:
+        conn.close()
+
+    yield _TEST_DB_URL
+
+    try:
+        conn = psycopg.connect(_TEST_DB_URL, autocommit=True)
+        conn.execute("DELETE FROM memories WHERE content LIKE %s", ("SCOPETEST%",))
+        conn.close()
+    except Exception:
+        pass
+
+
+def test_auto_recall_drops_other_project_row(_scope_seeded_db: str) -> None:
+    result = _run_hook("belongs to another project", _scope_seeded_db)
+    assert result.returncode == 0
+    assert "belongs to another project" not in result.stdout.lower()
+
+
+def test_auto_recall_keeps_global_row(_scope_seeded_db: str) -> None:
+    result = _run_hook("is a global decision", _scope_seeded_db)
+    assert result.returncode == 0
+    assert "global decision" in result.stdout.lower()
+
+
+def test_auto_recall_keeps_ancestor_row(_scope_seeded_db: str) -> None:
+    """The seeded row's directory_context (_SEEDED_CWD) is an ancestor of
+    the subdirectory session cwd this run reports."""
+    result = _run_hook(
+        "lives at an ancestor of the session cwd",
+        _scope_seeded_db,
+        cwd_override=f"{_SEEDED_CWD}/subdir",
+    )
+    assert result.returncode == 0
+    assert "ancestor of the session cwd" in result.stdout.lower()
+
+
+def test_auto_recall_drops_empty_directory_context_row(_scope_seeded_db: str) -> None:
+    """An empty directory_context is not a wildcard for every project."""
+    result = _run_hook("has an empty directory_context", _scope_seeded_db)
+    assert result.returncode == 0
+    assert "empty directory_context" not in result.stdout.lower()

@@ -32,6 +32,7 @@ from mcp_server.hooks._telemetry import observe_hook
 from mcp_server.shared.freshness import provenance_suffix
 from mcp_server.shared.platform import python_executable
 from mcp_server.shared.log_rotation import methodology_log_path, open_rotating_log
+from mcp_server.shared.project_scope import memory_matches_project, resolve_project_root
 import sqlite3
 import asyncio
 from datetime import datetime as _dt, timezone as _tz
@@ -142,14 +143,16 @@ def _connect_pg():
 # ── Memory fetching ──────────────────────────────────────────────────────
 
 
-def _fetch_anchors(conn) -> list[dict]:
-    """Fetch anchored memories (is_protected with _anchor tag).
+def _fetch_anchors(conn, project_root: str | None = None) -> list[dict]:
+    """Fetch anchored memories (is_protected with _anchor tag) scoped to
+    project_root or global (issue #604).
 
     source: ADR-0498"""
     try:
         rows = conn.execute(
             # source: ADR-0498
             "SELECT m.id, m.content, m.tags, m.domain, m.is_global, "
+            "m.directory_context, "
             "m.created_at, m.source_attribution, m.is_stale "
             # source: ADR-0498
             "FROM memories m JOIN current_memories cm ON cm.id = m.id "
@@ -169,6 +172,10 @@ def _fetch_anchors(conn) -> list[dict]:
 
     anchors = []
     for r in rows:
+        if not memory_matches_project(
+            r.get("directory_context"), bool(r.get("is_global")), project_root
+        ):
+            continue
         tags = r.get("tags") or []
         if isinstance(tags, str):
             try:
@@ -239,8 +246,11 @@ def _fetch_team_decisions(conn, exclude_ids: set) -> list[dict]:
     return decisions[:3]  # Keep injection compact
 
 
-def _fetch_hot_memories(conn, exclude_ids: set) -> list[dict]:
-    """Fetch high-heat memories, excluding anchors.
+def _fetch_hot_memories(
+    conn, exclude_ids: set, project_root: str | None = None
+) -> list[dict]:
+    """Fetch high-heat memories, excluding anchors, scoped to project_root
+    or global (issue #604).
 
     Tier exclusion: auto-captured tool noise and block-replica snapshots
     must not appear in the session-start banner — they poison the injected
@@ -250,6 +260,7 @@ def _fetch_hot_memories(conn, exclude_ids: set) -> list[dict]:
     try:
         rows = conn.execute(
             "SELECT id, content, domain, heat_base AS heat, tags, is_global, "
+            "directory_context, "
             "created_at, source_attribution, is_stale "
             # current_memories: hot-pool content injected into the session
             # banner — supersession chain heads only.
@@ -271,19 +282,24 @@ def _fetch_hot_memories(conn, exclude_ids: set) -> list[dict]:
 
     hot = []
     for r in rows:
-        if r["id"] not in exclude_ids:
-            hot.append(
-                {
-                    "id": r["id"],
-                    "content": r.get("content", ""),
-                    "domain": r.get("domain", ""),
-                    "heat": r.get("heat", 0.0),
-                    "is_global": bool(r.get("is_global", False)),
-                    "created_at": r.get("created_at"),
-                    "source_attribution": r.get("source_attribution", ""),
-                    "is_stale": bool(r.get("is_stale")),
-                }
-            )
+        if r["id"] in exclude_ids:
+            continue
+        if not memory_matches_project(
+            r.get("directory_context"), bool(r.get("is_global")), project_root
+        ):
+            continue
+        hot.append(
+            {
+                "id": r["id"],
+                "content": r.get("content", ""),
+                "domain": r.get("domain", ""),
+                "heat": r.get("heat", 0.0),
+                "is_global": bool(r.get("is_global", False)),
+                "created_at": r.get("created_at"),
+                "source_attribution": r.get("source_attribution", ""),
+                "is_stale": bool(r.get("is_stale")),
+            }
+        )
     return hot[:_HOT_LIMIT]
 
 
@@ -1030,12 +1046,15 @@ def _backend_is_sqlite() -> bool:
         return False
 
 
-def _partition_banner_rows(rows: list[dict]) -> tuple[list[dict], list[dict]]:
+def _partition_banner_rows(
+    rows: list[dict], project_root: str | None = None
+) -> tuple[list[dict], list[dict]]:
     """Split hot rows into (anchors, hot) with the PG path's exclusions.
 
     Mirrors _fetch_anchors/_fetch_hot_memories: tier-1 noise tags are
-    dropped, protected ``_anchor``-tagged rows become anchors, the rest
-    are hot-pool entries. Supersession exclusion already happened
+    dropped, rows outside project_root (and not global) are dropped
+    (issue #604), protected ``_anchor``-tagged rows become anchors, the
+    rest are hot-pool entries. Supersession exclusion already happened
     upstream (``get_hot_memories(heads_only=True)`` routes through the
     ``current_memories`` view).
     """
@@ -1044,6 +1063,10 @@ def _partition_banner_rows(rows: list[dict]) -> tuple[list[dict], list[dict]]:
     for r in rows:
         tags = [t for t in (r.get("tags") or []) if isinstance(t, str)]
         if _SQLITE_NOISE_TAGS & set(tags):
+            continue
+        if not memory_matches_project(
+            r.get("directory_context"), bool(r.get("is_global")), project_root
+        ):
             continue
         entry = {
             "id": r["id"],
@@ -1062,7 +1085,9 @@ def _partition_banner_rows(rows: list[dict]) -> tuple[list[dict], list[dict]]:
     return anchors[:_ANCHOR_LIMIT], hot[:_HOT_LIMIT]
 
 
-def _sqlite_banner_rows(store) -> tuple[list[dict], list[dict], dict | None]:
+def _sqlite_banner_rows(
+    store, project_root: str | None = None
+) -> tuple[list[dict], list[dict], dict | None]:
     """Fetch (anchors, hot, checkpoint) from the SQLite store, tolerantly."""
     try:
         rows = store.get_hot_memories(
@@ -1071,7 +1096,7 @@ def _sqlite_banner_rows(store) -> tuple[list[dict], list[dict], dict | None]:
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"SQLite hot-memory fetch failed (non-fatal): {exc}")
         rows = []
-    anchors, hot = _partition_banner_rows(rows)
+    anchors, hot = _partition_banner_rows(rows, project_root)
     try:
         checkpoint = _checkpoint_from_row(store.get_active_checkpoint())
     except Exception as exc:  # noqa: BLE001 — hook boundary; failure is logged to the hook log, the banner degrades
@@ -1082,6 +1107,12 @@ def _sqlite_banner_rows(store) -> tuple[list[dict], list[dict], dict | None]:
 
 def _sqlite_context(event: dict) -> None:
     """Build and print the SessionStart banner on the SQLite backend."""
+    project_root = resolve_project_root(event, os.environ)
+    if project_root is None:
+        _log(
+            "project root unresolved (no CLAUDE_PROJECT_ROOT, no event cwd), "
+            "restricting to global memories"
+        )
     try:
         from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
 
@@ -1101,7 +1132,7 @@ def _sqlite_context(event: dict) -> None:
             print(msg)
         return
 
-    anchors, hot, checkpoint = _sqlite_banner_rows(store)
+    anchors, hot, checkpoint = _sqlite_banner_rows(store, project_root)
     receipt_id = None
     payload = [{"memory_id": m["id"]} for m in (*anchors, *hot)]
     if payload:
@@ -1195,9 +1226,15 @@ def main() -> None:
         return
 
     # Normal flow — fetch and inject context
-    anchors = _fetch_anchors(conn)
+    project_root = resolve_project_root(event, os.environ)
+    if project_root is None:
+        _log(
+            "project root unresolved (no CLAUDE_PROJECT_ROOT, no event cwd), "
+            "restricting to global memories"
+        )
+    anchors = _fetch_anchors(conn, project_root)
     anchor_ids = {a["id"] for a in anchors}
-    hot = _fetch_hot_memories(conn, anchor_ids)
+    hot = _fetch_hot_memories(conn, anchor_ids, project_root)
     team_decisions = _fetch_team_decisions(conn, anchor_ids)
     checkpoint = _fetch_checkpoint(conn)
     pending_curations = _count_pending_curations(conn)

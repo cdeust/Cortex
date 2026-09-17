@@ -1,0 +1,82 @@
+"""Project-scope predicate for the context-injecting hooks.
+
+Issue #604: session_start and auto_recall queried memories with no
+project predicate, so a session under one project received the hot and
+protected memories of every other project. This module is the one place
+that decides whether a memory belongs on a given session, so both hooks
+and both storage backends (PostgreSQL raw SQL, SQLite store rows) apply
+the identical rule instead of four drifting copies of it.
+
+Rule (owner decision, ADR number 1080): a memory is injected when its
+``directory_context`` equals the session's project root, or is an
+ancestor of it, or the memory is global. An empty ``directory_context``
+is not a wildcard -- it never matches a concrete project root.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping
+
+
+def resolve_project_root(
+    event: Mapping[str, object], env: Mapping[str, str]
+) -> str | None:
+    """The session's project root, or None when neither source has one.
+
+    Precondition: event is the parsed hook JSON (may lack "cwd"); env is
+    the process environment, or a substitute mapping in tests.
+    Postcondition: returns CLAUDE_PROJECT_ROOT when set and non-empty
+    (the override the hooks already honour); otherwise the event's
+    "cwd" when it is a non-empty string; otherwise None. A None result
+    is not a fallback to a filesystem cwd() call -- callers that cannot
+    resolve a project root must restrict injection to global memories
+    and log that they did, never inject everything (issue #604).
+    """
+    override = env.get("CLAUDE_PROJECT_ROOT")
+    if override:
+        return override
+    cwd = event.get("cwd")
+    return cwd if isinstance(cwd, str) and cwd else None
+
+
+def _normalize_path(path: str) -> str:
+    """Slash-normalize and drop a trailing separator for comparison."""
+    return path.replace("\\", "/").rstrip("/")
+
+
+def project_ancestors(project_root: str) -> list[str]:
+    """project_root and every directory above it, most specific first.
+
+    Pure path-component walk, no filesystem access: directory_context is
+    already a resolved absolute path at write time (ingest_helpers.py,
+    domain_mapping.py._git_root), so this only has to walk path segments,
+    never verify them on disk.
+    """
+    normalized = _normalize_path(project_root)
+    if not normalized:
+        return []
+    parts = normalized.split("/")
+    return ["/".join(parts[:i]) for i in range(len(parts), 0, -1) if parts[:i]]
+
+
+def memory_matches_project(
+    directory_context: str | None,
+    is_global: bool,
+    project_root: str | None,
+) -> bool:
+    """True when this memory belongs on a session rooted at project_root.
+
+    Precondition: directory_context is a memory's raw column value (may
+    be None or "" for memories written before directory scoping, or for
+    genuinely-global memories); project_root is resolve_project_root's
+    result for the current session.
+    Postcondition: global memories always match. A non-global memory
+    matches only when project_root is known AND directory_context is
+    project_root or one of its ancestors. An empty directory_context
+    never matches -- it is not a wildcard for "every project".
+    """
+    if is_global:
+        return True
+    if not directory_context or not project_root:
+        return False
+    return _normalize_path(directory_context) in project_ancestors(project_root)

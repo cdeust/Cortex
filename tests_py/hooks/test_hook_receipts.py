@@ -148,18 +148,23 @@ def _run_hook(
 def test_session_start_banner_receipt_roundtrip(_db) -> None:
     from mcp_server.hooks import session_start as ss
 
+    # is_global=True on every seeded row: this test exercises receipt
+    # emission, not the project-scoping predicate (issue #604) -- with no
+    # event "cwd" here, a non-global row would be silently dropped.
     anchor_id = _seed(
         _db,
         "HOOKRCPT_TEST anchored critical fact",
         protected=True,
         tags='["_anchor"]',
+        is_global=True,
     )
-    hot_id = _seed(_db, "HOOKRCPT_TEST hot memory fact", heat=0.95)
+    hot_id = _seed(_db, "HOOKRCPT_TEST hot memory fact", heat=0.95, is_global=True)
     stale_id = _seed(
         _db,
         "HOOKRCPT_TEST superseded stale fact",
         heat=0.99,
         superseded_by=hot_id,
+        is_global=True,
     )
 
     anchors = ss._fetch_anchors(_db)
@@ -233,7 +238,12 @@ def test_session_start_empty_banner_emits_no_receipt(_db) -> None:
 
 
 def test_auto_recall_emits_receipt_with_marker(_db) -> None:
-    mid = _seed(_db, "HOOKRCPT_TEST velvetine mirandol cartography atlas")
+    # is_global=True: no event "cwd" is sent below, so a non-global row
+    # would be silently dropped by the project-scoping predicate
+    # (issue #604) -- this test exercises receipt emission, not scoping.
+    mid = _seed(
+        _db, "HOOKRCPT_TEST velvetine mirandol cartography atlas", is_global=True
+    )
 
     result = _run_hook(
         "mcp_server.hooks.auto_recall",

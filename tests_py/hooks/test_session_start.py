@@ -122,17 +122,74 @@ def test_fetch_anchors_keeps_only_anchor_tagged_rows():
             "tags": '["_anchor:x"]',
             "domain": "",
             "is_global": 0,
+            "directory_context": "/repo",
         },
-        {"id": 3, "content": "c", "tags": ["plain"], "domain": "", "is_global": False},
-        {"id": 4, "content": "d", "tags": "{corrupt", "domain": "", "is_global": False},
+        {
+            "id": 3,
+            "content": "c",
+            "tags": ["plain"],
+            "domain": "",
+            "is_global": False,
+            "directory_context": "/repo",
+        },
+        {
+            "id": 4,
+            "content": "d",
+            "tags": "{corrupt",
+            "domain": "",
+            "is_global": False,
+            "directory_context": "/repo",
+        },
     ]
-    anchors = hook._fetch_anchors(_conn_returning(rows))
+    anchors = hook._fetch_anchors(_conn_returning(rows), "/repo")
     assert [a["id"] for a in anchors] == [1, 2]
     assert anchors[0]["is_global"] is True
 
 
 def test_fetch_anchors_query_failure_degrades_to_empty():
-    assert hook._fetch_anchors(_failing_conn()) == []
+    assert hook._fetch_anchors(_failing_conn(), "/repo") == []
+
+
+# ── Project scoping (issue #604) ───────────────────────────────────────
+
+
+def test_fetch_anchors_drops_other_project_keeps_global_and_ancestor():
+    rows = [
+        {
+            "id": 1,
+            "content": "other project's anchor",
+            "tags": ["_anchor"],
+            "domain": "",
+            "is_global": False,
+            "directory_context": "/other/project",
+        },
+        {
+            "id": 2,
+            "content": "global anchor",
+            "tags": ["_anchor"],
+            "domain": "",
+            "is_global": True,
+            "directory_context": "",
+        },
+        {
+            "id": 3,
+            "content": "ancestor-scoped anchor",
+            "tags": ["_anchor"],
+            "domain": "",
+            "is_global": False,
+            "directory_context": "/repo",
+        },
+        {
+            "id": 4,
+            "content": "empty directory_context is not a wildcard",
+            "tags": ["_anchor"],
+            "domain": "",
+            "is_global": False,
+            "directory_context": "",
+        },
+    ]
+    anchors = hook._fetch_anchors(_conn_returning(rows), "/repo/subdir")
+    assert [a["id"] for a in anchors] == [2, 3]
 
 
 def test_fetch_team_decisions_excludes_ids_and_caps_at_three():
@@ -158,16 +215,60 @@ def test_fetch_hot_memories_excludes_ids_and_caps_at_limit():
             "heat": 0.9,
             "tags": [],
             "is_global": False,
+            "directory_context": "/repo",
         }
         for i in range(20)
     ]
-    out = hook._fetch_hot_memories(_conn_returning(rows), exclude_ids={0, 1})
+    out = hook._fetch_hot_memories(_conn_returning(rows), {0, 1}, "/repo")
     assert len(out) == hook._HOT_LIMIT
     assert out[0]["id"] == 2
 
 
 def test_fetch_hot_memories_query_failure_degrades_to_empty():
-    assert hook._fetch_hot_memories(_failing_conn(), set()) == []
+    assert hook._fetch_hot_memories(_failing_conn(), set(), "/repo") == []
+
+
+def test_fetch_hot_memories_drops_other_project_keeps_global_and_ancestor():
+    rows = [
+        {
+            "id": 1,
+            "content": "other project's hot memory",
+            "domain": "",
+            "heat": 0.9,
+            "tags": [],
+            "is_global": False,
+            "directory_context": "/other/project",
+        },
+        {
+            "id": 2,
+            "content": "global hot memory",
+            "domain": "",
+            "heat": 0.9,
+            "tags": [],
+            "is_global": True,
+            "directory_context": "",
+        },
+        {
+            "id": 3,
+            "content": "ancestor-scoped hot memory",
+            "domain": "",
+            "heat": 0.9,
+            "tags": [],
+            "is_global": False,
+            "directory_context": "/repo",
+        },
+        {
+            "id": 4,
+            "content": "empty directory_context is not a wildcard",
+            "domain": "",
+            "heat": 0.9,
+            "tags": [],
+            "is_global": False,
+            "directory_context": "",
+        },
+    ]
+    out = hook._fetch_hot_memories(_conn_returning(rows), set(), "/repo/subdir")
+    assert [m["id"] for m in out] == [2, 3]
 
 
 def test_fetch_checkpoint_maps_the_row():
@@ -507,7 +608,9 @@ def test_cold_start_populated_db_yields_no_message():
 # ── SQLite banner path ────────────────────────────────────────────────
 
 
-def _row(mem_id, tags=(), protected=False, heat=0.9):
+def _row(mem_id, tags=(), protected=False, heat=0.9, is_global=True):
+    """is_global defaults True: these fixtures drive tag/limit logic, not
+    the project-scoping predicate (covered separately below, issue #604)."""
     return {
         "id": mem_id,
         "content": f"content {mem_id}",
@@ -515,7 +618,8 @@ def _row(mem_id, tags=(), protected=False, heat=0.9):
         "heat": heat,
         "tags": list(tags),
         "is_protected": protected,
-        "is_global": False,
+        "is_global": is_global,
+        "directory_context": "",
     }
 
 
@@ -538,6 +642,22 @@ def test_partition_caps_both_pools():
     anchors, hot = hook._partition_banner_rows(rows)
     assert len(anchors) == hook._ANCHOR_LIMIT
     assert len(hot) == hook._HOT_LIMIT
+
+
+def test_partition_drops_other_project_keeps_global_and_ancestor():
+    def _scoped_row(mem_id, directory_context, is_global=False):
+        row = _row(mem_id, is_global=is_global)
+        row["directory_context"] = directory_context
+        return row
+
+    rows = [
+        _scoped_row(1, "/other/project"),
+        _scoped_row(2, "", is_global=True),
+        _scoped_row(3, "/repo"),
+        _scoped_row(4, ""),
+    ]
+    _, hot = hook._partition_banner_rows(rows, "/repo/subdir")
+    assert [h["id"] for h in hot] == [2, 3]
 
 
 def test_sqlite_banner_rows_fetch_failure_is_logged_and_degrades(capsys):
