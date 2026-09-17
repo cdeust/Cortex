@@ -37,7 +37,10 @@ from mcp_server.hooks.host_event_errors import HostEventError
 
 _ADD, _DELETE, _UPDATE = "Add File", "Delete File", "Update File"
 _MOVE_PREFIX = "*** Move to: "
-# An envelope needs at least its Begin/End markers plus one operation header.
+# source: zetetic-team-subagents hooks/lib/host_events.py, commit 4c2bc9b,
+# PR #139 -- the same three-line floor `_patch_events` checks there
+# (`len(lines) < 3`): an envelope needs at least its Begin/End markers
+# plus one operation header.
 _MIN_ENVELOPE_LINES = 3
 
 
