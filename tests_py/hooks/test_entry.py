@@ -4,8 +4,9 @@ from the installed wheel, without the repository or scripts/launcher.py.
 Source: this PR's specification (Codex plugin wave, PR 1). A Codex plugin
 ships only its own directory and calls
 ``uvx --from "hypermnesia-mcp[postgresql,sqlite]" hypermnesia-mcp-hook
-<module>``, so the ten hook modules the Claude Code plugin manifest wires
-(.claude-plugin/plugin.json) must be runnable without scripts/launcher.py.
+<module>``, so the eleven hook modules the Claude Code plugin manifest
+wires (.claude-plugin/plugin.json) must be runnable without
+scripts/launcher.py.
 
 Parity: mcp_server.hooks.entry must behave exactly like scripts/launcher.py
 for every allowlisted module on a benign event, because both are meant to
@@ -19,10 +20,17 @@ import json
 import os
 import subprocess
 import sys
-import tomllib
 from pathlib import Path
 
 import pytest
+
+# tomllib is 3.11+; requires-python is >=3.10 (pyproject.toml), so the
+# fallback backport is used on 3.10, exactly like build/hatchling's own
+# dependency on it (uv.lock: tomli, marker python_full_version < "3.11").
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LAUNCHER_PATH = REPO_ROOT / "scripts" / "launcher.py"

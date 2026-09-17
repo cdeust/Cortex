@@ -7,9 +7,11 @@ module's CHANGELOG entry) as
 ``uvx --from "hypermnesia-mcp[postgresql,sqlite]" hypermnesia-mcp-hook
 <module>``. ``main()`` validates ``<module>`` against the allowlist below,
 resolves the storage backend the way ``mcp_server/__main__.py`` does for
-the server, and dispatches to the named hook's own ``__main__`` block via
-``runpy`` -- unchanged, so its headless guard and composition-root wiring
-still run exactly as they do under ``scripts/launcher.py``.
+the server, wires the composition root the way ``scripts/launcher.py``
+does before dispatching (issue number 560), and dispatches to the named
+hook's own ``__main__`` block via ``runpy`` -- unchanged, so its headless
+guard and its own re-wiring still run exactly as they do under
+``scripts/launcher.py``.
 
 No ``chdir`` (uvx does not need one), no dependency installation (uvx owns
 dependencies), no capture preflight (``post_tool_capture.py`` already
@@ -26,8 +28,9 @@ from typing import MutableMapping
 
 from mcp_server.infrastructure.backend_marker import apply_backend_resolution
 
-# The ten hook modules the Claude Code plugin manifest wires (.claude-plugin/
-# plugin.json), verified against that file. Anything else is refused.
+# The eleven hook modules the Claude Code plugin manifest wires
+# (.claude-plugin/plugin.json), verified against that file. Anything else
+# is refused.
 HOOK_MODULES = frozenset(
     {
         "session_start",
@@ -81,10 +84,14 @@ def main() -> None:
 
     Precondition: none (argv may be missing its module argument).
     Postcondition: exits 2 with nothing on stdout when argv[1] is absent or
-    not in HOOK_MODULES; otherwise runs ``mcp_server.hooks.<module>``
-    as ``__main__`` and exits with that hook's own exit code, or 1 on any
-    exception the hook itself did not turn into a SystemExit (mirrors
-    ``scripts/launcher.py`` lines 159-167).
+    not in HOOK_MODULES; otherwise wires every core/ injection seam
+    (issue number 560, mirroring ``scripts/launcher.py`` lines 150-155 --
+    the hook's own ``__main__`` re-wires too, but a hook body can run
+    before that block returns control here), then runs
+    ``mcp_server.hooks.<module>`` as ``__main__`` and exits with that
+    hook's own exit code, or 1 on any exception the hook itself did not
+    turn into a SystemExit (mirrors ``scripts/launcher.py`` lines
+    159-167).
     """
     name = sys.argv[1] if len(sys.argv) > 1 else None
     if name not in HOOK_MODULES:
@@ -92,6 +99,10 @@ def main() -> None:
         sys.exit(2)
 
     prepare_environment(os.environ)
+
+    from mcp_server.hooks.wiring import wire_composition_root  # noqa: PLC0415 - issue number 560, same seam as scripts/launcher.py:153
+
+    wire_composition_root()
 
     module = f"mcp_server.hooks.{name}"
     sys.argv = [module]
