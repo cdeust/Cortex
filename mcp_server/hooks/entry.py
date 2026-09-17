@@ -27,7 +27,7 @@ import sys
 from pathlib import Path
 from typing import MutableMapping
 
-from mcp_server.hooks.host_dispatch import PRE_TOOL_USE, derive_events, run_event
+from mcp_server.hooks.host_dispatch import apply_project_root, derive_events, run_all
 from mcp_server.infrastructure.backend_marker import apply_backend_resolution
 
 # The eleven hook modules the Claude Code plugin manifest wires
@@ -92,10 +92,12 @@ def main() -> None:
     ``PreToolUse`` event the first non-zero exit among the derived events
     wins and stops further dispatch (an ``apply_patch`` with several file
     operations must not apply the second once the first is blocked);
-    otherwise every derived event runs and the last exit code wins. stdout
-    from every run passes through untouched. ``CLAUDE_PROJECT_ROOT`` is set
-    from the event's ``cwd`` only when it was not already set (the Claude
-    launcher's cwd is the plugin root, so an existing value must win).
+    otherwise every derived event runs and the worst (highest) exit code
+    among them wins, so one failing operation in a multi-event
+    ``PostToolUse`` batch is never masked by a later one that succeeds.
+    stdout from every run passes through untouched. ``CLAUDE_PROJECT_ROOT``
+    is set from the event's ``cwd`` via ``apply_project_root`` (never
+    overriding an existing value).
     """
     name = sys.argv[1] if len(sys.argv) > 1 else None
     if name not in HOOK_MODULES:
@@ -111,15 +113,8 @@ def main() -> None:
     module = f"mcp_server.hooks.{name}"
     raw = sys.stdin.read()
     payloads, hook_event_name, cwd = derive_events(module, raw)
-    if cwd and "CLAUDE_PROJECT_ROOT" not in os.environ:
-        os.environ["CLAUDE_PROJECT_ROOT"] = cwd
-
-    code = 0
-    for payload in payloads:
-        code = run_event(module, payload)
-        if hook_event_name == PRE_TOOL_USE and code != 0:
-            break
-    sys.exit(code)
+    apply_project_root(os.environ, cwd)
+    sys.exit(run_all(module, payloads, hook_event_name))
 
 
 if __name__ == "__main__":

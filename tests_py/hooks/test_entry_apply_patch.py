@@ -163,3 +163,74 @@ def test_malformed_patch_on_posttooluse_exits_1_with_stderr(tmp_path: Path) -> N
     assert result.returncode == 1
     assert result.stdout == ""
     assert "post_tool_capture" in result.stderr
+
+
+def _two_blocked_add_files_patch_event(tmp_path: Path, hook_event_name: str) -> str:
+    """Two independent Add File operations, each alone enough to trip
+    decision_gate's block -- so each run of the module that actually
+    happens leaves its own ``[decision-gate] BLOCKED`` line in stderr, and
+    counting that marker counts how many times the module ran."""
+    lines = "\n".join(f"+{line}" for line in _LONG_COMMENT_BLOCK.splitlines())
+    body = (
+        "*** Begin Patch\n"
+        f"*** Add File: first.py\n{lines}\n+x = 1\n"
+        f"*** Add File: second.py\n{lines}\n+y = 1\n"
+        "*** End Patch"
+    )
+    return json.dumps(
+        {
+            "hook_event_name": hook_event_name,
+            "cwd": str(tmp_path),
+            "tool_name": "apply_patch",
+            "tool_input": {"command": body},
+        }
+    )
+
+
+def test_pretooluse_stops_after_first_blocked_operation(tmp_path: Path) -> None:
+    env = _isolated_env(tmp_path)
+    result = _run_entry(
+        "decision_gate", _two_blocked_add_files_patch_event(tmp_path, "PreToolUse"), env
+    )
+    assert result.returncode == 2
+    assert result.stderr.count("[decision-gate] BLOCKED") == 1
+
+
+def test_posttooluse_runs_every_derived_operation(tmp_path: Path) -> None:
+    env = _isolated_env(tmp_path)
+    result = _run_entry(
+        "decision_gate",
+        _two_blocked_add_files_patch_event(tmp_path, "PostToolUse"),
+        env,
+    )
+    assert result.stderr.count("[decision-gate] BLOCKED") == 2
+
+
+def _blocked_then_benign_add_files_patch_event(tmp_path: Path) -> str:
+    """A PostToolUse patch whose FIRST operation blocks (exit 2) and whose
+    second is benign (exit 0): "last run wins" would report 0 and mask the
+    block; the worst (highest) code among the runs must not be masked."""
+    blocked_lines = "\n".join(f"+{line}" for line in _LONG_COMMENT_BLOCK.splitlines())
+    body = (
+        "*** Begin Patch\n"
+        f"*** Add File: blocked.py\n{blocked_lines}\n+x = 1\n"
+        "*** Add File: benign.py\n+ok = 1\n"
+        "*** End Patch"
+    )
+    return json.dumps(
+        {
+            "hook_event_name": "PostToolUse",
+            "cwd": str(tmp_path),
+            "tool_name": "apply_patch",
+            "tool_input": {"command": body},
+        }
+    )
+
+
+def test_posttooluse_exit_code_is_the_worst_not_the_last(tmp_path: Path) -> None:
+    env = _isolated_env(tmp_path)
+    result = _run_entry(
+        "decision_gate", _blocked_then_benign_add_files_patch_event(tmp_path), env
+    )
+    assert result.stderr.count("[decision-gate] BLOCKED") == 1
+    assert result.returncode == 2

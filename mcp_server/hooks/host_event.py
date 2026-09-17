@@ -25,7 +25,10 @@ _SHELL_TOOLS = {"exec_command", "shell_command"}
 
 
 def _shell_event(event: dict, tool_name: str) -> dict:
-    """A Bash-shaped event; ``workdir`` resolves against ``cwd`` when set."""
+    """A Bash-shaped event; ``workdir`` (or ``tool_input.cwd`` when no
+    ``workdir`` key is present -- the same fallback order
+    zetetic-team-subagents' ``host_events.py`` uses) resolves against the
+    event's own ``cwd``."""
     tool_input = event.get("tool_input")
     if not isinstance(tool_input, dict):
         raise HostEventError(f"{tool_name} tool_input must be an object")
@@ -33,7 +36,7 @@ def _shell_event(event: dict, tool_name: str) -> dict:
     if not isinstance(command, str):
         raise HostEventError("Shell command must be a string")
     base = event.get("cwd") or os.getcwd()
-    workdir = tool_input.get("workdir")
+    workdir = tool_input.get("workdir") or tool_input.get("cwd")
     cwd = str((Path(base) / workdir).resolve()) if workdir else base
     return {
         **event,

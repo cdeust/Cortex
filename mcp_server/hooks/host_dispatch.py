@@ -11,6 +11,7 @@ import io
 import json
 import runpy
 import sys
+from typing import MutableMapping
 
 from mcp_server.hooks.host_event import HostEventError, normalize_event
 
@@ -18,6 +19,25 @@ from mcp_server.hooks.host_event import HostEventError, normalize_event
 # .claude-plugin/plugin.json: decision_gate and no_deps_gate are the only
 # PreToolUse hooks in entry.HOOK_MODULES, and both already fail closed.
 PRE_TOOL_USE = "PreToolUse"
+
+_PROJECT_ROOT_VAR = "CLAUDE_PROJECT_ROOT"
+
+
+def apply_project_root(environ: MutableMapping[str, str], cwd: str | None) -> None:
+    """Set ``CLAUDE_PROJECT_ROOT`` from the event's ``cwd``, but never
+    override a value the launcher already set.
+
+    Precondition: ``environ`` is mutable (normally ``os.environ``); ``cwd``
+    is the source event's ``cwd`` field, or ``None`` when the event carried
+    none. Postcondition: ``environ[_PROJECT_ROOT_VAR]`` is unchanged if it
+    was already set OR ``cwd`` is falsy; otherwise it is set to ``cwd``.
+    Read from ``pipeline_impact_bump.py:195``, ``post_commit_reindex.py:255``
+    and ``session_start.py:919``, all of which fall back to ``os.getcwd()``
+    when this variable is unset -- under the Claude launcher ``cwd`` is the
+    plugin root, so an existing value must win.
+    """
+    if cwd and _PROJECT_ROOT_VAR not in environ:
+        environ[_PROJECT_ROOT_VAR] = cwd
 
 
 def run_event(module: str, payload: str) -> int:
@@ -33,6 +53,29 @@ def run_event(module: str, payload: str) -> int:
         print(f"[hypermnesia-mcp-hook] Failed to run {module}: {exc}", file=sys.stderr)
         return 1
     return 0
+
+
+def run_all(module: str, payloads: list[str], hook_event_name: str | None) -> int:
+    """Run ``module`` once per payload in order; the combined exit code.
+
+    Precondition: ``payloads`` is non-empty. Postcondition: for a
+    ``PreToolUse`` event, the first non-zero exit among the runs wins and
+    stops further dispatch (an ``apply_patch`` with several file
+    operations must not apply the second once the first is blocked); for
+    any other event, every payload runs and the worst (highest) exit code
+    among them wins, so one failing operation in a multi-event
+    ``PostToolUse`` batch is never masked by a later one that succeeds.
+    """
+    code = 0
+    for payload in payloads:
+        run_code = run_event(module, payload)
+        if hook_event_name == PRE_TOOL_USE:
+            code = run_code
+            if code != 0:
+                break
+        else:
+            code = max(code, run_code)
+    return code
 
 
 def derive_events(module: str, raw: str) -> tuple[list[str], str | None, str | None]:

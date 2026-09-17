@@ -99,6 +99,22 @@ def test_shell_tool_without_workdir_keeps_event_cwd() -> None:
     assert result[0]["cwd"] == "/repo"
 
 
+def test_shell_tool_falls_back_to_tool_input_cwd_when_no_workdir(
+    tmp_path: Path,
+) -> None:
+    """Parity with zetetic-team-subagents' host_events.py: when Codex sends
+    ``tool_input.cwd`` instead of ``workdir``, it must still resolve --
+    ``exec_command {"cmd": "ls", "cwd": "sub"}`` under base ``/p`` must
+    derive ``/p/sub``, not silently fall back to the base itself."""
+    event = {
+        "cwd": str(tmp_path),
+        "tool_name": "exec_command",
+        "tool_input": {"cmd": "ls", "cwd": "sub"},
+    }
+    result = normalize_event(event)
+    assert result[0]["cwd"] == str(tmp_path / "sub")
+
+
 def test_subagent_start_maps_agent_type_and_leaves_prompt_absent() -> None:
     event = {
         "hook_event_name": "SubagentStart",
