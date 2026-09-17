@@ -276,19 +276,25 @@ banners, auto-recall, auto-capture, checkpoints and every memory tool work on bo
 
 The server is host-agnostic. Any host that can launch a stdio process gets the full tool
 surface on the default SQLite store. What is not portable are the nine lifecycle hooks, which
-are Claude Code plugin machinery; the server never imports or requires them at startup.
+are Claude Code plugin machinery; the server never imports or requires them at startup. The
+Codex plugin deliberately starts the server with `--profile lean` so its first `uvx` handshake
+stays inside the host's startup budget (measured in [docs/codex-plugin.md](docs/codex-plugin.md));
+the direct registration below gives Codex the full surface.
 
-| Capability | Claude Code plugin | Local stdio hosts (Gemini CLI, Codex CLI, ChatGPT desktop, Cursor, Windsurf, VS Code, Agents SDK) | ChatGPT web |
-|---|---|---|---|
-| All 57 memory tools (`remember`, `recall`, wiki, navigation, consolidation, triggers, rules) | ✅ | ✅ | ❌ no remote HTTPS endpoint is shipped |
-| SQLite default store / PostgreSQL opt-in | ✅ | ✅ | ❌ would need a remote deployment and a per-user storage and auth model |
-| Auto-capture of significant tool output | ✅ PostToolUse hook | ❌ store explicitly with `remember` | ❌ |
-| Session-start context injection | ✅ SessionStart hook | ❌ call `recall` yourself | ❌ |
-| Per-prompt auto-recall | ✅ | ❌ | ❌ |
-| Compaction checkpoints | ✅ | ❌ | ❌ |
-| Autonomous wiki cycle | ✅ | ❌ run `consolidate` / `curate_wiki` manually | ❌ |
-| Predictions and calibration (`predict`, `resolve_prediction`, `calibration`) | ✅ | ✅ | ❌ |
-| Cognitive profiling (`query_methodology`) | ✅ | ⚠️ profiles are mined from Claude Code session logs under `~/.claude/`; without them the profile is empty | ❌ |
+| Capability | Claude Code plugin | Codex plugin (`hypermnesia-mcp-codex`) | Codex `codex mcp add`, Gemini CLI, Cursor, Windsurf, VS Code, Agents SDK | ChatGPT web |
+|---|---|---|---|---|
+| Tool surface | all 57 tools | the 10-tool `lean` profile: `remember`, `recall`, `unified_search`, `recall_hierarchical`, `consolidate`, `memory_stats`, `check_setup`, `wiki_read`, `wiki_list`, `query_methodology` | all 57 tools (`full` is the default profile) | ❌ no remote HTTPS endpoint is shipped |
+| SQLite default store / PostgreSQL opt-in | ✅ | ✅ | ✅ | ❌ would need a remote deployment and a per-user storage and auth model |
+| One store for Claude Code and Codex | ✅ writes the selection to `~/.claude/methodology/backend.json` | ✅ reads that selection at startup (#600) | ✅ same rule for any direct startup sharing the configuration root | ❌ |
+| Predictions and calibration (`predict`, `resolve_prediction`, `calibration`) | ✅ | ❌ not in `lean`; use the direct registration | ✅ | ❌ |
+| Wiki writes, ADRs, triggers, rules, codebase ingestion | ✅ | ❌ not in `lean` | ✅ | ❌ |
+| Auto-capture of significant tool output | ✅ PostToolUse hook | ❌ store explicitly with `remember` | ❌ same | ❌ |
+| Session-start context injection | ✅ SessionStart hook | ❌ call `recall` yourself | ❌ same | ❌ |
+| Per-prompt auto-recall | ✅ | ❌ | ❌ | ❌ |
+| Compaction checkpoints | ✅ | ❌ | ❌ | ❌ |
+| Autonomous wiki cycle | ✅ | ❌ `consolidate` by hand; `curate_wiki` needs the full profile | ❌ run `consolidate` / `curate_wiki` manually | ❌ |
+| Cognitive profiling (`query_methodology`) | ✅ | ⚠️ profiles are mined from Claude Code session logs under `~/.claude/`; without them the profile is empty | ⚠️ same | ❌ |
+| Worktree convention checked by `doctor` | `.claude/worktrees/<name>/` | `.Codex/worktrees/<name>/` (ignored at the repository root since #601) | n/a | n/a |
 
 On Claude Code memory is ambient: hooks capture and inject automatically. On every other host
 memory is tool-driven: the agent stores and retrieves when instructed, and nothing happens
