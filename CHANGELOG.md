@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [4.23.0] - 2026-09-17
+
 ### Added
 
 - **A session's tool sequence and turn count come from a Codex rollout too

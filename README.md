@@ -10,7 +10,7 @@
   <img src="assets/badge-python.svg" alt="Python 3.10+">
   <img src="assets/badge-tests.svg" alt="tests passing">
   <img src="assets/badge-references.svg" alt="97 referenced papers">
-  <img src="assets/badge-version.svg" alt="Version 4.22.0">
+  <img src="assets/badge-version.svg" alt="Version 4.23.0">
   <a href="https://www.bestpractices.dev/projects/13836"><img src="https://www.bestpractices.dev/projects/13836/badge" alt="OpenSSF Best Practices"></a>
   <a href="https://mcptoplist.com/server/io.github.cdeust%2Fhypermnesia-mcp"><img src="assets/badge-mcp-toplist.svg" alt="MCP Toplist: Top 1.2% of 81,919 tracked MCP servers, July 2026"></a>
 </p>
@@ -286,7 +286,7 @@ surface.
 |---|---|---|---|---|
 | Tool surface | all 57 tools | the 10-tool `lean` profile: `remember`, `recall`, `unified_search`, `recall_hierarchical`, `consolidate`, `memory_stats`, `check_setup`, `wiki_read`, `wiki_list`, `query_methodology` | all 57 tools (`full` is the default profile) | ❌ no remote HTTPS endpoint is shipped |
 | SQLite default store / PostgreSQL opt-in | ✅ | ✅ | ✅ | ❌ would need a remote deployment and a per-user storage and auth model |
-| One store for Claude Code and Codex | ✅ writes the selection to `~/.claude/methodology/backend.json` | ✅ reads that selection at startup (#600, from the release after 4.22.0) | ✅ same rule for any direct startup sharing the configuration root | ❌ |
+| One store for Claude Code and Codex | ✅ writes the selection to `~/.claude/methodology/backend.json` | ✅ reads that selection at startup (#600, since 4.23.0) | ✅ same rule for any direct startup sharing the configuration root | ❌ |
 | Predictions and calibration (`predict`, `resolve_prediction`, `calibration`) | ✅ | ❌ not in `lean`; use the direct registration | ✅ | ❌ |
 | Wiki writes, ADRs, triggers, rules, codebase ingestion | ✅ | ❌ not in `lean` | ✅ | ❌ |
 | Auto-capture of significant tool output | ✅ PostToolUse hook | ❌ store explicitly with `remember` | ❌ same | ❌ |
@@ -316,8 +316,7 @@ gemini extensions install https://github.com/cdeust/Cortex
 
 **Codex and ChatGPT desktop** have a native plugin with a 10-tool lean surface. It reads the
 same saved backend selection as the Claude Code launcher (`~/.claude/methodology/backend.json`),
-so both hosts write to one store (from the release after 4.22.0; the plugin launches the
-published package); explicit `CORTEX_MEMORY_STORE_BACKEND`, `CORTEX_BACKEND` or a database URL
+so both hosts write to one store (since 4.23.0); explicit `CORTEX_MEMORY_STORE_BACKEND`, `CORTEX_BACKEND` or a database URL
 still wins. Pre-install
 the package once so the plugin's first `uvx` handshake reuses the local uv cache instead of
 spending its startup budget downloading a Python environment:
