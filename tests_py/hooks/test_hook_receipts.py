@@ -89,14 +89,27 @@ def _seed(
     agent: str = "",
     tags: str = "[]",
     superseded_by: int | None = None,
+    directory: str = "",
+    team_decision: bool = False,
 ) -> int:
     row = conn.execute(
         "INSERT INTO memories (content, heat_base, heat_base_set_at, "
         "is_benchmark, plasticity, no_decay, is_protected, is_global, "
-        "agent_context, tags, superseded_by_id) "
-        "VALUES (%s, %s, NOW(), FALSE, 1.0, FALSE, %s, %s, %s, %s::jsonb, %s) "
-        "RETURNING id",
-        (content, heat, protected, is_global, agent, tags, superseded_by),
+        "agent_context, tags, superseded_by_id, directory_context, "
+        "is_team_decision) "
+        "VALUES (%s, %s, NOW(), FALSE, 1.0, FALSE, %s, %s, %s, %s::jsonb, %s, "
+        "%s, %s) RETURNING id",
+        (
+            content,
+            heat,
+            protected,
+            is_global,
+            agent,
+            tags,
+            superseded_by,
+            directory,
+            team_decision,
+        ),
     ).fetchone()
     return int(row["id"])
 
@@ -282,15 +295,27 @@ def test_agent_briefing_emits_receipt_with_marker(_db) -> None:
         _db,
         "HOOKRCPT_TEST zephyrine quantalum brokerage reconciliation ledger",
         agent="engineer",
+        directory="/tmp",
     )
-    # Pass 2 (TMS directory layer): a protected global decision from
+    # Pass 2 (TMS directory layer): a team decision of the SAME project from
     # ANOTHER agent enters the briefing regardless of keywords — it must
     # be attested by the same receipt, ranked after the agent-scoped pass.
+    # source: ADR-1083
     team_id = _seed(
         _db,
         "HOOKRCPT_TEST team decision on rollout gates",
         protected=True,
-        is_global=True,
+        team_decision=True,
+        directory="/tmp",
+        agent="architect",
+    )
+    # The same kind of row from ANOTHER project must stay out (issue #611).
+    _seed(
+        _db,
+        "HOOKRCPT_TEST foreignproject decision on rollout gates",
+        protected=True,
+        team_decision=True,
+        directory="/another-project",
         agent="architect",
     )
 
@@ -313,6 +338,7 @@ def test_agent_briefing_emits_receipt_with_marker(_db) -> None:
     assert "zephyrine" in result.stdout.lower(), (
         f"expected briefing, stdout={result.stdout!r} stderr={result.stderr!r}"
     )
+    assert "foreignproject" not in result.stdout.lower()
 
     row = _db.execute(
         "SELECT id FROM injection_receipts "
@@ -352,6 +378,7 @@ def test_agent_briefing_falls_back_when_only_dispatch_agent_is_installed(
         _db,
         "HOOKRCPT_TEST corvidae plangent isotherm dossier archive",
         agent="engineer",
+        directory="/tmp",
     )
 
     agents_dir = tmp_path / "agents"
@@ -442,11 +469,13 @@ def test_agent_briefing_skips_superseded_prior_work(_db) -> None:
         _db,
         "HOOKRCPT_TEST ombrelline daguerre synthesis current",
         agent="engineer",
+        directory="/tmp",
     )
     stale = _seed(
         _db,
         "HOOKRCPT_TEST ombrelline daguerre synthesis stale",
         agent="engineer",
+        directory="/tmp",
         superseded_by=current,
     )
 

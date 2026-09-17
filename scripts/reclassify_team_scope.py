@@ -12,7 +12,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from mcp_server.core.global_detector import detect_global
 from mcp_server.core.thermodynamics import is_decision_content
+from mcp_server.hooks.wiring import wire_composition_root  # noqa: E402 — source: issue #560
 from scripts.reclassify_team_scope_db import ScopeDatabase, verify_backup
+
+wire_composition_root()
 
 
 @dataclass(frozen=True)
