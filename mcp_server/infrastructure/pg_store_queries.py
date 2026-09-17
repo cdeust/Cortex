@@ -9,6 +9,7 @@ from typing import Any
 
 import numpy as np
 
+from mcp_server.infrastructure.pg_scope_clause import directory_scope_clause
 from mcp_server.infrastructure.pg_store_host import PgStoreHost
 
 
@@ -51,27 +52,36 @@ class PgQueryMixin(PgStoreHost):
         limit: int = 20,
         include_benchmarks: bool = False,
         heads_only: bool = False,
+        directory_ancestors: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Shared primitive with mixed callers. heads_only routes the read
         through the current_memories view (supersession chain heads only):
         content-serving callers (drill_down, write-gate struct_nov) pass
         True; maintenance/stats callers keep False.
+
+        directory_ancestors, when not None, restricts rows to is_global or
+        an ancestor directory_context (project_scope.project_ancestors),
+        applied here before ORDER BY/LIMIT so the limit is never spent on
+        rows the caller cannot use (issue #604 follow-up).
         """
         src = "current_memories" if heads_only else "memories"
         bench_filter = (
             "" if include_benchmarks else "AND NOT coalesce(is_benchmark, FALSE) "
         )
+        scope_filter, scope_params = directory_scope_clause(directory_ancestors)
+        params: tuple[Any, ...] = (min_heat, *scope_params)
+        where = f"WHERE heat_base >= %s {bench_filter}{scope_filter}"
         if limit > 0:
             rows = self._execute(
-                f"SELECT * FROM {src} WHERE heat_base >= %s {bench_filter}"  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
+                f"SELECT * FROM {src} {where}"  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
                 "ORDER BY heat_base DESC LIMIT %s",
-                (min_heat, limit),
+                (*params, limit),
             ).fetchall()
         else:
             rows = self._execute(
-                f"SELECT * FROM {src} WHERE heat_base >= %s {bench_filter}"  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
+                f"SELECT * FROM {src} {where}"  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
                 "ORDER BY heat_base DESC",
-                (min_heat,),
+                params,
             ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]
 

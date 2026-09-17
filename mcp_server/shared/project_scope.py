@@ -44,19 +44,32 @@ def _normalize_path(path: str) -> str:
     return path.replace("\\", "/").rstrip("/")
 
 
-def project_ancestors(project_root: str) -> list[str]:
+def project_ancestors(project_root: str | None) -> list[str]:
     """project_root and every directory above it, most specific first.
 
     Pure path-component walk, no filesystem access: directory_context is
     already a resolved absolute path at write time (ingest_helpers.py,
     domain_mapping.py._git_root), so this only has to walk path segments,
     never verify them on disk.
+
+    Postcondition: None or "" yields [] -- the caller-facing contract a
+    query-scoping caller relies on: pass this list straight to a
+    directory_ancestors parameter, and an unresolved project_root reduces
+    the query to is_global-only without a separate branch at the call
+    site (issue #604 follow-up).
     """
+    if not project_root:
+        return []
     normalized = _normalize_path(project_root)
     if not normalized:
         return []
     parts = normalized.split("/")
-    return ["/".join(parts[:i]) for i in range(len(parts), 0, -1) if parts[:i]]
+    # range stops at 2, not 0: parts[:1] on a leading-slash path is [""],
+    # a non-empty list whose join is "" -- an empty ancestor would let an
+    # empty directory_context match every project downstream (a caller
+    # builds "directory_context = ANY(ancestors)"/"IN (ancestors)" SQL
+    # straight from this list, with no separate empty-string guard).
+    return ["/".join(parts[:i]) for i in range(len(parts), 1, -1)]
 
 
 def memory_matches_project(

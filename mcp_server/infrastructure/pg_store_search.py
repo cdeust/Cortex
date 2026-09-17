@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from mcp_server.infrastructure.pg_scope_clause import directory_scope_clause
 from mcp_server.infrastructure.pg_store_host import PgStoreHost
 
 
@@ -137,17 +138,29 @@ class PgSearchMixin(PgStoreHost):
             untrusted_factor,
         )
 
-    def search_fts(self, query: str, limit: int = 20) -> list[tuple[int, float]]:
+    def search_fts(
+        self,
+        query: str,
+        limit: int = 20,
+        directory_ancestors: list[str] | None = None,
+    ) -> list[tuple[int, float]]:
         """Full-text search via tsvector. Returns (memory_id, score) pairs.
 
+        directory_ancestors, when not None, restricts rows to is_global or
+        an ancestor directory_context, applied before ORDER BY/LIMIT so
+        the limit is never spent on rows the caller cannot use (issue
+        #604 follow-up).
+
         source: ADR-0566"""
+        scope_filter, scope_params = directory_scope_clause(directory_ancestors)
         rows = self._execute(
-            "SELECT id, ts_rank_cd(content_tsv, "
+            "SELECT id, ts_rank_cd(content_tsv, "  # noqa: S608 — scope_filter is a fixed in-code fragment from directory_scope_clause; values are bound parameters (docs/ASSURANCE-CASE.md §5)
             "plainto_tsquery('english', %s)) AS score "
             "FROM current_memories "
             "WHERE content_tsv @@ plainto_tsquery('english', %s) AND NOT is_stale "
+            f"{scope_filter}"
             "ORDER BY score DESC LIMIT %s",
-            (query, query, limit),
+            (query, query, *scope_params, limit),
         ).fetchall()
         return [(r["id"], r["score"]) for r in rows]
 

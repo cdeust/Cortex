@@ -63,9 +63,16 @@ adheres to [Semantic Versioning](https://semver.org/).
   root or an ancestor of it. An empty `directory_context` is not a
   wildcard. The project root comes from `CLAUDE_PROJECT_ROOT` or the hook
   event's `cwd`; when neither is available the hook logs that it could not
-  resolve one and injects globals only, never everything. Team decisions
-  stay global by design and are unaffected. The `recall` tool's own
-  behaviour is unchanged.
+  resolve one and injects globals only, never everything. The predicate
+  runs inside the query, before the existing heat-ordered `LIMIT`, on both
+  backends: applied after the fetch instead, foreign-project rows above
+  the heat floor would consume the limited candidate window and starve a
+  project's own rows out of it. Team decisions stay global by design and
+  are unaffected. The `recall` tool's own behaviour is unchanged.
+  Migration consequence: a memory written before this fix with an empty
+  `directory_context` and `is_global = FALSE` stops being injected by
+  these two hooks on both backends; it stays reachable through the
+  `recall` tool and can be re-scoped or promoted to global.
 
 - **Claude and direct MCP startup honour the same saved backend (#600).** A
   saved SQLite selection was honoured by the Claude launcher while direct

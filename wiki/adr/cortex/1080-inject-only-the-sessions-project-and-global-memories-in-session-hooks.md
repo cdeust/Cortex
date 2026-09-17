@@ -23,6 +23,14 @@ an outside review of Cortex. The store already carries a
 function already scopes by it; the two hooks bypassed that column
 entirely.
 
+A first version of this fix applied the predicate after the fetch, in
+Python, over rows a heat-ordered `LIMIT` had already truncated. Review
+against a store with more out-of-project rows above the heat floor than
+the `LIMIT` allowed showed the fix's own failure mode: the foreign rows
+consumed the candidate window and the project's own row never reached the
+banner. That version is documented here only as the reason the predicate
+belongs in the query, not as the shipped design.
+
 ## Decision
 
 A memory is injected into a session only when it is global, or its
@@ -37,22 +45,44 @@ field. When neither is available the hook logs that it could not resolve
 a project root and restricts injection to global memories, never
 everything.
 
-The rule is one pure function, `memory_matches_project` in
-`mcp_server/shared/project_scope.py`, with a companion
-`resolve_project_root` and `project_ancestors`. Both hooks and both
-storage backends call it: the PostgreSQL queries fetch `directory_context`
-and `is_global` alongside their existing columns and filter the returned
-rows in Python; the SQLite store rows already carry both columns, so the
-same filter applies directly. No SQL predicate is duplicated across the
-four call sites, and no store schema or generic store method changed.
+The predicate runs inside the query, before `ORDER BY`/`LIMIT`, on both
+backends. `mcp_server/shared/project_scope.py` computes
+`project_ancestors(project_root)`, a pure ordered list from the project
+root up (empty when the root is unresolved); every query call site turns
+that list into `(is_global OR directory_context IN/ANY(...))` before its
+own limit, so the limit is spent only on candidates the caller can use.
+PostgreSQL's own `is_protected DESC, rank DESC` / `heat_base DESC`
+ordering after the predicate is unchanged. `mcp_server/infrastructure/
+pg_scope_clause.py` and `sqlite_scope_clause.py` build that fragment and
+its bind params once per backend, used by `get_hot_memories` and
+`search_fts` (both stores, an added `directory_ancestors` parameter
+defaulting to `None` for every other existing caller) and by the hooks'
+own raw SQL (`session_start._fetch_anchors`, `_fetch_hot_memories`,
+`auto_recall._recall_memories`). The PostgreSQL hook queries keep a
+post-fetch `memory_matches_project` check as a second, redundant layer;
+the SQLite path and `auto_recall._recall_memories` on PostgreSQL rely on
+the query predicate alone.
+
+Two quirks, observed in review, neither blocking: a `directory_context`
+of `"/"` normalizes to `""` in `project_ancestors`/the comparison and
+therefore matches nothing, not everything (`_normalize_path` strips the
+trailing separator and an all-separator path degrades to the empty
+string, which `project_ancestors` explicitly excludes so it can never
+appear as a match target). The comparison is case-sensitive: a
+`directory_context` recorded as `/Users/X` does not match a session
+whose root resolves to `/users/x`.
 
 ## Consequences
 
 Positive: a session under one project no longer sees another project's
-hot or protected memories. The failure mode when a project root cannot be
-resolved degrades to global-only injection instead of silent leakage.
+hot or protected memories, including when the store holds more
+out-of-project rows above the heat floor than a hook's own `LIMIT`
+allows. The failure mode when a project root cannot be resolved degrades
+to global-only injection instead of silent leakage.
 
 Negative: memories written before this fix with an empty
-`directory_context` and no `is_global` flag stop being injected by these
-two hooks until re-scoped or promoted to global; they remain reachable
-through the `recall` tool, which this change does not touch.
+`directory_context` and no `is_global` flag stop being injected by both
+hooks, on both backends, until re-scoped or promoted to global; they
+remain reachable through the `recall` tool, which this change does not
+touch. `get_hot_memories` and `search_fts` gained an optional parameter
+on both backends; every other caller passes nothing and is unaffected.

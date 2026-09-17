@@ -61,6 +61,12 @@ class TestSessionStartHook:
         ``SqliteMemoryStore`` in ``tmp_path`` and drive the SQLite banner path
         (``_sqlite_context``) in-process, asserting the seeded memory is
         injected and no PostgreSQL install guidance leaks in.
+
+        is_global=True on the seeded row (issue #604): the event below
+        carries no "cwd" and CLAUDE_PROJECT_ROOT is unset in this hermetic
+        run, so with the project-scoping predicate a non-global row with
+        an empty directory_context would not be injected -- this test
+        exercises the banner-renders-a-memory contract, not scoping.
         """
         from mcp_server.hooks import session_start
         from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
@@ -74,6 +80,7 @@ class TestSessionStartHook:
                     "heat": 1.0,
                     "is_protected": True,
                     "tags": ["_anchor", "architecture"],
+                    "is_global": True,
                 }
             )
             monkeypatch.setattr(

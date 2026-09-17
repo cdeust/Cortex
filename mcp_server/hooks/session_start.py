@@ -32,7 +32,11 @@ from mcp_server.hooks._telemetry import observe_hook
 from mcp_server.shared.freshness import provenance_suffix
 from mcp_server.shared.platform import python_executable
 from mcp_server.shared.log_rotation import methodology_log_path, open_rotating_log
-from mcp_server.shared.project_scope import memory_matches_project, resolve_project_root
+from mcp_server.shared.project_scope import (
+    memory_matches_project,
+    project_ancestors,
+    resolve_project_root,
+)
 import sqlite3
 import asyncio
 from datetime import datetime as _dt, timezone as _tz
@@ -147,7 +151,14 @@ def _fetch_anchors(conn, project_root: str | None = None) -> list[dict]:
     """Fetch anchored memories (is_protected with _anchor tag) scoped to
     project_root or global (issue #604).
 
+    The project predicate runs inside the query, before ORDER BY/LIMIT:
+    pushed to the output it would let foreign-project rows outrank and
+    starve the project's own anchors out of the LIMIT window (issue #604
+    follow-up). The post-fetch ``memory_matches_project`` check stays as
+    a defense-in-depth belt on top of the query's own suspenders.
+
     source: ADR-0498"""
+    ancestors = project_ancestors(project_root)
     try:
         rows = conn.execute(
             # source: ADR-0498
@@ -163,8 +174,9 @@ def _fetch_anchors(conn, project_root: str | None = None) -> list[dict]:
             "AND NOT (m.tags @> '[\"auto-captured\"]'::jsonb) "
             # source: ADR-0498
             "AND m.superseded_by_id IS NULL "
+            "AND (m.is_global = TRUE OR m.directory_context = ANY(%s::TEXT[])) "
             "ORDER BY effective_heat(m, NOW()) DESC LIMIT %s",
-            (int(_ANCHOR_LIMIT),),
+            (ancestors, int(_ANCHOR_LIMIT)),
         ).fetchall()
     except Exception as exc:  # noqa: BLE001 — hook boundary; failure is logged to the hook log, the banner degrades
         _log(f"anchor fetch failed (non-fatal): {exc}")
@@ -255,8 +267,15 @@ def _fetch_hot_memories(
     Tier exclusion: auto-captured tool noise and block-replica snapshots
     must not appear in the session-start banner — they poison the injected
     context with raw "# Tool: Edit" captures.
+
+    The project predicate runs inside the query, before ORDER BY/LIMIT:
+    pushed to the output it would let foreign-project rows outrank and
+    starve the project's own rows out of the LIMIT window (issue #604
+    follow-up). The post-fetch ``memory_matches_project`` check stays as
+    a defense-in-depth belt on top of the query's own suspenders.
     # contract: zetetic-team-subagents memory/contract.md §8b
     """
+    ancestors = project_ancestors(project_root)
     try:
         rows = conn.execute(
             "SELECT id, content, domain, heat_base AS heat, tags, is_global, "
@@ -273,8 +292,9 @@ def _fetch_hot_memories(
             "         OR tags @> '[\"memory-replica\"]'::jsonb) "
             # source: ADR-0498
             "AND superseded_by_id IS NULL "
+            "AND (is_global = TRUE OR directory_context = ANY(%s::TEXT[])) "
             "ORDER BY heat_base DESC LIMIT %s",
-            (float(_MIN_HEAT), int(_HOT_LIMIT + len(exclude_ids))),
+            (float(_MIN_HEAT), ancestors, int(_HOT_LIMIT + len(exclude_ids))),
         ).fetchall()
     except Exception as exc:  # noqa: BLE001 — hook boundary; failure is logged to the hook log, the banner degrades
         _log(f"hot-memory fetch failed (non-fatal): {exc}")
@@ -1088,10 +1108,19 @@ def _partition_banner_rows(
 def _sqlite_banner_rows(
     store, project_root: str | None = None
 ) -> tuple[list[dict], list[dict], dict | None]:
-    """Fetch (anchors, hot, checkpoint) from the SQLite store, tolerantly."""
+    """Fetch (anchors, hot, checkpoint) from the SQLite store, tolerantly.
+
+    The project predicate runs inside ``get_hot_memories`` itself, before
+    its own LIMIT (issue #604 follow-up): a post-fetch filter would let
+    foreign-project rows starve the project's own rows out of the
+    already-truncated pool.
+    """
     try:
         rows = store.get_hot_memories(
-            min_heat=_MIN_HEAT, limit=_HOT_LIMIT + _ANCHOR_LIMIT, heads_only=True
+            min_heat=_MIN_HEAT,
+            limit=_HOT_LIMIT + _ANCHOR_LIMIT,
+            heads_only=True,
+            directory_ancestors=project_ancestors(project_root),
         )
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"SQLite hot-memory fetch failed (non-fatal): {exc}")

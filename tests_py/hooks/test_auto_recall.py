@@ -187,73 +187,8 @@ def test_auto_recall_does_not_crash_on_short_query(_seeded_db: str) -> None:
     assert result.stdout.strip() == ""
 
 
-# ── Project scoping (issue #604) ────────────────────────────────────────
-
-
-@pytest.fixture()
-def _scope_seeded_db():
-    """Four rows exercising every branch of memory_matches_project."""
-    from mcp_server.infrastructure.pg_store import PgMemoryStore
-
-    PgMemoryStore(database_url=_TEST_DB_URL)
-
-    import psycopg
-
-    conn = psycopg.connect(_TEST_DB_URL, autocommit=True)
-    try:
-        conn.execute("DELETE FROM memories WHERE content LIKE %s", ("SCOPETEST%",))
-        rows = [
-            ("SCOPETEST belongs to another project", "/other/project", False),
-            ("SCOPETEST is a global decision", "", True),
-            ("SCOPETEST lives at an ancestor of the session cwd", _SEEDED_CWD, False),
-            ("SCOPETEST has an empty directory_context", "", False),
-        ]
-        for content, directory_context, is_global in rows:
-            conn.execute(
-                "INSERT INTO memories (content, heat_base, heat_base_set_at, "
-                "is_benchmark, plasticity, no_decay, directory_context, is_global) "
-                "VALUES (%s, 0.9, NOW(), FALSE, 1.0, FALSE, %s, %s)",
-                (content, directory_context, is_global),
-            )
-    finally:
-        conn.close()
-
-    yield _TEST_DB_URL
-
-    try:
-        conn = psycopg.connect(_TEST_DB_URL, autocommit=True)
-        conn.execute("DELETE FROM memories WHERE content LIKE %s", ("SCOPETEST%",))
-        conn.close()
-    except Exception:
-        pass
-
-
-def test_auto_recall_drops_other_project_row(_scope_seeded_db: str) -> None:
-    result = _run_hook("belongs to another project", _scope_seeded_db)
-    assert result.returncode == 0
-    assert "belongs to another project" not in result.stdout.lower()
-
-
-def test_auto_recall_keeps_global_row(_scope_seeded_db: str) -> None:
-    result = _run_hook("is a global decision", _scope_seeded_db)
-    assert result.returncode == 0
-    assert "global decision" in result.stdout.lower()
-
-
-def test_auto_recall_keeps_ancestor_row(_scope_seeded_db: str) -> None:
-    """The seeded row's directory_context (_SEEDED_CWD) is an ancestor of
-    the subdirectory session cwd this run reports."""
-    result = _run_hook(
-        "lives at an ancestor of the session cwd",
-        _scope_seeded_db,
-        cwd_override=f"{_SEEDED_CWD}/subdir",
-    )
-    assert result.returncode == 0
-    assert "ancestor of the session cwd" in result.stdout.lower()
-
-
-def test_auto_recall_drops_empty_directory_context_row(_scope_seeded_db: str) -> None:
-    """An empty directory_context is not a wildcard for every project."""
-    result = _run_hook("has an empty directory_context", _scope_seeded_db)
-    assert result.returncode == 0
-    assert "empty directory_context" not in result.stdout.lower()
+# Project-scoping tests (issue #604), including the LIMIT-starvation
+# regression, live in test_auto_recall_scope.py (craftsmanship file-size
+# split): they share this file's _run_hook/_SEEDED_CWD shape but exercise
+# the project predicate itself rather than the FTS/column-shape contract
+# this file covers.

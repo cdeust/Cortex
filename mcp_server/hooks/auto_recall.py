@@ -50,7 +50,7 @@ from mcp_server.handlers.injection_receipts import (
 )
 from mcp_server.hooks._telemetry import observe_hook
 from mcp_server.shared.freshness import provenance_suffix
-from mcp_server.shared.project_scope import memory_matches_project, resolve_project_root
+from mcp_server.shared.project_scope import project_ancestors, resolve_project_root
 
 _LOG_PREFIX = "[cortex-auto-recall]"
 _DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://localhost:5432/cortex")
@@ -128,12 +128,13 @@ def _recall_memories(conn, query: str, project_root: str | None = None) -> list[
     important memories.
 
     Each result keeps the memory ``id`` — the injection receipt (T2)
-    records exactly which memories entered the context. Rows outside
-    ``project_root`` (and not global) are dropped after the fetch, the
-    same ``memory_matches_project`` rule the SQLite path and session_start
-    apply (issue #604).
+    records exactly which memories entered the context. The project
+    predicate runs inside the query, before ORDER BY/LIMIT: pushed to the
+    output it would let foreign-project rows outrank and starve the
+    project's own rows out of the LIMIT window (issue #604 follow-up).
     """
     results = []
+    ancestors = project_ancestors(project_root)
 
     # source: ADR-0485
     try:
@@ -145,7 +146,6 @@ def _recall_memories(conn, query: str, project_root: str | None = None) -> list[
                    effective_heat(m, NOW()) AS heat,
                    m.domain, m.agent_context, m.is_protected,
                    m.created_at, m.source_attribution, m.is_stale,
-                   m.directory_context, m.is_global,
                    ts_rank_cd(m.content_tsv, q) AS rank
             FROM memories m
                  JOIN current_memories cm ON cm.id = m.id,
@@ -154,18 +154,15 @@ def _recall_memories(conn, query: str, project_root: str | None = None) -> list[
               AND effective_heat(m, NOW()) >= %s
               AND NOT m.is_benchmark
               AND m.superseded_by_id IS NULL
+              AND (m.is_global = TRUE OR m.directory_context = ANY(%s::TEXT[]))
             ORDER BY m.is_protected DESC, rank DESC, effective_heat(m, NOW()) DESC
             LIMIT %s
             """
             ),
-            (query[:200], _MIN_HEAT, _MAX_MEMORIES + 2),
+            (query[:200], _MIN_HEAT, ancestors, _MAX_MEMORIES + 2),
         ).fetchall()
 
         for r in rows:
-            if not memory_matches_project(
-                r.get("directory_context"), bool(r.get("is_global")), project_root
-            ):
-                continue
             results.append(
                 {
                     "id": r["id"],
@@ -213,46 +210,51 @@ def _fts_query_from_prompt(query: str) -> str:
     return " OR ".join(f'"{t}"' for t in terms)
 
 
+def _sqlite_result_entry(memory_id: int, m: dict, heat: float) -> dict:
+    """One ``_recall_memories_sqlite`` result row, in the PG-path shape."""
+    return {
+        "id": memory_id,
+        "content": m.get("content", ""),
+        "heat": heat,
+        "domain": m.get("domain", "") or "",
+        "agent": m.get("agent_context", "") or "",
+        "protected": bool(m.get("is_protected")),
+        "created_at": m.get("created_at"),
+        "source_attribution": m.get("source_attribution", ""),
+        "is_stale": bool(m.get("is_stale")),
+    }
+
+
 def _recall_memories_sqlite(
     store, query: str, project_root: str | None = None
 ) -> list[dict]:
     """FTS-based recall through the SQLite store — no embedding load.
 
     Mirror of the PG ``_recall_memories`` contract: FTS prefilter +
-    heat floor, protected-first ordering, benchmark rows excluded, and
-    the same ``memory_matches_project`` scoping (issue #604).
-    ``search_fts`` already restricts to supersession chain heads and
-    non-stale rows (current_memories join) and returns [] on any FTS5
-    error.
+    heat floor, protected-first ordering, benchmark rows excluded. The
+    project predicate runs inside ``search_fts`` itself, before its own
+    LIMIT (issue #604 follow-up) -- a post-fetch filter here would let
+    foreign-project rows starve the project's own rows out of the
+    already-truncated pool. ``search_fts`` already restricts to
+    supersession chain heads and non-stale rows (current_memories join)
+    and returns [] on any FTS5 error.
     """
     fts_query = _fts_query_from_prompt(query[:200])
     if not fts_query:
         return []
+    ancestors = project_ancestors(project_root)
+    hits = store.search_fts(
+        fts_query, limit=_MAX_MEMORIES + 2, directory_ancestors=ancestors
+    )
     results = []
-    for memory_id, _score in store.search_fts(fts_query, limit=_MAX_MEMORIES + 2):
+    for memory_id, _score in hits:
         m = store.get_memory(memory_id)
         if not m or m.get("is_benchmark"):
-            continue
-        if not memory_matches_project(
-            m.get("directory_context"), bool(m.get("is_global")), project_root
-        ):
             continue
         heat = float(m.get("heat") or 0.0)
         if heat < _MIN_HEAT:
             continue
-        results.append(
-            {
-                "id": memory_id,
-                "content": m.get("content", ""),
-                "heat": heat,
-                "domain": m.get("domain", "") or "",
-                "agent": m.get("agent_context", "") or "",
-                "protected": bool(m.get("is_protected")),
-                "created_at": m.get("created_at"),
-                "source_attribution": m.get("source_attribution", ""),
-                "is_stale": bool(m.get("is_stale")),
-            }
-        )
+        results.append(_sqlite_result_entry(memory_id, m, heat))
     # source: ADR-0485
     results.sort(key=lambda m: not m["protected"])
     return results[:_MAX_MEMORIES]

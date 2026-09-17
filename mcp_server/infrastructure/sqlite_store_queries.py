@@ -6,6 +6,7 @@ import json
 import sqlite3
 from typing import Any, Iterator
 from mcp_server.infrastructure.sqlite_compat import PsycopgCompatConnection
+from mcp_server.infrastructure.sqlite_scope_clause import directory_scope_clause
 from mcp_server.observability import silent_failure
 
 
@@ -63,23 +64,31 @@ class SqliteQueryMixin:
         limit: int = 20,
         include_benchmarks: bool = False,
         heads_only: bool = False,
+        directory_ancestors: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Mirror of PgQueryMixin.get_hot_memories — heads_only routes
         through the current_memories view (supersession chain heads only).
+
+        directory_ancestors, when not None, restricts rows to is_global or
+        an ancestor directory_context, applied before ORDER BY/LIMIT so
+        the limit is never spent on rows the caller cannot use (issue
+        #604 follow-up).
         """
         src = "current_memories" if heads_only else "memories"
+        scope_filter, scope_params = directory_scope_clause(directory_ancestors)
         if include_benchmarks:
             rows = self._conn.execute(
-                f"SELECT * FROM {src} WHERE heat_base >= ? "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
-                f"ORDER BY heat_base DESC LIMIT ?",
-                (min_heat, limit),
+                f"SELECT * FROM {src} WHERE heat_base >= ? {scope_filter}"  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
+                "ORDER BY heat_base DESC LIMIT ?",
+                (min_heat, *scope_params, limit),
             ).fetchall()
         else:
             rows = self._conn.execute(
                 f"SELECT * FROM {src} WHERE heat_base >= ? "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
                 "AND NOT COALESCE(is_benchmark, 0) "
+                f"{scope_filter}"
                 "ORDER BY heat_base DESC LIMIT ?",
-                (min_heat, limit),
+                (min_heat, *scope_params, limit),
             ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]
 

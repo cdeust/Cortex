@@ -16,6 +16,7 @@ import numpy as np
 from mcp_server.observability import silent_failure
 from mcp_server.shared.code_tokenize import expand_fts_query as _expand_fts_query
 from mcp_server.infrastructure.embedding_engine import current_embedding_mode
+from mcp_server.infrastructure.sqlite_scope_clause import directory_scope_clause
 
 
 def _decode_tags(raw: Any) -> list:
@@ -317,19 +318,33 @@ class SqliteSearchMixin:
             )
         return results
 
-    def search_fts(self, query: str, limit: int = 20) -> list[tuple[int, float]]:
+    def search_fts(
+        self,
+        query: str,
+        limit: int = 20,
+        directory_ancestors: list[str] | None = None,
+    ) -> list[tuple[int, float]]:
         """Full-text search via FTS5. Returns (memory_id, score) pairs.
+
+        directory_ancestors, when not None, restricts rows to is_global or
+        an ancestor directory_context, applied before ORDER BY/LIMIT so
+        the limit is never spent on rows the caller cannot use (issue
+        #604 follow-up).
 
         source: ADR-0616"""
         # source: ADR-0616
+        scope_filter, scope_params = directory_scope_clause(
+            directory_ancestors, column_prefix="m."
+        )
         try:
             rows = self._conn.execute(
-                "SELECT memories_fts.rowid AS rowid, memories_fts.rank AS rank "
+                "SELECT memories_fts.rowid AS rowid, memories_fts.rank AS rank "  # noqa: S608 — scope_filter is a fixed in-code fragment from directory_scope_clause; values are bound parameters (docs/ASSURANCE-CASE.md §5)
                 "FROM memories_fts "
                 "JOIN current_memories m ON m.id = memories_fts.rowid "
                 "WHERE memories_fts MATCH ? AND NOT m.is_stale "
+                f"{scope_filter}"
                 "ORDER BY memories_fts.rank LIMIT ?",
-                (query, limit),
+                (query, *scope_params, limit),
             ).fetchall()
             return [(r["rowid"], -r["rank"]) for r in rows]
         except sqlite3.Error:
