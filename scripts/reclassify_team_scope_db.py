@@ -7,7 +7,6 @@ import os
 from pathlib import Path
 import sqlite3
 import subprocess
-from typing import Self
 
 
 def verify_backup(path: Path | None) -> None:
@@ -39,7 +38,7 @@ class ScopeDatabase:
             self.connection.row_factory = sqlite3.Row
         self.columns: set[str] = set()
 
-    def __enter__(self) -> Self:
+    def __enter__(self) -> ScopeDatabase:
         if self.postgres:
             self.connection.execute("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
             rows = self.connection.execute(
