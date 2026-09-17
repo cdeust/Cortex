@@ -24,6 +24,7 @@ the zetetic implementation standard). Read it before any non-trivial change.
 
 - Layers: `server → handlers → core ← shared`, `infrastructure → shared`; handlers are the
   only composition roots.
-- Every git worktree lives at `.claude/worktrees/<name>/`, never outside the repo.
+- Every git worktree lives at `.claude/worktrees/<name>/` (`.Codex/worktrees/<name>/` for
+  Codex), never outside the repo.
 - No source, no implementation; benchmark before commit; no silent fallbacks or
   compatibility shims.

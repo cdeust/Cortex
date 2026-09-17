@@ -169,8 +169,18 @@ class TestWorktreeLocations:
         assert check.ok is True
         assert check.optional is True
 
-    def test_not_a_git_checkout_warns(self, tmp_path, monkeypatch):
+    def test_not_a_git_checkout_passes(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)  # plain dir, no .git
+        check = _worktree_locations()
+        assert check.ok is True
+        assert check.detail == "not a git checkout"
+        assert check.optional is True
+
+    def test_git_unavailable_in_a_checkout_warns(self, real_git_repo, monkeypatch):
+        monkeypatch.chdir(real_git_repo)
+        monkeypatch.setattr(
+            "mcp_server.doctor.run_with_hard_timeout", lambda *a, **k: None
+        )
         check = _worktree_locations()
         assert check.ok is False
         assert "Unable to inspect" in check.detail

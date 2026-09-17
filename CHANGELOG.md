@@ -101,6 +101,11 @@ adheres to [Semantic Versioning](https://semver.org/).
   Outside worktrees produce a warning without changing the exit code.
   NUL-delimited Git output preserves newlines and spaces in their paths.
   Failed Git invocations produce an optional warning with a retry command.
+  A project with no Git repository at all is an ordinary condition, not a
+  failure to inspect, so a stdlib `.git` walk now tells that case apart
+  from Git being unavailable or timing out before the check ever shells
+  out: `ok True, detail "not a git checkout"` on the former, the warning
+  kept for the latter.
 
 - **Procedural skills are stored on the default backend too (#596).** The
   `procedural_skills` table existed only on PostgreSQL, so on SQLite the

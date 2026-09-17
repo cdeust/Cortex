@@ -29,3 +29,5 @@ Positive: the owner sees worktrees outside both host directories via 'python -m 
 Git porcelain uses NUL record delimiters with `-z`; parsing those delimiters preserves literal newlines and trailing spaces in paths (git-worktree(1), Porcelain Format). A real-Git regression verifies that an outside worktree with both characters is reported by its exact path.
 
 A failed Git invocation produces an optional WARN that lists the possible causes and provides the Git command to retry. The existing subprocess helper returns no failure category, so the diagnostic does not claim a specific cause. Successful empty output is reported as no registered worktrees.
+
+Cortex is an MCP server whose working directory is whatever project the host opened, so a project with no Git repository is an ordinary condition, not a failure to inspect. The check tells the two cases apart with a stdlib walk from the cwd for a `.git` entry — the same discovery Git itself performs — before ever invoking `git worktree list`: no `.git` anywhere up the tree reports `ok True, detail "not a git checkout"`; a `.git` present but Git missing from PATH or the listing timing out keeps the optional WARN.

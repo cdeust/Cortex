@@ -327,6 +327,30 @@ def _worktree_classification(entries: list[dict[str, object]]) -> tuple[bool, st
     return False, f"outside {allowed}: {', '.join(outside)}"
 
 
+def _is_git_checkout(start: Path) -> bool:
+    """True iff ``start`` or an ancestor holds a ``.git`` entry — the same
+    upward walk Git itself performs to discover a repository.
+
+    precondition: none.
+    postcondition: returns True on the first ancestor (inclusive) carrying
+    a ``.git`` path, file or directory (a linked worktree's ``.git`` is a
+    file, not a directory); False once the filesystem root is reached
+    without finding one. No subprocess: this only ever needs to tell "no
+    repository here" apart from "git couldn't answer", which a failed
+    subprocess call can't distinguish on its own.
+
+    source: git-rev-parse(1) "repository discovery" (upward walk from cwd
+    for a `.git` entry, halting at a filesystem or ceiling boundary)"""
+    current = start.resolve()
+    while True:
+        if (current / ".git").exists():
+            return True
+        parent = current.parent
+        if parent == current:
+            return False
+        current = parent
+
+
 def _worktree_locations() -> Check:
     """Optional: WARN when a registered worktree lives outside
     the host-specific ``.claude/worktrees`` or ``.Codex/worktrees``.
@@ -334,15 +358,24 @@ def _worktree_locations() -> Check:
     never moves the worktree, never fails doctor's exit code
     (``optional=True``).
 
+    postcondition: a project that is not a Git checkout is an ordinary
+    condition for an MCP server whose cwd is whatever the host opened, not
+    a failed inspection — ``ok`` is True with detail "not a git checkout".
+    The WARN (``ok`` False) is reserved for the cases Git itself cannot
+    answer for: the binary missing from PATH, or the listing timing out.
+
     source: ADR-1079 (rule reported: docs/agent-guidance.md, What NOT to do)"""
+    if not _is_git_checkout(Path.cwd()):
+        return Check(
+            "worktree locations (optional)", True, "not a git checkout", optional=True
+        )
     entries = _worktree_list()
     if entries is None:
         return Check(
             "worktree locations (optional)",
             False,
-            "Unable to inspect worktree locations: not a Git checkout, "
-            "Git unavailable, or command failed.",
-            "Run from a Git checkout with Git available; retry "
+            "Unable to inspect worktree locations: Git unavailable or command failed.",
+            "Install Git and ensure it's on PATH; retry "
             "git worktree list --porcelain -z.",
             optional=True,
         )

@@ -10,6 +10,12 @@ from mcp_server.handlers import check_setup
 
 @pytest.mark.parametrize("output", [None, "", "HEAD abc\0\0"])
 def test_unavailable_or_empty_listing_contract(monkeypatch, output):
+    # This test runs inside the real repository checkout, so the `.git`
+    # probe in `_worktree_locations` passes and a mocked `None` here
+    # exercises the "Git unavailable or command failed" WARN, not the
+    # "not a git checkout" pass — that case is covered separately by
+    # test_not_a_git_checkout_passes / test_git_unavailable_in_a_checkout_warns
+    # in tests_py/test_doctor.py.
     monkeypatch.setattr(doctor, "run_with_hard_timeout", lambda *a, **k: output)
     check = doctor._worktree_locations()
     assert check.optional
@@ -17,7 +23,7 @@ def test_unavailable_or_empty_listing_contract(monkeypatch, output):
         assert doctor._worktree_list() is None
         assert check.ok is False
         assert "Unable to inspect worktree locations" in check.detail
-        assert "not a Git checkout, Git unavailable, or command failed" in check.detail
+        assert "Git unavailable or command failed" in check.detail
         assert "git worktree list --porcelain -z" in check.fix
     else:
         assert doctor._worktree_list() == []
