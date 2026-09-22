@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [4.23.3] - 2026-09-22
+
+### Fixed
+
+- Preserve the explicitly attached project directory when priming memories from
+  file reads through a symlink alias. Previously, a memory stored under a macOS
+  `/var/folders` path was missed because priming queried `/private/var/folders`.
+  Project scope now follows the shared predicate; canonical paths remain confined
+  to cooldown keys. Both storage backends retain foreign-project isolation (#629).
+
 ## [4.23.2] - 2026-09-22
 
 ### Fixed

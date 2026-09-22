@@ -108,3 +108,43 @@ def test_failed_statement_rolls_back_without_closing_store():
     conn.rollback.assert_called_once()
     conn.commit.assert_not_called()
     conn.close.assert_not_called()
+
+
+@pytest.mark.parametrize("delayed", [False, True])
+def test_alias_project_read_preserves_stored_scope(tmp_path, monkeypatch, delayed):
+    """Issue #629: raw remember directories remain the SQL scope, including resume."""
+    from mcp_server.hooks import preemptive_context as hook
+
+    real = tmp_path / "real"
+    real.mkdir()
+    alias = tmp_path / "alias"
+    alias.symlink_to(real, target_is_directory=True)
+    (real / "cue.py").write_text("cue\n")
+    monkeypatch.delenv("CLAUDE_PROJECT_ROOT", raising=False)
+    monkeypatch.setattr(hook, "_COOLDOWN_FILE", tmp_path / "cooldown.json")
+    store = get_shared_store()
+    local = _insert(store, "cue.py", directory=str(alias))
+    foreign = _insert(store, "cue.py", directory=str(tmp_path / "foreign"))
+    event = {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "exec_command" if delayed else "Bash",
+        "session_id": "alias-session",
+        "cwd": str(alias),
+        "tool_input": {"command": "cat cue.py"},
+        "tool_response": {"session_id": 23} if delayed else "cue\n",
+    }
+    hook.process_event(event)
+    if delayed:
+        assert _rows(store)[local]["heat_base"] == 0.5
+        hook.process_event(
+            {
+                **event,
+                "tool_name": "write_stdin",
+                "cwd": str(tmp_path / "foreign"),
+                "tool_input": {"session_id": 23, "chars": ""},
+                "tool_response": {"exit_code": 0},
+            }
+        )
+    rows = _rows(store)
+    assert rows[local]["heat_base"] == pytest.approx(0.6)
+    assert rows[foreign]["heat_base"] == 0.5

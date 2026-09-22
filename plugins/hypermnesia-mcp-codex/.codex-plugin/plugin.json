@@ -1,6 +1,6 @@
 {
   "name": "hypermnesia-mcp-codex",
-  "version": "4.23.2",
+  "version": "4.23.3",
   "description": "Cortex persistent local-first memory for Codex: the complete tool profile and the same 11 lifecycle hooks the Claude Code plugin installs.",
   "author": {
     "name": "Clement Deust",

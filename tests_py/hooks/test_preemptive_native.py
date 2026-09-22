@@ -27,3 +27,14 @@ def test_native_shell_reads_prime_exact_project_path(tmp_path, monkeypatch, comm
     with patch.object(hook, "_prime_file_memories", return_value=1) as prime:
         hook.process_event(event)
     prime.assert_called_once_with(str(target), str(tmp_path))
+
+
+def test_project_aliases_share_cooldown_key(tmp_path):
+    """Issue #629: scope stays lexical while cooldown recognizes one real project."""
+    real = tmp_path / "real"
+    real.mkdir()
+    alias = tmp_path / "alias"
+    alias.symlink_to(real, target_is_directory=True)
+    path = str(real / "cue.py")
+    assert hook._cooldown_key(path, str(alias)) == hook._cooldown_key(path, str(real))
+    assert hook._cooldown_key(path, None) != hook._cooldown_key(path, str(real))
