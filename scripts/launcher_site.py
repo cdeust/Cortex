@@ -102,9 +102,9 @@ def isolate_deps(deps_dir: str) -> None:
     0 unless a caller had already placed it elsewhere; its ``.pth`` files
     have been processed, so the directories they name (pywin32's
     ``win32``, ``win32/lib``, ``pythonwin``) are importable; and no
-    ``sys.path`` entry points at the user site-packages directory any
-    more. A ``.pth`` line that raises is reported by ``site`` on stderr
-    rather than propagating.
+    ``sys.path`` entry points at the user site-packages directory or at
+    anything under it any more. A ``.pth`` line that raises is reported by
+    ``site`` on stderr rather than propagating.
 
     The insert belongs here rather than at each call site: the two
     operations are only correct in this order (``site.addsitedir``
