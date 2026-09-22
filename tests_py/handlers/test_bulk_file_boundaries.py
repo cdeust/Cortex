@@ -10,6 +10,7 @@ from unittest.mock import patch
 from mcp_server.core import wiki_sync
 from mcp_server.handlers import codebase_analyze as codebase
 from mcp_server.handlers import remember, remember_bulk
+from mcp_server.shared.wiki_page_candidate import PageCandidate
 from tests_py.handlers._bulk_file_fakes import analysis, file_scenario
 from tests_py.handlers._remember_bulk_fakes import harness
 
@@ -121,11 +122,13 @@ class FileBoundaries(unittest.TestCase):
         for audit_tag in ("seeded", "codebase", "imported"):
             self.assertIsNone(
                 wiki_sync.build_from_memory(
-                    memory_id=1,
-                    content=content,
-                    tags=[audit_tag, "adr"],
-                    memory_source="",
-                    domain="fixture",
+                    PageCandidate(
+                        memory_id=1,
+                        content=content,
+                        tags=[audit_tag, "adr"],
+                        memory_source="",
+                        domain="fixture",
+                    )
                 )
             )
 

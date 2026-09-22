@@ -26,11 +26,11 @@ import pytest
 from mcp_server.core import wiki_sync
 from mcp_server.handlers import remember, wiki_write
 from mcp_server.shared.wiki_layout import PAGE_KINDS
+from mcp_server.shared.wiki_page_candidate import PageCandidate
 from mcp_server.shared.wiki_pointer import (
     POINTER_CONTENT_MAX_CHARS,
     is_pointer_source,
     pointer_source,
-    truncate_on_word_boundary,
 )
 
 # The authored page from the report, trimmed to the shape that matters:
@@ -219,30 +219,60 @@ async def test_extract_skips_a_pointer_named_explicitly(sqlite_store):
     assert out["memories_processed"] == 0
 
 
+@pytest.mark.asyncio
+async def test_extract_skips_a_pointer_whose_origin_is_padded(sqlite_store):
+    """The SQL pre-filter's LIKE cannot see a leading space. Python can.
+
+    Two enforcement points that disagree about one input are two
+    enforcement points, so ``is_pointer_source`` decides on the rows the
+    query returns and the LIKE clause only narrows them. Without that,
+    a ``source`` a migration or a hand-written row padded would slip
+    past door 2 while door 1 refused it.
+    """
+    from mcp_server.handlers.wiki_extract import handler as extract
+
+    padded_id = sqlite_store.insert_memory(
+        {
+            "content": _AUTHORED_PAGE,
+            "domain": "lazarus",
+            "source": f" {pointer_source(_AUTHORED_PATH)}",
+        }
+    )
+
+    out = await extract({"limit": 50})
+    assert out.get("errors") == []
+
+    with sqlite_store._conn.cursor() as cur:
+        cur.execute("SELECT DISTINCT memory_id FROM wiki.claim_events")
+        seen = {r["memory_id"] for r in cur.fetchall()}
+
+    assert padded_id not in seen
+
+
+def test_both_doors_agree_on_the_padded_origin(sqlite_store):
+    """Door 1 refuses it too, so the two cannot diverge on this input."""
+    padded = f" {pointer_source(_AUTHORED_PATH)}"
+
+    assert is_pointer_source(padded)
+    assert (
+        wiki_sync.build_from_memory(
+            PageCandidate(
+                memory_id=82,
+                content=_AUTHORED_PAGE,
+                memory_source=padded,
+                tags=list(_AUTHORED_TAGS),
+                domain="lazarus",
+            )
+        )
+        is None
+    )
+
+
 # ── Defect 4: the mid-word cut ───────────────────────────────────────────
-
-
-def test_truncate_keeps_whole_words():
-    text = "la règle qui garde les couches séparées " * 40
-    cut = truncate_on_word_boundary(text, 100)
-
-    assert len(cut) <= 100
-    assert cut.endswith("…")
-    assert not cut[:-1].endswith(" ")
-    # The last word is whole: it also occurs, whole, in the original.
-    assert f"{cut[:-1].rsplit(' ', 1)[-1]} " in text
-
-
-def test_truncate_leaves_short_text_untouched():
-    assert truncate_on_word_boundary("short", 100) == "short"
-
-
-def test_truncate_still_bounds_a_single_long_token():
-    token = "x" * 300
-    cut = truncate_on_word_boundary(token, 50)
-
-    assert len(cut) <= 50
-    assert cut.endswith("…")
+#
+# The helper's own edges live in tests_py/shared/test_wiki_pointer.py;
+# what belongs here is that wiki_write actually stores a boundary-safe
+# prefix.
 
 
 @pytest.mark.asyncio

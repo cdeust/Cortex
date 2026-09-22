@@ -31,6 +31,7 @@ from unittest.mock import patch
 import pytest
 
 from mcp_server.handlers import wiki_memory_sync
+from mcp_server.shared.wiki_page_candidate import PageCandidate
 from mcp_server.handlers.remember import handler as remember_handler
 
 
@@ -51,11 +52,13 @@ class TestSyncMemoryStrict:
                 with pytest.raises(OSError, match="disk full"):
                     wiki_memory_sync.sync_memory_strict(
                         tmp_path,
-                        memory_id=1,
-                        content="some decision",
-                        tags=["decision"],
-                        memory_source="",
-                        domain="cortex",
+                        PageCandidate(
+                            memory_id=1,
+                            content="some decision",
+                            tags=["decision"],
+                            memory_source="",
+                            domain="cortex",
+                        ),
                     )
 
     def test_returns_none_on_classifier_rejection(self, tmp_path):
@@ -66,11 +69,13 @@ class TestSyncMemoryStrict:
         ):
             result = wiki_memory_sync.sync_memory_strict(
                 tmp_path,
-                memory_id=1,
-                content="noise",
-                tags=[],
-                memory_source="",
-                domain="",
+                PageCandidate(
+                    memory_id=1,
+                    content="noise",
+                    tags=[],
+                    memory_source="",
+                    domain="",
+                ),
             )
             assert result is None
 
@@ -82,11 +87,13 @@ class TestSyncMemoryStrict:
         ):
             result = wiki_memory_sync.sync_memory_strict(
                 tmp_path,
-                memory_id=1,
-                content="decision",
-                tags=["decision"],
-                memory_source="",
-                domain="cortex",
+                PageCandidate(
+                    memory_id=1,
+                    content="decision",
+                    tags=["decision"],
+                    memory_source="",
+                    domain="cortex",
+                ),
             )
             assert result == "notes/ok.md"
             assert (tmp_path / "notes" / "ok.md").exists()
@@ -107,11 +114,13 @@ class TestSyncMemoryLegacyWrapper:
                 # Legacy wrapper swallows → None.
                 result = wiki_memory_sync.sync_memory(
                     tmp_path,
-                    memory_id=1,
-                    content="some decision",
-                    tags=["decision"],
-                    memory_source="",
-                    domain="cortex",
+                    PageCandidate(
+                        memory_id=1,
+                        content="some decision",
+                        tags=["decision"],
+                        memory_source="",
+                        domain="cortex",
+                    ),
                 )
                 assert result is None
 

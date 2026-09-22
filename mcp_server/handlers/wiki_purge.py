@@ -9,36 +9,24 @@ source: ADR-0465"""
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from mcp_server.core.wiki_classifier import classify_memory
 from mcp_server.core.wiki_stub_detector import (
     DEFAULT_SHALLOW_THRESHOLD,
     DEFAULT_STUB_THRESHOLD,
-    is_shallow,
-    is_stub,
     placeholder_count,
-    stub_score,
 )
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.shared.wiki_layout import PAGE_KINDS
-from mcp_server.shared.yaml_parser import parse_yaml_frontmatter
 from mcp_server.handlers._tool_meta import DESTRUCTIVE
-
-# Directories that hold authored page-kind content. Derived from the
-# path contract in ``shared.wiki_layout`` rather than re-listed here:
-# a hand-kept copy had drifted and silently skipped every page under a
-# kind it had never heard of — ``rfc`` among them, which the memory→page
-# pass emits (issue #622, the ADR-1077 hardcoded-copy pattern).
-# Anything else under the wiki root (_kinds, _rules, _views,
-# _bibliography, _triggers, .generated) is deliberately left alone.
-_PAGE_DIRS: frozenset[str] = frozenset(PAGE_KINDS)
-
-# A page lives at ``<kind>/.../<file>.md``; a bare ``README.md`` at the
-# root is not a page and has no kind directory to classify it by.
-# source: ADR-0682
-_MIN_PAGE_PARTS = 2
+from mcp_server.handlers.wiki_purge_scan import (
+    PAGE_DIRS,
+    RejectAxes,
+    candidate_pages,
+    evaluate_page,
+)
 
 # ── Schema ─────────────────────────────────────────────────────────────
 
@@ -62,8 +50,10 @@ schema = {
         "apply=true to actually delete. Latency ~200-500ms. Returns "
         "{kept, purged, purged_paths, purged_reasons, dry_run} plus the "
         "scan accounting — {wiki_pages_total, scanned, unscanned, "
-        "unrecognised_dirs} — so a caller can tell a full sweep from one "
-        "that reached only part of the wiki."
+        "errored, unrecognised_dirs} — so a caller can tell a full sweep "
+        "from one that reached only part of the wiki. A page that failed "
+        "to read counts as scanned, not unscanned: an I/O fault shows up "
+        "in `errored`, never as a coverage gap."
     ),
     "inputSchema": {
         "type": "object",
@@ -157,185 +147,143 @@ schema = {
 }
 
 
-def _page_census(root: Path) -> tuple[int, list[str]]:
-    """Census the tree: how many real pages exist, and where drift sits.
+@dataclass
+class _Sweep:
+    """Running tally of one purge pass over the pages in scope."""
 
-    Returns ``(pages_total, unrecognised_dirs)``. ``pages_total`` counts
-    every ``.md`` under a top-level directory this handler recognises as
-    a page kind — the denominator ``scanned`` has to be read against.
-    ``unrecognised_dirs`` names the top-level directories that hold
-    markdown yet are neither a page kind nor a reserved ``_``/``.``
-    bucket: pages no purge can ever reach, and the signal that the path
-    contract has grown a kind this handler does not know (issue #622).
-    """
-    pages_total = 0
-    unrecognised: set[str] = set()
-    for md in root.rglob("*.md"):
-        parts = md.relative_to(root).parts
-        if len(parts) < _MIN_PAGE_PARTS:
-            continue
-        top = parts[0]
-        if top in _PAGE_DIRS:
-            pages_total += 1
-        elif not top.startswith((".", "_")):
-            unrecognised.add(top)
-    return pages_total, sorted(unrecognised)
+    apply: bool
+    max_purges: int | None
+    kept: list[str] = field(default_factory=list)
+    purged: list[str] = field(default_factory=list)
+    deferred: list[str] = field(default_factory=list)
+    errored: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+    reasons: dict[str, int] = field(
+        default_factory=lambda: {"stub": 0, "shallow": 0, "classifier_reject": 0}
+    )
+    placeholder_lines: int = 0
+    cap_reached: bool = False
+
+    @property
+    def scanned(self) -> int:
+        """Pages this pass actually looked at, failures included.
+
+        A page that raised was visited, not missed; folding it into
+        ``unscanned`` would hide an I/O fault inside the coverage gap
+        that number exists to expose (issue #622).
+        """
+        return (
+            len(self.kept) + len(self.purged) + len(self.deferred) + len(self.errored)
+        )
+
+    def _reject(self, md: Path, rel: str, reason: str) -> None:
+        # Cap applies only when ``apply`` is True — dry-run reports the
+        # full count so operators see the actual backlog.
+        if self.apply and self.max_purges is not None:
+            if len(self.purged) >= self.max_purges:
+                self.deferred.append(rel)
+                self.cap_reached = True
+                return
+        self.purged.append(rel)
+        self.reasons[reason] = self.reasons.get(reason, 0) + 1
+        if reason == "stub":
+            self.placeholder_lines += placeholder_count(
+                md.read_text(encoding="utf-8", errors="ignore")
+            )
+        if self.apply:
+            md.unlink()
+
+    def visit(self, md: Path, rel: str, axes: RejectAxes) -> None:
+        """Evaluate one in-scope page and record what happened to it."""
+        try:
+            _kind, _tags, reason, _score = evaluate_page(md, axes)
+            if reason is None:
+                self.kept.append(rel)
+            else:
+                self._reject(md, rel, reason)
+        except (OSError, ValueError) as exc:
+            self.errored.append(rel)
+            self.errors.append(f"{rel}: {exc}")
 
 
-def _parse_tags(raw: Any) -> list[str]:
-    """Extract a list of tag strings from frontmatter value (list or CSV)."""
-    if isinstance(raw, list):
-        return [str(t) for t in raw]
-    if not isinstance(raw, str):
-        return []
-    stripped = raw.strip().strip("[]")
-    return [t.strip().strip("'\"") for t in stripped.split(",") if t.strip()]
+def _prune_empty_dirs(root: Path) -> None:
+    """Drop directories an apply emptied so the tree stays tidy."""
+    for dir_path in sorted(root.rglob("*"), key=lambda p: -len(p.parts)):
+        if (
+            dir_path.is_dir()
+            and not any(dir_path.iterdir())
+            and not dir_path.name.startswith("_")
+            and dir_path != root
+        ):
+            try:
+                dir_path.rmdir()
+            except OSError:
+                pass
 
 
-def _evaluate_page(
-    md_path: Path,
-    *,
-    check_classifier: bool,
-    check_stub: bool,
-    check_shallow: bool,
-    stub_threshold: float,
-    shallow_threshold: int,
-) -> tuple[str | None, list[str], str | None, float]:
-    """Evaluate a page against the configured reject axes.
+def _axes_from_args(args: dict[str, Any]) -> RejectAxes:
+    return RejectAxes(
+        check_stub=bool(args.get("purge_stubs", True)),
+        check_shallow=bool(args.get("purge_shallow", True)),
+        check_classifier=bool(args.get("purge_classifier_rejects", True)),
+        stub_threshold=float(args.get("stub_threshold") or DEFAULT_STUB_THRESHOLD),
+        shallow_threshold=int(
+            args.get("shallow_threshold") or DEFAULT_SHALLOW_THRESHOLD
+        ),
+    )
 
-    Three axes, checked in order — stub first (cheapest, unambiguous),
-    shallow next (auto-gen file dumps), classifier last (most expensive).
 
-      * ``stub`` — body is majority placeholder markers.
-      * ``shallow`` — body has too few prose chars to be an explanation.
-      * ``classifier_reject`` — classifier no longer admits the content.
-    """
-    text = md_path.read_text(encoding="utf-8", errors="ignore")
-    r = parse_yaml_frontmatter(text)
-    tags = _parse_tags(r.meta.get("tags"))
-    body = r.body or ""
-    score = stub_score(body)
+def _max_purges_from_args(args: dict[str, Any]) -> int | None:
+    raw = args.get("max_purges")
+    return int(raw) if raw is not None and int(raw) > 0 else None
 
-    if check_stub and is_stub(body, threshold=stub_threshold):
-        return None, tags, "stub", score
 
-    if check_shallow and is_shallow(body, threshold=shallow_threshold):
-        return None, tags, "shallow", score
-
-    if check_classifier:
-        lines = body.strip().splitlines()
-        if lines and lines[0].startswith("# "):
-            lines = lines[1:]
-        content = "\n".join(lines).strip() or str(r.meta.get("title", ""))
-        result = classify_memory(content, tags)
-        kind = result.kind if result is not None else None
-        if kind is None:
-            return None, tags, "classifier_reject", score
-        return kind, tags, None, score
-
-    # No axis fired — keep the page (use this for stat-only runs).
-    return "_unchecked", tags, None, score
+def _report(sweep: _Sweep, census, root: Path) -> dict[str, Any]:
+    scanned = sweep.scanned
+    return {
+        "applied": sweep.apply,
+        "scanned": scanned,
+        # The denominator ``scanned`` has to be read against: how many
+        # pages the wiki holds, and how many this sweep never looked at.
+        "wiki_pages_total": census.pages_total,
+        "unscanned": max(census.pages_total - scanned, 0),
+        "unrecognised_dirs": sorted(census.unrecognised),
+        "errored": len(sweep.errored),
+        "kept": len(sweep.kept),
+        "purged": len(sweep.purged),
+        "purged_paths": sweep.purged,
+        "purged_reasons": sweep.reasons,
+        "deferred": len(sweep.deferred),
+        # Sample only — the full count is the metric.
+        "deferred_paths": sweep.deferred[:50],
+        "cap_reached": sweep.cap_reached,
+        "max_purges": sweep.max_purges,
+        "placeholder_lines_purged": sweep.placeholder_lines,
+        "errors": sweep.errors,
+        "root": str(root),
+    }
 
 
 async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Purge wiki pages that no longer earn their place."""
     args = args or {}
-    apply = bool(args.get("apply", False))
-    kind_filter = args.get("kind")
-    purge_stubs = bool(args.get("purge_stubs", True))
-    purge_classifier_rejects = bool(args.get("purge_classifier_rejects", True))
-    purge_shallow = bool(args.get("purge_shallow", True))
-    threshold = float(args.get("stub_threshold") or DEFAULT_STUB_THRESHOLD)
-    shallow_thresh = int(args.get("shallow_threshold") or DEFAULT_SHALLOW_THRESHOLD)
-    max_purges_raw = args.get("max_purges")
-    max_purges = (
-        int(max_purges_raw)
-        if max_purges_raw is not None and int(max_purges_raw) > 0
-        else None
-    )
-
     root = Path(WIKI_ROOT).expanduser()
     if not root.exists():
         return {"error": f"wiki root does not exist: {root}"}
 
-    # Censused before the sweep: after an apply the purged files are gone
-    # and the total would no longer be the one ``scanned`` is read against.
-    pages_total, unrecognised_dirs = _page_census(root)
+    kind_filter = args.get("kind")
+    target_dirs = {str(kind_filter)} if kind_filter else set(PAGE_DIRS)
+    in_scope, census = candidate_pages(root, target_dirs)
 
-    target_dirs = {kind_filter} if kind_filter else _PAGE_DIRS
-    kept: list[str] = []
-    purged: list[str] = []
-    deferred: list[str] = []
-    purged_reasons: dict[str, int] = {"stub": 0, "shallow": 0, "classifier_reject": 0}
-    placeholder_lines_purged = 0
-    errors: list[str] = []
-    cap_reached = False
+    axes = _axes_from_args(args)
+    sweep = _Sweep(
+        apply=bool(args.get("apply", False)),
+        max_purges=_max_purges_from_args(args),
+    )
+    for md in in_scope:
+        sweep.visit(md, str(md.relative_to(root)), axes)
 
-    for md in root.rglob("*.md"):
-        rel = md.relative_to(root)
-        if rel.parts[0] not in target_dirs:
-            continue
-        try:
-            _, _tags, reason, _ = _evaluate_page(
-                md,
-                check_classifier=purge_classifier_rejects,
-                check_stub=purge_stubs,
-                check_shallow=purge_shallow,
-                stub_threshold=threshold,
-                shallow_threshold=shallow_thresh,
-            )
-            if reason is not None:
-                # Cap applies only when ``apply`` is True — dry-run reports
-                # the full count so operators see the actual backlog.
-                if apply and max_purges is not None and len(purged) >= max_purges:
-                    deferred.append(str(rel))
-                    cap_reached = True
-                    continue
-                purged.append(str(rel))
-                purged_reasons[reason] = purged_reasons.get(reason, 0) + 1
-                if reason == "stub":
-                    placeholder_lines_purged += placeholder_count(
-                        md.read_text(encoding="utf-8", errors="ignore")
-                    )
-                if apply:
-                    md.unlink()
-            else:
-                kept.append(str(rel))
-        except (OSError, ValueError) as exc:
-            errors.append(f"{rel}: {exc}")
+    if sweep.apply and sweep.purged:
+        _prune_empty_dirs(root)
 
-    # Clean up empty directories after an apply so the tree stays tidy.
-    if apply and purged:
-        for dir_path in sorted(root.rglob("*"), key=lambda p: -len(p.parts)):
-            if (
-                dir_path.is_dir()
-                and not any(dir_path.iterdir())
-                and not dir_path.name.startswith("_")
-                and dir_path != root
-            ):
-                try:
-                    dir_path.rmdir()
-                except OSError:
-                    pass
-
-    scanned = len(kept) + len(purged) + len(deferred)
-    return {
-        "applied": apply,
-        "scanned": scanned,
-        # The denominator ``scanned`` has to be read against: how many
-        # pages the wiki holds, and how many this sweep never looked at.
-        "wiki_pages_total": pages_total,
-        "unscanned": max(pages_total - scanned, 0),
-        "unrecognised_dirs": unrecognised_dirs,
-        "kept": len(kept),
-        "purged": len(purged),
-        "purged_paths": purged,
-        "purged_reasons": purged_reasons,
-        "deferred": len(deferred),
-        "deferred_paths": deferred[:50],  # sample only — full count is the metric
-        "cap_reached": cap_reached,
-        "max_purges": max_purges,
-        "placeholder_lines_purged": placeholder_lines_purged,
-        "errors": errors,
-        "root": str(root),
-    }
+    return _report(sweep, census, root)

@@ -13,6 +13,7 @@ from mcp_server.core.wiki_identity import generate_page_id
 from mcp_server.shared.wiki_layout import slugify
 from mcp_server.shared.wiki_pages import build_note
 from mcp_server.shared.wiki_classification import classification_to_frontmatter
+from mcp_server.shared.wiki_page_candidate import PageCandidate
 from mcp_server.shared.wiki_pointer import is_pointer_source
 import hashlib
 
@@ -83,27 +84,21 @@ def _page_frontmatter(
     return fm
 
 
-def build_from_memory(
-    *,
-    memory_id: int | str,
-    content: str,
-    tags: list[str] | None,
-    memory_source: str,
-    domain: str = "",
-) -> tuple[str, str] | None:
+def build_from_memory(candidate: PageCandidate) -> tuple[str, str] | None:
     """Build (relative_path, markdown) for a memory, or None if rejected.
 
     This is the first pass that admits a memory into wiki
     materialisation, so it is where a memory that is itself a pointer at
     an already-authored page is turned away: materialising one rebuilds
     a corrupted copy of the page it points at (issue #622).
-    ``memory_source`` is mandatory precisely so a new call site cannot
-    reopen that loop by omitting it.
+    ``PageCandidate.memory_source`` has no default, so a new call site
+    cannot reopen that loop by omitting it.
 
     source: ADR-0314"""
-    if is_pointer_source(memory_source):
+    if is_pointer_source(candidate.memory_source):
         return None
 
+    content, tags = candidate.content, candidate.tags
     classification = classify_memory(content, tags)
     if classification is None:
         return None
@@ -113,11 +108,12 @@ def build_from_memory(
         title = f"memory-{hashlib.sha256(content.encode()).hexdigest()[:8]}"
 
     dir_name = _MODERN_KIND_TO_DIR.get(classification.kind, "explanation")
+    domain = candidate.domain
     safe_domain = slugify(domain, max_len=40) if domain else "_general"
-    rel = f"{dir_name}/{safe_domain}/{memory_id}-{slugify(title)}.md"
+    rel = f"{dir_name}/{safe_domain}/{candidate.memory_id}-{slugify(title)}.md"
 
     # source: ADR-0314
-    fm = _page_frontmatter(classification, title, memory_id)
+    fm = _page_frontmatter(classification, title, candidate.memory_id)
     return rel, _render_with_frontmatter(fm, title, content)
 
 

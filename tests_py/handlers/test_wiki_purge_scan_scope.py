@@ -1,6 +1,6 @@
 """Issue #622, secondary defect — what ``wiki_purge`` can actually reach.
 
-``_PAGE_DIRS`` was a hand-kept copy of the page-kind list. It had drifted
+``wiki_purge``'s page-kind directory set was a hand-kept copy that had drifted
 from the path contract in ``shared.wiki_layout``, so every page under a
 kind it had never heard of was skipped in silence: the stray page the
 memory-to-page loop wrote under ``rfc/`` survived a purge that removed
@@ -78,6 +78,37 @@ async def test_purge_full_sweep_leaves_nothing_unscanned(wiki_root):
     assert out["unrecognised_dirs"] == []
 
 
+@pytest.mark.asyncio
+async def test_a_page_that_failed_to_read_counts_as_scanned(wiki_root, monkeypatch):
+    """An I/O fault must not masquerade as a coverage gap.
+
+    ``unscanned`` exists to say "this sweep never reached these pages".
+    Leaving an errored page out of ``scanned`` reported it as never
+    reached, hiding a real read failure behind the exact drift signal
+    this accounting was added to expose (issue #622).
+    """
+    _write(wiki_root, "notes/_general/readable.md", "thin.")
+    _write(wiki_root, "notes/_general/unreadable.md", "thin.")
+
+    real_evaluate = wiki_purge.evaluate_page
+
+    def explode(md_path, axes):
+        if md_path.name == "unreadable.md":
+            raise OSError("permission denied")
+        return real_evaluate(md_path, axes)
+
+    monkeypatch.setattr(wiki_purge, "evaluate_page", explode)
+
+    out = await wiki_purge.handler({"apply": False})
+
+    assert out["errored"] == 1
+    assert len(out["errors"]) == 1
+    assert "permission denied" in out["errors"][0]
+    assert out["wiki_pages_total"] == 2
+    assert out["scanned"] == 2
+    assert out["unscanned"] == 0
+
+
 def test_every_directory_the_pipeline_emits_is_one_purge_scans():
     """No second hand-kept copy of the kind list (the ADR-1077 pattern)."""
     from mcp_server.core.draft_compiler import (
@@ -93,7 +124,7 @@ def test_every_directory_the_pipeline_emits_is_one_purge_scans():
     )
 
     assert emitted <= set(PAGE_KINDS)
-    assert emitted <= wiki_purge._PAGE_DIRS
+    assert emitted <= wiki_purge.PAGE_DIRS
 
 
 def test_the_purge_kind_filter_offers_every_page_kind():

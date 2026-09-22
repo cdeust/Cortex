@@ -204,7 +204,15 @@ schema = {
             },
             "source": {
                 "type": "string",
-                "description": "Origin tag for provenance and replay scoring.",
+                "description": (
+                    "Origin tag for provenance and replay scoring. The "
+                    "enum below is the whole of what a caller may set; "
+                    "`wiki://<path>` is reserved for the pointer memories "
+                    "wiki_write/wiki_adr register in-process, and a value "
+                    "carrying that prefix is read as 'this memory points "
+                    "at an existing page', which excludes it from wiki "
+                    "materialisation and claim extraction (issue #622)."
+                ),
                 # source: ADR-0442
                 "enum": [
                     "session",

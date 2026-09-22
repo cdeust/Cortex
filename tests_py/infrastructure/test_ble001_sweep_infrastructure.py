@@ -95,13 +95,15 @@ class TestWikiStoreTolerantSync:
         # must not import core/ (core.wiki_sync.build_from_memory runs the
         # v2 classifier, real domain judgment).
         from mcp_server.handlers import wiki_memory_sync
+        from mcp_server.shared.wiki_page_candidate import PageCandidate
 
-        def broken(root, **kwargs):
+        def broken(root, candidate):
             raise RuntimeError("sync broke")
 
         monkeypatch.setattr(wiki_memory_sync, "sync_memory_strict", broken)
         out = wiki_memory_sync.sync_memory(
-            tmp_path, memory_id=1, content="c", tags=[], memory_source="", domain="d"
+            tmp_path,
+            PageCandidate(memory_id=1, content="c", memory_source="", tags=[]),
         )
         assert out is None
         _assert_noted("wiki_memory_sync.sync_memory", "sync broke")

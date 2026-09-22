@@ -48,6 +48,7 @@ from mcp_server.infrastructure.memory_config import (
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.profile_store import load_profiles
 from mcp_server.shared.domain_mapping import resolve_cwd, resolve_domain as resolve_hint
+from mcp_server.shared.wiki_page_candidate import PageCandidate
 from mcp_server.shared.content_hardening import harden_content
 
 __all__ = ["schema", "handler"]
@@ -356,11 +357,17 @@ async def _handler_impl(
         try:
             wiki_path = wiki_memory_sync.sync_memory_strict(
                 WIKI_ROOT,
-                memory_id=result["memory_id"],
-                content=content,
-                tags=tags,
-                memory_source=source,
-                domain=domain,
+                PageCandidate(
+                    memory_id=result["memory_id"],
+                    content=content,
+                    # The memories.source column, the signal that says
+                    # "this row is a wiki-page pointer" (issue #622) —
+                    # NOT resolved_origin, which is the capture-origin
+                    # axis and answers a different question.
+                    memory_source=source,
+                    tags=tags,
+                    domain=domain,
+                ),
             )
             if wiki_path:
                 result["wiki_page"] = wiki_path
