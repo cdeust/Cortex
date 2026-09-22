@@ -42,8 +42,7 @@ CODEX_EVENTS = {
 #
 # Codex limits intake to three seconds. The bundled script persists before
 # package startup; session/profile recording runs in a replayable worker.
-# source: ADR-1084
-CODEX_SESSION_END_MAX = 3
+CODEX_SESSION_END_MAX = 3  # source: ADR-1084
 
 
 def test_codex_hooks_dispatch_exactly_the_entry_point_allowlist() -> None:
