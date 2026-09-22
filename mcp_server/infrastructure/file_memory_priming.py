@@ -7,10 +7,15 @@ preserves the heat increment defined by ADR-0496.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
-from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.infrastructure.pg_scope_clause import directory_scope_clause
 from mcp_server.shared.project_scope import project_ancestors
+
+if TYPE_CHECKING:
+    from typing_extensions import LiteralString
+
+    from mcp_server.infrastructure.memory_store import MemoryStore
 
 
 def _literal_pattern(value: str) -> str:
@@ -39,7 +44,9 @@ def prime_file_memories(
     params = (boost, boost, *scope_params, *(_literal_pattern(cue) for cue in cues))
     with store.acquire_interactive() as conn:
         try:
-            result = conn.execute(sql, params)
+            # Query fragments contain only fixed SQL and generated placeholders;
+            # project paths and content cues are exclusively bound parameters.
+            result = conn.execute(cast("LiteralString", sql), params)
             conn.commit()
             return result.rowcount
         except Exception:

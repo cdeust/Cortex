@@ -5,7 +5,6 @@ import json
 import pytest
 
 from mcp_server.hooks import agent_briefing as hook
-from mcp_server.infrastructure.pg_store import PgMemoryStore
 from tests_py.conftest import _TEST_DB_URL, _USE_PG
 
 pytestmark = pytest.mark.skipif(not _USE_PG, reason="PostgreSQL test database required")
@@ -13,6 +12,8 @@ pytestmark = pytest.mark.skipif(not _USE_PG, reason="PostgreSQL test database re
 
 @pytest.fixture
 def seeded_store():
+    from mcp_server.infrastructure.pg_store import PgMemoryStore
+
     store = PgMemoryStore(database_url=_TEST_DB_URL)
 
     def insert(content, **values):

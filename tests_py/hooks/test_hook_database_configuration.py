@@ -1,12 +1,29 @@
 """Hooks must preserve the configured store URL. source: ADR-1085"""
 
-from unittest.mock import MagicMock, patch
+import sys
+from types import ModuleType
+from unittest.mock import MagicMock
 
 import pytest
 
 from mcp_server.hooks.agent_briefing_query import _connect
 from mcp_server.hooks.entry import prepare_environment
 from mcp_server.infrastructure.memory_config import get_memory_settings
+
+
+@pytest.fixture
+def postgres_connection_factory(monkeypatch):
+    """Model the optional driver boundary without importing the driver."""
+    driver = ModuleType("psycopg")
+    rows = ModuleType("psycopg.rows")
+    factory = MagicMock()
+    driver.Connection = factory
+    driver.Error = RuntimeError
+    rows.DictRow = dict
+    rows.dict_row = MagicMock()
+    monkeypatch.setitem(sys.modules, "psycopg", driver)
+    monkeypatch.setitem(sys.modules, "psycopg.rows", rows)
+    return factory
 
 
 def test_entry_promotes_namespaced_url_without_redirecting_to_default(tmp_path):
@@ -18,7 +35,7 @@ def test_entry_promotes_namespaced_url_without_redirecting_to_default(tmp_path):
 @pytest.mark.parametrize("backend", ["auto", "postgresql"])
 @pytest.mark.parametrize("canonical", [None, "postgresql:///canonical_test"])
 def test_direct_briefing_uses_settings_url_and_canonical_precedence(
-    monkeypatch, canonical, backend
+    monkeypatch, canonical, backend, postgres_connection_factory
 ):
     monkeypatch.setenv("CORTEX_MEMORY_STORE_BACKEND", backend)
     monkeypatch.setenv(
@@ -30,12 +47,12 @@ def test_direct_briefing_uses_settings_url_and_canonical_precedence(
     get_memory_settings.cache_clear()
     connection = MagicMock()
     try:
-        with patch("psycopg.Connection") as factory:
-            factory.__getitem__.return_value.connect.return_value = connection
-            assert _connect() is connection
-            assert factory.__getitem__.return_value.connect.call_args.args[0] == (
-                canonical or "postgresql:///briefing_alias_test"
-            )
+        factory = postgres_connection_factory
+        factory.__getitem__.return_value.connect.return_value = connection
+        assert _connect() is connection
+        assert factory.__getitem__.return_value.connect.call_args.args[0] == (
+            canonical or "postgresql:///briefing_alias_test"
+        )
     finally:
         get_memory_settings.cache_clear()
 

@@ -14,6 +14,8 @@ import subprocess
 import sys
 import textwrap
 
+import pytest
+
 from mcp.server.mcpserver import MCPServer
 
 from mcp_server.__main__ import register_all
@@ -85,10 +87,10 @@ def test_the_docker_smoke_floor_follows_the_surface() -> None:
 
 
 def test_the_verifier_imports_without_the_mcp_sdk() -> None:
-    """The mcp-host-config CI job installs the host CLIs, not the SDK.
+    """The verifier can bootstrap before artifact dependencies are installed.
 
-    Importing `mcp_server.tool_surface` at module scope pulled the SDK
-    through the registries and broke that job (issue #597).
+    Importing registries at module scope previously broke this boundary
+    (issue #597); full candidate verification loads them only when needed.
     """
     result = subprocess.run(
         [sys.executable, "-c", _SDK_FREE_IMPORT_PROBE], capture_output=True, text=True
@@ -98,43 +100,44 @@ def test_the_verifier_imports_without_the_mcp_sdk() -> None:
     assert "imported" in result.stdout
 
 
-def test_the_sdk_less_job_never_binds_a_release_to_this_checkouts_bounds() -> None:
-    """Importability is not enough: a full-profile case in the SDK-less job
-    still *calls* `full_tool_bounds()` and dies on the same missing SDK.
-
-    Codex stopped shipping a lean profile (PR #620), so mcp-host-config's
-    codex-cli case had to move to `--profiles full`, and it broke that way.
-    `--published-surface` is what keeps the call unreachable there, and it is
-    correct beyond the SDK: that command resolves a released artifact whose
-    surface is its own release's, not this checkout's (ADR-1077, revision
-    2026-09-22).
-    """
+def test_candidate_job_installs_dependencies_and_checks_its_full_surface() -> None:
+    """The candidate wheel supplies the SDK; exact checkout bounds must run."""
     import pathlib
     import re
 
     workflow = pathlib.Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
     job = workflow.split("\n  mcp-host-config:\n", 1)
-    assert len(job) == 2, "the mcp-host-config job is no longer declared as expected"
-    # Up to the next top-level job key.
+    assert len(job) == 2
     body = re.split(r"\n  [a-z][a-z-]*:\n", job[1], maxsplit=1)[0]
-
-    # Per invocation, not over the whole job: a second --profiles full case
-    # added later that legitimately needs no flag would otherwise satisfy a
-    # job-wide substring check on behalf of the one that does need it.
-    invocations = [
-        # From the script name to the `--` that ends the flags.
-        match.group(0)
-        for match in re.finditer(
-            r"verify_mcp_hosts\.py(?:[^\n]*\\\n)*[^\n]*", body, flags=re.MULTILINE
-        )
-    ]
-    assert invocations, (
-        "the job no longer drives the verifier; drop this test or re-point it"
+    commands = body.replace("\\\n", " ")
+    invocations = re.findall(
+        r"uv run[^\n]*scripts/verify_mcp_hosts\.py[^\n]*", commands
     )
+    assert invocations, "candidate verification must install its wheel dependencies"
+    assert 'uv build --wheel --out-dir "$RUNNER_TEMP/cortex-codex-wheel"' in body
     for invocation in invocations:
-        if "--profiles full" in invocation:
-            assert "--published-surface" in invocation, (
-                "this full-profile case in the SDK-less job must pass "
-                "--published-surface, or it calls full_tool_bounds() and dies "
-                f"on ModuleNotFoundError: No module named 'mcp':\n{invocation}"
-            )
+        assert '--no-project --with "$candidate_wheel" -- env' in invocation
+        assert 'UV_FIND_LINKS="$RUNNER_TEMP/cortex-codex-wheel"' in invocation
+        assert "--profiles full" in invocation
+        assert "--published-surface" not in invocation, (
+            "candidate bounds cannot be bypassed"
+        )
+        assert "--artifact-surface" not in invocation, (
+            "candidate bounds cannot be bypassed"
+        )
+
+
+def test_candidate_verifier_rejects_lean_only_discovery(tmp_path) -> None:
+    """A candidate claiming full must fail when only the lean tools survive."""
+    from mcp_server.tool_profiles import LEAN_TOOL_NAMES
+    from scripts.mcp_host_client import ContractCase, ContractError
+    from scripts.verify_mcp_hosts import _verify_tool_surface
+
+    case = ContractCase("codex-cli", "full", (), tmp_path, 180, False, "auto")
+    responses = {2: {"result": {"tools": [{"name": n} for n in LEAN_TOOL_NAMES]}}}
+    with pytest.raises(ContractError, match="discovered .* full tools; expected"):
+        _verify_tool_surface(case, responses, published=False)
+    responses[2]["result"]["tools"] = [{"name": n} for n in standalone_tool_names()]
+    assert _verify_tool_surface(case, responses, published=False) == len(
+        standalone_tool_names()
+    )

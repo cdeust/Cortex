@@ -2,7 +2,7 @@
 """Automatic child briefing for Claude Code and Codex.
 
 Claude specialists use their task prompt. Codex PreToolUse appends context to
-exact spawn arguments; promptless SubagentStart supplies scoped team decisions.
+exact spawn arguments; promptless SubagentStart supplies scoped project/role context.
 Queries and receipt writes honor the configured SQLite/PostgreSQL backend.
 
 source: ADR-0481
@@ -180,8 +180,8 @@ def _briefing(event, agent, keywords):
             target,
             [{"memory_id": m["id"]} for m in memories],
             channel="agent_briefing",
-            session_id=event.get("session_id")
-            or session_id_from_transcript(event.get("transcript_path")),
+            session_id=session_id_from_transcript(event.get("transcript_path"))
+            or event.get("session_id"),
         )
     except Exception as exc:  # noqa: BLE001 — hook boundary; visible degradation
         _log(f"skip: briefing query failed: {exc}")

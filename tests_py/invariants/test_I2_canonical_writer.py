@@ -17,7 +17,7 @@ Allow-list (post-A3 single-canonical-path):
     - homeostatic_apply.py _apply_fold        (rare amortized fold UPDATE,
                                                per write class since M-D3)
     - anchor.py    anchor handler              (heat_base=1.0, no_decay=TRUE)
-    - preemptive_context.py _prime_file_memories (heat_base boost on read/edit)
+    - file_memory_priming.py prime_file_memories (scoped file-cue boost, ADR-1086)
 
 Any new writer outside this list fails this test.
 """
@@ -53,8 +53,8 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     ("handlers/consolidation/homeostatic_apply.py", 184),
     # Anchor pin.
     ("handlers/anchor.py", 145),
-    # Preemptive boost.
-    ("hooks/preemptive_context.py", 125),
+    # Atomic project-scoped file-cue boost, moved from the hook in ADR-1086.
+    ("infrastructure/file_memory_priming.py", 37),
     # Pipeline-impact boost.
     ("hooks/pipeline_impact_bump.py", 164),
     # CAS-guarded deliberate reheat.

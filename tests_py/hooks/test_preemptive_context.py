@@ -142,7 +142,10 @@ def test_update_cooldown_recovers_from_a_corrupt_file():
 def test_prime_passes_paths_and_scope_to_selected_backend():
     store = MagicMock()
     with (
-        patch.object(hook, "get_shared_store", return_value=store),
+        patch(
+            "mcp_server.infrastructure.memory_store.get_shared_store",
+            return_value=store,
+        ),
         patch.object(hook, "prime_file_memories", return_value=7) as prime,
     ):
         assert hook._prime_file_memories("/repo/store.py", "/repo") == 7
@@ -151,8 +154,9 @@ def test_prime_passes_paths_and_scope_to_selected_backend():
 
 
 def test_failed_update_is_logged_with_its_cause(capsys):
-    with patch.object(
-        hook, "get_shared_store", side_effect=RuntimeError("unavailable")
+    with patch(
+        "mcp_server.infrastructure.memory_store.get_shared_store",
+        side_effect=RuntimeError("unavailable"),
     ):
         assert hook._prime_file_memories("/a.py") is None
     assert "prime failed: unavailable" in capsys.readouterr().err
@@ -161,8 +165,9 @@ def test_failed_update_is_logged_with_its_cause(capsys):
 def test_storage_failure_does_not_suppress_recovered_read():
     event = {"tool_name": "Read", "tool_input": {"file_path": "/a.py"}}
     with (
-        patch.object(
-            hook, "get_shared_store", side_effect=[RuntimeError("offline"), MagicMock()]
+        patch(
+            "mcp_server.infrastructure.memory_store.get_shared_store",
+            side_effect=[RuntimeError("offline"), MagicMock()],
         ),
         patch.object(hook, "prime_file_memories", return_value=1) as prime,
     ):

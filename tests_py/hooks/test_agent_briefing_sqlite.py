@@ -59,7 +59,8 @@ def test_task_pass_and_promptless_team_pass_are_scoped(connection):
     } == {global_id}
 
 
-def test_native_start_records_exact_receipt(connection, capsys):
+@pytest.mark.parametrize("transcript", [None, "/sessions/child-transcript.jsonl"])
+def test_native_start_records_exact_receipt(connection, capsys, transcript):
     memory = insert(connection, "shared decision", is_team_decision=True)
     with (
         patch.object(hook, "_connect", return_value=connection),
@@ -71,6 +72,7 @@ def test_native_start_records_exact_receipt(connection, capsys):
                 "agent_type": "worker",
                 "cwd": "/project",
                 "session_id": "child-test",
+                "transcript_path": transcript,
             }
         )
     assert "shared decision" in capsys.readouterr().out
@@ -81,7 +83,7 @@ def test_native_start_records_exact_receipt(connection, capsys):
     receipt = connection.store._conn.execute(
         "SELECT * FROM injection_receipts"
     ).fetchone()
-    assert receipt["session_id"] == "child-test"
+    assert receipt["session_id"] == ("child-transcript" if transcript else "child-test")
 
 
 def test_sqlite_selection_does_not_probe_postgres(connection, monkeypatch):

@@ -48,7 +48,6 @@ from mcp_server.shared.hook_state_paths import cooldown_path
 from mcp_server.shared.project_scope import resolve_project_root
 from mcp_server.hooks.shell_read_events import completed_shell_read
 from mcp_server.infrastructure.file_memory_priming import prime_file_memories
-from mcp_server.infrastructure.memory_store import get_shared_store
 
 _LOG_PREFIX = "[cortex-preemptive]"
 _HEAT_BOOST = 0.1  # source: ADR-0496 — preserved existing activation increment
@@ -107,6 +106,10 @@ def _prime_file_memories(
     """One atomic boost for all cues in this tool call (source: ADR-1086)."""
     paths = [file_path] if isinstance(file_path, str) else file_path
     try:
+        from mcp_server.infrastructure.memory_store import (  # noqa: PLC0415 -- cooldown imports must work without site packages
+            get_shared_store,
+        )
+
         return prime_file_memories(get_shared_store(), paths, project, _HEAT_BOOST)
     except Exception as exc:  # noqa: BLE001 — hook boundary; storage errors are logged
         _log(f"prime failed: {exc}")
