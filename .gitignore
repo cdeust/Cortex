@@ -43,8 +43,11 @@ docs/arxiv-*/*.fls
 docs/arxiv-*/*.fdb_latexmk
 docs/arxiv-*/*.synctex.gz
 
-# Local virtualenv (uv-managed; never committed)
-.venv/
+# Local virtualenv (uv-managed; never committed). No trailing slash: in a
+# worktree under .claude/worktrees/ the venv is a SYMLINK to the main
+# checkout's, and ".venv/" matches only a directory, so the symlink showed
+# up as untracked and a `git add -A` swept it into a commit.
+.venv
 
 # Pyright ratchet — ephemeral per-run output; typecheck-baseline.json IS tracked
 pyright-current.json
