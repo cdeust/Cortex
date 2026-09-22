@@ -1,14 +1,14 @@
-"""scripts/launcher_site.py — deps/ isolation from user site-packages.
+"""scripts/launcher_site.py deps/ isolation — issue #621.
 
-Source: issue #621. On a Windows machine whose user site-packages holds a
-coherent CUDA torch/torchvision/torchaudio set, the plugin's vendored
-``deps/`` (CPU torch, no torchvision) was merely first on ``sys.path``.
-``torch`` then came from ``deps/`` and ``torchvision`` from user
-site-packages, built against the other torch, and importing them together
-aborted the MCP server during startup. The reporter's first workaround —
-cutting user site-packages alone — moved the failure to ``pywintypes``,
-because ``deps/pywin32.pth`` is only processed for a *site* directory, not
-for one added with ``sys.path.insert``.
+On a Windows machine whose user site-packages holds a coherent CUDA
+torch/torchvision/torchaudio set, the plugin's vendored ``deps/`` (CPU
+torch, no torchvision) was merely first on ``sys.path``. ``torch`` then
+came from ``deps/`` and ``torchvision`` from user site-packages, built
+against the other torch, and importing them together aborted the MCP
+server during startup. The reporter's first workaround, cutting user
+site-packages alone, moved the failure to ``pywintypes``, because
+``deps/pywin32.pth`` is only processed for a *site* directory and not for
+one added with ``sys.path.insert``.
 
 Both halves are asserted here without a Windows torch stack: the logic
 under test is which entries ``sys.path`` ends up carrying and whether a
@@ -16,130 +16,20 @@ under test is which entries ``sys.path`` ends up carrying and whether a
 ``.pth`` handling is identical on every platform, so a temporary deps
 directory holding a real ``.pth`` file exercises it for real on macOS and
 Linux too.
+
+The path-filtering helpers this builds on are driven in
+``test_launcher_site_paths.py``.
 """
 
 from __future__ import annotations
 
-import importlib.util
 import os
 import sys
 from pathlib import Path
 
-import pytest
+from tests_py.scripts._launcher_site_fixture import REPO_ROOT
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-MODULE_PATH = REPO_ROOT / "scripts" / "launcher_site.py"
-
-
-@pytest.fixture
-def launcher_site():
-    """Load scripts/launcher_site.py under its path-derived dotted name.
-
-    "scripts.launcher_site" is the name mutmut derives from the file's
-    location; a synthetic name makes every mutant look unreached (#262).
-    """
-    spec = importlib.util.spec_from_file_location("scripts.launcher_site", MODULE_PATH)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-def test_without_user_site_drops_the_matching_entry(launcher_site, tmp_path):
-    user_site = str(tmp_path / "user-site")
-    path = ["/first", user_site, "/last"]
-
-    assert launcher_site.without_user_site(path, user_site) == ["/first", "/last"]
-
-
-def test_without_user_site_drops_an_unnormalized_spelling(launcher_site, tmp_path):
-    """The same directory reaches sys.path spelled differently than `site`
-    reports it — a trailing separator, or a `.` segment. Comparing raw
-    strings would keep it, and keeping it is what breaks the import."""
-    user_site = str(tmp_path / "user-site")
-    trailing = user_site + os.sep
-    dotted = os.path.join(str(tmp_path), ".", "user-site")
-    path = ["/first", trailing, dotted, "/last"]
-
-    assert launcher_site.without_user_site(path, user_site) == ["/first", "/last"]
-
-
-def test_without_user_site_drops_directories_under_user_site(launcher_site, tmp_path):
-    """`site` processes user site-packages' own .pth files at interpreter
-    start, so a pywin32 installed there has already appended its win32 and
-    win32/lib subdirectories. Leaving those behind keeps exactly the
-    packages this cut exists to displace."""
-    user_site = str(tmp_path / "user-site")
-    path = [
-        "/first",
-        os.path.join(user_site, "win32"),
-        os.path.join(user_site, "win32", "lib"),
-        user_site,
-        "/last",
-    ]
-
-    assert launcher_site.without_user_site(path, user_site) == ["/first", "/last"]
-
-
-def test_without_user_site_keeps_a_sibling_with_a_shared_prefix(
-    launcher_site, tmp_path
-):
-    """A prefix test on the raw string would swallow `user-site-extras`."""
-    user_site = str(tmp_path / "user-site")
-    sibling = str(tmp_path / "user-site-extras")
-    path = [sibling, user_site]
-
-    assert launcher_site.without_user_site(path, user_site) == [sibling]
-
-
-def test_without_user_site_preserves_order_and_duplicates(launcher_site):
-    path = ["/a", "/b", "/a", "/c"]
-
-    assert launcher_site.without_user_site(path, None) == ["/a", "/b", "/a", "/c"]
-    assert launcher_site.without_user_site(path, "") == ["/a", "/b", "/a", "/c"]
-
-
-def test_without_user_site_returns_a_new_list(launcher_site):
-    path = ["/a"]
-
-    assert launcher_site.without_user_site(path, None) is not path
-
-
-def test_user_site_dir_never_raises(launcher_site, monkeypatch, capsys):
-    """A launch must survive a sysconfig that cannot resolve the user base
-    — and must say so. Returning None leaves user site-packages on
-    sys.path, which is issue #621's symptom exactly, so swallowing the
-    cause would make the bug recur with no trace at all."""
-    monkeypatch.setattr(
-        launcher_site.site,
-        "getusersitepackages",
-        lambda: (_ for _ in ()).throw(KeyError("userbase")),
-    )
-
-    assert launcher_site.user_site_dir() is None
-
-    reported = capsys.readouterr().err
-    assert "userbase" in reported, "the cause must reach stderr, not be swallowed"
-    assert "not isolated" in reported, "and say what it costs the caller"
-
-
-def test_user_site_dir_stays_quiet_when_it_resolves(launcher_site, monkeypatch, capsys):
-    """Every hook launch calls this; a diagnostic on the normal path would
-    be noise in eleven hooks' stderr."""
-    monkeypatch.setattr(
-        launcher_site.site, "getusersitepackages", lambda: "/fake/user/site"
-    )
-
-    launcher_site.user_site_dir()
-
-    assert capsys.readouterr().err == ""
-
-
-def test_user_site_dir_reports_what_site_reports(launcher_site, monkeypatch):
-    monkeypatch.setattr(
-        launcher_site.site, "getusersitepackages", lambda: "/fake/user/site"
-    )
-
-    assert launcher_site.user_site_dir() == "/fake/user/site"
+# The launcher_site fixture arrives from tests_py/scripts/conftest.py.
 
 
 def _deps_dir_with_pth(tmp_path: Path, marker: Path, probe_name: str) -> Path:

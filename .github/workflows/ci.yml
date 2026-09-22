@@ -480,6 +480,7 @@ jobs:
           tests_py/infrastructure/test_sqlite_backend.py
           tests_py/scripts/test_setup_py_backend_skip.py
           tests_py/scripts/test_launcher_site.py
+          tests_py/scripts/test_launcher_site_paths.py
 
   # source: ADR-0802
 
