@@ -100,7 +100,7 @@ RUN mkdir -p /opt/model-cache && \
         return 1; \
     }; \
     retry HF python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')" && \
-    retry FlashRank python -c "from mcp_server.core.reranker import _ensure_reranker; assert _ensure_reranker() is not None, 'FlashRank prewarm failed at build time'" && \
+    retry FlashRank python -c "from mcp_server.hooks.wiring import wire_composition_root; wire_composition_root(); from mcp_server.core.reranker import _ensure_reranker; assert _ensure_reranker() is not None, 'FlashRank prewarm failed at build time'" && \
     chown -R cortex:cortex /opt/model-cache /workspace
 
 USER cortex
