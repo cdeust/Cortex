@@ -49,10 +49,10 @@ _AUTHORED_PAGE = (
     "# Architecture overview: lazarus\n\n"
     "Lazarus is a local web application that tracks a sourdough starter. "
     "It runs on a single machine, serves one page, and stores everything "
-    "in a SQLite file next to the code. Decision: the architecture is "
-    "deliberately one process, because a second one would need a broker "
-    "nobody wants to operate. This page describes the real layers of the "
-    "project and the rule that keeps them apart.\n"
+    "in a SQLite file next to the code. We decided to keep Lazarus "
+    "single-process because a broker would double the operational "
+    "surface for no measured gain. This page describes the real layers "
+    "of the project and the rule that keeps them apart.\n"
 )
 
 _AUTHORED_PATH = "explanation/lazarus/architecture-overview.md"
@@ -182,8 +182,8 @@ async def test_extract_skips_wiki_pointer_memories(sqlite_store):
     authored_id = sqlite_store.insert_memory(
         {
             "content": (
-                "We decided to keep Lazarus single-process because a broker "
-                "would double the operational surface for no measured gain."
+                "We decided to adopt WRRF fusion over plain RRF because heat "
+                "needed weights the flat formula could not carry."
             ),
             "domain": "lazarus",
             "source": "",
@@ -192,6 +192,7 @@ async def test_extract_skips_wiki_pointer_memories(sqlite_store):
 
     out = await extract({"limit": 50})
     assert out.get("errors") == []
+    assert out["claims_inserted"] > 0
 
     with sqlite_store._conn.cursor() as cur:
         cur.execute("SELECT DISTINCT memory_id FROM wiki.claim_events")

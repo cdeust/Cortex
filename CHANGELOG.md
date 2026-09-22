@@ -82,6 +82,28 @@ adheres to [Semantic Versioning](https://semver.org/).
   text-mode stdout writes CRLF on Windows and a pipe preserves it, so the
   extracted name arrived as `sentence-transformers\r` and the rest of the
   installer's line overwrote it from column 0.
+- A `wiki_write` pointer memory is no longer re-materialised as a wiki page
+  (#622). `wiki_write`/`wiki_adr` register one memory per authored page so
+  the page surfaces in `recall`; that memory carries a prefix of the page's
+  own markdown. `remember` handed it to `wiki_sync.build_from_memory` like
+  any other memory, and a tag such as `architecture` admitted it, so the
+  classifier wrote a second page from the pointer: the authored
+  frontmatter copied into the body, a `title:` YAML line as the H1, a kind
+  inferred rather than read (`rfc/_general/` for a page declaring
+  `kind: explanation`), and the body cut mid-word. A new
+  `shared/wiki_pointer.py` owns the identity of a pointer memory, keyed on
+  the `wiki://` origin prefix; `build_from_memory` and `sync_memory_strict`
+  now require that origin as a keyword, and `wiki_extract`'s candidate
+  query excludes pointers on every branch. The pointer memory itself is
+  unchanged: removing it would drop the authored page out of `recall`.
+  Pointer truncation now lands on a word boundary.
+- `wiki_purge` reaches every page kind (#622). `_PAGE_DIRS` was a hand-kept
+  copy of the kind list that had drifted from `shared.wiki_layout`, so
+  pages under `rfc/`, `explanation/`, `how-to/`, `runbook/`, `tutorial/`
+  and `files/` were skipped in silence and had to be deleted by hand. It
+  now derives from `PAGE_KINDS`, and the result reports
+  `wiki_pages_total`, `unscanned` and `unrecognised_dirs` alongside
+  `scanned` so a caller can tell a full sweep from a partial one.
 
 ## [4.23.1] - 2026-09-22
 
