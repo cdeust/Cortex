@@ -1,0 +1,68 @@
+---
+created: 2026-09-22
+kind: adr
+number: 1084
+status: proposed
+tags: [codex, lifecycle, durability]
+title: Durable SessionEnd intake before package startup
+---
+# ADR-1084: Durable SessionEnd intake before package startup
+
+## Evidence
+
+[Codex hooks](https://developers.openai.com/codex/hooks) specifies a maximum
+SessionEnd timeout of three seconds and supplies PLUGIN_ROOT for bundled
+scripts. The published 4.23.1 command took 3.46, 1.03 and 0.97 seconds with
+a warm uv cache on macOS 26.6.2 arm64 (docs/codex-plugin.md). Entry wiring,
+profile imports and session processing precede the detached consolidation.
+Package resolution therefore consumes the host budget before recording starts.
+
+## Decision
+
+Ship a Python 3 standard-library intake inside the Codex plugin. Python 3 must
+already be on PATH. SessionEnd persists the validated event using fsync and an
+atomic no-overwrite link before spawning any package resolver. The stable job
+identity is the SHA-256 of the native session_id. Queue files live under the
+configured Cortex methodology root, in a private directory. A completed receipt
+prevents a repeated event from reentering the queue. Events and their Cortex
+storage environment are local data; queue files and worker logs are private.
+The saved Cortex root is absolute and expanded; the worker restores the original
+invocation directory so relative storage and transcript paths keep their meaning.
+New directory links are fsynced in their parents, including first-use ancestors.
+
+A detached bundled worker takes a nonblocking operating-system lock per job and
+runs the published session lifecycle entry point at the version declared by the
+bundled plugin manifest, avoiding an older cached runtime. It acknowledges only successful
+processing. Nonzero exits keep the event and an error file; SessionStart reports
+pending/errors and starts another drain asynchronously before its normal hook.
+This is recovery on a lifecycle event, not a timed retry loop. Worker termination
+releases the operating-system lock and leaves unacknowledged work available.
+A later drain skips active jobs and can process other sessions, so a hung
+resolver cannot hold a drain-wide lock that starves all subsequent sessions.
+
+All session lifecycle callers, including Claude and direct callers, share a
+recording lock. Log rows and domain profiles embed the event identity in their
+atomic writes. Replaying after either write cannot append a second row or apply
+the profile EMA twice. Profile idempotency IDs are retained without an invented
+retention bound. JSON writes fsync both file and containing directory before
+returning, so a queue acknowledgement cannot precede persistence of the effects.
+Existing unrelated profile writers do not acquire this lifecycle lock; this
+change does not promise transactional isolation from profile rebuilds.
+
+Consolidation remains an ancillary detached operation. Its launch and the queue
+receipt cannot be committed atomically, so this design does not claim exactly-once
+consolidation. Session recording and profile updates are the replay-safe effects.
+Absent initial profiles remain a valid cold start. Malformed existing lifecycle
+files raise an error and retain the queued event instead of replacing data.
+A queue backlog remains visible until the worker can run successfully. Missing
+Python prevents intake and is reported by the shell; missing uvx prevents worker
+processing but does not discard the saved event.
+
+## Verification
+
+Use isolated Cortex roots and explicitly selected SQLite storage. Assert durable
+intake before any resolver executes, duplicate-event idempotency, recovery after
+worker interruption, and profile/log replay after partial completion. Synchronize
+subprocess interruption with events, never timing thresholds. Report cold/warm
+latency observations separately from correctness assertions. Native host acceptance
+is required before claiming the installed hook meets the host budget.

@@ -14,6 +14,8 @@ from mcp_server.hooks.entry import HOOK_MODULES
 from tests_py.scripts._codex_plugin_support import (
     CLAUDE_SUFFIX,
     CODEX_SUFFIX,
+    PLUGIN_PATH,
+    read_json as _json,
     claude_hooks,
     codex_hooks,
     every_hook,
@@ -38,11 +40,9 @@ CODEX_EVENTS = {
 # event takes 600s when `timeout` is omitted, with no documented maximum, so
 # every other budget is settable and comes from the Claude manifest instead.
 #
-# This is the one budget Codex sets rather than Cortex, and detaching
-# consolidation (#610) is not enough to fit inside it: session_lifecycle
-# measured 3.46s on its first run, and `save_session_log` and `save_profile`
-# both run inline before the detached spawn, so a kill loses the session-log
-# row and the profile delta. Named limitation in docs/codex-plugin.md.
+# Codex limits intake to three seconds. The bundled script persists before
+# package startup; session/profile recording runs in a replayable worker.
+# source: ADR-1084
 CODEX_SESSION_END_MAX = 3
 
 
@@ -61,13 +61,17 @@ def test_codex_hook_commands_run_the_published_wheel_not_this_repository() -> No
     """A Codex plugin ships only its own directory: no scripts/launcher.py,
     no ${CLAUDE_PLUGIN_ROOT}-relative path, and a named diagnostic when the
     one thing this command line depends on (uvx) is absent."""
-    for _event, _entry, hook in every_hook(codex_hooks()):
+    for event, _entry, hook in every_hook(codex_hooks()):
         command = hook["command"]
         assert hook["type"] == "command"
         assert "scripts/launcher.py" not in command
         assert "CLAUDE_PLUGIN_ROOT" not in command
+        if event == "SessionEnd":
+            assert command == 'python3 "${PLUGIN_ROOT}/scripts/session_queue.py" intake'
+            continue
         assert "command -v uvx" in command
-        assert 'uvx --from "hypermnesia-mcp[postgresql,sqlite]"' in command
+        version = _json(PLUGIN_PATH)["version"]
+        assert f'uvx --from "hypermnesia-mcp[postgresql,sqlite]=={version}"' in command
 
 
 def test_codex_hooks_use_only_codex_event_names() -> None:

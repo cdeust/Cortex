@@ -4,7 +4,7 @@
       "command": "uvx",
       "args": [
         "--from",
-        "hypermnesia-mcp[postgresql,sqlite]",
+        "hypermnesia-mcp[postgresql,sqlite]==4.23.2",
         "hypermnesia-mcp"
       ],
       "env": {

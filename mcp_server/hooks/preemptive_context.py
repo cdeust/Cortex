@@ -28,7 +28,7 @@ Add to ``~/.claude/settings.json`` under hooks::
 
 Invariants
 ----------
-- Fires on Edit/Write/Read tools only
+- Fires on file tools and completed explicit shell file reads
 - Non-blocking: exits quickly, errors logged to stderr
 - Heat boost is small (0.1) — primes but doesn't dominate ranking
 - Cooldown per file (60s) — avoids repeated boosting on rapid edits
@@ -45,10 +45,13 @@ from pathlib import Path
 from typing import Any
 
 from mcp_server.shared.hook_state_paths import cooldown_path
+from mcp_server.shared.project_scope import resolve_project_root
+from mcp_server.hooks.shell_read_events import completed_shell_read
+from mcp_server.infrastructure.file_memory_priming import prime_file_memories
+from mcp_server.infrastructure.memory_store import get_shared_store
 
 _LOG_PREFIX = "[cortex-preemptive]"
-_DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://localhost:5432/cortex")
-_HEAT_BOOST = 0.1  # Small boost — primes without dominating
+_HEAT_BOOST = 0.1  # source: ADR-0496 — preserved existing activation increment
 _COOLDOWN_SECONDS = 60
 _COOLDOWN_FILE = cooldown_path("cortex_preemptive_cooldown.json")
 
@@ -98,68 +101,69 @@ def _update_cooldown(file_path: str) -> None:
         pass
 
 
-def _prime_file_memories(file_path: str) -> int:
-    """Boost heat of memories related to this file.
-
-    Implements Collins & Loftus 1975 spreading activation: file access
-    cue propagates activation (heat) to related memory nodes.
-
-    Returns number of memories primed.
-    """
+def _prime_file_memories(
+    file_path: str | list[str], project: str | None = None
+) -> int | None:
+    """One atomic boost for all cues in this tool call (source: ADR-1086)."""
+    paths = [file_path] if isinstance(file_path, str) else file_path
     try:
-        import psycopg  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
-    except ImportError:
-        return 0
-
-    try:
-        conn = psycopg.connect(_DATABASE_URL, autocommit=True)
-    except psycopg.Error:
-        return 0
-
-    filename = Path(file_path).name
-    # source: ADR-0496
-    try:
-        result = conn.execute(
-            """
-            UPDATE memories
-            SET heat_base = LEAST(heat_base + %s, 1.0),
-                heat_base_set_at = NOW(),
-                last_accessed = NOW()
-            WHERE NOT is_benchmark
-              AND heat_base < 1.0
-              AND (content ILIKE %s OR content ILIKE %s)
-            """,
-            (_HEAT_BOOST, f"%{file_path}%", f"%{filename}%"),
-        )
-        count = result.rowcount if result else 0
-    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
+        return prime_file_memories(get_shared_store(), paths, project, _HEAT_BOOST)
+    except Exception as exc:  # noqa: BLE001 — hook boundary; storage errors are logged
         _log(f"prime failed: {exc}")
-        count = 0
+        return None
 
-    conn.close()
-    return count
+
+def _event_paths(
+    event: dict[str, Any], project: str | None
+) -> tuple[list[str], str | None]:
+    tool = event.get("tool_name", "")
+    if tool in {"Bash", "exec_command", "shell_command", "write_stdin"}:
+        return completed_shell_read(
+            event, project, _COOLDOWN_FILE.parent / "pending-reads"
+        )
+    inputs = event.get("tool_input") or {}
+    path = inputs.get("file_path") if isinstance(inputs, dict) else None
+    if tool not in _FILE_TOOLS or not isinstance(path, str) or not path:
+        return [], project
+    base = event.get("cwd") or project
+    if not Path(path).is_absolute() and not base:
+        return [], project
+    return [str((Path(base or "/") / path).resolve())], project
+
+
+def _cooldown_key(path: str, project: str | None) -> str:
+    return json.dumps([project, path])
 
 
 def process_event(event: dict[str, Any]) -> None:
-    """Process PostToolUse event and prime related memories."""
-    tool_name = event.get("tool_name", "")
-
-    if tool_name not in _FILE_TOOLS:
+    """Process completed file-access cues; scope every activation."""
+    if (
+        not isinstance(event, dict)
+        or event.get("hook_event_name", "PostToolUse") != "PostToolUse"
+    ):
         return
-
-    tool_input = event.get("tool_input") or {}
-    file_path = tool_input.get("file_path", "")
-
-    if not file_path:
+    project = resolve_project_root(event, os.environ)
+    if project:
+        project = str(Path(project).resolve())
+    try:
+        paths, project = _event_paths(event, project)
+    except (OSError, ValueError, TypeError) as exc:
+        _log(f"read event rejected: {exc}")
         return
-
-    if _check_cooldown(file_path):
+    paths = list(
+        dict.fromkeys(
+            p for p in paths if not _check_cooldown(_cooldown_key(p, project))
+        )
+    )
+    if not paths:
         return
-
-    count = _prime_file_memories(file_path)
-    _update_cooldown(file_path)
+    count = _prime_file_memories(paths[0] if len(paths) == 1 else paths, project)
+    if count is None:
+        return
+    for path in paths:
+        _update_cooldown(_cooldown_key(path, project))
     if count > 0:
-        _log(f"primed {count} memories for {Path(file_path).name}")
+        _log(f"primed {count} memories for {', '.join(Path(p).name for p in paths)}")
 
 
 def main() -> None:

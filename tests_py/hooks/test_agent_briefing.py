@@ -142,6 +142,7 @@ def test_keywords_from_stop_words_only_prompt_is_empty():
 
 
 def test_connect_without_psycopg_returns_none(monkeypatch):
+    monkeypatch.setenv("CORTEX_MEMORY_STORE_BACKEND", "postgresql")
     monkeypatch.setitem(sys.modules, "psycopg", None)
 
     def _raise(name, *args, **kwargs):
@@ -159,6 +160,7 @@ class _FakePgError(Exception):
 
 
 def test_connect_with_unreachable_database_returns_none(monkeypatch):
+    monkeypatch.setenv("CORTEX_MEMORY_STORE_BACKEND", "postgresql")
     module = MagicMock()
     module.Error = _FakePgError
     # The hook connects via psycopg.Connection[DictRow].connect(...) so the

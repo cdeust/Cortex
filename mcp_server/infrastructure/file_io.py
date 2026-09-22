@@ -29,8 +29,13 @@ def write_json(file_path: str | Path, data: Any) -> None:
     p = Path(file_path)
     ensure_dir(p.parent)
     tmp = p.with_suffix(f"{p.suffix}.tmp-{os.getpid()}")
-    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    # source: ADR-1084 (acknowledge lifecycle effects only after persistence).
+    with tmp.open("w", encoding="utf-8") as stream:
+        json.dump(data, stream, indent=2, ensure_ascii=False)
+        stream.flush()
+        os.fsync(stream.fileno())
     os.replace(tmp, p)
+    _sync_directory(p.parent)
 
 
 def read_text_file(file_path: str | Path) -> str | None:
@@ -48,7 +53,15 @@ def ensure_dir(dir_path: str | Path) -> None:
     """Ensure a directory exists, creating it recursively if needed.
 
     source: ADR-0526"""
-    Path(dir_path).mkdir(parents=True, exist_ok=True)
+    # source: ADR-1084 (new directory links must survive acknowledgement).
+    missing = []
+    path = Path(dir_path).resolve()
+    while not path.exists():
+        missing.append(path)
+        path = path.parent
+    for directory in reversed(missing):
+        directory.mkdir(exist_ok=True)
+        _sync_directory(directory.parent)
 
 
 def list_dir(dir_path: str | Path, *, with_file_types: bool = False) -> list | None:
@@ -70,3 +83,13 @@ def stat_file(file_path: str | Path) -> os.stat_result | None:
         return Path(file_path).stat()
     except OSError:
         return None
+
+
+def _sync_directory(path: Path) -> None:
+    """Persist directory entries after mkdir or atomic replacement. source: ADR-1084"""
+    if os.name != "nt":
+        descriptor = os.open(path, os.O_RDONLY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)

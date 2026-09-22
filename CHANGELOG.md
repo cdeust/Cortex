@@ -6,33 +6,21 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Changed
-
-- **Codex exposes the full tool profile and registers all 11 lifecycle hooks.**
-  Host payloads and timeout limits still affect behavior; see
-  [Codex hook limitations](docs/codex-plugin.md). The Codex
-  plugin now serves the complete tool profile (`.mcp.json` drops
-  `--profile lean`, matching the Claude manifest's server args, which carry
-  no `--profile` flag) and installs the same 11 lifecycle hooks through
-  a new `plugins/hypermnesia-mcp-codex/hooks/hooks.json`, referenced from
-  `.codex-plugin/plugin.json` by path the way `mcpServers` already is. Each
-  hook runs `uvx --from "hypermnesia-mcp[postgresql,sqlite]"
-  hypermnesia-mcp-hook <module>` — the console script added in #605 — so the
-  package still ships only its own directory, never this repository and never
-  `scripts/launcher.py`. Event names are Codex's own: `compaction_checkpoint`
-  moves to `PreCompact` because Codex has no `Notification` event, and
-  `SessionEnd` takes Codex's documented 3-second maximum instead of the
-  Claude manifest's 30. Every other hook carries the Claude manifest's own
-  timeout, because a latency budget is part of behaviour: unset, Codex would
-  let a stalled `UserPromptSubmit` hook hold a prompt for its 600-second
-  default where Claude Code caps the same hook at 5 seconds. The two
-  `PreToolUse` gates declare none on either host, which is the parity case.
-  Matchers carry Codex's native tool names
-  (`apply_patch`, `exec_command`, `shell_command`) alongside Claude's, so the
-  translations in `host_event.py` (#608) actually receive the events they
-  translate. This reverses the earlier "Codex is additive, reduced" design.
+## [4.23.2] - 2026-09-22
 
 ### Fixed
+
+- Codex subagents receive scoped team decisions and role context at native
+  start on PostgreSQL and SQLite. Plaintext spawn calls also receive task-specific
+  memory; opaque collaboration arguments remain unchanged.
+- Shell file-access cues prime current project/global memories. Priming respects
+  the configured backend and excludes sibling projects, stale and superseded
+  records, and benchmark data.
+- Session-end intake persists events before package startup. A detached worker
+  records session/profile effects with idempotent replay after interruption;
+  startup recovers pending work and reports failures.
+- Codex runtime commands pin the matching wheel version so package caches cannot
+  retain the previous hook behavior after a plugin update.
 
 - **The vendored `deps/` directory is now isolated from user site-packages
   (#621).** `scripts/launcher.py` put `deps/` first on `sys.path` and left
@@ -42,12 +30,12 @@ adheres to [Semantic Versioning](https://semver.org/).
   torch/torchvision/torchaudio set, `torch` came from `deps/` (CPU) while
   `torchvision` came from user site-packages built against the other torch,
   so importing them together aborted the MCP server during startup with
-  `RuntimeError: operator torchvision::nms does not exist` — which
+  `RuntimeError: operator torchvision::nms does not exist`, which
   `transformers` re-raised as a misleading `ModuleNotFoundError: Could not
   import module 'PreTrainedModel'`, and which the host reported only as
   `CONNECTION_CLOSED`. Conversely, `sys.path.insert` never processes a
-  directory's `.pth` files, so `deps/pywin32.pth` — the only route to
-  `pywintypes` — was inert, and cutting user site-packages on its own
+  directory's `.pth` files, so `deps/pywin32.pth`, the only route to
+  `pywintypes`, was inert, and cutting user site-packages on its own
   (`PYTHONNOUSERSITE`, `python -s`) traded one import failure for another.
   A new stdlib-only `scripts/launcher_site.py` does both halves in the
   order that works: `site.addsitedir(deps_dir)` so the `.pth` files run,
@@ -59,7 +47,7 @@ adheres to [Semantic Versioning](https://semver.org/).
   applies it to the MCP server and all eleven lifecycle hooks at once —
   twice, once before `ensure_deps`/`ensure_all_deps` and once after, since
   that install resolves transitives and can land a `.pth` the first call
-  could not see — and `scripts/setup.py`'s verification block applies it
+  could not see, and `scripts/setup.py`'s verification block applies it
   too, so the installer checks what the plugin will actually import.
   Inside a virtualenv (dev clones, CI) user site-packages is already off
   `sys.path`, so the removal is a no-op there. A `site.getusersitepackages()`
@@ -82,6 +70,32 @@ adheres to [Semantic Versioning](https://semver.org/).
   text-mode stdout writes CRLF on Windows and a pipe preserves it, so the
   extracted name arrived as `sentence-transformers\r` and the rest of the
   installer's line overwrote it from column 0.
+
+### Changed
+
+- **Codex exposes the full tool profile and registers all 11 lifecycle hooks.**
+  Host payloads and timeout limits still affect behavior; see
+  [Codex hook limitations](docs/codex-plugin.md). The Codex
+  plugin now serves the complete tool profile (`.mcp.json` drops
+  `--profile lean`, matching the Claude manifest's server args, which carry
+  no `--profile` flag) and installs the same 11 lifecycle hooks through
+  a new `plugins/hypermnesia-mcp-codex/hooks/hooks.json`, referenced from
+  `.codex-plugin/plugin.json` by path the way `mcpServers` already is. Each
+  hook runs `uvx --from "hypermnesia-mcp[postgresql,sqlite]"
+  hypermnesia-mcp-hook <module>`, the console script added in #605, so the
+  package still ships only its own directory, never this repository and never
+  `scripts/launcher.py`. Event names are Codex's own: `compaction_checkpoint`
+  moves to `PreCompact` because Codex has no `Notification` event, and
+  `SessionEnd` takes Codex's documented 3-second maximum instead of the
+  Claude manifest's 30. Every other hook carries the Claude manifest's own
+  timeout, because a latency budget is part of behaviour: unset, Codex would
+  let a stalled `UserPromptSubmit` hook hold a prompt for its 600-second
+  default where Claude Code caps the same hook at 5 seconds. The two
+  `PreToolUse` gates declare none on either host, which is the parity case.
+  Matchers carry Codex's native tool names
+  (`apply_patch`, `exec_command`, `shell_command`) alongside Claude's, so the
+  translations in `host_event.py` (#608) actually receive the events they
+  translate. This reverses the earlier "Codex is additive, reduced" design.
 
 ## [4.23.1] - 2026-09-22
 

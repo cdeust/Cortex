@@ -1,4 +1,4 @@
-"""PostgreSQL connection + the two-pass briefing query for agent_briefing.
+"""Backend connection and the two-pass briefing query for agent_briefing.
 
 source: ADR-0484"""
 
@@ -8,14 +8,22 @@ import os
 
 from mcp_server.hooks.agent_briefing_log import _log
 from mcp_server.shared.project_scope import project_ancestors
-
-_DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://localhost:5432/cortex")
-_MAX_MEMORIES = 3
-_MIN_HEAT = 0.2
+from mcp_server.infrastructure.backend_marker import effective_backend
+from mcp_server.infrastructure.memory_config import get_memory_settings
+from mcp_server.hooks.agent_briefing_sqlite import (
+    SqliteBriefingConnection,
+    _MAX_MEMORIES,
+    _MIN_HEAT,
+    fetch_sqlite_context,
+)
 
 
 def _connect():
-    """Open the briefing's PG connection; None when PG is unreachable."""
+    """Select the configured backend; None when PostgreSQL is unreachable."""
+    if effective_backend(os.environ) == "sqlite":
+        from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: PLC0415 — hook latency boundary
+
+        return SqliteBriefingConnection(get_shared_store())
     try:
         import psycopg  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
         from psycopg.rows import DictRow, dict_row  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
@@ -23,7 +31,9 @@ def _connect():
         return None
     try:
         return psycopg.Connection[DictRow].connect(
-            _DATABASE_URL, row_factory=dict_row, autocommit=True
+            os.environ.get("DATABASE_URL") or get_memory_settings().DATABASE_URL,
+            row_factory=dict_row,
+            autocommit=True,
         )
     except psycopg.Error:
         return None
@@ -42,6 +52,8 @@ def _fetch_agent_context(
     Each result keeps the memory ``id`` — the injection receipt (T2)
     records exactly which memories entered the agent's context.
     """
+    if isinstance(conn, SqliteBriefingConnection):
+        return fetch_sqlite_context(conn, agent_name, keywords, project_root)
     results = []
     ancestors = project_ancestors(project_root)  # source: ADR-1083
 
@@ -101,7 +113,7 @@ def _fetch_agent_context(
                 FROM memories m
                      JOIN current_memories cm ON cm.id = m.id
                 WHERE m.is_team_decision = TRUE
-                  AND m.agent_context != %s
+                  AND (m.agent_context IS NULL OR m.agent_context != %s OR %s = 0)
                   AND (m.is_global = TRUE OR m.directory_context = ANY(%s::TEXT[]))
                   AND NOT m.is_benchmark
                   AND m.superseded_by_id IS NULL
@@ -109,7 +121,7 @@ def _fetch_agent_context(
                 LIMIT %s
                 """
                 ),
-                (agent_name, ancestors, remaining),
+                (agent_name, len(keywords), ancestors, remaining),
             ).fetchall()
             for r in rows:
                 results.append(

@@ -105,7 +105,7 @@ def test_codex_plugin_serves_the_full_profile_and_references_its_hooks() -> None
         "command": "uvx",
         "args": [
             "--from",
-            "hypermnesia-mcp[postgresql,sqlite]",
+            f"hypermnesia-mcp[postgresql,sqlite]=={plugin['version']}",
             "hypermnesia-mcp",
         ],
         # Codex's local storage selection has the same auto contract as the
@@ -137,7 +137,10 @@ def test_codex_plugin_ships_an_mcp_server_and_hooks_and_nothing_else() -> None:
         assert unsupported not in plugin, unsupported
     # postInstall is the sharpest of those: the Claude package runs an
     # installer script, and this one deliberately does not.
-    assert not (PLUGIN_ROOT / "scripts").exists()
+    # source: ADR-1084 (bundled stdlib intake, no installer script).
+    assert {p.name for p in (PLUGIN_ROOT / "scripts").glob("*.py")} == {
+        "session_queue.py"
+    }
 
 
 def test_codex_package_does_not_weaken_the_claude_plugin() -> None:

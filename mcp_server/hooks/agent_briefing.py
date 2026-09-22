@@ -1,37 +1,13 @@
 #!/usr/bin/env python3
-"""Claude Code SubagentStart hook — automatic agent briefing.
+"""Automatic child briefing for Claude Code and Codex.
 
-When the orchestrator or any parent agent spawns a subagent, this hook
-retrieves relevant memories for the spawned agent's task context.
+Claude specialists use their task prompt. Codex PreToolUse appends context to
+exact spawn arguments; promptless SubagentStart supplies scoped team decisions.
+Queries and receipt writes honor the configured SQLite/PostgreSQL backend.
 
-  Gated by:
-    - Agent type must be a known, usable specialist (engineer, tester, etc.)
-    - Task description must be non-empty
-    - At least 1 relevant memory found
-    - Max 3 memories injected (keep context compact)
-
-Installation
-------------
-Add to ``~/.claude/settings.json`` under hooks::
-
-    {
-        "hooks": {
-            "SubagentStart": [{
-                "type": "command",
-                "command": "python3 -m mcp_server.hooks.agent_briefing",
-                "timeout": 5
-            }]
-        }
-    }
-
-Invariants
-----------
-- Exit 0: stdout injected into agent's context
-- Exit 1: skip (no relevant context)
-- Must complete within 5s
-- Logs to stderr only
-
-source: ADR-0481"""
+source: ADR-0481
+source: ADR-1085
+"""
 
 from __future__ import annotations
 
@@ -44,13 +20,18 @@ from typing import Any
 
 from mcp_server.handlers.injection_receipts import (
     emit_hook_receipt,
+    emit_injection_receipt,
     receipt_marker,
     session_id_from_transcript,
 )
 from mcp_server.hooks.agent_briefing_keywords import _extract_task_keywords
 from mcp_server.hooks.agent_briefing_log import _log
+from mcp_server.hooks.agent_briefing_native import emit_native, native_request
+from mcp_server.hooks.agent_briefing_role import (
+    fetch_role_context as _fetch_role_context,
+)
+from mcp_server.hooks.agent_briefing_sqlite import SqliteBriefingConnection
 from mcp_server.hooks.agent_briefing_query import (
-    _DATABASE_URL,
     _MAX_MEMORIES,
     _MIN_HEAT,
     _connect,
@@ -60,7 +41,6 @@ from mcp_server.infrastructure.config import CLAUDE_DIR
 from mcp_server.shared.project_scope import resolve_project_root
 
 __all__ = [
-    "_DATABASE_URL",
     "_MAX_MEMORIES",
     "_MIN_HEAT",
     "_connect",
@@ -124,13 +104,13 @@ def _load_specialist_agents() -> frozenset[str]:
     root = CLAUDE_DIR / "agents"
     names: set[str] = set()
     if root.is_dir():
-        for pattern in ("*.md", "genius/*.md"):
-            for md in root.glob(pattern):
-                if md.name == "INDEX.md":
-                    continue
-                name = _parse_frontmatter_name(md)
-                if name:
-                    names.add(name)
+        paths = (md for pattern in ("*.md", "genius/*.md") for md in root.glob(pattern))
+        for md in paths:
+            if md.name == "INDEX.md":
+                continue
+            name = _parse_frontmatter_name(md)
+            if name:
+                names.add(name)
     usable = names - _NON_SPECIALIST_META_AGENTS
     dropped = names & _NON_SPECIALIST_META_AGENTS
     if dropped:
@@ -146,61 +126,100 @@ _SPECIALIST_AGENTS = _load_specialist_agents()
 _MIN_PROMPT_CHARS = 20
 
 
-def process_event(event: dict[str, Any]) -> None:
-    """Process SubagentStart event and inject briefing context."""
-    agent_name = (event.get("agent_name") or "").lower()
+def _request(event: dict) -> tuple[str, list[str] | None, bool] | None:
+    """Native roles do not belong to the Claude specialist roster."""
+    try:
+        native = native_request(event)
+    except ValueError as exc:
+        _log(f"skip: {exc}")
+        return None
+    if native is not None:
+        agent, prompt = native
+        keywords = _extract_task_keywords(prompt) if prompt else None
+        return agent, keywords, True
+    agent = (event.get("agent_name") or "").lower()
     prompt = event.get("prompt", "")
-
-    if agent_name not in _SPECIALIST_AGENTS:
-        _log(f"skip: agent '{agent_name}' not a specialist")
-        sys.exit(0)
-
-    if not prompt or len(prompt) < _MIN_PROMPT_CHARS:
+    if agent not in _SPECIALIST_AGENTS:
+        _log(f"skip: agent '{agent}' not a specialist")
+    elif not prompt or len(prompt) < _MIN_PROMPT_CHARS:
         _log("skip: prompt too short")
-        sys.exit(0)
-
-    keywords = _extract_task_keywords(prompt)
-    if not keywords:
+    elif not (keywords := _extract_task_keywords(prompt)):
         _log("skip: no keywords extracted")
-        sys.exit(0)
+    else:
+        return agent, keywords, False
+    return None
 
-    conn = _connect()
+
+def _briefing(event, agent, keywords):
+    """Fetch bounded context and record exactly those injected memories."""
+    try:
+        conn = _connect()
+    except Exception as exc:  # noqa: BLE001 — hook boundary; visible degradation
+        _log(f"skip: briefing store unavailable: {exc}")
+        return ""
     if conn is None:
         _log("skip: PostgreSQL unavailable")
-        sys.exit(0)
-
+        return ""
     try:
-        memories = _fetch_agent_context(
-            conn, agent_name, keywords, resolve_project_root(event, os.environ)
+        project_root = resolve_project_root(event, os.environ)
+        memories = (
+            _fetch_role_context(conn, agent, project_root)
+            if keywords is None
+            else _fetch_agent_context(conn, agent, keywords, project_root)
         )
         if not memories:
-            _log(f"skip: no relevant memories for {agent_name}")
-            sys.exit(0)
-
-        # source: ADR-0481
-        receipt_id = emit_hook_receipt(
-            conn,
+            _log(f"skip: no relevant memories for {agent}")
+            return ""
+        emitter = (
+            emit_injection_receipt
+            if isinstance(conn, SqliteBriefingConnection)
+            else emit_hook_receipt
+        )
+        target = conn.store if isinstance(conn, SqliteBriefingConnection) else conn
+        receipt_id = emitter(
+            target,
             [{"memory_id": m["id"]} for m in memories],
             channel="agent_briefing",
-            session_id=session_id_from_transcript(event.get("transcript_path")),
+            session_id=event.get("session_id")
+            or session_id_from_transcript(event.get("transcript_path")),
         )
+    except Exception as exc:  # noqa: BLE001 — hook boundary; visible degradation
+        _log(f"skip: briefing query failed: {exc}")
+        return ""
     finally:
         conn.close()
+    _log(f"briefed {agent} with {len(memories)} memories")
+    return _render_briefing(agent, memories, receipt_id, keywords is None)
 
-    # Build injection
-    header = f"## Cortex Briefing ({agent_name})"
+
+def _render_briefing(agent, memories, receipt_id, role_only=False):
+    """The bounded ADR-0481 banner shared by both hosts."""
+    header = f"## Cortex Briefing ({agent})"
     if receipt_id is not None:
         header += f" {receipt_marker(receipt_id)}"
     lines = [header + "\n"]
+    if role_only:
+        lines.append("Role and project context; the host did not expose the task.\n")
     for m in memories:
         source = m.get("source", "")
         prefix = f"[{source}] " if source else ""
         first_line = m["content"].split("\n")[0][:200]
         lines.append(f"- {prefix}{first_line}")
     lines.append("\n*Auto-injected by Cortex. Use `recall` for deeper context.*")
+    return "\n".join(lines)
 
-    print("\n".join(lines))
-    _log(f"briefed {agent_name} with {len(memories)} memories")
+
+def process_event(event: dict[str, Any]) -> None:
+    """Brief native spawn tasks, native project starts, or legacy specialists."""
+    request = _request(event)
+    if request is not None:
+        agent, keywords, native = request
+        text = _briefing(event, agent, keywords)
+        if text:
+            if native:
+                emit_native(event, text)
+            else:
+                print(text)
     sys.exit(0)
 
 
@@ -218,7 +237,8 @@ def main() -> None:
     except json.JSONDecodeError:
         sys.exit(0)
 
-    process_event(event)
+    if isinstance(event, dict):
+        process_event(event)
 
 
 if __name__ == "__main__":

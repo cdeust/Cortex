@@ -3978,24 +3978,9 @@
       "detail": "mcp_server.handlers.injection_receipts"
     },
     {
-      "file": "mcp_server/hooks/agent_briefing.py",
-      "kind": "method-size",
-      "detail": "process_event"
-    },
-    {
       "file": "mcp_server/hooks/agent_briefing_query.py",
       "kind": "method-size",
       "detail": "_fetch_agent_context"
-    },
-    {
-      "file": "mcp_server/hooks/agent_briefing_query.py",
-      "kind": "unsourced-constant",
-      "detail": "_MAX_MEMORIES"
-    },
-    {
-      "file": "mcp_server/hooks/agent_briefing_query.py",
-      "kind": "unsourced-constant",
-      "detail": "_MIN_HEAT"
     },
     {
       "file": "mcp_server/hooks/auto_recall.py",
@@ -4126,11 +4111,6 @@
       "file": "mcp_server/hooks/preemptive_context.py",
       "kind": "unsourced-constant",
       "detail": "_COOLDOWN_SECONDS"
-    },
-    {
-      "file": "mcp_server/hooks/preemptive_context.py",
-      "kind": "unsourced-constant",
-      "detail": "_HEAT_BOOST"
     },
     {
       "file": "mcp_server/hooks/session_lifecycle.py",

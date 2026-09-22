@@ -47,11 +47,11 @@ def _shell_event(event: dict, tool_name: str) -> dict:
 
 
 def _subagent_start_event(event: dict) -> dict:
-    """``agent_briefing`` reads ``agent_name`` and ``prompt``; Codex's
-    SubagentStart carries ``agent_type`` and no prompt. Mapping ``agent_type``
-    to ``agent_name`` and leaving ``prompt`` absent lets the module's own
-    early exit (prompt shorter than its minimum) handle the rest, which is
-    the documented behaviour rather than a synthesized prompt."""
+    """Keep native role identity; promptless starts receive project context.
+
+    Task context is added independently at PreToolUse from exact spawn arguments.
+    source: ADR-1085
+    """
     mapped = dict(event)
     agent_type = event.get("agent_type")
     if agent_type is not None:

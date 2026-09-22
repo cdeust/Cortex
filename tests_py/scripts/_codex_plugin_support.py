@@ -66,4 +66,9 @@ def hook_index(hooks: dict, suffix: str) -> dict[str, tuple[str, dict, dict]]:
         for event, entry, hook in every_hook(hooks)
         for module in HOOK_MODULES
         if hook["command"].endswith(suffix.format(module=module))
+        or (
+            module == "session_lifecycle"
+            and hook["command"]
+            == 'python3 "${PLUGIN_ROOT}/scripts/session_queue.py" intake'
+        )
     }

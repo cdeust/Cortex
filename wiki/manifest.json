@@ -3503,6 +3503,18 @@
     "ADR-1083": {
       "mirror": "ADR-1083-separate-project-team-decisions-from-global-knowledge.md",
       "path": "adr/cortex/1083-separate-project-team-decisions-from-global-knowledge.md"
+    },
+    "ADR-1084": {
+      "mirror": "ADR-1084-durable-sessionend-intake-before-package-startup.md",
+      "path": "adr/cortex/1084-durable-sessionend-intake-before-package-startup.md"
+    },
+    "ADR-1085": {
+      "mirror": "ADR-1085-codex-task-and-project-briefings.md",
+      "path": "adr/cortex/1085-codex-task-and-project-briefings.md"
+    },
+    "ADR-1086": {
+      "mirror": "ADR-1086-prime-project-memories-from-explicit-shell-file-cues.md",
+      "path": "adr/cortex/1086-prime-project-memories-from-explicit-shell-file-cues.md"
     }
   },
   "project": "cortex",

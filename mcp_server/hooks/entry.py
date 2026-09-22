@@ -62,15 +62,20 @@ def prepare_environment(
     Postcondition: ``CORTEX_MEMORY_STORE_BACKEND`` carries whatever
     ``apply_backend_resolution`` resolves (mirrors ``mcp_server/__main__.py``
     line 22 for the server). ``DATABASE_URL`` is set to the local default
-    only when it was unset AND the resolved backend is not ``sqlite``
+    only when both URL aliases are unset AND the resolved backend is not ``sqlite``
     (mirrors ``scripts/launcher.py`` lines 135-139) -- on the SQLite backend
     the URL is unused, and injecting a PostgreSQL default would make every
-    hook invocation attempt a doomed connection.
+    hook invocation attempt a doomed connection. A configured namespaced URL
+    is promoted to DATABASE_URL so raw-SQL hooks and the shared store use the
+    same destination (DATABASE_URL takes precedence, as in memory_store).
     """
     apply_backend_resolution(environ, marker_path)
     backend = environ.get("CORTEX_MEMORY_STORE_BACKEND", "")
     if "DATABASE_URL" not in environ and backend != "sqlite":
-        environ["DATABASE_URL"] = _DEFAULT_DATABASE_URL
+        environ["DATABASE_URL"] = (
+            environ.get("CORTEX_MEMORY_DATABASE_URL", "").strip()
+            or _DEFAULT_DATABASE_URL
+        )
 
 
 def _print_usage() -> None:

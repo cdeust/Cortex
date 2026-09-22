@@ -38,6 +38,7 @@ Invariants
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import subprocess
@@ -46,6 +47,12 @@ from datetime import datetime, timezone
 from typing import Any
 
 try:
+    from mcp_server.infrastructure.config import METHODOLOGY_DIR
+    from mcp_server.infrastructure.file_io import ensure_dir
+    from mcp_server.infrastructure.session_lifecycle_files import (
+        validate_lifecycle_files,
+    )
+    from mcp_server.infrastructure.hook_counter_lock import counter_lock
     from mcp_server.core.profile_builder import apply_session_update
     from mcp_server.handlers.injection_receipts import (
         session_id_from_transcript,
@@ -254,6 +261,8 @@ def _build_session_entry(event: dict[str, Any], domain_id: str) -> dict[str, Any
 def _append_session(session_log: dict, entry: dict[str, Any]) -> None:
     """Append a session entry to the log, capping at MAX_SESSION_LOG_ENTRIES."""
     sessions = session_log.get("sessions") or []
+    if any(row.get("sessionId") == entry["sessionId"] for row in sessions):
+        return
     sessions.append(entry)
     if len(sessions) > MAX_SESSION_LOG_ENTRIES:
         sessions = sessions[-MAX_SESSION_LOG_ENTRIES:]
@@ -330,30 +339,43 @@ def process_event(event: dict[str, Any] | None) -> None:
         _log("No session_id in event, skipping")
         return
 
+    # source: ADR-1084 (serialize direct, Claude and queued lifecycle writers).
+    ensure_dir(METHODOLOGY_DIR)
+    with counter_lock(METHODOLOGY_DIR / "session-lifecycle.lock"):
+        _record_event(event)
+
+
+def _record_event(event: dict[str, Any]) -> None:
+    """Replay-safe log and profile effects under the lifecycle lock.
+
+    source: ADR-1084
+    """
+    validate_lifecycle_files()
     profiles = load_profiles()
     log = load_session_log()
-
     domain_id = _resolve_domain(event, profiles)
-    _append_session(log, _build_session_entry(event, domain_id))
+    entry = _build_session_entry(event, domain_id)
+    _append_session(log, entry)
     save_session_log(log)
-
     dp = (profiles.get("domains") or {}).get(domain_id)
+    event_id = hashlib.sha256(event["session_id"].encode()).hexdigest()
     if dp:
-        apply_session_update(
-            domain_profile=dp,
-            session_data={
-                "duration": event.get("duration"),
-                "tools_used": event.get("tools_used"),
-                "turn_count": event.get("turn_count"),
-            },
-        )
-        # D5: targeted per-domain write — does not rewrite other domains.
-        save_profile(domain_id, dp)
-        _log(f'Updated profile for domain "{domain_id}"')
+        applied = dp.setdefault("sessionEndEvents", [])
+        if event_id not in applied:
+            apply_session_update(
+                domain_profile=dp,
+                session_data={
+                    "duration": event.get("duration"),
+                    "tools_used": entry["toolsUsed"],
+                    "turn_count": entry["turnCount"],
+                },
+            )
+            applied.append(event_id)
+            save_profile(domain_id, dp)
+            _log(f'Updated profile for domain "{domain_id}"')
     else:
         _log(f'No profile for domain "{domain_id}", logged session only')
-
-    _spawn_consolidation(turn_count=event.get("turn_count", 0))
+    _spawn_consolidation(turn_count=entry["turnCount"])
 
 
 def main() -> None:

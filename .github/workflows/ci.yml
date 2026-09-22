@@ -330,6 +330,11 @@ jobs:
       - name: Install pinned MCP host CLIs
         run: npm ci --prefix tests_js/mcp-host-clis
 
+      # source: ADR-1084 — the plugin pins its matching runtime; validate the
+      # candidate wheel before that version exists on PyPI.
+      - name: Build candidate Codex runtime
+        run: uv build --wheel --out-dir "$RUNNER_TEMP/cortex-codex-wheel"
+
       - name: Validate Claude, Gemini, and Codex configuration parsing
         run: |
           set -euo pipefail
@@ -360,14 +365,18 @@ jobs:
           plugin_runtime="$(
             python -c 'import json; print(json.load(open("plugins/hypermnesia-mcp-codex/.mcp.json"))["mcpServers"]["cortex"]["env"]["CORTEX_RUNTIME"])'
           )"
-          CORTEX_RUNTIME="$plugin_runtime" \
-          UV_CACHE_DIR="$RUNNER_TEMP/cortex-codex-cold-uv-cache" \
-          UV_TOOL_DIR="$RUNNER_TEMP/cortex-codex-cold-uv-tools" \
-          PYTHONPATH="$GITHUB_WORKSPACE" \
+          candidate_wheel="$(find "$RUNNER_TEMP/cortex-codex-wheel" -name '*.whl' -print -quit)"
+          # Install verifier dependencies outside the cold cache used by the
+          # manifest command; full-profile bounds come from this exact tree.
+          uv run --no-project --with "$candidate_wheel" -- env \
+            CORTEX_RUNTIME="$plugin_runtime" \
+            UV_FIND_LINKS="$RUNNER_TEMP/cortex-codex-wheel" \
+            UV_CACHE_DIR="$RUNNER_TEMP/cortex-codex-cold-uv-cache" \
+            UV_TOOL_DIR="$RUNNER_TEMP/cortex-codex-cold-uv-tools" \
+            PYTHONPATH="$GITHUB_WORKSPACE" \
             python scripts/verify_mcp_hosts.py \
               --timeout "$plugin_timeout" --clients codex-cli --profiles full \
               --command-includes-profile \
-              --published-surface \
               --allow-bootstrap-network \
               --storage-selection auto \
               -- "${plugin_command[@]}"

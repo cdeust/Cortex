@@ -1,4 +1,4 @@
-# Security Policy — Cortex plugin for Codex
+# Security Policy, Cortex plugin for Codex
 
 This package is the Codex distribution of Cortex (`hypermnesia-mcp`). It
 starts the published PyPI server over local stdio with the default `full` tool
@@ -33,10 +33,10 @@ To run the reduced surface instead, override the server command with
 
 ## Lifecycle hooks
 
-`hooks/hooks.json` registers the 11 lifecycle hooks as commands that Codex
-runs on session, prompt, tool and compaction events. Each is a separate
-`uvx --from "hypermnesia-mcp[postgresql,sqlite]" hypermnesia-mcp-hook <module>`
-process. The ones with effects beyond writing to the memory store:
+`hooks/hooks.json` registers the 11 lifecycle hook modules on session, prompt,
+tool and compaction events. Runtime hooks use the wheel version pinned to the
+plugin. Session-end intake and recovery use a bundled Python standard-library
+script. The hooks with effects beyond writing to the memory store:
 
 - `decision_gate` and `no_deps_gate` run on `PreToolUse` for edits. They read
   the target file, and for an `apply_patch` call they read each patched file's
@@ -44,8 +44,16 @@ process. The ones with effects beyond writing to the memory store:
   the tool call** by exiting non-zero.
 - `post_tool_capture` runs on every `PostToolUse` event and stores significant
   tool output as memory, so tool results are persisted locally by default.
-- `session_lifecycle` runs at `SessionEnd` and **spawns a detached
-  subprocess** that outlives the hook to run consolidation.
+- Session-end intake persists the event and storage selection in a private local
+  queue, then **spawns a detached worker**. The worker runs `session_lifecycle`
+  to update session/profile records and launch consolidation. Startup recovers
+  pending jobs. Queue files and completion receipts stay under the configured
+  Cortex methodology directory.
+- `agent_briefing` injects scoped project/role context into native children and
+  can append task-relevant memory to plaintext spawn arguments. Opaque
+  collaboration arguments remain unchanged.
+- `preemptive_context` parses supported shell file-access cues without executing
+  shell text and boosts matching current memories within project/global scope.
 - `post_commit_reindex` runs on shell events and may reindex the working
   repository into the local store.
 
@@ -64,9 +72,9 @@ disable the plugin's hooks in Codex, to run the MCP server alone.
   (see [PRIVACY.md](https://github.com/cdeust/Cortex/blob/main/PRIVACY.md)).
 - Files referenced by the events the hooks receive, read-only, as described
   above. No hook writes to your repository.
-- The `uvx` cache, used at server startup and on every hook invocation. The
-  package requirement is unpinned; the manifests do not guarantee a specific
-  `hypermnesia-mcp` release.
+- The `uvx` cache, used for server and runtime-hook startup. The package
+  requirement is pinned to the installed plugin version. Intake does not wait
+  for package startup before persisting the session-end event.
 
 Nothing leaves the machine except the one-time model download described in
 PRIVACY.md.

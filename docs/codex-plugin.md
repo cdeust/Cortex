@@ -4,11 +4,11 @@ Cortex ships a native Codex package in an isolated repository subdirectory.
 It exposes the same complete MCP tool profile and registers the same hook
 modules as the Claude Code plugin. Host event payloads and timeout limits
 differ, so registering the same modules does not guarantee identical behavior.
-The limitations below describe those differences.
+The adapters below handle those differences.
 
 - **Same tool surface.** The Codex package starts the published PyPI server
   over local stdio with no `--profile` flag, so it gets the default `full`
-  profile — exactly like the Claude Code plugin's server args, which also
+  profile, exactly like the Claude Code plugin's server args, which also
   carry no `--profile` flag.
 - **Same registered hook modules.** `hooks/hooks.json` wires all 11 lifecycle hooks
   that `mcp_server.hooks.entry.HOOK_MODULES` allows, which is the same set
@@ -23,13 +23,13 @@ MCP-only, `lean`-profile package.
 
 ## How the hooks run under Codex
 
-A Codex plugin ships only its own directory — never this repository, and never
-`scripts/launcher.py`, which is Claude-only. Each hook therefore invokes the
+A Codex plugin ships only its own directory, never this repository, and never
+`scripts/launcher.py`, which is Claude-only. Runtime hooks invoke the
 console script the wheel declares (`hypermnesia-mcp-hook`, `pyproject.toml`,
 added in #605):
 
 ```bash
-uvx --from "hypermnesia-mcp[postgresql,sqlite]" hypermnesia-mcp-hook <module>
+uvx --from "hypermnesia-mcp[postgresql,sqlite]==4.23.2" hypermnesia-mcp-hook <module>
 ```
 
 `mcp_server/hooks/entry.py` validates `<module>` against `HOOK_MODULES`, wires
@@ -40,20 +40,15 @@ per file operation, `exec_command`/`shell_command` become a `Bash`-shaped
 event, and `SubagentStart`'s `agent_type` is mapped to `agent_name`; a
 Claude-shaped event passes through untouched.
 
-Each command is wrapped in a `uvx` presence check. That is the only thing that
-can go wrong at this command line that the plugin can diagnose: unlike the
-Claude manifest there is no `CLAUDE_PLUGIN_ROOT` to guard (nothing in the
-command resolves against the plugin root) and no interpreter to locate (`uvx`
-owns the environment). A missing `uv` therefore reports a named cause on
-stderr and exits 1 instead of surfacing a bare `command not found`.
+Runtime commands check that `uvx` is present and report a named diagnostic if
+it is missing. Session-end intake and startup recovery use the bundled
+`${PLUGIN_ROOT}/scripts/session_queue.py` through Python 3. They do not import
+the runtime before persisting or scheduling work.
 
-Known debt: that guard is repeated verbatim in all 11 entries here, and the
-Claude manifest repeats its own equivalent 11 times too. Both hosts
-require a literal command string per entry, so nothing shares a source today;
-`test_codex_hook_commands_run_the_published_wheel_not_this_repository` checks
-every entry rather than a sample, which is what keeps them from diverging
-silently. Generating both manifests from one template is the real fix and is
-deliberately not attempted here.
+The MCP server and runtime hooks pin the wheel to the plugin version. This
+prevents a cached older wheel from silently handling newer event contracts.
+CI builds that candidate wheel and supplies it through `UV_FIND_LINKS` before
+the version is published; deployment uses the same requirement from PyPI.
 
 ### Event names and matchers
 
@@ -62,68 +57,52 @@ Event names are Codex's own, verified against
 2026-09-22). Two differ from the Claude manifest:
 
 - Codex has no `Notification` event. `compaction_checkpoint` is wired on
-  `PreCompact`, which "runs before Codex compacts the chat" — the module's own
+  `PreCompact`, which "runs before Codex compacts the chat", the module's own
   contract is to save a hippocampal checkpoint *before* compaction so state can
   be restored afterwards, so `PreCompact` is the matching point and
   `PostCompact` is not wired.
 - `SessionEnd` carries `"timeout": 3`. Codex defaults `SessionEnd` to 1 second
-  and "support[s] up to 3 seconds" — the documented maximum, so the Claude
-  manifest's 30 is not expressible here. Spawning consolidation detached
-  (#610) is what makes the remaining work small enough to attempt at all, but
-  it does not guarantee the hook fits. See the limitation below.
+  and "support[s] up to 3 seconds", the documented maximum, so the Claude
+  manifest's 30 is not expressible here. The bundled intake persists the event before
+  package startup and delegates recording to a replayable worker.
 
-#### Known limitation: session-end recording can exceed the timeout
+### Durable session-end recording
 
-`session_lifecycle` is the one hook whose budget is set by Codex rather than
-by Cortex, and measurement says the ceiling is marginal, not comfortable.
-Timed on 2026-09-22 (macOS 26.6.2 arm64, uv 0.11.3, warm `uv` cache, published
-4.23.1 wheel), running the manifest's own command against a `SessionEnd`
-event:
+Codex's three-second ceiling applies to intake. A bundled Python standard-library
+script writes and fsyncs the event before starting a detached worker. Package
+resolution, transcript analysis and profile updates run in that worker. A new
+session also starts recovery of pending events. The queue lives under
+`$CORTEX_CLAUDE_DIR/methodology/session-end-queue` (default `~/.claude`).
 
-```
-session_lifecycle  run 1: 3.46s
-session_lifecycle  run 2: 1.03s
-session_lifecycle  run 3: 0.97s
-```
+Each event retains its storage selection. The worker uses the wheel version
+from the installed plugin manifest. Session-log and profile writes carry replay
+identities, so retrying an interrupted job does not apply either effect twice.
+A worker failure retains the event and diagnostic; the next session reports
+pending jobs and their worker log. Invalid existing lifecycle files remain
+errors rather than being acknowledged as completed records.
 
-The first run exceeds the 3-second maximum despite a warm `uv` cache. The two
-later runs completed within it, but these three observations do not establish
-that subsequent sessions always fit. They also do not isolate the cause of
-the slower run. Prewarming package downloads does not guarantee completion,
-because the measurement above is already on a warm cache.
+See [ADR-1084](adr/ADR-1084-durable-sessionend-intake-before-package-startup.md)
+for the persistence boundary and interruption tests. Consolidation remains a
+separate detached operation; the durable receipt covers the session and profile
+recording. Python 3 must be available on `PATH` for intake and recovery.
 
-**What a kill actually costs.** Detaching consolidation (#610) does not
-protect the recording, because only the last step is detached. Reading
-`process_event` in `mcp_server/hooks/session_lifecycle.py`, this runs inline
-and in this order before anything is spawned:
+### Subagent briefing
 
-1. `load_profiles()` and `load_session_log()`;
-2. `_append_session(...)` then `save_session_log(log)` — **the session-log
-   row**;
-3. `apply_session_update(...)` then `save_profile(domain_id, dp)` — **the
-   per-domain profile delta**;
-4. `_spawn_consolidation(...)` — the only detached part.
+The child-start hook supplies team decisions first, followed by prior context
+for the child's role, within the existing briefing budget. Both passes enforce
+project/global scope on PostgreSQL and SQLite. This works without a manual
+memory call or special task wording.
 
-So a hook killed at 3 seconds loses the session-log row and the profile
-delta, not merely a consolidation pass. The session is not recorded at all,
-and nothing retries it: the next `SessionStart` does not reconcile a missing
-row.
+When Codex exposes a plaintext `spawn_agent` or `Agent` task in `PreToolUse`,
+Cortex retrieves against that exact message and appends the result while
+preserving all other arguments. The installed collaboration path also emits
+`collaborationspawn_agent`, but its message is encrypted. Cortex leaves that
+argument untouched. Its native child receives explicitly labelled project/role
+context through `SubagentStart`; Cortex does not claim task-specific retrieval
+from an unavailable prompt or infer a task from another transcript.
 
-Nothing in this package can raise Codex's ceiling. Whether to fix this by
-moving steps 1 to 3 behind the same detached re-invocation the module already
-has (`main()` dispatches on `argv[1] == "--consolidate"`, so the mechanism
-exists) is a design decision with its own durability trade-offs, and it is
-not made here. This is recorded as an open limitation rather than reconciled
-in prose.
-
-### Subagent briefing requires a prompt
-
-Codex's native [`SubagentStart` payload](https://developers.openai.com/codex/hooks#subagentstart)
-includes `agent_type` but no task `prompt`. The adapter maps `agent_type` to
-`agent_name` and leaves the prompt absent (`mcp_server/hooks/host_event.py`).
-`agent_briefing` exits when the prompt is absent or too short, before querying
-memories (`mcp_server/hooks/agent_briefing.py`). The hook remains registered,
-but native Codex subagent starts currently receive no briefing from it.
+See [ADR-1085](adr/ADR-1085-codex-task-and-project-briefings.md) for the captured
+host contract and the two delivery paths.
 
 ### Timeouts
 
@@ -159,7 +138,7 @@ budgets; prewarming (below) removes the window.
 
 ### Cost per edit
 
-Every hook is its own `uvx` process, so one `apply_patch`, `Edit` or `Write`
+Every runtime hook is its own `uvx` process, so one `apply_patch`, `Edit` or `Write`
 fires up to five of them: `decision_gate` and `no_deps_gate` before the call,
 then `post_tool_capture`, `preemptive_context` and `pipeline_impact_bump`
 after it. A patch touching several files still costs five processes, not five
@@ -179,16 +158,18 @@ The Codex docs state that for `apply_patch` "hook input still reports
 `apply_patch` as well, and the `Bash`-triggered hook also matches
 `exec_command|shell_command`.
 
-One asymmetry has no Codex equivalent to add. `preemptive_context` matches
-`Read` alongside the write tools, and Codex has no read tool: its table lists
-shell commands and unified exec, both matching as `Bash`, with no
-`Read`-shaped entry. Reading a file under Codex is a shell command, and
-`preemptive_context` keys on `tool_input.file_path`
-(`mcp_server/hooks/preemptive_context.py`), which a shell event does not
-carry. Matching `Bash` there would spawn a `uvx` process per shell command
-for a guaranteed no-op, so the matcher keeps `Read` (harmless, never emitted
-by Codex) and the read-triggered half of this hook simply does not fire under
-Codex. The edit-triggered half does, through `apply_patch`.
+File priming also recognizes explicit file operands in supported shell reads.
+Paths resolve against the tool's working directory. Shell text is parsed, never
+executed by the hook; ambiguous shell syntax and directory-wide searches do not
+supply explicit file cues. A native PostToolUse event contains plain command
+output without an exit code, so a cue identifies an attempted access to an
+existing file, not a claim that the entire command succeeded. Native asynchronous
+commands deliver that event after completion.
+
+Priming updates each matching memory once per call, within the project's ancestor
+scope or explicit global scope, on PostgreSQL and SQLite. Superseded, stale and
+benchmark memories are excluded. See [ADR-1086](adr/ADR-1086-prime-project-memories-from-explicit-shell-file-cues.md)
+for supported command forms and scope tests.
 
 The Codex `.mcp.json` lives under `plugins/hypermnesia-mcp-codex/`, never at
 the repository root. The package directory also carries its own `README.md`,
@@ -209,8 +190,7 @@ codex plugin add hypermnesia-mcp-codex@cortex-codex-plugins
 
 Restart the ChatGPT desktop app and start a new task so Codex loads the new
 plugin components. The plugin uses `uvx`, so `uv` must be available on `PATH`.
-The first launch installs both storage drivers. In this source checkout (pending
-release), direct MCP startup reads the
+The first launch installs both storage drivers. Direct MCP startup reads the
 same `~/.claude/methodology/backend.json` selection as the Claude launcher
 before loading memory settings. `CORTEX_CLAUDE_DIR` relocates that shared
 configuration root. Explicit `CORTEX_MEMORY_STORE_BACKEND`, then
@@ -227,18 +207,18 @@ settings to share memories; this does not merge previously separate stores.
 A prewarm downloads the package before restarting Codex:
 
 ```bash
-uv tool install "hypermnesia-mcp[postgresql,sqlite]"
+uv tool install "hypermnesia-mcp[postgresql,sqlite]==4.23.2"
 ```
 
-For the MCP server this is only a startup optimization — `startup_timeout_sec`
+For the MCP server this is only a startup optimization, `startup_timeout_sec`
 already covers a cold resolve. For the lifecycle hooks it matters more: every
 hook is its own `uvx` invocation, so a cold cache makes the first one pay the
-full package resolve. Prewarming removes that window. It does not remove the
-`SessionEnd` limitation above, which is a warm-cache measurement.
+full package resolve. Prewarming removes that window. Session-end intake runs before package resolution; a cold worker keeps its event
+queued until recording completes.
 
 The bundled server declares `startup_timeout_sec: 180`. This is a bounded
 startup ceiling, not a delay. Re-measured for the full profile on 2026-09-22
-with `scripts/verify_mcp_hosts.py` — the same script and flags CI runs — the
+with `scripts/verify_mcp_hosts.py`, the same script and flags CI runs, the
 exact two-driver command below completed `initialize`, `tools/list`, and a real
 `memory_stats` call over **59 tools in 120.17 seconds** from clean
 `UV_CACHE_DIR` and `UV_TOOL_DIR` directories on macOS 26.6.2 arm64 with uv
@@ -250,7 +230,7 @@ The bundled MCP command is equivalent to:
 
 ```bash
 env CORTEX_RUNTIME=cowork \
-  uvx --from "hypermnesia-mcp[postgresql,sqlite]" \
+  uvx --from "hypermnesia-mcp[postgresql,sqlite]==4.23.2" \
   hypermnesia-mcp
 ```
 
