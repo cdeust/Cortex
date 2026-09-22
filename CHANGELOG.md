@@ -6,6 +6,29 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The SQLite backend now installs sqlite-vec on every platform (#634).**
+  Neither the plugin launcher's runtime dependency pins nor `scripts/setup.py`'s
+  install closure (`requirements/setup.txt`) ever named the `[sqlite]` extra —
+  only `postgresql`, `codebase` and `benchmarks` were installed, unconditionally,
+  regardless of which backend was chosen. The zero-config SQLite default
+  therefore ran with vector search silently disabled (FTS-only) on every
+  install, reported by `check_setup`/`doctor` as fully ready. A memory whose
+  vector was computed but never persisted (because sqlite-vec was absent at
+  write time) could also never resurface for re-embedding once sqlite-vec was
+  installed afterward, since the re-embed worklist matched only on the
+  `embedding_model='fallback'` label. Fixed: `sqlite-vec` is now part of the
+  base install set and of `requirements/setup.txt`'s generated closure;
+  existing installs self-heal on next launch (`ensure_deps`'s pin-satisfaction
+  check picks up the new pin automatically); the re-embed worklist also
+  matches embedded-but-vectorless rows; `doctor`/`check_setup` report an
+  optional vector-search check that distinguishes "package not installed"
+  from "installed but this Python's sqlite3 cannot load extensions"; and when
+  the store cannot persist vectors at all, the `embedding_upgrade`
+  consolidation counter's result also carries `vectors_persisted: 0` and a
+  reason, so "upgraded: N" is never misread as "N vectors written".
+
 ## [4.23.2] - 2026-09-22
 
 ### Fixed

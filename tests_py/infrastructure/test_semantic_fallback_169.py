@@ -146,6 +146,35 @@ def test_select_fallback_embeddings_worklist(fallback_engine, store):
     assert "neural one" not in contents
 
 
+@_needs_vec
+def test_select_fallback_embeddings_backfills_vectorless_neural_rows(store):
+    """A memory correctly stamped 'neural' but missing its vec row (e.g.
+    sqlite-vec became available only after it was written) must resurface
+    for re-embedding — otherwise it can never be repaired (issue #634)."""
+    mid = store.insert_memory(
+        {
+            "content": "orphaned neural row",
+            "embedding": np.zeros(384, dtype=np.float32).tobytes(),
+            "embedding_model": "neural",
+        }
+    )
+    # Simulate has_vec having been False at insert time: the vec row that
+    # insert_memory just wrote is the thing that would be missing.
+    store._conn.execute("DELETE FROM memories_vec WHERE rowid = ?", (mid,))
+    store._conn.commit()
+
+    worklist = {w["memory_id"] for w in store.select_fallback_embeddings(limit=10)}
+    assert mid in worklist
+
+
+def test_select_fallback_embeddings_ignores_never_embedded_rows(store):
+    """A memory that never had an embedding computed (embedding_model=='')
+    must not be swept into the re-embed worklist."""
+    store.insert_memory({"content": "no embedding at all", "embedding": None})
+    worklist = {w["memory_id"] for w in store.select_fallback_embeddings(limit=10)}
+    assert not worklist
+
+
 # ── camelCase FTS (index-time augmentation) ──────────────────────────────────
 
 
@@ -269,6 +298,39 @@ def test_consolidate_reports_embedding_upgrade(fallback_engine, store):
     out = run_embedding_upgrade_cycle(store, fallback_engine)
     assert out["upgraded"] == 0
     assert "reason" in out
+
+
+def test_embedding_upgrade_flags_vectors_not_persisted_when_has_vec_false(
+    monkeypatch, store
+):
+    """'upgraded: N' must not be read as 'N vectors written' when the store
+    cannot persist vectors at all — the exact shape of issue #634 defect 4."""
+    from mcp_server.handlers.consolidation.embedding_upgrade import (
+        run_embedding_upgrade_cycle,
+    )
+
+    monkeypatch.setenv("CORTEX_EMBEDDING_ZERO_DOWNLOAD", "1")
+    saved = ef._singleton
+    fb = ee.EmbeddingEngine(model_name="no-such-model-169b", dim=384)
+    ef._singleton = fb
+    try:
+        store.insert_memory({"content": "needs upgrade", "embedding": fb.encode("x")})
+        assert len(store.select_fallback_embeddings(limit=10)) == 1
+
+        monkeypatch.delenv("CORTEX_EMBEDDING_ZERO_DOWNLOAD", raising=False)
+        neural = ee.EmbeddingEngine(dim=384)
+        if neural.mode != "neural":
+            pytest.skip("neural model not cached in this environment")
+        ef._singleton = neural
+
+        # Simulate sqlite-vec unavailable, e.g. the reporter's environment.
+        store._has_vec = False
+        result = run_embedding_upgrade_cycle(store, neural)
+        assert result["upgraded"] == 1
+        assert result["vectors_persisted"] == 0
+        assert "reason" in result
+    finally:
+        ef._singleton = saved
 
 
 # ── FTS migration: external-content → self-content ───────────────────────────

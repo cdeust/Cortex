@@ -41,6 +41,14 @@ def run_embedding_upgrade_cycle(
     Only runs when the encoder currently resolves to the neural model; each
     upgraded memory is re-embedded and restamped 'neural' via
     ``store.reembed_memory``. Non-fatal: failures report zero upgrades.
+
+    ``upgraded`` counts memories successfully re-encoded and restamped —
+    that count stays accurate even when the store cannot persist a vector
+    at all (``has_vec is False``, e.g. sqlite-vec unavailable). In that
+    case the result also carries ``vectors_persisted: 0`` and a ``reason``,
+    so a caller cannot read "upgraded: N" as "N vectors written" when none
+    were (issue #634). Stores without a ``has_vec`` attribute (PostgreSQL,
+    test doubles) are assumed vector-capable, unchanged from before.
     """
     if not isinstance(store, _FallbackWorklistStore):
         return {"upgraded": 0, "reason": "store has no fallback worklist"}
@@ -52,6 +60,7 @@ def run_embedding_upgrade_cycle(
         logger.debug("Embedding-upgrade cycle: worklist query failed (non-fatal)")
         return {"upgraded": 0}
 
+    has_vec = getattr(store, "has_vec", True)
     upgraded = 0
     for item in candidates:
         content = item.get("content")
@@ -67,4 +76,8 @@ def run_embedding_upgrade_cycle(
                 "Embedding-upgrade failed for memory %s (non-fatal)",
                 item.get("memory_id"),
             )
-    return {"upgraded": upgraded}
+    result: dict[str, Any] = {"upgraded": upgraded}
+    if not has_vec and upgraded:
+        result["vectors_persisted"] = 0
+        result["reason"] = "sqlite-vec unavailable — restamped, no vector written"
+    return result

@@ -444,6 +444,61 @@ def _sqlite_store() -> Check:
         )
 
 
+def _sqlite_vector_search() -> Check:
+    """SQLite backend: is vector (semantic) search actually enabled.
+
+    Optional — FTS-only search is a supported degraded mode (issue #634),
+    so this never fails ``doctor`` on its own; it exists so the mode is
+    reported instead of silently engaged. Distinguishes "sqlite-vec is not
+    installed" (fix: reinstall deps) from "sqlite-vec is installed but this
+    interpreter's sqlite3 cannot load extensions" (fix: a different Python
+    build) — reporting the wrong one sends a user chasing a reinstall that
+    cannot help them.
+
+    source: issue #634"""
+    try:
+        import sqlite_vec  # noqa: PLC0415, F401 — probe only: presence, not use
+    except ImportError:
+        return Check(
+            "SQLite vector search (optional)",
+            False,
+            "sqlite-vec package not installed — semantic recall falls back "
+            "to full-text search only",
+            "Restart Claude Code to let the launcher install it, or run: "
+            "python3 scripts/launcher.py mcp_server --install-deps",
+            optional=True,
+        )
+    try:
+        store = SqliteMemoryStore(db_path=get_memory_settings().SQLITE_FALLBACK_PATH)
+        try:
+            has_vec = store.has_vec
+        finally:
+            store.close()
+    except Exception as exc:  # noqa: BLE001 — source: ADR-0322
+        return Check(
+            "SQLite vector search (optional)",
+            False,
+            f"could not probe: {type(exc).__name__}: {exc}",
+            "",
+            optional=True,
+        )
+    if has_vec:
+        return Check(
+            "SQLite vector search (optional)", True, "sqlite-vec loaded", optional=True
+        )
+    return Check(
+        "SQLite vector search (optional)",
+        False,
+        "sqlite-vec is installed but failed to load — this Python's sqlite3 "
+        "was likely built without loadable-extension support (common on "
+        "macOS system/Framework Python) — semantic recall falls back to "
+        "full-text search only",
+        "Use a Python built with extension loading enabled (python.org "
+        "installer, pyenv, or Homebrew python), then reinstall.",
+        optional=True,
+    )
+
+
 CHECKS: list[Callable[[], Check]] = [
     _python_version,
     _pg_driver,
@@ -459,6 +514,7 @@ CHECKS: list[Callable[[], Check]] = [
 SQLITE_CHECKS: list[Callable[[], Check]] = [
     _python_version,
     _sqlite_store,
+    _sqlite_vector_search,  # optional — doesn't fail doctor
     _methodology_dir,
     _i10_config,
     _codebase_pipeline,  # optional — doesn't fail doctor

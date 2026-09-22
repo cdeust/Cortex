@@ -55,6 +55,7 @@ BASE_PACKAGES: list[tuple[str, str]] = [
     ("psycopg", "psycopg[binary]==3.3.5"),
     ("psycopg_pool", "psycopg_pool==3.3.1"),
     ("pgvector", "pgvector==0.5.0"),
+    ("sqlite_vec", "sqlite-vec==0.1.9"),  # source: ADR-1087
 ]
 
 # source: ADR-0750

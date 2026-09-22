@@ -3515,6 +3515,10 @@
     "ADR-1086": {
       "mirror": "ADR-1086-prime-project-memories-from-explicit-shell-file-cues.md",
       "path": "adr/cortex/1086-prime-project-memories-from-explicit-shell-file-cues.md"
+    },
+    "ADR-1087": {
+      "mirror": "ADR-1087-install-sqlite-vec-unconditionally-on-every-plugin-install.md",
+      "path": "adr/cortex/1087-install-sqlite-vec-unconditionally-on-every-plugin-install.md"
     }
   },
   "project": "cortex",

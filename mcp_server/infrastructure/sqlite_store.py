@@ -733,21 +733,34 @@ class SqliteMemoryStore(
             pass
 
     def select_fallback_embeddings(self, limit: int = 100) -> list[dict[str, Any]]:
-        """Return current memories whose vector was written in fallback mode.
+        """Return current memories that need a (re-)embed.
 
         precondition: ``limit`` > 0.
-                postcondition: returns up to ``limit`` ``{memory_id, content}`` dicts
-                for
-                non-superseded memories tagged ``embedding_model='fallback'``, hottest
-                first — the re-embedding worklist that upgrades a store transparently
-                once the neural model becomes available . Empty when the
-                column is absent or nothing is tagged fallback.
+                postcondition: returns up to ``limit`` ``{memory_id, content}`` dicts,
+                hottest first — the re-embedding worklist that upgrades a store
+                transparently once the neural model becomes available. Two
+                classes of row qualify: those tagged ``embedding_model='fallback'``
+                (the encoder ran without the real model), and — only when the vec
+                store is present — those with a non-empty ``embedding_model`` but
+                no row in ``memories_vec``, i.e. a vector that was computed but
+                never persisted because sqlite-vec was unavailable when the
+                memory was written. The second class is what makes a store
+                self-repairing once sqlite-vec is installed after the fact:
+                without it, a memory correctly labelled 'neural' but missing its
+                vector would never resurface (issue #634). Empty when the column
+                is absent or nothing qualifies.
 
-        source: ADR-0605"""
+        source: ADR-0605
+        source: issue #634"""
+        vec_gap = (
+            " OR (embedding_model != '' AND id NOT IN (SELECT rowid FROM memories_vec))"
+            if self._has_vec
+            else ""
+        )
         try:
             rows = self._conn.execute(
-                "SELECT id, content FROM current_memories "
-                "WHERE embedding_model = 'fallback' "
+                "SELECT id, content FROM current_memories "  # noqa: S608 — vec_gap is one of two in-code literal fragments, never external input; limit is bound
+                f"WHERE embedding_model = 'fallback'{vec_gap} "
                 "ORDER BY heat_base DESC LIMIT ?",
                 (limit,),
             ).fetchall()
