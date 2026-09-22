@@ -40,7 +40,7 @@ files. We hold that intent to the
 publish **no CO₂ or energy figure**, because we have not measured one.
 [What we do and do not claim ↓](#green-software-engineering)
 
-> **36 neuroscience mechanisms · 57 memory tools · 9 lifecycle hooks · a self-curating per-project wiki — all local, all open-source, MIT.**
+> **36 neuroscience mechanisms · 57 memory tools · 11 lifecycle hooks · a self-curating per-project wiki — all local, all open-source, MIT.**
 
 ## Install
 
@@ -204,8 +204,8 @@ prior analysis, the Redis decision, and the TTL lesson when their content matche
 **Three weeks later.** The sessions can consolidate into a pattern about authentication and
 TTL-based caches; some details may fade while the principle remains useful.
 
-In Claude Code that is automatic: nine lifecycle hooks inject context at session start, recall
-per prompt, capture as you work, checkpoint before compaction, and run a per-project wiki that
+In Claude Code and Codex alike that is automatic: 11 lifecycle hooks inject context at session
+start, recall per prompt, capture as you work, checkpoint before compaction, and run a wiki that
 curates itself. In any other stdio MCP host you call the same 57 tools yourself, or 60 when
 the optional `ai-architect-mcp-codebase` and `ai-architect-mcp-spec` integrations are present.
 

@@ -67,6 +67,20 @@ def canonical_reference_count(read_fn: ReadFn) -> int:
     return len(entries)
 
 
+def canonical_hook_count(_read_fn: ReadFn) -> int:
+    """How many lifecycle hooks the docs may claim.
+
+    Unlike the mechanism count this IS machine-countable: the allowlist in
+    `mcp_server.hooks.entry` is what both plugin manifests wire and what the
+    console script accepts, so it is the only number a doc can mean. Imported
+    inside the function so this module stays importable without the package
+    on sys.path, matching `verify_mcp_hosts.full_tool_bounds` (ADR-1077).
+    """
+    from mcp_server.hooks.entry import HOOK_MODULES  # noqa: PLC0415 — see docstring
+
+    return len(HOOK_MODULES)
+
+
 def canonical_mechanism_count(read_fn: ReadFn) -> int:
     """The mechanism count declared in the bibliography header.
 

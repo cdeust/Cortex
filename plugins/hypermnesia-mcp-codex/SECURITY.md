@@ -49,6 +49,11 @@ process. The ones with effects beyond writing to the memory store:
 - `post_commit_reindex` runs on shell events and may reindex the working
   repository into the local store.
 
+One edit fires up to five of these processes (two before the call, three
+after), so every `apply_patch` starts subprocesses that read files and write
+to the memory store. Timings and the exact set are in
+[docs/codex-plugin.md](https://github.com/cdeust/Cortex/blob/main/docs/codex-plugin.md).
+
 Remove `"hooks": "./hooks/hooks.json"` from `.codex-plugin/plugin.json`, or
 disable the plugin's hooks in Codex, to run the MCP server alone.
 

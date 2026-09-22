@@ -18,6 +18,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from mcp_server.hooks.entry import HOOK_MODULES
+
 # The module name must be the dotted path mutmut derives from the file's
 # location: it keys its mutant trampolines on "scripts.check_doc_claims.*",
 # and a bare "check_doc_claims" makes every mutant look unreached, so the
@@ -548,9 +550,14 @@ class CollectFailuresTests(unittest.TestCase):
     # entirely (only assets/badge-tests.svg — a monotone floor, checked
     # below — still states one), so there is nothing left here for the
     # "tests" family among the other four to disagree on.
+    # The hook count is machine-counted from mcp_server.hooks.entry rather
+    # than declared in a fixture file, so this line states the real number:
+    # a literal here would be a second copy of the allowlist's length, which
+    # is the drift the family was added to stop (PR #620).
     CONSISTENT = (
         "52 memory tools (55 total with upstream).\n"
         "A 2-reference bibliography of 36 mechanisms.\n"
+        f"{len(HOOK_MODULES)} lifecycle hooks run per session.\n"
         # The count also lives inside the pinned test's NAME, where no space
         # precedes the digits; its own family is checked since ADR-1077.
         "Pinned by tests_py/test_main.py::test_standalone_baseline_is_52_tools.\n"
@@ -604,6 +611,11 @@ class CollectFailuresTests(unittest.TestCase):
             ("(55 total", "(53 total", "advertises 53 tools with integrations,"),
             ("2-reference", "3-reference", "advertises 3 references,"),
             ("36 mechanisms", "35 mechanisms", "advertises 35 mechanisms,"),
+            (
+                f"{len(HOOK_MODULES)} lifecycle hooks",
+                "9 lifecycle hooks",
+                "advertises 9 lifecycle hooks,",
+            ),
         ):
             with self.subTest(family=expected):
                 self._install(self.CONSISTENT.replace(old, new))

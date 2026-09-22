@@ -85,6 +85,22 @@ one skipped enrichment, never a blocked prompt or a blocked edit; Claude
 Code's own reference is explicit that a timed-out `PreToolUse` hook "doesn't
 block the tool call". Prewarming the cache (below) removes the window.
 
+### Cost per edit
+
+Every hook is its own `uvx` process, so one `apply_patch`, `Edit` or `Write`
+fires up to five of them: `decision_gate` and `no_deps_gate` before the call,
+then `post_tool_capture`, `preemptive_context` and `pipeline_impact_bump`
+after it. A patch touching several files still costs five processes, not five
+per file: `host_dispatch` runs the module once per derived event inside a
+single process.
+
+Measured on 2026-09-22 (macOS 26.6.2 arm64, uv 0.11.3, warm `uv` cache,
+published 4.23.1 wheel), one such process takes 0.18s to 0.21s in steady
+state, with the first invocation of a given module slower (1.3s to 5.1s
+observed) while its caches fill. The two gates are the ones in the blocking
+path, at roughly 0.4s of that total. On a cold cache the first hook pays the
+full resolve instead, which is what the prewarm below is for.
+
 Matchers are widened to carry Codex's native tool names alongside Claude's.
 The Codex docs state that for `apply_patch` "hook input still reports
 `tool_name: "apply_patch"`", so every Edit/Write-triggered hook matches

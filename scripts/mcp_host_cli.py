@@ -106,3 +106,9 @@ def check_selection(parser: argparse.ArgumentParser, args: argparse.Namespace) -
             "--published-surface requires exactly one --clients and one "
             "--profiles value: it describes one command, not a matrix"
         )
+    if args.published_surface and args.profiles[0] != "full":
+        # The lean branch compares a surface against this checkout's own
+        # LEAN_TOOL_NAMES. On a released artifact that is the same
+        # checkout-versus-release coupling the flag exists to remove, so the
+        # flag pairs with `full` or it is refused rather than half-applied.
+        parser.error("--published-surface applies to --profiles full only")

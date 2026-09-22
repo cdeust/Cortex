@@ -69,6 +69,11 @@ MECHANISM_CLAIM = re.compile(
 )
 # source: ADR-0713
 TEST_CLAIM = re.compile(r"(\d+)(?:\s+tests|-test suite)\b")
+# The docs said "9 lifecycle hooks" through the two that #605 added, and the
+# Codex parity work (PR #620) then put "eleven" in the same README, so the
+# file contradicted itself. Counted from the entry-point allowlist, not
+# declared, because that allowlist is what both manifests wire.
+HOOK_CLAIM = re.compile(r"(\d+)\s+lifecycle\s+hooks\b")
 # The pinned test name carries the standalone count inside an identifier,
 # where no space precedes the digits, so TOOL_CLAIM never saw it and it
 # sat stale at 52 across two count moves.
@@ -92,6 +97,10 @@ def canonical_reference_count() -> int:
 
 def canonical_mechanism_count() -> int:
     return doc_claim_sources.canonical_mechanism_count(read)
+
+
+def canonical_hook_count() -> int:
+    return doc_claim_sources.canonical_hook_count(read)
 
 
 def canonical_version() -> str:
@@ -140,6 +149,7 @@ def collect_failures(test_count: int | None) -> list[str]:
     )
     failures += check_counts(REFERENCE_CLAIM, canonical_reference_count(), "references")
     failures += check_counts(MECHANISM_CLAIM, canonical_mechanism_count(), "mechanisms")
+    failures += check_counts(HOOK_CLAIM, canonical_hook_count(), "lifecycle hooks")
     failures += check_no_hotlinked_badges()
     failures += check_no_conflict_markers()
     failures += check_scanned_json_parses()
