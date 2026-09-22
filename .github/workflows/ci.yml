@@ -365,7 +365,7 @@ jobs:
           UV_TOOL_DIR="$RUNNER_TEMP/cortex-codex-cold-uv-tools" \
           PYTHONPATH="$GITHUB_WORKSPACE" \
             python scripts/verify_mcp_hosts.py \
-              --timeout "$plugin_timeout" --clients codex-cli --profiles lean \
+              --timeout "$plugin_timeout" --clients codex-cli --profiles full \
               --command-includes-profile \
               --allow-bootstrap-network \
               --storage-selection auto \

@@ -275,25 +275,24 @@ banners, auto-recall, auto-capture, checkpoints and every memory tool work on bo
 ## Every other MCP host
 
 The server is host-agnostic. Any host that can launch a stdio process gets the full tool
-surface on the default SQLite store. What is not portable are the nine lifecycle hooks, which
-are Claude Code plugin machinery; the server never imports or requires them at startup. The
-Codex plugin deliberately starts the server with `--profile lean`: the full tool surface is the
-largest fixed token cost a session pays before the user types anything (ADR-0693, issue #177),
-and the plugin keeps that cost to ten tools; the direct registration below gives Codex the full
-surface.
+surface on the default SQLite store. What is not portable are the lifecycle hooks — but they
+are no longer Claude-only: the Codex plugin wires the same eleven hook modules through the
+`hypermnesia-mcp-hook` console script (`docs/codex-plugin.md`), so Cortex behaves the same
+under both hosts. A direct `codex mcp add` registration still gets the tool surface only; the
+hooks come with the plugin.
 
 | Capability | Claude Code plugin | Codex plugin (`hypermnesia-mcp-codex`) | Codex `codex mcp add`, Gemini CLI, Cursor, Windsurf, VS Code, Agents SDK | ChatGPT web |
 |---|---|---|---|---|
-| Tool surface | all 57 tools | the 10-tool `lean` profile: `remember`, `recall`, `unified_search`, `recall_hierarchical`, `consolidate`, `memory_stats`, `check_setup`, `wiki_read`, `wiki_list`, `query_methodology` | all 57 tools (`full` is the default profile) | ❌ no remote HTTPS endpoint is shipped |
+| Tool surface | all 57 tools | all 57 tools (no `--profile` flag, same as Claude Code) | all 57 tools (`full` is the default profile) | ❌ no remote HTTPS endpoint is shipped |
 | SQLite default store / PostgreSQL opt-in | ✅ | ✅ | ✅ | ❌ would need a remote deployment and a per-user storage and auth model |
 | One store for Claude Code and Codex | ✅ writes the selection to `~/.claude/methodology/backend.json` | ✅ reads that selection at startup (#600, since 4.23.0) | ✅ same rule for any direct startup sharing the configuration root | ❌ |
-| Predictions and calibration (`predict`, `resolve_prediction`, `calibration`) | ✅ | ❌ not in `lean`; use the direct registration | ✅ | ❌ |
-| Wiki writes, ADRs, triggers, rules, codebase ingestion | ✅ | ❌ not in `lean` | ✅ | ❌ |
-| Auto-capture of significant tool output | ✅ PostToolUse hook | ❌ store explicitly with `remember` | ❌ same | ❌ |
-| Session-start context injection | ✅ SessionStart hook | ❌ call `recall` yourself | ❌ same | ❌ |
-| Per-prompt auto-recall | ✅ | ❌ | ❌ | ❌ |
-| Compaction checkpoints | ✅ | ❌ | ❌ | ❌ |
-| Autonomous wiki cycle | ✅ | ❌ `consolidate` by hand; `curate_wiki` needs the full profile | ❌ run `consolidate` / `curate_wiki` manually | ❌ |
+| Predictions and calibration (`predict`, `resolve_prediction`, `calibration`) | ✅ | ✅ | ✅ | ❌ |
+| Wiki writes, ADRs, triggers, rules, codebase ingestion | ✅ | ✅ | ✅ | ❌ |
+| Auto-capture of significant tool output | ✅ PostToolUse hook | ✅ PostToolUse hook | ❌ store explicitly with `remember` | ❌ |
+| Session-start context injection | ✅ SessionStart hook | ✅ SessionStart hook | ❌ call `recall` yourself | ❌ |
+| Per-prompt auto-recall | ✅ | ✅ UserPromptSubmit hook | ❌ | ❌ |
+| Compaction checkpoints | ✅ `Notification: compacted` | ✅ `PreCompact` (Codex has no `Notification` event) | ❌ | ❌ |
+| Autonomous wiki cycle | ✅ | ✅ | ❌ run `consolidate` / `curate_wiki` manually | ❌ |
 | Cognitive profiling (`query_methodology`) | ✅ | ⚠️ profiles are mined from Claude Code session logs under `~/.claude/`; without them the profile is empty | ⚠️ same | ❌ |
 | Worktree directory | `.claude/worktrees/<name>/`, the location `docs/agent-guidance.md` names | `.Codex/worktrees/<name>/`, where Codex puts its own; ignored at the repository root since #601 | n/a | n/a |
 

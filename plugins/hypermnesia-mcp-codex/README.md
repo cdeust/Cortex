@@ -1,9 +1,8 @@
 # Cortex plugin for Codex (`hypermnesia-mcp-codex`)
 
 Persistent, local-first memory for Codex. This package points at the same
-Cortex product as the Claude Code plugin, but exposes only the MCP server:
-no lifecycle hooks, skills, apps or agents. Claude Code remains the primary
-integration; Codex is additive.
+Cortex product as the Claude Code plugin and gives Codex the same thing: the
+complete MCP tool profile plus the same eleven lifecycle hooks.
 
 The full design, host boundary and measured startup contract are documented
 in [docs/codex-plugin.md](https://github.com/cdeust/Cortex/blob/main/docs/codex-plugin.md).
@@ -16,21 +15,27 @@ codex plugin add hypermnesia-mcp-codex@cortex-codex-plugins
 ```
 
 Restart the ChatGPT desktop app and start a new task. The plugin launches the
-server with `uvx`, so `uv` must be on `PATH`. The first launch resolves the
-`hypermnesia-mcp[postgresql,sqlite]` release from PyPI; later launches run
-from the cache.
+server and every hook with `uvx`, so `uv` must be on `PATH`. The first launch
+resolves the `hypermnesia-mcp[postgresql,sqlite]` release from PyPI; later
+launches run from the cache. Prewarming that cache is worth it — see
+[docs/codex-plugin.md](https://github.com/cdeust/Cortex/blob/main/docs/codex-plugin.md):
+
+```bash
+uv tool install "hypermnesia-mcp[postgresql,sqlite]"
+```
 
 ## What it exposes
 
-The `.mcp.json` in this directory starts `hypermnesia-mcp --profile lean` over
-stdio. The lean profile is exactly these ten tools:
+`.mcp.json` starts `hypermnesia-mcp` over stdio with no `--profile` flag, so
+Codex gets the default `full` tool profile — the same surface the Claude Code
+plugin serves.
 
-`query_methodology`, `remember`, `recall`, `unified_search`,
-`recall_hierarchical`, `consolidate`, `memory_stats`, `check_setup`,
-`wiki_read`, `wiki_list`.
-
-Every one of them is read-only or an idempotent write; no destructive tool
-(`forget`, `wiki_purge`, `wiki_migrate`) is part of the profile.
+`hooks/hooks.json` wires the eleven lifecycle hooks, each as
+`uvx --from "hypermnesia-mcp[postgresql,sqlite]" hypermnesia-mcp-hook <module>`:
+session-start context injection, per-prompt auto-recall, auto-capture of
+significant tool output, preemptive context, pipeline heat bumps, post-commit
+reindexing, the decision and dependency edit gates, compaction checkpoints,
+subagent briefing, and the session-end record.
 
 ## Storage
 

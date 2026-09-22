@@ -1,7 +1,7 @@
 {
   "name": "hypermnesia-mcp-codex",
   "version": "4.23.1",
-  "description": "Cortex persistent local-first memory for Codex, with Claude Code remaining the primary automatic integration.",
+  "description": "Cortex persistent local-first memory for Codex: the complete tool profile and the same eleven lifecycle hooks the Claude Code plugin installs.",
   "author": {
     "name": "Clement Deust",
     "email": "admin@ai-architect.tools",
@@ -18,15 +18,18 @@
     "local-first"
   ],
   "mcpServers": "./.mcp.json",
+  "hooks": "./hooks/hooks.json",
   "interface": {
     "displayName": "Cortex Memory",
-    "shortDescription": "Persistent local memory for Codex",
-    "longDescription": "Use Cortex's focused local-memory tools from Codex. Claude Code remains the primary integration, with automatic lifecycle hooks, custom agents, and the complete tool profile.",
+    "shortDescription": "Automatic persistent memory for Codex",
+    "longDescription": "Cortex gives Codex the same persistent memory Claude Code gets: the complete MCP tool profile plus the eleven lifecycle hooks that record sessions, inject context at session start and on every prompt, capture significant tool output, checkpoint before compaction, brief subagents, and gate edits against recorded decisions. Memory is local-first and shared with Claude Code through the same store.",
     "developerName": "Clement Deust",
     "category": "Developer Tools",
     "capabilities": [
       "Persistent project memory",
+      "Automatic session capture and recall",
       "Decision and correction recall",
+      "Compaction checkpoints and subagent briefing",
       "Local-first storage",
       "Memory inspection"
     ],

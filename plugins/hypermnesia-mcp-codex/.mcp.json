@@ -5,9 +5,7 @@
       "args": [
         "--from",
         "hypermnesia-mcp[postgresql,sqlite]",
-        "hypermnesia-mcp",
-        "--profile",
-        "lean"
+        "hypermnesia-mcp"
       ],
       "env": {
         "CORTEX_RUNTIME": "cowork"
