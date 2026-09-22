@@ -3888,21 +3888,6 @@
       "detail": "page_row_from_md"
     },
     {
-      "file": "mcp_server/handlers/wiki_purge.py",
-      "kind": "file-size",
-      "detail": "exceeds 300-line cap"
-    },
-    {
-      "file": "mcp_server/handlers/wiki_purge.py",
-      "kind": "method-size",
-      "detail": "_evaluate_page"
-    },
-    {
-      "file": "mcp_server/handlers/wiki_purge.py",
-      "kind": "method-size",
-      "detail": "handler"
-    },
-    {
       "file": "mcp_server/handlers/wiki_read.py",
       "kind": "method-size",
       "detail": "handler"
