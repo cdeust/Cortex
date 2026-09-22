@@ -68,6 +68,21 @@ _MODERN_KIND_TO_DIR = {
 }
 
 
+def _page_frontmatter(
+    classification, title: str, memory_id: int | str
+) -> dict[str, object]:
+    """The 4-tuple axes plus page identity, ready to serialise.
+
+    source: ADR-0314"""
+    fm = classification_to_frontmatter(classification)
+    fm["id"] = generate_page_id()
+    fm["title"] = title
+    fm["updated"] = _now_iso()
+    if "memory_id" not in fm:
+        fm["memory_id"] = memory_id
+    return fm
+
+
 def build_from_memory(
     *,
     memory_id: int | str,
@@ -97,24 +112,13 @@ def build_from_memory(
     if not title:
         title = f"memory-{hashlib.sha256(content.encode()).hexdigest()[:8]}"
 
-    slug = slugify(title)
-    filename = f"{memory_id}-{slug}.md"
-
     dir_name = _MODERN_KIND_TO_DIR.get(classification.kind, "explanation")
     safe_domain = slugify(domain, max_len=40) if domain else "_general"
-    rel = f"{dir_name}/{safe_domain}/{filename}"
+    rel = f"{dir_name}/{safe_domain}/{memory_id}-{slugify(title)}.md"
 
     # source: ADR-0314
-
-    fm = classification_to_frontmatter(classification)
-    fm["id"] = generate_page_id()
-    fm["title"] = title
-    fm["updated"] = _now_iso()
-    if "memory_id" not in fm:
-        fm["memory_id"] = memory_id
-
-    markdown = _render_with_frontmatter(fm, title, content)
-    return rel, markdown
+    fm = _page_frontmatter(classification, title, memory_id)
+    return rel, _render_with_frontmatter(fm, title, content)
 
 
 def _render_with_frontmatter(

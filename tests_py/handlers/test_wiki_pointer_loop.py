@@ -9,10 +9,9 @@ report), with the frontmatter copied into the body, a ``title:`` line as
 the H1, and the body cut mid-word.
 
 The file also pins the second door into the same loop
-(``wiki_extract``'s candidate query), the boundary-safe pointer
-truncation, and ``wiki_purge``'s scan scope — a hand-kept directory list
-that had drifted from the path contract, so the stray page under ``rfc/``
-could not be cleaned by the tool at all.
+(``wiki_extract``'s candidate query) and the boundary-safe pointer
+truncation. The scan scope that let the stray page survive a purge is in
+``test_wiki_purge_scan_scope.py``.
 
 Backend: SQLite, pinned through the real composition root, the way
 ``test_wiki_pipeline_sqlite.py`` drives it.
@@ -25,7 +24,7 @@ from pathlib import Path
 import pytest
 
 from mcp_server.core import wiki_sync
-from mcp_server.handlers import remember, wiki_purge, wiki_write
+from mcp_server.handlers import remember, wiki_write
 from mcp_server.shared.wiki_layout import PAGE_KINDS
 from mcp_server.shared.wiki_pointer import (
     POINTER_CONTENT_MAX_CHARS,
@@ -90,7 +89,6 @@ def wiki_root(tmp_path, monkeypatch) -> Path:
     root.mkdir()
     monkeypatch.setattr(wiki_write, "WIKI_ROOT", str(root))
     monkeypatch.setattr(remember, "WIKI_ROOT", str(root))
-    monkeypatch.setattr(wiki_purge, "WIKI_ROOT", str(root))
     return root
 
 
@@ -265,78 +263,3 @@ async def test_pointer_memory_content_is_not_cut_mid_word(sqlite_store, wiki_roo
     assert len(stored) <= POINTER_CONTENT_MAX_CHARS
     assert stored.endswith("…")
     assert long_page.startswith(stored[:-1].rstrip())
-
-
-# ── Defect 5: wiki_purge's scan scope ────────────────────────────────────
-
-
-def _write(root: Path, rel: str, body: str) -> None:
-    path = root / rel
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        f"---\ntitle: {path.stem}\nkind: note\n---\n\n# {path.stem}\n\n{body}\n",
-        encoding="utf-8",
-    )
-
-
-@pytest.mark.asyncio
-async def test_purge_reaches_a_page_under_a_modern_kind_directory(wiki_root):
-    """``rfc/`` is a kind the pipeline emits; the purge never saw it."""
-    _write(wiki_root, "rfc/_general/82-title-architecture-overview.md", "thin.")
-    _write(wiki_root, "notes/_general/1-also-thin.md", "thin.")
-
-    out = await wiki_purge.handler({"apply": True})
-
-    assert out["purged_paths"]
-    purged = {Path(p).as_posix() for p in out["purged_paths"]}
-    assert "rfc/_general/82-title-architecture-overview.md" in purged
-
-
-@pytest.mark.asyncio
-async def test_purge_reports_the_total_it_scanned_against(wiki_root):
-    """``scanned`` alone hid that most of the wiki was skipped."""
-    _write(wiki_root, "rfc/_general/a.md", "thin.")
-    _write(wiki_root, "notes/_general/b.md", "thin.")
-    _write(wiki_root, "_kinds/adr.md", "schema file, never a page.")
-    _write(wiki_root, "handbook/_general/c.md", "not a known kind at all.")
-
-    out = await wiki_purge.handler({"apply": False, "kind": "notes"})
-
-    assert out["wiki_pages_total"] == 2
-    assert out["scanned"] == 1
-    assert out["unscanned"] == 1
-    assert out["unrecognised_dirs"] == ["handbook"]
-
-
-@pytest.mark.asyncio
-async def test_purge_full_sweep_leaves_nothing_unscanned(wiki_root):
-    _write(wiki_root, "rfc/_general/a.md", "thin.")
-    _write(wiki_root, "explanation/_general/b.md", "thin.")
-    _write(wiki_root, "_rules/default.md", "schema file, never a page.")
-
-    out = await wiki_purge.handler({"apply": False})
-
-    assert out["wiki_pages_total"] == out["scanned"] == 2
-    assert out["unscanned"] == 0
-    assert out["unrecognised_dirs"] == []
-
-
-# ── The drift that let it happen ─────────────────────────────────────────
-
-
-def test_every_directory_the_pipeline_emits_is_one_purge_scans():
-    """No second hand-kept copy of the kind list (the ADR-1077 pattern)."""
-    from mcp_server.core.draft_compiler import (
-        DRAFT_KIND_DIR_FALLBACK,
-        DRAFT_KIND_DIRS,
-    )
-    from mcp_server.core.wiki_sync import _MODERN_KIND_TO_DIR
-
-    emitted = (
-        set(_MODERN_KIND_TO_DIR.values())
-        | set(DRAFT_KIND_DIRS.values())
-        | {DRAFT_KIND_DIR_FALLBACK}
-    )
-
-    assert emitted <= set(PAGE_KINDS)
-    assert emitted <= wiki_purge._PAGE_DIRS

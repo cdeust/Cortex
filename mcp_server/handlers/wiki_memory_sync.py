@@ -26,25 +26,17 @@ def sync_memory_strict(
 ) -> str | None:
     """Strict variant of ``sync_memory`` — surfaces errors to the caller.
 
-        Preconditions:
-            - ``content`` is a non-empty string.
-            - ``memory_id`` has already been committed to the store.
-            - ``memory_source`` is the memory's stored origin string, so
-              ``build_from_memory`` can turn away a wiki-page pointer
-              (issue #622).
+        Preconditions: ``content`` is non-empty, ``memory_id`` is already
+        committed to the store, and ``memory_source`` is the memory's
+        stored origin string so ``build_from_memory`` can turn away a
+        wiki-page pointer (issue #622).
 
-        Postconditions:
-            - On success: returns the relative path of the written wiki page.
-            - On classifier rejection, or when the memory is a wiki-page
-              pointer: returns None (not an error — the memory did not
-              qualify for a wiki page).
-            - On I/O or classifier failure: raises the underlying exception.
-              The caller must decide whether the memory write + wiki failure
-              constitutes a partial failure.
-
-        Does NOT swallow the reindex failure either — reindex is best-effort
-        by design (see ``wiki_reindex_io.try_reindex``), but the page write
-        itself must succeed or be reported.
+        Postconditions: returns the relative path of the written page; or
+        None when the classifier rejects the memory or it is a pointer
+        (neither is an error). Any I/O or classifier failure raises, and
+        the caller decides whether a stored memory plus a failed wiki
+        write is a partial failure. The best-effort reindex
+        (``wiki_reindex_io.try_reindex``) is not swallowed here either.
 
     source: ADR-0462"""
     built = build_from_memory(

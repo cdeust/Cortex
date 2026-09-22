@@ -91,37 +91,32 @@ def _get_store() -> MemoryStore:
 _NOT_A_WIKI_POINTER = "(m.source IS NULL OR m.source NOT LIKE %s)"
 
 
+_SELECT_CANDIDATE = "SELECT m.id, m.content, m.tags FROM memories m WHERE "
+
+_NO_CLAIMS_YET = (
+    "NOT EXISTS (SELECT 1 FROM wiki.claim_events c WHERE c.memory_id = m.id)"
+)
+
+
+def _candidate_query(
+    memory_id: int | None, limit: int, force: bool
+) -> tuple[str, tuple]:
+    """(sql, params) for the three selection modes, pointers excluded.
+
+    source: ADR-0459"""
+    if memory_id is not None:
+        sql = f"{_SELECT_CANDIDATE} m.id = %s AND {_NOT_A_WIKI_POINTER}"  # noqa: S608 — fragments are module constants, not input
+        return sql, (memory_id, WIKI_POINTER_SOURCE_LIKE)
+    predicate = (
+        _NOT_A_WIKI_POINTER if force else f"{_NO_CLAIMS_YET} AND {_NOT_A_WIKI_POINTER}"
+    )
+    sql = f"{_SELECT_CANDIDATE}{predicate} ORDER BY m.id LIMIT %s"  # noqa: S608 — fragments are module constants, not input
+    return sql, (WIKI_POINTER_SOURCE_LIKE, limit)
+
+
 def _memory_rows(conn, memory_id: int | None, limit: int, force: bool) -> list[dict]:
     """Fetch the candidate memory rows for extraction."""
-    if memory_id is not None:
-        sql = f"""
-        SELECT m.id, m.content, m.tags
-          FROM memories m
-         WHERE m.id = %s AND {_NOT_A_WIKI_POINTER}
-        """  # noqa: S608 — interpolated fragment is a module constant, not input
-        params: tuple = (memory_id, WIKI_POINTER_SOURCE_LIKE)
-    elif force:
-        sql = f"""
-        SELECT m.id, m.content, m.tags
-          FROM memories m
-         WHERE {_NOT_A_WIKI_POINTER}
-         ORDER BY m.id
-         LIMIT %s
-        """  # noqa: S608 — interpolated fragment is a module constant, not input
-        params = (WIKI_POINTER_SOURCE_LIKE, limit)
-    else:
-        # source: ADR-0459
-        sql = f"""
-        SELECT m.id, m.content, m.tags
-          FROM memories m
-         WHERE NOT EXISTS (
-            SELECT 1 FROM wiki.claim_events c WHERE c.memory_id = m.id
-         )
-           AND {_NOT_A_WIKI_POINTER}
-         ORDER BY m.id
-         LIMIT %s
-        """  # noqa: S608 — interpolated fragment is a module constant, not input
-        params = (WIKI_POINTER_SOURCE_LIKE, limit)
+    sql, params = _candidate_query(memory_id, limit, force)
     with conn.cursor() as cur:
         cur.execute(sql, params)
         rows = cur.fetchall()
