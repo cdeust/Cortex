@@ -313,7 +313,8 @@ uvx --from "hypermnesia-mcp[sqlite]" hypermnesia-mcp
 gemini extensions install https://github.com/cdeust/Cortex
 ```
 
-**Codex and ChatGPT desktop** have a native plugin with a 10-tool lean surface. It reads the
+**Codex and ChatGPT desktop** have a native plugin with the full tool surface and the same
+eleven lifecycle hooks the Claude Code plugin installs. It reads the
 same saved backend selection as the Claude Code launcher (`~/.claude/methodology/backend.json`),
 so both hosts write to one store (since 4.23.0); explicit `CORTEX_MEMORY_STORE_BACKEND`, `CORTEX_BACKEND` or a database URL
 still wins. Pre-install

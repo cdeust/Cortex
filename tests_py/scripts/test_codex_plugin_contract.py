@@ -25,6 +25,24 @@ VIZ_SHIM_ROOT = REPO_ROOT / "plugins/cortex-viz-deprecated"
 VIZ_SHIM_PLUGIN_PATH = VIZ_SHIM_ROOT / ".claude-plugin/plugin.json"
 VIZ_SHIM_HOOKS_PATH = VIZ_SHIM_ROOT / "hooks/hooks.json"
 
+# Prose describing this package, in the files a user or a registry reviewer
+# actually reads. scripts/check_doc_claims.py cannot cover these: every one of
+# its patterns matches a NUMBER next to a keyword ("57 MCP tools", "97-reference"),
+# and a design claim like "installs no hooks" carries no number to compare.
+CODEX_PROSE_PATHS = (
+    PLUGIN_ROOT / "README.md",
+    PLUGIN_ROOT / "SECURITY.md",
+    REPO_ROOT / "README.md",
+    REPO_ROOT / "docs/codex-plugin.md",
+    REPO_ROOT / "docs/shared-host-memory.md",
+)
+
+# Phrasings the shipped manifests contradict. Each is the literal wording that
+# drifted (PR #620 review), not a ban on the words themselves: the docs still
+# have to explain `--profile lean` as an opt-in, and that must keep passing.
+NO_HOOKS_CLAIM = re.compile(r"installs no (?:lifecycle )?hooks", re.IGNORECASE)
+LEAN_SURFACE_CLAIM = re.compile(r"\b(?:10|ten)[- ]tool\b", re.IGNORECASE)
+
 
 def _json(path: Path) -> dict:
     return json.loads(path.read_text())
@@ -102,6 +120,45 @@ def test_codex_plugin_serves_the_full_profile_and_references_its_hooks() -> None
     # No --profile flag at all, exactly like the Claude plugin's server args:
     # the default full profile is what both hosts get.
     assert "--profile" not in server["args"]
+
+
+def test_codex_prose_does_not_contradict_the_shipped_manifests() -> None:
+    """The shipped docs described the old reduced design after the manifests
+    stopped implementing it: a `lean` surface and "installs no hooks" in the
+    package's own SECURITY.md, which is what a registry reviewer reads.
+
+    The check is conditioned on the manifests, so reverting the design
+    relaxes the guard instead of stranding it.
+    """
+    declares_hooks = "hooks" in _json(PLUGIN_PATH)
+    serves_full = "--profile" not in _json(MCP_PATH)["mcpServers"]["cortex"]["args"]
+
+    for path in CODEX_PROSE_PATHS:
+        text = path.read_text(encoding="utf-8")
+        relative = path.relative_to(REPO_ROOT)
+        if declares_hooks:
+            assert not NO_HOOKS_CLAIM.search(text), (
+                f"{relative} says the package installs no hooks, but "
+                f"{PLUGIN_PATH.relative_to(REPO_ROOT)} declares a hooks manifest"
+            )
+        if serves_full:
+            assert not LEAN_SURFACE_CLAIM.search(text), (
+                f"{relative} describes a ten-tool surface, but "
+                f"{MCP_PATH.relative_to(REPO_ROOT)} passes no --profile flag, "
+                "so the server serves the full profile"
+            )
+
+
+def test_codex_security_doc_discloses_what_the_package_can_do() -> None:
+    """A security doc that omits the destructive tools and the hooks gives a
+    reviewer a materially wrong picture of the package's reach."""
+    security = (PLUGIN_ROOT / "SECURITY.md").read_text(encoding="utf-8")
+
+    for disclosure in ("forget", "wiki_purge", "full", "hooks"):
+        assert disclosure in security, disclosure
+    # The two hooks with effects beyond writing to the memory store.
+    assert "decision_gate" in security, "the edit gate that can block a tool call"
+    assert "session_lifecycle" in security, "the hook that spawns a detached process"
 
 
 def test_codex_package_does_not_weaken_the_claude_plugin() -> None:
