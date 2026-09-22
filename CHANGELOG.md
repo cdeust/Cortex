@@ -100,6 +100,22 @@ adheres to [Semantic Versioning](https://semver.org/).
   still turned away rather than slipping past the second door. The
   pointer memory itself is unchanged: removing it would drop the authored
   page out of `recall`. Pointer truncation now lands on a word boundary.
+  Upgrading does not clean up after the old behaviour. A pointer memory
+  that already carries `wiki.claim_events` rows from before this fix is
+  still a synthesis candidate, because `wiki_synthesize` selects from
+  `claim_events` and never reads `memories`. Re-running `wiki_extract`
+  will not clear those rows: its pointer exclusion applies on every
+  branch, including `force` and an explicit `memory_id`, so the
+  `delete_claims_for_memory` call inside it is now unreachable for a
+  pointer. The only in-product path that still deletes them is `forget`,
+  which removes the memory itself and so drops the authored page out of
+  `recall` — the outcome #622 rules out. Clearing the rows while keeping
+  the pointer is therefore a manual, one-time statement against the
+  store:
+  `DELETE FROM wiki.claim_events WHERE memory_id IN (SELECT id FROM memories WHERE source LIKE 'wiki://%');`
+  On SQLite the table is `wiki_claim_events`; the rest is identical. Any
+  page already derived from such a memory is removed with `wiki_purge`,
+  which now reaches every page kind.
 - `wiki_purge` reaches every page kind (#622). Its page-kind directory
   set was a hand-kept copy that had drifted from `shared.wiki_layout`, so
   pages under `rfc/`, `explanation/`, `how-to/`, `runbook/`, `tutorial/`
