@@ -29,6 +29,10 @@ from pathlib import Path
 # ── Paths ──────────────────────────────────────────────────────────────
 
 SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+import launcher_site  # noqa: E402 — sibling module, resolvable only once SCRIPT_DIR is on sys.path
+
 PROJECT_DIR = SCRIPT_DIR.parent
 PLUGIN_DATA = os.environ.get("CLAUDE_PLUGIN_DATA", str(PROJECT_DIR))
 DEPS_DIR = os.path.join(PLUGIN_DATA, "deps")
@@ -373,6 +377,11 @@ def verify() -> None:
     step("Verification")
 
     sys.path.insert(0, DEPS_DIR)
+    # source: issue #621 -- verify what the plugin will actually import at
+    # runtime. Without this the [FAIL] sentence-transformers row reported
+    # there reproduces here: torch resolves from DEPS_DIR while an
+    # unvendored torchvision still resolves from user site-packages.
+    launcher_site.isolate_deps(DEPS_DIR)
 
     # source: ADR-0782
     checks = _sqlite_checks() if SKIP_POSTGRES else _postgres_checks()

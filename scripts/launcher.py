@@ -25,6 +25,7 @@ _SCRIPTS_DIR = str(Path(__file__).resolve().parent)
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 import launcher_deps  # noqa: E402
+import launcher_site  # noqa: E402
 
 _MIN_ARGC = 2  # source: ADR-0742
 
@@ -101,6 +102,12 @@ def main() -> None:
     for p in [plugin_root, deps_dir]:
         if p not in sys.path:
             sys.path.insert(0, p)
+
+    # source: issue #621 -- being first on sys.path is not isolation: it
+    # neither processes deps/pywin32.pth (the only route to pywintypes)
+    # nor stops an unvendored torchvision/torchaudio resolving from user
+    # site-packages against a torch deps/ did not build.
+    launcher_site.isolate_deps(deps_dir)
 
     if (
         module == "mcp_server.hooks.post_tool_capture"

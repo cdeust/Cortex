@@ -32,6 +32,41 @@ adheres to [Semantic Versioning](https://semver.org/).
   translations in `host_event.py` (#608) actually receive the events they
   translate. This reverses the earlier "Codex is additive, reduced" design.
 
+### Fixed
+
+- **The vendored `deps/` directory is now isolated from user site-packages
+  (#621).** `scripts/launcher.py` put `deps/` first on `sys.path` and left
+  the interpreter's user site-packages behind it, which is not isolation in
+  either direction. Every package `deps/` does not vendor kept resolving
+  from user site-packages: on a Windows machine carrying a coherent CUDA
+  torch/torchvision/torchaudio set, `torch` came from `deps/` (CPU) while
+  `torchvision` came from user site-packages built against the other torch,
+  so importing them together aborted the MCP server during startup with
+  `RuntimeError: operator torchvision::nms does not exist` — which
+  `transformers` re-raised as a misleading `ModuleNotFoundError: Could not
+  import module 'PreTrainedModel'`, and which the host reported only as
+  `CONNECTION_CLOSED`. Conversely, `sys.path.insert` never processes a
+  directory's `.pth` files, so `deps/pywin32.pth` — the only route to
+  `pywintypes` — was inert, and cutting user site-packages on its own
+  (`PYTHONNOUSERSITE`, `python -s`) traded one import failure for another.
+  A new stdlib-only `scripts/launcher_site.py` does both halves in the
+  order that works: `site.addsitedir(deps_dir)` so the `.pth` files run,
+  then drops every `sys.path` entry that resolves to the user
+  site-packages directory. `scripts/launcher.py` applies it to the MCP
+  server and all eleven lifecycle hooks at once, and `scripts/setup.py`'s
+  verification block applies it too, so the installer checks what the
+  plugin will actually import. Inside a virtualenv (dev clones, CI) user
+  site-packages is already off `sys.path`, so the removal is a no-op there.
+
+- **The installer names the check that actually failed (#621).** When
+  `scripts/setup.py` failed, `install-plugin.sh` ended with "PostgreSQL
+  must be installed and running first" whatever the run had reported —
+  including the run above, whose four PostgreSQL checks all passed and
+  whose only failing row was `sentence-transformers`. A new
+  `scripts/lib/setup_py_step.sh` captures the run's output and echoes back
+  its `[FAIL] <check>` rows; the PostgreSQL install guidance survives as a
+  conditional instead of an assertion.
+
 ## [4.23.1] - 2026-09-22
 
 ### Fixed

@@ -57,6 +57,11 @@ say()  { echo -e "${GREEN}[cortex-install]${NC} $1"; }
 warn() { echo -e "${YELLOW}[cortex-install]${NC} $1"; }
 fail() { echo -e "${RED}[cortex-install]${NC} $1" >&2; exit 1; }
 
+# run_setup_py + SETUP_PY_FAILURE: report the check scripts/setup.py
+# actually failed instead of naming a component that passed.
+# source: issue #621
+source "$PLUGIN_ROOT/scripts/lib/setup_py_step.sh"
+
 # ── Read current version from the plugin manifest ──────────────────────
 
 PLUGIN_JSON="$PLUGIN_ROOT/.claude-plugin/plugin.json"
@@ -130,13 +135,15 @@ say "Backend: $BACKEND"
 
 # source: ADR-0740
 if [ "$BACKEND" = "sqlite" ]; then
-    CORTEX_MEMORY_STORE_BACKEND=sqlite "$PY" "$PLUGIN_ROOT/scripts/setup.py" \
-        || fail "scripts/setup.py failed. Re-run manually: CORTEX_MEMORY_STORE_BACKEND=sqlite \"$PY\" \"$PLUGIN_ROOT/scripts/setup.py\""
+    run_setup_py env CORTEX_MEMORY_STORE_BACKEND=sqlite \
+        "$PY" "$PLUGIN_ROOT/scripts/setup.py" \
+        || fail "scripts/setup.py failed. ${SETUP_PY_FAILURE} Re-run manually: CORTEX_MEMORY_STORE_BACKEND=sqlite \"$PY\" \"$PLUGIN_ROOT/scripts/setup.py\""
 else
     case "$(uname -s)" in
         MINGW*|MSYS*|CYGWIN*)
             say "Detected Windows ($(uname -s)) — delegating to cross-platform scripts/setup.py"
-            "$PY" "$PLUGIN_ROOT/scripts/setup.py" || fail "scripts/setup.py failed. PostgreSQL must be installed and running first (https://www.postgresql.org/download/windows/, then also install pgvector: https://github.com/pgvector/pgvector#windows). Once that is done, re-run manually: \"$PY\" \"$PLUGIN_ROOT/scripts/setup.py\""
+            run_setup_py "$PY" "$PLUGIN_ROOT/scripts/setup.py" \
+                || fail "scripts/setup.py failed. ${SETUP_PY_FAILURE} Re-run manually: \"$PY\" \"$PLUGIN_ROOT/scripts/setup.py\". If a PostgreSQL check is among them, install PostgreSQL (https://www.postgresql.org/download/windows/) plus pgvector (https://github.com/pgvector/pgvector#windows) and start the PostgreSQL service first."
             ;;
         Darwin|Linux)
             bash "$PLUGIN_ROOT/scripts/setup.sh"
