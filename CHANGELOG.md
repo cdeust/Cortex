@@ -8,12 +8,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- **Codex exposes the full tool profile and registers all eleven hook modules.**
+- **Codex exposes the full tool profile and registers all 11 lifecycle hooks.**
   Host payloads and timeout limits still affect behavior; see
   [Codex hook limitations](docs/codex-plugin.md). The Codex
   plugin now serves the complete tool profile (`.mcp.json` drops
   `--profile lean`, matching the Claude manifest's server args, which carry
-  no `--profile` flag) and installs the same eleven lifecycle hooks through
+  no `--profile` flag) and installs the same 11 lifecycle hooks through
   a new `plugins/hypermnesia-mcp-codex/hooks/hooks.json`, referenced from
   `.codex-plugin/plugin.json` by path the way `mcpServers` already is. Each
   hook runs `uvx --from "hypermnesia-mcp[postgresql,sqlite]"

@@ -63,6 +63,9 @@ SCANNED_FILES = (
     # lifecycle hooks" sit next to "eleven" in one README (PR #620).
     "plugins/hypermnesia-mcp-codex/README.md",
     "plugins/hypermnesia-mcp-codex/SECURITY.md",
+    # The manifest a Codex marketplace shows to every installer: its
+    # description and longDescription both state the hook count.
+    "plugins/hypermnesia-mcp-codex/.codex-plugin/plugin.json",
     "docs/codex-plugin.md",
     "docs/shared-host-memory.md",
 )

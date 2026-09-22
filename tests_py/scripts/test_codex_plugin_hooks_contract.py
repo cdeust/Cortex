@@ -37,6 +37,12 @@ CODEX_EVENTS = {
 # Interrupt use 1 second by default and support up to 3 seconds." Every other
 # event takes 600s when `timeout` is omitted, with no documented maximum, so
 # every other budget is settable and comes from the Claude manifest instead.
+#
+# This is the one budget Codex sets rather than Cortex, and detaching
+# consolidation (#610) is not enough to fit inside it: session_lifecycle
+# measured 3.46s on its first run, and `save_session_log` and `save_profile`
+# both run inline before the detached spawn, so a kill loses the session-log
+# row and the profile delta. Named limitation in docs/codex-plugin.md.
 CODEX_SESSION_END_MAX = 3
 
 
@@ -133,10 +139,7 @@ def test_codex_hook_timeouts_mirror_the_claude_manifest() -> None:
 
     for module, (event, timeout) in codex.items():
         if event == "SessionEnd":
-            # The one budget Codex will not accept: it defaults SessionEnd to
-            # 1s and supports up to 3s, against the Claude manifest's 30.
-            # session_lifecycle survives that because it spawns its
-            # consolidation detached (#610) instead of working inline.
+            # The one budget Codex will not accept; see CODEX_SESSION_END_MAX.
             assert timeout == CODEX_SESSION_END_MAX, module
             assert claude[module] > CODEX_SESSION_END_MAX, (
                 "SessionEnd is only special-cased because Claude's budget "

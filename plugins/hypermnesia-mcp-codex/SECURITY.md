@@ -33,8 +33,8 @@ To run the reduced surface instead, override the server command with
 
 ## Lifecycle hooks
 
-`hooks/hooks.json` registers eleven commands that Codex runs on session,
-prompt, tool and compaction events. Each is a separate
+`hooks/hooks.json` registers the 11 lifecycle hooks as commands that Codex
+runs on session, prompt, tool and compaction events. Each is a separate
 `uvx --from "hypermnesia-mcp[postgresql,sqlite]" hypermnesia-mcp-hook <module>`
 process. The ones with effects beyond writing to the memory store:
 

@@ -13,9 +13,10 @@ The limitations below describe those differences.
 - **Same registered hook modules.** `hooks/hooks.json` wires all 11 lifecycle hooks
   that `mcp_server.hooks.entry.HOOK_MODULES` allows, which is the same set
   `.claude-plugin/plugin.json` wires for Claude Code. That allowlist is the
-  single source of truth for the set; the contract test in
-  `tests_py/scripts/test_codex_plugin_contract.py` imports it rather than
-  restating it.
+  single source of truth for the set; the contract tests import it through
+  `tests_py/scripts/_codex_plugin_support.py` rather than restating it, and
+  `tests_py/scripts/test_codex_plugin_hooks_contract.py` asserts both hosts
+  dispatch exactly that set.
 
 This reverses the earlier "Codex is additive, reduced" design that shipped an
 MCP-only, `lean`-profile package.
@@ -88,13 +89,32 @@ session_lifecycle  run 3: 0.97s
 The first run exceeds the 3-second maximum despite a warm `uv` cache. The two
 later runs completed within it, but these three observations do not establish
 that subsequent sessions always fit. They also do not isolate the cause of
-the slower run. Session-end recording can therefore be lost to the timeout;
-prewarming package downloads does not guarantee completion.
+the slower run. Prewarming package downloads does not guarantee completion,
+because the measurement above is already on a warm cache.
 
-Nothing in this package can raise the ceiling, and lowering the work below it
-would mean detaching even the part that decides what to record. This is
-recorded as a real limitation rather than reconciled in prose; it needs a
-decision, not an edit.
+**What a kill actually costs.** Detaching consolidation (#610) does not
+protect the recording, because only the last step is detached. Reading
+`process_event` in `mcp_server/hooks/session_lifecycle.py`, this runs inline
+and in this order before anything is spawned:
+
+1. `load_profiles()` and `load_session_log()`;
+2. `_append_session(...)` then `save_session_log(log)` — **the session-log
+   row**;
+3. `apply_session_update(...)` then `save_profile(domain_id, dp)` — **the
+   per-domain profile delta**;
+4. `_spawn_consolidation(...)` — the only detached part.
+
+So a hook killed at 3 seconds loses the session-log row and the profile
+delta, not merely a consolidation pass. The session is not recorded at all,
+and nothing retries it: the next `SessionStart` does not reconcile a missing
+row.
+
+Nothing in this package can raise Codex's ceiling. Whether to fix this by
+moving steps 1 to 3 behind the same detached re-invocation the module already
+has (`main()` dispatches on `argv[1] == "--consolidate"`, so the mechanism
+exists) is a design decision with its own durability trade-offs, and it is
+not made here. This is recorded as an open limitation rather than reconciled
+in prose.
 
 ### Subagent briefing requires a prompt
 
