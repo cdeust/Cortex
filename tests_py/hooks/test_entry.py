@@ -21,6 +21,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -178,17 +179,21 @@ def codex_auto_store(tmp_path: Path, monkeypatch):
     reset_shared_store()
     get_memory_settings.cache_clear()
     try:
-        prepare_environment(os.environ, root / "methodology" / "backend.json")
-        resolve_auto_backend(os.environ)
-        store = get_shared_store()
-        assert isinstance(store, SqliteMemoryStore)
-        assert (
-            effective_backend(os.environ, root / "methodology" / "backend.json")
-            == "sqlite"
-        )
-        assert "DATABASE_URL" not in os.environ
-        yield store
+        # The resolver writes os.environ directly; preserve the absent key that
+        # monkeypatch.delenv established, including on PostgreSQL-backed CI.
+        with patch.dict(os.environ):
+            prepare_environment(os.environ, root / "methodology" / "backend.json")
+            resolve_auto_backend(os.environ)
+            store = get_shared_store()
+            assert isinstance(store, SqliteMemoryStore)
+            assert (
+                effective_backend(os.environ, root / "methodology" / "backend.json")
+                == "sqlite"
+            )
+            assert "DATABASE_URL" not in os.environ
+            yield store
     finally:
+        assert "CORTEX_MEMORY_STORE_BACKEND" not in os.environ
         reset_shared_store()
         get_memory_settings.cache_clear()
 

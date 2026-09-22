@@ -53,3 +53,11 @@ binary under the Python 3.13 runner. Replacing the isolated worktree copy with
 matching pinned Python 3.13 dependencies made the unchanged comparisons pass.
 The editable checkout pointer was excluded and the imported Cortex source path
 was verified to be this worktree. No installed host configuration was changed.
+
+The first CI run exposed a test fixture that left the backend set to SQLite
+when it had originally been unset. The fixture now snapshots its environment
+around the resolver and restores it before clearing cached settings. With the
+backend unset, the affected hook and PostgreSQL persistence suites passed all
+51 tests locally against a disposable database. The two entry-point suites
+also passed all 27 tests with SQLite selected; sandboxed PostgreSQL discovery
+emitted one availability warning in that run.
