@@ -52,8 +52,10 @@ adheres to [Semantic Versioning](https://semver.org/).
   A new stdlib-only `scripts/launcher_site.py` does both halves in the
   order that works: `site.addsitedir(deps_dir)` so the `.pth` files run,
   then drops every `sys.path` entry that resolves to the user
-  site-packages directory. It owns the `sys.path` insert as well, so no
-  call site can perform the two steps out of order. `scripts/launcher.py`
+  site-packages directory or sits under it (`site` has already appended a
+  user-installed pywin32's `win32` and `win32/lib` from that directory's
+  own `.pth` files by the time any of this runs). It owns the `sys.path`
+  insert as well, so no call site can perform the two steps out of order. `scripts/launcher.py`
   applies it to the MCP server and all eleven lifecycle hooks at once —
   twice, once before `ensure_deps`/`ensure_all_deps` and once after, since
   that install resolves transitives and can land a `.pth` the first call
@@ -75,7 +77,11 @@ adheres to [Semantic Versioning](https://semver.org/).
   it, which would block-buffer the child's stdout and hide the whole
   install until it ended, so the run is made unbuffered: measured, a
   `print()` followed by a two-second sleep reaches the reader at t+2s
-  through a pipe and at t+0s with `PYTHONUNBUFFERED=1`.
+  through a pipe and at t+0s with `PYTHONUNBUFFERED=1`. Carriage returns
+  are stripped for the same reason the message exists: CPython's
+  text-mode stdout writes CRLF on Windows and a pipe preserves it, so the
+  extracted name arrived as `sentence-transformers\r` and the rest of the
+  installer's line overwrote it from column 0.
 
 ## [4.23.1] - 2026-09-22
 

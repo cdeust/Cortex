@@ -85,6 +85,32 @@ def test_reported_run_names_sentence_transformers_not_postgresql():
     assert "Some checks failed" not in failure
 
 
+_CRLF_REPORTED_OUTPUT = _REPORTED_OUTPUT.replace("\\n", "\\r\\n")
+
+
+def test_windows_crlf_does_not_corrupt_the_message():
+    """CPython's text-mode stdout writes CRLF on Windows, the platform this
+    message exists for, and a pipe preserves it byte for byte. A surviving
+    carriage return returns the terminal cursor to column 0, so the rest of
+    the installer's failure line overwrites the check name it just
+    reported."""
+    failure = _failure_line(_drive(_CRLF_REPORTED_OUTPUT, 1))
+
+    assert "\r" not in failure
+    assert failure == "Failed check(s): sentence-transformers."
+
+
+def test_crlf_stripping_keeps_a_name_ending_in_r():
+    """A check name whose own last character is "r", so any stripper that
+    removes a trailing character rather than a carriage return returns
+    "FlashRank reranke" and is caught here."""
+    output = "  \\033[0;31m[FAIL]\\033[0m FlashRank reranker\\r\\n"
+
+    failure = _failure_line(_drive(output, 1))
+
+    assert failure == "Failed check(s): FlashRank reranker."
+
+
 def test_every_failed_check_is_listed():
     output = (
         "  \\033[0;31m[FAIL]\\033[0m sentence-transformers\\n"

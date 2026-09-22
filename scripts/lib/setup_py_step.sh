@@ -20,13 +20,27 @@
 # setup_py_failed_checks <log_file>
 # Pre:  log_file holds the combined stdout/stderr of a scripts/setup.py run.
 # Post: prints, on one line, the comma-separated names of every
-#       "[FAIL] <name>" row in the log, ANSI colour codes stripped, minus
-#       setup.py's own "Some checks failed" summary line (which names
-#       nothing). Prints nothing when the log carries no such row.
+#       "[FAIL] <name>" row in the log, ANSI colour codes and carriage
+#       returns stripped, minus setup.py's own "Some checks failed"
+#       summary line (which names nothing). Prints nothing when the log
+#       carries no such row.
+#
+# `tr -d '\r'` is what makes this correct on Windows, the platform this
+# whole message exists for: CPython's text-mode stdout writes CRLF, and a
+# pipe preserves it byte for byte, so the extracted name ends in a
+# carriage return. Measured on the pre-fix library, SETUP_PY_FAILURE came
+# out as "sentence-transformers\r." (od -c), and in a terminal that \r
+# returns the cursor to column 0, so the rest of the failure message
+# overwrites the check name it just reported.
+#
+# tr rather than a sed `s/\r$//`: POSIX defines the \r escape for tr and
+# defines no such escape inside a basic regular expression, so the sed
+# spelling leans on an extension. macOS's /usr/bin/sed does honour it
+# (measured), which is one build rather than a guarantee.
 setup_py_failed_checks() {
     local esc
     esc=$(printf '\033')
-    sed -e "s/${esc}\[[0-9;]*m//g" "$1" 2>/dev/null | awk '
+    tr -d '\r' <"$1" 2>/dev/null | sed -e "s/${esc}\[[0-9;]*m//g" | awk '
         /\[FAIL\]/ {
             sub(/^.*\[FAIL\][[:space:]]*/, "")
             if (index($0, "Some checks failed") == 1) next

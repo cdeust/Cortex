@@ -66,19 +66,30 @@ def _normalized(entry: str) -> str:
 
 
 def without_user_site(path: list[str], user_site: str | None) -> list[str]:
-    """``path`` with every entry that resolves to ``user_site`` removed.
+    """``path`` with every entry inside ``user_site`` removed.
 
     Precondition: ``path`` is a list of ``sys.path`` entries.
     Postcondition: returns a new list in the same order, minus the entries
-    whose absolute, case-normalized form equals ``user_site``'s. An empty
-    or None ``user_site`` removes nothing. Normalizing matters on Windows,
-    where the same directory reaches ``sys.path`` under a different case
-    or separator than ``site`` reports it.
+    whose absolute, case-normalized form is ``user_site``'s or sits under
+    it. An empty or None ``user_site`` removes nothing.
+
+    Normalizing matters on Windows, where the same directory reaches
+    ``sys.path`` under a different case or separator than ``site`` reports
+    it. Matching subdirectories matters because ``site`` processes user
+    site-packages' own ``.pth`` files at interpreter start: a pywin32
+    installed there has already appended ``<user-site>/win32`` and
+    ``<user-site>/win32/lib``, and leaving those behind would keep exactly
+    the packages this cut exists to displace.
     """
     if not user_site:
         return list(path)
     dropped = _normalized(user_site)
-    return [entry for entry in path if _normalized(entry) != dropped]
+    prefix = dropped + os.sep
+    return [
+        entry
+        for entry in path
+        if not _normalized(entry).startswith(prefix) and _normalized(entry) != dropped
+    ]
 
 
 def isolate_deps(deps_dir: str) -> None:

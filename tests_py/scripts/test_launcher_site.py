@@ -63,6 +63,34 @@ def test_without_user_site_drops_an_unnormalized_spelling(launcher_site, tmp_pat
     assert launcher_site.without_user_site(path, user_site) == ["/first", "/last"]
 
 
+def test_without_user_site_drops_directories_under_user_site(launcher_site, tmp_path):
+    """`site` processes user site-packages' own .pth files at interpreter
+    start, so a pywin32 installed there has already appended its win32 and
+    win32/lib subdirectories. Leaving those behind keeps exactly the
+    packages this cut exists to displace."""
+    user_site = str(tmp_path / "user-site")
+    path = [
+        "/first",
+        os.path.join(user_site, "win32"),
+        os.path.join(user_site, "win32", "lib"),
+        user_site,
+        "/last",
+    ]
+
+    assert launcher_site.without_user_site(path, user_site) == ["/first", "/last"]
+
+
+def test_without_user_site_keeps_a_sibling_with_a_shared_prefix(
+    launcher_site, tmp_path
+):
+    """A prefix test on the raw string would swallow `user-site-extras`."""
+    user_site = str(tmp_path / "user-site")
+    sibling = str(tmp_path / "user-site-extras")
+    path = [sibling, user_site]
+
+    assert launcher_site.without_user_site(path, user_site) == [sibling]
+
+
 def test_without_user_site_preserves_order_and_duplicates(launcher_site):
     path = ["/a", "/b", "/a", "/c"]
 

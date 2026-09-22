@@ -27,6 +27,16 @@ precache_embedding_model_step() {
     cache_log="$(mktemp)"
 
     echo "  Pre-caching sentence-transformers model (one-time ~100MB download)..."
+    # Known gap, the macOS/Linux twin of setup_database() and
+    # cache_embedding_model() in scripts/setup.py: the child reaches
+    # deps_dir through PYTHONPATH alone, which cannot process .pth files
+    # and cannot cut user site-packages the way launcher_site.isolate_deps
+    # does in-process, so issue #621's torch mismatch still aborts this
+    # import. The step warns rather than fails, and the model then
+    # downloads on first encode inside a process the launcher has already
+    # isolated. Closing it needs a child-process bootstrap and a signature
+    # change here (this function takes no scripts_dir), which issue #537's
+    # tests pin; neither belongs in the #621 fix.
     PYTHONPATH="${project_dir}:${deps_dir}:${PYTHONPATH:-}" python3 -c "
 from sentence_transformers import SentenceTransformer
 model = SentenceTransformer('all-MiniLM-L6-v2')
