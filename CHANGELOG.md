@@ -20,7 +20,12 @@ adheres to [Semantic Versioning](https://semver.org/).
   `scripts/launcher.py`. Event names are Codex's own: `compaction_checkpoint`
   moves to `PreCompact` because Codex has no `Notification` event, and
   `SessionEnd` takes Codex's documented 3-second maximum instead of the
-  Claude manifest's 30. Matchers carry Codex's native tool names
+  Claude manifest's 30. Every other hook carries the Claude manifest's own
+  timeout, because a latency budget is part of behaviour: unset, Codex would
+  let a stalled `UserPromptSubmit` hook hold a prompt for its 600-second
+  default where Claude Code caps the same hook at 5 seconds. The two
+  `PreToolUse` gates declare none on either host, which is the parity case.
+  Matchers carry Codex's native tool names
   (`apply_patch`, `exec_command`, `shell_command`) alongside Claude's, so the
   translations in `host_event.py` (#608) actually receive the events they
   translate. This reverses the earlier "Codex is additive, reduced" design.

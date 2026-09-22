@@ -38,6 +38,12 @@ CODEX_EVENTS = {
     "SubagentStart",
 }
 
+# source: learn.chatgpt.com/docs/hooks (read 2026-09-22) -- "SessionEnd and
+# Interrupt use 1 second by default and support up to 3 seconds." Every other
+# event takes 600s when `timeout` is omitted, with no documented maximum, so
+# every other budget is settable and comes from the Claude manifest instead.
+CODEX_SESSION_END_MAX = 3
+
 
 def _json(path: Path) -> dict:
     return json.loads(path.read_text())
@@ -53,6 +59,22 @@ def _every_hook(hooks: dict):
         for entry in entries:
             for hook in entry["hooks"]:
                 yield event, entry, hook
+
+
+def _claude_timeouts() -> dict[str, int | None]:
+    """Each allowlisted module's declared budget in the Claude manifest.
+
+    `None` means that manifest declares none and the hook takes its host's
+    command-hook default, which is 600s on both hosts (code.claude.com/docs
+    hooks reference and learn.chatgpt.com/docs/hooks, both read 2026-09-22),
+    so declaring nothing on either side is already parity.
+    """
+    return {
+        module: hook.get("timeout")
+        for _event, _entry, hook in _every_hook(_json(CLAUDE_PLUGIN_PATH)["hooks"])
+        for module in HOOK_MODULES
+        if hook["command"].endswith(f"mcp_server.hooks.{module}'")
+    }
 
 
 def _dispatched(hooks: dict, suffix: str) -> set[str]:
@@ -131,17 +153,37 @@ def test_codex_matchers_carry_the_native_tool_names_host_event_translates() -> N
     assert _matcher_for("post_tool_capture") == "*"
 
 
-def test_codex_session_end_respects_the_host_timeout_ceiling() -> None:
-    """Codex defaults SessionEnd to 1s and supports up to 3s
-    (learn.chatgpt.com/docs/hooks, read 2026-09-22), so the Claude manifest's
-    30s is not expressible here. Every other hook omits `timeout` and takes
-    Codex's own 600s default rather than an unmeasured number."""
-    hooks = _hooks()
-    assert hooks["SessionEnd"][0]["hooks"][0]["timeout"] == 3
+def test_codex_hook_timeouts_mirror_the_claude_manifest() -> None:
+    """Parity is the point, and a latency budget is part of behaviour.
 
-    for event, _entry, hook in _every_hook(hooks):
-        if event != "SessionEnd":
-            assert "timeout" not in hook, event
+    Leaving these unset takes Codex's 600s default: a stalled `uvx` resolve
+    on `UserPromptSubmit` would hold up every prompt for ten minutes where
+    Claude caps the same hook at 5s. Codex documents a special default and
+    maximum only for SessionEnd and Interrupt, so every other budget here is
+    Claude's own number (learn.chatgpt.com/docs/hooks, read 2026-09-22).
+    """
+    claude = _claude_timeouts()
+    codex = {
+        module: (event, hook.get("timeout"))
+        for event, _entry, hook in _every_hook(_hooks())
+        for module in HOOK_MODULES
+        if hook["command"].endswith(f"{HOOK_CONSOLE_SCRIPT} {module}'")
+    }
+    assert set(codex) == set(claude)
+
+    for module, (event, timeout) in codex.items():
+        if event == "SessionEnd":
+            # The one budget Codex will not accept: it defaults SessionEnd to
+            # 1s and supports up to 3s, against the Claude manifest's 30.
+            # session_lifecycle survives that because it spawns its
+            # consolidation detached (#610) instead of working inline.
+            assert timeout == CODEX_SESSION_END_MAX, module
+            assert claude[module] > CODEX_SESSION_END_MAX, (
+                "SessionEnd is only special-cased because Claude's budget "
+                "exceeds the Codex maximum; it no longer does"
+            )
+        else:
+            assert timeout == claude[module], module
 
 
 def test_codex_wires_the_same_hook_modules_as_the_claude_plugin() -> None:

@@ -122,6 +122,21 @@ def test_codex_plugin_serves_the_full_profile_and_references_its_hooks() -> None
     assert "--profile" not in server["args"]
 
 
+def test_codex_plugin_ships_an_mcp_server_and_hooks_and_nothing_else() -> None:
+    """The package's own SECURITY.md tells a reviewer it ships "no skills,
+    apps or agents" and runs no installer. That is a testable claim, and the
+    denylist asserting it was lost when this file was split; `hooks` moved
+    from the denied set to the required one, the rest did not."""
+    plugin = _json(PLUGIN_PATH)
+
+    assert set(plugin) >= {"mcpServers", "hooks"}
+    for unsupported in ("skills", "apps", "agents", "postInstall"):
+        assert unsupported not in plugin, unsupported
+    # postInstall is the sharpest of those: the Claude package runs an
+    # installer script, and this one deliberately does not.
+    assert not (PLUGIN_ROOT / "scripts").exists()
+
+
 def test_codex_prose_does_not_contradict_the_shipped_manifests() -> None:
     """The shipped docs described the old reduced design after the manifests
     stopped implementing it: a `lean` surface and "installs no hooks" in the

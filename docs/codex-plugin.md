@@ -60,9 +60,30 @@ Event names are Codex's own, verified against
   and "support[s] up to 3 seconds" — the documented maximum, so the Claude
   manifest's 30 is not expressible here. `session_lifecycle` survives that
   ceiling because it spawns its consolidation as a detached subprocess (#610)
-  rather than doing the work inline. No other hook sets `timeout`: Codex's own
-  default of 600 seconds applies, and this repository has no measurement of
-  the `uvx` hook path that would justify a tighter number.
+  rather than doing the work inline.
+
+### Timeouts
+
+A latency budget is part of how a hook behaves, so every other budget is the
+Claude manifest's own number: `session_start` 30s, `auto_recall` 5s,
+`post_tool_capture` 10s, `preemptive_context` 5s, `pipeline_impact_bump` 5s,
+`post_commit_reindex` 10s, `compaction_checkpoint` 10s, `agent_briefing` 5s.
+Codex documents a special default and maximum only for `SessionEnd` and
+`Interrupt`, so all of those are settable.
+
+`decision_gate` and `no_deps_gate` declare none, because the Claude manifest
+declares none for them either and both hosts default a command hook to 600
+seconds. Declaring nothing on both sides is the parity case, not an omission.
+
+Leaving the rest unset would not have been: on `UserPromptSubmit`, a stalled
+`uvx` resolve or a blocked database would hold up every prompt for ten
+minutes where Claude Code caps the same hook at five seconds.
+
+The tradeoff is that a cold `uv` cache will exceed these budgets, and a hook
+that exceeds its timeout is cancelled with its output discarded. That costs
+one skipped enrichment, never a blocked prompt or a blocked edit; Claude
+Code's own reference is explicit that a timed-out `PreToolUse` hook "doesn't
+block the tool call". Prewarming the cache (below) removes the window.
 
 Matchers are widened to carry Codex's native tool names alongside Claude's.
 The Codex docs state that for `apply_patch` "hook input still reports

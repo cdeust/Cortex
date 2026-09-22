@@ -19,7 +19,6 @@ from pathlib import Path
 import sys
 import tempfile
 import time
-from typing import Literal
 
 # Run as a script (`python scripts/verify_mcp_hosts.py`) sys.path[0] is
 # scripts/, not the repo root, so the sibling below would not resolve under
@@ -39,13 +38,13 @@ from scripts.mcp_host_client import (  # noqa: E402
     ContractError,
     run_client,
 )
+from scripts.mcp_host_cli import (  # noqa: E402
+    build_parser,
+    check_selection,
+    resolved_command,
+)
 
 from mcp_server.tool_profiles import LEAN_TOOL_NAMES  # noqa: E402
-
-
-CLIENTS = ("claude-code", "gemini-cli", "codex-cli")
-PROFILES: tuple[Literal["full", "lean"], ...] = ("full", "lean")
-STORAGE_SELECTIONS: tuple[Literal["sqlite", "auto"], ...] = ("sqlite", "auto")
 
 
 # source: ADR-0788
@@ -110,9 +109,19 @@ def _verify_tool_surface(
             raise ContractError(
                 f"{case.label}: lean surface drifted; missing={missing}, extra={extra}"
             )
-    elif not published:
-        # These bounds are THIS checkout's; a released artifact advertises its
-        # own release's surface (ADR-1077, revision 2026-09-22).
+    elif published:
+        # This checkout's exact bounds cannot judge a released artifact, but
+        # any release's full profile is a superset of its lean one, so the
+        # lean names are a floor that holds across versions and would still
+        # catch a packaging regression that dropped whole tool registries.
+        # LEAN_TOOL_NAMES needs no MCP SDK (ADR-1077, revision 2026-09-22).
+        missing = sorted(LEAN_TOOL_NAMES - tool_names)
+        if missing:
+            raise ContractError(
+                f"{case.label}: released full surface is missing {missing}; "
+                "every profile advertises at least the lean names"
+            )
+    else:
         minimum, maximum = full_tool_bounds()
         if not minimum <= len(tools) <= maximum:
             raise ContractError(
@@ -161,78 +170,6 @@ def _verify(case: ContractCase, published: bool) -> tuple[int, float]:
     _verify_auxiliary_discovery(case, responses)
     _verify_memory_call(case, responses)
     return count, time.monotonic() - started_at
-
-
-def _add_selection_arguments(parser: argparse.ArgumentParser) -> None:
-    """Which host identities and profiles a run exercises."""
-    parser.add_argument(
-        "--clients",
-        nargs="+",
-        choices=CLIENTS,
-        default=CLIENTS,
-        help="client identities to exercise (default: all)",
-    )
-    parser.add_argument(
-        "--profiles",
-        nargs="+",
-        choices=PROFILES,
-        default=PROFILES,
-        help="tool profiles to exercise (default: full lean)",
-    )
-    parser.add_argument(
-        "--command-includes-profile",
-        action="store_true",
-        help=(
-            "run the supplied command unchanged; requires exactly one --profiles value"
-        ),
-    )
-    parser.add_argument(
-        "--published-surface",
-        action="store_true",
-        help="the command resolves a released artifact, not this checkout",
-    )
-
-
-def _add_runtime_arguments(parser: argparse.ArgumentParser) -> None:
-    """How each exercised case is actually driven."""
-    parser.add_argument("--timeout", type=int, default=2 * 60)
-    parser.add_argument(
-        "--allow-bootstrap-network",
-        action="store_true",
-        help="do not inject the SOCKS regression fixture; intended for cold uvx",
-    )
-    parser.add_argument(
-        "--storage-selection",
-        choices=STORAGE_SELECTIONS,
-        default="sqlite",
-        help=(
-            "storage policy to exercise: explicit sqlite (default), or auto "
-            "for PostgreSQL-first selection with SQLite fallback"
-        ),
-    )
-    parser.add_argument(
-        "command",
-        nargs=argparse.REMAINDER,
-        help="base server command after --; profile flags are added by the test",
-    )
-
-
-def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__)
-    _add_selection_arguments(parser)
-    _add_runtime_arguments(parser)
-    return parser
-
-
-def _resolved_command(
-    parser: argparse.ArgumentParser, raw_command: list[str]
-) -> tuple[str, ...]:
-    command = raw_command or [sys.executable, "-m", "mcp_server"]
-    if command and command[0] == "--":
-        command = command[1:]
-    if not command:
-        parser.error("server command after -- cannot be empty")
-    return tuple(command)
 
 
 def _case_command(
@@ -285,11 +222,10 @@ def _run_all_cases(args: argparse.Namespace, base_command: tuple[str, ...]) -> N
 
 
 def main() -> int:
-    parser = _build_parser()
+    parser = build_parser(__doc__)
     args = parser.parse_args()
-    base_command = _resolved_command(parser, args.command)
-    if args.command_includes_profile and len(args.profiles) != 1:
-        parser.error("--command-includes-profile requires exactly one --profiles value")
+    base_command = resolved_command(parser, args.command)
+    check_selection(parser, args)
 
     _run_all_cases(args, base_command)
     return 0

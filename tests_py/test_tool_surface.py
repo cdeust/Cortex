@@ -118,12 +118,23 @@ def test_the_sdk_less_job_never_binds_a_release_to_this_checkouts_bounds() -> No
     # Up to the next top-level job key.
     body = re.split(r"\n  [a-z][a-z-]*:\n", job[1], maxsplit=1)[0]
 
-    assert "verify_mcp_hosts.py" in body, (
+    # Per invocation, not over the whole job: a second --profiles full case
+    # added later that legitimately needs no flag would otherwise satisfy a
+    # job-wide substring check on behalf of the one that does need it.
+    invocations = [
+        # From the script name to the `--` that ends the flags.
+        match.group(0)
+        for match in re.finditer(
+            r"verify_mcp_hosts\.py(?:[^\n]*\\\n)*[^\n]*", body, flags=re.MULTILINE
+        )
+    ]
+    assert invocations, (
         "the job no longer drives the verifier; drop this test or re-point it"
     )
-    if "--profiles full" in body:
-        assert "--published-surface" in body, (
-            "a full-profile case in the SDK-less job must pass "
-            "--published-surface, or it calls full_tool_bounds() and dies on "
-            "ModuleNotFoundError: No module named 'mcp'"
-        )
+    for invocation in invocations:
+        if "--profiles full" in invocation:
+            assert "--published-surface" in invocation, (
+                "this full-profile case in the SDK-less job must pass "
+                "--published-surface, or it calls full_tool_bounds() and dies "
+                f"on ModuleNotFoundError: No module named 'mcp':\n{invocation}"
+            )
