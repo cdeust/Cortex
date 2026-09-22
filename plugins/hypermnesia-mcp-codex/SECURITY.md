@@ -2,7 +2,7 @@
 
 This package is the Codex distribution of Cortex (`hypermnesia-mcp`). It
 starts the published PyPI server over local stdio with the default `full` tool
-profile and installs eleven lifecycle hooks. It ships no skills, apps or
+profile and installs 11 lifecycle hooks. It ships no skills, apps or
 agents, declares no remote endpoint and holds no secrets.
 
 Read the two sections below before installing: the full profile and the hooks

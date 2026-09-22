@@ -276,7 +276,7 @@ banners, auto-recall, auto-capture, checkpoints and every memory tool work on bo
 
 The server is host-agnostic. Any host that can launch a stdio process gets the full tool
 surface on the default SQLite store. What is not portable are the lifecycle hooks — but they
-are no longer Claude-only: the Codex plugin wires the same eleven hook modules through the
+are no longer Claude-only: the Codex plugin wires the same 11 lifecycle hooks through the
 `hypermnesia-mcp-hook` console script (`docs/codex-plugin.md`), so Cortex behaves the same
 under both hosts. A direct `codex mcp add` registration still gets the tool surface only; the
 hooks come with the plugin.
@@ -314,7 +314,7 @@ gemini extensions install https://github.com/cdeust/Cortex
 ```
 
 **Codex and ChatGPT desktop** have a native plugin with the full tool surface and the same
-eleven lifecycle hooks the Claude Code plugin installs. It reads the
+11 lifecycle hooks the Claude Code plugin installs. It reads the
 same saved backend selection as the Claude Code launcher (`~/.claude/methodology/backend.json`),
 so both hosts write to one store (since 4.23.0); explicit `CORTEX_MEMORY_STORE_BACKEND`, `CORTEX_BACKEND` or a database URL
 still wins. Pre-install

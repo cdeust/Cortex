@@ -57,6 +57,14 @@ SCANNED_FILES = (
     ".bestpractices.json",
     # source: ADR-0713
     "server.json",
+    # The Codex package's own shipped docs and the two repository docs that
+    # describe it. They carry no counted claim today; they are scanned so a
+    # future digit-based one cannot drift, which is the gap that let "9
+    # lifecycle hooks" sit next to "eleven" in one README (PR #620).
+    "plugins/hypermnesia-mcp-codex/README.md",
+    "plugins/hypermnesia-mcp-codex/SECURITY.md",
+    "docs/codex-plugin.md",
+    "docs/shared-host-memory.md",
 )
 
 TOOL_CLAIM = re.compile(r"(\d+)\s+(?:memory|standalone|MCP)\s+tools\b")

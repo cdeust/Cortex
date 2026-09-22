@@ -2,7 +2,7 @@
 
 Persistent, local-first memory for Codex. This package points at the same
 Cortex product as the Claude Code plugin and gives Codex the same thing: the
-complete MCP tool profile plus the same eleven lifecycle hooks.
+complete MCP tool profile plus the same 11 lifecycle hooks.
 
 The full design, host boundary and measured startup contract are documented
 in [docs/codex-plugin.md](https://github.com/cdeust/Cortex/blob/main/docs/codex-plugin.md).
@@ -30,7 +30,7 @@ uv tool install "hypermnesia-mcp[postgresql,sqlite]"
 Codex gets the default `full` tool profile — the same surface the Claude Code
 plugin serves.
 
-`hooks/hooks.json` wires the eleven lifecycle hooks, each as
+`hooks/hooks.json` wires the 11 lifecycle hooks, each as
 `uvx --from "hypermnesia-mcp[postgresql,sqlite]" hypermnesia-mcp-hook <module>`:
 session-start context injection, per-prompt auto-recall, auto-capture of
 significant tool output, preemptive context, pipeline heat bumps, post-commit

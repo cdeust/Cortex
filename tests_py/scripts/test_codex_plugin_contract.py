@@ -36,12 +36,36 @@ def test_codex_plugin_is_confined_to_a_dedicated_subdirectory() -> None:
 
     ignored = (REPO_ROOT / ".mcpbignore").read_text().splitlines()
     assert ".agents/" in ignored
-    # The directory entry already excludes hooks/hooks.json and anything else
-    # added under the package, so a new file there never needs its own line.
     assert "plugins/hypermnesia-mcp-codex/" in ignored
-    assert HOOKS_PATH.is_relative_to(PLUGIN_ROOT)
     assert "plugins/cortex-deprecated/" in ignored
     assert "plugins/cortex-viz-deprecated/" in ignored
+
+    # Every file this package ships is actually covered by one of those
+    # directory entries. Asserting `HOOKS_PATH.is_relative_to(PLUGIN_ROOT)`
+    # instead could never fail: the support module defines HOOKS_PATH AS
+    # `PLUGIN_ROOT / "hooks/hooks.json"`, so it tested the constant, not the
+    # ignore file.
+    prefixes = tuple(entry for entry in ignored if entry.endswith("/"))
+    shipped = [
+        path.relative_to(REPO_ROOT).as_posix()
+        for path in PLUGIN_ROOT.rglob("*")
+        if path.is_file()
+    ]
+    assert HOOKS_PATH.relative_to(REPO_ROOT).as_posix() in shipped
+    uncovered = [rel for rel in shipped if not rel.startswith(prefixes)]
+    assert not uncovered, (
+        f"shipped by the Codex package but not excluded from the Claude "
+        f"MCPB bundle: {uncovered}"
+    )
+    # A re-include would silently undo the directory entry above, and a
+    # prefix test alone cannot see it.
+    reincluded = [
+        entry
+        for entry in ignored
+        if entry.startswith("!")
+        if any(rel.startswith(entry[1:].rstrip("/")) for rel in shipped)
+    ]
+    assert not reincluded, f"re-includes a Codex package path: {reincluded}"
 
 
 def test_codex_marketplace_resolves_only_the_dedicated_plugin() -> None:

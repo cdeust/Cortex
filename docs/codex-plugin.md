@@ -9,7 +9,7 @@ as under Claude Code.**
   over local stdio with no `--profile` flag, so it gets the default `full`
   profile — exactly like the Claude Code plugin's server args, which also
   carry no `--profile` flag.
-- **Same lifecycle hooks.** `hooks/hooks.json` wires all eleven hook modules
+- **Same lifecycle hooks.** `hooks/hooks.json` wires all 11 lifecycle hooks
   that `mcp_server.hooks.entry.HOOK_MODULES` allows, which is the same set
   `.claude-plugin/plugin.json` wires for Claude Code. That allowlist is the
   single source of truth for the set; the contract test in
@@ -45,6 +45,14 @@ command resolves against the plugin root) and no interpreter to locate (`uvx`
 owns the environment). A missing `uv` therefore reports a named cause on
 stderr and exits 1 instead of surfacing a bare `command not found`.
 
+Known debt: that guard is repeated verbatim in all 11 entries here, and the
+Claude manifest repeats its own equivalent 11 times too. Both hosts
+require a literal command string per entry, so nothing shares a source today;
+`test_codex_hook_commands_run_the_published_wheel_not_this_repository` checks
+every entry rather than a sample, which is what keeps them from diverging
+silently. Generating both manifests from one template is the real fix and is
+deliberately not attempted here.
+
 ### Event names and matchers
 
 Event names are Codex's own, verified against
@@ -58,9 +66,36 @@ Event names are Codex's own, verified against
   `PostCompact` is not wired.
 - `SessionEnd` carries `"timeout": 3`. Codex defaults `SessionEnd` to 1 second
   and "support[s] up to 3 seconds" — the documented maximum, so the Claude
-  manifest's 30 is not expressible here. `session_lifecycle` survives that
-  ceiling because it spawns its consolidation as a detached subprocess (#610)
-  rather than doing the work inline.
+  manifest's 30 is not expressible here. Spawning consolidation detached
+  (#610) is what makes the remaining work small enough to attempt at all, but
+  it does not guarantee the hook fits. See the limitation below.
+
+#### Known limitation: the first session end can be lost
+
+`session_lifecycle` is the one hook whose budget is set by Codex rather than
+by Cortex, and measurement says the ceiling is marginal, not comfortable.
+Timed on 2026-09-22 (macOS 26.6.2 arm64, uv 0.11.3, warm `uv` cache, published
+4.23.1 wheel), running the manifest's own command against a `SessionEnd`
+event:
+
+```
+session_lifecycle  run 1: 3.46s
+session_lifecycle  run 2: 1.03s
+session_lifecycle  run 3: 0.97s
+```
+
+The first run exceeds the 3-second maximum. Later runs sit well inside it, so
+in practice this costs the session record of the **first** session after an
+install or an upgrade, once the interpreter and bytecode caches for that
+module are cold; every session after that fits. Prewarming the package does
+not remove it, because the cost measured above is already on a warm `uv`
+cache: it is the module's own first-import cost, and `session_lifecycle` runs
+exactly once per session, so it never gets a warm second run within a session.
+
+Nothing in this package can raise the ceiling, and lowering the work below it
+would mean detaching even the part that decides what to record. This is
+recorded as a real limitation rather than reconciled in prose; it needs a
+decision, not an edit.
 
 ### Timeouts
 
@@ -75,15 +110,24 @@ Codex documents a special default and maximum only for `SessionEnd` and
 declares none for them either and both hosts default a command hook to 600
 seconds. Declaring nothing on both sides is the parity case, not an omission.
 
-Leaving the rest unset would not have been: on `UserPromptSubmit`, a stalled
-`uvx` resolve or a blocked database would hold up every prompt for ten
-minutes where Claude Code caps the same hook at five seconds.
+That default is long, and these two are the hooks that hold up the tool call
+while they run. A tighter ceiling would be worse, not better: both hosts
+cancel a timed-out hook and discard its output, and Claude Code's reference
+says plainly that a timed-out `PreToolUse` hook "doesn't block the tool call.
+The call continues through the normal permission flow, so don't count on a
+stalled hook to act as a gate." A timeout on a gate therefore fails **open**,
+so a tight one would trade a rare long wait for silently ungated edits.
+Warm, these cost 0.16s to 0.26s (measured 2026-09-22, same conditions as
+above); the long wait is only the first cold `uvx` resolve, which the prewarm
+removes. Note that this exposure is identical on Claude Code today, so it is
+a property of both manifests rather than something Codex introduces.
 
-The tradeoff is that a cold `uv` cache will exceed these budgets, and a hook
-that exceeds its timeout is cancelled with its output discarded. That costs
-one skipped enrichment, never a blocked prompt or a blocked edit; Claude
-Code's own reference is explicit that a timed-out `PreToolUse` hook "doesn't
-block the tool call". Prewarming the cache (below) removes the window.
+Leaving the rest unset would not have been the parity case: on
+`UserPromptSubmit`, a stalled `uvx` resolve or a blocked database would hold
+up every prompt for ten minutes where Claude Code caps the same hook at five
+seconds. For those, failing open is the right trade, because what a cancelled
+run costs is one skipped enrichment. A cold `uv` cache will exceed those
+budgets; prewarming (below) removes the window.
 
 ### Cost per edit
 
@@ -106,6 +150,17 @@ The Codex docs state that for `apply_patch` "hook input still reports
 `tool_name: "apply_patch"`", so every Edit/Write-triggered hook matches
 `apply_patch` as well, and the `Bash`-triggered hook also matches
 `exec_command|shell_command`.
+
+One asymmetry has no Codex equivalent to add. `preemptive_context` matches
+`Read` alongside the write tools, and Codex has no read tool: its table lists
+shell commands and unified exec, both matching as `Bash`, with no
+`Read`-shaped entry. Reading a file under Codex is a shell command, and
+`preemptive_context` keys on `tool_input.file_path`
+(`mcp_server/hooks/preemptive_context.py`), which a shell event does not
+carry. Matching `Bash` there would spawn a `uvx` process per shell command
+for a guaranteed no-op, so the matcher keeps `Read` (harmless, never emitted
+by Codex) and the read-triggered half of this hook simply does not fire under
+Codex. The edit-triggered half does, through `apply_patch`.
 
 The Codex `.mcp.json` lives under `plugins/hypermnesia-mcp-codex/`, never at
 the repository root. The package directory also carries its own `README.md`,
@@ -149,9 +204,9 @@ uv tool install "hypermnesia-mcp[postgresql,sqlite]"
 
 For the MCP server this is only a startup optimization — `startup_timeout_sec`
 already covers a cold resolve. For the lifecycle hooks it matters more: every
-hook is its own `uvx` invocation, and `SessionEnd` cannot be given more than
-Codex's 3-second maximum, so a cold cache at session end can lose that one
-hook's run. Prewarming removes that window.
+hook is its own `uvx` invocation, so a cold cache makes the first one pay the
+full package resolve. Prewarming removes that window. It does not remove the
+`SessionEnd` limitation above, which is a warm-cache measurement.
 
 The bundled server declares `startup_timeout_sec: 180`. This is a bounded
 startup ceiling, not a delay. Re-measured for the full profile on 2026-09-22
