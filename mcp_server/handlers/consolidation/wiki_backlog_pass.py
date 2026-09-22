@@ -11,6 +11,9 @@ from __future__ import annotations
 import logging
 from typing import Any
 from mcp_server.observability import silent_failure
+from mcp_server.handlers.consolidation.batch_pool_capability import (
+    batch_pool_skip_reason,
+)
 from mcp_server.infrastructure.pg_store_lesson_promotion import (
     count_lesson_promotion_candidates,
 )
@@ -34,11 +37,20 @@ def _lesson_promotion_backlog(store: Any) -> int | None:
 
     Precondition: none — degrades to ``None`` (not 0, so a caller can't
     mistake "query failed" for "queue is empty") when ``store`` lacks
-    ``batch_pool`` (SQLite fallback in tests) or the query itself fails.
+    ``batch_pool`` (the SQLite backend, which has no lesson-promotion
+    table; this is its permanent degraded mode, not a test-only
+    fallback) or the query itself fails.
     Postcondition: returns the exact eligible-candidate count on
-    success; never raises.
+    success; never raises. A missing ``batch_pool`` is an expected,
+    silent ``None`` (no ``silent_failure.note`` — that would otherwise
+    fire, and increment ``cortex_silent_failures_total``, on every
+    ``consolidate`` run for the lifetime of a SQLite install); a query
+    that raises once ``batch_pool`` exists is a real failure and stays
+    observable.
     """
 
+    if batch_pool_skip_reason(store) is not None:
+        return None
     try:
         with store.batch_pool.connection() as conn:
             return count_lesson_promotion_candidates(conn)

@@ -11,6 +11,9 @@ from mcp_server.core.wiki_citation_seed import (
     SeedReliability,
     classify_seed_candidates,
 )
+from mcp_server.handlers.consolidation.batch_pool_capability import (
+    batch_pool_skip_reason,
+)
 from mcp_server.infrastructure.pg_store_wiki import insert_citation
 from mcp_server.infrastructure.pg_store_wiki_citation_seed import (
     list_existing_page_memory_citations,
@@ -53,6 +56,10 @@ async def run_wiki_citation_seed_pass(
         "journal": [],
         "status": "ok",
     }
+    skip_reason = batch_pool_skip_reason(store)
+    if skip_reason is not None:
+        out["status"] = f"skipped: {skip_reason}"
+        return out
     try:
         with store.batch_pool.connection() as conn:
             rows = list_page_memory_seed_candidates(conn, limit)

@@ -164,3 +164,68 @@ class TestCitationSeedWiring:
         assert result["status"].startswith("citation_seed_error")
         # Non-fatal: the function still returned a full dict, not raised.
         assert "pending_total" in result
+
+    def test_citation_seed_returned_error_escalates_without_raising(
+        self, monkeypatch
+    ) -> None:
+        """#636: a sub-pass that catches its OWN failure internally and
+        RETURNS ``{"status": "error: ..."}`` (never raises) must still
+        escalate ``out["status"]`` -- this is exactly the shape every
+        batch_pool-gated wiki pass used before the #636 fix, and it left
+        ``wiki_maintenance``'s except-only escalation dead code."""
+        _silence_everything_except_citation_seed(monkeypatch)
+
+        async def _returns_error_without_raising(store, *, apply, limit):
+            return {
+                "scanned_rows": 0,
+                "seeded": 0,
+                "already_cited": 0,
+                "skipped_race": 0,
+                "journal": [],
+                "status": (
+                    "error: AttributeError: "
+                    "'FakeStore' object has no attribute 'batch_pool'"
+                ),
+            }
+
+        monkeypatch.setattr(
+            wiki_maintenance,
+            "run_wiki_citation_seed_pass",
+            _returns_error_without_raising,
+        )
+
+        result = _run(
+            wiki_maintenance.run_wiki_maintenance(
+                _FakeStore(), max_purges_per_axis=None
+            )
+        )
+
+        assert result["citation_seed"]["status"].startswith("error:")
+        assert result["status"].startswith("citation_seed_error")
+
+    def test_skipped_status_does_not_escalate(self, monkeypatch) -> None:
+        """A named ``skipped: ...`` status (missing PG-only capability, the
+        expected SQLite degraded mode) is not an error and must leave the
+        overall cycle status ``ok``."""
+        _silence_everything_except_citation_seed(monkeypatch)
+
+        async def _skips(store, *, apply, limit):
+            return {
+                "scanned_rows": 0,
+                "seeded": 0,
+                "already_cited": 0,
+                "skipped_race": 0,
+                "journal": [],
+                "status": "skipped: store has no batch_pool (non-PostgreSQL backend)",
+            }
+
+        monkeypatch.setattr(wiki_maintenance, "run_wiki_citation_seed_pass", _skips)
+
+        result = _run(
+            wiki_maintenance.run_wiki_maintenance(
+                _FakeStore(), max_purges_per_axis=None
+            )
+        )
+
+        assert result["citation_seed"]["status"].startswith("skipped:")
+        assert result["status"] == "ok"

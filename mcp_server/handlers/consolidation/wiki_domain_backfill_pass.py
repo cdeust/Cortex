@@ -10,6 +10,9 @@ import os
 from typing import Any, Callable
 from mcp_server.shared.domain_mapping import _build_registry
 from mcp_server.core.wiki_domain_backfill import derive_page_domain
+from mcp_server.handlers.consolidation.batch_pool_capability import (
+    batch_pool_skip_reason,
+)
 from mcp_server.infrastructure.pg_store_wiki_domain import (
     update_page_domain,
     list_catchall_pages_with_sources,
@@ -101,6 +104,10 @@ async def run_domain_backfill_pass(
         "by_domain": {},
         "status": "ok",
     }
+    skip_reason = batch_pool_skip_reason(store)
+    if skip_reason is not None:
+        out["status"] = f"skipped: {skip_reason}"
+        return out
     try:
         with store.batch_pool.connection() as conn:
             domain_roots = _registry_domain_roots()

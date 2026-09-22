@@ -10,6 +10,9 @@ from typing import Any, Callable
 from mcp_server.core.wiki_drift import _file_exists_under
 from mcp_server.core.wiki_coverage import _project_source_root
 from mcp_server.core.wiki_source_backfill import derive_primary_source
+from mcp_server.handlers.consolidation.batch_pool_capability import (
+    batch_pool_skip_reason,
+)
 from mcp_server.infrastructure.pg_store_wiki_sources import (
     upsert_page_sources,
     list_pages_missing_source_link,
@@ -86,6 +89,10 @@ async def run_source_backfill_pass(
         "by_source": {},
         "status": "ok",
     }
+    skip_reason = batch_pool_skip_reason(store)
+    if skip_reason is not None:
+        out["status"] = f"skipped: {skip_reason}"
+        return out
     try:
         with store.batch_pool.connection() as conn:
             pages = list_pages_missing_source_link(conn, limit=limit)

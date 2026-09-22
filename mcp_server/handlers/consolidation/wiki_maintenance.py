@@ -63,6 +63,29 @@ async def _invoke_wiki_purge(args: dict[str, Any]) -> dict[str, Any]:
     return await wiki_purge_handler(args)
 
 
+def _escalate_if_error(out: dict[str, Any], key: str, result: dict[str, Any]) -> None:
+    """Bump ``out['status']`` when a sub-pass RETURNED an error stanza.
+
+    Every wiki sub-pass below catches its own failures internally and
+    returns ``{"status": "error: ..."}`` rather than raising, so the
+    ``except`` block around each ``await`` (which only fires on a
+    *raise*) never saw these -- ``consolidate`` reported ``status: "ok"``
+    with four passes silently broken on every SQLite run (#636). This
+    checks the returned stanza too. A ``"skipped: ..."`` status (the
+    PG-only capability is simply absent -- SQLite's expected degraded
+    mode) is not an error and does not escalate.
+
+    source: ADR-1089
+    """
+    status = result.get("status") if isinstance(result, dict) else None
+    if (
+        isinstance(status, str)
+        and status.startswith("error:")
+        and out["status"] == "ok"
+    ):
+        out["status"] = f"{key}_error: {status[len('error: ') :]}"
+
+
 async def _run_purge_axis(
     *, axis: str, apply: bool, max_purges: int | None = None
 ) -> dict[str, Any]:
@@ -207,6 +230,7 @@ async def run_wiki_maintenance(
         out["source_backfill"] = await run_source_backfill_pass(
             store, apply=not source_backfill_dry_run
         )
+        _escalate_if_error(out, "source_backfill", out["source_backfill"])
     except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("wiki_maintenance: source backfill failed (non-fatal): %s", exc)
         out["source_backfill"] = {"status": f"error: {type(exc).__name__}: {exc}"}
@@ -218,6 +242,7 @@ async def run_wiki_maintenance(
         out["domain_backfill"] = await run_domain_backfill_pass(
             store, apply=not domain_backfill_dry_run
         )
+        _escalate_if_error(out, "domain_backfill", out["domain_backfill"])
     except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("wiki_maintenance: domain backfill failed (non-fatal): %s", exc)
         out["domain_backfill"] = {"status": f"error: {type(exc).__name__}: {exc}"}
@@ -231,6 +256,7 @@ async def run_wiki_maintenance(
             apply=apply_citation_seed,
             limit=citation_seed_limit or DEFAULT_SEED_SCAN_LIMIT,
         )
+        _escalate_if_error(out, "citation_seed", out["citation_seed"])
     except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning(
             "wiki_maintenance: citation seed pass failed (non-fatal): %s", exc
