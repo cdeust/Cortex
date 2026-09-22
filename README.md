@@ -51,6 +51,12 @@ claude plugin marketplace add cdeust/Cortex
 claude plugin install hypermnesia-mcp
 ```
 
+Update the same way, one command:
+
+```bash
+claude plugin update hypermnesia-mcp
+```
+
 **Claude Desktop** — download `hypermnesia-mcp.mcpb` from
 [Releases](https://github.com/cdeust/Cortex/releases) and open it, or use
 **Settings → Extensions**. The bundle carries the tools but no hooks; the MCPB format has none.
