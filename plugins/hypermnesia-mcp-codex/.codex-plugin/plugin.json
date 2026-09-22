@@ -22,14 +22,14 @@
   "interface": {
     "displayName": "Cortex Memory",
     "shortDescription": "Automatic persistent memory for Codex",
-    "longDescription": "Cortex gives Codex the same persistent memory Claude Code gets: the complete MCP tool profile plus the eleven lifecycle hooks that record sessions, inject context at session start and on every prompt, capture significant tool output, checkpoint before compaction, brief subagents, and gate edits against recorded decisions. Memory is local-first and shared with Claude Code through the same store.",
+    "longDescription": "Cortex gives Codex persistent memory through the complete MCP tool profile plus the eleven lifecycle hooks that record sessions, inject context at session start and on every prompt, capture significant tool output, checkpoint before compaction, and gate edits against recorded decisions. Host event payloads and timeout limits affect which hooks complete. Memory is local-first and can be shared with Claude Code through the same configured store.",
     "developerName": "Clement Deust",
     "category": "Developer Tools",
     "capabilities": [
       "Persistent project memory",
       "Automatic session capture and recall",
       "Decision and correction recall",
-      "Compaction checkpoints and subagent briefing",
+      "Compaction checkpoints",
       "Local-first storage",
       "Memory inspection"
     ],

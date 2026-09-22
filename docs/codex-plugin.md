@@ -1,15 +1,16 @@
 # Cortex plugin for Codex
 
 Cortex ships a native Codex package in an isolated repository subdirectory.
-It points at the same Cortex product as the existing Claude Code plugin, and
-both packages expose the same product: **Cortex behaves the same under Codex
-as under Claude Code.**
+It exposes the same complete MCP tool profile and registers the same hook
+modules as the Claude Code plugin. Host event payloads and timeout limits
+differ, so registering the same modules does not guarantee identical behavior.
+The limitations below describe those differences.
 
 - **Same tool surface.** The Codex package starts the published PyPI server
   over local stdio with no `--profile` flag, so it gets the default `full`
   profile — exactly like the Claude Code plugin's server args, which also
   carry no `--profile` flag.
-- **Same lifecycle hooks.** `hooks/hooks.json` wires all 11 lifecycle hooks
+- **Same registered hook modules.** `hooks/hooks.json` wires all 11 lifecycle hooks
   that `mcp_server.hooks.entry.HOOK_MODULES` allows, which is the same set
   `.claude-plugin/plugin.json` wires for Claude Code. That allowlist is the
   single source of truth for the set; the contract test in
@@ -70,7 +71,7 @@ Event names are Codex's own, verified against
   (#610) is what makes the remaining work small enough to attempt at all, but
   it does not guarantee the hook fits. See the limitation below.
 
-#### Known limitation: the first session end can be lost
+#### Known limitation: session-end recording can exceed the timeout
 
 `session_lifecycle` is the one hook whose budget is set by Codex rather than
 by Cortex, and measurement says the ceiling is marginal, not comfortable.
@@ -84,18 +85,25 @@ session_lifecycle  run 2: 1.03s
 session_lifecycle  run 3: 0.97s
 ```
 
-The first run exceeds the 3-second maximum. Later runs sit well inside it, so
-in practice this costs the session record of the **first** session after an
-install or an upgrade, once the interpreter and bytecode caches for that
-module are cold; every session after that fits. Prewarming the package does
-not remove it, because the cost measured above is already on a warm `uv`
-cache: it is the module's own first-import cost, and `session_lifecycle` runs
-exactly once per session, so it never gets a warm second run within a session.
+The first run exceeds the 3-second maximum despite a warm `uv` cache. The two
+later runs completed within it, but these three observations do not establish
+that subsequent sessions always fit. They also do not isolate the cause of
+the slower run. Session-end recording can therefore be lost to the timeout;
+prewarming package downloads does not guarantee completion.
 
 Nothing in this package can raise the ceiling, and lowering the work below it
 would mean detaching even the part that decides what to record. This is
 recorded as a real limitation rather than reconciled in prose; it needs a
 decision, not an edit.
+
+### Subagent briefing requires a prompt
+
+Codex's native [`SubagentStart` payload](https://developers.openai.com/codex/hooks#subagentstart)
+includes `agent_type` but no task `prompt`. The adapter maps `agent_type` to
+`agent_name` and leaves the prompt absent (`mcp_server/hooks/host_event.py`).
+`agent_briefing` exits when the prompt is absent or too short, before querying
+memories (`mcp_server/hooks/agent_briefing.py`). The hook remains registered,
+but native Codex subagent starts currently receive no briefing from it.
 
 ### Timeouts
 
