@@ -51,8 +51,8 @@ STORAGE_SELECTIONS: tuple[Literal["sqlite", "auto"], ...] = ("sqlite", "auto")
 # source: ADR-0788
 # The correction is recorded as ADR number 1077.
 def full_tool_bounds() -> tuple[int, int]:
-    """The surface's own bounds, imported late: the mcp-host-config job runs
-    without the MCP SDK and verifies lean profiles only."""
+    """This checkout's own bounds, imported late: the mcp-host-config job runs
+    without the MCP SDK, so no case it drives may reach here (ADR-1077)."""
     from mcp_server.tool_surface import (  # noqa: PLC0415 — see docstring
         full_tool_bounds as surface_bounds,
     )
@@ -92,7 +92,7 @@ def _verify_initialize(
 
 
 def _verify_tool_surface(
-    case: ContractCase, responses: dict[int, dict[str, object]]
+    case: ContractCase, responses: dict[int, dict[str, object]], published: bool
 ) -> int:
     tools = _result(responses, 2).get("tools", [])
     if not isinstance(tools, list):
@@ -110,7 +110,9 @@ def _verify_tool_surface(
             raise ContractError(
                 f"{case.label}: lean surface drifted; missing={missing}, extra={extra}"
             )
-    else:
+    elif not published:
+        # These bounds are THIS checkout's; a released artifact advertises its
+        # own release's surface (ADR-1077, revision 2026-09-22).
         minimum, maximum = full_tool_bounds()
         if not minimum <= len(tools) <= maximum:
             raise ContractError(
@@ -151,11 +153,11 @@ def _verify_memory_call(
         raise ContractError(f"{case.label}: memory_stats failed: {call_result!r}")
 
 
-def _verify(case: ContractCase) -> tuple[int, float]:
+def _verify(case: ContractCase, published: bool) -> tuple[int, float]:
     started_at = time.monotonic()
     responses = run_client(case)
     _verify_initialize(case, responses)
-    count = _verify_tool_surface(case, responses)
+    count = _verify_tool_surface(case, responses, published)
     _verify_auxiliary_discovery(case, responses)
     _verify_memory_call(case, responses)
     return count, time.monotonic() - started_at
@@ -183,6 +185,11 @@ def _add_selection_arguments(parser: argparse.ArgumentParser) -> None:
         help=(
             "run the supplied command unchanged; requires exactly one --profiles value"
         ),
+    )
+    parser.add_argument(
+        "--published-surface",
+        action="store_true",
+        help="the command resolves a released artifact, not this checkout",
     )
 
 
@@ -257,7 +264,7 @@ def _run_one_case(
         socks_proxy_regression=not args.allow_bootstrap_network,
         storage_selection=args.storage_selection,
     )
-    count, elapsed_seconds = _verify(case)
+    count, elapsed_seconds = _verify(case, args.published_surface)
     print(
         f"PASS {case.label}: initialize + discovery + "
         f"memory_stats ({count} tools, {elapsed_seconds:.2f}s)"

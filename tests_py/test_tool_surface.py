@@ -96,3 +96,34 @@ def test_the_verifier_imports_without_the_mcp_sdk() -> None:
 
     assert result.returncode == 0, result.stderr
     assert "imported" in result.stdout
+
+
+def test_the_sdk_less_job_never_binds_a_release_to_this_checkouts_bounds() -> None:
+    """Importability is not enough: a full-profile case in the SDK-less job
+    still *calls* `full_tool_bounds()` and dies on the same missing SDK.
+
+    Codex stopped shipping a lean profile (PR #620), so mcp-host-config's
+    codex-cli case had to move to `--profiles full`, and it broke that way.
+    `--published-surface` is what keeps the call unreachable there, and it is
+    correct beyond the SDK: that command resolves a released artifact whose
+    surface is its own release's, not this checkout's (ADR-1077, revision
+    2026-09-22).
+    """
+    import pathlib
+    import re
+
+    workflow = pathlib.Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
+    job = workflow.split("\n  mcp-host-config:\n", 1)
+    assert len(job) == 2, "the mcp-host-config job is no longer declared as expected"
+    # Up to the next top-level job key.
+    body = re.split(r"\n  [a-z][a-z-]*:\n", job[1], maxsplit=1)[0]
+
+    assert "verify_mcp_hosts.py" in body, (
+        "the job no longer drives the verifier; drop this test or re-point it"
+    )
+    if "--profiles full" in body:
+        assert "--published-surface" in body, (
+            "a full-profile case in the SDK-less job must pass "
+            "--published-surface, or it calls full_tool_bounds() and dies on "
+            "ModuleNotFoundError: No module named 'mcp'"
+        )

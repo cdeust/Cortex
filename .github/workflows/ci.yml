@@ -367,6 +367,7 @@ jobs:
             python scripts/verify_mcp_hosts.py \
               --timeout "$plugin_timeout" --clients codex-cli --profiles full \
               --command-includes-profile \
+              --published-surface \
               --allow-bootstrap-network \
               --storage-selection auto \
               -- "${plugin_command[@]}"

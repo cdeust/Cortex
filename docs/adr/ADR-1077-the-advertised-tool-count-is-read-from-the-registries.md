@@ -26,7 +26,17 @@ A literal that is right for a while, then wrong, and only caught when it drifts 
 
 `mcp_server/tool_surface.py` reads the surface from the registry modules themselves: `standalone_tool_names()` is the union of their `SCHEMAS` maps minus the three gated names, and `UPSTREAM_TOOL_NAMES` holds those three. It imports registries only, never the server, so a caller pays no MCP startup for a count.
 
-`scripts/verify_mcp_hosts.py` derives its bounds from that module rather than stating them, through a thin `full_tool_bounds()` that imports it late. The late import is load-bearing: reading the registries pulls the MCP SDK, and the `mcp-host-config` CI job installs the three host CLIs with no Python dependencies and verifies lean profiles only. A module-scope import broke that job, and a test now imports the script with `mcp` blocked to keep it importable without the SDK. The remaining copies are prose for humans, and the doc-claim gate already cross-checks them against the pinned test name.
+`scripts/verify_mcp_hosts.py` derives its bounds from that module rather than stating them, through a thin `full_tool_bounds()` that imports it late. The late import is load-bearing: reading the registries pulls the MCP SDK, and the `mcp-host-config` CI job installs the three host CLIs with no Python dependencies. A module-scope import broke that job, and a test now imports the script with `mcp` blocked to keep it importable without the SDK. The remaining copies are prose for humans, and the doc-claim gate already cross-checks them against the pinned test name.
+
+### Revision 2026-09-22: importable is not the same as unreached
+
+The paragraph above said the job "verifies lean profiles only", and the guard built for it only checked that the script stays *importable* without the SDK. Both were too weak. When the Codex plugin stopped shipping a lean profile (PR #620), that job's codex-cli case moved to `--profiles full`, which *calls* `full_tool_bounds()`, and the job failed on `ModuleNotFoundError: No module named 'mcp'` again. Importability never protected the call.
+
+There is a second, independent reason that call did not belong there, and it is the same defect this ADR was written about, pointed the other way. The bounds are derived from **this checkout's** registries, while that job's command is `uvx --from "hypermnesia-mcp[postgresql,sqlite]" ...`, which resolves the **published release**. A PR that adds a tool moves this checkout's bounds while the published wheel keeps advertising the old count, so the job would have failed on a correct change. Binding an artifact's surface to a different tree's registries is a second source of truth waiting to disagree with the first.
+
+`--published-surface` therefore marks a case whose command resolves a released artifact. It keeps every other full-profile check (the `'full' profile` marker in the initialize instructions, a non-empty `tools/list`, `memory_stats` present and callable, the empty-resources and `session_recall` shims) and drops only the count bound, which is the one assertion that cannot be true of a foreign artifact. Tool-count coverage for codex-cli at the full profile is unaffected: it lives in the two `python scripts/verify_mcp_hosts.py -- hypermnesia-mcp` calls in the `test` and `release-deps` jobs, which pass no `--clients` or `--profiles` and so exercise all three clients across both profiles against this checkout's own installed entry point, in jobs that do install the SDK.
+
+The guard is now `test_the_sdk_less_job_never_binds_a_release_to_this_checkouts_bounds`, which reads the job out of `ci.yml` and fails if a full-profile case there omits the flag.
 
 ## Consequences
 
