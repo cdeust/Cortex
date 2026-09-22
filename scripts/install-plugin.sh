@@ -133,6 +133,22 @@ else
 fi
 say "Backend: $BACKEND"
 
+# Resolve the marker path with Path.home() inside Python.
+# source: ADR-1088
+MARKER_WRITTEN=$(CORTEX_BACKEND_MARKER_VALUE="$BACKEND" \
+CORTEX_BACKEND_MARKER_VERSION="$CURRENT_VERSION" "$PY" -c "
+import json, os, pathlib
+path = pathlib.Path.home() / '.claude' / 'methodology' / 'backend.json'
+path.parent.mkdir(parents=True, exist_ok=True)
+path.write_text(json.dumps({
+    'backend': os.environ['CORTEX_BACKEND_MARKER_VALUE'],
+    'written_by': 'install-plugin.sh',
+    'plugin_version': os.environ['CORTEX_BACKEND_MARKER_VERSION'],
+}, indent=2) + '\n', encoding='utf-8')
+print(path)
+") || warn "could not persist backend marker (launcher falls back to auto)"
+[ -n "$MARKER_WRITTEN" ] && say "Backend persisted: $BACKEND -> $MARKER_WRITTEN"
+
 # source: ADR-0740
 if [ "$BACKEND" = "sqlite" ]; then
     run_setup_py env CORTEX_MEMORY_STORE_BACKEND=sqlite \
@@ -153,22 +169,6 @@ else
             ;;
     esac
 fi
-
-# Persist only the backend name; resolve the marker path with Path.home() inside Python.
-# source: ADR-0740
-MARKER_WRITTEN=$(CORTEX_BACKEND_MARKER_VALUE="$BACKEND" \
-CORTEX_BACKEND_MARKER_VERSION="$CURRENT_VERSION" "$PY" -c "
-import json, os, pathlib
-path = pathlib.Path.home() / '.claude' / 'methodology' / 'backend.json'
-path.parent.mkdir(parents=True, exist_ok=True)
-path.write_text(json.dumps({
-    'backend': os.environ['CORTEX_BACKEND_MARKER_VALUE'],
-    'written_by': 'install-plugin.sh',
-    'plugin_version': os.environ['CORTEX_BACKEND_MARKER_VERSION'],
-}, indent=2) + '\n', encoding='utf-8')
-print(path)
-") || warn "could not persist backend marker (launcher falls back to auto)"
-[ -n "$MARKER_WRITTEN" ] && say "Backend persisted: $BACKEND -> $MARKER_WRITTEN"
 
 # ── Phase 2: prune stale OTHER versions ────────────────────────────────
 

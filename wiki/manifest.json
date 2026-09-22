@@ -3515,6 +3515,14 @@
     "ADR-1086": {
       "mirror": "ADR-1086-prime-project-memories-from-explicit-shell-file-cues.md",
       "path": "adr/cortex/1086-prime-project-memories-from-explicit-shell-file-cues.md"
+    },
+    "ADR-1087": {
+      "mirror": "ADR-1087-isolate-every-ml-importing-child-process-spawned-by-scripts-setup.py.md",
+      "path": "adr/cortex/1087-isolate-every-ml-importing-child-process-spawned-by-scripts-setup.py.md"
+    },
+    "ADR-1088": {
+      "mirror": "ADR-1088-persist-install-plugin.sh-s-backend-marker-before-scripts-setup.py-can-fail.md",
+      "path": "adr/cortex/1088-persist-install-plugin.sh-s-backend-marker-before-scripts-setup.py-can-fail.md"
     }
   },
   "project": "cortex",
