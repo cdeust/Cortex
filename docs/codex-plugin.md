@@ -29,7 +29,7 @@ console script the wheel declares (`hypermnesia-mcp-hook`, `pyproject.toml`,
 added in #605):
 
 ```bash
-uvx --from "hypermnesia-mcp[postgresql,sqlite]==4.23.3" hypermnesia-mcp-hook <module>
+uvx --from "hypermnesia-mcp[postgresql,sqlite]==4.23.4" hypermnesia-mcp-hook <module>
 ```
 
 `mcp_server/hooks/entry.py` validates `<module>` against `HOOK_MODULES`, wires
@@ -210,7 +210,7 @@ settings to share memories; this does not merge previously separate stores.
 A prewarm downloads the package before restarting Codex:
 
 ```bash
-uv tool install "hypermnesia-mcp[postgresql,sqlite]==4.23.3"
+uv tool install "hypermnesia-mcp[postgresql,sqlite]==4.23.4"
 ```
 
 For the MCP server this is only a startup optimization, `startup_timeout_sec`
@@ -233,7 +233,7 @@ The bundled MCP command is equivalent to:
 
 ```bash
 env CORTEX_RUNTIME=cowork \
-  uvx --from "hypermnesia-mcp[postgresql,sqlite]==4.23.3" \
+  uvx --from "hypermnesia-mcp[postgresql,sqlite]==4.23.4" \
   hypermnesia-mcp
 ```
 

@@ -6,6 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [4.23.4] - 2026-09-23
+
+### Documentation
+
+- Describe native Codex memory capabilities directly alongside Claude Code,
+  including automatic context, capture, checkpoints and shared project memory.
+  Remove stale pre-fix limitations and explain hook trust during installation
+  and updates.
+- Publish native macOS verification traces for Claude-to-Codex and Codex-to-Claude
+  memory retrieval, project-scoped exclusion, and automatic startup context in
+  both hosts. The report names the exact tested versions and includes sanitized
+  tool responses and transcript hashes (#632).
+
 ## [4.23.3] - 2026-09-22
 
 ### Fixed

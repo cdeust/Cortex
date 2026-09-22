@@ -23,7 +23,7 @@ launches run from the cache. Prewarming that cache is worth it, see
 [docs/codex-plugin.md](https://github.com/cdeust/Cortex/blob/main/docs/codex-plugin.md):
 
 ```bash
-uv tool install "hypermnesia-mcp[postgresql,sqlite]==4.23.3"
+uv tool install "hypermnesia-mcp[postgresql,sqlite]==4.23.4"
 ```
 
 ## What it exposes
@@ -33,7 +33,7 @@ Codex gets the default `full` tool profile, the same surface the Claude Code
 plugin serves.
 
 `hooks/hooks.json` wires the 11 lifecycle hooks, each as
-`uvx --from "hypermnesia-mcp[postgresql,sqlite]==4.23.3" hypermnesia-mcp-hook <module>`
+`uvx --from "hypermnesia-mcp[postgresql,sqlite]==4.23.4" hypermnesia-mcp-hook <module>`
 (or the bundled durable intake for session end):
 session-start context injection, per-prompt auto-recall, auto-capture of
 significant tool output, preemptive context, pipeline heat bumps, post-commit
