@@ -15,7 +15,7 @@
     }
   },
   "description": "Cross-platform persistent memory and cognitive profiling for AI agents. Scientific retrieval backed by 97 published references; optional automatic lifecycle hooks on Claude Code.",
-  "display_name": "Cortex — Persistent Memory",
+  "display_name": "Cortex \u2014 Persistent Memory",
   "documentation": "https://github.com/cdeust/Cortex#readme",
   "homepage": "https://github.com/cdeust/Cortex",
   "icon": "icon.png",
