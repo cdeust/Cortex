@@ -93,17 +93,22 @@ adheres to [Semantic Versioning](https://semver.org/).
   `kind: explanation`), and the body cut mid-word. A new
   `shared/wiki_pointer.py` owns the identity of a pointer memory, keyed on
   the `wiki://` origin prefix; `build_from_memory` and `sync_memory_strict`
-  now require that origin as a keyword, and `wiki_extract`'s candidate
-  query excludes pointers on every branch. The pointer memory itself is
-  unchanged: removing it would drop the authored page out of `recall`.
-  Pointer truncation now lands on a word boundary.
-- `wiki_purge` reaches every page kind (#622). `_PAGE_DIRS` was a hand-kept
-  copy of the kind list that had drifted from `shared.wiki_layout`, so
+  now take that origin inside a `PageCandidate`, and `wiki_extract`'s
+  candidate query excludes pointers on every branch. `is_pointer_source`
+  is the single authority: the SQL clause only narrows the candidate set,
+  so a `source` value padded with whitespace, which LIKE cannot see, is
+  still turned away rather than slipping past the second door. The
+  pointer memory itself is unchanged: removing it would drop the authored
+  page out of `recall`. Pointer truncation now lands on a word boundary.
+- `wiki_purge` reaches every page kind (#622). Its page-kind directory
+  set was a hand-kept copy that had drifted from `shared.wiki_layout`, so
   pages under `rfc/`, `explanation/`, `how-to/`, `runbook/`, `tutorial/`
   and `files/` were skipped in silence and had to be deleted by hand. It
   now derives from `PAGE_KINDS`, and the result reports
-  `wiki_pages_total`, `unscanned` and `unrecognised_dirs` alongside
-  `scanned` so a caller can tell a full sweep from a partial one.
+  `wiki_pages_total`, `unscanned`, `errored` and `unrecognised_dirs`
+  alongside `scanned` so a caller can tell a full sweep from a partial
+  one. A page that failed to read counts as scanned, not unscanned: an
+  I/O fault no longer hides inside the coverage gap.
 
 ## [4.23.1] - 2026-09-22
 
