@@ -1,12 +1,15 @@
-"""Contract tests for the isolated, full-parity Codex plugin package."""
+"""Contract tests for the isolated, full-parity Codex plugin package.
+
+The hook manifest this package now ships has its own contracts in the sibling
+test_codex_plugin_hooks_contract.py; this file carries the package identity,
+the marketplace entries and the MCP server command.
+"""
 
 from __future__ import annotations
 
 import json
 import re
 from pathlib import Path
-
-from mcp_server.hooks.entry import HOOK_MODULES
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -17,11 +20,6 @@ MCP_PATH = PLUGIN_ROOT / ".mcp.json"
 HOOKS_REF = "./hooks/hooks.json"
 HOOKS_PATH = PLUGIN_ROOT / "hooks/hooks.json"
 CLAUDE_PLUGIN_PATH = REPO_ROOT / ".claude-plugin/plugin.json"
-
-# The console script mcp_server/hooks/entry.py backs (pyproject.toml). A Codex
-# plugin ships only its own directory, so it can call neither this repository
-# nor scripts/launcher.py.
-HOOK_CONSOLE_SCRIPT = "hypermnesia-mcp-hook"
 CLAUDE_MARKETPLACE_PATH = REPO_ROOT / ".claude-plugin/marketplace.json"
 VIZ_SHIM_ROOT = REPO_ROOT / "plugins/cortex-viz-deprecated"
 VIZ_SHIM_PLUGIN_PATH = VIZ_SHIM_ROOT / ".claude-plugin/plugin.json"
@@ -104,113 +102,6 @@ def test_codex_plugin_serves_the_full_profile_and_references_its_hooks() -> None
     # No --profile flag at all, exactly like the Claude plugin's server args:
     # the default full profile is what both hosts get.
     assert "--profile" not in server["args"]
-
-
-def test_codex_hooks_dispatch_exactly_the_entry_point_allowlist() -> None:
-    """The regression guard: the Codex manifest wires every hook module the
-    console script allows, and nothing the console script would refuse.
-
-    HOOK_MODULES is imported rather than restated, so a module added to (or
-    dropped from) the allowlist cannot silently leave the Codex package
-    behind the Claude one.
-    """
-    dispatched = {
-        module
-        for entries in _json(HOOKS_PATH)["hooks"].values()
-        for entry in entries
-        for hook in entry["hooks"]
-        for module in HOOK_MODULES
-        if hook["command"].endswith(f"{HOOK_CONSOLE_SCRIPT} {module}'")
-    }
-    assert dispatched == set(HOOK_MODULES)
-
-
-def test_codex_hook_commands_run_the_published_wheel_not_this_repository() -> None:
-    """A Codex plugin ships only its own directory: no scripts/launcher.py,
-    no ${CLAUDE_PLUGIN_ROOT}-relative path, and a named diagnostic when the
-    one thing this command line depends on (uvx) is absent."""
-    for entries in _json(HOOKS_PATH)["hooks"].values():
-        for entry in entries:
-            for hook in entry["hooks"]:
-                command = hook["command"]
-                assert hook["type"] == "command"
-                assert "scripts/launcher.py" not in command
-                assert "CLAUDE_PLUGIN_ROOT" not in command
-                assert "command -v uvx" in command
-                assert 'uvx --from "hypermnesia-mcp[postgresql,sqlite]"' in command
-
-
-def test_codex_hooks_use_codex_event_names_and_widened_matchers() -> None:
-    """Event names are Codex's own (learn.chatgpt.com/docs/hooks, read
-    2026-09-22), and matchers carry Codex's native tool names alongside
-    Claude's."""
-    hooks = _json(HOOKS_PATH)["hooks"]
-
-    # Codex has no Notification event; PreCompact is where a checkpoint taken
-    # *before* compaction belongs (compaction_checkpoint's own contract).
-    assert "Notification" not in hooks
-    assert "PreCompact" in hooks
-    assert set(hooks) == {
-        "PreToolUse",
-        "SessionStart",
-        "UserPromptSubmit",
-        "PostToolUse",
-        "SessionEnd",
-        "PreCompact",
-        "SubagentStart",
-    }
-
-    def _matcher_for(module: str) -> str | None:
-        for entries in hooks.values():
-            for entry in entries:
-                for hook in entry["hooks"]:
-                    if hook["command"].endswith(f"{HOOK_CONSOLE_SCRIPT} {module}'"):
-                        return entry.get("matcher")
-        raise AssertionError(f"{module} is not wired")
-
-    # host_event.py expands apply_patch into Edit/Write events, so every
-    # edit-triggered hook must see the apply_patch call in the first place.
-    for module in ("decision_gate", "no_deps_gate", "preemptive_context"):
-        assert "apply_patch" in (_matcher_for(module) or "")
-    assert "apply_patch" in (_matcher_for("pipeline_impact_bump") or "")
-    # host_event.py maps exec_command/shell_command onto a Bash-shaped event.
-    bash_matcher = _matcher_for("post_commit_reindex") or ""
-    for shell_tool in ("Bash", "exec_command", "shell_command"):
-        assert shell_tool in bash_matcher
-    # Claude's PostToolUse capture matcher is "*"; Codex documents "*" as a
-    # universal matcher too.
-    assert _matcher_for("post_tool_capture") == "*"
-
-
-def test_codex_session_end_respects_the_host_timeout_ceiling() -> None:
-    """Codex defaults SessionEnd to 1s and supports up to 3s
-    (learn.chatgpt.com/docs/hooks, read 2026-09-22), so the Claude manifest's
-    30s is not expressible here. Every other hook omits `timeout` and takes
-    Codex's own 600s default rather than an unmeasured number."""
-    hooks = _json(HOOKS_PATH)["hooks"]
-    session_end = hooks["SessionEnd"][0]["hooks"][0]
-    assert session_end["timeout"] == 3
-
-    for event, entries in hooks.items():
-        if event == "SessionEnd":
-            continue
-        for entry in entries:
-            for hook in entry["hooks"]:
-                assert "timeout" not in hook
-
-
-def test_codex_wires_the_same_hook_modules_as_the_claude_plugin() -> None:
-    """Parity is the point: neither host gets a hook the other does not."""
-    claude_hooks = _json(CLAUDE_PLUGIN_PATH)["hooks"]
-    claude_modules = {
-        module
-        for entries in claude_hooks.values()
-        for entry in entries
-        for hook in entry["hooks"]
-        for module in HOOK_MODULES
-        if hook["command"].endswith(f"mcp_server.hooks.{module}'")
-    }
-    assert claude_modules == set(HOOK_MODULES)
 
 
 def test_codex_package_does_not_weaken_the_claude_plugin() -> None:
