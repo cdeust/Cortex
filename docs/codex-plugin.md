@@ -196,6 +196,9 @@ before loading memory settings. `CORTEX_CLAUDE_DIR` relocates that shared
 configuration root. Explicit `CORTEX_MEMORY_STORE_BACKEND`, then
 `CORTEX_BACKEND`, then a non-empty `DATABASE_URL` or
 `CORTEX_MEMORY_DATABASE_URL` take precedence over the saved selection.
+The Codex hook entry uses the same store factory when no backend or URL is
+configured. It selects the backend before running a hook, so automatic context
+reads use the SQLite fallback that the MCP server selected on a fresh install.
 
 Without a saved selection or explicit backend, Cortex keeps its existing
 `auto` behavior: PostgreSQL first, then SQLite only when no explicit PostgreSQL

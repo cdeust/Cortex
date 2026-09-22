@@ -58,5 +58,5 @@ confirmed briefing delivery and durable SessionEnd, but its file-cue memory
 remained at 0.3. Priming resolved the query project to `/private/var/folders`
 while the explicitly attached memory retained `/var/folders`. Issue #629 records
 this mismatch; 4.23.3 preserves the stored project identity for scope queries and
-canonicalizes only cooldown keys. Three focused regressions fail on 4.23.2 and
+uses the same identity in cooldown keys. Three focused regressions fail on 4.23.2 and
 pass with that correction on both PostgreSQL and SQLite.

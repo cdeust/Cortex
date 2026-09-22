@@ -153,6 +153,138 @@ def test_prepare_environment_no_marker_postgresql_sets_default_database_url(
     assert environ["DATABASE_URL"] == "postgresql://localhost:5432/cortex"
 
 
+@pytest.fixture
+def codex_auto_store(tmp_path: Path, monkeypatch):
+    from mcp_server.hooks.entry import prepare_environment, resolve_auto_backend
+    from mcp_server.infrastructure.backend_marker import effective_backend
+    from mcp_server.infrastructure.memory_config import get_memory_settings
+    from mcp_server.infrastructure import memory_store
+    from mcp_server.infrastructure.memory_store import (
+        get_shared_store,
+        reset_shared_store,
+    )
+    from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
+
+    root = tmp_path / "claude"
+    monkeypatch.setenv("CORTEX_RUNTIME", "cowork")
+    monkeypatch.setenv("CORTEX_CLAUDE_DIR", str(root))
+    monkeypatch.setenv(
+        "CORTEX_MEMORY_SQLITE_FALLBACK_PATH", str(tmp_path / "memory.db")
+    )
+    monkeypatch.delenv("CORTEX_MEMORY_STORE_BACKEND", raising=False)
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("CORTEX_MEMORY_DATABASE_URL", raising=False)
+    monkeypatch.setattr(memory_store, "_try_pg_verbose", lambda _url: (None, "offline"))
+    reset_shared_store()
+    get_memory_settings.cache_clear()
+    try:
+        prepare_environment(os.environ, root / "methodology" / "backend.json")
+        resolve_auto_backend(os.environ)
+        store = get_shared_store()
+        assert isinstance(store, SqliteMemoryStore)
+        assert (
+            effective_backend(os.environ, root / "methodology" / "backend.json")
+            == "sqlite"
+        )
+        assert "DATABASE_URL" not in os.environ
+        yield store
+    finally:
+        reset_shared_store()
+        get_memory_settings.cache_clear()
+
+
+def test_codex_auto_hook_uses_actual_sqlite_store_without_marker(
+    codex_auto_store, capsys
+) -> None:
+    from mcp_server.hooks import agent_briefing
+
+    codex_auto_store.insert_memory(
+        {
+            "content": "shared Codex decision",
+            "agent_context": "worker",
+            "directory_context": "/project",
+            "heat": 0.9,
+            "heat_base": 0.9,
+            "is_team_decision": True,
+        }
+    )
+    with pytest.raises(SystemExit):
+        agent_briefing.process_event(
+            {
+                "hook_event_name": "SubagentStart",
+                "agent_type": "worker",
+                "cwd": "/project",
+                "session_id": "fresh-codex",
+            }
+        )
+    assert "shared Codex decision" in capsys.readouterr().out
+
+
+def test_codex_auto_hook_keeps_postgres_when_store_selects_it(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from mcp_server.hooks.entry import prepare_environment, resolve_auto_backend
+    from mcp_server.infrastructure import memory_store
+
+    monkeypatch.setattr(memory_store, "get_shared_store", lambda: object())
+    environ = {"CORTEX_RUNTIME": "cowork"}
+    prepare_environment(environ, tmp_path / "absent.json")
+    resolve_auto_backend(environ)
+    assert environ["CORTEX_MEMORY_STORE_BACKEND"] == "postgresql"
+    assert environ["DATABASE_URL"] == "postgresql://127.0.0.1:5432/cortex"
+
+
+def test_codex_explicit_database_url_stays_explicit(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from mcp_server.hooks.entry import prepare_environment, resolve_auto_backend
+    from mcp_server.infrastructure import memory_store
+
+    def unexpected_store():
+        pytest.fail("explicit PostgreSQL URL must not trigger auto selection")
+
+    monkeypatch.setattr(memory_store, "get_shared_store", unexpected_store)
+    environ = {
+        "CORTEX_RUNTIME": "cowork",
+        "DATABASE_URL": "postgresql:///operator_db",
+    }
+    prepare_environment(environ, tmp_path / "absent.json")
+    resolve_auto_backend(environ)
+    assert environ["DATABASE_URL"] == "postgresql:///operator_db"
+    assert "CORTEX_MEMORY_STORE_BACKEND" not in environ
+
+
+def test_packaged_codex_entry_selects_sqlite_before_hook_wiring(
+    tmp_path: Path,
+) -> None:
+    """Exercise the real console path with neither runtime nor backend supplied."""
+    env = _isolated_env(tmp_path)
+    env.pop("CORTEX_RUNTIME", None)
+    env.pop("CORTEX_MEMORY_STORE_BACKEND", None)
+    env.pop("CORTEX_MEMORY_DATABASE_URL", None)
+    db = tmp_path / "codex-memory.db"
+    env["CORTEX_MEMORY_SQLITE_FALLBACK_PATH"] = str(db)
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import mcp_server.infrastructure.memory_store as store; "
+                "store._try_pg_verbose = lambda _url: (None, 'offline'); "
+                "from mcp_server.hooks.entry import main; main()"
+            ),
+            "decision_gate",
+        ],
+        input=json.dumps({"hook_event_name": "PreToolUse", "tool_name": "Read"}),
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=REPO_ROOT,
+    )
+    assert result.returncode == 0, result.stderr
+    assert db.is_file()
+
+
 def test_pyproject_declares_the_console_script() -> None:
     data = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     scripts = data["project"]["scripts"]

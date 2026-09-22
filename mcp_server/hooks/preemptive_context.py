@@ -135,7 +135,7 @@ def _event_paths(
 
 
 def _cooldown_key(path: str, project: str | None) -> str:
-    return json.dumps([str(Path(project).resolve()) if project else None, path])
+    return json.dumps([project, path])
 
 
 def process_event(event: dict[str, Any]) -> None:
@@ -147,7 +147,7 @@ def process_event(event: dict[str, Any]) -> None:
         return
     project = resolve_project_root(event, os.environ)
     # Remember preserves directory aliases: SQL and pending reads must use the
-    # original project scope. Only cooldown identity resolves aliases (#629).
+    # original project scope. Cooldown keys must distinguish those scopes (#629).
     try:
         paths, project = _event_paths(event, project)
     except (OSError, ValueError, TypeError) as exc:
