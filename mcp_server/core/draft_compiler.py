@@ -32,6 +32,23 @@ _FRONTMATTER_KEYS_ORDER = (
 )
 
 
+# Directory each draft kind compiles into. Named rather than inlined so
+# the invariant "every directory this pipeline can emit is a kind
+# ``shared.wiki_layout`` knows, and therefore one ``wiki_purge`` scans"
+# is testable instead of re-asserted by hand (issue #622).
+DRAFT_KIND_DIRS: dict[str, str] = {
+    "adr": "adr",
+    "spec": "specs",
+    "lesson": "lessons",
+    "convention": "conventions",
+    "note": "notes",
+    "guide": "guides",
+    "reference": "reference",
+}
+
+DRAFT_KIND_DIR_FALLBACK = "notes"
+
+
 def _now_iso() -> str:
     return datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -91,15 +108,7 @@ def derive_rel_path(
     """
     title_slug = slugify(title or "untitled")
     domain_slug = slugify(domain or "_general", max_len=40)
-    folder = kind_dir or {
-        "adr": "adr",
-        "spec": "specs",
-        "lesson": "lessons",
-        "convention": "conventions",
-        "note": "notes",
-        "guide": "guides",
-        "reference": "reference",
-    }.get(kind, "notes")
+    folder = kind_dir or DRAFT_KIND_DIRS.get(kind, DRAFT_KIND_DIR_FALLBACK)
     id_prefix = (
         f"{memory_id}"
         if memory_id is not None

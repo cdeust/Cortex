@@ -13,6 +13,7 @@ from mcp_server.core.wiki_identity import generate_page_id
 from mcp_server.shared.wiki_layout import slugify
 from mcp_server.shared.wiki_pages import build_note
 from mcp_server.shared.wiki_classification import classification_to_frontmatter
+from mcp_server.shared.wiki_pointer import is_pointer_source
 import hashlib
 
 _DECISION_TAGS = frozenset({"decision", "adr", "architecture", "spec", "design"})
@@ -72,11 +73,22 @@ def build_from_memory(
     memory_id: int | str,
     content: str,
     tags: list[str] | None,
+    memory_source: str,
     domain: str = "",
 ) -> tuple[str, str] | None:
     """Build (relative_path, markdown) for a memory, or None if rejected.
 
+    This is the first pass that admits a memory into wiki
+    materialisation, so it is where a memory that is itself a pointer at
+    an already-authored page is turned away: materialising one rebuilds
+    a corrupted copy of the page it points at (issue #622).
+    ``memory_source`` is mandatory precisely so a new call site cannot
+    reopen that loop by omitting it.
+
     source: ADR-0314"""
+    if is_pointer_source(memory_source):
+        return None
+
     classification = classify_memory(content, tags)
     if classification is None:
         return None

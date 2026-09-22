@@ -15,6 +15,10 @@ from mcp_server.shared.wiki_decision_ids import decision_id, parse_decision_id
 
 from mcp_server.shared.wiki_layout import adr_filename, page_path, slugify
 from mcp_server.shared.wiki_pages import ADR_STATUSES, build_adr
+from mcp_server.shared.wiki_pointer import (
+    pointer_source,
+    truncate_on_word_boundary,
+)
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.wiki_decision_index import write_decision_index
 from mcp_server.handlers import project_wiki
@@ -128,9 +132,9 @@ async def _store_pointer_memory(rel_path: str, content: str, tags: list[str]) ->
         token = decision_id(number) if number is not None else "ADR"
         await remember.handler(
             {
-                "content": f"{token}\n{content}"[:500],
+                "content": truncate_on_word_boundary(f"{token}\n{content}"),
                 "tags": list({"wiki", "adr", *tags}),
-                "source": f"wiki://{rel_path}",
+                "source": pointer_source(rel_path),
                 # M-D2 (7.4): structural indexing bookkeeping (a protected
                 # pointer memory for recall), not user-authored content.
                 "write_class": "mechanical",

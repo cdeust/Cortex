@@ -22,6 +22,7 @@ from mcp_server.infrastructure.pg_store_wiki import (
     delete_claims_for_memory,
     insert_claim_events,
 )
+from mcp_server.shared.wiki_pointer import WIKI_POINTER_SOURCE_LIKE
 
 
 schema = {
@@ -82,26 +83,45 @@ def _get_store() -> MemoryStore:
     return get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
 
 
+# A wiki-page pointer memory is a copy of a page that already exists;
+# claims mined from one feed wiki_synthesize/wiki_compile and rebuild
+# that page as a corrupted derivative (issue #622). The exclusion sits
+# on every branch — an explicit memory_id included — because this is the
+# pass that first admits a memory into the drafting chain.
+_NOT_A_WIKI_POINTER = "(m.source IS NULL OR m.source NOT LIKE %s)"
+
+
 def _memory_rows(conn, memory_id: int | None, limit: int, force: bool) -> list[dict]:
     """Fetch the candidate memory rows for extraction."""
     if memory_id is not None:
-        sql = "SELECT id, content, tags FROM memories WHERE id = %s"
-        params: tuple = (memory_id,)
+        sql = f"""
+        SELECT m.id, m.content, m.tags
+          FROM memories m
+         WHERE m.id = %s AND {_NOT_A_WIKI_POINTER}
+        """  # noqa: S608 — interpolated fragment is a module constant, not input
+        params: tuple = (memory_id, WIKI_POINTER_SOURCE_LIKE)
     elif force:
-        sql = "SELECT id, content, tags FROM memories ORDER BY id LIMIT %s"
-        params = (limit,)
+        sql = f"""
+        SELECT m.id, m.content, m.tags
+          FROM memories m
+         WHERE {_NOT_A_WIKI_POINTER}
+         ORDER BY m.id
+         LIMIT %s
+        """  # noqa: S608 — interpolated fragment is a module constant, not input
+        params = (WIKI_POINTER_SOURCE_LIKE, limit)
     else:
         # source: ADR-0459
-        sql = """
+        sql = f"""
         SELECT m.id, m.content, m.tags
           FROM memories m
          WHERE NOT EXISTS (
             SELECT 1 FROM wiki.claim_events c WHERE c.memory_id = m.id
          )
+           AND {_NOT_A_WIKI_POINTER}
          ORDER BY m.id
          LIMIT %s
-        """
-        params = (limit,)
+        """  # noqa: S608 — interpolated fragment is a module constant, not input
+        params = (WIKI_POINTER_SOURCE_LIKE, limit)
     with conn.cursor() as cur:
         cur.execute(sql, params)
         rows = cur.fetchall()

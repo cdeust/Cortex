@@ -54,6 +54,7 @@ class TestSyncMemoryStrict:
                         memory_id=1,
                         content="some decision",
                         tags=["decision"],
+                        memory_source="",
                         domain="cortex",
                     )
 
@@ -68,6 +69,7 @@ class TestSyncMemoryStrict:
                 memory_id=1,
                 content="noise",
                 tags=[],
+                memory_source="",
                 domain="",
             )
             assert result is None
@@ -83,6 +85,7 @@ class TestSyncMemoryStrict:
                 memory_id=1,
                 content="decision",
                 tags=["decision"],
+                memory_source="",
                 domain="cortex",
             )
             assert result == "notes/ok.md"
@@ -107,6 +110,7 @@ class TestSyncMemoryLegacyWrapper:
                     memory_id=1,
                     content="some decision",
                     tags=["decision"],
+                    memory_source="",
                     domain="cortex",
                 )
                 assert result is None

@@ -32,6 +32,7 @@ def test_adr_routes_to_adr_directory() -> None:
         memory_id=42,
         content=content,
         tags=["decision", "architecture"],
+        memory_source="",
         domain="cortex",
     )
     assert result is not None
@@ -55,6 +56,7 @@ def test_legacy_lesson_routes_to_explanation_directory() -> None:
         memory_id=101,
         content=content,
         tags=["lesson", "bug-fix"],
+        memory_source="",
         domain="cortex",
     )
     assert result is not None
@@ -74,6 +76,7 @@ def test_runbook_routes_to_runbook_directory() -> None:
         memory_id=7,
         content=content,
         tags=["ops", "runbook"],
+        memory_source="",
         domain="cortex",
     )
     assert result is not None
@@ -95,6 +98,7 @@ def test_frontmatter_includes_4tuple_axes() -> None:
         memory_id=200,
         content=content,
         tags=["decision", "architecture"],
+        memory_source="",
         domain="cortex",
     )
     assert result is not None
@@ -111,6 +115,7 @@ def test_rejection_returns_none() -> None:
         memory_id=1,
         content="<tool_result>output of ls -la</tool_result>",
         tags=["tool-output"],
+        memory_source="",
     )
     assert result is None
 
@@ -129,6 +134,7 @@ def test_new_page_carries_stable_id() -> None:
         memory_id=300,
         content=content,
         tags=["decision", "architecture"],
+        memory_source="",
         domain="cortex",
     )
     assert result is not None
@@ -152,10 +158,18 @@ def test_each_new_page_gets_a_distinct_id() -> None:
         "Decided to adopt Lucene. Consequences: JVM in the stack."
     )
     r_a = build_from_memory(
-        memory_id=301, content=content_a, tags=["decision"], domain="cortex"
+        memory_id=301,
+        content=content_a,
+        tags=["decision"],
+        memory_source="",
+        domain="cortex",
     )
     r_b = build_from_memory(
-        memory_id=302, content=content_b, tags=["decision"], domain="cortex"
+        memory_id=302,
+        content=content_b,
+        tags=["decision"],
+        memory_source="",
+        domain="cortex",
     )
     assert r_a is not None and r_b is not None
     id_a = _parse_frontmatter(r_a[1])["id"]
@@ -179,6 +193,7 @@ def test_file_documentation_is_rejected_from_wiki() -> None:
         memory_id=98649,
         content=content,
         tags=["code-reference", "codebase"],
+        memory_source="",
         domain="cortex",
     )
     assert result is None, (
@@ -186,3 +201,50 @@ def test_file_documentation_is_rejected_from_wiki() -> None:
         "wiki — it lives in PG memory only; the autonomous worker "
         "produces curated structural pages instead"
     )
+
+
+# ── Issue #622: the page → memory → page loop ────────────────────────────
+
+
+_POINTER_CONTENT = (
+    '---\ntitle: "Architecture overview: lazarus"\nkind: explanation\n'
+    "domain: lazarus\nstatus: seedling\n---\n\n"
+    "# Architecture overview: lazarus\n\n"
+    "Lazarus is a local web application that tracks a sourdough starter. "
+    "It runs on one machine, serves a single page, and stores everything "
+    "in a SQLite file next to the code. Decision: the architecture is "
+    "deliberately one process."
+)
+
+
+def test_wiki_pointer_memory_is_not_materialised_into_a_page() -> None:
+    """The pointer wiki_write registers must never become a page.
+
+    Its content is a copy of a page that already exists; materialising it
+    rebuilds that page as a corrupted derivative under a kind directory
+    no caller wrote to (issue #622).
+    """
+    result = build_from_memory(
+        memory_id=82,
+        content=_POINTER_CONTENT,
+        tags=["architecture", "lazarus", "llm-authored", "wiki"],
+        memory_source="wiki://explanation/lazarus/architecture-overview.md",
+        domain="lazarus",
+    )
+    assert result is None
+
+
+def test_same_content_without_the_pointer_origin_is_still_admitted() -> None:
+    """The guard keys on the pointer origin, not on the tag or the prose.
+
+    A memory that merely carries the tag ``wiki`` — one written *about*
+    the wiki — keeps its page.
+    """
+    result = build_from_memory(
+        memory_id=82,
+        content=_POINTER_CONTENT,
+        tags=["architecture", "lazarus", "llm-authored", "wiki"],
+        memory_source="",
+        domain="lazarus",
+    )
+    assert result is not None

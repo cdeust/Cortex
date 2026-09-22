@@ -7,6 +7,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from mcp_server.shared.wiki_pointer import WIKI_POINTER_SOURCE_PREFIX
+
 AUTO = "auto"
 DELIBERATE = "deliberate"
 DERIVED = "derived"
@@ -53,7 +55,7 @@ _MECHANICAL_SOURCE_PREFIXES: tuple[str, ...] = (
     "backfill:",
     "seed:",
     "ingest_codebase:",
-    "wiki://",
+    WIKI_POINTER_SOURCE_PREFIX,
 )
 
 # source: ADR-0688

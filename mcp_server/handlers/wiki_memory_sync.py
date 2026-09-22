@@ -21,6 +21,7 @@ def sync_memory_strict(
     memory_id: int | str,
     content: str,
     tags: list[str] | None,
+    memory_source: str,
     domain: str = "",
 ) -> str | None:
     """Strict variant of ``sync_memory`` — surfaces errors to the caller.
@@ -28,11 +29,15 @@ def sync_memory_strict(
         Preconditions:
             - ``content`` is a non-empty string.
             - ``memory_id`` has already been committed to the store.
+            - ``memory_source`` is the memory's stored origin string, so
+              ``build_from_memory`` can turn away a wiki-page pointer
+              (issue #622).
 
         Postconditions:
             - On success: returns the relative path of the written wiki page.
-            - On classifier rejection: returns None (not an error — the memory
-              did not qualify for a wiki page).
+            - On classifier rejection, or when the memory is a wiki-page
+              pointer: returns None (not an error — the memory did not
+              qualify for a wiki page).
             - On I/O or classifier failure: raises the underlying exception.
               The caller must decide whether the memory write + wiki failure
               constitutes a partial failure.
@@ -43,7 +48,11 @@ def sync_memory_strict(
 
     source: ADR-0462"""
     built = build_from_memory(
-        memory_id=memory_id, content=content, tags=tags, domain=domain
+        memory_id=memory_id,
+        content=content,
+        tags=tags,
+        memory_source=memory_source,
+        domain=domain,
     )
     if built is None:
         return None
@@ -59,6 +68,7 @@ def sync_memory(
     memory_id: int | str,
     content: str,
     tags: list[str] | None,
+    memory_source: str,
     domain: str = "",
 ) -> str | None:
     """Promote a stored memory to a wiki page if it passes the classifier.
@@ -73,6 +83,7 @@ def sync_memory(
             memory_id=memory_id,
             content=content,
             tags=tags,
+            memory_source=memory_source,
             domain=domain,
         )
     except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure

@@ -359,6 +359,7 @@ async def _handler_impl(
                 memory_id=result["memory_id"],
                 content=content,
                 tags=tags,
+                memory_source=source,
                 domain=domain,
             )
             if wiki_path:

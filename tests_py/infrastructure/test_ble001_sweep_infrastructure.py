@@ -101,7 +101,7 @@ class TestWikiStoreTolerantSync:
 
         monkeypatch.setattr(wiki_memory_sync, "sync_memory_strict", broken)
         out = wiki_memory_sync.sync_memory(
-            tmp_path, memory_id=1, content="c", tags=[], domain="d"
+            tmp_path, memory_id=1, content="c", tags=[], memory_source="", domain="d"
         )
         assert out is None
         _assert_noted("wiki_memory_sync.sync_memory", "sync broke")

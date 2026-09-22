@@ -27,6 +27,10 @@ from typing import Any
 from mcp_server.core.prose_redaction import scan_prose, summarize_findings
 from mcp_server.shared.wiki_frontmatter_validation import UnclosedFrontmatterError
 from mcp_server.shared.wiki_layout import page_path
+from mcp_server.shared.wiki_pointer import (
+    pointer_source,
+    truncate_on_word_boundary,
+)
 from mcp_server.shared.wiki_pages import (
     build_adr,
     build_file_doc,
@@ -144,13 +148,18 @@ schema = {
 
 
 async def _store_pointer_memory(rel_path: str, content: str, tags: list[str]) -> None:
-    """Best-effort: register a protected pointer memory for recall."""
+    """Best-effort: register a protected pointer memory for recall.
+
+    The stored content is a word-boundary-safe prefix of the page: a
+    byte cut left the pointer ending mid-word, and recall shows it
+    verbatim (issue #622).
+    """
     try:
         await remember.handler(
             {
-                "content": content[:500],
+                "content": truncate_on_word_boundary(content),
                 "tags": list({"wiki", *tags}),
-                "source": f"wiki://{rel_path}",
+                "source": pointer_source(rel_path),
                 # M-D2 (7.4): structural indexing bookkeeping (a protected
                 # pointer memory for recall), not user-authored content.
                 "write_class": "mechanical",

@@ -124,6 +124,7 @@ class FileBoundaries(unittest.TestCase):
                     memory_id=1,
                     content=content,
                     tags=[audit_tag, "adr"],
+                    memory_source="",
                     domain="fixture",
                 )
             )

@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from mcp_server.handlers import remember, wiki_adr
 from mcp_server.infrastructure.wiki_decision_index import decision_index
+from mcp_server.shared.wiki_pointer import POINTER_CONTENT_MAX_CHARS
 
 
 def test_pointer_starts_with_citable_identity(monkeypatch):
@@ -16,7 +17,9 @@ def test_pointer_starts_with_citable_identity(monkeypatch):
     monkeypatch.setattr(remember, "handler", capture)
     asyncio.run(wiki_adr._store_pointer_memory("adr/0056-test.md", "---\n" * 200, []))
     assert captured[0]["content"].startswith("ADR-0056\n")
-    assert len(captured[0]["content"]) == 500
+    # The budget is a cap, not a target: the cut lands on the last word
+    # boundary that fits, so the length is at most the budget (issue #622).
+    assert len(captured[0]["content"]) <= POINTER_CONTENT_MAX_CHARS
 
 
 def test_concurrent_authors_allocate_unique_canonical_ids(tmp_path, monkeypatch):

@@ -22,8 +22,23 @@ from mcp_server.core.wiki_stub_detector import (
     stub_score,
 )
 from mcp_server.infrastructure.config import WIKI_ROOT
+from mcp_server.shared.wiki_layout import PAGE_KINDS
 from mcp_server.shared.yaml_parser import parse_yaml_frontmatter
 from mcp_server.handlers._tool_meta import DESTRUCTIVE
+
+# Directories that hold authored page-kind content. Derived from the
+# path contract in ``shared.wiki_layout`` rather than re-listed here:
+# a hand-kept copy had drifted and silently skipped every page under a
+# kind it had never heard of — ``rfc`` among them, which the memory→page
+# pass emits (issue #622, the ADR-1077 hardcoded-copy pattern).
+# Anything else under the wiki root (_kinds, _rules, _views,
+# _bibliography, _triggers, .generated) is deliberately left alone.
+_PAGE_DIRS: frozenset[str] = frozenset(PAGE_KINDS)
+
+# A page lives at ``<kind>/.../<file>.md``; a bare ``README.md`` at the
+# root is not a page and has no kind directory to classify it by.
+# source: ADR-0682
+_MIN_PAGE_PARTS = 2
 
 # ── Schema ─────────────────────────────────────────────────────────────
 
@@ -45,7 +60,10 @@ schema = {
         "(deletes a memory, not a wiki page), and `wiki_compile` "
         "(publishes drafts, doesn't purge). Defaults to dry-run; pass "
         "apply=true to actually delete. Latency ~200-500ms. Returns "
-        "{kept, purged, purged_paths, purged_reasons, dry_run}."
+        "{kept, purged, purged_paths, purged_reasons, dry_run} plus the "
+        "scan accounting — {wiki_pages_total, scanned, unscanned, "
+        "unrecognised_dirs} — so a caller can tell a full sweep from one "
+        "that reached only part of the wiki."
     ),
     "inputSchema": {
         "type": "object",
@@ -65,16 +83,7 @@ schema = {
                     "Restrict the purge to a single page-kind directory. "
                     "Omit to scan all page kinds."
                 ),
-                "enum": [
-                    "adr",
-                    "conventions",
-                    "guides",
-                    "journal",
-                    "lessons",
-                    "notes",
-                    "reference",
-                    "specs",
-                ],
+                "enum": sorted(PAGE_KINDS),
                 "examples": ["notes", "lessons"],
             },
             "purge_stubs": {
@@ -147,21 +156,30 @@ schema = {
     },
 }
 
-# Directories that hold authored page-kind content. Anything else under the
-# wiki root (_kinds, _rules, _views, _bibliography, _triggers, .generated)
-# is deliberately left alone.
-_PAGE_DIRS: frozenset[str] = frozenset(
-    {
-        "adr",
-        "conventions",
-        "guides",
-        "journal",
-        "lessons",
-        "notes",
-        "reference",
-        "specs",
-    }
-)
+
+def _page_census(root: Path) -> tuple[int, list[str]]:
+    """Census the tree: how many real pages exist, and where drift sits.
+
+    Returns ``(pages_total, unrecognised_dirs)``. ``pages_total`` counts
+    every ``.md`` under a top-level directory this handler recognises as
+    a page kind — the denominator ``scanned`` has to be read against.
+    ``unrecognised_dirs`` names the top-level directories that hold
+    markdown yet are neither a page kind nor a reserved ``_``/``.``
+    bucket: pages no purge can ever reach, and the signal that the path
+    contract has grown a kind this handler does not know (issue #622).
+    """
+    pages_total = 0
+    unrecognised: set[str] = set()
+    for md in root.rglob("*.md"):
+        parts = md.relative_to(root).parts
+        if len(parts) < _MIN_PAGE_PARTS:
+            continue
+        top = parts[0]
+        if top in _PAGE_DIRS:
+            pages_total += 1
+        elif not top.startswith((".", "_")):
+            unrecognised.add(top)
+    return pages_total, sorted(unrecognised)
 
 
 def _parse_tags(raw: Any) -> list[str]:
@@ -240,6 +258,10 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     if not root.exists():
         return {"error": f"wiki root does not exist: {root}"}
 
+    # Censused before the sweep: after an apply the purged files are gone
+    # and the total would no longer be the one ``scanned`` is read against.
+    pages_total, unrecognised_dirs = _page_census(root)
+
     target_dirs = {kind_filter} if kind_filter else _PAGE_DIRS
     kept: list[str] = []
     purged: list[str] = []
@@ -296,9 +318,15 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
                 except OSError:
                     pass
 
+    scanned = len(kept) + len(purged) + len(deferred)
     return {
         "applied": apply,
-        "scanned": len(kept) + len(purged) + len(deferred),
+        "scanned": scanned,
+        # The denominator ``scanned`` has to be read against: how many
+        # pages the wiki holds, and how many this sweep never looked at.
+        "wiki_pages_total": pages_total,
+        "unscanned": max(pages_total - scanned, 0),
+        "unrecognised_dirs": unrecognised_dirs,
         "kept": len(kept),
         "purged": len(purged),
         "purged_paths": purged,
