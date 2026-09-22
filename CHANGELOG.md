@@ -52,11 +52,17 @@ adheres to [Semantic Versioning](https://semver.org/).
   A new stdlib-only `scripts/launcher_site.py` does both halves in the
   order that works: `site.addsitedir(deps_dir)` so the `.pth` files run,
   then drops every `sys.path` entry that resolves to the user
-  site-packages directory. `scripts/launcher.py` applies it to the MCP
-  server and all eleven lifecycle hooks at once, and `scripts/setup.py`'s
-  verification block applies it too, so the installer checks what the
-  plugin will actually import. Inside a virtualenv (dev clones, CI) user
-  site-packages is already off `sys.path`, so the removal is a no-op there.
+  site-packages directory. It owns the `sys.path` insert as well, so no
+  call site can perform the two steps out of order. `scripts/launcher.py`
+  applies it to the MCP server and all eleven lifecycle hooks at once —
+  twice, once before `ensure_deps`/`ensure_all_deps` and once after, since
+  that install resolves transitives and can land a `.pth` the first call
+  could not see — and `scripts/setup.py`'s verification block applies it
+  too, so the installer checks what the plugin will actually import.
+  Inside a virtualenv (dev clones, CI) user site-packages is already off
+  `sys.path`, so the removal is a no-op there. A `site.getusersitepackages()`
+  that cannot resolve now reports the cause on stderr instead of silently
+  leaving `deps/` unisolated.
 
 - **The installer names the check that actually failed (#621).** When
   `scripts/setup.py` failed, `install-plugin.sh` ended with "PostgreSQL
@@ -65,7 +71,11 @@ adheres to [Semantic Versioning](https://semver.org/).
   whose only failing row was `sentence-transformers`. A new
   `scripts/lib/setup_py_step.sh` captures the run's output and echoes back
   its `[FAIL] <check>` rows; the PostgreSQL install guidance survives as a
-  conditional instead of an assertion.
+  conditional instead of an assertion. Capturing the output means piping
+  it, which would block-buffer the child's stdout and hide the whole
+  install until it ended, so the run is made unbuffered: measured, a
+  `print()` followed by a two-second sleep reaches the reader at t+2s
+  through a pipe and at t+0s with `PYTHONUNBUFFERED=1`.
 
 ## [4.23.1] - 2026-09-22
 

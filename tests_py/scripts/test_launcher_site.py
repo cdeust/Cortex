@@ -76,8 +76,11 @@ def test_without_user_site_returns_a_new_list(launcher_site):
     assert launcher_site.without_user_site(path, None) is not path
 
 
-def test_user_site_dir_never_raises(launcher_site, monkeypatch):
-    """A launch must survive a sysconfig that cannot resolve the user base."""
+def test_user_site_dir_never_raises(launcher_site, monkeypatch, capsys):
+    """A launch must survive a sysconfig that cannot resolve the user base
+    — and must say so. Returning None leaves user site-packages on
+    sys.path, which is issue #621's symptom exactly, so swallowing the
+    cause would make the bug recur with no trace at all."""
     monkeypatch.setattr(
         launcher_site.site,
         "getusersitepackages",
@@ -85,6 +88,22 @@ def test_user_site_dir_never_raises(launcher_site, monkeypatch):
     )
 
     assert launcher_site.user_site_dir() is None
+
+    reported = capsys.readouterr().err
+    assert "userbase" in reported, "the cause must reach stderr, not be swallowed"
+    assert "not isolated" in reported, "and say what it costs the caller"
+
+
+def test_user_site_dir_stays_quiet_when_it_resolves(launcher_site, monkeypatch, capsys):
+    """Every hook launch calls this; a diagnostic on the normal path would
+    be noise in eleven hooks' stderr."""
+    monkeypatch.setattr(
+        launcher_site.site, "getusersitepackages", lambda: "/fake/user/site"
+    )
+
+    launcher_site.user_site_dir()
+
+    assert capsys.readouterr().err == ""
 
 
 def test_user_site_dir_reports_what_site_reports(launcher_site, monkeypatch):
@@ -165,15 +184,106 @@ def test_isolate_deps_tolerates_a_deps_dir_that_does_not_exist(
     assert user_site not in sys.path
 
 
-def test_launcher_isolates_after_inserting_deps():
-    """scripts/launcher.py must call isolate_deps with the deps directory
-    it just put on sys.path — the seam shared by the MCP server and all
-    eleven lifecycle hooks (ADR-0742)."""
-    source = (REPO_ROOT / "scripts" / "launcher.py").read_text(encoding="utf-8")
-    insert_at = source.index("sys.path.insert(0, p)")
-    isolate_at = source.index("launcher_site.isolate_deps(deps_dir)")
+def test_isolate_deps_puts_an_absent_deps_dir_first(
+    launcher_site, tmp_path, monkeypatch
+):
+    """isolate_deps owns the insert, so no call site can get the order
+    wrong. site.addsitedir alone would APPEND deps/, landing it behind
+    system site-packages — the position that loses the whole fix."""
+    marker = tmp_path / "pth-ran.txt"
+    probe_name = "_cortex_pth_probe_621_absent"
+    deps = _deps_dir_with_pth(tmp_path, marker, probe_name)
+    monkeypatch.setattr(launcher_site.site, "getusersitepackages", lambda: None)
+    monkeypatch.setattr(sys, "path", ["/stdlib", "/system/site-packages"])
+    monkeypatch.delitem(sys.modules, probe_name, raising=False)
 
-    assert insert_at < isolate_at, (
-        "isolate_deps must run after deps_dir is on sys.path, so "
-        "site.addsitedir keeps its position instead of appending it"
+    launcher_site.isolate_deps(str(deps))
+
+    assert sys.path[0] == str(deps)
+    assert sys.path.index(str(deps)) < sys.path.index("/system/site-packages")
+
+    sys.modules.pop(probe_name, None)
+
+
+def test_isolate_deps_picks_up_a_pth_that_arrived_since_the_last_call(
+    launcher_site, tmp_path, monkeypatch
+):
+    """scripts/launcher.py calls isolate_deps once before ensure_deps and
+    once after, because that install can land a .pth the first call could
+    not see. A .pth left unprocessed is issue #621's bug class again."""
+    deps = tmp_path / "deps"
+    deps.mkdir()
+    monkeypatch.setattr(launcher_site.site, "getusersitepackages", lambda: None)
+    monkeypatch.setattr(sys, "path", ["/stdlib"])
+
+    launcher_site.isolate_deps(str(deps))
+    assert str(deps / "late") not in sys.path
+
+    # What ensure_deps/ensure_all_deps does between the two calls.
+    (deps / "late").mkdir()
+    (deps / "late.pth").write_text("late\n", encoding="utf-8")
+
+    launcher_site.isolate_deps(str(deps))
+
+    assert str(deps / "late") in sys.path
+    assert sys.path.count(str(deps)) == 1, "the repeat must not duplicate deps/"
+
+
+def test_isolate_deps_is_idempotent(launcher_site, tmp_path, monkeypatch):
+    marker = tmp_path / "pth-ran.txt"
+    probe_name = "_cortex_pth_probe_621_twice"
+    deps = _deps_dir_with_pth(tmp_path, marker, probe_name)
+    user_site = str(tmp_path / "user-site")
+    monkeypatch.setattr(launcher_site.site, "getusersitepackages", lambda: user_site)
+    monkeypatch.setattr(sys, "path", [user_site, "/stdlib"])
+    monkeypatch.delitem(sys.modules, probe_name, raising=False)
+
+    launcher_site.isolate_deps(str(deps))
+    after_first = list(sys.path)
+    launcher_site.isolate_deps(str(deps))
+
+    assert sys.path == after_first
+    assert user_site not in sys.path
+
+    sys.modules.pop(probe_name, None)
+
+
+def test_launcher_reisolates_after_installing_dependencies():
+    """The second call must come after ensure_deps/ensure_all_deps, or the
+    .pth files that install writes stay inert until the next launch."""
+    source = (REPO_ROOT / "scripts" / "launcher.py").read_text(encoding="utf-8")
+    isolate_calls = [
+        index
+        for index, line in enumerate(source.splitlines())
+        if "launcher_site.isolate_deps(deps_dir)" in line
+    ]
+    ensure_at = next(
+        index
+        for index, line in enumerate(source.splitlines())
+        if "launcher_deps.ensure_deps(deps_dir)" in line
     )
+
+    assert len(isolate_calls) == 2, "once before the install, once after"
+    assert isolate_calls[0] < ensure_at < isolate_calls[1]
+
+
+def test_launcher_puts_deps_on_sys_path_only_through_isolate_deps():
+    """scripts/launcher.py must not re-add deps_dir itself: a bare insert
+    beside the isolating one is how the two drift apart. plugin_root is
+    still inserted directly — it carries no .pth files and no vendored
+    distributions."""
+    source = (REPO_ROOT / "scripts" / "launcher.py").read_text(encoding="utf-8")
+
+    assert "launcher_site.isolate_deps(deps_dir)" in source
+    assert "sys.path.insert(0, deps_dir)" not in source
+    assert "for p in [plugin_root, deps_dir]" not in source
+
+
+def test_setup_py_verifies_through_isolate_deps():
+    """scripts/setup.py's verification must check what the plugin will
+    actually import — a bare insert there reproduces the reported
+    [FAIL] sentence-transformers row."""
+    source = (REPO_ROOT / "scripts" / "setup.py").read_text(encoding="utf-8")
+
+    assert "launcher_site.isolate_deps(DEPS_DIR)" in source
+    assert "sys.path.insert(0, DEPS_DIR)\n    # source: ADR-0782" not in source

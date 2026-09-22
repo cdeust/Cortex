@@ -42,12 +42,19 @@ setup_py_failed_checks() {
 #       0 on success, 1 otherwise. Sets SETUP_PY_FAILURE to a sentence
 #       naming the failed checks, or — when the run died before printing
 #       any — to a sentence that says so rather than blaming a component.
+#
+# PYTHONUNBUFFERED=1 is what keeps "live" true. `tee` makes the child's
+# stdout a pipe, and CPython block-buffers a pipe (flushing at ~8KB or at
+# exit) where it line-buffers a tty. scripts/setup.py prints progress with
+# a plain print() and no flush, so without this the whole install prints
+# nothing until it ends. Measured: a print() followed by a 2s sleep
+# reaches the reader at t+2s through a pipe, at t+0s with this set.
 run_setup_py() {
     local log status failed
     log="$(mktemp)"
     SETUP_PY_FAILURE=""
 
-    if "$@" 2>&1 | tee "$log"; then
+    if PYTHONUNBUFFERED=1 "$@" 2>&1 | tee "$log"; then
         status=0
     else
         status=1

@@ -38,14 +38,25 @@ def user_site_dir() -> str | None:
 
     Precondition: none.
     Postcondition: returns whatever ``site.getusersitepackages()``
-    resolves, else None. Inside a virtualenv the value still resolves but
-    is absent from ``sys.path`` (``site.ENABLE_USER_SITE`` is False
-    there), so dropping it is a measured no-op for dev clones and CI.
-    Never raises: path hygiene must not be what stops a hook launching.
+    resolves. Inside a virtualenv the value still resolves but is absent
+    from ``sys.path`` (``site.ENABLE_USER_SITE`` is False there), so
+    dropping it is a measured no-op for dev clones and CI.
+
+    A launch must survive a ``sysconfig`` that cannot resolve the user
+    base, so a raising ``getusersitepackages()`` yields None instead of
+    propagating — but never silently: returning None leaves user
+    site-packages on ``sys.path``, which is issue #621's symptom exactly,
+    so the cause goes to stderr the way ``scripts/launcher.py`` reports a
+    failed backend resolution.
     """
     try:
         return site.getusersitepackages()
-    except Exception:  # noqa: BLE001 — a launch must survive any sysconfig failure
+    except Exception as exc:  # noqa: BLE001 — a launch must survive any sysconfig failure
+        print(
+            f"[cortex-launcher] user site-packages not resolved, deps/ is "
+            f"not isolated from it: {exc}",
+            file=sys.stderr,
+        )
         return None
 
 
@@ -71,17 +82,26 @@ def without_user_site(path: list[str], user_site: str | None) -> list[str]:
 
 
 def isolate_deps(deps_dir: str) -> None:
-    """Promote ``deps_dir`` to a site directory, then cut user site-packages.
+    """Put ``deps_dir`` first on ``sys.path`` as a *site* directory, then
+    cut user site-packages.
 
-    Precondition: the caller has already placed ``deps_dir`` on
-    ``sys.path`` at the position it wants; ``deps_dir`` need not exist.
-    Postcondition: ``deps_dir``'s ``.pth`` files have been processed, so
-    the directories they name (pywin32's ``win32``, ``win32/lib``,
-    ``pythonwin``) are importable, and no ``sys.path`` entry points at the
-    user site-packages directory any more. ``deps_dir`` keeps its existing
-    position — ``site.addsitedir`` appends only a directory ``sys.path``
-    does not already carry, and a ``.pth`` line that raises is reported by
-    ``site`` on stderr rather than propagating.
+    Precondition: none. ``deps_dir`` need not exist and need not already
+    be on ``sys.path``.
+    Postcondition: ``deps_dir`` is on ``sys.path`` exactly once, at index
+    0 unless a caller had already placed it elsewhere; its ``.pth`` files
+    have been processed, so the directories they name (pywin32's
+    ``win32``, ``win32/lib``, ``pythonwin``) are importable; and no
+    ``sys.path`` entry points at the user site-packages directory any
+    more. A ``.pth`` line that raises is reported by ``site`` on stderr
+    rather than propagating.
+
+    The insert belongs here rather than at each call site: the two
+    operations are only correct in this order (``site.addsitedir``
+    appends a directory ``sys.path`` does not already carry, which would
+    put ``deps/`` *behind* system site-packages), and a contract kept by
+    prose at each call site is one a third call site can drop.
     """
+    if deps_dir not in sys.path:
+        sys.path.insert(0, deps_dir)
     site.addsitedir(deps_dir)
     sys.path[:] = without_user_site(sys.path, user_site_dir())

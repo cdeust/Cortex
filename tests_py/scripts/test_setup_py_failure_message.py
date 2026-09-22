@@ -45,6 +45,15 @@ run_setup_py stub || true
 echo "SETUP_PY_FAILURE=${{SETUP_PY_FAILURE}}"
 """
 
+# Same shape as the production call sites: run_setup_py is handed an
+# external command, not a shell function, so the environment the child
+# actually receives is what gets asserted.
+_ENV_HARNESS = """
+set -euo pipefail
+source "{lib_path}"
+run_setup_py bash -c 'printf "unbuffered=%s\\n" "${{PYTHONUNBUFFERED:-unset}}"'
+"""
+
 pytestmark = pytest.mark.skipif(
     shutil.which("bash") is None, reason="bash is required to drive the shell library"
 )
@@ -107,6 +116,23 @@ def test_a_successful_run_leaves_no_failure_sentence():
     failure = _failure_line(_drive("  \\033[0;32m[ok]\\033[0m everything\\n", 0))
 
     assert failure == ""
+
+
+def test_the_run_is_unbuffered_so_tee_does_not_hide_progress():
+    """`tee` makes the child's stdout a pipe, and CPython block-buffers a
+    pipe where it line-buffers a tty. scripts/setup.py prints progress
+    with a plain print() and no flush, so without PYTHONUNBUFFERED the
+    whole install would print nothing until it ended. Asserted on the
+    mechanism (the variable the child actually sees) rather than on a
+    clock. The probe is an external command, as both production call sites
+    are, so the assignment prefix has to reach the child's environment."""
+    script = _ENV_HARNESS.format(lib_path=LIB_PATH)
+    result = subprocess.run(
+        ["bash", "-c", script], capture_output=True, text=True, timeout=30
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "unbuffered=1" in result.stdout
 
 
 def test_installer_no_longer_asserts_postgresql_is_the_cause():

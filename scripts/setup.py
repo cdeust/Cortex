@@ -233,7 +233,16 @@ def install_deps() -> None:
 def setup_database() -> None:
     step("Database & schema")
 
-    # Add deps and project to path
+    # Add deps and project to path.
+    #
+    # Known gap, same shape as cache_embedding_model() below: setup_db.py
+    # runs as a child and reaches DEPS_DIR only through PYTHONPATH, which
+    # cannot process .pth files and cannot cut user site-packages the way
+    # launcher_site.isolate_deps does in-process. It imports psycopg and
+    # mcp_server.infrastructure.pg_schema, neither of which is part of the
+    # torch ecosystem split that issue #621 reports, so nothing observed
+    # reaches it; closing it needs a child-process bootstrap this fix does
+    # not introduce. Unlike the pre-cache, this step's failure is fatal.
     sys.path.insert(0, DEPS_DIR)
     sys.path.insert(0, str(PROJECT_DIR))
     os.environ["PYTHONPATH"] = f"{PROJECT_DIR}{os.pathsep}{DEPS_DIR}"
@@ -266,6 +275,12 @@ def setup_database() -> None:
 def cache_embedding_model() -> None:
     step("Embedding model")
 
+    # Known gap, same shape as setup_database() above and as its
+    # macOS/Linux twin scripts/lib/precache_embedding_model.sh: the child
+    # reaches DEPS_DIR only through PYTHONPATH, so issue #621's torch
+    # mismatch still aborts this import. The step warns rather than fails,
+    # and the model then downloads on first encode inside a process
+    # launcher_site.isolate_deps has already isolated.
     sys.path.insert(0, DEPS_DIR)
     print("Pre-caching sentence-transformers model (one-time ~100MB download)...")
 
@@ -376,11 +391,11 @@ def _model_checks() -> list[tuple[str, bool]]:
 def verify() -> None:
     step("Verification")
 
-    sys.path.insert(0, DEPS_DIR)
-    # source: issue #621 -- verify what the plugin will actually import at
-    # runtime. Without this the [FAIL] sentence-transformers row reported
-    # there reproduces here: torch resolves from DEPS_DIR while an
-    # unvendored torchvision still resolves from user site-packages.
+    # Verify what the plugin will actually import at runtime. With a plain
+    # sys.path.insert the [FAIL] sentence-transformers row reported there
+    # reproduces here: torch resolves from DEPS_DIR while an unvendored
+    # torchvision still resolves from user site-packages.
+    # source: issue #621
     launcher_site.isolate_deps(DEPS_DIR)
 
     # source: ADR-0782
