@@ -13,7 +13,9 @@ import argparse
 import contextlib
 import importlib.util
 import io
+import subprocess
 import sys
+import textwrap
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -93,6 +95,21 @@ BIBLIOGRAPHY = (
     "mechanisms.\n\n## References\n\nAuthor, A. (2001). One.\n\n"
     "Author, B. (2002). Two.\n"
 )
+# The hook allowlist is read as source TEXT, never imported, because the Lint
+# job that runs this gate installs ruff and nothing else. Four names here, not
+# the real eleven: these unit tests check the parsing, and pinning them to the
+# live count would make every hook added to Cortex edit this file.
+HOOK_ENTRY = (
+    "HOOK_MODULES = frozenset(\n"
+    "    {\n"
+    '        "session_start",\n'
+    '        "auto_recall",\n'
+    '        "decision_gate",\n'
+    '        "no_deps_gate",\n'
+    "    }\n"
+    ")\n"
+)
+HOOK_ENTRY_COUNT = 4
 
 
 class _FakeRepo:
@@ -550,14 +567,14 @@ class CollectFailuresTests(unittest.TestCase):
     # entirely (only assets/badge-tests.svg — a monotone floor, checked
     # below — still states one), so there is nothing left here for the
     # "tests" family among the other four to disagree on.
-    # The hook count is machine-counted from mcp_server.hooks.entry rather
-    # than declared in a fixture file, so this line states the real number:
-    # a literal here would be a second copy of the allowlist's length, which
-    # is the drift the family was added to stop (PR #620).
+    # The hook count is parsed out of HOOK_ENTRY, the fixture's own stand-in
+    # for mcp_server/hooks/entry.py, exactly as the other families read their
+    # own canonical fixture files. LintJobEnvironmentTests below checks the
+    # parse against the real allowlist.
     CONSISTENT = (
         "52 memory tools (55 total with upstream).\n"
         "A 2-reference bibliography of 36 mechanisms.\n"
-        f"{len(HOOK_MODULES)} lifecycle hooks run per session.\n"
+        f"{HOOK_ENTRY_COUNT} lifecycle hooks run per session.\n"
         # The count also lives inside the pinned test's NAME, where no space
         # precedes the digits; its own family is checked since ADR-1077.
         "Pinned by tests_py/test_main.py::test_standalone_baseline_is_52_tools.\n"
@@ -582,6 +599,7 @@ class CollectFailuresTests(unittest.TestCase):
             "docs/mcp-tools.md": CATALOGUE,
             "tests_py/test_main.py": PINNED_TEST,
             "docs/papers/bibliography.md": BIBLIOGRAPHY,
+            "mcp_server/hooks/entry.py": HOOK_ENTRY,
             "README.md": readme or '<img src="assets/badge-tests.svg" alt="tests">\n',
             ".claude-plugin/marketplace.json": self.MARKETPLACE,
         }
@@ -612,7 +630,7 @@ class CollectFailuresTests(unittest.TestCase):
             ("2-reference", "3-reference", "advertises 3 references,"),
             ("36 mechanisms", "35 mechanisms", "advertises 35 mechanisms,"),
             (
-                f"{len(HOOK_MODULES)} lifecycle hooks",
+                f"{HOOK_ENTRY_COUNT} lifecycle hooks",
                 "9 lifecycle hooks",
                 "advertises 9 lifecycle hooks,",
             ),
@@ -1435,6 +1453,65 @@ class MainTests(unittest.TestCase):
             "live test count (from `pytest --collect-only -q`); skipped when absent",
         )
         self.assertIsNone(help_kwargs.get("default"))
+
+
+class LintJobEnvironmentTests(unittest.TestCase):
+    """The Lint job runs this gate with `requirements/lint.txt` installed and
+    nothing else (ci.yml): ruff, no editable install of this project, no
+    PYTHONPATH. `python scripts/check_doc_claims.py` puts `scripts/` on
+    sys.path, not the repository root, so `mcp_server` is not importable.
+
+    The hook-count family briefly imported it and took the whole pipeline
+    down, Lint being the gate every other job needs. Reading the allowlist as
+    text is what makes the family work there, and this pins it.
+    """
+
+    # The same meta_path blocker tests_py/test_tool_surface.py uses for the
+    # MCP SDK, pointed at the package this gate must not need.
+    _PROBE = textwrap.dedent("""
+        import pathlib
+        import sys
+
+        class Blocker:
+            def find_spec(self, name, path=None, target=None):
+                if name == "mcp_server" or name.startswith("mcp_server."):
+                    raise ImportError(name)
+                return None
+
+        sys.meta_path.insert(0, Blocker())
+        try:
+            import mcp_server  # the blocker must actually block
+        except ImportError:
+            pass
+        else:
+            raise AssertionError("the probe's blocker did not block the package")
+
+        sys.path.insert(0, "scripts")
+        import check_doc_claims as gate
+
+        failures = gate.collect_failures(test_count=None)
+        assert not failures, failures
+        print("gate ran without mcp_server")
+    """)
+
+    def test_the_gate_runs_without_the_project_package_importable(self):
+        result = subprocess.run(
+            [sys.executable, "-c", self._PROBE],
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).resolve().parents[2],
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("gate ran without mcp_server", result.stdout)
+
+    def test_the_hook_count_comes_from_the_allowlist_in_the_file(self):
+        """Read as text, but still the real number: the literal this parses
+        is the same frozenset the console script validates against."""
+        self.assertEqual(
+            gate.canonical_hook_count(),
+            len(HOOK_MODULES),
+        )
 
 
 if __name__ == "__main__":

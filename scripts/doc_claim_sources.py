@@ -4,6 +4,7 @@ source: ADR-0730"""
 
 from __future__ import annotations
 
+import ast
 import re
 from collections.abc import Callable
 
@@ -67,18 +68,34 @@ def canonical_reference_count(read_fn: ReadFn) -> int:
     return len(entries)
 
 
-def canonical_hook_count(_read_fn: ReadFn) -> int:
+def canonical_hook_count(read_fn: ReadFn) -> int:
     """How many lifecycle hooks the docs may claim.
 
-    Unlike the mechanism count this IS machine-countable: the allowlist in
-    `mcp_server.hooks.entry` is what both plugin manifests wire and what the
-    console script accepts, so it is the only number a doc can mean. Imported
-    inside the function so this module stays importable without the package
-    on sys.path, matching `verify_mcp_hosts.full_tool_bounds` (ADR-1077).
+    The allowlist in `mcp_server/hooks/entry.py` is what both plugin manifests
+    wire and what the console script accepts, so it is the only number a doc
+    can mean. It is read as TEXT, like every other canonical source here, and
+    never imported: the Lint job that runs this gate installs ruff and nothing
+    else (`requirements/lint.txt`, ci.yml), so `import mcp_server` raises
+    ModuleNotFoundError there and takes the whole pipeline down with it.
+    A late import does not help, because this is called unconditionally.
     """
-    from mcp_server.hooks.entry import HOOK_MODULES  # noqa: PLC0415 — see docstring
-
-    return len(HOOK_MODULES)
+    tree = ast.parse(read_fn("mcp_server/hooks/entry.py"))
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        if not any(
+            isinstance(t, ast.Name) and t.id == "HOOK_MODULES" for t in node.targets
+        ):
+            continue
+        value = node.value
+        # `frozenset({...})`: unwrap the call and evaluate its one argument.
+        if isinstance(value, ast.Call) and value.args:
+            value = value.args[0]
+        try:
+            return len(ast.literal_eval(value))
+        except (ValueError, TypeError) as exc:
+            raise ClaimError(f"HOOK_MODULES is not a literal set: {exc}") from exc
+    raise ClaimError("mcp_server/hooks/entry.py declares no HOOK_MODULES")
 
 
 def canonical_mechanism_count(read_fn: ReadFn) -> int:
