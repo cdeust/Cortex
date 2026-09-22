@@ -276,10 +276,11 @@ banners, auto-recall, auto-capture, checkpoints and every memory tool work on bo
 
 The server is host-agnostic. Any host that can launch a stdio process gets the full tool
 surface on the default SQLite store. What is not portable are the lifecycle hooks — but they
-are no longer Claude-only: the Codex plugin wires the same 11 lifecycle hooks through the
-`hypermnesia-mcp-hook` console script (`docs/codex-plugin.md`), so Cortex behaves the same
-under both hosts. A direct `codex mcp add` registration still gets the tool surface only; the
-hooks come with the plugin.
+are no longer Claude-only: the Codex plugin registers the same 11 hook modules through the
+`hypermnesia-mcp-hook` console script. Host payloads and timeout limits affect their behavior:
+native Codex subagent starts receive no briefing, and session-end recording can exceed its
+timeout. See [Codex hook limitations](docs/codex-plugin.md). A direct `codex mcp add`
+registration gets the tool surface only; the hooks come with the plugin.
 
 | Capability | Claude Code plugin | Codex plugin (`hypermnesia-mcp-codex`) | Codex `codex mcp add`, Gemini CLI, Cursor, Windsurf, VS Code, Agents SDK | ChatGPT web |
 |---|---|---|---|---|
@@ -296,9 +297,9 @@ hooks come with the plugin.
 | Cognitive profiling (`query_methodology`) | ✅ | ⚠️ profiles are mined from Claude Code session logs under `~/.claude/`; without them the profile is empty | ⚠️ same | ❌ |
 | Worktree directory | `.claude/worktrees/<name>/`, the location `docs/agent-guidance.md` names | `.Codex/worktrees/<name>/`, where Codex puts its own; ignored at the repository root since #601 | n/a | n/a |
 
-On Claude Code memory is ambient: hooks capture and inject automatically. On every other host
-memory is tool-driven: the agent stores and retrieves when instructed, and nothing happens
-between prompts.
+The Claude Code and Codex plugins use hooks to capture and inject memory automatically,
+subject to the host limitations above. With a direct MCP registration without plugin hooks,
+memory is tool-driven: the agent explicitly calls tools to store and retrieve it.
 
 The launch command on every host is the PyPI package. The `[sqlite]` extra enables
 sqlite-vec vector search; without it the store still works, with vector search disabled.

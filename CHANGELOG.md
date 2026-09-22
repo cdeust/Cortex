@@ -8,7 +8,9 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- **Cortex behaves the same under Codex as under Claude Code.** The Codex
+- **Codex exposes the full tool profile and registers all eleven hook modules.**
+  Host payloads and timeout limits still affect behavior; see
+  [Codex hook limitations](docs/codex-plugin.md). The Codex
   plugin now serves the complete tool profile (`.mcp.json` drops
   `--profile lean`, matching the Claude manifest's server args, which carry
   no `--profile` flag) and installs the same eleven lifecycle hooks through

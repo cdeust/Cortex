@@ -68,9 +68,10 @@ A minimal evaluation is:
 
 The follow-up reference is explicit text. These tests do not establish
 automatic outcome attribution or automatic conflict resolution. Both hosts do
-now install the same 11 lifecycle hooks (`docs/codex-plugin.md`), but that
-parity is asserted by the plugin contract tests, not by the handoff tests
-here.
+now register the same 11 hook modules. The plugin contract tests assert
+registration parity, not equivalent native behavior. See
+[Codex hook limitations](codex-plugin.md) for payload and timeout differences;
+the handoff tests here do not exercise those hooks.
 
 ## Reproducible checks
 

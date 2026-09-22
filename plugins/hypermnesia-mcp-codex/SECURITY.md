@@ -64,8 +64,9 @@ disable the plugin's hooks in Codex, to run the MCP server alone.
   (see [PRIVACY.md](https://github.com/cdeust/Cortex/blob/main/PRIVACY.md)).
 - Files referenced by the events the hooks receive, read-only, as described
   above. No hook writes to your repository.
-- The `uvx` cache, to resolve the pinned `hypermnesia-mcp` release on first
-  launch, and on every hook invocation.
+- The `uvx` cache, used at server startup and on every hook invocation. The
+  package requirement is unpinned; the manifests do not guarantee a specific
+  `hypermnesia-mcp` release.
 
 Nothing leaves the machine except the one-time model download described in
 PRIVACY.md.
