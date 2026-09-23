@@ -74,24 +74,61 @@ def _write_inert_pip_stubs(bin_dir: Path) -> None:
         stub.chmod(mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
 
+def _write_uname_stub(bin_dir: Path) -> None:
+    """A `uname` on PATH that always reports a Windows kernel, so the
+    installer's OS dispatch lands on the Windows-postgres branch (which
+    reuses the already-stubbable scripts/setup.py invocation) regardless
+    of the runner's real OS -- scripts/setup.sh, the Darwin/Linux postgres
+    path, needs a genuine PostgreSQL to drive end to end and is not what
+    this test is about."""
+    stub = bin_dir / "uname"
+    stub.write_text("#!/usr/bin/env bash\necho 'MINGW64_NT-10.0'\n", encoding="utf-8")
+    mode = stub.stat().st_mode
+    stub.chmod(mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+
+
+def _seed_marker(home: Path, *, backend: str) -> None:
+    """Pre-exist a marker as if a previous, presumably-working install had
+    already run -- so a test can drive a backend *switch* rather than a
+    fresh install."""
+    marker_dir = home / ".claude" / "methodology"
+    marker_dir.mkdir(parents=True)
+    (marker_dir / "backend.json").write_text(
+        json.dumps({"backend": backend, "written_by": "test fixture"}),
+        encoding="utf-8",
+    )
+
+
 def _run_installer(
-    tmp_path: Path, *, setup_py_exit_code: int
+    tmp_path: Path,
+    *,
+    setup_py_exit_code: int,
+    cortex_backend: str = "sqlite",
+    seed_marker_backend: str | None = None,
+    windows: bool = False,
 ) -> subprocess.CompletedProcess:
     """Drive the real installer, home/PATH isolated under tmp_path, against
-    a python3 stub that only fakes scripts/setup.py's own exit code."""
+    a python3 stub that only fakes scripts/setup.py's own exit code.
+    `windows=True` also stubs `uname` so the OS dispatch lands on the
+    Windows-postgres branch, which (like the sqlite branch) routes
+    through the stubbable scripts/setup.py."""
     home = tmp_path / "home"
     home.mkdir()
+    if seed_marker_backend is not None:
+        _seed_marker(home, backend=seed_marker_backend)
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     _write_setup_py_stub(bin_dir, exit_code=setup_py_exit_code)
     _write_inert_pip_stubs(bin_dir)
+    if windows:
+        _write_uname_stub(bin_dir)
 
     env = {
         **os.environ,
         "HOME": str(home),
         "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
         "CLAUDE_PLUGIN_ROOT": str(REPO_ROOT),
-        "CORTEX_BACKEND": "sqlite",
+        "CORTEX_BACKEND": cortex_backend,
     }
     return subprocess.run(
         ["bash", str(INSTALLER_PATH)],
@@ -131,3 +168,29 @@ def test_marker_persists_backend_on_a_successful_sqlite_install(tmp_path):
 
     assert result.returncode == 0, result.stderr
     assert _marker_backend(tmp_path) == "sqlite"
+
+
+def test_marker_restores_previous_backend_when_switch_setup_fails(tmp_path):
+    """A working sqlite marker must survive a failed attempt to switch to
+    postgresql -- the fix for issue #633 introduced this regression: it
+    persists the newly-*requested* backend before setup runs, so a failed
+    switch away from a working install left the marker pointing at a
+    backend that was never actually stood up, reproducing #633's own bug
+    in reverse."""
+    result = _run_installer(
+        tmp_path,
+        setup_py_exit_code=1,
+        cortex_backend="postgres",
+        seed_marker_backend="sqlite",
+        windows=True,
+    )
+
+    # The switch genuinely failed and that must not be hidden.
+    assert result.returncode != 0
+
+    # But the marker must still say sqlite: postgresql was requested,
+    # never confirmed working, and must not silently become the new
+    # requirement on next launch.
+    assert _marker_backend(tmp_path) == "sqlite", (
+        f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+    )
