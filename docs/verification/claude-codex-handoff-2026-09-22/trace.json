@@ -1,0 +1,164 @@
+{
+  "date": "2026-09-22",
+  "platform": "macOS",
+  "claude_code": "2.1.280",
+  "codex_cli": "0.155.1",
+  "cortex_mcp": "4.23.2",
+  "backend": "PostgreSQL",
+  "codex_session_override": "mcp_servers.cortex.required=true",
+  "synthetic_payloads": {
+    "claude": "dbaf4f362fed0e612a451c3ad6f49bcf8bc69765",
+    "codex": "a4009d5bfa3a9b00b2dfcdcba3043b6e864d849b"
+  },
+  "read_prompts": {
+    "read-codex-prompt.txt": "Native Cortex interoperability test authorized by the user. A different host saved a test record under lookup key cortex-native-handoff-a5mdhw9v-codex-record. Retrieve it using the installed Cortex MCP recall tool with query=\"cortex-native-handoff-a5mdhw9v-codex-record\", directory=\"/private/tmp/cortex-native-handoff-a5mdhw9v/project-a\", tags_all=['native-handoff-test','cortex-native-handoff-a5mdhw9v'], max_results=5. The secret payload is deliberately not supplied here. Do not inspect files, shell commands, other sessions or transcripts. Do not write memory or delegate. Return the memory ID and exact secret payload present in the actual recall result; report failure if absent.",
+    "codex_actual_write_and_read_prompt": "Your Cortex tools may be deferred. Before declaring a tool unavailable, use functions.exec to inspect ALL_TOOLS for names matching cortex and remember/recall. Then invoke the discovered real tools through tools[name](arguments). Do not use exec_command, files, shell, or any direct database implementation. Tool discovery is permitted.\n\nNative Cortex interoperability test authorized by the user. Use the installed Cortex MCP server in this session. Call its remember tool exactly once with content=\"Synthetic native host handoff validation record. Lookup key: cortex-native-handoff-a5mdhw9v-codex-record. Secret payload: a4009d5bfa3a9b00b2dfcdcba3043b6e864d849b. Written by a real codex session. This is disposable validation data.\", tags=['archival','native-handoff-test','cortex-native-handoff-a5mdhw9v'], agent_topic='native-handoff-test', source='lesson', directory=\"/private/tmp/cortex-native-handoff-a5mdhw9v/project-a\". Do not use files or shell commands to implement memory, do not change settings, do not delegate. If the tool is unavailable or fails, report the exact failure without a workaround. Report the actual returned memory ID and stored status.\n\nAfter the write, perform this independent read:\nNative Cortex interoperability test authorized by the user. A different host saved a test record under lookup key cortex-native-handoff-a5mdhw9v-claude-record. Retrieve it using the installed Cortex MCP recall tool with query=\"cortex-native-handoff-a5mdhw9v-claude-record\", directory=\"/private/tmp/cortex-native-handoff-a5mdhw9v/project-a\", tags_all=['native-handoff-test','cortex-native-handoff-a5mdhw9v'], max_results=5. The secret payload is deliberately not supplied here. Do not inspect files, shell commands, other sessions or transcripts. Do not write memory or delegate. Return the memory ID and exact secret payload present in the actual recall result; report failure if absent."
+  },
+  "checks": {
+    "claude_to_codex": "PASS",
+    "codex_to_claude": "PASS",
+    "blind_read_prompts": "PASS",
+    "claude_foreign_project_exclusion": "PASS",
+    "codex_foreign_project_exclusion": "PASS"
+  },
+  "trace": [
+    {
+      "source": "claude-write.jsonl",
+      "tool": "mcp__plugin_hypermnesia-mcp_cortex__remember",
+      "arguments": {
+        "content": "Synthetic native host handoff validation record. Lookup key: cortex-native-handoff-a5mdhw9v-claude-record. Secret payload: dbaf4f362fed0e612a451c3ad6f49bcf8bc69765. Written by a real claude session. This is disposable validation data.",
+        "tags": [
+          "archival",
+          "native-handoff-test",
+          "cortex-native-handoff-a5mdhw9v"
+        ],
+        "agent_topic": "native-handoff-test",
+        "source": "lesson",
+        "directory": "/private/tmp/cortex-native-handoff-a5mdhw9v/project-a"
+      },
+      "response_projection": {
+        "stored": true,
+        "memory_id": 4369037,
+        "action": "stored"
+      }
+    },
+    {
+      "source": "codex-required.jsonl",
+      "tool": "cortex.remember",
+      "arguments": {
+        "content": "Synthetic native host handoff validation record. Lookup key: cortex-native-handoff-a5mdhw9v-codex-record. Secret payload: a4009d5bfa3a9b00b2dfcdcba3043b6e864d849b. Written by a real codex session. This is disposable validation data.",
+        "tags": [
+          "archival",
+          "native-handoff-test",
+          "cortex-native-handoff-a5mdhw9v"
+        ],
+        "agent_topic": "native-handoff-test",
+        "source": "lesson",
+        "directory": "/private/tmp/cortex-native-handoff-a5mdhw9v/project-a"
+      },
+      "response_projection": {
+        "stored": true,
+        "memory_id": 4369037,
+        "action": "merged"
+      }
+    },
+    {
+      "source": "codex-required.jsonl",
+      "tool": "cortex.recall",
+      "arguments": {
+        "query": "cortex-native-handoff-a5mdhw9v-claude-record",
+        "directory": "/private/tmp/cortex-native-handoff-a5mdhw9v/project-a",
+        "tags_all": [
+          "native-handoff-test",
+          "cortex-native-handoff-a5mdhw9v"
+        ],
+        "max_results": 5
+      },
+      "response_projection": {
+        "test_memories": [
+          {
+            "memory_id": 4369037,
+            "content": "Synthetic native host handoff validation record. Lookup key: cortex-native-handoff-a5mdhw9v-claude-record. Secret payload: dbaf4f362fed0e612a451c3ad6f49bcf8bc69765. Written by a real claude session. This is disposable validation data.\nSynthetic native host handoff validation record. Lookup key: cortex-native-handoff-a5mdhw9v-codex-record. Secret payload: a4009d5bfa3a9b00b2dfcdcba3043b6e864d849b. Written by the current real Codex session. This is disposable validation data.\nSynthetic native host handoff validation record. Lookup key: cortex-native-handoff-a5mdhw9v-codex-record. Secret payload: a4009d5bfa3a9b00b2dfcdcba3043b6e864d849b. Written by a real codex session. This is disposable validation data.",
+            "tags": [
+              "archival",
+              "native-handoff-test",
+              "cortex-native-handoff-a5mdhw9v",
+              "prov:verifiable"
+            ]
+          }
+        ],
+        "unrelated_memories_omitted": true
+      }
+    },
+    {
+      "source": "claude-read-codex.jsonl",
+      "tool": "mcp__plugin_hypermnesia-mcp_cortex__recall",
+      "arguments": {
+        "query": "cortex-native-handoff-a5mdhw9v-codex-record",
+        "directory": "/private/tmp/cortex-native-handoff-a5mdhw9v/project-a",
+        "tags_all": [
+          "native-handoff-test",
+          "cortex-native-handoff-a5mdhw9v"
+        ],
+        "max_results": 5
+      },
+      "response_projection": {
+        "test_memories": [
+          {
+            "memory_id": 4369037,
+            "content": "Synthetic native host handoff validation record. Lookup key: cortex-native-handoff-a5mdhw9v-claude-record. Secret payload: dbaf4f362fed0e612a451c3ad6f49bcf8bc69765. Written by a real claude session. This is disposable validation data.\nSynthetic native host handoff validation record. Lookup key: cortex-native-handoff-a5mdhw9v-codex-record. Secret payload: a4009d5bfa3a9b00b2dfcdcba3043b6e864d849b. Written by the current real Codex session. This is disposable validation data.\nSynthetic native host handoff validation record. Lookup key: cortex-native-handoff-a5mdhw9v-codex-record. Secret payload: a4009d5bfa3a9b00b2dfcdcba3043b6e864d849b. Written by a real codex session. This is disposable validation data.",
+            "tags": [
+              "archival",
+              "native-handoff-test",
+              "cortex-native-handoff-a5mdhw9v",
+              "prov:verifiable"
+            ]
+          }
+        ],
+        "unrelated_memories_omitted": true
+      }
+    },
+    {
+      "source": "claude-scope.jsonl",
+      "tool": "mcp__plugin_hypermnesia-mcp_cortex__recall",
+      "arguments": {
+        "query": "cortex-native-handoff-a5mdhw9v-codex-record",
+        "directory": "/private/tmp/cortex-native-handoff-a5mdhw9v/project-b",
+        "tags_all": [
+          "native-handoff-test",
+          "cortex-native-handoff-a5mdhw9v"
+        ],
+        "max_results": 5
+      },
+      "response_projection": {
+        "test_memories": [],
+        "unrelated_memories_omitted": true
+      }
+    },
+    {
+      "source": "codex-scope.jsonl",
+      "tool": "cortex.recall",
+      "arguments": {
+        "query": "cortex-native-handoff-a5mdhw9v-claude-record",
+        "directory": "/private/tmp/cortex-native-handoff-a5mdhw9v/project-b",
+        "tags_all": [
+          "native-handoff-test",
+          "cortex-native-handoff-a5mdhw9v"
+        ],
+        "max_results": 5
+      },
+      "response_projection": {
+        "test_memories": [],
+        "unrelated_memories_omitted": true
+      }
+    }
+  ],
+  "raw_artifact_sha256": {
+    "claude-write.jsonl": "a384492eafe9026a93796689bcf39c54206f869961211766afeeeedb443f2e7b",
+    "codex-required.jsonl": "d73f06f313db83077d3fcce228a7987f67842315dfdaeadb4a320a28aa27aa0b",
+    "claude-read-codex.jsonl": "7f80ecf95e775917ab0f9ea8a9386af93ae78083237c96e1fba51bbd20cdebe0",
+    "claude-scope.jsonl": "da54921ea8f7500826a2ecb99c2f116beeaffdc0fd04c9bc4412e7e78834afbe",
+    "codex-scope.jsonl": "612bb67c2c35440abfee89318c0afbb1407cb516d5e4b2ec5fd28a5b3dea021c"
+  },
+  "privacy": "Only synthetic test records are reproduced. Full transcripts remain private because they include unrelated context."
+}

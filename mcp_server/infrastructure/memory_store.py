@@ -208,7 +208,11 @@ def _database_url_is_explicit(database_url_param: str | None) -> bool:
         inspection default.
 
     source: ADR-0535"""
-    return database_url_param is not None or "DATABASE_URL" in os.environ
+    return (
+        database_url_param is not None
+        or "DATABASE_URL" in os.environ
+        or bool(os.environ.get("CORTEX_MEMORY_DATABASE_URL", "").strip())
+    )
 
 
 def _make_sqlite(path: str, embedding_dim: int) -> "SqliteMemoryStore":

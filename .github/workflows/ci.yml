@@ -1069,7 +1069,8 @@ jobs:
     needs: [ci-green]
     # ci-gate-exempt: runs only on push to main, after the PR it belongs to
     # has already merged — see the job comment above.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # source: issue #628 — explicit status bypasses skipped ancestors, never failed CI.
+    if: always() && !cancelled() && needs.ci-green.result == 'success' && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     # source: ADR-0802
     timeout-minutes: 1

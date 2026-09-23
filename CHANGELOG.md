@@ -27,6 +27,35 @@ adheres to [Semantic Versioning](https://semver.org/).
   `scripts/setup.py`'s dependency-check step now reports a `[FAIL]` row
   instead of crashing outright when that class of import failure occurs.
 
+## [4.23.4] - 2026-09-23
+
+### Documentation
+
+- Describe native Codex memory capabilities directly alongside Claude Code,
+  including automatic context, capture, checkpoints and shared project memory.
+  Remove stale pre-fix limitations and explain hook trust during installation
+  and updates.
+- Publish native macOS verification traces for Claude-to-Codex and Codex-to-Claude
+  memory retrieval, project-scoped exclusion, and automatic startup context in
+  both hosts. The report names the exact tested versions and includes sanitized
+  tool responses and transcript hashes (#632).
+
+## [4.23.3] - 2026-09-22
+
+### Fixed
+
+- Codex lifecycle hooks use the MCP storage factory when no backend is configured,
+  so automatic context reads the same SQLite store after PostgreSQL fallback.
+  Explicit database targets and saved backend selections retain precedence.
+  The MCP store also treats `CORTEX_MEMORY_DATABASE_URL` as an explicit target
+  and refuses an unrequested SQLite fallback when that target is unavailable.
+- Preserve the explicitly attached project directory when priming memories from
+  file reads through a symlink alias. Previously, a memory stored under a macOS
+  `/var/folders` path was missed because priming queried `/private/var/folders`.
+  Project scope and cooldown keys now preserve the same directory identity, so
+  a read through one alias cannot suppress another scope. Both storage backends
+  retain foreign-project isolation (#629).
+
 ## [4.23.2] - 2026-09-22
 
 ### Fixed

@@ -10,7 +10,7 @@
   <img src="assets/badge-python.svg" alt="Python 3.10+">
   <img src="assets/badge-tests.svg" alt="tests passing">
   <img src="assets/badge-references.svg" alt="97 referenced papers">
-  <img src="assets/badge-version.svg" alt="Version 4.23.2">
+  <img src="assets/badge-version.svg" alt="Version 4.23.4">
   <a href="https://www.bestpractices.dev/projects/13836"><img src="https://www.bestpractices.dev/projects/13836/badge" alt="OpenSSF Best Practices"></a>
   <a href="https://mcptoplist.com/server/io.github.cdeust%2Fhypermnesia-mcp"><img src="assets/badge-mcp-toplist.svg" alt="MCP Toplist: Top 1.2% of 81,919 tracked MCP servers, July 2026"></a>
 </p>
@@ -28,10 +28,12 @@ default, or PostgreSQL + pgvector if you prefer. No LLM in the retrieval loop, a
 leaves localhost unless you configure an integration that does. Your project's memory is a
 file you own and can delete.
 
-**Cross-platform is how it is built.** One stdio MCP server and the same 57 tools on Claude
-Code, in the Claude Desktop bundle, under Claude Cowork, and on every local stdio MCP host
-listed in the table below. What differs per host is stated there, not discovered after
-install.
+**Claude Code and Codex share Cortex memory.** Both native plugins provide the same
+memory tools and 11 lifecycle hook modules for automatic capture, recall and project
+context. Use either agent on a project and keep its memory when you switch.
+[Verified with real Claude and Codex sessions on macOS](docs/verification/claude-codex-handoff-2026-09-22/README.md).
+The same stdio MCP server also supplies memory tools to Claude Desktop, Claude Cowork
+and other local MCP hosts.
 
 **Eco-responsible is what we are aiming at.** Work that never reaches a datacenter is work
 nobody has to power, and an agent that finds the right context first time re-reads fewer
@@ -64,11 +66,24 @@ claude plugin update hypermnesia-mcp
 **Claude Cowork** is detected automatically (`CLAUDE_ENVIRONMENT=cowork`) and uses the local
 SQLite store. No PostgreSQL required.
 
-**Any other stdio MCP host** (Codex, Gemini CLI, Cursor, Windsurf, VS Code) launches the same
-server and gets the same tools. The per-host matrix and launch commands are in
-[Every other MCP host](#every-other-mcp-host) below. Codex has a native package:
-[docs/codex-plugin.md](docs/codex-plugin.md). WSL, TLS client certificates and corporate
-proxies are covered in [docs/deployment-scenarios.md](docs/deployment-scenarios.md).
+For **Codex**, install the native plugin for memory tools and automatic hooks:
+
+```bash
+uv tool install "hypermnesia-mcp[sqlite]"
+codex plugin marketplace add cdeust/Cortex
+codex plugin add hypermnesia-mcp-codex@cortex-codex-plugins
+```
+
+Open `/hooks` in Codex to review and trust the Cortex hooks, then start a fresh
+session. Changed hook definitions require renewed trust after an update. The
+plugin uses the same saved backend selection as Claude Code; both hosts share
+memory when they use the same configuration root and store.
+[Codex setup details](docs/codex-plugin.md).
+
+**Other stdio MCP hosts** (Gemini CLI, Cursor, Windsurf, VS Code) launch the same
+server and get the same tools. See [launch commands](#every-other-mcp-host).
+WSL, TLS client certificates and corporate proxies are covered in
+[deployment scenarios](docs/deployment-scenarios.md).
 
 The first use creates a local SQLite store under `~/.claude/methodology/`. Models are downloaded
 once when needed and then run offline. The embedding and reranking model files are both fetched
@@ -278,34 +293,50 @@ bash <plugin-dir>/scripts/install-plugin.sh --postgres
 Three hook enrichments are PostgreSQL-only and degrade to silent no-ops on SQLite. Session
 banners, auto-recall, auto-capture, checkpoints and every memory tool work on both.
 
+## Cortex in Codex and Claude Code
+
+Both plugins expose the complete memory tool profile and use the same 11 Cortex
+hook modules. They share project-associated memories when connected to the same
+store, so a decision saved in Claude can be recalled in Codex and vice versa.
+
+With the native Codex plugin installed and its hooks trusted, Cortex:
+
+- **Restores project context when a session starts** and recalls relevant memories
+  as you submit prompts.
+- **Captures significant tool results automatically**, keeping useful work
+  available across sessions.
+- **Preserves session state** through compaction checkpoints and durable
+  session-end recording.
+- **Briefs subagents** with project and role context.
+- **Provides the full memory toolset** for decisions, lessons, wiki pages, ADRs,
+  predictions, calibration, triggers, rules and codebase ingestion.
+- **Shares memories with Claude Code** when both use the same store and project
+  association. You can switch agents and retrieve what the other saved.
+
+Claude Code uses the same Cortex memory tools and hook modules. Both plugins
+support the autonomous wiki cycle, SQLite storage and optional PostgreSQL.
+
+**Verified on installed hosts:** Claude wrote a random test payload and Codex
+retrieved it; Codex wrote another and a fresh Claude session retrieved it. Neither
+read prompt supplied the expected payload. Both hosts excluded the test record
+when recalling from another project, and both delivered Cortex context through
+native startup hooks. [Read the verification and tool traces](docs/verification/claude-codex-handoff-2026-09-22/README.md).
+
+Hook trust is part of Codex setup: review `/hooks` after installation or a changed
+hook definition, then start a fresh session. Event mapping, task-context handling
+and session-end delivery are documented in the [Codex integration guide](docs/codex-plugin.md).
+Cognitive profiles are shared too; the current profile builder derives them from
+Claude Code session logs, so that historical input must exist for either host to
+retrieve a populated profile.
+
 ## Every other MCP host
 
-The server is host-agnostic. Any host that can launch a stdio process gets the full tool
-surface on the default SQLite store. What is not portable are the lifecycle hooks — but they
-are no longer Claude-only: the Codex plugin registers the same 11 hook modules through the
-`hypermnesia-mcp-hook` console script. Host payloads and timeout limits affect their behavior:
-native Codex subagent starts receive no briefing, and session-end recording can exceed its
-timeout. See [Codex hook limitations](docs/codex-plugin.md). A direct `codex mcp add`
-registration gets the tool surface only; the hooks come with the plugin.
-
-| Capability | Claude Code plugin | Codex plugin (`hypermnesia-mcp-codex`) | Codex `codex mcp add`, Gemini CLI, Cursor, Windsurf, VS Code, Agents SDK | ChatGPT web |
-|---|---|---|---|---|
-| Tool surface | all 57 tools | all 57 tools (no `--profile` flag, same as Claude Code) | all 57 tools (`full` is the default profile) | ❌ no remote HTTPS endpoint is shipped |
-| SQLite default store / PostgreSQL opt-in | ✅ | ✅ | ✅ | ❌ would need a remote deployment and a per-user storage and auth model |
-| One store for Claude Code and Codex | ✅ writes the selection to `~/.claude/methodology/backend.json` | ✅ reads that selection at startup (#600, since 4.23.0) | ✅ same rule for any direct startup sharing the configuration root | ❌ |
-| Predictions and calibration (`predict`, `resolve_prediction`, `calibration`) | ✅ | ✅ | ✅ | ❌ |
-| Wiki writes, ADRs, triggers, rules, codebase ingestion | ✅ | ✅ | ✅ | ❌ |
-| Auto-capture of significant tool output | ✅ PostToolUse hook | ✅ PostToolUse hook | ❌ store explicitly with `remember` | ❌ |
-| Session-start context injection | ✅ SessionStart hook | ✅ SessionStart hook | ❌ call `recall` yourself | ❌ |
-| Per-prompt auto-recall | ✅ | ✅ UserPromptSubmit hook | ❌ | ❌ |
-| Compaction checkpoints | ✅ `Notification: compacted` | ✅ `PreCompact` (Codex has no `Notification` event) | ❌ | ❌ |
-| Autonomous wiki cycle | ✅ | ✅ | ❌ run `consolidate` / `curate_wiki` manually | ❌ |
-| Cognitive profiling (`query_methodology`) | ✅ | ⚠️ profiles are mined from Claude Code session logs under `~/.claude/`; without them the profile is empty | ⚠️ same | ❌ |
-| Worktree directory | `.claude/worktrees/<name>/`, the location `docs/agent-guidance.md` names | `.Codex/worktrees/<name>/`, where Codex puts its own; ignored at the repository root since #601 | n/a | n/a |
-
-The Claude Code and Codex plugins use hooks to capture and inject memory automatically,
-subject to the host limitations above. With a direct MCP registration without plugin hooks,
-memory is tool-driven: the agent explicitly calls tools to store and retrieve it.
+Any host that can launch the stdio server gets the complete memory tool profile,
+with SQLite by default and PostgreSQL as an option. A direct MCP registration,
+including `codex mcp add`, provides explicit `remember` and `recall` tools.
+Automatic lifecycle behavior comes with the native Claude Code or Codex plugin.
+The Claude Desktop bundle provides tools without hooks. ChatGPT web would require
+a remote deployment; this repository ships a local stdio server.
 
 The launch command on every host is the PyPI package. The `[sqlite]` extra enables
 sqlite-vec vector search; without it the store still works, with vector search disabled.
@@ -458,8 +489,8 @@ v4.22.0 release ([en français](https://ai-architect.tools/fr/notes/how-cortex-r
 
 ## Limits worth knowing before you install
 
-- The automatic behaviour is Claude Code plugin machinery. Elsewhere you call the tools
-  yourself, and the host table above says exactly what is missing where.
+- Automatic capture and context injection are provided by the native Claude Code and
+  Codex plugins. Direct MCP connections use explicit memory tools.
 - SQLite fusion is in-process and unindexed. Fine at personal scale, slower at very large one.
 - The retrieval scores above are retrieval-only. They say nothing about answer quality.
 - Provenance grading is local and structural. It checks that a reference resolves, not that a

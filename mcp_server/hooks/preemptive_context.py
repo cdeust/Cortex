@@ -146,8 +146,8 @@ def process_event(event: dict[str, Any]) -> None:
     ):
         return
     project = resolve_project_root(event, os.environ)
-    if project:
-        project = str(Path(project).resolve())
+    # Remember preserves directory aliases: SQL and pending reads must use the
+    # original project scope. Cooldown keys must distinguish those scopes (#629).
     try:
         paths, project = _event_paths(event, project)
     except (OSError, ValueError, TypeError) as exc:

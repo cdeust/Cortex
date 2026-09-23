@@ -47,10 +47,10 @@ def _normalize_path(path: str) -> str:
 def project_ancestors(project_root: str | None) -> list[str]:
     """project_root and every directory above it, most specific first.
 
-    Pure path-component walk, no filesystem access: directory_context is
-    already a resolved absolute path at write time (ingest_helpers.py,
-    domain_mapping.py._git_root), so this only has to walk path segments,
-    never verify them on disk.
+    Pure path-component walk, no filesystem access. Ingestion resolves paths,
+    but explicit remember writes preserve the supplied directory, including
+    aliases (remember_helpers._build_insert_record). Readers must preserve
+    that same project identity instead of resolving only the query path.
 
     Postcondition: None or "" yields [] -- the caller-facing contract a
     query-scoping caller relies on: pass this list straight to a
