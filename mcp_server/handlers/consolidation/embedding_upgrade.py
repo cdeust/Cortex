@@ -29,7 +29,8 @@ class _FallbackWorklistStore(Protocol):
     degraded mode of this cycle.
     """
 
-    has_vec: bool
+    @property
+    def has_vec(self) -> bool: ...
 
     def select_fallback_embeddings(self, limit: int = ...) -> list[dict]: ...
 
