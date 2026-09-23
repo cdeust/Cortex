@@ -155,7 +155,14 @@ def test_neural_stamp_downgrades_to_fallback_without_a_persisted_vector(
     assert "would-be neural row" in contents
 
 
+@_needs_vec
 def test_select_fallback_embeddings_worklist(fallback_engine, store):
+    """A 'neural' stamp only means what it claims -- excluded from the
+    worklist -- when a vector actually persisted (source: ADR-1089), so
+    this assertion is only meaningful with sqlite-vec available; without
+    it, "neural one" would legitimately downgrade to 'fallback' and
+    belongs in the worklist, which is a different, already-covered
+    contract (test_neural_stamp_downgrades_to_fallback_without_a_persisted_vector)."""
     eng = fallback_engine
     store.insert_memory(
         {"content": "fb one", "embedding": eng.encode("fb one"), "heat": 0.9}
