@@ -5,7 +5,6 @@ source: ADR-0378"""
 
 from __future__ import annotations
 
-import logging
 import os
 from typing import Any, Callable
 from mcp_server.shared.domain_mapping import _build_registry
@@ -14,8 +13,6 @@ from mcp_server.infrastructure.pg_store_wiki_domain import (
     update_page_domain,
     list_catchall_pages_with_sources,
 )
-
-logger = logging.getLogger(__name__)
 
 # source: ADR-0378
 DEFAULT_DOMAIN_BACKFILL_LIMIT = 500
@@ -82,9 +79,10 @@ async def run_domain_backfill_pass(
     """Re-derive and persist the true domain for catch-all wiki pages.
 
     Pre-condition:  ``store`` exposes ``batch_pool``
-                    (``psycopg_pool.ConnectionPool``) — the long-running
-                    writer pool, matching how ``consolidate`` already
-                    borrows connections for other maintenance sweeps.
+                    (``psycopg_pool.ConnectionPool``), enforced by the
+                    sole caller ``run_wiki_maintenance`` once at wiring
+                    time (issue #636) — called without it, this raises
+                    ``AttributeError`` as a wiring bug, not caught here.
     Post-condition: for every scanned page where
                     ``core.wiki_domain_backfill.derive_page_domain``
                     finds an unambiguous majority domain that differs
@@ -101,17 +99,11 @@ async def run_domain_backfill_pass(
         "by_domain": {},
         "status": "ok",
     }
-    try:
-        with store.batch_pool.connection() as conn:
-            domain_roots = _registry_domain_roots()
-            containing = _build_containment_fn(domain_roots)
-            pages = list_catchall_pages_with_sources(
-                conn, list(domain_roots), limit=limit
-            )
-            out["pages_scanned"] = len(pages)
-            for page in pages:
-                _process_page(conn, page, containing, apply=apply, out=out)
-    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
-        logger.warning("wiki_domain_backfill_pass failed (non-fatal): %s", exc)
-        out["status"] = f"error: {type(exc).__name__}: {exc}"
+    with store.batch_pool.connection() as conn:
+        domain_roots = _registry_domain_roots()
+        containing = _build_containment_fn(domain_roots)
+        pages = list_catchall_pages_with_sources(conn, list(domain_roots), limit=limit)
+        out["pages_scanned"] = len(pages)
+        for page in pages:
+            _process_page(conn, page, containing, apply=apply, out=out)
     return out

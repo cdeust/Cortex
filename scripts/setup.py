@@ -233,16 +233,7 @@ def install_deps() -> None:
 def setup_database() -> None:
     step("Database & schema")
 
-    # Add deps and project to path.
-    #
-    # Known gap, same shape as cache_embedding_model() below: setup_db.py
-    # runs as a child and reaches DEPS_DIR only through PYTHONPATH, which
-    # cannot process .pth files and cannot cut user site-packages the way
-    # launcher_site.isolate_deps does in-process. It imports psycopg and
-    # mcp_server.infrastructure.pg_schema, neither of which is part of the
-    # torch ecosystem split that issue #621 reports, so nothing observed
-    # reaches it; closing it needs a child-process bootstrap this fix does
-    # not introduce. Unlike the pre-cache, this step's failure is fatal.
+    # Add deps and project to path. source: ADR-1087
     sys.path.insert(0, DEPS_DIR)
     sys.path.insert(0, str(PROJECT_DIR))
     os.environ["PYTHONPATH"] = f"{PROJECT_DIR}{os.pathsep}{DEPS_DIR}"
@@ -272,26 +263,49 @@ def setup_database() -> None:
 # ── Step 5: Embedding model ──────────────────────────────────────────
 
 
+def _model_cache_child_source(script_dir: Path, deps_dir: str) -> str:
+    """The child process's ``-c`` payload for ``cache_embedding_model``.
+
+    Pulled out so it can be unit-tested independently (compiled, and run
+    end-to-end against a stubbed ``sentence_transformers``) rather than
+    only ever exercised as an opaque string mocked out in every test that
+    touches ``cache_embedding_model`` — a typo here would otherwise
+    silently disable pre-caching on every platform, forever, with no test
+    catching it (``cache_embedding_model``'s own caller only warns on
+    failure).
+
+    Pre:  ``script_dir`` is scripts/'s own directory (where launcher_site.py
+          lives); ``deps_dir`` is the vendored deps directory.
+    Post: returns a syntactically valid Python source string that: cuts
+          user site-packages the way launcher_site.isolate_deps does in
+          this process (the child reaches deps_dir only through
+          PYTHONPATH, which cannot do that — issue #621's
+          torch/torchaudio mismatch would otherwise still abort the
+          sentence_transformers import); then loads the model and prints
+          its embedding dimension. repr() rather than an f-string: it
+          escapes a Windows path's backslashes correctly when embedded in
+          the child's source.
+
+    source: issue #633"""
+    return (
+        "import sys; sys.path.insert(0, "
+        + repr(str(script_dir))
+        + "); import launcher_site; launcher_site.isolate_deps("
+        + repr(deps_dir)
+        + "); from sentence_transformers import SentenceTransformer; "
+        "m = SentenceTransformer('all-MiniLM-L6-v2'); "
+        "print(f'Model loaded: {m.encode([\"test\"]).shape[1]}D embeddings')"
+    )
+
+
 def cache_embedding_model() -> None:
     step("Embedding model")
 
-    # Known gap, same shape as setup_database() above and as its
-    # macOS/Linux twin scripts/lib/precache_embedding_model.sh: the child
-    # reaches DEPS_DIR only through PYTHONPATH, so issue #621's torch
-    # mismatch still aborts this import. The step warns rather than fails,
-    # and the model then downloads on first encode inside a process
-    # launcher_site.isolate_deps has already isolated.
     sys.path.insert(0, DEPS_DIR)
     print("Pre-caching sentence-transformers model (one-time ~100MB download)...")
 
     result = run(
-        [
-            sys.executable,
-            "-c",
-            "from sentence_transformers import SentenceTransformer; "
-            "m = SentenceTransformer('all-MiniLM-L6-v2'); "
-            "print(f'Model loaded: {m.encode([\"test\"]).shape[1]}D embeddings')",
-        ],
+        [sys.executable, "-c", _model_cache_child_source(SCRIPT_DIR, DEPS_DIR)],
         env={**os.environ, "PYTHONPATH": f"{PROJECT_DIR}{os.pathsep}{DEPS_DIR}"},
     )
 
@@ -368,21 +382,26 @@ def _model_checks() -> list[tuple[str, bool]]:
     """Embedding/reranking dependency import checks (both backends).
 
     Post: returns (name, passed) pairs for sentence-transformers and
-          FlashRank, independent of SKIP_POSTGRES.
+          FlashRank, independent of SKIP_POSTGRES. Catches Exception, not
+          only ImportError: a torch/torchaudio ABI mismatch (issue #621)
+          surfaces as OSError/RuntimeError deep inside the import chain,
+          and letting that escape is exactly how a prior run crashed
+          before printing any "[FAIL]" line for run_setup_py to name
+          (issue #633).
     """
     checks: list[tuple[str, bool]] = []
     try:
-        import sentence_transformers  # noqa: PLC0415, F401 — optional-feature probe: ImportError here is a handled degraded mode
+        import sentence_transformers  # noqa: PLC0415, F401 — optional-feature probe: import failure here is a handled degraded mode
 
         checks.append(("sentence-transformers", True))
-    except ImportError:
+    except Exception:  # noqa: BLE001 — source: issue #633
         checks.append(("sentence-transformers", False))
 
     try:
-        from flashrank import Ranker  # noqa: PLC0415, F401 — optional-feature probe: ImportError here is a handled degraded mode
+        from flashrank import Ranker  # noqa: PLC0415, F401 — optional-feature probe: import failure here is a handled degraded mode
 
         checks.append(("FlashRank reranker", True))
-    except ImportError:
+    except Exception:  # noqa: BLE001 — source: issue #633
         checks.append(("FlashRank reranker", False))
 
     return checks

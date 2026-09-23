@@ -48,6 +48,7 @@ from mcp_server.handlers.consolidation.near_dup_calibration_pass import (  # noq
     run_near_dup_sample,
     run_near_dup_apply_pass,
 )
+from mcp_server.shared.campaign_store_guard import require_postgres_store  # noqa: E402
 from mcp_server.shared.near_dup_calibration import (  # noqa: E402
     LabeledPair,
     precision_by_threshold,
@@ -58,7 +59,9 @@ from mcp_server.shared.near_dup_calibration import (  # noqa: E402
 async def _get_store():
 
     settings = get_memory_settings()
-    return get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
+    store = get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
+    require_postgres_store(store)
+    return store
 
 
 def _timestamp() -> str:

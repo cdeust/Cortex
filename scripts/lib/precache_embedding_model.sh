@@ -27,17 +27,21 @@ precache_embedding_model_step() {
     cache_log="$(mktemp)"
 
     echo "  Pre-caching sentence-transformers model (one-time ~100MB download)..."
-    # Known gap, the macOS/Linux twin of setup_database() and
-    # cache_embedding_model() in scripts/setup.py: the child reaches
-    # deps_dir through PYTHONPATH alone, which cannot process .pth files
-    # and cannot cut user site-packages the way launcher_site.isolate_deps
-    # does in-process, so issue #621's torch mismatch still aborts this
-    # import. The step warns rather than fails, and the model then
-    # downloads on first encode inside a process the launcher has already
-    # isolated. Closing it needs a child-process bootstrap and a signature
-    # change here (this function takes no scripts_dir), which issue #537's
-    # tests pin; neither belongs in the #621 fix.
-    PYTHONPATH="${project_dir}:${deps_dir}:${PYTHONPATH:-}" python3 -c "
+    # Paths reach the child through env vars, not string interpolation: a
+    # single quote or backslash in project_dir/deps_dir (Windows paths use
+    # backslashes) would otherwise break the embedded Python source, the
+    # same class of bug ADR-1087 fixed on this step's Python twin
+    # (_model_cache_child_source) with repr()-escaping -- env vars need no
+    # escaping at all. source: issue #638
+    PYTHONPATH="${project_dir}:${deps_dir}:${PYTHONPATH:-}" \
+    CORTEX_PRECACHE_SCRIPTS_DIR="${project_dir}/scripts" \
+    CORTEX_PRECACHE_DEPS_DIR="${deps_dir}" \
+    python3 -c "
+import os
+import sys
+sys.path.insert(0, os.environ['CORTEX_PRECACHE_SCRIPTS_DIR'])
+import launcher_site
+launcher_site.isolate_deps(os.environ['CORTEX_PRECACHE_DEPS_DIR'])
 from sentence_transformers import SentenceTransformer
 model = SentenceTransformer('all-MiniLM-L6-v2')
 emb = model.encode(['test'])
