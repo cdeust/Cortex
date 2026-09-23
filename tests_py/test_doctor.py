@@ -15,6 +15,7 @@ import sys
 
 import pytest
 
+from tests_py.conftest import requires_psycopg  # type: ignore
 from mcp_server.doctor import (
     CHECKS,
     SQLITE_CHECKS,
@@ -37,6 +38,7 @@ class TestIndividualChecks:
         # This test suite requires 3.10+ anyway
         assert check.ok is True
 
+    @requires_psycopg
     def test_pg_driver_passes_in_dev_env(self):
         check = _pg_driver()
         assert check.ok is True  # dev env has postgresql extras installed
