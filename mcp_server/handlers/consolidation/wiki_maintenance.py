@@ -120,8 +120,10 @@ async def run_wiki_maintenance(
 
         Four keys exist ONLY when ``store`` is PostgreSQL-backed (has
         ``batch_pool``), decided once here rather than defended against
-        per call site (issue #636): ``lesson_promotion_backlog`` (int),
-        a ``source_backfill`` stanza (``{pages_scanned,
+        per call site (issue #636): ``lesson_promotion_backlog`` (int on
+        success, ``None`` with ``status`` escalated to
+        ``lesson_promotion_backlog_error: ...`` on a genuine query
+        failure), a ``source_backfill`` stanza (``{pages_scanned,
         primaries_written, by_source, status}``), a ``domain_backfill``
         stanza (``{pages_scanned, domains_reassigned, by_domain,
         status}``), and a ``citation_seed`` stanza (``{scanned_rows,
@@ -259,7 +261,18 @@ async def run_wiki_maintenance(
             if out["status"] == "ok":
                 out["status"] = f"citation_seed_error: {type(exc).__name__}: {exc}"
 
-        out["lesson_promotion_backlog"] = _lesson_promotion_backlog(store)
+        try:
+            out["lesson_promotion_backlog"] = _lesson_promotion_backlog(store)
+        except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
+            logger.warning(
+                "wiki_maintenance: lesson promotion backlog failed (non-fatal): %s",
+                exc,
+            )
+            out["lesson_promotion_backlog"] = None
+            if out["status"] == "ok":
+                out["status"] = (
+                    f"lesson_promotion_backlog_error: {type(exc).__name__}: {exc}"
+                )
 
     # Curation backlog (filesystem-based, both backends).
     try:

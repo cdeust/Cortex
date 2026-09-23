@@ -179,6 +179,37 @@ class TestCitationSeedWiring:
         assert "pending_total" in result
 
 
+class TestLessonPromotionBacklogEscalation:
+    """#636 follow-up: a real query failure for lesson_promotion_backlog
+    must escalate ``out["status"]`` the same way the other three
+    PostgreSQL-only passes do, not degrade to a silent ``None`` with
+    ``status`` left ``ok``."""
+
+    def test_failure_escalates_status(self, monkeypatch) -> None:
+        _silence_everything_except_citation_seed(monkeypatch)
+
+        async def _fake_seed_pass(store, *, apply, limit):
+            return {"status": "ok", "journal": []}
+
+        monkeypatch.setattr(
+            wiki_maintenance, "run_wiki_citation_seed_pass", _fake_seed_pass
+        )
+
+        def _boom(store):
+            raise RuntimeError("PG connection reset")
+
+        monkeypatch.setattr(wiki_maintenance, "_lesson_promotion_backlog", _boom)
+
+        result = _run(
+            wiki_maintenance.run_wiki_maintenance(
+                _FakeStore(), max_purges_per_axis=None
+            )
+        )
+
+        assert result["lesson_promotion_backlog"] is None
+        assert result["status"].startswith("lesson_promotion_backlog_error")
+
+
 class TestPgOnlyStanzasGatedOnce:
     """#636: the four PG-only stanzas (source_backfill, domain_backfill,
     citation_seed, lesson_promotion_backlog) are wired once, at the top

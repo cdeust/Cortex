@@ -72,11 +72,19 @@ before this fix.
 wiki_backlog_pass._lesson_promotion_backlog moves out of run_backlog_pass
 (which runs unconditionally, since its other counts are filesystem-based
 and backend-agnostic) into run_wiki_maintenance's own PostgreSQL branch.
-Its internal try/except and silent_failure.note call for a genuine query
-failure are unchanged (ADR-0640's accepted pattern for that module); only
-the call site moved, which is what stops silent_failure.note from firing
--- and cortex_silent_failures_total from incrementing -- on every
-consolidate run for the lifetime of a SQLite install.
+Its own internal try/except is also removed, matching the other three
+passes: it now raises on a genuine query failure instead of degrading to
+a silent None, and run_wiki_maintenance wraps the call in its own
+try/except, escalating out["status"] to
+"lesson_promotion_backlog_error: ..." the same way it does for the other
+three. An earlier version of this same commit kept the swallow in place
+-- reviewed and corrected before landing, since None with status still
+"ok" is the exact shape #636 reported, just for one key instead of four.
+This also removes the silent_failure.note call that previously fired --
+and incremented cortex_silent_failures_total -- on every consolidate run
+for the lifetime of a SQLite install; the wiring change alone (this
+function is never called at all on a non-PostgreSQL store) already made
+that metric-pollution problem moot.
 
 The five standalone campaign scripts (memory_dedup_exact_pass,
 memory_domain_backfill_pass, memory_reheat_pass,
