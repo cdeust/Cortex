@@ -56,6 +56,24 @@ def _write_setup_py_stub(bin_dir: Path, *, exit_code: int) -> None:
     stub.chmod(mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
 
+def _write_inert_pip_stubs(bin_dir: Path) -> None:
+    """`pip`/`pip3` on PATH that report every package as not installed.
+
+    install-plugin.sh's stale-install pruning (phase 2b) runs `pip3 show
+    <pkg>` unconditionally and, on a truthy result, `pip3 uninstall -y
+    <pkg>` -- against whatever `pip3` PATH resolves to. Without this stub,
+    that resolves to the real interpreter's pip, and in CI it genuinely
+    uninstalls this repo's own just-installed editable `hypermnesia-mcp`
+    package (a later step in the same job needs it on PATH), because a
+    stubbed HOME does not sandbox the real site-packages `pip3` operates
+    on. `show` exiting non-zero keeps the uninstall branch unreached."""
+    for name in ("pip", "pip3"):
+        stub = bin_dir / name
+        stub.write_text("#!/usr/bin/env bash\nexit 1\n", encoding="utf-8")
+        mode = stub.stat().st_mode
+        stub.chmod(mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+
+
 def _run_installer(
     tmp_path: Path, *, setup_py_exit_code: int
 ) -> subprocess.CompletedProcess:
@@ -66,6 +84,7 @@ def _run_installer(
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     _write_setup_py_stub(bin_dir, exit_code=setup_py_exit_code)
+    _write_inert_pip_stubs(bin_dir)
 
     env = {
         **os.environ,
