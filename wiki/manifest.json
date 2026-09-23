@@ -3515,6 +3515,10 @@
     "ADR-1086": {
       "mirror": "ADR-1086-prime-project-memories-from-explicit-shell-file-cues.md",
       "path": "adr/cortex/1086-prime-project-memories-from-explicit-shell-file-cues.md"
+    },
+    "ADR-1091": {
+      "mirror": "ADR-1091-target-the-windows-ci-leg-at-what-actually-broke-on-windows.md",
+      "path": "adr/cortex/1091-target-the-windows-ci-leg-at-what-actually-broke-on-windows.md"
     }
   },
   "project": "cortex",

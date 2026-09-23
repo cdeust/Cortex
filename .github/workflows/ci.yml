@@ -473,9 +473,28 @@ jobs:
           CLAUDE_PLUGIN_DATA: ${{ runner.temp }}/cortex-plugin-data
         run: bash scripts/install-plugin.sh
 
+      # The step above ran the REAL install path, not the
+      # `pip install -r requirements/ci-sqlite-min.txt` shortcut two steps
+      # up. Issue #634 shipped because BASE_PACKAGES never named sqlite-vec
+      # while ci-sqlite-min.txt did (it always inherits the [sqlite]
+      # extra) -- every prior Windows CI run installed a dependency set no
+      # real user ever received. This checks the real path's own deps/
+      # output against pyproject.toml's [sqlite] extra directly, so a
+      # future package added to one list but not the other fails here.
+      - name: Verify the real install path installed the [sqlite] extra
+        shell: bash
+        env:
+          CLAUDE_PLUGIN_DATA: ${{ runner.temp }}/cortex-plugin-data
+        run: python3 scripts/verify_sqlite_extra_parity.py "$CLAUDE_PLUGIN_DATA/deps"
+
       # Scope (explicit, not silent): the portability tests plus the modules
       # carrying Windows-specific branches and the SQLite backend suite. The
       # full PG suite is not run here — it is covered by the ubuntu `test` job.
+      # The four files below join the leg per issues #634 and #636 (both
+      # Windows-reported, both in modules this job did not previously run):
+      # test_semantic_fallback_169.py and test_doctor.py cover #634's
+      # sqlite-vec install-and-backfill fix; test_wiki_maintenance.py and
+      # test_wiki_backlog_pass.py cover #636's consolidate-on-SQLite fix.
       - name: Run portability + backend tests
         env:
           HF_HUB_OFFLINE: "1"
@@ -490,6 +509,10 @@ jobs:
           tests_py/scripts/test_setup_py_backend_skip.py
           tests_py/scripts/test_launcher_site.py
           tests_py/scripts/test_launcher_site_paths.py
+          tests_py/infrastructure/test_semantic_fallback_169.py
+          tests_py/test_doctor.py
+          tests_py/handlers/consolidation/test_wiki_maintenance.py
+          tests_py/handlers/consolidation/test_wiki_backlog_pass.py
 
   # source: ADR-0802
 
