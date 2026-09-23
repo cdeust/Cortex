@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [4.23.5] - 2026-09-23
+
 ### Fixed
 
 - **The SQLite backend now installs sqlite-vec on every platform, and a
@@ -45,6 +47,31 @@ adheres to [Semantic Versioning](https://semver.org/).
   embedding-model pre-cache on a conflicting environment; and
   `scripts/setup.py`'s dependency-check step now reports a `[FAIL]` row
   instead of crashing outright when that class of import failure occurs.
+- **`consolidate`'s wiki maintenance cycle silently broke four passes on
+  every SQLite run while reporting `status: "ok"` (#636).**
+  `wiki_source_backfill_pass`, `wiki_domain_backfill_pass`,
+  `wiki_citation_seed_pass`, and `wiki_backlog_pass`'s lesson-promotion
+  count all accessed `store.batch_pool` (a PostgreSQL-only connection
+  pool) unconditionally; each raised `AttributeError` on the SQLite
+  default backend, three of the four caught it internally and returned
+  an `"error: ..."` stanza, and `wiki_maintenance.py`'s own escalation
+  only fired on a *raised* exception, never on a returned error status —
+  so `consolidate` kept reporting overall success while four maintenance
+  passes were broken on every run, on the default backend. Fixed: the
+  backend is decided once, at the top of `run_wiki_maintenance`, and the
+  four PostgreSQL-only passes are invoked only when the store actually
+  provides `batch_pool`; on SQLite their keys are simply absent from the
+  response, the same way `consolidate`'s other optional sections behave
+  when disabled, and a genuine failure inside any of the four now raises
+  and is caught by the function's own (previously dead) error boundary
+  instead of being swallowed at the call site.
+- **Windows CI now actually exercises the SQLite-vec install path and
+  the wiki maintenance fix above** — the platform every reporter of
+  #633/#634/#636 was running. A new verifier
+  (`scripts/verify_sqlite_extra_parity.py`) checks every package
+  `pyproject.toml`'s `[sqlite]` extra declares actually resolves under
+  the real install path's own `deps/` directory, the same check that
+  would have caught #634 directly.
 
 ## [4.23.4] - 2026-09-23
 
