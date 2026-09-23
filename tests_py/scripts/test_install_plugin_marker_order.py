@@ -36,17 +36,17 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def _write_failing_setup_py_stub(bin_dir: Path) -> None:
+def _write_setup_py_stub(bin_dir: Path, *, exit_code: int) -> None:
     """A `python3` on PATH: real Python for everything except
-    scripts/setup.py, which it fails immediately — standing in for issue
-    #633's Defect 1 crash without needing a real torch/torchaudio
-    conflict to reproduce it."""
+    scripts/setup.py, which exits with `exit_code` immediately -- standing
+    in for issue #633's Defect 1 crash (or a clean run) without needing a
+    real torch/torchaudio conflict to reproduce either."""
     stub = bin_dir / "python3"
     stub.write_text(
         "#!/usr/bin/env bash\n"
         'for arg in "$@"; do\n'
         '    case "$arg" in\n'
-        "        */scripts/setup.py) exit 1 ;;\n"
+        f"        */scripts/setup.py) exit {exit_code} ;;\n"
         "    esac\n"
         "done\n"
         f'exec "{sys.executable}" "$@"\n',
@@ -56,12 +56,16 @@ def _write_failing_setup_py_stub(bin_dir: Path) -> None:
     stub.chmod(mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
 
-def test_marker_persists_backend_even_when_setup_py_fails(tmp_path):
+def _run_installer(
+    tmp_path: Path, *, setup_py_exit_code: int
+) -> subprocess.CompletedProcess:
+    """Drive the real installer, home/PATH isolated under tmp_path, against
+    a python3 stub that only fakes scripts/setup.py's own exit code."""
     home = tmp_path / "home"
     home.mkdir()
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    _write_failing_setup_py_stub(bin_dir)
+    _write_setup_py_stub(bin_dir, exit_code=setup_py_exit_code)
 
     env = {
         **os.environ,
@@ -70,13 +74,23 @@ def test_marker_persists_backend_even_when_setup_py_fails(tmp_path):
         "CLAUDE_PLUGIN_ROOT": str(REPO_ROOT),
         "CORTEX_BACKEND": "sqlite",
     }
-    result = subprocess.run(
+    return subprocess.run(
         ["bash", str(INSTALLER_PATH)],
         env=env,
         capture_output=True,
         text=True,
         timeout=30,
     )
+
+
+def _marker_backend(tmp_path: Path) -> str:
+    marker = tmp_path / "home" / ".claude" / "methodology" / "backend.json"
+    assert marker.exists()
+    return json.loads(marker.read_text(encoding="utf-8"))["backend"]
+
+
+def test_marker_persists_backend_even_when_setup_py_fails(tmp_path):
+    result = _run_installer(tmp_path, setup_py_exit_code=1)
 
     # The installer still fails overall — setup.py genuinely failed, and
     # that failure must not be hidden.
@@ -85,55 +99,16 @@ def test_marker_persists_backend_even_when_setup_py_fails(tmp_path):
 
     # But the backend decision itself must survive: a subsequent launch
     # must not silently fall back to requiring PostgreSQL.
-    marker = home / ".claude" / "methodology" / "backend.json"
-    assert marker.exists(), (
-        "backend.json missing after a setup.py failure — the exact "
-        f"regression issue #633 reports.\nstdout:\n{result.stdout}\n"
-        f"stderr:\n{result.stderr}"
+    assert _marker_backend(tmp_path) == "sqlite", (
+        f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
     )
-    assert json.loads(marker.read_text(encoding="utf-8"))["backend"] == "sqlite"
 
 
 def test_marker_persists_backend_on_a_successful_sqlite_install(tmp_path):
     """Companion to the failure case: an ordinary successful install still
     persists the marker (the reordering did not just move the write, it
     kept it reachable on the happy path too)."""
-    home = tmp_path / "home"
-    home.mkdir()
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    # Stub every step scripts/setup.py would take, so the test stays fast
-    # and hermetic (no pip installs, no model download) while still
-    # proving the marker exists once the installer returns 0.
-    stub = bin_dir / "python3"
-    stub.write_text(
-        "#!/usr/bin/env bash\n"
-        'for arg in "$@"; do\n'
-        '    case "$arg" in\n'
-        "        */scripts/setup.py) exit 0 ;;\n"
-        "    esac\n"
-        "done\n"
-        f'exec "{sys.executable}" "$@"\n',
-        encoding="utf-8",
-    )
-    stub.chmod(stub.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
-
-    env = {
-        **os.environ,
-        "HOME": str(home),
-        "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
-        "CLAUDE_PLUGIN_ROOT": str(REPO_ROOT),
-        "CORTEX_BACKEND": "sqlite",
-    }
-    result = subprocess.run(
-        ["bash", str(INSTALLER_PATH)],
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
+    result = _run_installer(tmp_path, setup_py_exit_code=0)
 
     assert result.returncode == 0, result.stderr
-    marker = home / ".claude" / "methodology" / "backend.json"
-    assert marker.exists()
-    assert json.loads(marker.read_text(encoding="utf-8"))["backend"] == "sqlite"
+    assert _marker_backend(tmp_path) == "sqlite"
