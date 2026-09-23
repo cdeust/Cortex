@@ -47,6 +47,13 @@ async def _run(apply: bool, target: float, limit: int) -> dict:
 
     settings = get_memory_settings()
     store = get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
+    if not hasattr(store, "batch_pool"):
+        print(
+            "This campaign requires a PostgreSQL-backed store (batch_pool); "
+            "the SQLite backend has no equivalent table for it.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     return await run_memory_reheat_pass(
         store, apply=apply, target=target or DEFAULT_REHEAT_TARGET, limit=limit
     )

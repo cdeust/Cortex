@@ -13,6 +13,8 @@ doesn't need to re-mock the whole orchestration surface.
 from __future__ import annotations
 
 import asyncio
+import os
+import tempfile
 
 from mcp_server.handlers.consolidation import wiki_maintenance
 
@@ -24,7 +26,18 @@ def _run(coro):
 class _FakeStore:
     """Stand-in store; every sub-pass below is monkeypatched so this
     object's shape never actually matters to the passes it's threaded
-    through."""
+    through. Carries ``batch_pool`` so ``run_wiki_maintenance``'s own
+    backend gate (issue #636) treats it as PostgreSQL-backed and
+    actually invokes the mocked PG-only passes below -- without this,
+    the four PG-only stanzas would never be wired in these tests at
+    all, since gating now happens once, at the top of the function,
+    not per pass."""
+
+    batch_pool = object()
+
+
+class _FakeSqliteStore:
+    """Stand-in store with no ``batch_pool`` -- the SQLite shape."""
 
 
 def _silence_everything_except_citation_seed(monkeypatch) -> None:
@@ -65,11 +78,11 @@ def _silence_everything_except_citation_seed(monkeypatch) -> None:
             "coverage_gaps": 0,
             "uncovered_files": 0,
             "drifted_pages": 0,
-            "lesson_promotion_backlog": 0,
             "pending_total": 0,
         }
 
     monkeypatch.setattr(wiki_maintenance, "run_backlog_pass", _noop_backlog)
+    monkeypatch.setattr(wiki_maintenance, "_lesson_promotion_backlog", lambda store: 7)
 
 
 class TestCitationSeedWiring:
@@ -165,33 +178,37 @@ class TestCitationSeedWiring:
         # Non-fatal: the function still returned a full dict, not raised.
         assert "pending_total" in result
 
-    def test_citation_seed_returned_error_escalates_without_raising(
-        self, monkeypatch
-    ) -> None:
-        """#636: a sub-pass that catches its OWN failure internally and
-        RETURNS ``{"status": "error: ..."}`` (never raises) must still
-        escalate ``out["status"]`` -- this is exactly the shape every
-        batch_pool-gated wiki pass used before the #636 fix, and it left
-        ``wiki_maintenance``'s except-only escalation dead code."""
+
+class TestPgOnlyStanzasGatedOnce:
+    """#636: the four PG-only stanzas (source_backfill, domain_backfill,
+    citation_seed, lesson_promotion_backlog) are wired once, at the top
+    of ``run_wiki_maintenance``, from whether ``store`` has
+    ``batch_pool`` -- not defended against per pass. On a store without
+    it they are absent from the response, never a "skipped" status."""
+
+    def test_absent_on_a_store_without_batch_pool(self, monkeypatch) -> None:
         _silence_everything_except_citation_seed(monkeypatch)
 
-        async def _returns_error_without_raising(store, *, apply, limit):
-            return {
-                "scanned_rows": 0,
-                "seeded": 0,
-                "already_cited": 0,
-                "skipped_race": 0,
-                "journal": [],
-                "status": (
-                    "error: AttributeError: "
-                    "'FakeStore' object has no attribute 'batch_pool'"
-                ),
-            }
+        result = _run(
+            wiki_maintenance.run_wiki_maintenance(
+                _FakeSqliteStore(), max_purges_per_axis=None
+            )
+        )
+
+        assert "source_backfill" not in result
+        assert "domain_backfill" not in result
+        assert "citation_seed" not in result
+        assert "lesson_promotion_backlog" not in result
+        assert result["status"] == "ok"
+
+    def test_present_on_a_store_with_batch_pool(self, monkeypatch) -> None:
+        _silence_everything_except_citation_seed(monkeypatch)
+
+        async def _fake_seed_pass(store, *, apply, limit):
+            return {"status": "ok", "journal": []}
 
         monkeypatch.setattr(
-            wiki_maintenance,
-            "run_wiki_citation_seed_pass",
-            _returns_error_without_raising,
+            wiki_maintenance, "run_wiki_citation_seed_pass", _fake_seed_pass
         )
 
         result = _run(
@@ -200,32 +217,48 @@ class TestCitationSeedWiring:
             )
         )
 
-        assert result["citation_seed"]["status"].startswith("error:")
-        assert result["status"].startswith("citation_seed_error")
+        assert result["source_backfill"]["status"] == "ok"
+        assert result["domain_backfill"]["status"] == "ok"
+        assert result["citation_seed"]["status"] == "ok"
+        assert result["lesson_promotion_backlog"] == 7
 
-    def test_skipped_status_does_not_escalate(self, monkeypatch) -> None:
-        """A named ``skipped: ...`` status (missing PG-only capability, the
-        expected SQLite degraded mode) is not an error and must leave the
-        overall cycle status ``ok``."""
+
+def _no_stanza_errored(result: dict, path: str = "") -> None:
+    """Recursively assert no ``status`` field anywhere in the result
+    starts with ``error:`` -- issue #636's own requested contract check."""
+    for key, value in result.items():
+        here = f"{path}.{key}" if path else key
+        if key == "status" and isinstance(value, str):
+            assert not value.startswith("error:"), f"{here} = {value!r}"
+        elif isinstance(value, dict):
+            _no_stanza_errored(value, here)
+
+
+class TestRealSqliteStoreContract:
+    """#636's own requested check: run the whole cycle against a real,
+    fresh SqliteMemoryStore built through the composition root, and
+    prove the PG-only passes are never reached at all (no AttributeError
+    disguised as a stanza status) rather than reached and caught."""
+
+    def test_no_stanza_errors_and_pg_only_keys_are_absent(self, monkeypatch) -> None:
         _silence_everything_except_citation_seed(monkeypatch)
 
-        async def _skips(store, *, apply, limit):
-            return {
-                "scanned_rows": 0,
-                "seeded": 0,
-                "already_cited": 0,
-                "skipped_race": 0,
-                "journal": [],
-                "status": "skipped: store has no batch_pool (non-PostgreSQL backend)",
-            }
+        from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 
-        monkeypatch.setattr(wiki_maintenance, "run_wiki_citation_seed_pass", _skips)
-
-        result = _run(
-            wiki_maintenance.run_wiki_maintenance(
-                _FakeStore(), max_purges_per_axis=None
+        fd, path = tempfile.mkstemp(suffix=".db")
+        os.close(fd)
+        store = SqliteMemoryStore(path)
+        try:
+            result = _run(
+                wiki_maintenance.run_wiki_maintenance(store, max_purges_per_axis=None)
             )
-        )
+        finally:
+            store.close()
+            os.remove(path)
 
-        assert result["citation_seed"]["status"].startswith("skipped:")
         assert result["status"] == "ok"
+        assert "source_backfill" not in result
+        assert "domain_backfill" not in result
+        assert "citation_seed" not in result
+        assert "lesson_promotion_backlog" not in result
+        _no_stanza_errored(result)

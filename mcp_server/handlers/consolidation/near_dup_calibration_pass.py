@@ -17,9 +17,6 @@ from mcp_server.shared.near_dup_calibration import (
     stratified_sample,
 )
 from mcp_server.shared.near_dup_calibration import bucket_by_stratum
-from mcp_server.handlers.consolidation.batch_pool_capability import (
-    batch_pool_skip_reason,
-)
 from mcp_server.infrastructure.pg_store_near_dup import (
     fetch_contents,
     list_candidate_pairs,
@@ -53,10 +50,6 @@ async def run_near_dup_sample(
         "sample": [],
         "status": "ok",
     }
-    skip_reason = batch_pool_skip_reason(store)
-    if skip_reason is not None:
-        out["status"] = f"skipped: {skip_reason}"
-        return out
     try:
         with store.batch_pool.connection() as conn:
             pairs = list_candidate_pairs(
@@ -163,10 +156,6 @@ async def run_near_dup_apply_pass(
         "review_queue": [],
         "status": "ok",
     }
-    skip_reason = batch_pool_skip_reason(store)
-    if skip_reason is not None:
-        out["status"] = f"skipped: {skip_reason}"
-        return out
     try:
         with store.batch_pool.connection() as conn:
             pairs = list_candidate_pairs(

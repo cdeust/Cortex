@@ -11,9 +11,6 @@ from __future__ import annotations
 import logging
 from typing import Any
 from mcp_server.observability import silent_failure
-from mcp_server.handlers.consolidation.batch_pool_capability import (
-    batch_pool_skip_reason,
-)
 from mcp_server.infrastructure.pg_store_lesson_promotion import (
     count_lesson_promotion_candidates,
 )
@@ -35,22 +32,16 @@ logger = logging.getLogger(__name__)
 def _lesson_promotion_backlog(store: Any) -> int | None:
     """Best-effort lesson-promotion candidate count; ``None`` on failure.
 
-    Precondition: none — degrades to ``None`` (not 0, so a caller can't
-    mistake "query failed" for "queue is empty") when ``store`` lacks
-    ``batch_pool`` (the SQLite backend, which has no lesson-promotion
-    table; this is its permanent degraded mode, not a test-only
-    fallback) or the query itself fails.
-    Postcondition: returns the exact eligible-candidate count on
-    success; never raises. A missing ``batch_pool`` is an expected,
-    silent ``None`` (no ``silent_failure.note`` — that would otherwise
-    fire, and increment ``cortex_silent_failures_total``, on every
-    ``consolidate`` run for the lifetime of a SQLite install); a query
-    that raises once ``batch_pool`` exists is a real failure and stays
-    observable.
+    Callable only when ``store.batch_pool`` exists: ``run_wiki_maintenance``
+    is this function's sole caller and gates it on that capability once,
+    at wiring time (issue #636) — this is a PostgreSQL-only table, and the
+    SQLite backend never reaches this function at all.
+    Precondition: ``store`` exposes ``batch_pool``.
+    Postcondition: returns the exact eligible-candidate count on success;
+    degrades to ``None`` (not 0, so a caller can't mistake "query failed"
+    for "queue is empty") when the query itself fails; never raises.
     """
 
-    if batch_pool_skip_reason(store) is not None:
-        return None
     try:
         with store.batch_pool.connection() as conn:
             return count_lesson_promotion_candidates(conn)
@@ -66,15 +57,14 @@ async def run_backlog_pass(store: Any) -> dict[str, Any]:
                     failing that, ``get_all_memories_for_decay``).
     Post-condition: returned dict carries ``cluster_jobs``,
                     ``coverage_gaps``, ``uncovered_files``,
-                    ``file_coverage_by_domain``, ``drifted_pages``,
-                    ``lesson_promotion_backlog`` (int or ``None`` on a
-                    degraded read — see ``_lesson_promotion_backlog``),
-                    and ``pending_total`` (the sum of the first four
-                    count fields — unchanged shape; ``lesson_promotion_
-                    backlog`` is intentionally excluded from this sum,
-                    it is a distinct queue with a distinct consumer
-                    tool, not a wiki-authoring job) — read-only, no rows
-                    written.
+                    ``file_coverage_by_domain``, ``drifted_pages``, and
+                    ``pending_total`` (the sum of those four count
+                    fields) — read-only, no rows written.
+                    ``lesson_promotion_backlog`` is NOT part of this
+                    dict: it is a PostgreSQL-only queue (see
+                    ``_lesson_promotion_backlog``) that
+                    ``run_wiki_maintenance`` populates itself, directly,
+                    only on a PostgreSQL-backed store (issue #636).
     """
 
     out: dict[str, Any] = {}
@@ -111,10 +101,6 @@ async def run_backlog_pass(store: Any) -> dict[str, Any]:
     # re-enumerate when it needs the actual job set.
     drifts = audit_wiki_drift(str(WIKI_ROOT), _project_source_root, limit=1000)
     out["drifted_pages"] = len(drifts)
-
-    # Mechanical report only (G-2) — never folded into pending_total,
-    # see this module's docstring and _lesson_promotion_backlog.
-    out["lesson_promotion_backlog"] = _lesson_promotion_backlog(store)
 
     out["pending_total"] = (
         out["cluster_jobs"]

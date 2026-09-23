@@ -15,9 +15,6 @@ import logging
 from typing import Any
 
 from mcp_server.shared.write_class import DELIBERATE, classify_write_class
-from mcp_server.handlers.consolidation.batch_pool_capability import (
-    batch_pool_skip_reason,
-)
 from mcp_server.infrastructure.pg_store_memory_write_class import (
     bulk_reclassify_source,
     list_source_groups_at_default,
@@ -83,10 +80,6 @@ async def run_write_class_backfill_pass(
         "journal": [],
         "status": "ok",
     }
-    skip_reason = batch_pool_skip_reason(store)
-    if skip_reason is not None:
-        out["status"] = f"skipped: {skip_reason}"
-        return out
     try:
         with store.batch_pool.connection() as conn:
             rows = list_source_groups_at_default(conn, limit)

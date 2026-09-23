@@ -24,9 +24,6 @@ from mcp_server.core.memory_domain_backfill import (
 )
 from mcp_server.shared.domain_mapping import resolve_cwd
 from mcp_server.handlers.backfill_helpers import slug_to_domain
-from mcp_server.handlers.consolidation.batch_pool_capability import (
-    batch_pool_skip_reason,
-)
 from mcp_server.infrastructure.pg_store_memory_domain import (
     tag_memory_orphan,
     update_memory_domain,
@@ -112,10 +109,6 @@ async def run_memory_domain_backfill_pass(
         "journal": [],
         "status": "ok",
     }
-    skip_reason = batch_pool_skip_reason(store)
-    if skip_reason is not None:
-        out["status"] = f"skipped: {skip_reason}"
-        return out
     try:
         with store.batch_pool.connection() as conn:
             rows = list_domainless_memories(

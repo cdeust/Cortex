@@ -26,7 +26,10 @@ from mcp_server.handlers.consolidation.wiki_citation_seed_pass import (
     DEFAULT_SEED_SCAN_LIMIT,
     run_wiki_citation_seed_pass,
 )
-from mcp_server.handlers.consolidation.wiki_backlog_pass import run_backlog_pass
+from mcp_server.handlers.consolidation.wiki_backlog_pass import (
+    _lesson_promotion_backlog,
+    run_backlog_pass,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -61,29 +64,6 @@ async def _invoke_wiki_purge(args: dict[str, Any]) -> dict[str, Any]:
     """Await the wiki_purge handler on the caller's event loop."""
 
     return await wiki_purge_handler(args)
-
-
-def _escalate_if_error(out: dict[str, Any], key: str, result: dict[str, Any]) -> None:
-    """Bump ``out['status']`` when a sub-pass RETURNED an error stanza.
-
-    Every wiki sub-pass below catches its own failures internally and
-    returns ``{"status": "error: ..."}`` rather than raising, so the
-    ``except`` block around each ``await`` (which only fires on a
-    *raise*) never saw these -- ``consolidate`` reported ``status: "ok"``
-    with four passes silently broken on every SQLite run (#636). This
-    checks the returned stanza too. A ``"skipped: ..."`` status (the
-    PG-only capability is simply absent -- SQLite's expected degraded
-    mode) is not an error and does not escalate.
-
-    source: ADR-1089
-    """
-    status = result.get("status") if isinstance(result, dict) else None
-    if (
-        isinstance(status, str)
-        and status.startswith("error:")
-        and out["status"] == "ok"
-    ):
-        out["status"] = f"{key}_error: {status[len('error: ') :]}"
 
 
 async def _run_purge_axis(
@@ -136,14 +116,22 @@ async def run_wiki_maintenance(
         Returns a dict with one stanza per axis (``stub`` / ``classifier``)
         each carrying ``{applied, purged, deferred, cap_reached, ...}`` plus
         a backlog stanza (``coverage_gaps``, ``cluster_jobs``,
-        ``pending_total``, ``lesson_promotion_backlog``), a
-        ``source_backfill`` stanza (``{pages_scanned, primaries_written,
-        by_source, status}``), a ``domain_backfill`` stanza
-        (``{pages_scanned, domains_reassigned, by_domain, status}``), and a
-        ``citation_seed`` stanza (``{scanned_rows, seeded, already_cited,
-        skipped_race, journal, status}``).
+        ``pending_total``).
+
+        Four keys exist ONLY when ``store`` is PostgreSQL-backed (has
+        ``batch_pool``), decided once here rather than defended against
+        per call site (issue #636): ``lesson_promotion_backlog`` (int),
+        a ``source_backfill`` stanza (``{pages_scanned,
+        primaries_written, by_source, status}``), a ``domain_backfill``
+        stanza (``{pages_scanned, domains_reassigned, by_domain,
+        status}``), and a ``citation_seed`` stanza (``{scanned_rows,
+        seeded, already_cited, skipped_race, journal, status}``). These
+        four features have no SQLite equivalent (their SQL is
+        Postgres-schema-qualified) and are simply absent from the
+        response on that backend, not reported as failed or skipped.
 
     source: ADR-0379"""
+    store_is_postgres = hasattr(store, "batch_pool")
     out: dict[str, Any] = {
         "stub": {
             "applied": apply_stubs,
@@ -226,46 +214,54 @@ async def run_wiki_maintenance(
         out["dashboards"] = {"status": f"error: {type(exc).__name__}: {exc}"}
 
     # source: ADR-0379
-    try:
-        out["source_backfill"] = await run_source_backfill_pass(
-            store, apply=not source_backfill_dry_run
-        )
-        _escalate_if_error(out, "source_backfill", out["source_backfill"])
-    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
-        logger.warning("wiki_maintenance: source backfill failed (non-fatal): %s", exc)
-        out["source_backfill"] = {"status": f"error: {type(exc).__name__}: {exc}"}
-        if out["status"] == "ok":
-            out["status"] = f"source_backfill_error: {type(exc).__name__}: {exc}"
+    # The four blocks below are PostgreSQL-only (issue #636): the store is
+    # checked once, here, rather than each pass catching its own
+    # AttributeError. A pass raising past this point is a real failure —
+    # the wiring above already ruled out "wrong backend" — and the
+    # except blocks are this function's only error boundary for them.
+    if store_is_postgres:
+        try:
+            out["source_backfill"] = await run_source_backfill_pass(
+                store, apply=not source_backfill_dry_run
+            )
+        except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
+            logger.warning(
+                "wiki_maintenance: source backfill failed (non-fatal): %s", exc
+            )
+            out["source_backfill"] = {"status": f"error: {type(exc).__name__}: {exc}"}
+            if out["status"] == "ok":
+                out["status"] = f"source_backfill_error: {type(exc).__name__}: {exc}"
 
-    # Domain backfill (Volet 4): re-derives true domain for catch-all pages.
-    try:
-        out["domain_backfill"] = await run_domain_backfill_pass(
-            store, apply=not domain_backfill_dry_run
-        )
-        _escalate_if_error(out, "domain_backfill", out["domain_backfill"])
-    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
-        logger.warning("wiki_maintenance: domain backfill failed (non-fatal): %s", exc)
-        out["domain_backfill"] = {"status": f"error: {type(exc).__name__}: {exc}"}
-        if out["status"] == "ok":
-            out["status"] = f"domain_backfill_error: {type(exc).__name__}: {exc}"
+        # Domain backfill (Volet 4): re-derives true domain for catch-all pages.
+        try:
+            out["domain_backfill"] = await run_domain_backfill_pass(
+                store, apply=not domain_backfill_dry_run
+            )
+        except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
+            logger.warning(
+                "wiki_maintenance: domain backfill failed (non-fatal): %s", exc
+            )
+            out["domain_backfill"] = {"status": f"error: {type(exc).__name__}: {exc}"}
+            if out["status"] == "ok":
+                out["status"] = f"domain_backfill_error: {type(exc).__name__}: {exc}"
 
-    # source: ADR-0379
-    try:
-        out["citation_seed"] = await run_wiki_citation_seed_pass(
-            store,
-            apply=apply_citation_seed,
-            limit=citation_seed_limit or DEFAULT_SEED_SCAN_LIMIT,
-        )
-        _escalate_if_error(out, "citation_seed", out["citation_seed"])
-    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
-        logger.warning(
-            "wiki_maintenance: citation seed pass failed (non-fatal): %s", exc
-        )
-        out["citation_seed"] = {"status": f"error: {type(exc).__name__}: {exc}"}
-        if out["status"] == "ok":
-            out["status"] = f"citation_seed_error: {type(exc).__name__}: {exc}"
+        try:
+            out["citation_seed"] = await run_wiki_citation_seed_pass(
+                store,
+                apply=apply_citation_seed,
+                limit=citation_seed_limit or DEFAULT_SEED_SCAN_LIMIT,
+            )
+        except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
+            logger.warning(
+                "wiki_maintenance: citation seed pass failed (non-fatal): %s", exc
+            )
+            out["citation_seed"] = {"status": f"error: {type(exc).__name__}: {exc}"}
+            if out["status"] == "ok":
+                out["status"] = f"citation_seed_error: {type(exc).__name__}: {exc}"
 
-    # Curation backlog.
+        out["lesson_promotion_backlog"] = _lesson_promotion_backlog(store)
+
+    # Curation backlog (filesystem-based, both backends).
     try:
         out.update(await run_backlog_pass(store))
     except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues

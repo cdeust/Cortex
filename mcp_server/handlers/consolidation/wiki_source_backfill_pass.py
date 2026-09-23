@@ -5,21 +5,15 @@ source: ADR-0380"""
 
 from __future__ import annotations
 
-import logging
 from typing import Any, Callable
 from mcp_server.core.wiki_drift import _file_exists_under
 from mcp_server.core.wiki_coverage import _project_source_root
 from mcp_server.core.wiki_source_backfill import derive_primary_source
-from mcp_server.handlers.consolidation.batch_pool_capability import (
-    batch_pool_skip_reason,
-)
 from mcp_server.infrastructure.pg_store_wiki_sources import (
     upsert_page_sources,
     list_pages_missing_source_link,
 )
 from mcp_server.infrastructure.pg_store_wiki_thermo import get_claim_file_refs_for_pages
-
-logger = logging.getLogger(__name__)
 
 # source: ADR-0380
 DEFAULT_BACKFILL_LIMIT = 500
@@ -70,9 +64,10 @@ async def run_source_backfill_pass(
     """Derive and persist ``documents_primary`` for pages that lack one.
 
     Pre-condition:  ``store`` exposes ``batch_pool``
-                    (``psycopg_pool.ConnectionPool``) — the long-running
-                    writer pool, matching how ``consolidate`` already
-                    borrows connections for other maintenance sweeps.
+                    (``psycopg_pool.ConnectionPool``), enforced by the
+                    sole caller ``run_wiki_maintenance`` once at wiring
+                    time (issue #636) — called without it, this raises
+                    ``AttributeError`` as a wiring bug, not caught here.
     Post-condition: for every scanned page where
                     ``core.wiki_source_backfill.derive_primary_source``
                     finds an unambiguous candidate, ``wiki.page_sources``
@@ -89,22 +84,14 @@ async def run_source_backfill_pass(
         "by_source": {},
         "status": "ok",
     }
-    skip_reason = batch_pool_skip_reason(store)
-    if skip_reason is not None:
-        out["status"] = f"skipped: {skip_reason}"
-        return out
-    try:
-        with store.batch_pool.connection() as conn:
-            pages = list_pages_missing_source_link(conn, limit=limit)
-            out["pages_scanned"] = len(pages)
-            if not pages:
-                return out
-            claim_refs = get_claim_file_refs_for_pages(conn, [p["id"] for p in pages])
-            for page in pages:
-                _process_one_page(
-                    conn, page, claim_refs.get(page["id"], []), apply=apply, out=out
-                )
-    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
-        logger.warning("wiki_source_backfill_pass failed (non-fatal): %s", exc)
-        out["status"] = f"error: {type(exc).__name__}: {exc}"
+    with store.batch_pool.connection() as conn:
+        pages = list_pages_missing_source_link(conn, limit=limit)
+        out["pages_scanned"] = len(pages)
+        if not pages:
+            return out
+        claim_refs = get_claim_file_refs_for_pages(conn, [p["id"] for p in pages])
+        for page in pages:
+            _process_one_page(
+                conn, page, claim_refs.get(page["id"], []), apply=apply, out=out
+            )
     return out

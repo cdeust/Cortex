@@ -10,9 +10,6 @@ from itertools import groupby
 from typing import Any
 
 from mcp_server.core.memory_dedup_exact import DuplicateMember, elect_survivor
-from mcp_server.handlers.consolidation.batch_pool_capability import (
-    batch_pool_skip_reason,
-)
 from mcp_server.infrastructure.pg_store_memory_dedup import (
     supersede_to_existing,
     list_exact_duplicate_groups,
@@ -102,10 +99,6 @@ async def run_memory_dedup_exact_pass(
         "journal": [],
         "status": "ok",
     }
-    skip_reason = batch_pool_skip_reason(store)
-    if skip_reason is not None:
-        out["status"] = f"skipped: {skip_reason}"
-        return out
     try:
         with store.batch_pool.connection() as conn:
             rows = list_exact_duplicate_groups(conn, limit)

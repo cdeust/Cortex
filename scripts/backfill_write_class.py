@@ -61,6 +61,13 @@ async def _run(apply: bool, limit: int) -> dict:
 
     settings = get_memory_settings()
     store = get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
+    if not hasattr(store, "batch_pool"):
+        print(
+            "This campaign requires a PostgreSQL-backed store (batch_pool); "
+            "the SQLite backend has no equivalent table for it.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     return await run_write_class_backfill_pass(store, apply=apply, limit=limit)
 
 

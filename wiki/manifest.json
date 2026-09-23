@@ -3516,9 +3516,9 @@
       "mirror": "ADR-1086-prime-project-memories-from-explicit-shell-file-cues.md",
       "path": "adr/cortex/1086-prime-project-memories-from-explicit-shell-file-cues.md"
     },
-    "ADR-1089": {
-      "mirror": "ADR-1089-named-skip-for-the-batch_pool-capability-gap-on-sqlite.md",
-      "path": "adr/cortex/1089-named-skip-for-the-batch_pool-capability-gap-on-sqlite.md"
+    "ADR-1090": {
+      "mirror": "ADR-1090-gate-pg-only-wiki-passes-once-at-wiring-time-instead-of-catching-their-attributeerror.md",
+      "path": "adr/cortex/1090-gate-pg-only-wiki-passes-once-at-wiring-time-instead-of-catching-their-attributeerror.md"
     }
   },
   "project": "cortex",

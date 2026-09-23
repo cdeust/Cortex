@@ -4,23 +4,17 @@ source: ADR-0377"""
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 from mcp_server.core.wiki_citation_seed import (
     SeedCandidate,
     SeedReliability,
     classify_seed_candidates,
 )
-from mcp_server.handlers.consolidation.batch_pool_capability import (
-    batch_pool_skip_reason,
-)
 from mcp_server.infrastructure.pg_store_wiki import insert_citation
 from mcp_server.infrastructure.pg_store_wiki_citation_seed import (
     list_existing_page_memory_citations,
     list_page_memory_seed_candidates,
 )
-
-logger = logging.getLogger(__name__)
 
 DEFAULT_SEED_SCAN_LIMIT = 5000
 
@@ -46,6 +40,12 @@ async def run_wiki_citation_seed_pass(
 ) -> dict[str, Any]:
     """Seed ``wiki.citations`` from ``wiki.pages.memory_id`` (HIGH tier only).
 
+    Callable only when ``store.batch_pool`` exists: ``run_wiki_maintenance``
+    is this pass's sole caller and gates it on that capability once, at
+    wiring time (issue #636). Calling this on a store without it is a
+    wiring bug, not a runtime condition, and raises ``AttributeError``
+    like any other precondition violation.
+
     source: ADR-0377"""
 
     out: dict[str, Any] = {
@@ -56,51 +56,43 @@ async def run_wiki_citation_seed_pass(
         "journal": [],
         "status": "ok",
     }
-    skip_reason = batch_pool_skip_reason(store)
-    if skip_reason is not None:
-        out["status"] = f"skipped: {skip_reason}"
-        return out
-    try:
-        with store.batch_pool.connection() as conn:
-            rows = list_page_memory_seed_candidates(conn, limit)
-            out["scanned_rows"] = len(rows)
-            candidates = _to_candidates(rows)
-            page_ids = [c.page_id for c in candidates]
-            existing_pairs = list_existing_page_memory_citations(conn, page_ids)
-            decisions = classify_seed_candidates(candidates, existing_pairs)
+    with store.batch_pool.connection() as conn:
+        rows = list_page_memory_seed_candidates(conn, limit)
+        out["scanned_rows"] = len(rows)
+        candidates = _to_candidates(rows)
+        page_ids = [c.page_id for c in candidates]
+        existing_pairs = list_existing_page_memory_citations(conn, page_ids)
+        decisions = classify_seed_candidates(candidates, existing_pairs)
 
-            for decision in decisions:
-                c = decision.candidate
-                if decision.action == "skip_existing":
-                    out["already_cited"] += 1
+        for decision in decisions:
+            c = decision.candidate
+            if decision.action == "skip_existing":
+                out["already_cited"] += 1
+                continue
+
+            new_id = None
+            if apply:
+                new_id = insert_citation(
+                    conn,
+                    page_id=c.page_id,
+                    session_id="",
+                    domain=c.domain,
+                    memory_id=c.memory_id,
+                )
+                if new_id is None:
+                    out["skipped_race"] += 1
                     continue
 
-                new_id = None
-                if apply:
-                    new_id = insert_citation(
-                        conn,
-                        page_id=c.page_id,
-                        session_id="",
-                        domain=c.domain,
-                        memory_id=c.memory_id,
-                    )
-                    if new_id is None:
-                        out["skipped_race"] += 1
-                        continue
-
-                out["seeded"] += 1
-                out["journal"].append(
-                    {
-                        "page_id": c.page_id,
-                        "memory_id": c.memory_id,
-                        "domain": c.domain,
-                        "reliability": c.reliability.value,
-                        "outcome": "seeded" if apply else "would_seed",
-                    }
-                )
-    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
-        logger.warning("wiki_citation_seed_pass failed (non-fatal): %s", exc)
-        out["status"] = f"error: {type(exc).__name__}: {exc}"
+            out["seeded"] += 1
+            out["journal"].append(
+                {
+                    "page_id": c.page_id,
+                    "memory_id": c.memory_id,
+                    "domain": c.domain,
+                    "reliability": c.reliability.value,
+                    "outcome": "seeded" if apply else "would_seed",
+                }
+            )
     return out
 
 
