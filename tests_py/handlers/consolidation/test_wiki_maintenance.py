@@ -15,6 +15,8 @@ from __future__ import annotations
 import asyncio
 
 from mcp_server.handlers.consolidation import wiki_maintenance
+from mcp_server.infrastructure import memory_store
+from mcp_server.infrastructure.memory_config import get_memory_settings
 
 
 def _run(coro):
@@ -24,7 +26,18 @@ def _run(coro):
 class _FakeStore:
     """Stand-in store; every sub-pass below is monkeypatched so this
     object's shape never actually matters to the passes it's threaded
-    through."""
+    through. Carries ``batch_pool`` so ``run_wiki_maintenance``'s own
+    backend gate (issue #636) treats it as PostgreSQL-backed and
+    actually invokes the mocked PG-only passes below -- without this,
+    the four PG-only stanzas would never be wired in these tests at
+    all, since gating now happens once, at the top of the function,
+    not per pass."""
+
+    batch_pool = object()
+
+
+class _FakeSqliteStore:
+    """Stand-in store with no ``batch_pool`` -- the SQLite shape."""
 
 
 def _silence_everything_except_citation_seed(monkeypatch) -> None:
@@ -65,11 +78,11 @@ def _silence_everything_except_citation_seed(monkeypatch) -> None:
             "coverage_gaps": 0,
             "uncovered_files": 0,
             "drifted_pages": 0,
-            "lesson_promotion_backlog": 0,
             "pending_total": 0,
         }
 
     monkeypatch.setattr(wiki_maintenance, "run_backlog_pass", _noop_backlog)
+    monkeypatch.setattr(wiki_maintenance, "_lesson_promotion_backlog", lambda store: 7)
 
 
 class TestCitationSeedWiring:
@@ -164,3 +177,124 @@ class TestCitationSeedWiring:
         assert result["status"].startswith("citation_seed_error")
         # Non-fatal: the function still returned a full dict, not raised.
         assert "pending_total" in result
+
+
+class TestLessonPromotionBacklogEscalation:
+    """#636 follow-up: a real query failure for lesson_promotion_backlog
+    must escalate ``out["status"]`` the same way the other three
+    PostgreSQL-only passes do, not degrade to a silent ``None`` with
+    ``status`` left ``ok``."""
+
+    def test_failure_escalates_status(self, monkeypatch) -> None:
+        _silence_everything_except_citation_seed(monkeypatch)
+
+        async def _fake_seed_pass(store, *, apply, limit):
+            return {"status": "ok", "journal": []}
+
+        monkeypatch.setattr(
+            wiki_maintenance, "run_wiki_citation_seed_pass", _fake_seed_pass
+        )
+
+        def _boom(store):
+            raise RuntimeError("PG connection reset")
+
+        monkeypatch.setattr(wiki_maintenance, "_lesson_promotion_backlog", _boom)
+
+        result = _run(
+            wiki_maintenance.run_wiki_maintenance(
+                _FakeStore(), max_purges_per_axis=None
+            )
+        )
+
+        assert result["lesson_promotion_backlog"] is None
+        assert result["status"].startswith("lesson_promotion_backlog_error")
+
+
+class TestPgOnlyStanzasGatedOnce:
+    """#636: the four PG-only stanzas (source_backfill, domain_backfill,
+    citation_seed, lesson_promotion_backlog) are wired once, at the top
+    of ``run_wiki_maintenance``, from whether ``store`` has
+    ``batch_pool`` -- not defended against per pass. On a store without
+    it they are absent from the response, never a "skipped" status."""
+
+    def test_absent_on_a_store_without_batch_pool(self, monkeypatch) -> None:
+        _silence_everything_except_citation_seed(monkeypatch)
+
+        result = _run(
+            wiki_maintenance.run_wiki_maintenance(
+                _FakeSqliteStore(), max_purges_per_axis=None
+            )
+        )
+
+        assert "source_backfill" not in result
+        assert "domain_backfill" not in result
+        assert "citation_seed" not in result
+        assert "lesson_promotion_backlog" not in result
+        assert result["status"] == "ok"
+
+    def test_present_on_a_store_with_batch_pool(self, monkeypatch) -> None:
+        _silence_everything_except_citation_seed(monkeypatch)
+
+        async def _fake_seed_pass(store, *, apply, limit):
+            return {"status": "ok", "journal": []}
+
+        monkeypatch.setattr(
+            wiki_maintenance, "run_wiki_citation_seed_pass", _fake_seed_pass
+        )
+
+        result = _run(
+            wiki_maintenance.run_wiki_maintenance(
+                _FakeStore(), max_purges_per_axis=None
+            )
+        )
+
+        assert result["source_backfill"]["status"] == "ok"
+        assert result["domain_backfill"]["status"] == "ok"
+        assert result["citation_seed"]["status"] == "ok"
+        assert result["lesson_promotion_backlog"] == 7
+
+
+def _no_stanza_errored(result: dict, path: str = "") -> None:
+    """Recursively assert no ``status`` field anywhere in the result
+    starts with ``error:`` -- issue #636's own requested contract check."""
+    for key, value in result.items():
+        here = f"{path}.{key}" if path else key
+        if key == "status" and isinstance(value, str):
+            assert not value.startswith("error:"), f"{here} = {value!r}"
+        elif isinstance(value, dict):
+            _no_stanza_errored(value, here)
+
+
+class TestRealSqliteStoreContract:
+    """#636's own requested check: run the whole cycle against a real
+    store built through get_shared_store's actual backend-selection path
+    (not a direct SqliteMemoryStore(...) construction, which would skip
+    that selection logic -- exactly what this bug was about), and prove
+    the PG-only passes are never reached (no AttributeError disguised as
+    a stanza status)."""
+
+    def test_no_stanza_errors_and_pg_only_keys_are_absent(
+        self, tmp_path, monkeypatch
+    ) -> None:
+        _silence_everything_except_citation_seed(monkeypatch)
+
+        monkeypatch.setenv("CORTEX_MEMORY_STORE_BACKEND", "sqlite")
+        memory_store.reset_shared_store()
+        get_memory_settings.cache_clear()
+        try:
+            store = memory_store.get_shared_store(
+                db_path=str(tmp_path / "wiki_maintenance_contract.db")
+            )
+            result = _run(
+                wiki_maintenance.run_wiki_maintenance(store, max_purges_per_axis=None)
+            )
+        finally:
+            memory_store.reset_shared_store()
+            get_memory_settings.cache_clear()
+
+        assert result["status"] == "ok"
+        assert "source_backfill" not in result
+        assert "domain_backfill" not in result
+        assert "citation_seed" not in result
+        assert "lesson_promotion_backlog" not in result
+        _no_stanza_errored(result)

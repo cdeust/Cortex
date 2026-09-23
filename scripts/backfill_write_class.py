@@ -55,12 +55,14 @@ from mcp_server.handlers.consolidation.write_class_backfill_pass import (  # noq
 )
 from mcp_server.infrastructure.memory_config import get_memory_settings  # noqa: E402
 from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: E402
+from mcp_server.shared.campaign_store_guard import require_postgres_store  # noqa: E402
 
 
 async def _run(apply: bool, limit: int) -> dict:
 
     settings = get_memory_settings()
     store = get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
+    require_postgres_store(store)
     return await run_write_class_backfill_pass(store, apply=apply, limit=limit)
 
 

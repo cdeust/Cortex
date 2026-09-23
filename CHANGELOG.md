@@ -6,6 +6,46 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The SQLite backend now installs sqlite-vec on every platform, and a
+  memory is never mislabelled as having a vector it doesn't have (#634).**
+  Neither the plugin launcher's runtime dependency pins nor `scripts/setup.py`'s
+  install closure (`requirements/setup.txt`) ever named the `[sqlite]` extra —
+  only `postgresql`, `codebase` and `benchmarks` were installed, unconditionally,
+  regardless of which backend was chosen. The zero-config SQLite default
+  therefore ran with vector search silently disabled (FTS-only) on every
+  install, reported by `check_setup`/`doctor` as fully ready. Separately,
+  `SqliteMemoryStore` stamped `embedding_model='neural'` on a memory whether
+  or not its vector actually persisted, so a memory written while sqlite-vec
+  was unavailable could be mislabelled as vector-backed and never resurface
+  for repair. Fixed: `sqlite-vec` is now part of the base install set and of
+  `requirements/setup.txt`'s generated closure; existing installs self-heal
+  on next launch; the store now stamps `'neural'` only after the vector
+  itself is confirmed written (`'fallback'` keeps stamping unconditionally,
+  per its own pre-existing contract), and the re-embed worklist self-heals
+  any row a prior install already mislabelled; `doctor`/`check_setup`'s
+  vector-search check is required, not optional, since sqlite-vec now ships
+  by default.
+- **A failed `scripts/setup.py` no longer discards the plugin's backend
+  decision (#633).** `install-plugin.sh` wrote `~/.claude/methodology/backend.json`
+  only after running `scripts/setup.py`, guarded by `|| fail ...`. Any setup
+  failure (a Windows torch/torchaudio conflict, a network blip during
+  dependency install) discarded a correctly-chosen SQLite backend; on the
+  next launch, the missing marker left the engine on its "auto" default,
+  which requires PostgreSQL under the plugin's `CORTEX_RUNTIME=""` (resolves
+  to "cli") setting — silently turning a zero-config SQLite install into a
+  hard PostgreSQL requirement with none ever provisioned to satisfy it.
+  Fixed: the marker now persists immediately after the backend is decided,
+  before setup can fail and exit. Separately, `scripts/setup.py`'s
+  `cache_embedding_model()` and its macOS/Linux twin
+  `scripts/lib/precache_embedding_model.sh` now isolate their child process
+  from user site-packages the same way `scripts/launcher.py` already does
+  (issue #621), closing the one remaining gap that could still abort the
+  embedding-model pre-cache on a conflicting environment; and
+  `scripts/setup.py`'s dependency-check step now reports a `[FAIL]` row
+  instead of crashing outright when that class of import failure occurs.
+
 ## [4.23.4] - 2026-09-23
 
 ### Documentation

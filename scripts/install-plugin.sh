@@ -133,29 +133,19 @@ else
 fi
 say "Backend: $BACKEND"
 
-# source: ADR-0740
-if [ "$BACKEND" = "sqlite" ]; then
-    run_setup_py env CORTEX_MEMORY_STORE_BACKEND=sqlite \
-        "$PY" "$PLUGIN_ROOT/scripts/setup.py" \
-        || fail "scripts/setup.py failed. ${SETUP_PY_FAILURE} Re-run manually: CORTEX_MEMORY_STORE_BACKEND=sqlite \"$PY\" \"$PLUGIN_ROOT/scripts/setup.py\""
-else
-    case "$(uname -s)" in
-        MINGW*|MSYS*|CYGWIN*)
-            say "Detected Windows ($(uname -s)) — delegating to cross-platform scripts/setup.py"
-            run_setup_py "$PY" "$PLUGIN_ROOT/scripts/setup.py" \
-                || fail "scripts/setup.py failed. ${SETUP_PY_FAILURE} Re-run manually: \"$PY\" \"$PLUGIN_ROOT/scripts/setup.py\". If a PostgreSQL check is among them, install PostgreSQL (https://www.postgresql.org/download/windows/) plus pgvector (https://github.com/pgvector/pgvector#windows) and start the PostgreSQL service first."
-            ;;
-        Darwin|Linux)
-            bash "$PLUGIN_ROOT/scripts/setup.sh"
-            ;;
-        *)
-            fail "Unsupported OS: $(uname -s). Cortex supports macOS, Linux, and Windows (via Git Bash). To retry manually once you've confirmed your shell environment, run: \"$PY\" \"$PLUGIN_ROOT/scripts/setup.py\" (cross-platform) — see also https://github.com/cdeust/Cortex#readme"
-            ;;
-    esac
+# Remember what the marker said before we overwrite it: if BACKEND is a
+# switch away from a previously-persisted, presumably-working backend and
+# the new backend's setup then fails, we must restore the old value
+# rather than leave the marker pointing at a backend that was never
+# actually stood up (that reproduces issue #633's own bug in reverse).
+# source: issue #638
+PREVIOUS_BACKEND=""
+if [ -f "$MARKER_PATH" ]; then
+    PREVIOUS_BACKEND=$(sed -n 's/.*"backend"[[:space:]]*:[[:space:]]*"\([a-z]*\)".*/\1/p' "$MARKER_PATH" 2>/dev/null | head -1)
 fi
 
-# Persist only the backend name; resolve the marker path with Path.home() inside Python.
-# source: ADR-0740
+# Resolve the marker path with Path.home() inside Python.
+# source: ADR-1088
 MARKER_WRITTEN=$(CORTEX_BACKEND_MARKER_VALUE="$BACKEND" \
 CORTEX_BACKEND_MARKER_VERSION="$CURRENT_VERSION" "$PY" -c "
 import json, os, pathlib
@@ -169,6 +159,50 @@ path.write_text(json.dumps({
 print(path)
 ") || warn "could not persist backend marker (launcher falls back to auto)"
 [ -n "$MARKER_WRITTEN" ] && say "Backend persisted: $BACKEND -> $MARKER_WRITTEN"
+
+# Only meaningful when PREVIOUS_BACKEND was a real, different, prior
+# choice: a fresh install (no prior marker) or a same-backend reinstall
+# both leave nothing to restore, which is issue #633's own exact case
+# and must stay untouched by this.
+# source: issue #638
+restore_previous_marker() {
+    if [ -n "$PREVIOUS_BACKEND" ] && [ "$PREVIOUS_BACKEND" != "$BACKEND" ]; then
+        CORTEX_BACKEND_MARKER_VALUE="$PREVIOUS_BACKEND" \
+        CORTEX_BACKEND_MARKER_VERSION="$CURRENT_VERSION" "$PY" -c "
+import json, os, pathlib
+path = pathlib.Path.home() / '.claude' / 'methodology' / 'backend.json'
+path.write_text(json.dumps({
+    'backend': os.environ['CORTEX_BACKEND_MARKER_VALUE'],
+    'written_by': 'install-plugin.sh (restored after failed backend switch)',
+    'plugin_version': os.environ['CORTEX_BACKEND_MARKER_VERSION'],
+}, indent=2) + '\n', encoding='utf-8')
+" 2>/dev/null || true
+        warn "Backend switch to $BACKEND failed — restored working marker to $PREVIOUS_BACKEND"
+    fi
+}
+
+# source: ADR-0740
+if [ "$BACKEND" = "sqlite" ]; then
+    run_setup_py env CORTEX_MEMORY_STORE_BACKEND=sqlite \
+        "$PY" "$PLUGIN_ROOT/scripts/setup.py" \
+        || { restore_previous_marker; fail "scripts/setup.py failed. ${SETUP_PY_FAILURE} Re-run manually: CORTEX_MEMORY_STORE_BACKEND=sqlite \"$PY\" \"$PLUGIN_ROOT/scripts/setup.py\""; }
+else
+    case "$(uname -s)" in
+        MINGW*|MSYS*|CYGWIN*)
+            say "Detected Windows ($(uname -s)) — delegating to cross-platform scripts/setup.py"
+            run_setup_py "$PY" "$PLUGIN_ROOT/scripts/setup.py" \
+                || { restore_previous_marker; fail "scripts/setup.py failed. ${SETUP_PY_FAILURE} Re-run manually: \"$PY\" \"$PLUGIN_ROOT/scripts/setup.py\". If a PostgreSQL check is among them, install PostgreSQL (https://www.postgresql.org/download/windows/) plus pgvector (https://github.com/pgvector/pgvector#windows) and start the PostgreSQL service first."; }
+            ;;
+        Darwin|Linux)
+            bash "$PLUGIN_ROOT/scripts/setup.sh" \
+                || { restore_previous_marker; fail "scripts/setup.sh failed while switching to PostgreSQL."; }
+            ;;
+        *)
+            restore_previous_marker
+            fail "Unsupported OS: $(uname -s). Cortex supports macOS, Linux, and Windows (via Git Bash). To retry manually once you've confirmed your shell environment, run: \"$PY\" \"$PLUGIN_ROOT/scripts/setup.py\" (cross-platform) — see also https://github.com/cdeust/Cortex#readme"
+            ;;
+    esac
+fi
 
 # ── Phase 2: prune stale OTHER versions ────────────────────────────────
 

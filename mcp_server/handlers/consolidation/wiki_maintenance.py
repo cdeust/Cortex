@@ -26,7 +26,10 @@ from mcp_server.handlers.consolidation.wiki_citation_seed_pass import (
     DEFAULT_SEED_SCAN_LIMIT,
     run_wiki_citation_seed_pass,
 )
-from mcp_server.handlers.consolidation.wiki_backlog_pass import run_backlog_pass
+from mcp_server.handlers.consolidation.wiki_backlog_pass import (
+    _lesson_promotion_backlog,
+    run_backlog_pass,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -113,14 +116,24 @@ async def run_wiki_maintenance(
         Returns a dict with one stanza per axis (``stub`` / ``classifier``)
         each carrying ``{applied, purged, deferred, cap_reached, ...}`` plus
         a backlog stanza (``coverage_gaps``, ``cluster_jobs``,
-        ``pending_total``, ``lesson_promotion_backlog``), a
-        ``source_backfill`` stanza (``{pages_scanned, primaries_written,
-        by_source, status}``), a ``domain_backfill`` stanza
-        (``{pages_scanned, domains_reassigned, by_domain, status}``), and a
-        ``citation_seed`` stanza (``{scanned_rows, seeded, already_cited,
-        skipped_race, journal, status}``).
+        ``pending_total``).
+
+        Four keys exist ONLY when ``store`` is PostgreSQL-backed (has
+        ``batch_pool``), decided once here rather than defended against
+        per call site (issue #636): ``lesson_promotion_backlog`` (int on
+        success, ``None`` with ``status`` escalated to
+        ``lesson_promotion_backlog_error: ...`` on a genuine query
+        failure), a ``source_backfill`` stanza (``{pages_scanned,
+        primaries_written, by_source, status}``), a ``domain_backfill``
+        stanza (``{pages_scanned, domains_reassigned, by_domain,
+        status}``), and a ``citation_seed`` stanza (``{scanned_rows,
+        seeded, already_cited, skipped_race, journal, status}``). These
+        four features have no SQLite equivalent (their SQL is
+        Postgres-schema-qualified) and are simply absent from the
+        response on that backend, not reported as failed or skipped.
 
     source: ADR-0379"""
+    store_is_postgres = hasattr(store, "batch_pool")
     out: dict[str, Any] = {
         "stub": {
             "applied": apply_stubs,
@@ -203,43 +216,65 @@ async def run_wiki_maintenance(
         out["dashboards"] = {"status": f"error: {type(exc).__name__}: {exc}"}
 
     # source: ADR-0379
-    try:
-        out["source_backfill"] = await run_source_backfill_pass(
-            store, apply=not source_backfill_dry_run
-        )
-    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
-        logger.warning("wiki_maintenance: source backfill failed (non-fatal): %s", exc)
-        out["source_backfill"] = {"status": f"error: {type(exc).__name__}: {exc}"}
-        if out["status"] == "ok":
-            out["status"] = f"source_backfill_error: {type(exc).__name__}: {exc}"
+    # The four blocks below are PostgreSQL-only (issue #636): the store is
+    # checked once, here, rather than each pass catching its own
+    # AttributeError. A pass raising past this point is a real failure —
+    # the wiring above already ruled out "wrong backend" — and the
+    # except blocks are this function's only error boundary for them.
+    if store_is_postgres:
+        try:
+            out["source_backfill"] = await run_source_backfill_pass(
+                store, apply=not source_backfill_dry_run
+            )
+        except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
+            logger.warning(
+                "wiki_maintenance: source backfill failed (non-fatal): %s", exc
+            )
+            out["source_backfill"] = {"status": f"error: {type(exc).__name__}: {exc}"}
+            if out["status"] == "ok":
+                out["status"] = f"source_backfill_error: {type(exc).__name__}: {exc}"
 
-    # Domain backfill (Volet 4): re-derives true domain for catch-all pages.
-    try:
-        out["domain_backfill"] = await run_domain_backfill_pass(
-            store, apply=not domain_backfill_dry_run
-        )
-    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
-        logger.warning("wiki_maintenance: domain backfill failed (non-fatal): %s", exc)
-        out["domain_backfill"] = {"status": f"error: {type(exc).__name__}: {exc}"}
-        if out["status"] == "ok":
-            out["status"] = f"domain_backfill_error: {type(exc).__name__}: {exc}"
+        # Domain backfill (Volet 4): re-derives true domain for catch-all pages.
+        try:
+            out["domain_backfill"] = await run_domain_backfill_pass(
+                store, apply=not domain_backfill_dry_run
+            )
+        except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
+            logger.warning(
+                "wiki_maintenance: domain backfill failed (non-fatal): %s", exc
+            )
+            out["domain_backfill"] = {"status": f"error: {type(exc).__name__}: {exc}"}
+            if out["status"] == "ok":
+                out["status"] = f"domain_backfill_error: {type(exc).__name__}: {exc}"
 
-    # source: ADR-0379
-    try:
-        out["citation_seed"] = await run_wiki_citation_seed_pass(
-            store,
-            apply=apply_citation_seed,
-            limit=citation_seed_limit or DEFAULT_SEED_SCAN_LIMIT,
-        )
-    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
-        logger.warning(
-            "wiki_maintenance: citation seed pass failed (non-fatal): %s", exc
-        )
-        out["citation_seed"] = {"status": f"error: {type(exc).__name__}: {exc}"}
-        if out["status"] == "ok":
-            out["status"] = f"citation_seed_error: {type(exc).__name__}: {exc}"
+        try:
+            out["citation_seed"] = await run_wiki_citation_seed_pass(
+                store,
+                apply=apply_citation_seed,
+                limit=citation_seed_limit or DEFAULT_SEED_SCAN_LIMIT,
+            )
+        except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
+            logger.warning(
+                "wiki_maintenance: citation seed pass failed (non-fatal): %s", exc
+            )
+            out["citation_seed"] = {"status": f"error: {type(exc).__name__}: {exc}"}
+            if out["status"] == "ok":
+                out["status"] = f"citation_seed_error: {type(exc).__name__}: {exc}"
 
-    # Curation backlog.
+        try:
+            out["lesson_promotion_backlog"] = _lesson_promotion_backlog(store)
+        except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
+            logger.warning(
+                "wiki_maintenance: lesson promotion backlog failed (non-fatal): %s",
+                exc,
+            )
+            out["lesson_promotion_backlog"] = None
+            if out["status"] == "ok":
+                out["status"] = (
+                    f"lesson_promotion_backlog_error: {type(exc).__name__}: {exc}"
+                )
+
+    # Curation backlog (filesystem-based, both backends).
     try:
         out.update(await run_backlog_pass(store))
     except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues

@@ -177,12 +177,12 @@ SETS: tuple[ConstraintSet, ...] = (
     ),
     ConstraintSet(
         filename="setup.txt",
-        consumers=("scripts/setup.sh",),
-        extras=("postgresql", "codebase", "benchmarks"),
+        consumers=("scripts/setup.sh", "scripts/setup.py"),
+        extras=("postgresql", "sqlite", "codebase", "benchmarks"),
         note=(
             "Replaces a hand-written package list that had already drifted from"
             " pyproject.toml. The benchmarks extra is what carries datasets,"
-            " which that list installed."
+            " which that list installed. sqlite extra: see ADR-1089."
         ),
     ),
 )

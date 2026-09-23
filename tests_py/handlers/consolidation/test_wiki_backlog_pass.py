@@ -8,6 +8,8 @@ this file isolates the one new mechanical field.
 
 from __future__ import annotations
 
+import pytest
+
 from mcp_server.handlers.consolidation import wiki_backlog_pass
 
 
@@ -54,14 +56,19 @@ class TestLessonPromotionBacklog:
 
         assert result == 133
 
-    def test_degrades_to_none_when_store_lacks_batch_pool(self) -> None:
-        # No monkeypatch of the count function needed — the AttributeError
-        # on `.batch_pool` fires before it would ever be called.
-        result = wiki_backlog_pass._lesson_promotion_backlog(_StoreWithoutPool())
+    def test_raises_when_store_lacks_batch_pool(self) -> None:
+        """#636: calling this without ``batch_pool`` is a wiring bug (the
+        sole caller, ``run_wiki_maintenance``, gates on it once) and
+        raises rather than degrading to a silent ``None``."""
+        with pytest.raises(AttributeError):
+            wiki_backlog_pass._lesson_promotion_backlog(_StoreWithoutPool())
 
-        assert result is None
+    def test_raises_on_query_failure(self, monkeypatch) -> None:
+        """A genuine query failure propagates to the caller's own error
+        boundary (``run_wiki_maintenance``'s try/except) instead of
+        being swallowed here -- the same shape as the other three
+        PostgreSQL-only passes."""
 
-    def test_degrades_to_none_on_query_failure(self, monkeypatch) -> None:
         def _boom(conn):
             raise RuntimeError("PG connection reset")
 
@@ -69,13 +76,11 @@ class TestLessonPromotionBacklog:
             wiki_backlog_pass, "count_lesson_promotion_candidates", _boom
         )
 
-        result = wiki_backlog_pass._lesson_promotion_backlog(_StoreWithPool())
+        with pytest.raises(RuntimeError):
+            wiki_backlog_pass._lesson_promotion_backlog(_StoreWithPool())
 
-        assert result is None
-
-    def test_zero_is_a_valid_distinct_result_from_none(self, monkeypatch) -> None:
-        """None means 'query failed'; 0 means 'queue is genuinely empty' —
-        callers must be able to tell these apart."""
+    def test_zero_is_a_valid_result(self, monkeypatch) -> None:
+        """The queue being genuinely empty is a normal 0, not an error."""
         monkeypatch.setattr(
             wiki_backlog_pass, "count_lesson_promotion_candidates", lambda conn: 0
         )
@@ -83,4 +88,3 @@ class TestLessonPromotionBacklog:
         result = wiki_backlog_pass._lesson_promotion_backlog(_StoreWithPool())
 
         assert result == 0
-        assert result is not None

@@ -25,6 +25,8 @@ class Engine:
 
 
 class UpgradeStore:
+    has_vec = True  # source: ADR-1089 — satisfies _FallbackWorklistStore
+
     def __init__(self, rows):
         self.rows = rows
         self.reembedded = []

@@ -121,10 +121,14 @@ schema = {
                     "Run autonomous wiki maintenance: purge stub pages, "
                     "report classifier-reject count, reconcile missing "
                     "wiki.citations rows (HIGH-reliability tier only), "
-                    "and update the curation backlog (including the "
-                    "lesson_promotion candidate count). Default true — "
+                    "and update the curation backlog. Default true — "
                     "the wiki must stay up-to-date without a human in "
-                    "the loop. Set false only when debugging consolidate."
+                    "the loop. Set false only when debugging consolidate. "
+                    "source_backfill, domain_backfill, citation_seed and "
+                    "lesson_promotion_backlog appear in the response only "
+                    "on a PostgreSQL-backed store: they have no SQLite "
+                    "equivalent and are simply absent on that backend, "
+                    "not reported as failed or skipped (issue #636)."
                 ),
                 "default": True,
             },

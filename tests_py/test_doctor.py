@@ -99,6 +99,10 @@ class TestBackendAwareChecks:
         assert check.ok is True
         assert "memories" in check.detail
 
+    # _sqlite_vector_search's own tests live in
+    # test_doctor_sqlite_vector_search.py (source: ADR-1089) — kept out of
+    # this file to stay under the 300-line cap.
+
 
 @pytest.fixture
 def real_git_repo(tmp_path):
