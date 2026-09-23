@@ -49,3 +49,14 @@ candidate hook definitions and their reviewed hashes, spawn a child without
 parent-history inheritance, read the cue file, then inspect the child developer
 context, database heat, session log and queue receipt. Backend selection must be
 explicit in hooks and in any MCP server used by the test.
+
+## Published-artifact follow-up
+
+The published wheel matched all 659 runtime Python files at release commit
+`c8827be`. A subsequent native run under a macOS `/var/folders` project alias
+confirmed briefing delivery and durable SessionEnd, but its file-cue memory
+remained at 0.3. Priming resolved the query project to `/private/var/folders`
+while the explicitly attached memory retained `/var/folders`. Issue #629 records
+this mismatch; 4.23.3 preserves the stored project identity for scope queries and
+uses the same identity in cooldown keys. Three focused regressions fail on 4.23.2 and
+pass with that correction on both PostgreSQL and SQLite.

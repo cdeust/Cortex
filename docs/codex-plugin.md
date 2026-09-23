@@ -29,7 +29,7 @@ console script the wheel declares (`hypermnesia-mcp-hook`, `pyproject.toml`,
 added in #605):
 
 ```bash
-uvx --from "hypermnesia-mcp[postgresql,sqlite]==4.23.2" hypermnesia-mcp-hook <module>
+uvx --from "hypermnesia-mcp[postgresql,sqlite]==4.23.4" hypermnesia-mcp-hook <module>
 ```
 
 `mcp_server/hooks/entry.py` validates `<module>` against `HOOK_MODULES`, wires
@@ -196,6 +196,9 @@ before loading memory settings. `CORTEX_CLAUDE_DIR` relocates that shared
 configuration root. Explicit `CORTEX_MEMORY_STORE_BACKEND`, then
 `CORTEX_BACKEND`, then a non-empty `DATABASE_URL` or
 `CORTEX_MEMORY_DATABASE_URL` take precedence over the saved selection.
+The Codex hook entry uses the same store factory when no backend or URL is
+configured. It selects the backend before running a hook, so automatic context
+reads use the SQLite fallback that the MCP server selected on a fresh install.
 
 Without a saved selection or explicit backend, Cortex keeps its existing
 `auto` behavior: PostgreSQL first, then SQLite only when no explicit PostgreSQL
@@ -207,7 +210,7 @@ settings to share memories; this does not merge previously separate stores.
 A prewarm downloads the package before restarting Codex:
 
 ```bash
-uv tool install "hypermnesia-mcp[postgresql,sqlite]==4.23.2"
+uv tool install "hypermnesia-mcp[postgresql,sqlite]==4.23.4"
 ```
 
 For the MCP server this is only a startup optimization, `startup_timeout_sec`
@@ -230,7 +233,7 @@ The bundled MCP command is equivalent to:
 
 ```bash
 env CORTEX_RUNTIME=cowork \
-  uvx --from "hypermnesia-mcp[postgresql,sqlite]==4.23.2" \
+  uvx --from "hypermnesia-mcp[postgresql,sqlite]==4.23.4" \
   hypermnesia-mcp
 ```
 

@@ -8,26 +8,54 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- **The SQLite backend now installs sqlite-vec on every platform (#634).**
+- **The SQLite backend now installs sqlite-vec on every platform, and a
+  memory is never mislabelled as having a vector it doesn't have (#634).**
   Neither the plugin launcher's runtime dependency pins nor `scripts/setup.py`'s
   install closure (`requirements/setup.txt`) ever named the `[sqlite]` extra —
   only `postgresql`, `codebase` and `benchmarks` were installed, unconditionally,
   regardless of which backend was chosen. The zero-config SQLite default
   therefore ran with vector search silently disabled (FTS-only) on every
-  install, reported by `check_setup`/`doctor` as fully ready. A memory whose
-  vector was computed but never persisted (because sqlite-vec was absent at
-  write time) could also never resurface for re-embedding once sqlite-vec was
-  installed afterward, since the re-embed worklist matched only on the
-  `embedding_model='fallback'` label. Fixed: `sqlite-vec` is now part of the
-  base install set and of `requirements/setup.txt`'s generated closure;
-  existing installs self-heal on next launch (`ensure_deps`'s pin-satisfaction
-  check picks up the new pin automatically); the re-embed worklist also
-  matches embedded-but-vectorless rows; `doctor`/`check_setup` report an
-  optional vector-search check that distinguishes "package not installed"
-  from "installed but this Python's sqlite3 cannot load extensions"; and when
-  the store cannot persist vectors at all, the `embedding_upgrade`
-  consolidation counter's result also carries `vectors_persisted: 0` and a
-  reason, so "upgraded: N" is never misread as "N vectors written".
+  install, reported by `check_setup`/`doctor` as fully ready. Separately,
+  `SqliteMemoryStore` stamped `embedding_model='neural'` on a memory whether
+  or not its vector actually persisted, so a memory written while sqlite-vec
+  was unavailable could be mislabelled as vector-backed and never resurface
+  for repair. Fixed: `sqlite-vec` is now part of the base install set and of
+  `requirements/setup.txt`'s generated closure; existing installs self-heal
+  on next launch; the store now stamps `'neural'` only after the vector
+  itself is confirmed written (`'fallback'` keeps stamping unconditionally,
+  per its own pre-existing contract), and the re-embed worklist self-heals
+  any row a prior install already mislabelled; `doctor`/`check_setup`'s
+  vector-search check is required, not optional, since sqlite-vec now ships
+  by default.
+
+## [4.23.4] - 2026-09-23
+
+### Documentation
+
+- Describe native Codex memory capabilities directly alongside Claude Code,
+  including automatic context, capture, checkpoints and shared project memory.
+  Remove stale pre-fix limitations and explain hook trust during installation
+  and updates.
+- Publish native macOS verification traces for Claude-to-Codex and Codex-to-Claude
+  memory retrieval, project-scoped exclusion, and automatic startup context in
+  both hosts. The report names the exact tested versions and includes sanitized
+  tool responses and transcript hashes (#632).
+
+## [4.23.3] - 2026-09-22
+
+### Fixed
+
+- Codex lifecycle hooks use the MCP storage factory when no backend is configured,
+  so automatic context reads the same SQLite store after PostgreSQL fallback.
+  Explicit database targets and saved backend selections retain precedence.
+  The MCP store also treats `CORTEX_MEMORY_DATABASE_URL` as an explicit target
+  and refuses an unrequested SQLite fallback when that target is unavailable.
+- Preserve the explicitly attached project directory when priming memories from
+  file reads through a symlink alias. Previously, a memory stored under a macOS
+  `/var/folders` path was missed because priming queried `/private/var/folders`.
+  Project scope and cooldown keys now preserve the same directory identity, so
+  a read through one alias cannot suppress another scope. Both storage backends
+  retain foreign-project isolation (#629).
 
 ## [4.23.2] - 2026-09-22
 

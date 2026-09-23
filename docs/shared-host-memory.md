@@ -95,7 +95,7 @@ separation is a routing check, not an authorization boundary.
 
 ### Test liveness policy
 
-The test harness uses 30-second bootstrap and protocol deadlines, a 90-second
+The test runner uses 30-second bootstrap and protocol deadlines, a 90-second
 MCP scenario deadline, and 5 seconds per shutdown stage. These are engineering
 time budgets to fail stalled tests and clean up children before the existing
 300-second pytest ceiling, not algorithm constants or latency benchmarks.
@@ -106,10 +106,10 @@ and the craftsmanship gate passed. The store protocol test uses POSIX pipe
 selection; these results do not establish Windows coverage. Independent review
 approved the change after subprocess deadlines and cleanup were added.
 
-## Next acceptance step
+## Installed-host verification
 
-Run the released or explicitly checkout-backed server through both installed
-hosts against a disposable store. Verify the configured roots, available
-tools, decision creation, exact retrieval, and outcome handoff. Only then
-assess packaging changes and a public directory submission. No live host
-configuration, personal memory data, or marketplace listing is changed here.
+The [22 September 2026 native verification report](verification/claude-codex-handoff-2026-09-22/README.md)
+records passing Claude-to-Codex and Codex-to-Claude memory handoffs on macOS,
+with lookup-only read prompts and negative project-scope checks. Both installed
+hosts also delivered Cortex context through their native SessionStart hooks.
+The report includes exact versions and sanitized tool traces.

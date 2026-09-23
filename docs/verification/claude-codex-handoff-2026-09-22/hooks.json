@@ -1,0 +1,89 @@
+{
+  "codex": {
+    "session_id": "01a0cb28-66ee-7bf0-add7-e78913482b21",
+    "automatic_developer_context": [
+      {
+        "heading": "## Cortex Memory Context \u27e6rcpt:2412\u27e7",
+        "context_sha256": "1bffb730312f341178c1e457a4d794d3990dd68ec19cc8e3dfa077dc9dd740c3"
+      }
+    ],
+    "hook_package": "4.23.3",
+    "trust": "Exact current hashes approved by user; all 12 entries verified trusted",
+    "raw_transcript_sha256": "a7203f8f6ffd8ecfc288fdca469efd1b04f53439c8da254d4a2f6be4326d8431",
+    "persisted_trust": [
+      {
+        "event": "preToolUse",
+        "status": "trusted",
+        "definition_hash": "sha256:1e53c20247e89079a100bc0cb1a7a234ddcd8c32242ca97e8b8335673d805bfe"
+      },
+      {
+        "event": "preToolUse",
+        "status": "trusted",
+        "definition_hash": "sha256:368afcb79b2828a16a25b230a691149aa4a255ddd48bac550c3a6a585413a761"
+      },
+      {
+        "event": "preToolUse",
+        "status": "trusted",
+        "definition_hash": "sha256:470858bd2c53eb4b09fb5cc4251f78222f9be815e9694f4dbc830b93d8958bcc"
+      },
+      {
+        "event": "postToolUse",
+        "status": "trusted",
+        "definition_hash": "sha256:5e24d250a707ae31f13c17d8d7022d59b3f74557dab053d2d6e576e24aeb598b"
+      },
+      {
+        "event": "postToolUse",
+        "status": "trusted",
+        "definition_hash": "sha256:11ee5994ff7a2e7b186e1b21fe5ac2e7a9b9722966e192654eac8070f606ce8c"
+      },
+      {
+        "event": "postToolUse",
+        "status": "trusted",
+        "definition_hash": "sha256:485885e4fdee6cfb04351572050c2ddbbbc5489d2d99e77e4ac390998987a8d9"
+      },
+      {
+        "event": "postToolUse",
+        "status": "trusted",
+        "definition_hash": "sha256:17fe42ef111cd7811e97910d9cc2eae33afa7ccb749964e7268dba4cc9beef0a"
+      },
+      {
+        "event": "preCompact",
+        "status": "trusted",
+        "definition_hash": "sha256:f7341fb5e8bcfdf8f2b3f8da8f4da847e87be6b76851366a64d84667aeded7c1"
+      },
+      {
+        "event": "sessionStart",
+        "status": "trusted",
+        "definition_hash": "sha256:6b857bb6047fd6303e7c9a047099b4bd804b54a49329cdf84d0935f603407dd6"
+      },
+      {
+        "event": "sessionEnd",
+        "status": "trusted",
+        "definition_hash": "sha256:0848c713df1de1145bf5adb7c23d25560f831eec46c3a5d4802c4d89f93d6d74"
+      },
+      {
+        "event": "userPromptSubmit",
+        "status": "trusted",
+        "definition_hash": "sha256:fc1013d14d38df25f3774960048cf6a1789fc766cef11995c20ba0ce644cd202"
+      },
+      {
+        "event": "subagentStart",
+        "status": "trusted",
+        "definition_hash": "sha256:915b87efed98dbce4d7e8bc7c723734e037af7843f34f537cc53c14a1b8b63f1"
+      }
+    ]
+  },
+  "claude": {
+    "automatic_session_start_hook_response": true,
+    "raw_stream_sha256": "70ae5d4bf50b3e1ca74f28080a03f71dfc894a3834a2ddbb16fc176e485aab77",
+    "hook_name": "SessionStart:startup",
+    "exit_code": 0,
+    "session_id": "c2d1b619-7122-426c-b76c-f310d813ca1f",
+    "hook_package": "4.23.2"
+  },
+  "checks": {
+    "codex_native_startup_context": "PASS",
+    "claude_native_startup_context": "PASS"
+  },
+  "privacy": "Memory contents omitted; headings and hashes retain the context-delivery trace."
+}

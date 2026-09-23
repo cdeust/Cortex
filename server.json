@@ -6,13 +6,13 @@
     "url": "https://github.com/cdeust/Cortex",
     "source": "github"
   },
-  "version": "4.23.2",
+  "version": "4.23.4",
   "websiteUrl": "https://ai-architect.tools",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "hypermnesia-mcp",
-      "version": "4.23.2",
+      "version": "4.23.4",
       "transport": {
         "type": "stdio"
       }

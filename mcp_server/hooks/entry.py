@@ -61,21 +61,44 @@ def prepare_environment(
     Precondition: ``environ`` is mutable (normally ``os.environ``).
     Postcondition: ``CORTEX_MEMORY_STORE_BACKEND`` carries whatever
     ``apply_backend_resolution`` resolves (mirrors ``mcp_server/__main__.py``
-    line 22 for the server). ``DATABASE_URL`` is set to the local default
-    only when both URL aliases are unset AND the resolved backend is not ``sqlite``
-    (mirrors ``scripts/launcher.py`` lines 135-139) -- on the SQLite backend
-    the URL is unused, and injecting a PostgreSQL default would make every
-    hook invocation attempt a doomed connection. A configured namespaced URL
-    is promoted to DATABASE_URL so raw-SQL hooks and the shared store use the
-    same destination (DATABASE_URL takes precedence, as in memory_store).
+    line 22 for the server). A configured namespaced URL is promoted to
+    ``DATABASE_URL``. Claude's explicit PostgreSQL path retains its launcher
+    default; Codex's unconfigured cowork auto path defers that default until
+    the shared store factory has selected the live backend.
     """
     apply_backend_resolution(environ, marker_path)
     backend = environ.get("CORTEX_MEMORY_STORE_BACKEND", "")
     if "DATABASE_URL" not in environ and backend != "sqlite":
-        environ["DATABASE_URL"] = (
-            environ.get("CORTEX_MEMORY_DATABASE_URL", "").strip()
-            or _DEFAULT_DATABASE_URL
-        )
+        named_url = environ.get("CORTEX_MEMORY_DATABASE_URL", "").strip()
+        if named_url:
+            environ["DATABASE_URL"] = named_url
+        elif backend not in {"", "auto"} or environ.get("CORTEX_RUNTIME") != "cowork":
+            environ["DATABASE_URL"] = _DEFAULT_DATABASE_URL
+
+
+def resolve_auto_backend(environ: MutableMapping[str, str]) -> None:
+    """Use the MCP store factory's actual auto-selection for Codex hooks.
+
+    source: ADR-0535 — the factory owns PostgreSQL validation and SQLite
+    fallback, including schema/driver failures that a connection probe misses.
+    """
+    if environ.get("CORTEX_RUNTIME") != "cowork":
+        return
+    if environ.get("CORTEX_MEMORY_STORE_BACKEND", "") not in {"", "auto"}:
+        return
+    if environ.get("DATABASE_URL") or environ.get("CORTEX_MEMORY_DATABASE_URL"):
+        return
+
+    from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: PLC0415 — backend must resolve after environment preparation
+    from mcp_server.infrastructure.memory_config import get_memory_settings  # noqa: PLC0415 — use the factory's selected URL
+    from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore  # noqa: PLC0415 — backend must resolve after environment preparation
+
+    store = get_shared_store()
+    if isinstance(store, SqliteMemoryStore):
+        environ["CORTEX_MEMORY_STORE_BACKEND"] = "sqlite"
+    else:
+        environ["CORTEX_MEMORY_STORE_BACKEND"] = "postgresql"
+        environ["DATABASE_URL"] = get_memory_settings().DATABASE_URL
 
 
 def _print_usage() -> None:
@@ -109,7 +132,9 @@ def main() -> None:
         _print_usage()
         sys.exit(2)
 
+    os.environ.setdefault("CORTEX_RUNTIME", "cowork")
     prepare_environment(os.environ)
+    resolve_auto_backend(os.environ)
 
     from mcp_server.hooks.wiring import wire_composition_root  # noqa: PLC0415 - issue number 560, same seam as scripts/launcher.py:153
 
