@@ -13,10 +13,10 @@ doesn't need to re-mock the whole orchestration surface.
 from __future__ import annotations
 
 import asyncio
-import os
-import tempfile
 
 from mcp_server.handlers.consolidation import wiki_maintenance
+from mcp_server.infrastructure import memory_store
+from mcp_server.infrastructure.memory_config import get_memory_settings
 
 
 def _run(coro):
@@ -266,26 +266,31 @@ def _no_stanza_errored(result: dict, path: str = "") -> None:
 
 
 class TestRealSqliteStoreContract:
-    """#636's own requested check: run the whole cycle against a real,
-    fresh SqliteMemoryStore built through the composition root, and
-    prove the PG-only passes are never reached at all (no AttributeError
-    disguised as a stanza status) rather than reached and caught."""
+    """#636's own requested check: run the whole cycle against a real
+    store built through get_shared_store's actual backend-selection path
+    (not a direct SqliteMemoryStore(...) construction, which would skip
+    that selection logic -- exactly what this bug was about), and prove
+    the PG-only passes are never reached (no AttributeError disguised as
+    a stanza status)."""
 
-    def test_no_stanza_errors_and_pg_only_keys_are_absent(self, monkeypatch) -> None:
+    def test_no_stanza_errors_and_pg_only_keys_are_absent(
+        self, tmp_path, monkeypatch
+    ) -> None:
         _silence_everything_except_citation_seed(monkeypatch)
 
-        from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
-
-        fd, path = tempfile.mkstemp(suffix=".db")
-        os.close(fd)
-        store = SqliteMemoryStore(path)
+        monkeypatch.setenv("CORTEX_MEMORY_STORE_BACKEND", "sqlite")
+        memory_store.reset_shared_store()
+        get_memory_settings.cache_clear()
         try:
+            store = memory_store.get_shared_store(
+                db_path=str(tmp_path / "wiki_maintenance_contract.db")
+            )
             result = _run(
                 wiki_maintenance.run_wiki_maintenance(store, max_purges_per_axis=None)
             )
         finally:
-            store.close()
-            os.remove(path)
+            memory_store.reset_shared_store()
+            get_memory_settings.cache_clear()
 
         assert result["status"] == "ok"
         assert "source_backfill" not in result

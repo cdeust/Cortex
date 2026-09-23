@@ -36,19 +36,14 @@ from mcp_server.handlers.consolidation.memory_dedup_exact_pass import (  # noqa:
 )
 from mcp_server.infrastructure.memory_config import get_memory_settings  # noqa: E402
 from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: E402
+from mcp_server.shared.campaign_store_guard import require_postgres_store  # noqa: E402
 
 
 async def _run(apply: bool, limit: int) -> dict:
 
     settings = get_memory_settings()
     store = get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
-    if not hasattr(store, "batch_pool"):
-        print(
-            "This campaign requires a PostgreSQL-backed store (batch_pool); "
-            "the SQLite backend has no equivalent table for it.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+    require_postgres_store(store)
     return await run_memory_dedup_exact_pass(store, apply=apply, limit=limit)
 
 
