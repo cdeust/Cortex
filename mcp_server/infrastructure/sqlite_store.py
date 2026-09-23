@@ -393,9 +393,9 @@ class SqliteMemoryStore(
             (memory_id, _fts_augment(content)),
         )
         embedding = data.get("embedding")
-        if embedding is not None:
-            # source: ADR-0605
-            self._stamp_embedding_model(memory_id, data.get("embedding_model"))
+        if embedding is not None:  # source: ADR-1089
+            model = data.get("embedding_model") or current_embedding_mode()
+            persisted = False
             if self._has_vec:
                 vec = self._bytes_to_vector(embedding)
                 if vec is not None:
@@ -403,6 +403,9 @@ class SqliteMemoryStore(
                         "INSERT INTO memories_vec(rowid, embedding) VALUES (?, ?)",
                         (memory_id, vec.tobytes()),
                     )
+                    persisted = True
+            if model != "neural" or persisted:
+                self._stamp_embedding_model(memory_id, model)
         return memory_id
 
     def insert_memory(self, data: dict[str, Any]) -> int:
@@ -711,12 +714,14 @@ class SqliteMemoryStore(
         self._conn.commit()
 
     def _stamp_embedding_model(self, memory_id: int, model: str | None) -> None:
-        """precondition: ``memory_id`` refers to a just-written vec row.
-                postcondition: ``memories.embedding_model`` is set to ``model`` when
-                given, else to the process-wide engine mode
-                (``current_embedding_mode``). This is the single tag the vector search
-                reads to keep 'neural' and 'fallback' vectors — incompatible geometries
-                — from cross-ranking.
+        """precondition: ``model`` (or, when falsy, ``current_embedding_mode()``)
+                is ``'neural'`` only when a vec row was just written for
+                ``memory_id`` -- every caller now enforces this (source:
+                ADR-1089); ``'fallback'`` carries no such requirement (see
+                that ADR for why the two differ).
+                postcondition: ``memories.embedding_model`` is set to ``model``;
+                the tag vector search reads to keep 'neural'/'fallback'
+                geometries from cross-ranking.
 
         source: ADR-0605"""
         if not model:
@@ -736,22 +741,15 @@ class SqliteMemoryStore(
         """Return current memories that need a (re-)embed.
 
         precondition: ``limit`` > 0.
-                postcondition: returns up to ``limit`` ``{memory_id, content}`` dicts,
-                hottest first — the re-embedding worklist that upgrades a store
-                transparently once the neural model becomes available. Two
-                classes of row qualify: those tagged ``embedding_model='fallback'``
-                (the encoder ran without the real model), and — only when the vec
-                store is present — those with a non-empty ``embedding_model`` but
-                no row in ``memories_vec``, i.e. a vector that was computed but
-                never persisted because sqlite-vec was unavailable when the
-                memory was written. The second class is what makes a store
-                self-repairing once sqlite-vec is installed after the fact:
-                without it, a memory correctly labelled 'neural' but missing its
-                vector would never resurface (issue #634). Empty when the column
-                is absent or nothing qualifies.
+                postcondition: returns up to ``limit`` ``{memory_id, content}``
+                dicts, hottest first. Matches ``embedding_model='fallback'``
+                rows, plus -- one-time self-heal for installs affected by
+                issue #634 before its fix, see ADR-1089 -- any vectorless row
+                a stamp-then-write bug left mislabelled 'neural'. Empty when
+                the column is absent or nothing qualifies.
 
         source: ADR-0605
-        source: issue #634"""
+        source: ADR-1089"""
         vec_gap = (
             " OR (embedding_model != '' AND id NOT IN (SELECT rowid FROM memories_vec))"
             if self._has_vec
@@ -770,28 +768,28 @@ class SqliteMemoryStore(
 
     def reembed_memory(self, memory_id: int, embedding: bytes | None) -> None:
         """precondition: ``embedding`` was produced by the current process encoder.
-                postcondition: the vec row is replaced (when the vec store is present)
-                and ``embedding_model`` is restamped to the current mode — so a
-                fallback-tagged memory becomes 'neural' once the model is available,
-                without touching content or the compression flags. No-op for a None
-                embedding. Commits.
+                postcondition: the vec row is replaced and ``embedding_model``
+                restamped to the current mode, IFF the vec write itself
+                succeeds -- a fallback-tagged memory becomes 'neural' only
+                once its vector actually lands, never a restamp with no
+                vector behind it. No-op for a None embedding or when the
+                vec store is absent. Commits.
 
-        source: ADR-0605"""
-        if embedding is None:
+        source: ADR-1089"""
+        if embedding is None or not self._has_vec:
             return
-        if self._has_vec:
-            vec = self._bytes_to_vector(embedding)
-            if vec is not None:
-                try:
-                    self._conn.execute(
-                        "DELETE FROM memories_vec WHERE rowid = ?", (memory_id,)
-                    )
-                    self._conn.execute(
-                        "INSERT INTO memories_vec(rowid, embedding) VALUES (?, ?)",
-                        (memory_id, vec.tobytes()),
-                    )
-                except Exception as exc:  # noqa: BLE001 — row keeps its old vector on failure
-                    silent_failure.note("sqlite_store.vec_index_update", exc)
+        vec = self._bytes_to_vector(embedding)
+        if vec is None:
+            return
+        try:
+            self._conn.execute("DELETE FROM memories_vec WHERE rowid = ?", (memory_id,))
+            self._conn.execute(
+                "INSERT INTO memories_vec(rowid, embedding) VALUES (?, ?)",
+                (memory_id, vec.tobytes()),
+            )
+        except Exception as exc:  # noqa: BLE001 — row keeps its old vector on failure
+            silent_failure.note("sqlite_store.vec_index_update", exc)
+            return
         self._stamp_embedding_model(memory_id, None)
         self._conn.commit()
 
@@ -861,9 +859,9 @@ class SqliteMemoryStore(
             "INSERT INTO memories_fts(rowid, content) VALUES (?, ?)",
             (memory_id, _fts_augment(content)),
         )
-        # source: ADR-0605
-        if embedding is not None:
-            self._stamp_embedding_model(memory_id, None)
+        if embedding is not None:  # source: ADR-1089
+            model = current_embedding_mode()
+            persisted = False
             if self._has_vec:
                 vec = self._bytes_to_vector(embedding)
                 if vec is not None:
@@ -877,6 +875,10 @@ class SqliteMemoryStore(
                         )
                     except Exception as exc:  # noqa: BLE001 — row keeps its old vector on failure
                         silent_failure.note("sqlite_store.vec_index_update", exc)
+                    else:
+                        persisted = True
+            if model != "neural" or persisted:
+                self._stamp_embedding_model(memory_id, model)
         self._conn.commit()
 
     # ── Row normalization ─────────────────────────────────────────────

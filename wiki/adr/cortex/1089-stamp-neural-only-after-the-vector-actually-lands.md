@@ -1,0 +1,133 @@
+---
+created: 2026-09-23T02:00:00Z
+kind: adr
+number: 1089
+status: accepted
+tags: [sqlite, sqlite-vec, embedding, issue-634]
+title: Stamp 'neural' only after the vector actually lands
+---
+# ADR-1089: Stamp 'neural' only after the vector actually lands
+
+## Status
+
+accepted
+
+## Context
+
+The SQLite backend is Cortex's zero-config default. Its vector (semantic)
+search depends on the sqlite-vec extension, declared in pyproject.toml's
+`[sqlite]` extra. Neither dependency-install path the plugin actually
+uses (`launcher_pins.py::BASE_PACKAGES`, installed on every hook/session
+launch; `requirements/setup.txt`, installed by `scripts/setup.py`) ever
+named that extra -- only the PostgreSQL drivers were installed
+unconditionally. Consequence (issue #634, reported on Windows by a
+non-developer end user, billothewild): the SQLite backend ran with
+vector search silently disabled, on every install, on every OS, while
+`doctor`/`check_setup` reported the store fully ready.
+
+That install-list gap is real and was fixed in this same branch: `sqlite-vec`
+now joins `BASE_PACKAGES` and `requirements/setup.txt`'s generated closure,
+pinned to `0.1.9`. It is not this ADR's subject.
+
+This ADR is about a second, deeper defect the install-list fix alone does
+not close, found on review of this branch's first attempt: `SqliteMemoryStore`
+stamps `memories.embedding_model` regardless of whether the vector it
+describes was actually persisted. `_insert_memory_rows`, `reembed_memory`,
+and `update_memory_compression` each call `_stamp_embedding_model`
+unconditionally whenever an embedding is present, whether or not
+`self._has_vec` is true or the vec INSERT itself succeeds. A memory
+written while sqlite-vec is unavailable (the exact population issue #634
+describes) gets stamped `'neural'` with no row in `memories_vec` behind
+it -- `_stamp_embedding_model`'s own docstring already stated the
+precondition every caller violated: "memory_id refers to a just-written
+vec row."
+
+Two further defects follow directly from the mislabelling. First,
+`select_fallback_embeddings`'s worklist matched only
+`embedding_model = 'fallback'`, so a memory mislabelled `'neural'` with
+no vector could never resurface for repair once sqlite-vec became
+available -- fixed on this branch by also matching rows with a non-empty
+`embedding_model` and no `memories_vec` row, a self-heal sweep. Second,
+`run_embedding_upgrade_cycle` (the consolidation cycle that drives that
+worklist) restamped a recoverable `'fallback'` row to `'neural'` even
+when `has_vec` was false, permanently discarding the one honest signal
+(`'fallback'`) that the row still needed a real embedding, and reported
+`upgraded: N` with no way for a caller to know zero vectors were
+actually written.
+
+An initial version of this fix on this branch treated the defect as
+"stamp only after a persisted vector, period," and moved the stamp call
+inside `if self._has_vec:` in all three writers uniformly. That broke a
+different, deliberately-tested contract from issue #169
+(`test_embedding_model_stamped_fallback`, module docstring: "embedding_model
+is stamped UNCONDITIONALLY on remember -- 'fallback' even when sqlite-vec
+is absent"): the re-embed worklist keys on `embedding_model = 'fallback'`
+specifically to find memories that still need a real embedding, and a
+fallback-encoded memory with no vector is exactly what that worklist must
+keep finding. Reviewed and corrected before landing.
+
+## Decision
+
+The tag has two readings that were tangled into one write path.
+`'fallback'` records which encoder ran; the worklist keys on it, and a
+fallback memory with no vector must still surface for upgrade, so it
+stamps unconditionally -- issue #169's contract stands. `'neural'` is
+read elsewhere (`sqlite_store_search.py::_vec_rows_in_query_space`, the
+mixed-store cross-rank filter) as a claim that a neural vector exists;
+stamping it with no vector behind it is issue #634's actual bug, in one
+word: `'neural'` stamped without a vector.
+
+In `_insert_memory_rows` and `update_memory_compression`, the resolved
+model name and whether the vec write actually succeeded are computed
+once, and the stamp is written when `model != "neural" or persisted`:
+`'fallback'` always stamps; `'neural'` stamps only when
+`memories_vec` genuinely received the row. `reembed_memory` needed no
+such split -- its only caller, `run_embedding_upgrade_cycle`, now checks
+`store.has_vec` once before calling it at all (see below), so by the
+time `reembed_memory` runs, a persisted vector is already guaranteed.
+
+`run_embedding_upgrade_cycle` gains `has_vec` on the `_FallbackWorklistStore`
+Protocol (source: ADR-0358) and returns `{"upgraded": 0, "reason": ...}`
+before encoding or restamping anything when `has_vec` is false --
+touching nothing is the correct behavior for a cycle that cannot persist
+what it would compute, not a reason to restamp and report the gap after
+the fact. The `vectors_persisted` field this branch's first version
+added to paper over that restamping is deleted entirely; there is
+nothing left for it to report.
+
+`select_fallback_embeddings`'s widened worklist query (the `NOT IN
+memories_vec` sweep) is kept. Once the stamp fix lands, no production
+write path can produce a `'neural'`-without-vector row going forward, so
+the sweep's job going forward is a one-time migration: self-heal for
+installs whose database already carries rows the pre-fix bug wrote
+before this patch shipped -- a real, non-hypothetical population (the
+issue's own reporter measured 86 such rows on their machine).
+
+`_sqlite_vector_search` (`mcp_server/doctor.py`) changes from
+`optional=True` to `optional=False`: sqlite-vec now ships in every
+install's base package set, so its absence or a load failure is a broken
+install, not a supported degraded mode, and `doctor`/`check_setup` should
+say so.
+
+## Consequences
+
+Positive: `embedding_model` means what each value claims. `'fallback'`
+still means "encoded without the real model, needs upgrade" and keeps
+finding its worklist. `'neural'` means "a neural vector exists,"
+verifiably, everywhere it is read (the worklist, the cross-rank filter).
+A genuinely broken SQLite vector-search install is now reported by
+`doctor` as broken, not silently degraded. The self-heal sweep repairs
+every row the pre-fix bug already corrupted, on the next consolidate
+cycle, with no manual intervention.
+
+Negative: three call sites in `sqlite_store.py` now carry a small
+`model != "neural" or persisted` branch instead of an unconditional
+stamp -- one more thing a future writer of a fourth call site must get
+right, since the rule lives at each call site, not inside
+`_stamp_embedding_model` itself (its own precondition docstring states
+the rule; it does not enforce it). `_try_load_vec` (the method that logs
+INFO and sets `has_vec=False` when the extension fails to load) is
+unchanged by this ADR: hardening it to raise at store-open time would
+change startup behavior on interpreters without loadable-extension
+support (common on macOS system/Framework Python) -- that is a decision
+for the maintainer, not bundled into this fix.

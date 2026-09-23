@@ -9,7 +9,7 @@
 #   scripts/setup.sh
 #   scripts/setup.py
 #
-# Replaces a hand-written package list that had already drifted from pyproject.toml. The benchmarks extra is what carries datasets, which that list installed. sqlite extra: see ADR-1087.
+# Replaces a hand-written package list that had already drifted from pyproject.toml. The benchmarks extra is what carries datasets, which that list installed. sqlite extra: see ADR-1089.
 ##########################################################################
 # An extra index widens where pip may look, which is normally how
 # dependency-confusion attacks land. It is safe HERE and only here

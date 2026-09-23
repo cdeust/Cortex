@@ -3516,9 +3516,9 @@
       "mirror": "ADR-1086-prime-project-memories-from-explicit-shell-file-cues.md",
       "path": "adr/cortex/1086-prime-project-memories-from-explicit-shell-file-cues.md"
     },
-    "ADR-1087": {
-      "mirror": "ADR-1087-install-sqlite-vec-unconditionally-on-every-plugin-install.md",
-      "path": "adr/cortex/1087-install-sqlite-vec-unconditionally-on-every-plugin-install.md"
+    "ADR-1089": {
+      "mirror": "ADR-1089-stamp-neural-only-after-the-vector-actually-lands.md",
+      "path": "adr/cortex/1089-stamp-neural-only-after-the-vector-actually-lands.md"
     }
   },
   "project": "cortex",

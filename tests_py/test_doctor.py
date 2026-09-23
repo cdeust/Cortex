@@ -23,7 +23,6 @@ from mcp_server.doctor import (
     _pg_driver,
     _python_version,
     _sqlite_store,
-    _sqlite_vector_search,
     _worktree_locations,
     _worktree_classification,
     active_checks,
@@ -100,44 +99,9 @@ class TestBackendAwareChecks:
         assert check.ok is True
         assert "memories" in check.detail
 
-    def test_sqlite_vector_search_is_optional_and_in_sqlite_checks(
-        self, tmp_path, monkeypatch
-    ):
-        # source: issue #634 — must never fail doctor on its own; FTS-only
-        # search is a supported degraded mode.
-        from mcp_server.infrastructure import memory_config
-
-        assert _sqlite_vector_search in SQLITE_CHECKS
-        monkeypatch.setenv(
-            "CORTEX_MEMORY_SQLITE_FALLBACK_PATH", str(tmp_path / "memory.db")
-        )
-        memory_config.get_memory_settings.cache_clear()
-        try:
-            check = _sqlite_vector_search()
-        finally:
-            memory_config.get_memory_settings.cache_clear()
-        assert check.optional is True
-
-    def test_sqlite_vector_search_names_missing_package_distinctly(
-        self, tmp_path, monkeypatch
-    ):
-        """Package absent must report a different fix than extension-load
-        failure — the two need opposite remedies (reinstall vs. different
-        Python build)."""
-        from mcp_server.infrastructure import memory_config
-
-        monkeypatch.setenv(
-            "CORTEX_MEMORY_SQLITE_FALLBACK_PATH", str(tmp_path / "memory.db")
-        )
-        monkeypatch.setitem(sys.modules, "sqlite_vec", None)  # force ImportError
-        memory_config.get_memory_settings.cache_clear()
-        try:
-            check = _sqlite_vector_search()
-        finally:
-            memory_config.get_memory_settings.cache_clear()
-        assert check.ok is False
-        assert "not installed" in check.detail
-        assert "launcher" in check.fix or "install-deps" in check.fix
+    # _sqlite_vector_search's own tests live in
+    # test_doctor_sqlite_vector_search.py (source: ADR-1089) — kept out of
+    # this file to stay under the 300-line cap.
 
 
 @pytest.fixture

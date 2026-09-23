@@ -129,6 +129,25 @@ def test_embedding_model_stamped_fallback(fallback_engine, store):
     assert row["embedding_model"] == "fallback"
 
 
+def test_neural_stamp_withheld_without_a_persisted_vector(fallback_engine, store):
+    """Issue #634 in one word: 'neural' claims a vector exists.
+    'fallback' carries no such claim (previous test) and stamps
+    regardless; 'neural' must not, when has_vec is False."""
+    store._has_vec = False
+    eng = fallback_engine
+    mid = store.insert_memory(
+        {
+            "content": "would-be neural row",
+            "embedding": eng.encode("would-be neural row"),
+            "embedding_model": "neural",
+        }
+    )
+    row = store._conn.execute(
+        "SELECT embedding_model FROM memories WHERE id = ?", (mid,)
+    ).fetchone()
+    assert row["embedding_model"] == ""
+
+
 def test_select_fallback_embeddings_worklist(fallback_engine, store):
     eng = fallback_engine
     store.insert_memory(
@@ -300,11 +319,11 @@ def test_consolidate_reports_embedding_upgrade(fallback_engine, store):
     assert "reason" in out
 
 
-def test_embedding_upgrade_flags_vectors_not_persisted_when_has_vec_false(
-    monkeypatch, store
-):
-    """'upgraded: N' must not be read as 'N vectors written' when the store
-    cannot persist vectors at all — the exact shape of issue #634 defect 4."""
+def test_embedding_upgrade_skips_entirely_when_has_vec_false(monkeypatch, store):
+    """The cycle must not restamp a fallback memory to 'neural' with no
+    vector behind it (issue #634's stamp-before-write defect): it now
+    refuses to touch anything when the store cannot persist vectors,
+    rather than restamping and reporting the gap after the fact."""
     from mcp_server.handlers.consolidation.embedding_upgrade import (
         run_embedding_upgrade_cycle,
     )
@@ -326,9 +345,12 @@ def test_embedding_upgrade_flags_vectors_not_persisted_when_has_vec_false(
         # Simulate sqlite-vec unavailable, e.g. the reporter's environment.
         store._has_vec = False
         result = run_embedding_upgrade_cycle(store, neural)
-        assert result["upgraded"] == 1
-        assert result["vectors_persisted"] == 0
-        assert "reason" in result
+        assert result == {
+            "upgraded": 0,
+            "reason": "store cannot persist vectors (has_vec=False)",
+        }
+        # Untouched: the fallback memory is still exactly where it was.
+        assert len(store.select_fallback_embeddings(limit=10)) == 1
     finally:
         ef._singleton = saved
 

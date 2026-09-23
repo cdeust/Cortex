@@ -182,7 +182,7 @@ SETS: tuple[ConstraintSet, ...] = (
         note=(
             "Replaces a hand-written package list that had already drifted from"
             " pyproject.toml. The benchmarks extra is what carries datasets,"
-            " which that list installed. sqlite extra: see ADR-1087."
+            " which that list installed. sqlite extra: see ADR-1089."
         ),
     ),
 )

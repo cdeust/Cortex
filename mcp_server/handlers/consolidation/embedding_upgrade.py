@@ -22,10 +22,14 @@ class _FallbackWorklistStore(Protocol):
 
     The SQLite store implements it; PgMemoryStore intentionally does not
     (PG installs always have the neural encoder), so absence is the
-    designed degraded mode — named, not silent. runtime_checkable
-    isinstance resolves members statically (3.12+ getattr_static), which
-    real stores and test fakes with real methods both satisfy.
+    designed degraded mode -- named, not silent. ``has_vec`` is checked
+    separately (source: ADR-1089): a store can satisfy this Protocol's
+    methods while its vec extension is unavailable, and re-embedding
+    without a place to persist the vector is pointless work, not a
+    degraded mode of this cycle.
     """
+
+    has_vec: bool
 
     def select_fallback_embeddings(self, limit: int = ...) -> list[dict]: ...
 
@@ -37,30 +41,24 @@ def run_embedding_upgrade_cycle(
 ) -> dict[str, Any]:
     """Re-embed up to ``_MAX_UPGRADE_PER_CYCLE`` fallback memories with neural.
 
-    postcondition: returns ``{"upgraded": n}`` (and a ``reason`` when it skips).
-    Only runs when the encoder currently resolves to the neural model; each
-    upgraded memory is re-embedded and restamped 'neural' via
-    ``store.reembed_memory``. Non-fatal: failures report zero upgrades.
+    postcondition: ``{"upgraded": n}``, or ``{"upgraded": 0, "reason":
+    ...}`` and nothing touched when the encoder isn't neural or the store
+    can't persist a vector (``has_vec``). Non-fatal: failures count zero.
 
-    ``upgraded`` counts memories successfully re-encoded and restamped —
-    that count stays accurate even when the store cannot persist a vector
-    at all (``has_vec is False``, e.g. sqlite-vec unavailable). In that
-    case the result also carries ``vectors_persisted: 0`` and a ``reason``,
-    so a caller cannot read "upgraded: N" as "N vectors written" when none
-    were (issue #634). Stores without a ``has_vec`` attribute (PostgreSQL,
-    test doubles) are assumed vector-capable, unchanged from before.
+    source: ADR-1089
     """
     if not isinstance(store, _FallbackWorklistStore):
         return {"upgraded": 0, "reason": "store has no fallback worklist"}
     if getattr(embeddings, "mode", "neural") != "neural":
         return {"upgraded": 0, "reason": "no neural model available yet"}
+    if not store.has_vec:
+        return {"upgraded": 0, "reason": "store cannot persist vectors (has_vec=False)"}
     try:
         candidates = store.select_fallback_embeddings(limit=_MAX_UPGRADE_PER_CYCLE)
     except Exception:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.debug("Embedding-upgrade cycle: worklist query failed (non-fatal)")
         return {"upgraded": 0}
 
-    has_vec = getattr(store, "has_vec", True)
     upgraded = 0
     for item in candidates:
         content = item.get("content")
@@ -76,8 +74,4 @@ def run_embedding_upgrade_cycle(
                 "Embedding-upgrade failed for memory %s (non-fatal)",
                 item.get("memory_id"),
             )
-    result: dict[str, Any] = {"upgraded": upgraded}
-    if not has_vec and upgraded:
-        result["vectors_persisted"] = 0
-        result["reason"] = "sqlite-vec unavailable — restamped, no vector written"
-    return result
+    return {"upgraded": upgraded}
