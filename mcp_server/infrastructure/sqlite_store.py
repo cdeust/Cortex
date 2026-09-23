@@ -404,8 +404,15 @@ class SqliteMemoryStore(
                         (memory_id, vec.tobytes()),
                     )
                     persisted = True
-            if model != "neural" or persisted:
-                self._stamp_embedding_model(memory_id, model)
+            # A neural encode with no persisted vector is stamped
+            # 'fallback', never skipped: an unstamped row keeps the
+            # schema-default '', which select_fallback_embeddings's own
+            # WHERE clause excludes -- permanently invisible to the
+            # re-embed worklist, worse than the mislabel this ADR fixes.
+            stamp = (
+                "fallback" if model == "neural" and not persisted else model
+            )  # source: ADR-1089
+            self._stamp_embedding_model(memory_id, stamp)
         return memory_id
 
     def insert_memory(self, data: dict[str, Any]) -> int:
@@ -877,8 +884,9 @@ class SqliteMemoryStore(
                         silent_failure.note("sqlite_store.vec_index_update", exc)
                     else:
                         persisted = True
-            if model != "neural" or persisted:
-                self._stamp_embedding_model(memory_id, model)
+            # source: ADR-1089 — see _insert_memory_rows's matching comment
+            stamp = "fallback" if model == "neural" and not persisted else model
+            self._stamp_embedding_model(memory_id, stamp)
         self._conn.commit()
 
     # ── Row normalization ─────────────────────────────────────────────

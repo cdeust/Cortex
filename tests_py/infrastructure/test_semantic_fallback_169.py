@@ -129,10 +129,15 @@ def test_embedding_model_stamped_fallback(fallback_engine, store):
     assert row["embedding_model"] == "fallback"
 
 
-def test_neural_stamp_withheld_without_a_persisted_vector(fallback_engine, store):
-    """Issue #634 in one word: 'neural' claims a vector exists.
-    'fallback' carries no such claim (previous test) and stamps
-    regardless; 'neural' must not, when has_vec is False."""
+def test_neural_stamp_downgrades_to_fallback_without_a_persisted_vector(
+    fallback_engine, store
+):
+    """Issue #634 in one word: 'neural' claims a vector exists. A row
+    with no persisted vector must never be stamped 'neural' -- but it
+    must also never be left unstamped (''), which select_fallback_
+    embeddings's own WHERE clause excludes, making the row permanently
+    unrecoverable (worse than the original bug). It is stamped
+    'fallback' instead, so it stays in the re-embed worklist."""
     store._has_vec = False
     eng = fallback_engine
     mid = store.insert_memory(
@@ -145,7 +150,9 @@ def test_neural_stamp_withheld_without_a_persisted_vector(fallback_engine, store
     row = store._conn.execute(
         "SELECT embedding_model FROM memories WHERE id = ?", (mid,)
     ).fetchone()
-    assert row["embedding_model"] == ""
+    assert row["embedding_model"] == "fallback"
+    contents = {w["content"] for w in store.select_fallback_embeddings(limit=10)}
+    assert "would-be neural row" in contents
 
 
 def test_select_fallback_embeddings_worklist(fallback_engine, store):
