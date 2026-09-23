@@ -6,6 +6,27 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A failed `scripts/setup.py` no longer discards the plugin's backend
+  decision (#633).** `install-plugin.sh` wrote `~/.claude/methodology/backend.json`
+  only after running `scripts/setup.py`, guarded by `|| fail ...`. Any setup
+  failure (a Windows torch/torchaudio conflict, a network blip during
+  dependency install) discarded a correctly-chosen SQLite backend; on the
+  next launch, the missing marker left the engine on its "auto" default,
+  which requires PostgreSQL under the plugin's `CORTEX_RUNTIME=""` (resolves
+  to "cli") setting — silently turning a zero-config SQLite install into a
+  hard PostgreSQL requirement with none ever provisioned to satisfy it.
+  Fixed: the marker now persists immediately after the backend is decided,
+  before setup can fail and exit. Separately, `scripts/setup.py`'s
+  `cache_embedding_model()` and its macOS/Linux twin
+  `scripts/lib/precache_embedding_model.sh` now isolate their child process
+  from user site-packages the same way `scripts/launcher.py` already does
+  (issue #621), closing the one remaining gap that could still abort the
+  embedding-model pre-cache on a conflicting environment; and
+  `scripts/setup.py`'s dependency-check step now reports a `[FAIL]` row
+  instead of crashing outright when that class of import failure occurs.
+
 ## [4.23.4] - 2026-09-23
 
 ### Documentation

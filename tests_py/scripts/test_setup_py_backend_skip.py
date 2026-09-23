@@ -17,6 +17,8 @@ see .github/workflows/ci.yml test-windows).
 from __future__ import annotations
 
 import importlib.util
+import subprocess
+import sys
 from pathlib import Path
 from unittest import mock
 
@@ -167,3 +169,97 @@ def test_verify_exits_when_any_mocked_check_fails(monkeypatch, skip_postgres):
 
     with pytest.raises(SystemExit):
         mod.verify()
+
+
+def test_model_checks_reports_failure_for_non_import_error(monkeypatch):
+    """A torch/torchaudio ABI mismatch (issue #621) raises OSError deep
+    inside the sentence_transformers import chain, not ImportError. Before
+    issue #633's fix, that exception escaped _model_checks() uncaught and
+    crashed scripts/setup.py before it could print a "[FAIL]" line for
+    run_setup_py to name — reproducing exactly the confusing message the
+    reporter saw."""
+    mod = _load_setup_module(monkeypatch, None)
+
+    real_import = __import__
+
+    def _boom(name, *args, **kwargs):
+        if name == "sentence_transformers":
+            raise OSError("Could not load this library: libtorchaudio.pyd")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr("builtins.__import__", _boom)
+
+    checks = mod._model_checks()
+
+    assert ("sentence-transformers", False) in checks
+
+
+def test_model_cache_child_source_compiles(monkeypatch, tmp_path):
+    mod = _load_setup_module(monkeypatch, None)
+
+    src = mod._model_cache_child_source(mod.SCRIPT_DIR, str(tmp_path / "deps"))
+
+    compile(src, "<model-cache-child>", "exec")
+
+
+def test_model_cache_child_source_runs_end_to_end_against_a_stub(monkeypatch, tmp_path):
+    """The seam issue #633 introduces is otherwise only ever exercised as
+    an opaque string mocked out by every test that touches
+    cache_embedding_model() -- this actually runs the generated child
+    process, proving the isolate_deps bootstrap and the import chain both
+    work, not just that the source happens to parse."""
+    mod = _load_setup_module(monkeypatch, None)
+
+    shadow_dir = tmp_path / "shadow"
+    shadow_dir.mkdir()
+    (shadow_dir / "sentence_transformers.py").write_text(
+        "class SentenceTransformer:\n"
+        "    def __init__(self, *a, **k):\n"
+        "        pass\n"
+        "\n"
+        "    def encode(self, texts):\n"
+        "        class _Shape:\n"
+        "            shape = (len(texts), 384)\n"
+        "        return _Shape()\n"
+    )
+    deps_dir = tmp_path / "deps"
+    deps_dir.mkdir()
+
+    src = mod._model_cache_child_source(mod.SCRIPT_DIR, str(deps_dir))
+    result = subprocess.run(
+        [sys.executable, "-c", src],
+        capture_output=True,
+        text=True,
+        env={
+            "PATH": "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin",
+            "PYTHONPATH": str(shadow_dir),
+        },
+        timeout=30,
+    )
+
+    assert result.returncode == 0, f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+    assert "Model loaded: 384D" in result.stdout
+
+
+def test_model_cache_child_source_escapes_special_characters_in_paths(monkeypatch):
+    """repr() rather than an f-string is what the function's own docstring
+    claims keeps a path containing a backslash or apostrophe -- the exact
+    shape of a Windows path under a name with an apostrophe -- from
+    corrupting the child's source (issue #633)."""
+    mod = _load_setup_module(monkeypatch, None)
+
+    tricky_deps = r"C:\Users\O'Brien\.claude\plugins\deps"
+    tricky_script_dir = Path(r"C:\Users\O'Brien\Cortex\scripts")
+
+    src = mod._model_cache_child_source(tricky_script_dir, tricky_deps)
+
+    compile(src, "<model-cache-child>", "exec")
+    import ast
+
+    literals = [
+        node.value
+        for node in ast.walk(ast.parse(src))
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    ]
+    assert str(tricky_script_dir) in literals
+    assert tricky_deps in literals
