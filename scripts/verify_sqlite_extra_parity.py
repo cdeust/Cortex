@@ -22,12 +22,18 @@ from __future__ import annotations
 import importlib.metadata
 import re
 import sys
-import tomllib
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PYPROJECT_TOML = REPO_ROOT / "pyproject.toml"
 
+# The `sqlite = [...]` TOML array under [project.optional-dependencies]:
+# captures its bracketed body across lines. Not a general TOML parser --
+# `tomllib` is 3.11+ and this repo's floor is 3.10 (pyproject.toml
+# requires-python); pyproject.toml's own [sqlite] extra is a short,
+# single-key array, so a scoped regex avoids a version-gated stdlib import
+# or a new third-party dependency for one list.
+_SQLITE_EXTRA_RE = re.compile(r"^sqlite\s*=\s*\[(.*?)\]", re.MULTILINE | re.DOTALL)
 # A PEP 508 requirement string's leading distribution name: letters, digits,
 # '.', '_', '-'. Stops at the first version specifier, marker, or extra.
 _NAME_RE = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)")
@@ -42,17 +48,19 @@ def _normalize(name: str) -> str:
 def sqlite_extra_names(pyproject_text: str) -> list[str]:
     """Distribution names pyproject.toml's ``[sqlite]`` extra declares.
 
-    postcondition: one entry per requirement string in
-    ``project.optional-dependencies.sqlite``, version specifiers and
-    markers stripped.
+    postcondition: one entry per quoted requirement string inside the
+    ``sqlite = [...]`` array, version specifiers and markers stripped.
+    Empty when that array is absent or empty -- the caller decides
+    whether an empty result is itself an error.
     """
-    data = tomllib.loads(pyproject_text)
-    raw = data["project"]["optional-dependencies"]["sqlite"]
+    match = _SQLITE_EXTRA_RE.search(pyproject_text)
+    if not match:
+        return []
     names = []
-    for requirement in raw:
-        match = _NAME_RE.match(requirement.strip())
-        if match:
-            names.append(match.group(1))
+    for requirement in re.findall(r'"([^"]+)"', match.group(1)):
+        name_match = _NAME_RE.match(requirement.strip())
+        if name_match:
+            names.append(name_match.group(1))
     return names
 
 
