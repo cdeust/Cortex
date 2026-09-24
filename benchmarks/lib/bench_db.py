@@ -23,6 +23,7 @@ from mcp_server.core.pg_recall import (
 )
 from mcp_server.core.reranker import ensure_reranker_loaded
 from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
+from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.pg_store import PgMemoryStore
 import benchmarks.lib._composition_root_wiring  # noqa: F401 — source: issue #560
 
@@ -180,7 +181,12 @@ class BenchmarkDB:
         rerank: bool = True,
         rerank_alpha: float = 0.70,
     ) -> list[dict[str, Any]]:
-        """Delegate to mcp_server.core.pg_recall.recall()."""
+        """Delegate to mcp_server.core.pg_recall.recall().
+
+        ``wrrf_k`` comes from the same settings accessor the production
+        handler uses (``handlers/recall.py``), so ``CORTEX_MEMORY_WRRF_K``
+        moves the benchmark exactly as it moves a live recall.
+        """
         assert self._store is not None, "Call open() first"
         return pg_recall(
             query=query,
@@ -192,6 +198,7 @@ class BenchmarkDB:
             min_heat=min_heat,
             rerank=rerank,
             rerank_alpha=rerank_alpha,
+            wrrf_k=get_memory_settings().WRRF_K,
             momentum_state=self._momentum_state,
             include_globals=False,
         )
