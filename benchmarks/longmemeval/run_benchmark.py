@@ -172,9 +172,8 @@ def run_benchmark(
     if limit > 0:
         dataset = dataset[:limit]
 
-    print(
-        f"Running benchmark on {len(dataset)} questions ({resolve_backend(None)} backend)..."
-    )
+    backend = resolve_backend(None)
+    print(f"Running benchmark on {len(dataset)} questions ({backend} backend)...")
     if with_consolidation:
         print("  consolidation: ON (per-question warmup pass between load and recall)")
         print(
