@@ -15,6 +15,7 @@ from __future__ import annotations
 import os
 from typing import Any, Callable
 
+from benchmarks.lib.bench_backend import SqliteBench, resolve_backend
 from benchmarks.lib.capture_origin_mix import assign_capture_origins
 from mcp_server.core.memory_ingest import ingest_memories_batch
 from mcp_server.core.pg_recall import (
@@ -24,7 +25,6 @@ from mcp_server.core.pg_recall import (
 from mcp_server.core.reranker import ensure_reranker_loaded
 from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
 from mcp_server.infrastructure.memory_config import get_memory_settings
-from mcp_server.infrastructure.pg_store import PgMemoryStore
 import benchmarks.lib._composition_root_wiring  # noqa: F401 — source: issue #560
 
 
@@ -77,11 +77,16 @@ class BenchmarkDB:
         *,
         on_connection_open: Callable[[Any], None] | None = None,
         require_reranker: bool = False,
+        backend: str | None = None,
     ) -> None:
+        self._backend = resolve_backend(backend)
+        if self._backend == "sqlite" and on_connection_open is not None:
+            raise ValueError("on_connection_open is PostgreSQL-only (session GUCs)")
+        self._sqlite: SqliteBench | None = None
         self._url = database_url or os.environ.get(
             "DATABASE_URL", "postgresql://localhost:5432/cortex"
         )
-        self._store: PgMemoryStore | None = None
+        self._store: Any = None
         self._embeddings: EmbeddingEngine | None = None
         self._memory_ids: list[int] = []
         self._content_lookup: dict[int, str] = {}
@@ -107,6 +112,12 @@ class BenchmarkDB:
                     "runs. Fix the reranker load (see mcp_server.core."
                     "reranker module docstring) before retrying."
                 )
+        if self._backend == "sqlite":
+            return self._open_sqlite()
+        from mcp_server.infrastructure.pg_store import (  # noqa: PLC0415 — deferred: PgMemoryStore hard-imports psycopg, absent on SQLite-only installs
+            PgMemoryStore,
+        )
+
         self._store = PgMemoryStore(database_url=self._url)
         # Auto-apply deterministic session when the runner has set the env
         # var (playbook §8); benchmarks/lib/ablation_runner sets it per row.
@@ -122,6 +133,12 @@ class BenchmarkDB:
             self._embeddings = EmbeddingEngine()
         return self
 
+    def _open_sqlite(self) -> BenchmarkDB:
+        self._embeddings = EmbeddingEngine()
+        self._sqlite = SqliteBench(self._embeddings.dimensions)
+        self._store = self._sqlite.store
+        return self
+
     def _purge_stale_benchmark_data(self) -> None:
         """Remove orphaned benchmark memories from crashed/killed runs."""
         assert self._store is not None
@@ -130,7 +147,11 @@ class BenchmarkDB:
 
     def close(self) -> None:
         self.cleanup()
-        if self._store is not None:
+        if self._sqlite is not None:
+            self._sqlite.release()
+            self._sqlite = None
+            self._store = None
+        elif self._store is not None:
             self._store.close()
             self._store = None
 
@@ -222,6 +243,8 @@ class BenchmarkDB:
         compute retrieval hit ranks.
         """
         assert self._store is not None, "Call open() first"
+        if self._backend == "sqlite":
+            raise NotImplementedError("assemble_context is PostgreSQL-only")
         return pg_assemble_context(
             query=query,
             store=self._store,
@@ -240,6 +263,11 @@ class BenchmarkDB:
     def cleanup(self) -> None:
         """Remove all memories inserted by this benchmark run."""
         if not self._store or not self._memory_ids:
+            return
+        if self._sqlite is not None:
+            self._sqlite.delete(self._memory_ids)
+            self._memory_ids.clear()
+            self._content_lookup.clear()
             return
         batch_size = 500
         for i in range(0, len(self._memory_ids), batch_size):

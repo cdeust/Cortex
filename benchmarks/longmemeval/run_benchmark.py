@@ -25,6 +25,7 @@ os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from benchmarks._repro import build_repro_manifest, multi_run_stats
+from benchmarks.lib.bench_backend import resolve_backend
 from benchmarks.lib.bench_db import BenchmarkDB
 
 
@@ -171,7 +172,9 @@ def run_benchmark(
     if limit > 0:
         dataset = dataset[:limit]
 
-    print(f"Running benchmark on {len(dataset)} questions (PostgreSQL backend)...")
+    print(
+        f"Running benchmark on {len(dataset)} questions ({resolve_backend(None)} backend)..."
+    )
     if with_consolidation:
         print("  consolidation: ON (per-question warmup pass between load and recall)")
         print(
@@ -329,7 +332,7 @@ def run_benchmark(
 
     print()
     print("=" * 72)
-    print("LongMemEval Benchmark Results — Cortex (PostgreSQL)")
+    print(f"LongMemEval Benchmark Results — Cortex ({resolve_backend(None)})")
     print("=" * 72)
     print()
 
@@ -386,6 +389,7 @@ def run_benchmark(
     print()
 
     manifest = {
+        "backend": resolve_backend(None),
         # ── Experimental conditions (must be visible in every published score) ──
         "with_consolidation": with_consolidation,
         "with_consolidation_note": (
