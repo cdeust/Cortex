@@ -71,11 +71,13 @@ def test_sqlite_mode_returns_matching_memory(monkeypatch: pytest.MonkeyPatch) ->
     assert rows and "greyhound" in rows[0]["content"]
 
 
-def test_wrrf_k_changes_sqlite_fused_scores(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_wrrf_k_does_not_change_sqlite_fused_scores(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     low = _fused_scores(10, monkeypatch)
     high = _fused_scores(200, monkeypatch)
     assert low and high
-    assert low[0] != pytest.approx(high[0])
+    assert low == pytest.approx(high)
 
 
 def test_close_removes_throwaway_file() -> None:
