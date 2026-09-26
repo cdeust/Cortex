@@ -22,12 +22,8 @@ from mcp_server.infrastructure.sqlite_scope_clause import directory_scope_clause
 
 
 _SCORE_FLOOR = 0.001  # source: pg_schema.py recall_memories (floor)
-_COSINE_SHIFT = (
-    -1.0
-)  # source: pg_schema.py recall_memories, (raw_score - (-1.0)) for the vector signal
-_RECENCY_DECAY_PER_DAY = (
-    0.01  # source: pg_schema.py recall_memories, recency CTE EXP(-0.01 * age_days)
-)
+_COSINE_SHIFT = -1.0  # source: pg_schema.py recall_memories (vector)
+_RECENCY_DECAY_PER_DAY = 0.01  # source: pg_schema.py recall_memories (recency)
 
 
 def _normalised(
@@ -88,38 +84,16 @@ class SqliteSearchMixin:
         trusted_origins: tuple[str, ...] = (),
         untrusted_factor: float = 1.0,
     ) -> list[dict[str, Any]]:
-        """Client-side score fusion: vector + FTS5 + heat + recency.
+        """Max-normalised weighted score fusion, as PL/pgSQL ``recall_memories``.
 
-        Each signal is max-normalised over its own pool and the weighted
-        contributions are summed, as in PL/pgSQL ``recall_memories``. The
-        trigram signal is absent on SQLite; ``wrrf_k`` only scales the
-        agent-topic bonus.
+        No trigram signal on SQLite; ``wrrf_k`` only scales the agent bonus.
 
         source: ADR-0616"""
         w = weights or {}
         w_vector = w.get("vector", 1.0)
-        w_fts = w.get("fts", 0.5)
-        w_heat = w.get("heat", 0.3)
-        w_recency = w.get("recency", 0.0)
         pool = max_results * 10
-
-        scores = _fuse(
-            [
-                _normalised(
-                    self._signal_vector(query_embedding, w_vector, pool),
-                    w_vector,
-                    _COSINE_SHIFT,
-                ),
-                _normalised(self._signal_fts(query_text, w_fts, pool), w_fts),
-                _normalised(
-                    self._signal_heat(w_heat, pool, min_heat, domain, directory),
-                    w_heat,
-                ),
-                _normalised(
-                    self._signal_recency(w_recency, pool, min_heat, domain, directory),
-                    w_recency,
-                ),
-            ]
+        scores = self._fused_scores(
+            query_text, query_embedding, w, pool, min_heat, domain, directory
         )
         self._apply_agent_boost(scores, agent_topic, w_vector, wrrf_k)
         self._apply_trust_factor(scores, trusted_origins, untrusted_factor)
@@ -128,6 +102,33 @@ class SqliteSearchMixin:
             return []
         return self._fetch_ranked_results(
             scores, max_results, min_heat, domain, directory
+        )
+
+    def _fused_scores(
+        self,
+        query_text: str,
+        query_embedding: bytes | None,
+        w: dict[str, float],
+        pool: int,
+        min_heat: float,
+        domain: str | None,
+        directory: str | None,
+    ) -> dict[int, float]:
+        w_vector = w.get("vector", 1.0)
+        w_fts = w.get("fts", 0.5)
+        w_heat = w.get("heat", 0.3)
+        w_recency = w.get("recency", 0.0)
+        vector = self._signal_vector(query_embedding, w_vector, pool)
+        fts = self._signal_fts(query_text, w_fts, pool)
+        heat = self._signal_heat(w_heat, pool, min_heat, domain, directory)
+        recency = self._signal_recency(w_recency, pool, min_heat, domain, directory)
+        return _fuse(
+            [
+                _normalised(vector, w_vector, _COSINE_SHIFT),
+                _normalised(fts, w_fts),
+                _normalised(heat, w_heat),
+                _normalised(recency, w_recency),
+            ]
         )
 
     def _signal_vector(

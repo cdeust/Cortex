@@ -13,7 +13,7 @@ import pytest
 from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 from mcp_server.infrastructure.sqlite_store_search import _normalised
 
-_DIM = 384
+_DIM = 384  # source: all-MiniLM-L6-v2 embedding width
 _DOMAIN = "sqlite-score-fusion-test"
 
 
