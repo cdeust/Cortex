@@ -21,6 +21,10 @@ The adapters below handle those differences.
 This reverses the earlier "Codex is additive, reduced" design that shipped an
 MCP-only, `lean`-profile package.
 
+The same bundled [disk-hygiene hook](disk-hygiene.md) also runs on both hosts
+at session start, after push/PR tools, Stop and session end. It preserves
+transcripts by default and removes only eligible registered local worktrees.
+
 ## How the hooks run under Codex
 
 A Codex plugin ships only its own directory, never this repository, and never

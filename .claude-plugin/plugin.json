@@ -71,6 +71,15 @@
             "timeout": 30
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -B \"${CLAUDE_PLUGIN_ROOT}/plugins/hypermnesia-mcp-codex/scripts/disk_hygiene.py\" --host claude hook SessionStart",
+            "timeout": 120
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
@@ -124,6 +133,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -B \"${CLAUDE_PLUGIN_ROOT}/plugins/hypermnesia-mcp-codex/scripts/disk_hygiene.py\" --host claude hook PostToolUse",
+            "timeout": 120
+          }
+        ],
+        "matcher": "*"
       }
     ],
     "SessionEnd": [
@@ -133,6 +152,15 @@
             "type": "command",
             "command": "bash -c 'PY=$(command -v python3 || command -v python) && if [ -z \"${CLAUDE_PLUGIN_ROOT:-}\" ]; then echo \"cortex hook: CLAUDE_PLUGIN_ROOT is unset; refusing to guess the plugin root\" >&2; exit 1; fi; ROOT=\"$CLAUDE_PLUGIN_ROOT\" && \"$PY\" \"$ROOT/scripts/launcher.py\" mcp_server.hooks.session_lifecycle'",
             "timeout": 30
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -B \"${CLAUDE_PLUGIN_ROOT}/plugins/hypermnesia-mcp-codex/scripts/disk_hygiene.py\" --host claude hook SessionEnd",
+            "timeout": 120
           }
         ]
       }
@@ -156,6 +184,17 @@
             "type": "command",
             "command": "bash -c 'PY=$(command -v python3 || command -v python) && if [ -z \"${CLAUDE_PLUGIN_ROOT:-}\" ]; then echo \"cortex hook: CLAUDE_PLUGIN_ROOT is unset; refusing to guess the plugin root\" >&2; exit 1; fi; ROOT=\"$CLAUDE_PLUGIN_ROOT\" && \"$PY\" \"$ROOT/scripts/launcher.py\" mcp_server.hooks.agent_briefing'",
             "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -B \"${CLAUDE_PLUGIN_ROOT}/plugins/hypermnesia-mcp-codex/scripts/disk_hygiene.py\" --host claude hook Stop",
+            "timeout": 120
           }
         ]
       }

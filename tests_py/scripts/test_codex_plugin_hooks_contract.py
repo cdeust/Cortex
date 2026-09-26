@@ -31,6 +31,7 @@ CODEX_EVENTS = {
     "UserPromptSubmit",
     "PostToolUse",
     "SessionEnd",
+    "Stop",
     "PreCompact",
     "SubagentStart",
 }
@@ -65,6 +66,12 @@ def test_codex_hook_commands_run_the_published_wheel_not_this_repository() -> No
         assert hook["type"] == "command"
         assert "scripts/launcher.py" not in command
         assert "CLAUDE_PLUGIN_ROOT" not in command
+        if "scripts/disk_hygiene.py" in command:
+            assert command.startswith(
+                'python3 -B "${PLUGIN_ROOT}/scripts/disk_hygiene.py" --host codex hook '
+            )
+            assert command.endswith(event)
+            continue
         if event == "SessionEnd":
             assert command == 'python3 "${PLUGIN_ROOT}/scripts/session_queue.py" intake'
             continue

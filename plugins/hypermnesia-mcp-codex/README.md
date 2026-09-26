@@ -45,6 +45,12 @@ related memories in the current project. Session-end events are persisted before
 package startup and processed by a detached, replayable worker. See the linked
 design for supported command forms and recovery diagnostics.
 
+The shared [disk-hygiene hook](https://github.com/cdeust/Cortex/blob/main/docs/disk-hygiene.md)
+also handles registered worktree cleanup. Transcripts remain available for resume
+by default. Set `CORTEX_CLEANUP_TRANSCRIPTS=delete` explicitly to enable deletion.
+Cleanup requires Git, authenticated GitHub CLI and `lsof`; missing checks protect
+paths. Remote PRs and branches remain.
+
 ## Storage
 
 Cortex tries PostgreSQL at `DATABASE_URL` (or its local `cortex` default)
@@ -55,8 +61,9 @@ PostgreSQL target was supplied. An explicitly configured but unreachable
 ## Security expectations
 
 - Local stdio only: no remote endpoint, no secrets in the manifest.
-- Nothing leaves the machine except the one-time embedding-model download
-  described in [PRIVACY.md](https://github.com/cdeust/Cortex/blob/main/PRIVACY.md).
+- Cleanup verifies registered PR heads through GitHub CLI and fetches the PR ref
+  through Git. See [PRIVACY.md](https://github.com/cdeust/Cortex/blob/main/PRIVACY.md)
+  for network access and storage details.
 - Vulnerability reports: see [SECURITY.md](./SECURITY.md).
 
 ## License

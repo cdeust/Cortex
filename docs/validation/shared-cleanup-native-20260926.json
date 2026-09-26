@@ -1,0 +1,260 @@
+{
+  "phase": "final_codex_passed_claude_stop_blocked_by_429",
+  "verified_at": "2026-09-26T16:56:39.537162+00:00",
+  "scope": "Actual native dispatch of trusted installed cleanup command through temporary PATH recorder to candidate. Isolated cleanup child only; global hooks and trust unchanged. Final Codex all events passed. Final Claude Start/End passed, Stop unobserved due external 429. Previous revision Claude full lifecycle events are retained separately with their own hashes.",
+  "hosts": {
+    "codex": {
+      "exit": 0,
+      "reply": "HOOK_PROBE_OK"
+    },
+    "claude": {
+      "exit": 1,
+      "api_error_status": 429,
+      "error": "You've hit your session limit \u00b7 resets 7:30pm (Europe/Paris)",
+      "native_events_observed": [
+        "SessionStart",
+        "SessionEnd"
+      ],
+      "missing_native_event": "Stop"
+    }
+  },
+  "final_candidate_hashes": {
+    "transcript_policy.py": "7371084fef3ec2d4c809c438353aea9621f51174b985cedac786d03aef859f68",
+    "cleanup_processes.py": "9a6b2448e03a0bc1fac6daeea26a5ad11400d764004c9a1f4ab8a34fa3750692",
+    "codex_purge.py": "1c59e17071bbe9ce6261c76bb2ab98aae4d66bbd9fc9da62bf34eef903bc59f6",
+    "host_cleanup.py": "25818f7b298051ae670e50b8022831b13030478f353ca594a725278174bee779",
+    "disk_hygiene.py": "2335db4e55c12b871e6aa460b6a21fcef3c57694d57541fc7ad3d404e37dd10a",
+    "session_purge.py": "0db2bb97682ed787d8d014ff880cc51eb67340ea5a72d0cf9258ec757cc540d1",
+    "cleanup_hooks.py": "2cc665ad1e5348f9f68564328538eab51af25ddfcd81d9953f2ee972aa31ea36",
+    "cleanup_registry.py": "2323ffb50bfb5c3e682ba4dffb2b369bd50dec22d3597c31258e1be0e98ccfdc",
+    "session_queue.py": "a91ec4a518e91867dc04095001c657979ea65c3cd6df8d6d59bb004d65dac637",
+    "cleanup_operations.py": "e4f4036608f4244709428195a5d762facdbb4c6aafd9e14d11d3226b8dec3450",
+    "cleanup_intake.py": "43745657955b3beb804a86acf32841270c583f2a4c116d42e9564c7644a3ed61"
+  },
+  "versions": {
+    "codex": "codex-cli 0.157.1",
+    "claude": "2.1.283 (Claude Code)"
+  },
+  "transcript_retention_scope": "Isolated cleanup-child fixtures remain byte-identical at every event. Both actual host transcript paths also exist after native exit. Original event payloads were forwarded unchanged; no transcript content is copied into this report.",
+  "events": [
+    {
+      "host": "codex",
+      "event": "SessionStart",
+      "exit": 0,
+      "elapsed_seconds": 0.14211312518455088,
+      "hashes": {
+        "transcript_policy.py": "7371084fef3ec2d4c809c438353aea9621f51174b985cedac786d03aef859f68",
+        "cleanup_processes.py": "9a6b2448e03a0bc1fac6daeea26a5ad11400d764004c9a1f4ab8a34fa3750692",
+        "codex_purge.py": "1c59e17071bbe9ce6261c76bb2ab98aae4d66bbd9fc9da62bf34eef903bc59f6",
+        "host_cleanup.py": "25818f7b298051ae670e50b8022831b13030478f353ca594a725278174bee779",
+        "disk_hygiene.py": "2335db4e55c12b871e6aa460b6a21fcef3c57694d57541fc7ad3d404e37dd10a",
+        "session_purge.py": "0db2bb97682ed787d8d014ff880cc51eb67340ea5a72d0cf9258ec757cc540d1",
+        "cleanup_hooks.py": "2cc665ad1e5348f9f68564328538eab51af25ddfcd81d9953f2ee972aa31ea36",
+        "cleanup_registry.py": "2323ffb50bfb5c3e682ba4dffb2b369bd50dec22d3597c31258e1be0e98ccfdc",
+        "session_queue.py": "a91ec4a518e91867dc04095001c657979ea65c3cd6df8d6d59bb004d65dac637",
+        "cleanup_operations.py": "e4f4036608f4244709428195a5d762facdbb4c6aafd9e14d11d3226b8dec3450",
+        "cleanup_intake.py": "43745657955b3beb804a86acf32841270c583f2a4c116d42e9564c7644a3ed61"
+      },
+      "retention_default": true,
+      "fixture_retained": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "native_transcript_exists_after_probe": true
+    },
+    {
+      "host": "claude",
+      "event": "SessionStart",
+      "exit": 0,
+      "elapsed_seconds": 0.18201774987392128,
+      "hashes": {
+        "transcript_policy.py": "7371084fef3ec2d4c809c438353aea9621f51174b985cedac786d03aef859f68",
+        "cleanup_processes.py": "9a6b2448e03a0bc1fac6daeea26a5ad11400d764004c9a1f4ab8a34fa3750692",
+        "codex_purge.py": "1c59e17071bbe9ce6261c76bb2ab98aae4d66bbd9fc9da62bf34eef903bc59f6",
+        "host_cleanup.py": "25818f7b298051ae670e50b8022831b13030478f353ca594a725278174bee779",
+        "disk_hygiene.py": "2335db4e55c12b871e6aa460b6a21fcef3c57694d57541fc7ad3d404e37dd10a",
+        "session_purge.py": "0db2bb97682ed787d8d014ff880cc51eb67340ea5a72d0cf9258ec757cc540d1",
+        "cleanup_hooks.py": "2cc665ad1e5348f9f68564328538eab51af25ddfcd81d9953f2ee972aa31ea36",
+        "cleanup_registry.py": "2323ffb50bfb5c3e682ba4dffb2b369bd50dec22d3597c31258e1be0e98ccfdc",
+        "session_queue.py": "a91ec4a518e91867dc04095001c657979ea65c3cd6df8d6d59bb004d65dac637",
+        "cleanup_operations.py": "e4f4036608f4244709428195a5d762facdbb4c6aafd9e14d11d3226b8dec3450",
+        "cleanup_intake.py": "43745657955b3beb804a86acf32841270c583f2a4c116d42e9564c7644a3ed61"
+      },
+      "retention_default": true,
+      "fixture_retained": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "native_transcript_exists_after_probe": true
+    },
+    {
+      "host": "codex",
+      "event": "Stop",
+      "exit": 0,
+      "elapsed_seconds": 0.09371579112485051,
+      "hashes": {
+        "transcript_policy.py": "7371084fef3ec2d4c809c438353aea9621f51174b985cedac786d03aef859f68",
+        "cleanup_processes.py": "9a6b2448e03a0bc1fac6daeea26a5ad11400d764004c9a1f4ab8a34fa3750692",
+        "codex_purge.py": "1c59e17071bbe9ce6261c76bb2ab98aae4d66bbd9fc9da62bf34eef903bc59f6",
+        "host_cleanup.py": "25818f7b298051ae670e50b8022831b13030478f353ca594a725278174bee779",
+        "disk_hygiene.py": "2335db4e55c12b871e6aa460b6a21fcef3c57694d57541fc7ad3d404e37dd10a",
+        "session_purge.py": "0db2bb97682ed787d8d014ff880cc51eb67340ea5a72d0cf9258ec757cc540d1",
+        "cleanup_hooks.py": "2cc665ad1e5348f9f68564328538eab51af25ddfcd81d9953f2ee972aa31ea36",
+        "cleanup_registry.py": "2323ffb50bfb5c3e682ba4dffb2b369bd50dec22d3597c31258e1be0e98ccfdc",
+        "session_queue.py": "a91ec4a518e91867dc04095001c657979ea65c3cd6df8d6d59bb004d65dac637",
+        "cleanup_operations.py": "e4f4036608f4244709428195a5d762facdbb4c6aafd9e14d11d3226b8dec3450",
+        "cleanup_intake.py": "43745657955b3beb804a86acf32841270c583f2a4c116d42e9564c7644a3ed61"
+      },
+      "retention_default": true,
+      "fixture_retained": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "native_transcript_exists_after_probe": true
+    },
+    {
+      "host": "codex",
+      "event": "SessionEnd",
+      "exit": 0,
+      "elapsed_seconds": 0.1260055408347398,
+      "hashes": {
+        "transcript_policy.py": "7371084fef3ec2d4c809c438353aea9621f51174b985cedac786d03aef859f68",
+        "cleanup_processes.py": "9a6b2448e03a0bc1fac6daeea26a5ad11400d764004c9a1f4ab8a34fa3750692",
+        "codex_purge.py": "1c59e17071bbe9ce6261c76bb2ab98aae4d66bbd9fc9da62bf34eef903bc59f6",
+        "host_cleanup.py": "25818f7b298051ae670e50b8022831b13030478f353ca594a725278174bee779",
+        "disk_hygiene.py": "2335db4e55c12b871e6aa460b6a21fcef3c57694d57541fc7ad3d404e37dd10a",
+        "session_purge.py": "0db2bb97682ed787d8d014ff880cc51eb67340ea5a72d0cf9258ec757cc540d1",
+        "cleanup_hooks.py": "2cc665ad1e5348f9f68564328538eab51af25ddfcd81d9953f2ee972aa31ea36",
+        "cleanup_registry.py": "2323ffb50bfb5c3e682ba4dffb2b369bd50dec22d3597c31258e1be0e98ccfdc",
+        "session_queue.py": "a91ec4a518e91867dc04095001c657979ea65c3cd6df8d6d59bb004d65dac637",
+        "cleanup_operations.py": "e4f4036608f4244709428195a5d762facdbb4c6aafd9e14d11d3226b8dec3450",
+        "cleanup_intake.py": "43745657955b3beb804a86acf32841270c583f2a4c116d42e9564c7644a3ed61"
+      },
+      "retention_default": true,
+      "fixture_retained": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "native_transcript_exists_after_probe": true
+    },
+    {
+      "host": "claude",
+      "event": "SessionEnd",
+      "exit": 0,
+      "elapsed_seconds": 0.12463362491689622,
+      "hashes": {
+        "transcript_policy.py": "7371084fef3ec2d4c809c438353aea9621f51174b985cedac786d03aef859f68",
+        "cleanup_processes.py": "9a6b2448e03a0bc1fac6daeea26a5ad11400d764004c9a1f4ab8a34fa3750692",
+        "codex_purge.py": "1c59e17071bbe9ce6261c76bb2ab98aae4d66bbd9fc9da62bf34eef903bc59f6",
+        "host_cleanup.py": "25818f7b298051ae670e50b8022831b13030478f353ca594a725278174bee779",
+        "disk_hygiene.py": "2335db4e55c12b871e6aa460b6a21fcef3c57694d57541fc7ad3d404e37dd10a",
+        "session_purge.py": "0db2bb97682ed787d8d014ff880cc51eb67340ea5a72d0cf9258ec757cc540d1",
+        "cleanup_hooks.py": "2cc665ad1e5348f9f68564328538eab51af25ddfcd81d9953f2ee972aa31ea36",
+        "cleanup_registry.py": "2323ffb50bfb5c3e682ba4dffb2b369bd50dec22d3597c31258e1be0e98ccfdc",
+        "session_queue.py": "a91ec4a518e91867dc04095001c657979ea65c3cd6df8d6d59bb004d65dac637",
+        "cleanup_operations.py": "e4f4036608f4244709428195a5d762facdbb4c6aafd9e14d11d3226b8dec3450",
+        "cleanup_intake.py": "43745657955b3beb804a86acf32841270c583f2a4c116d42e9564c7644a3ed61"
+      },
+      "retention_default": true,
+      "fixture_retained": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "native_transcript_exists_after_probe": true
+    }
+  ],
+  "previous_revision_claude_native_events": [
+    {
+      "host": "claude",
+      "event": "SessionStart",
+      "exit": 0,
+      "elapsed_seconds": 0.2814260001759976,
+      "hashes": {
+        "transcript_policy.py": "7371084fef3ec2d4c809c438353aea9621f51174b985cedac786d03aef859f68",
+        "cleanup_processes.py": "9a6b2448e03a0bc1fac6daeea26a5ad11400d764004c9a1f4ab8a34fa3750692",
+        "codex_purge.py": "1c59e17071bbe9ce6261c76bb2ab98aae4d66bbd9fc9da62bf34eef903bc59f6",
+        "host_cleanup.py": "d802c78ff435291e5a5985c46c3e39a1c54c8237932f8bcd4d5b1c150cfc85a8",
+        "disk_hygiene.py": "2335db4e55c12b871e6aa460b6a21fcef3c57694d57541fc7ad3d404e37dd10a",
+        "session_purge.py": "d9ad578213770ef769b374bc864b897015a77c3f8582b026ce072b0149c4466b",
+        "cleanup_hooks.py": "2cc665ad1e5348f9f68564328538eab51af25ddfcd81d9953f2ee972aa31ea36",
+        "cleanup_registry.py": "2323ffb50bfb5c3e682ba4dffb2b369bd50dec22d3597c31258e1be0e98ccfdc",
+        "session_queue.py": "a91ec4a518e91867dc04095001c657979ea65c3cd6df8d6d59bb004d65dac637",
+        "cleanup_operations.py": "616f2c811fa1d56331ae1e9196552303e66b3273d1b273bc2fad83141568c4ad",
+        "cleanup_intake.py": "43745657955b3beb804a86acf32841270c583f2a4c116d42e9564c7644a3ed61"
+      },
+      "retention_default": true,
+      "fixture_retained": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "native_transcript_exists_after_probe": true
+    },
+    {
+      "host": "claude",
+      "event": "Stop",
+      "exit": 0,
+      "elapsed_seconds": 0.20097291702404618,
+      "hashes": {
+        "transcript_policy.py": "7371084fef3ec2d4c809c438353aea9621f51174b985cedac786d03aef859f68",
+        "cleanup_processes.py": "9a6b2448e03a0bc1fac6daeea26a5ad11400d764004c9a1f4ab8a34fa3750692",
+        "codex_purge.py": "1c59e17071bbe9ce6261c76bb2ab98aae4d66bbd9fc9da62bf34eef903bc59f6",
+        "host_cleanup.py": "d802c78ff435291e5a5985c46c3e39a1c54c8237932f8bcd4d5b1c150cfc85a8",
+        "disk_hygiene.py": "2335db4e55c12b871e6aa460b6a21fcef3c57694d57541fc7ad3d404e37dd10a",
+        "session_purge.py": "d9ad578213770ef769b374bc864b897015a77c3f8582b026ce072b0149c4466b",
+        "cleanup_hooks.py": "2cc665ad1e5348f9f68564328538eab51af25ddfcd81d9953f2ee972aa31ea36",
+        "cleanup_registry.py": "2323ffb50bfb5c3e682ba4dffb2b369bd50dec22d3597c31258e1be0e98ccfdc",
+        "session_queue.py": "a91ec4a518e91867dc04095001c657979ea65c3cd6df8d6d59bb004d65dac637",
+        "cleanup_operations.py": "616f2c811fa1d56331ae1e9196552303e66b3273d1b273bc2fad83141568c4ad",
+        "cleanup_intake.py": "43745657955b3beb804a86acf32841270c583f2a4c116d42e9564c7644a3ed61"
+      },
+      "retention_default": true,
+      "fixture_retained": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "native_transcript_exists_after_probe": true
+    },
+    {
+      "host": "claude",
+      "event": "SessionEnd",
+      "exit": 0,
+      "elapsed_seconds": 0.26769966701976955,
+      "hashes": {
+        "transcript_policy.py": "7371084fef3ec2d4c809c438353aea9621f51174b985cedac786d03aef859f68",
+        "cleanup_processes.py": "9a6b2448e03a0bc1fac6daeea26a5ad11400d764004c9a1f4ab8a34fa3750692",
+        "codex_purge.py": "1c59e17071bbe9ce6261c76bb2ab98aae4d66bbd9fc9da62bf34eef903bc59f6",
+        "host_cleanup.py": "d802c78ff435291e5a5985c46c3e39a1c54c8237932f8bcd4d5b1c150cfc85a8",
+        "disk_hygiene.py": "2335db4e55c12b871e6aa460b6a21fcef3c57694d57541fc7ad3d404e37dd10a",
+        "session_purge.py": "d9ad578213770ef769b374bc864b897015a77c3f8582b026ce072b0149c4466b",
+        "cleanup_hooks.py": "2cc665ad1e5348f9f68564328538eab51af25ddfcd81d9953f2ee972aa31ea36",
+        "cleanup_registry.py": "2323ffb50bfb5c3e682ba4dffb2b369bd50dec22d3597c31258e1be0e98ccfdc",
+        "session_queue.py": "a91ec4a518e91867dc04095001c657979ea65c3cd6df8d6d59bb004d65dac637",
+        "cleanup_operations.py": "616f2c811fa1d56331ae1e9196552303e66b3273d1b273bc2fad83141568c4ad",
+        "cleanup_intake.py": "43745657955b3beb804a86acf32841270c583f2a4c116d42e9564c7644a3ed61"
+      },
+      "retention_default": true,
+      "fixture_retained": [
+        true,
+        true,
+        true,
+        true
+      ],
+      "native_transcript_exists_after_probe": true
+    }
+  ],
+  "recorder_sha256": "e233e6c535450beb3dbea8bb24c22d6811071badecc24b815175fb88b3b921ae"
+}

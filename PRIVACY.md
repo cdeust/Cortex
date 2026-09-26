@@ -145,3 +145,18 @@ memories over time; this is a local maintenance operation, not a transfer.
 
 Questions about this policy: **admin@ai-architect.tools** ·
 issues: https://github.com/cdeust/Cortex/issues
+
+## Session disk cleanup
+
+Claude Code and Codex use the same bundled disk-hygiene script. Session transcripts
+are retained by default, including Claude subagent transcripts and file history.
+`CORTEX_CLEANUP_TRANSCRIPTS=delete` opts into transcript deletion and can remove
+native resume/rewind history. Cortex's session receipt is not a transcript backup.
+
+Only explicitly registered worktrees and temporary directories enter workspace
+cleanup. GitHub CLI queries a linked PR and Git fetches its head to verify pushed
+commits before local removal. Those requests use the user's configured GitHub/Git
+authentication and contact the repository host. No transcript is sent by this script.
+Remote PRs and branches are preserved. Shared caches, history databases, generated
+images and attachments are not swept. See [disk hygiene](docs/disk-hygiene.md) for
+registration, protections and lifecycle recovery.

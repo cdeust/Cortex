@@ -34,6 +34,15 @@
             "timeout": 30
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -B \"${PLUGIN_ROOT}/scripts/disk_hygiene.py\" --host codex hook SessionStart",
+            "timeout": 120
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
@@ -87,6 +96,16 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -B \"${PLUGIN_ROOT}/scripts/disk_hygiene.py\" --host codex hook PostToolUse",
+            "timeout": 120
+          }
+        ],
+        "matcher": "*"
       }
     ],
     "SessionEnd": [
@@ -95,6 +114,15 @@
           {
             "type": "command",
             "command": "python3 \"${PLUGIN_ROOT}/scripts/session_queue.py\" intake",
+            "timeout": 3
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -B \"${PLUGIN_ROOT}/scripts/disk_hygiene.py\" --host codex hook SessionEnd",
             "timeout": 3
           }
         ]
@@ -118,6 +146,17 @@
             "type": "command",
             "command": "bash -c 'command -v uvx >/dev/null 2>&1 || { echo \"cortex hook: uvx is not on PATH; install uv so Codex can run Cortex lifecycle hooks\" >&2; exit 1; }; exec uvx --from \"hypermnesia-mcp[postgresql,sqlite]==4.23.5\" hypermnesia-mcp-hook agent_briefing'",
             "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -B \"${PLUGIN_ROOT}/scripts/disk_hygiene.py\" --host codex hook Stop",
+            "timeout": 120
           }
         ]
       }

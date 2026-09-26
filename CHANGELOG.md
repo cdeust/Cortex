@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Package the existing shared disk-hygiene hook for Claude Code and Codex
+  (ADR-1092). Registered, clean worktrees and local branches can be removed
+  after a verified PR push, with unfinished cleanup retried at session start.
+  Transcripts remain by default; `CORTEX_CLEANUP_TRANSCRIPTS=delete` opts into
+  deletion after host-specific reader checks. Remote PRs and branches remain.
+
 ## [4.23.5] - 2026-09-23
 
 ### Fixed

@@ -3535,6 +3535,10 @@
     "ADR-1091": {
       "mirror": "ADR-1091-target-the-windows-ci-leg-at-what-actually-broke-on-windows.md",
       "path": "adr/cortex/1091-target-the-windows-ci-leg-at-what-actually-broke-on-windows.md"
+    },
+    "ADR-1092": {
+      "path": "adr/cortex/1092-package-the-existing-shared-disk-hygiene-hook.md",
+      "mirror": "ADR-1092-package-the-existing-shared-disk-hygiene-hook.md"
     }
   },
   "project": "cortex",
