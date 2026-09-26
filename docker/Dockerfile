@@ -25,7 +25,7 @@
 
 
 
-FROM python:3.14-slim-bookworm@sha256:9ab8d9c8514b44f90cf0029dd42fdd7e9e211e639c8b995304cc04568dee900f AS builder
+FROM python:3.14-slim-bookworm@sha256:82bc3c539b8813ada9d68c63b40158fa002f7f33de9bf3312a3dfdc0620dff56 AS builder
 
 # Node.js 22 LTS.
 #
@@ -113,7 +113,7 @@ RUN for attempt in 1 2 3 4 5; do \
 
 # ── Runtime ───────────────────────────────────────────────────────────────
 
-FROM python:3.14-slim-bookworm@sha256:9ab8d9c8514b44f90cf0029dd42fdd7e9e211e639c8b995304cc04568dee900f
+FROM python:3.14-slim-bookworm@sha256:82bc3c539b8813ada9d68c63b40158fa002f7f33de9bf3312a3dfdc0620dff56
 
 # System: PostgreSQL 17 + pgvector + git + ripgrep
 RUN apt-get update && apt-get install -y --no-install-recommends \
