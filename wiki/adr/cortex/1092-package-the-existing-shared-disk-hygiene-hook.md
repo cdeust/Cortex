@@ -54,3 +54,16 @@ head divergence, ownership, evidence, process and dirty-work protections. Test b
 host manifests and transcript retention/deletion explicitly. Keep native host
 observations separate from command fixtures. Record before/after counts and checker
 results with the final revision. No retrieval benchmark changes are claimed.
+
+## Integration validation
+
+The first PR645 CI run (36257614026, head 3c359821) exposed two consumers omitted
+from the initial focused checks: the package inventory contract and the
+PostToolUse timing aggregator. The inventory must explicitly include the shared
+stdlib bundle. Timing reports must include the cleanup command when configured;
+ignoring it would undercount CPU and wall work. Its sample `module` identifier is
+`disk_hygiene`; measure that standalone command as configured in the manifest.
+The existing report `entrypoint` still describes server-module measurements.
+Historical snapshots without that
+command remain valid, while unknown or duplicate command hooks remain errors.
+Validate package contracts and timing-route tests together with hook behavior.

@@ -106,17 +106,23 @@ class MatcherTests(unittest.TestCase):
             "mcp__x__y",
             "NewTool",
         ):
-            self.assertEqual(timing.selected_modules(self.plugin, tool), {_CAPTURE})
+            self.assertEqual(
+                timing.selected_modules(self.plugin, tool),
+                {_CAPTURE, timing.CLEANUP_ID},
+            )
 
     def test_matchers_do_not_match_partial_or_wrong_case_names(self):
         for tool in ("NotebookEdit", "ReadFile", "SomeWrite", "bash", "edit", ""):
-            self.assertEqual(timing.selected_modules(self.plugin, tool), {_CAPTURE})
+            self.assertEqual(
+                timing.selected_modules(self.plugin, tool),
+                {_CAPTURE, timing.CLEANUP_ID},
+            )
 
     def test_every_handler_is_preserved_exactly_once(self):
         modules = set()
         for tool in ("Edit", "Write", "Read", "MultiEdit", "Bash"):
             modules.update(timing.selected_modules(self.plugin, tool))
-        self.assertEqual(modules, timing.MODULES)
+        self.assertEqual(modules, timing.MODULES | {timing.CLEANUP_ID})
 
 
 class AggregationTests(unittest.TestCase):
@@ -131,9 +137,11 @@ class AggregationTests(unittest.TestCase):
         self.assertEqual(
             [row["discarded"] for row in rows], [True, False, False, False]
         )
-        self.assertEqual(rows[1]["cpu_seconds"], 6)
-        self.assertEqual(rows[1]["wall_seconds_sum"], 8)
-        self.assertEqual([hook["max_rss_native"] for hook in rows[1]["hooks"]], [5, 5])
+        self.assertEqual(rows[1]["cpu_seconds"], 9)
+        self.assertEqual(rows[1]["wall_seconds_sum"], 12)
+        self.assertEqual(
+            [hook["max_rss_native"] for hook in rows[1]["hooks"]], [5, 5, 5]
+        )
 
     def test_raw_bsd_time_log_is_parsed_without_entering_metrics_manually(self):
         raw = (
@@ -201,7 +209,7 @@ class AggregationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             timing.validate_report({**self.report, "cases": [self.case]}, _PLUGIN)
 
-    def test_before_four_hooks_after_two_hooks_aggregate_actual_routes(self):
+    def test_before_five_hooks_after_three_hooks_aggregate_actual_routes(self):
         before_plugin = copy.deepcopy(self.plugin)
         for group in before_plugin["hooks"]["PostToolUse"]:
             group["matcher"] = "*"

@@ -128,3 +128,30 @@ external session rate limit before generation, so it did not deliver Stop.
 The previous revision passed native Claude Stop; the final exact manifest Stop
 command passes the isolated command test. The final Claude Stop native rerun is
 unverified. No model/account change or rate-limit bypass was attempted.
+
+## CI integration correction
+
+Run 36257614026 at 3c359821 failed all five Linux test jobs on the same fourteen
+failures: thirteen matcher/timing-aggregation tests rejected the standalone command,
+and one package inventory test still expected only session_queue.py. The initial
+109-test selection did not cover these two existing manifest consumers.
+
+The correction recognizes the exact cleanup command in timing routes and requires
+its measured sample; it does not omit cleanup costs. The package inventory now
+lists the shared bundle explicitly and verifies imports stay within stdlib/bundle.
+Regression tests preserve rejection of unknown/duplicate commands and missing
+measurements while accepting historical snapshots that predate cleanup.
+
+Correction verification used the normal project bootstrap:
+
+```sh
+python -m pytest tests_py/hooks tests_py/scripts -q --no-cov --basetemp REGISTERED_SCRATCH/expanded-tests
+```
+
+Result: 1,839 passed, 27 skipped, 378 subtests passed in 295.53 seconds. The
+focused routing/package contracts passed with no skips. All three injected timing
+mutations were detected: accepting duplicate hooks, accepting malformed cleanup
+commands, and omitting required cleanup samples. Repository lint/format, both
+craftsmanship checkers, source discipline and wiki mirrors passed. Peer review of
+the package checks and parent review of the parser found no blocking issues.
+Runtime cleanup scripts and their recorded native hashes are unchanged.

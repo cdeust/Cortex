@@ -27,6 +27,12 @@ MODULES = {
         "post_commit_reindex",
     )
 }
+# source: ADR-1092 (stable measurement ID for the shared standalone entrypoint).
+CLEANUP_ID = "disk_hygiene"
+CLEANUP_COMMAND = (
+    'python3 -B "${CLAUDE_PLUGIN_ROOT}/plugins/hypermnesia-mcp-codex/'
+    'scripts/disk_hygiene.py" --host claude hook PostToolUse'
+)
 _METRICS = ("user_seconds", "system_seconds", "wall_seconds", "max_rss_native")
 
 
@@ -61,6 +67,22 @@ def _measured_sample(sample: dict) -> dict:
     return {**sample, **read_time_log(Path(sample["time_log"]))}
 
 
+def _handler_id(handler: dict) -> str:
+    """Keep legacy module snapshots and recognize only the exact cleanup command.
+
+    source: ADR-0703 ADR-1092
+    """
+    command = handler["command"]
+    if handler.get("type") != "command":
+        raise ValueError("Expected a command hook")
+    if command == CLEANUP_COMMAND:
+        return CLEANUP_ID
+    names = re.findall(r"mcp_server\.hooks\.[a-z_]+", command)
+    if "disk_hygiene" in command or len(names) != 1 or names[0] not in MODULES:
+        raise ValueError("Unexpected PostToolUse command")
+    return names[0]
+
+
 def selected_modules(plugin: dict, tool: str) -> set[str]:
     """Resolve this plugin's exact matchers without executing its shell strings."""
     selected = set()
@@ -73,13 +95,12 @@ def selected_modules(plugin: dict, tool: str) -> set[str]:
             raise ValueError(f"Unsupported matcher: {matcher!r}")
         matches = matcher in ("", "*") or tool in matcher.split("|")
         for handler in group["hooks"]:
-            names = re.findall(r"mcp_server\.hooks\.[a-z_]+", handler["command"])
-            if len(names) != 1 or handler.get("type") != "command":
-                raise ValueError("Expected one module per command hook")
-            configured.extend(names)
+            identifier = _handler_id(handler)
+            configured.append(identifier)
             if matches:
-                selected.add(names[0])
-    if set(configured) != MODULES or len(configured) != len(MODULES):
+                selected.add(identifier)
+    required = MODULES | ({CLEANUP_ID} if CLEANUP_ID in configured else set())
+    if set(configured) != required or len(configured) != len(required):
         raise ValueError("Missing, unexpected or duplicate PostToolUse hook")
     return selected
 

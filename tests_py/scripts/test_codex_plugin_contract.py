@@ -7,7 +7,9 @@ the marketplace entries and the MCP server command.
 
 from __future__ import annotations
 
+import ast
 import re
+import sys
 
 from tests_py.scripts._codex_plugin_support import (
     CLAUDE_PLUGIN_PATH,
@@ -137,10 +139,35 @@ def test_codex_plugin_ships_an_mcp_server_and_hooks_and_nothing_else() -> None:
         assert unsupported not in plugin, unsupported
     # postInstall is the sharpest of those: the Claude package runs an
     # installer script, and this one deliberately does not.
-    # source: ADR-1084 (bundled stdlib intake, no installer script).
+    # source: ADR-1084 and ADR-1092 (stdlib intake and shared cleanup, no installer).
     assert {p.name for p in (PLUGIN_ROOT / "scripts").glob("*.py")} == {
-        "session_queue.py"
+        "session_queue.py",
+        "disk_hygiene.py",
+        "cleanup_hooks.py",
+        "cleanup_intake.py",
+        "cleanup_operations.py",
+        "cleanup_processes.py",
+        "cleanup_registry.py",
+        "codex_purge.py",
+        "host_cleanup.py",
+        "session_purge.py",
+        "transcript_policy.py",
     }
+
+
+def test_bundled_hook_scripts_import_only_stdlib_or_their_own_bundle() -> None:
+    scripts = list((PLUGIN_ROOT / "scripts").glob("*.py"))
+    allowed = sys.stdlib_module_names | {path.stem for path in scripts}
+    for path in scripts:
+        imports = set()
+        for node in ast.walk(ast.parse(path.read_text())):
+            if isinstance(node, ast.Import):
+                imports.update(alias.name.split(".")[0] for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                imports.add(node.module.split(".")[0])
+        assert imports <= allowed, (
+            f"{path.name} imports outside the bundle: {imports - allowed}"
+        )
 
 
 def test_codex_package_does_not_weaken_the_claude_plugin() -> None:
