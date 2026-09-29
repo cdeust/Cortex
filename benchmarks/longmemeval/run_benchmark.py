@@ -26,6 +26,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from benchmarks._repro import build_repro_manifest, multi_run_stats
 from benchmarks.lib.bench_db import BenchmarkDB
+from benchmarks.lib.dataset_pins import (
+    LME_S_CLEANED,
+    LME_S_QUESTIONS,
+    file_identity,
+    preflight_longmemeval,
+)
+from benchmarks.lib.query_log import QueryLog
 
 
 # ── Date Parsing ─────────────────────────────────────────────────────────────
@@ -144,6 +151,8 @@ def run_benchmark(
     with_consolidation: bool = False,
     ablate_mechanism: str | None = None,
     n_runs: int = 1,
+    query_log: QueryLog | None = None,
+    dataset_identity: dict | None = None,
 ) -> dict:
     """Run the full LongMemEval benchmark using production PG retrieval.
 
@@ -162,7 +171,11 @@ def run_benchmark(
     Manifest fields include the reproducibility sidecar (git commit, library
     versions, platform, timestamp) and the with_consolidation flag so
     published scores cannot be mistaken for production-consolidation behaviour.
+    ``query_log`` (optional) journals each query's retrieved items and the
+    ingest/recall phase times after retrieval, without changing it;
+    ``dataset_identity`` is written into the manifest as ``dataset``.
     """
+    log = query_log or QueryLog(None)
 
     print(f"Loading dataset from {data_path}...")
     with open(data_path) as f:
@@ -230,6 +243,7 @@ def run_benchmark(
                 haystack_sessions = item["haystack_sessions"]
                 haystack_sids = item["haystack_session_ids"]
                 haystack_dates = item["haystack_dates"]
+                qid = str(item.get("question_id", qi))
 
                 category_map = {
                     "single-session-user": "Single-session (user)",
@@ -265,7 +279,10 @@ def run_benchmark(
                         }
                     )
 
-                mem_ids, source_map = db.load_memories(memories, domain="longmemeval")
+                with log.phase("ingest", qid):
+                    mem_ids, source_map = db.load_memories(
+                        memories, domain="longmemeval"
+                    )
 
                 # source: ADR-0850
 
@@ -274,7 +291,20 @@ def run_benchmark(
                     consolidation_call_count += 1
 
                 # Run production retrieval
-                results = db.recall(question, top_k=10, domain="longmemeval")
+                with log.phase("recall", qid):
+                    results = db.recall(question, top_k=10, domain="longmemeval")
+                log.record(
+                    qid,
+                    results,
+                    source_map=source_map,
+                    extra={
+                        "run": run_idx,
+                        "category": category,
+                        "haystack_bytes": sum(
+                            len(m["content"].encode("utf-8")) for m in memories
+                        ),
+                    },
+                )
                 retrieved_sids = [source_map.get(r["memory_id"], "") for r in results]
 
                 # Compute metrics
@@ -407,6 +437,7 @@ def run_benchmark(
         ),
         "n_questions": len(dataset),
         "n_runs": n_runs,
+        "dataset": dataset_identity,
         "consolidation_call_count": final_consolidation_call_count,
         "consolidation_total_wall_s": final_consolidation_total_wall_s,
         # ── Reproducibility sidecar ──────────────────────────────────────────
@@ -428,6 +459,7 @@ def run_benchmark(
         result["runs_recall10"] = runs_recall10
         result["stats_mrr"] = stats_mrr
         result["stats_recall10"] = stats_recall10
+    log.close()
     return result
 
 
@@ -438,9 +470,20 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--variant",
-        choices=["oracle", "s"],
+        choices=["oracle", "s", "s_cleaned"],
         default="s",
-        help="Dataset variant: oracle (evidence only) or s (~40 sessions)",
+        help=(
+            "Dataset variant: oracle (evidence only), s (~40 sessions), or "
+            "s_cleaned (the 2025-09 cleaned release of s, pinned by sha256)"
+        ),
+    )
+    parser.add_argument(
+        "--query-log-content",
+        action="store_true",
+        help=(
+            "With --results-out, also store each retrieved item's text in the "
+            "<stem>.queries.jsonl journal (needed for offline token counting)."
+        ),
     )
     parser.add_argument("--verbose", action="store_true", help="Show missed questions")
     parser.add_argument(
@@ -498,18 +541,22 @@ if __name__ == "__main__":
         os.environ[f"CORTEX_ABLATE_{ablate_mech}"] = "1"
 
     data_dir = Path(__file__).parent
-    if args.variant == "oracle":
-        data_path = data_dir / "longmemeval_oracle.json"
-    else:
-        data_path = data_dir / "longmemeval_s.json"
-
+    data_path = data_dir / f"longmemeval_{args.variant}.json"
+    download_url = (
+        LME_S_CLEANED.url
+        if args.variant == "s_cleaned"
+        else f"https://huggingface.co/datasets/xiaowu0162/LongMemEval/resolve/main/longmemeval_{args.variant}"
+    )
     if not data_path.exists():
         print(f"Dataset not found at {data_path}")
         print("Download with:")
-        print(
-            f'  curl -sL -o {data_path} "https://huggingface.co/datasets/xiaowu0162/LongMemEval/resolve/main/longmemeval_{args.variant}"'
-        )
+        print(f'  curl -sL -o {data_path} "{download_url}"')
         sys.exit(1)
+    identity = (
+        preflight_longmemeval(data_path, LME_S_CLEANED, LME_S_QUESTIONS)
+        if args.variant == "s_cleaned"
+        else {"variant": args.variant, **file_identity(data_path)}
+    )
 
     results = run_benchmark(
         str(data_path),
@@ -518,6 +565,8 @@ if __name__ == "__main__":
         with_consolidation=args.with_consolidation,
         ablate_mechanism=ablate_mech,
         n_runs=args.n_runs,
+        query_log=QueryLog(args.results_out, include_content=args.query_log_content),
+        dataset_identity=identity,
     )
 
     if args.results_out:

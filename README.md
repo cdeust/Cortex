@@ -407,10 +407,15 @@ energy improvement.** Further, by design:
   a `MANIFEST.json` of commit and source hashes, and the exact analyzed
   `powermetrics.txt` snapshot.
 
-No energy results are committed to this repository. That is deliberate: a
-figure measured on one operator's machine, region and duty cycle is not a
-property of the software, and publishing it as one would be the drift this
-programme exists to prevent.
+Energy results measured on real benchmark runs are now committed, under
+`benchmarks/results/energy/`, each with its raw `powermetrics.txt`, its phase
+timeline and its manifest. A committed figure is a measurement on one
+operator's machine, region and duty cycle, not a property of the software,
+and is always quoted with those limits: the whole-run figure per query is an
+upper bound (it includes ingestion, embedding and database work), no energy
+spent on the model side is claimed, and the carbon intensity is an operator
+input quoted with its source. See `benchmarks/energy/README.md`, *Benchmark
+phases*.
 
 ### What has actually shipped
 

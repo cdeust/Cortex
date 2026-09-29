@@ -21,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from benchmarks._repro import build_repro_manifest, multi_run_stats
 from benchmarks.beam.data import (
+    beam_dataset_identity,
     extract_10m_chat,
     extract_conversation_turns,
     load_beam_dataset,
@@ -28,6 +29,7 @@ from benchmarks.beam.data import (
     turns_to_memories,
 )
 from benchmarks.lib.bench_db import BenchmarkDB
+from benchmarks.lib.query_log import QueryLog
 from mcp_server.hooks.wiring import wire_composition_root  # noqa: E402 — source: issue #560
 
 wire_composition_root()
@@ -119,15 +121,21 @@ def evaluate_retrieval(
     questions: dict,
     conversation_turns: list[dict],
     mem_ids: list[int],
+    query_log: QueryLog | None = None,
+    conv_id: str = "",
 ) -> dict[str, dict]:
-    """Evaluate retrieval quality per ability."""
+    """Evaluate retrieval quality per ability.
+
+    ``query_log`` journals each scored query after retrieval (ids
+    ``<conv_id>:<ability>:<index>``); it never changes what is retrieved."""
+    log = query_log or QueryLog(None)
     results: dict[str, list[dict]] = defaultdict(list)
 
     for ability, qs in questions.items():
         if not isinstance(qs, list):
             qs = [qs]
 
-        for q in qs:
+        for q_index, q in enumerate(qs):
             if not isinstance(q, dict):
                 continue
 
@@ -153,30 +161,33 @@ def evaluate_retrieval(
 
             # source: ADR-0818
 
-            if os.environ.get("CORTEX_USE_ASSEMBLER") == "1":
-                # source: ADR-0818
+            qid = f"{conv_id}:{ability}:{q_index}"
+            with log.phase("recall", qid):
+                if os.environ.get("CORTEX_USE_ASSEMBLER") == "1":
+                    # source: ADR-0818
 
-                bstr = os.environ.get("CORTEX_ASSEMBLER_BUDGET")
-                tbudget: int | None = int(bstr) if bstr else None
-                # Stage detector: oracle (plan_id) or temporal (timestamp gaps)
-                detector = _get_stage_detector()
-                stage_mode = os.environ.get("CORTEX_STAGE_DETECTOR", "oracle")
-                raw_stage = _current_stage_for_question(q, conversation_turns)
-                # Oracle mode: memories have agent_context="beam:plan-0"
-                # Temporal mode: detector reads created_at → "day-YYYY-MM-DD"
-                current_stage = (
-                    f"beam:{raw_stage}" if stage_mode != "temporal" else raw_stage
-                )
-                asm = db.assemble_context(
-                    query=query,
-                    current_stage=current_stage,
-                    token_budget=tbudget,
-                    stage_field="agent_context",
-                    stage_detector=detector,
-                )
-                retrieved = asm["selected_memories"]
-            else:
-                retrieved = db.recall(query, top_k=10, domain="beam")
+                    bstr = os.environ.get("CORTEX_ASSEMBLER_BUDGET")
+                    tbudget: int | None = int(bstr) if bstr else None
+                    # Stage detector: oracle (plan_id) or temporal (timestamp gaps)
+                    detector = _get_stage_detector()
+                    stage_mode = os.environ.get("CORTEX_STAGE_DETECTOR", "oracle")
+                    raw_stage = _current_stage_for_question(q, conversation_turns)
+                    # Oracle mode: memories have agent_context="beam:plan-0"
+                    # Temporal mode: detector reads created_at → "day-YYYY-MM-DD"
+                    current_stage = (
+                        f"beam:{raw_stage}" if stage_mode != "temporal" else raw_stage
+                    )
+                    asm = db.assemble_context(
+                        query=query,
+                        current_stage=current_stage,
+                        token_budget=tbudget,
+                        stage_field="agent_context",
+                        stage_detector=detector,
+                    )
+                    retrieved = asm["selected_memories"]
+                else:
+                    retrieved = db.recall(query, top_k=10, domain="beam")
+            log.record(qid, retrieved, extra={"ability": ability})
 
             answer = q.get("answer", "")
 
@@ -263,6 +274,7 @@ def run_benchmark(
     limit: int | None = None,
     verbose: bool = False,
     n_runs: int = 1,
+    query_log: QueryLog | None = None,
 ) -> dict:
     """Run BEAM retrieval benchmark using production PG retrieval.
 
@@ -275,8 +287,10 @@ def run_benchmark(
     When n_runs > 1 the dict also contains ``runs_mrr``, ``runs_r10``,
     ``stats_mrr``, and ``stats_r10``.
     Manifest includes the reproducibility sidecar (git commit, library
-    versions, platform, timestamp).
+    versions, platform, timestamp). ``query_log`` journals queries and
+    phases (closed on return).
     """
+    log = query_log or QueryLog(None)
     print(f"Loading BEAM dataset (split={split})...")
     ds = load_beam_dataset(split)
 
@@ -345,9 +359,13 @@ def run_benchmark(
 
                 # source: ADR-0818
                 db.clear()
-                mem_ids, _source_map = db.load_memories(memories, domain="beam")
+                conv_id = str(conversation.get("conversation_id", conv_idx))
+                with log.phase("ingest", conv_id):
+                    mem_ids, _source_map = db.load_memories(memories, domain="beam")
 
-                metrics = evaluate_retrieval(db, questions, turns, mem_ids)
+                metrics = evaluate_retrieval(
+                    db, questions, turns, mem_ids, query_log=log, conv_id=conv_id
+                )
 
                 for ability, m in metrics.items():
                     all_metrics[ability].append(m)
@@ -488,6 +506,7 @@ def run_benchmark(
         "n_conversations": len(ds),
         "n_questions": final_total_qs,
         "n_runs": n_runs,
+        "dataset": beam_dataset_identity(split),
         # ── Reproducibility sidecar ──────────────────────────────────────────
         "repro": repro,
     }
@@ -507,6 +526,7 @@ def run_benchmark(
         result["runs_r10"] = runs_r10
         result["stats_mrr"] = stats_mrr
         result["stats_r10"] = stats_r10
+    log.close()
     return result
 
 
@@ -539,13 +559,25 @@ if __name__ == "__main__":
         default=None,
         help="Optional path to write the result+manifest JSON.",
     )
+    parser.add_argument(
+        "--query-log-content",
+        action="store_true",
+        help=(
+            "With --results-out, also store each retrieved item's text in the "
+            "<stem>.queries.jsonl journal (needed for offline token counting)."
+        ),
+    )
     args = parser.parse_args()
 
     if args.n_runs < 1:
         parser.error("--n-runs must be >= 1")
 
     results = run_benchmark(
-        split=args.split, limit=args.limit, verbose=args.verbose, n_runs=args.n_runs
+        split=args.split,
+        limit=args.limit,
+        verbose=args.verbose,
+        n_runs=args.n_runs,
+        query_log=QueryLog(args.results_out, include_content=args.query_log_content),
     )
 
     if args.results_out:

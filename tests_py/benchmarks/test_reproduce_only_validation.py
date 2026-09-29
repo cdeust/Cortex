@@ -43,6 +43,8 @@ def _validate(only: str) -> subprocess.CompletedProcess[str]:
         ("beam-100K", "beam"),
         ("longmemeval-s,beam-100K,locomo", "longmemeval,beam,locomo"),
         ("decision-ids", "decision-ids"),
+        ("longmemeval-cleaned", "longmemeval-cleaned"),
+        ("longmemeval-s-cleaned,locomo", "longmemeval-cleaned,locomo"),
     ],
 )
 def test_aliases_normalise_to_the_tokens_want_bench_matches(
@@ -64,6 +66,28 @@ def test_unknown_or_empty_token_fails_closed_naming_the_accepted_values(
     assert "accepted:" in done.stderr
     for token in ("longmemeval", "locomo", "beam", "decision-ids"):
         assert token in done.stderr
+
+
+@pytest.mark.parametrize(
+    ("only", "selected"),
+    [("", False), ("longmemeval", False), ("longmemeval-cleaned", True)],
+)
+def test_cleaned_leg_runs_only_when_named(only: str, selected: bool) -> None:
+    """An empty --only keeps the historical set; the cleaned leg is opt-in."""
+    done = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'source "$1"; ONLY="$2"; want_bench_explicit longmemeval-cleaned',
+            "bash",
+            str(LIBRARY),
+            only,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert (done.returncode == 0) is selected
 
 
 def test_empty_only_means_every_benchmark() -> None:

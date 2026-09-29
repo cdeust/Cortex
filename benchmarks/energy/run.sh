@@ -6,6 +6,17 @@ unsetopt BG_NICE
 SCRIPT_DIR=${0:A:h}
 REPO_DIR=${SCRIPT_DIR:h:h}
 BENCH_PY=${ENERGY_PYTHON:-${REPO_DIR}/.venv/bin/python}
+# Which unprivileged entry runs under the sensor: the embedding workload
+# (default) or run_external_energy.py, which times a benchmark from the phase
+# timeline it writes. source: Cortex benchmark refresh plan (2026-09-30), item (e).
+ENERGY_ENTRY=${ENERGY_ENTRY:-run_embedding_energy.py}
+case ${ENERGY_ENTRY} in
+  run_embedding_energy.py|run_external_energy.py) ;;
+  *)
+    print -u2 "Unknown ENERGY_ENTRY: ${ENERGY_ENTRY}"
+    exit 2
+    ;;
+esac
 ENERGY_POWER_FILE=""
 ENERGY_METER_PID=""
 
@@ -15,18 +26,18 @@ if [[ ! -x ${BENCH_PY} ]]; then
 fi
 for ENERGY_ARG in "$@"; do
   if [[ ${ENERGY_ARG} == --help || ${ENERGY_ARG} == -h ]]; then
-    exec "${BENCH_PY}" "${SCRIPT_DIR}/run_embedding_energy.py" --help
+    exec "${BENCH_PY}" "${SCRIPT_DIR}/${ENERGY_ENTRY}" --help
   fi
 done
 # Required carbon flags and every numeric argument are checked before sudo.
-ENERGY_SAMPLE_RATE_MS=$("${BENCH_PY}" "${SCRIPT_DIR}/run_embedding_energy.py" "$@" --validate-only)
+ENERGY_SAMPLE_RATE_MS=$("${BENCH_PY}" "${SCRIPT_DIR}/${ENERGY_ENTRY}" "$@" --validate-only)
 for ENERGY_ARG in "$@"; do
   if [[ ${ENERGY_ARG} == --validate-only ]]; then
     print "${ENERGY_SAMPLE_RATE_MS}"
     exit 0
   fi
   if [[ ${ENERGY_ARG} == --external-power-file* ]]; then
-    print -u2 "Use run_embedding_energy.py directly for --external-power-file."
+    print -u2 "Use ${ENERGY_ENTRY} directly for --external-power-file."
     exit 2
   fi
 done
@@ -86,7 +97,7 @@ sudo -n /usr/bin/powermetrics \
   --output-file "${ENERGY_POWER_FILE}" &
 ENERGY_METER_PID=$!
 
-"${BENCH_PY}" "${SCRIPT_DIR}/run_embedding_energy.py" "$@" \
+"${BENCH_PY}" "${SCRIPT_DIR}/${ENERGY_ENTRY}" "$@" \
   --external-power-file "${ENERGY_POWER_FILE}"
 stop_meter
 print "Energy benchmark complete; raw samples are in the result directory."

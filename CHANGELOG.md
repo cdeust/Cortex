@@ -6,6 +6,33 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Benchmark refresh preparation: pinned datasets, a per-query journal,
+  offline token counting and energy per scored query.** Scores and retrieval
+  are unchanged; nothing here runs a scored benchmark.
+  - `--only longmemeval-cleaned` runs LongMemEval-S on the 2025-09 cleaned
+    release, pinned by revision `98d7416c` and sha256, with a preflight on
+    bytes, record count (500) and the keys the runner reads. The artifact is
+    `longmemeval-s-cleaned.json`, never judged against the floors measured on
+    the original file; an empty `--only` keeps the historical set.
+  - BEAM loads `Mohammadta/BEAM` at a pinned revision (data identical to the
+    only data upload). Every result manifest carries `dataset`, gathered into
+    the run `MANIFEST.json` under `datasets`.
+  - With `--results-out`, the LongMemEval, LoCoMo and BEAM runners write
+    `<stem>.queries.jsonl` (retrieved ids, sources, sizes, sha256, optional
+    text with `--query-log-content`) and `<stem>.phases.jsonl` (ingest and
+    recall wall-clock windows), after retrieval returns.
+  - `benchmarks/tokens/count_tokens.py` counts, offline and separately from
+    scoring, retrieved-text and bench-equivalent recall-payload tokens (json
+    and tabular) with Anthropic's `count_tokens` for one pinned model, plus
+    the full LongMemEval history for the retrieved-vs-full ratio.
+  - `benchmarks/energy/run.sh` with `ENERGY_ENTRY=run_external_energy.py`
+    measures a benchmark from its own phase timeline: whole-leg energy per
+    scored query (an upper bound) and per-condition energy, with SCI carbon.
+    Energy results measured on real benchmark runs may now be committed,
+    quoted with their machine, region and boundary.
+
 ## [4.23.5] - 2026-09-23
 
 ### Fixed

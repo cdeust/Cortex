@@ -23,6 +23,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from benchmarks._repro import build_repro_manifest, multi_run_stats
 from benchmarks.lib.bench_db import BenchmarkDB
+from benchmarks.lib.dataset_pins import file_identity
+from benchmarks.lib.query_log import QueryLog
 from benchmarks.locomo.data import (
     CATEGORY_NAMES,
     extract_sessions,
@@ -50,8 +52,14 @@ def evaluate_conversation(
     mem_ids: list[int],
     source_map: dict[int, str],
     qa_pairs: list[dict],
+    query_log: QueryLog | None = None,
+    conv_id: str = "",
 ) -> dict[str, list[dict]]:
-    """Evaluate retrieval for all QA pairs in one conversation."""
+    """Evaluate retrieval for all QA pairs in one conversation.
+
+    ``query_log`` journals each scored query after retrieval (ids
+    ``<conv_id>:<qa index>``); it never changes what is retrieved."""
+    log = query_log or QueryLog(None)
     # Map memory_id → session_idx via source provenance from ingestion
     mid_to_sidx: dict[int, int] = {}
     for mid, src in source_map.items():
@@ -63,7 +71,7 @@ def evaluate_conversation(
 
     results: dict[str, list[dict]] = defaultdict(list)
 
-    for qa in qa_pairs:
+    for qa_index, qa in enumerate(qa_pairs):
         question = qa["question"]
         evidence = qa.get("evidence", [])
         category = qa.get("category", 0)
@@ -74,7 +82,10 @@ def evaluate_conversation(
         if not target_sessions:
             continue
 
-        retrieved = db.recall(question, top_k=10, domain="locomo")
+        qid = f"{conv_id}:{qa_index}"
+        with log.phase("recall", qid):
+            retrieved = db.recall(question, top_k=10, domain="locomo")
+        log.record(qid, retrieved, source_map=source_map, extra={"category": cat_name})
 
         hit_rank = None
         for rank, r in enumerate(retrieved):
@@ -172,6 +183,8 @@ def run_benchmark(
     with_consolidation: bool = False,
     ablate_mechanism: str | None = None,
     n_runs: int = 1,
+    query_log: QueryLog | None = None,
+    dataset_identity: dict | None = None,
 ) -> dict:
     """Run the LoCoMo benchmark using production PG retrieval.
 
@@ -185,8 +198,10 @@ def run_benchmark(
     When n_runs > 1 the dict also contains ``runs_mrr``, ``runs_recall10``,
     ``stats_mrr``, and ``stats_recall10``.
     Manifest includes the reproducibility sidecar (git commit, library
-    versions, platform, timestamp).
+    versions, platform, timestamp). ``query_log`` journals queries and
+    phases (closed on return); ``dataset_identity`` lands in the manifest.
     """
+    log = query_log or QueryLog(None)
     data = load_locomo(data_path)
     if limit:
         data = data[:limit]
@@ -241,7 +256,9 @@ def run_benchmark(
                     }
                     for s in sessions
                 ]
-                mem_ids, source_map = db.load_memories(memories, domain="locomo")
+                conv_id = str(conv.get("sample_id", conv_idx))
+                with log.phase("ingest", conv_id):
+                    mem_ids, source_map = db.load_memories(memories, domain="locomo")
 
                 # source: ADR-0848
 
@@ -250,7 +267,13 @@ def run_benchmark(
                     consolidation_call_count += 1
 
                 conv_results = evaluate_conversation(
-                    db, sessions, mem_ids, source_map, conv["qa"]
+                    db,
+                    sessions,
+                    mem_ids,
+                    source_map,
+                    conv["qa"],
+                    query_log=log,
+                    conv_id=conv_id,
                 )
                 for cat, rs in conv_results.items():
                     all_results[cat].extend(rs)
@@ -349,6 +372,7 @@ def run_benchmark(
         "n_conversations": len(data),
         "n_questions": final_overall_total,
         "n_runs": n_runs,
+        "dataset": dataset_identity,
         "consolidation_call_count": final_consolidation_call_count,
         "consolidation_total_wall_s": final_consolidation_total_wall_s,
         # ── Reproducibility sidecar ──────────────────────────────────────────
@@ -370,6 +394,7 @@ def run_benchmark(
         result["runs_recall10"] = runs_recall10
         result["stats_mrr"] = stats_mrr
         result["stats_recall10"] = stats_recall10
+    log.close()
     return result
 
 
@@ -405,6 +430,14 @@ if __name__ == "__main__":
         type=str,
         default=None,
         help="Optional path to write the result+manifest JSON.",
+    )
+    parser.add_argument(
+        "--query-log-content",
+        action="store_true",
+        help=(
+            "With --results-out, also store each retrieved item's text in the "
+            "<stem>.queries.jsonl journal (needed for offline token counting)."
+        ),
     )
     parser.add_argument(
         "--n-runs",
@@ -446,6 +479,14 @@ if __name__ == "__main__":
         with_consolidation=args.with_consolidation,
         ablate_mechanism=ablate_mech,
         n_runs=args.n_runs,
+        query_log=QueryLog(args.results_out, include_content=args.query_log_content),
+        dataset_identity={
+            "source": (
+                "snap-research/locomo data/locomo10.json "
+                "(Percena/locomo-mc10 raw mirror)"
+            ),
+            **file_identity(data_path),
+        },
     )
 
     if args.results_out:

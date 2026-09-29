@@ -6,6 +6,10 @@ import ast
 import json
 import sys
 
+from benchmarks.lib.dataset_pins import BEAM_REVISION
+
+BEAM_REPO = "Mohammadta/BEAM"
+
 
 ABILITIES = [
     "abstention",
@@ -34,11 +38,21 @@ def load_beam_dataset(split: str = "100K"):
 
         if split == "10M":
             return load_dataset("Mohammadta/BEAM-10M", split="10M")
-        return load_dataset("Mohammadta/BEAM", split=split)
+        return load_dataset(BEAM_REPO, split=split, revision=BEAM_REVISION)
     except Exception as e:  # noqa: BLE001 — source: ADR-0817
         print(f"Error loading dataset: {e}")
         print("Install: pip install datasets")
         sys.exit(1)
+
+
+def beam_dataset_identity(split: str) -> dict:
+    """What a manifest records about the BEAM data a run loaded.
+
+    100K/500K/1M load ``BEAM_REPO`` at the pinned ``BEAM_REVISION``; the
+    separate BEAM-10M repository is not pinned (``revision`` is None)."""
+    if split == "10M":
+        return {"repo": "Mohammadta/BEAM-10M", "split": split, "revision": None}
+    return {"repo": BEAM_REPO, "split": split, "revision": BEAM_REVISION}
 
 
 def extract_10m_chat(conversation: dict) -> list:

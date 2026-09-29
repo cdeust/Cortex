@@ -106,6 +106,13 @@ DATASET_URL="https://huggingface.co/datasets/xiaowu0162/LongMemEval/resolve/main
 #
 DATASET_SHA256="08d8dad4be43ee2049a22ff5674eb86725d0ce5ff434cde2627e5e8e7e117894"
 
+# ── LongMemEval-S cleaned release (opt-in: --only longmemeval-cleaned).
+# source: benchmarks/lib/dataset_pins.py LME_S_CLEANED (same pin, checked
+# again by the runner's preflight before any question is scored).
+CLEANED_DATASET_PATH="$REPO_ROOT/benchmarks/longmemeval/longmemeval_s_cleaned.json"
+CLEANED_DATASET_URL="https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned/resolve/98d7416c24c778c2fee6e6f3006e7a073259d48f/longmemeval_s_cleaned.json"
+CLEANED_DATASET_SHA256="d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442"
+
 # source: ADR-0859
 #
 #
@@ -235,6 +242,22 @@ fetch_longmemeval() {
         exit 1
     fi
     echo "==> LongMemEval checksum OK."
+}
+
+fetch_longmemeval_cleaned() {
+    if [ ! -f "$CLEANED_DATASET_PATH" ]; then
+        echo "==> Downloading cleaned LongMemEval-S (~265 MB) at its pinned revision..."
+        curl -L --fail --progress-bar -o "$CLEANED_DATASET_PATH" "$CLEANED_DATASET_URL"
+    fi
+    local actual; actual="$(sha256_of "$CLEANED_DATASET_PATH")"
+    if [ "$actual" != "$CLEANED_DATASET_SHA256" ]; then
+        echo "error: cleaned LongMemEval dataset checksum mismatch." >&2
+        echo "  expected: $CLEANED_DATASET_SHA256" >&2
+        echo "  actual:   $actual" >&2
+        echo "Delete $CLEANED_DATASET_PATH and retry." >&2
+        exit 1
+    fi
+    echo "==> Cleaned LongMemEval checksum OK."
 }
 
 # source: ADR-0859
@@ -470,6 +493,9 @@ main() {
 
     # source: ADR-0859
     if [ "$RUN_BENCHMARKS" = "1" ] && want_bench longmemeval; then fetch_longmemeval; fi
+    if [ "$RUN_BENCHMARKS" = "1" ] && want_bench_explicit longmemeval-cleaned; then
+        fetch_longmemeval_cleaned
+    fi
     if [ "$RUN_ABLATION" = "1" ] && [ "$ABLATE_ON" = "longmemeval-s" ]; then fetch_longmemeval; fi
 
     if [ "$NO_REGRESSION" = "1" ]; then preflight_regression_datasets; fi
@@ -487,6 +513,12 @@ main() {
     if [ "$RUN_BENCHMARKS" = "1" ]; then
         want_bench longmemeval && run_bench "longmemeval-s" \
             "benchmarks/longmemeval/run_benchmark.py" \
+            ${lm_args[@]+"${lm_args[@]}"}
+        # Artifact stem longmemeval-s-cleaned: check_floors keys on
+        # longmemeval-s only, so the cleaned leg is never judged against
+        # floors measured on the superseded file.
+        want_bench_explicit longmemeval-cleaned && run_bench "longmemeval-s-cleaned" \
+            "benchmarks/longmemeval/run_benchmark.py" --variant s_cleaned \
             ${lm_args[@]+"${lm_args[@]}"}
         want_bench locomo && run_bench "locomo" \
             "benchmarks/locomo/run_benchmark.py" \

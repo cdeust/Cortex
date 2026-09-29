@@ -96,6 +96,48 @@ no new sudo invocation, so an expired authentication ticket does not prevent
 cleanup. A nonstandard sudo policy that replaces its parent with the root
 command may deny the signal; the runner then reports failure without waiting.
 
+## Benchmark phases (external mode)
+
+`ENERGY_ENTRY=run_external_energy.py` makes `run.sh` launch
+`run_external_energy.py` under the same single privileged sensor. That entry
+waits for the sample stream, measures an idle window of `--idle-seconds`,
+runs the benchmark `--command` unprivileged, then reads the phase timeline
+the benchmark wrote itself (`--phases-file`, the `<stem>.phases.jsonl` beside
+a runner's `--results-out`):
+
+```sh
+ENERGY_ENTRY=run_external_energy.py benchmarks/energy/run.sh \
+  --command "bash benchmarks/reproduce.sh --only locomo --no-ablation --results-dir $DIR" \
+  --phases-file "$DIR/locomo.phases.jsonl" \
+  --idle-seconds "$ENERGY_IDLE_SECONDS" \
+  --sample-rate-ms "$ENERGY_SAMPLE_RATE_MS" \
+  --carbon-intensity "$ENERGY_INTENSITY_G_PER_KWH" \
+  --embodied "$ENERGY_EMBODIED_G_PER_SECOND"
+```
+
+The functional unit is **one scored retrieval query**. Two boundaries are
+reported (`external_phases.py`):
+
+- **whole leg**: mean sampled power from the first phase start to the last
+  phase end, times that duration, divided by the scored queries. It includes
+  ingestion, embedding and PostgreSQL work: an upper bound per query.
+- **per condition** (`ingest`, `recall`): mean power of the samples whose end
+  timestamp falls inside a phase of that condition, times the summed phase
+  durations. A single LongMemEval recall is shorter than a sample, so a
+  condition may catch no sample; it is then reported as unmeasured, never
+  estimated. LoCoMo and BEAM run their queries back to back after one load
+  and suit a short `--sample-rate-ms`.
+
+The idle window is measured before the command; when the command starts its
+own database container (as `reproduce.sh` does), that container is not part
+of the idle reference. Idle power is reported as a reference only; carbon
+uses raw energy, as above. Results land in
+`benchmarks/results/energy/external-<stamp>/` with `results.json`,
+`MANIFEST.json`, `powermetrics.txt` and a copy of the phase timeline. These
+results may be committed; each one is a measurement of one machine, region
+and duty cycle and is quoted with that boundary. No energy spent by a model
+reading the retrieved context is estimated or claimed.
+
 ## Primary sources
 
 - [Green Software Foundation SCI specification](https://sci.greensoftware.foundation/):

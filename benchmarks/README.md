@@ -14,7 +14,9 @@ any invocation runs the identical clean-DB / production-recall pipeline and
 yields the same numbers. Take it, hit play, reproduce.
 
 Requirements: Docker, [uv](https://docs.astral.sh/uv/), ~1.5 GB free disk
-(datasets + embedding models), no API keys.
+(datasets + embedding models), no API keys. (The separate, offline token
+count described under *Per-query journal* is the one step that needs an
+Anthropic credential; it never runs inside a scoring leg.)
 
 ```bash
 make reproduce-smoke     # ALL benchmarks + ablation sweep, tiny limits — a few minutes
@@ -58,6 +60,8 @@ deterministic.
 | `--quick` | small per-benchmark limits (fast end-to-end check) |
 | `--limit N` | explicit per-benchmark cap |
 | `--keep-db` | leave the container up for inspection |
+| `--only longmemeval-cleaned` | opt-in leg on the 2025-09 cleaned LongMemEval-S release, pinned by revision and sha256 (`benchmarks/lib/dataset_pins.py`); artifact `longmemeval-s-cleaned.json`, never judged against the floors measured on the original file. An empty `--only` keeps the historical set |
+| `--query-log-content` | passes through to the runners: store each retrieved item's text in the per-query journal (needed for token counting) |
 
 ```bash
 make reproduce ARGS=...           # or call the script directly:
@@ -104,8 +108,50 @@ printed reproducibility manifest and we will publish the discrepancy.
 |---|---|---|
 | LongMemEval (ICLR 2025), 500 Q | `longmemeval/run_benchmark.py` | auto-downloaded by the harness |
 | LoCoMo (ACL 2024), 1,986 Q | `locomo/run_benchmark.py` | see runner's download hint |
-| BEAM (ICLR 2026) | `beam/run_benchmark.py --split 100K` | see runner's download hint |
+| BEAM (ICLR 2026) | `beam/run_benchmark.py --split 100K` | `Mohammadta/BEAM` at the pinned revision `BEAM_REVISION` (`benchmarks/lib/dataset_pins.py`) |
 | MemoryAgentBench, EverMemBench, Episodic | respective `run_benchmark.py` | see runner's download hint |
+
+Every result JSON now carries `manifest.dataset` (repository, revision,
+file, bytes, sha256 as that leg knows them), and the run-level
+`MANIFEST.json` gathers them under `datasets`.
+
+## Per-query journal, tokens and energy
+
+With `--results-out`, the LongMemEval, LoCoMo and BEAM runners also write,
+next to `<stem>.json`:
+
+- `<stem>.queries.jsonl` — one line per scored query: the retrieved items'
+  ids, sources, scores, UTF-8 bytes, code points and sha256 (and the text,
+  with `--query-log-content`). LongMemEval lines also carry the bytes of the
+  question's whole haystack.
+- `<stem>.phases.jsonl` — wall-clock start and end of every `ingest` and
+  `recall` phase.
+
+Both are written after `recall` returns; retrieval and scores are unchanged
+(`tests_py/benchmarks/test_query_log_scores_unchanged.py`).
+
+**Tokens** are counted offline, after scoring, with Anthropic's
+token-counting endpoint for one pinned model (never an estimate from
+characters, never tiktoken):
+
+```bash
+uv run --extra benchmarks --with anthropic \
+    python benchmarks/tokens/count_tokens.py \
+    --queries RESULTS_DIR/locomo.queries.jsonl --out RESULTS_DIR/locomo.tokens.json
+# LongMemEval: add --lme-dataset benchmarks/longmemeval/longmemeval_s_cleaned.json
+# to count each question's full history as well (retrieved vs full-history ratio).
+```
+
+It reports, per query, the retrieved texts (`t_retrieved`) and the
+bench-equivalent recall payload in `json` and `tabular` form
+(`benchmarks/tokens/payload.py`: the handler's own `bound_payload` /
+`encode_within_budget`, without the live handler's over-fetch and enrichment
+stages). The payload is not what the auto-recall hook injects; that hook is a
+different, FTS-only path.
+
+**Energy** per scored query comes from the same phase timeline, under the
+existing sensor lifecycle: see *Benchmark phases* in
+`benchmarks/energy/README.md`.
 
 Ablation studies (per-mechanism lesion runs) live in
 `benchmarks/lib/ablation_runner` and their results under
