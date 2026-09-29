@@ -174,6 +174,19 @@ def _dataset_fields(results_dir: str) -> dict:
     return {"datasets": datasets}
 
 
+def _legacy_lme_sha(results_dir: str, ds_sha: str) -> str | None:
+    """The positional LongMemEval-S hash, only when that leg ran here.
+
+    ``reproduce.sh`` always passes the original LongMemEval-S hash, so a
+    results dir holding only the cleaned leg would otherwise carry a hash for
+    a file it never scored. The per-leg ``datasets`` map stays the source of
+    truth; this field is kept for older readers.
+
+    source: review of cdeust/Cortex#647 (2026-09-30), blocking finding 2."""
+    ran = (Path(results_dir) / "longmemeval-s.json").exists()
+    return ds_sha if ran else None
+
+
 def build_manifest(
     results_dir: str,
     git_sha: str,
@@ -189,7 +202,7 @@ def build_manifest(
         **_start_snapshot_fields(results_dir),
         "machine_load_at_end": machine_load_snapshot(),
         "disk_space_at_end": disk_space_snapshot(),
-        "longmemeval_dataset_sha256": ds_sha,
+        "longmemeval_dataset_sha256": _legacy_lme_sha(results_dir, ds_sha),
         **_dataset_fields(results_dir),
         "pg_image": pg_image,
         # source: ADR-0091

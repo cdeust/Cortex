@@ -51,7 +51,10 @@ from benchmarks.tokens.payload import (  # noqa: E402
     render_payload,
 )
 
-DEFAULT_MODEL = "claude-opus-5"
+# source: https://docs.claude.com/en/docs/build-with-claude/token-counting (every
+# sample there uses this id; read 2026-09-30). The tokenizer is model-specific,
+# so the id is also written into every report.
+DEFAULT_MODEL = "claude-opus-5-5"
 ENVELOPE_PROBE = "x"
 
 

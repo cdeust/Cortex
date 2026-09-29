@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from benchmarks.lib.write_manifest import _dataset_fields
+from benchmarks.lib.write_manifest import _dataset_fields, _legacy_lme_sha
 
 
 def test_dataset_fields_read_each_leg_manifest(tmp_path: Path) -> None:
@@ -29,3 +29,10 @@ def test_dataset_fields_read_each_leg_manifest(tmp_path: Path) -> None:
             "longmemeval-s-cleaned": cleaned,
         }
     }
+
+
+def test_legacy_lme_hash_only_when_the_original_leg_ran(tmp_path: Path) -> None:
+    (tmp_path / "longmemeval-s-cleaned.json").write_text("{}")
+    assert _legacy_lme_sha(str(tmp_path), "08d8") is None
+    (tmp_path / "longmemeval-s.json").write_text("{}")
+    assert _legacy_lme_sha(str(tmp_path), "08d8") == "08d8"
