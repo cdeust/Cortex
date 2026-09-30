@@ -7,6 +7,7 @@ import hashlib
 import json
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from benchmarks.lib.query_log import QueryLog, sidecar_paths, text_stats
@@ -94,3 +95,11 @@ def test_phase_records_wall_clock_window_even_when_the_block_raises(
     assert recall["unit"] == "conv-1:0"
     for row in (ingest, recall):
         assert row["wall_start"] <= row["wall_end"]
+
+
+def test_numpy_scores_are_journaled_as_plain_floats(tmp_path: Path) -> None:
+    results = [{"memory_id": 1, "content": "a", "score": np.float32(0.5)}]
+    with QueryLog(tmp_path / "x.json") as log:
+        log.record("q1", results)
+    (line,) = _lines(tmp_path / "x.queries.jsonl")
+    assert line["items"][0]["score"] == 0.5

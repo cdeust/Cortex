@@ -57,10 +57,12 @@ def item_record(
 ) -> dict[str, Any]:
     """One retrieved item as the journal stores it."""
     content = str(result.get("content") or "")
+    score = result.get("score")
     record: dict[str, Any] = {
         "memory_id": result.get("memory_id"),
         "source": (source_map or {}).get(result.get("memory_id")),
-        "score": result.get("score"),
+        # recall returns numpy scalars (float32); json cannot encode them.
+        "score": None if score is None else float(score),
         **text_stats(content),
     }
     if include_content:
