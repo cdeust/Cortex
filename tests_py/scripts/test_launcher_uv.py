@@ -97,6 +97,19 @@ def test_bootstrap_installs_the_pinned_wheel_beside_deps(uv_mod, monkeypatch, tm
     assert [p.name for p in tmp_path.iterdir()] == [f"deps.uv-{uv_mod.UV_VERSION}"]
 
 
+def test_bootstrap_replaces_an_interrupted_copy_without_binary(
+    uv_mod, monkeypatch, tmp_path
+):
+    deps = str(tmp_path / "deps")
+    (uv_mod.private_dir(deps) / "uv").mkdir(parents=True)
+    monkeypatch.setattr(
+        uv_mod._pip,
+        "run_install",
+        lambda command, _env: _fake_uv_site(command) or _done(),
+    )
+    assert uv_mod._bootstrap(deps) == uv_mod.private_dir(deps) / "bin" / "uv"
+
+
 def test_bootstrap_failure_is_loud_and_leaves_nothing(uv_mod, monkeypatch, tmp_path):
     failed = _done(1, stderr="ERROR: network unreachable")
     monkeypatch.setattr(uv_mod._pip, "run_install", lambda *_a: failed)

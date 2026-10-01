@@ -125,6 +125,8 @@ def _bootstrap(deps_dir: str) -> Path:
             f"Install uv {UV_VERSION} yourself (https://docs.astral.sh/uv/) "
             "and put it on PATH, then restart."
         )
+    if target.exists() and _binary_in(target) is None:
+        shutil.rmtree(target, ignore_errors=True)  # an interrupted earlier copy
     try:
         os.replace(scratch / "site", target)
     except OSError:
