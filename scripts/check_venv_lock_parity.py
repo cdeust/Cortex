@@ -72,7 +72,7 @@ def parse_pinned_versions(requirements_text: str) -> dict[str, str]:
     versions: dict[str, str] = {}
     for raw in requirements_text.splitlines():
         line = raw.strip()
-        requirement = line.split("\\", 1)[0].strip()
+        requirement = line.partition("\\")[0].strip()
         match = _PIN_RE.match(requirement)
         if not match:
             continue

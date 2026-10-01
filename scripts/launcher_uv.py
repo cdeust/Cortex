@@ -110,7 +110,7 @@ def _bootstrap(deps_dir: str) -> Path:
     scratch.mkdir(parents=True)
     requirement = scratch / "uv-requirement.txt"
     hashes = " ".join(f"--hash=sha256:{digest}" for digest in UV_HASHES)
-    requirement.write_text(f"uv=={UV_VERSION} {hashes}\n", encoding="utf-8")
+    requirement.write_bytes(f"uv=={UV_VERSION} {hashes}\n".encode())
     print(
         f"[cortex-launcher] installing uv {UV_VERSION} into {target}", file=sys.stderr
     )

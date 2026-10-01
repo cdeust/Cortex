@@ -126,8 +126,7 @@ def _stamp_matches(deps_dir: str, kind: str, digest: str) -> bool:
     source: ADR-0747
     source: ADR-1092"""
     try:
-        with open(_stamp_path(deps_dir, kind), encoding="utf-8") as fh:
-            data = json.load(fh)
+        data = json.loads(Path(_stamp_path(deps_dir, kind)).read_bytes())
     except (OSError, ValueError):
         return False
     py = f"{sys.version_info.major}.{sys.version_info.minor}"
@@ -140,8 +139,7 @@ def _write_stamp(deps_dir: str, kind: str, digest: str) -> None:
         "lock": digest,
     }
     try:
-        with open(_stamp_path(deps_dir, kind), "w", encoding="utf-8") as fh:
-            json.dump(payload, fh)
+        Path(_stamp_path(deps_dir, kind)).write_bytes(json.dumps(payload).encode())
     except OSError:
         pass  # best-effort — worst case the next call re-verifies
 
