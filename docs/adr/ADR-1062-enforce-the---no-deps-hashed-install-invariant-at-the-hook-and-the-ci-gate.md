@@ -14,6 +14,8 @@ title: Enforce the --no-deps hashed-install invariant at the hook and the CI gat
 
 accepted
 
+Records here that describe the exported `requirements/*.txt` files, the installers' `pip install --no-deps --require-hashes` call sites or the launcher's pip resolution are superseded by ADR-1092 (installs now run `uv sync --locked` or `uv pip install --require-hashes` on a `pylock.toml` exported from `uv.lock`); the hook and CI gate this ADR adds stand and still run.
+
 ## Context
 
 `pyproject.toml`'s `[tool.uv] override-dependencies` steers `mpmath` past the
@@ -100,3 +102,7 @@ grep-level pattern's reach); those two call sites are unaffected by this
 gate and remain correct by construction (verified by
 `tests_py/scripts/test_setup_py_installs_from_lock.py` and
 `tests_py/scripts/test_launcher_torch_cpu.py`).
+
+## Related
+
+- see_also → [adr/cortex/1092-make-uv-lock-the-only-dependency-source.md](adr/cortex/1092-make-uv-lock-the-only-dependency-source.md)

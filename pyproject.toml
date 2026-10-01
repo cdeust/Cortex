@@ -701,6 +701,33 @@ launcher-ml = [
     "flashrank",
     "torch",
 ]
+# Which torch / onnxruntime / numpy / transformers / cryptography each platform
+# resolves to. uv keeps ONE version across platforms unless the specifiers of
+# disjoint markers cannot overlap, so every bound below is paired with the
+# opposite bound for the rest: otherwise the lock collapses to the oldest
+# version everywhere on the next `uv lock --upgrade-package`. Not installed by
+# any entry point; it only shapes the lock.
+# - Intel macOS: PyTorch stops at 2.2.2 (CPython <= 3.12), built against the
+#   numpy 1 ABI, below transformers 5 (needs torch >= 2.4); onnxruntime stops
+#   at 1.23.2 and cryptography at 48 (no x86_64 wheel from 49).
+# - Apple Silicon before macOS 14 (Darwin < 23): torch >= 2.12 and
+#   onnxruntime >= 1.24 publish macosx_14_0_arm64 wheels only. Its torch range
+#   must not overlap Intel's, or uv would give both the one version 2.2.2.
+# source: ADR-1092
+platform-bounds = [
+    "torch==2.2.2 ; sys_platform == 'darwin' and platform_machine == 'x86_64' and python_full_version < '3.13'",
+    "torch>=2.4,<2.12 ; sys_platform == 'darwin' and platform_machine == 'arm64' and platform_release < '23'",
+    "torch>=2.12 ; sys_platform != 'darwin' or (platform_machine == 'arm64' and platform_release >= '23') or (platform_machine == 'x86_64' and python_full_version >= '3.13')",
+    "onnxruntime<1.24 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "onnxruntime<1.24 ; sys_platform == 'darwin' and platform_machine == 'arm64' and platform_release < '23'",
+    "onnxruntime>=1.24 ; python_full_version >= '3.11' and (sys_platform != 'darwin' or (platform_machine == 'arm64' and platform_release >= '23'))",
+    "numpy<2 ; sys_platform == 'darwin' and platform_machine == 'x86_64' and python_full_version < '3.13'",
+    "numpy>=2 ; sys_platform != 'darwin' or platform_machine != 'x86_64' or python_full_version >= '3.13'",
+    "transformers<5 ; sys_platform == 'darwin' and platform_machine == 'x86_64' and python_full_version < '3.13'",
+    "transformers>=5 ; sys_platform != 'darwin' or platform_machine != 'x86_64' or python_full_version >= '3.13'",
+    "cryptography<49 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "cryptography>=49 ; sys_platform != 'darwin' or platform_machine != 'x86_64'",
+]
 
 [tool.mutmut]
 # source: ADR-0874

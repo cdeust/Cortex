@@ -23,7 +23,11 @@ results (LongMemEval Recall@10 = 98.2%, LoCoMo Recall@10 = 94.2%, BEAM-10M
 
 ## Dev setup
 
-**Prerequisites:** Python 3.10+ and `uvx` (`pip install uv` or `pipx install uv`).
+**Prerequisites:** Python 3.10+ and `uv` with `uvx` (`pip install uv` or `pipx install uv`).
+`uv` itself must be on `PATH` for `pytest`, not only `uvx`: once psycopg is
+installed, pytest's start-up check (`scripts/check_venv_lock_parity.py`) runs
+`uv export` to compare your venv with `uv.lock`, and stops with an explicit
+error when `uv` is missing. The launcher tests resolve the locked sets with it too.
 The default store is a local SQLite file — nothing to provision. PostgreSQL 17
 + pgvector is only needed to run the PostgreSQL-backed integration tests.
 

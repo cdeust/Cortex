@@ -90,6 +90,34 @@ bot pushes to `main`.
    `generate_pip_constraints.py --check`. `uv lock --check` stays.
    `requirements/fuzz.txt` had no reader: the ClusterFuzzLite build
    installed `ci-sqlite-min.txt`, and still installs that set.
+6. **The lock carries per-platform bounds, so the ML set resolves on every
+   platform the old pip resolution served.** One locked version is not
+   enough: from onnxruntime 1.24 and torch 2.12 the macOS wheels are
+   `macosx_14_0_arm64` only, so `uv export --only-group launcher-ml` of a lock
+   with one version of each failed on Intel Macs and on Apple Silicon before
+   macOS 14, where the old pip resolution had chosen older wheels (found in
+   the review of #654, reproduced with `uv pip install --dry-run
+   --python-platform` on uv 0.11.3). The `platform-bounds` dependency group
+   in `pyproject.toml` (installed by nothing, it only shapes the lock) gives
+   each platform its range: Intel macOS torch 2.2.2 (PyTorch publishes
+   nothing newer there), numpy 1, transformers 4, onnxruntime below 1.24,
+   cryptography below 49 (no x86_64 wheel from 49); Apple Silicon before
+   macOS 14 (marker `platform_release < '23'`, Darwin 22 and older) torch
+   2.4 to 2.11 and onnxruntime below 1.24; everything else the newest. The
+   ranges are paired with their opposite (`>=`), because uv keeps ONE
+   version across platforms unless the specifiers cannot overlap: with
+   `constraint-dependencies` alone, or a bound without its opposite, the
+   first `uv lock` from scratch or `--upgrade-package` (Dependabot's
+   command) collapsed onnxruntime, torch and cryptography to the oldest
+   version on every platform, and Apple Silicon before macOS 14 took Intel's
+   torch 2.2.2. The old Intel resolution (torch 2.2.2 with numpy 2.5 and
+   transformers 5.16) was itself broken: `import transformers` fails with
+   `NameError: name 'nn' is not defined`, run under Rosetta on 2026-10-02.
+   `tests_py/scripts/test_launcher_platform_coverage.py` resolves both
+   launcher sets for each platform and Python offline and fails when a
+   platform loses its wheels or its coherent stack. A Dependabot PR that raises
+one of these bounds (it reads them as ordinary requirements) fails that test
+in CI instead of reaching users.
 
 ## Consequences
 
@@ -106,6 +134,39 @@ letting pip resolve transitives from PyPI. Measured 2026-10-01, macOS
 arm64, Python 3.13, cold caches: base set 32.0 s with pip, 7.4 s with uv
 plus 8.1 s for the one-time uv bootstrap; ML set 175 s with pip, 64 s with
 uv.
+
+Coverage of the launcher's two sets, from `uv pip install --dry-run
+--offline --python-platform` on uv 0.11.3 (2026-10-02; the raw runs are in
+`tasks/review-evidence-uv-lock-single-source.md`). Base resolves to wheels on
+every row. ML, with torch / onnxruntime / numpy / transformers:
+
+| Platform | CPython | ML set |
+|---|---|---|
+| Linux x86_64, aarch64 (manylinux 2.28) | 3.10 to 3.14 | torch 2.13.0+cpu, transformers 5.16.1; onnxruntime 1.28.0 (1.23.2 on 3.10) |
+| Windows x86_64 | 3.10 to 3.14 | torch 2.13.0, transformers 5.16.1; onnxruntime 1.28.0 (1.23.2 on 3.10) |
+| macOS Apple Silicon 14+ (Darwin 23+) | 3.10 to 3.14 | torch 2.13.0, transformers 5.16.1; onnxruntime 1.28.0 (1.23.2 on 3.10) |
+| macOS Apple Silicon 13 (Darwin 22) | 3.10 to 3.13 | torch 2.11.0, onnxruntime 1.23.2, transformers 5.16.1; 3.14: none (onnxruntime publishes no cp314 wheel before macOS 14) |
+| macOS Intel (13+) | 3.10 to 3.12 | torch 2.2.2, numpy 1.26.4, transformers 4.57.6 with sentence-transformers 5.7.0, onnxruntime 1.23.2; 3.13, 3.14: none (no PyTorch wheel) |
+| macOS 12 and older, Windows ARM | any | none; unchanged for Windows ARM (psycopg-binary has no wheel); macOS 12 was served before with onnxruntime 1.19.2 and is not now (onnxruntime 1.23.2 needs macOS 13) |
+
+An uncovered row fails the install loudly at the wheel lookup, never a
+fallback, and a failed ML install writes no stamp, so the launcher retries at
+the next SessionStart (the old resolution failed the same way where it
+found no wheel: Intel on 3.13 and 3.14, Apple Silicon before 14 on 3.14).
+Installed and exercised for real: the Intel row under Rosetta
+(`SentenceTransformer.encode`, flashrank `Ranker`, base imports) and the
+Apple Silicon 14+ row natively (Darwin 25.6); the macOS 13 row with its
+torch 2.11.0 and onnxruntime 1.23.2 pinned on that host. Linux and Windows
+resolve to the same versions as before this change, closure for closure
+(9 of 9 dry runs of every installer extra plus the ML group).
+
+Harder: the lock now holds several versions of torch, onnxruntime, numpy,
+transformers and cryptography side by side (about 100 KB more; hashing it
+still costs 0.46 ms per launch, 0.45 before), and a bump of one of them
+moves only the platforms whose range it satisfies. uv 0.12.18, the
+version Dependabot runs, writes `resolution-markers` in a different order
+than 0.11.3 (526 changed lines on this lock after `--upgrade-package certifi`, measured 2026-10-02), so a local `uv lock` after
+such a PR rewrites them without changing a version.
 
 Harder: the plugin tree must ship `uv.lock` and `pyproject.toml` (it does;
 the MCPB bundle does not use the launcher). The first launch without a

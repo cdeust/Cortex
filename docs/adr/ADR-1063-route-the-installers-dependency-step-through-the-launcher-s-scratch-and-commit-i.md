@@ -14,6 +14,8 @@ title: Route the installers' dependency step through the launcher's scratch-and-
 
 accepted
 
+Records here that describe `requirements/setup.txt` or `scripts/launcher_torch_cpu.py` are superseded by ADR-1092 (the installers now export their set from `uv.lock` and install it with `uv pip install --require-hashes --target`); the scratch-and-commit routing this ADR chose stands.
+
 ## Context
 
 `scripts/setup.sh` (the `--postgres` path of `install-plugin.sh`) and `scripts/setup.py` (the SQLite path) installed `requirements/setup.txt` with `pip install --target "$DEPS_DIR" --no-deps --require-hashes`, straight into the persistent `$CLAUDE_PLUGIN_DATA/deps`. ADR-1059 kept that call without `--upgrade` because the directory may sit on a running MCP server's `sys.path`, and it named the launcher's atomic commit path (ADR-0749) as the only one allowed to refresh a stale `deps/`.
@@ -41,3 +43,7 @@ Harder: the installers inherit the launcher's pip environment (`launcher_pip.cle
 Harder: a re-run on an up-to-date directory is no longer a no-op for entries whose name is not their distribution's. The idempotence guard matches a top-level entry to a version by name, so `yaml` (PyYAML), `sklearn`, `google`, `bin` and similar entries are replaced on every run, with identical content, through the same atomic rename. Measured on 2026-09-15 on an APFS clone of the maintainer's 4.22.0 deps directory (Python 3.14.4, macOS 26): 27 of 213 entries replaced, every one of them of that kind; entries named after their distribution, numpy among them, kept their inode. Mapping entries to distributions through each `RECORD` would remove the churn; that is a change to the guard, not to this routing.
 
 Unchanged: a top-level module that an old version shipped and the new one no longer ships is not removed, because no scratch entry replaces it. This was already true of the launcher's own installs.
+
+## Related
+
+- see_also → [adr/cortex/1092-make-uv-lock-the-only-dependency-source.md](adr/cortex/1092-make-uv-lock-the-only-dependency-source.md)
