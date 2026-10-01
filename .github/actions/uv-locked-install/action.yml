@@ -18,10 +18,14 @@ runs:
   using: composite
 
   steps:
+    # No uv cache: setup-uv's default restores one key shared by every job
+    # (a 44 s restore in run 36896928228's MCP host job).
+    # source: ADR-1092
     - name: Install uv (pinned)
       uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
       with:
         version: "0.11.3"
+        enable-cache: false
 
     # --inexact keeps what the environment already had (pip, setuptools);
     # --locked fails instead of re-resolving when uv.lock is stale.

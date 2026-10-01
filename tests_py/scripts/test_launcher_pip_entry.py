@@ -1,10 +1,10 @@
 """The launcher finds a pip even on an interpreter that has none (issue #582).
 
-The launcher's pip command ran `sys.executable -m pip`, so from a `uv venv` (no pip module
-by design) every install failed with "No module named pip" and the plugin's
-private deps directory could not be filled at all. The resolution order is now
-installed module, then the wheel the standard library bundles for ensurepip,
-then a named error.
+The launcher's pip command ran `sys.executable -m pip`, so from a `uv venv`
+(no pip module by design) every install failed with "No module named pip"
+and the plugin's private deps directory could not be filled at all. The
+resolution order is now installed module, then the wheel the standard
+library bundles for ensurepip, then a named error.
 
 source: ADR-1067
 """

@@ -467,7 +467,7 @@ jobs:
             PATH="$stripped"
           done
           bash scripts/install-plugin.sh
-          ls "$CLAUDE_PLUGIN_DATA"/deps.uv-*/
+          python3 -c "import glob, os, sys; found = glob.glob(os.path.join(os.environ['CLAUDE_PLUGIN_DATA'], 'deps.uv-*', 'bin', 'uv*')); print(found); sys.exit(not found)"
 
       # The step above ran the REAL install path, not the CI install two
       # steps up. This checks its deps/ output against pyproject.toml's

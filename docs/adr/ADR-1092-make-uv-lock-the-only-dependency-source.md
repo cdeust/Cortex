@@ -49,7 +49,9 @@ bot pushes to `main`.
    (`crates/uv/src/commands/project/mod.rs`); `--inexact` keeps pip.
    `Verify` accepts a lock entry without a hash, so
    `tests_py/scripts/test_uv_lock_single_source.py` asserts every registry
-   artifact in `uv.lock` has one.
+   artifact in `uv.lock` has one. The composite turns setup-uv's cache
+   off: its default restores one key shared by every job, a 44 s restore
+   in run 36896928228's MCP host job.
 2. **The launcher and both installers install from `uv.lock` too.**
    `scripts/launcher_uv.py` runs `uv export --frozen --format pylock.toml`
    for one set and `uv pip install --require-hashes --target <scratch>` on
