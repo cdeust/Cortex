@@ -106,6 +106,19 @@ def test_ensure_deps_runs_nothing_when_the_stamp_matches(deps_mod, deps_dir, cal
     assert calls == []
 
 
+def test_fast_path_reads_the_stamp_of_this_kind_and_lock(
+    deps_mod, deps_dir, calls, monkeypatch
+):
+    seen = []
+    real = deps_mod._stamp_matches
+    monkeypatch.setattr(
+        deps_mod, "_stamp_matches", lambda *a: seen.append(a) or real(*a)
+    )
+    deps_mod._write_stamp(str(deps_dir), "base", DIGEST)
+    deps_mod.ensure_deps(str(deps_dir))
+    assert seen == [(str(deps_dir), "base", DIGEST)]
+
+
 def test_ensure_deps_rechecks_the_stamp_under_the_lock(
     deps_mod, deps_dir, calls, monkeypatch
 ):
@@ -162,7 +175,14 @@ def test_missing_lock_installs_nothing_and_says_why(
     monkeypatch.setattr(deps_mod, "lock_digest", lambda: None)
     deps_mod.ensure_all_deps(str(deps_dir))
     assert calls == []
-    assert "uv.lock is missing" in capsys.readouterr().err
+    assert (
+        capsys.readouterr().err
+        == (
+            f"[cortex-launcher] {deps_mod.LOCK_PATH} is missing; cannot install "
+            "dependencies. Reinstall the plugin.\n"
+        )
+        * 2
+    )
 
 
 def test_ensure_all_deps_installs_base_then_ml(deps_mod, deps_dir, calls):
@@ -172,6 +192,8 @@ def test_ensure_all_deps_installs_base_then_ml(deps_mod, deps_dir, calls):
         (str(deps_dir), ("--only-group", "launcher-ml")),
     ]
     assert _stamp(deps_mod, deps_dir, "ml")["lock"] == DIGEST
+    names = {p.name for p in deps_dir.iterdir() if p.name.startswith(".cortex")}
+    assert names == {".cortex-deps-stamp-base.json", ".cortex-deps-stamp-ml.json"}
 
 
 def test_ensure_deps_sweeps_stale_backups_even_on_the_fast_path(
@@ -189,6 +211,28 @@ def test_installer_set_is_installed_under_the_lock(deps_mod, tmp_path, calls):
     assert deps_mod.main([str(deps_dir)]) == 0
     assert calls == [(str(deps_dir), deps_mod._sets.INSTALLER)]
     assert not Path(f"{deps_dir}.lock").exists()
+
+
+def test_installer_set_sweeps_and_locks_its_own_deps_dir(
+    deps_mod, deps_dir, calls, monkeypatch
+):
+    (deps_dir / "numpy.bak-4242").mkdir()
+    monkeypatch.setattr(deps_mod._fs, "pid_alive", lambda _pid: False)
+    held = []
+    monkeypatch.setattr(
+        deps_mod,
+        "_install_locked_set",
+        lambda d, _s: held.append(Path(f"{d}.lock").is_dir()) or True,
+    )
+    assert deps_mod.install_installer_set(str(deps_dir)) is True
+    assert held == [True]
+    assert not (deps_dir / "numpy.bak-4242").exists()
+
+
+def test_installer_cli_help_is_the_function_docstring(deps_mod, capsys):
+    with pytest.raises(SystemExit):
+        deps_mod.main(["--help"])
+    assert "Install the installers' set" in capsys.readouterr().out
 
 
 def test_installer_cli_exits_nonzero_when_the_install_fails(

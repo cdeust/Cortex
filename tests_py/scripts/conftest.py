@@ -10,5 +10,6 @@ F811). Discovery through conftest has no such collision.
 from __future__ import annotations
 
 from tests_py.scripts._launcher_site_fixture import launcher_site  # noqa: F401 — re-exported for pytest's fixture discovery
+from tests_py.scripts._launcher_uv_fixture import uv_mod  # noqa: F401 — re-exported for pytest's fixture discovery
 
-__all__ = ["launcher_site"]
+__all__ = ["launcher_site", "uv_mod"]

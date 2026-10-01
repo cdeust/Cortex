@@ -57,6 +57,15 @@ class ParsePinnedVersionsTests(unittest.TestCase):
         text = "foo==1.0.0 ; python_version < '3.0'\n"
         self.assertEqual(parity.parse_pinned_versions(text), {})
 
+    def test_marker_is_read_before_the_first_continuation_backslash(self) -> None:
+        """A hashed export continues a marker line with ``\\``; the marker
+        must be parsed without it, and without anything after it."""
+        text = (
+            "foo==1.0.0 ; python_version >= '3.0' \\\n    --hash=sha256:aa\n"
+            "bar==2.0.0 ; python_version < '3.0' \\ trailing \\\n"
+        )
+        self.assertEqual(parity.parse_pinned_versions(text), {"foo": "1.0.0"})
+
     def test_python_version_fork_keeps_only_the_matching_branch(self) -> None:
         """The real file forks e.g. aiofile on python_full_version; only the
         branch matching THIS interpreter should survive, never both."""
@@ -223,9 +232,13 @@ class LockedRequirementsTests(unittest.TestCase):
         )
 
     def test_missing_uv_or_failed_export_raises(self) -> None:
-        with mock.patch.object(parity.shutil, "which", return_value=None):
-            with self.assertRaises(parity.LockUnreadableError):
+        with mock.patch.object(parity.shutil, "which", return_value=None) as which:
+            with self.assertRaises(parity.LockUnreadableError) as raised:
                 parity.locked_requirements()
+        which.assert_called_once_with("uv")
+        self.assertEqual(
+            str(raised.exception), "uv is not on PATH (https://docs.astral.sh/uv/)."
+        )
         failed = mock.Mock(returncode=2, stdout="", stderr="lock is stale")
         with (
             mock.patch.object(parity.shutil, "which", return_value="/bin/uv"),
