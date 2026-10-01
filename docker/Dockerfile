@@ -68,22 +68,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY docker/claude-code/package.json docker/claude-code/package-lock.json /opt/claude-code/
 RUN cd /opt/claude-code && npm ci --omit=dev --ignore-scripts
 
-# Install the exported Python requirements with artifact hash verification.
+# Install uv.lock's postgresql + codebase + container set into a venv at a
+# version-free path, every artifact checked against the lock's sha256.
 # source: ADR-0872
-#
-# source: ADR-0872
-
-
-
-
-
-
-
-
-COPY requirements/docker-runtime.txt /tmp/requirements.txt
+# source: ADR-1092
+COPY --from=ghcr.io/astral-sh/uv:0.11.3@sha256:90bbb3c16635e9627f49eec6539f956d70746c409209041800a0280b93152823 /uv /usr/local/bin/uv
+COPY pyproject.toml uv.lock /tmp/cortex-lock/
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-RUN pip install --no-cache-dir --no-deps --require-hashes -r /tmp/requirements.txt
+RUN cd /tmp/cortex-lock && UV_PROJECT_ENVIRONMENT=/opt/venv uv sync --locked \
+    --inexact --no-cache --no-install-project --no-default-groups \
+    --extra postgresql --extra codebase --group container
 
 # source: ADR-0872
 

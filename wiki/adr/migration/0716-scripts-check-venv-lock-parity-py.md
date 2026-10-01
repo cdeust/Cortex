@@ -2,6 +2,8 @@
 
 Status: accepted; preserved from the existing implementation during issue #514.
 
+Records here that describe the exported `requirements/*.txt` files, `scripts/launcher_pins.py` or the launcher's pip resolution are superseded by ADR-1092; the others stand.
+
 These are historical implementation records, not new algorithm or threshold choices.
 Source: `scripts/check_venv_lock_parity.py`; original SHA-256 `1b754aac2ec4d3ce35923aadd2daa90c60a48c4d599f80d9acdf1ff0974ba94a`.
 
@@ -80,3 +82,6 @@ file does not pin, and both are outside what this check covers.
     """
 ````
 
+## Related
+
+- see_also → [adr/cortex/1092-make-uv-lock-the-only-dependency-source.md](adr/cortex/1092-make-uv-lock-the-only-dependency-source.md)

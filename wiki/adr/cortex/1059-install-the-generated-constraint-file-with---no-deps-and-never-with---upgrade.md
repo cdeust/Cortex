@@ -2,7 +2,7 @@
 created: 2026-09-09T10:47:34Z
 kind: adr
 number: 1059
-status: accepted
+status: superseded
 tags: [packaging, pip, uv-lock, concurrency, installer]
 title: Install the generated constraint file with --no-deps and never with --upgrade
 ---
@@ -10,7 +10,7 @@ title: Install the generated constraint file with --no-deps and never with --upg
 
 ## Status
 
-accepted
+superseded by ADR-1092
 
 ## Context
 
@@ -41,3 +41,7 @@ Easier: the concurrency contract around `deps/` now has a single owner. Nothing 
 Harder: `scripts/setup.sh` cannot repair a stale `deps/` itself. After an interpreter upgrade the directory can hold extension modules built for the previous ABI, and the step will report success regardless. That is a known gap, deliberately left visible rather than papered over, and it depends on the launcher's idempotence guard becoming ABI-aware.
 
 Risk accepted: a maintainer who deletes either flag gets no signal from CI, because nothing asserts the invariant that a hashed constraint install also passes `--no-deps`. That absence is precisely why PR #332's fix could skip a call site, and it is filed as its own gate work.
+
+## Related
+
+- superseded_by → [adr/cortex/1092-make-uv-lock-the-only-dependency-source.md](adr/cortex/1092-make-uv-lock-the-only-dependency-source.md)

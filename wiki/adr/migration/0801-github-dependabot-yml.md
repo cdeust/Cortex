@@ -6,6 +6,8 @@ source: .github/dependabot.yml
 
 # ADR-0801 — .github/dependabot.yml
 
+Records here that describe the exported `requirements/*.txt` files, `scripts/launcher_pins.py` or the launcher's pip resolution are superseded by ADR-1092; the others stand.
+
 Source rationale preserved verbatim. Identifiers inside historical quotations are not current identities.
 
 ## .github/dependabot.yml — original line 3
@@ -115,3 +117,7 @@ Source rationale preserved verbatim. Identifiers inside historical quotations ar
 #         https://pypi.org/pypi/pydantic/2.14.0a1/json +
 #         https://pypi.org/pypi/pydantic/2.14.0b1/json, read 2026-08-10.
 ````
+
+## Related
+
+- see_also → [adr/cortex/1092-make-uv-lock-the-only-dependency-source.md](adr/cortex/1092-make-uv-lock-the-only-dependency-source.md)

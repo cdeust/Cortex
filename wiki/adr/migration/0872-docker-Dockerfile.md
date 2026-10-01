@@ -6,6 +6,8 @@ source: docker/Dockerfile
 
 # ADR-0872 — docker/Dockerfile
 
+Records here that describe the exported `requirements/*.txt` files, `scripts/launcher_pins.py` or the launcher's pip resolution are superseded by ADR-1092; the others stand.
+
 Source rationale preserved verbatim. Identifiers inside historical quotations are not current identities.
 
 ## docker/Dockerfile — original line 21
@@ -154,3 +156,7 @@ Source rationale preserved verbatim. Identifiers inside historical quotations ar
 # Copy Node.js + Claude CLI from builder. The CLI now lives in the project
 # directory `npm ci` installed it into, not in the global prefix.
 ````
+
+## Related
+
+- see_also → [adr/cortex/1092-make-uv-lock-the-only-dependency-source.md](adr/cortex/1092-make-uv-lock-the-only-dependency-source.md)

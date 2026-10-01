@@ -2,7 +2,7 @@
 
 # ADR-0750: scripts/launcher_pins.py implementation decisions
 
-Status: accepted; preserved from the existing implementation during issue #514.
+Status: superseded by ADR-1092; was accepted; preserved from the existing implementation during issue #514.
 
 These are historical implementation records, not new algorithm or threshold choices.
 Source: `scripts/launcher_pins.py`; original SHA-256 `db8bcce2755cf8dff6cc97a38491ebf37424d7e285f09b828590bb879afc5172`.
@@ -102,3 +102,6 @@ bump can no longer silently leave the launcher behind.
 # Reconciled to the export and uv.lock by test_launcher_torch_cpu_pins.py.
 ````
 
+## Related
+
+- superseded_by → [adr/cortex/1092-make-uv-lock-the-only-dependency-source.md](adr/cortex/1092-make-uv-lock-the-only-dependency-source.md)

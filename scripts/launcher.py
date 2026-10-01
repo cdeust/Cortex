@@ -152,13 +152,8 @@ def main() -> None:
     else:
         launcher_deps.ensure_deps(deps_dir)
 
-    # Again, because the install above can add .pth files that the first
-    # call could not see. That pip run resolves transitives (only the
-    # installers' requirements closure passes --no-deps), so the set of
-    # distributions landing in deps_dir is wider than the pinned list, and
-    # a .pth among them would stay inert until the next launch -- issue
-    # #621's own bug class, for a different package. Re-running costs
-    # ~0.5 ms median on a 600-entry deps_dir (measured, 200 samples).
+    # Again: the locked set just installed can add a .pth the first call
+    # could not see. ~0.5 ms median on a 600-entry deps_dir.
     # source: issue #621
     launcher_site.isolate_deps(deps_dir)
 

@@ -2,7 +2,7 @@
 
 # ADR-0737: scripts/generate_pip_constraints.py implementation decisions
 
-Status: accepted; preserved from the existing implementation during issue #514.
+Status: superseded by ADR-1092; was accepted; preserved from the existing implementation during issue #514.
 
 These are historical implementation records, not new algorithm or threshold choices.
 Source: `scripts/generate_pip_constraints.py`; original SHA-256 `1ca5c929d4fc839d69bc883ceae0473bf0441eaf1b08a6ff954d6ad84aeb33f6`.
@@ -94,3 +94,6 @@ Usage:
     # share an exit code: a missing uv would otherwise read as a clean gate.
 ````
 
+## Related
+
+- superseded_by → [adr/cortex/1092-make-uv-lock-the-only-dependency-source.md](adr/cortex/1092-make-uv-lock-the-only-dependency-source.md)

@@ -683,6 +683,24 @@ container = [
 fuzz = [
     "atheris>=3.1.0; python_version >= '3.12' and sys_platform == 'linux' and platform_machine == 'x86_64'",
 ]
+# What scripts/launcher.py installs lazily: the base set on every entry
+# point, the ML set at SessionStart. Versions come from uv.lock only.
+# source: ADR-1092
+launcher-base = [
+    "mcp",
+    "pydantic",
+    "pydantic-settings",
+    "numpy",
+    "psycopg[binary]",
+    "psycopg-pool",
+    "pgvector",
+    "sqlite-vec",
+]
+launcher-ml = [
+    "sentence-transformers",
+    "flashrank",
+    "torch",
+]
 
 [tool.mutmut]
 # source: ADR-0874

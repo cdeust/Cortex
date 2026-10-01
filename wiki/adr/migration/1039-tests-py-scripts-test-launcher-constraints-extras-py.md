@@ -1,6 +1,6 @@
 # ADR-1039: tests_py/scripts/test_launcher_constraints_extras.py design and historical evidence
 
-Status: accepted; existing test/harness evidence preserved during issue #514.
+Status: superseded by ADR-1092; was accepted; existing test/harness evidence preserved during issue #514.
 
 Source `tests_py/scripts/test_launcher_constraints_extras.py`, original SHA-256 `ecc23aa315432c92cc9e9e92b1161b1ac13a4c1a93d54ae9cc1ba1f336b3720e`.
 Assertions and runtime fixture literals remain unchanged.
@@ -30,3 +30,6 @@ rejects.
 """
 ````
 
+## Related
+
+- superseded_by → [adr/cortex/1092-make-uv-lock-the-only-dependency-source.md](adr/cortex/1092-make-uv-lock-the-only-dependency-source.md)

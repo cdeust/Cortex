@@ -8,6 +8,8 @@ source: Dockerfile
 
 # ADR-0812 — Dockerfile
 
+Records here that describe the exported `requirements/*.txt` files, `scripts/launcher_pins.py` or the launcher's pip resolution are superseded by ADR-1092; the others stand.
+
 Source rationale preserved verbatim. Identifiers inside historical quotations are not current identities.
 
 ## Dockerfile — original line 15
@@ -158,3 +160,7 @@ Source rationale preserved verbatim. Identifiers inside historical quotations ar
 # MCP servers typically run stdio transport; no ports to expose.
 # Prometheus metrics endpoint is served by the sidecar in Phase 7.1.
 ````
+
+## Related
+
+- see_also → [adr/cortex/1092-make-uv-lock-the-only-dependency-source.md](adr/cortex/1092-make-uv-lock-the-only-dependency-source.md)

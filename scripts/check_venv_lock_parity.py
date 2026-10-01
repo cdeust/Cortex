@@ -2,18 +2,18 @@
 """Guard a stale postgresql-extra install from silently under-collecting
 tests.
 
-The same class of drift was independently caught the day before, in
-``tests_py/scripts/test_launcher_pins_match_lock.py`` — ``pgvector`` 0.4.2
-vs. 0.5.0, ``psycopg`` 3.3.3 vs. 3.3.4 — confirming a stale postgresql-extra
-venv is a recurring, not hypothetical, failure mode in this repo, not a
-one-off.
+The pins compared against are uv.lock's, exported for the set CI's Test job
+installs (dev + postgresql + codebase) by ``uv export``.
 
-source: ADR-0716"""
+source: ADR-0716
+source: ADR-1092"""
 
 from __future__ import annotations
 
 import importlib.metadata
 import re
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 from typing import Callable
@@ -21,7 +21,30 @@ from typing import Callable
 from packaging.markers import Marker
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-CI_POSTGRESQL_TXT = REPO_ROOT / "requirements" / "ci-postgresql.txt"
+# The Test (Python 3.x) job's set. source: ADR-1092
+CI_SET = ("--extra", "dev", "--extra", "postgresql", "--extra", "codebase")
+
+
+class LockUnreadableError(RuntimeError):
+    """uv could not export the locked set; the message says why."""
+
+
+def locked_requirements() -> str:
+    """uv.lock's CI set as a requirements.txt body, markers kept, no hashes."""
+    uv = shutil.which("uv")
+    if uv is None:
+        raise LockUnreadableError("uv is not on PATH (https://docs.astral.sh/uv/).")
+    process = subprocess.run(
+        [uv, "export", "--frozen", "--no-config", "--project", str(REPO_ROOT)]
+        + ["--no-emit-project", "--no-default-groups", *CI_SET]
+        + ["--format", "requirements.txt", "--no-hashes"],
+        capture_output=True,
+        text=True,
+    )
+    if process.returncode:
+        raise LockUnreadableError(process.stderr.strip())
+    return process.stdout
+
 
 # A pinned requirement line: "name==version", optionally followed by
 # "; marker" and/or a trailing "\" continuation. Comment, hash-continuation,
@@ -96,14 +119,17 @@ def postgresql_extra_drift() -> str | None:
     if installed_version("psycopg") is None:
         return None  # no postgresql extra installed — nothing to guard
 
-    pinned = parse_pinned_versions(CI_POSTGRESQL_TXT.read_text(encoding="utf-8"))
+    try:
+        pinned = parse_pinned_versions(locked_requirements())
+    except LockUnreadableError as exc:
+        return f"Cannot read uv.lock's pins to check this venv: {exc}"
     mismatches = find_mismatches(pinned, installed_version)
     if not mismatches:
         return None
 
     return (
-        "Local venv has drifted from requirements/ci-postgresql.txt — the "
-        "file CI's 'Check advertised test count' step installs from "
+        "Local venv has drifted from uv.lock's dev+postgresql+codebase set — "
+        "the set CI's 'Check advertised test count' step installs "
         "(issue #287). A version-mismatched postgresql-extra package can "
         "change which tests import successfully at collection time, so the "
         "locally collected test count silently stops matching CI's. "
@@ -120,9 +146,7 @@ def main(argv: list[str]) -> int:
     del argv
     message = postgresql_extra_drift()
     if message is None:
-        print(
-            "OK: no postgresql-extra version drift from requirements/ci-postgresql.txt"
-        )
+        print("OK: no postgresql-extra version drift from uv.lock")
         return 0
     print(message, file=sys.stderr)
     return 1

@@ -1,47 +1,31 @@
-"""scripts/setup.py's dependency install must resolve from the generated,
-hash-pinned constraint file, not a hand-written package list — issue #538.
+"""scripts/setup.py's dependency install must come from uv.lock — issue #538.
 
 Prior state: ``install_deps()`` built its own ``packages = ["mcp>=2.0.0",
 ...]`` list of loose version ranges and passed it straight to ``pip
-install --target``. No pin, no hash, no reference to uv.lock.
+install --target``. No pin, no hash, no reference to uv.lock. It now hands
+the deps directory to ``scripts/launcher_deps.py``, which exports the
+installer set from uv.lock and installs it, hash-checked, through scratch;
+a failure stops the setup instead of printing a warning and carrying on.
 
-Since issue #573 ``install_deps()`` no longer calls pip itself: it hands
-``requirements/setup.txt`` to ``scripts/launcher_deps.py``, which installs
-into scratch and commits entry by entry. The first test inspects that argv
-(via the module's ``run`` hook, mocked so no process starts); the second
-inspects the pip argv the launcher builds for the file:
-  - the source is ``-r requirements/setup.txt``, not a Python list literal
-  - ``--no-deps`` is present (ADR-1059: pip must not re-derive the graph
-    uv's ``[tool.uv] override-dependencies`` already resolved)
-  - ``--require-hashes`` is present
-  - ``--upgrade`` is absent and ``--target`` is the scratch directory, never
-    the deps directory a live MCP server may hold on ``sys.path``
-  - no hand-written ``name>=version`` requirement specifier reaches pip
-
-source: ADR-1059
-source: ADR-1063"""
+source: ADR-1063
+source: ADR-1092"""
 
 from __future__ import annotations
 
 import importlib.util
-import re
-import subprocess
 import sys
 from pathlib import Path
 from unittest import mock
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS_DIR = REPO_ROOT / "scripts"
 SETUP_MODULE_PATH = SCRIPTS_DIR / "setup.py"
-LOCK_EXPORT_PATH = REPO_ROOT / "requirements" / "setup.txt"
 
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
-import launcher_pip  # noqa: E402
-
-# A hand-written loose requirement specifier: NAME>=X.Y.Z (optionally with
-# an extras marker like psycopg[binary]); must never reach pip.
-_LOOSE_SPEC = re.compile(r"^[A-Za-z0-9_.-]+(\[[a-z]+\])?>=[0-9]")
+import launcher_sets  # noqa: E402
 
 
 def _load_setup_module():
@@ -54,55 +38,38 @@ def _load_setup_module():
     return module
 
 
-def test_install_deps_hands_the_generated_file_to_the_launcher():
+def test_install_deps_hands_only_the_deps_dir_to_the_launcher():
     mod = _load_setup_module()
     fake_run = mock.Mock(return_value=mock.Mock(returncode=0, stderr=""))
     with mock.patch.object(mod, "run", fake_run):
         mod.install_deps()
-
-    fake_run.assert_called_once()
     (argv,), _kwargs = fake_run.call_args
+    assert argv == [
+        sys.executable,
+        str(SCRIPTS_DIR / "launcher_deps.py"),
+        mod.DEPS_DIR,
+    ]
 
-    assert Path(argv[1]) == SCRIPTS_DIR / "launcher_deps.py", argv
-    source = argv[argv.index("--requirement") + 1]
-    assert Path(source) == LOCK_EXPORT_PATH, (
-        f"install_deps() reads {source!r}, expected the generated "
-        f"{LOCK_EXPORT_PATH} (scripts/pip_constraint_sets.py, entry "
-        f'"setup.txt")'
+
+def test_install_deps_failure_stops_the_setup_with_the_cause(capsys):
+    mod = _load_setup_module()
+    failed = mock.Mock(returncode=1, stderr="could not install uv 0.11.3 from PyPI")
+    with mock.patch.object(mod, "run", mock.Mock(return_value=failed)):
+        with pytest.raises(SystemExit) as stopped:
+            mod.install_deps()
+    assert stopped.value.code == 1
+    assert "could not install uv 0.11.3 from PyPI" in capsys.readouterr().out
+
+
+def test_installer_set_keeps_the_extras_setup_txt_carried():
+    """postgresql + sqlite (ADR-1089) + codebase + benchmarks (datasets)."""
+    assert launcher_sets.INSTALLER == (
+        "--extra",
+        "postgresql",
+        "--extra",
+        "sqlite",
+        "--extra",
+        "codebase",
+        "--extra",
+        "benchmarks",
     )
-    assert argv[-1] == mod.DEPS_DIR
-    assert "--target" not in argv, (
-        "install_deps() must not install into DEPS_DIR directly: pip then "
-        "keeps the old package directories under the new *.dist-info "
-        "(issue #573)"
-    )
-    hand_written = [arg for arg in argv if _LOOSE_SPEC.match(arg)]
-    assert not hand_written, hand_written
-
-
-def test_launcher_installs_the_file_hashed_without_deps_into_scratch(tmp_path):
-    deps_dir = str(tmp_path / "deps")
-    completed = subprocess.CompletedProcess([], 0, "", "")
-    with mock.patch.object(
-        launcher_pip.subprocess, "run", return_value=completed
-    ) as run:
-        launcher_pip.install_requirements(deps_dir, str(LOCK_EXPORT_PATH))
-
-    (argv,), _kwargs = run.call_args
-    assert Path(argv[argv.index("-r") + 1]) == LOCK_EXPORT_PATH
-    assert "--no-deps" in argv, (
-        "the constraint file is the fully uv-resolved closure and pip "
-        "re-deriving it aborts with ResolutionImpossible (ADR-1059)"
-    )
-    assert "--require-hashes" in argv
-    assert "--upgrade" not in argv
-    assert argv[argv.index("--target") + 1] == launcher_pip.scratch_dir(deps_dir)
-
-
-def test_generated_constraint_file_exists_and_is_hash_pinned():
-    """Guard the fixture itself: the file the tests above point at must be
-    the real generated, hashed export, not an empty/missing placeholder."""
-    assert LOCK_EXPORT_PATH.is_file()
-    text = LOCK_EXPORT_PATH.read_text(encoding="utf-8")
-    assert "GENERATED by scripts/generate_pip_constraints.py" in text
-    assert "--hash=sha256:" in text

@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Pip invocation and non-destructive commit — stdlib only.
+"""Locked-set install into scratch and non-destructive commit — stdlib only.
 
 Like its siblings, this module runs before the plugin's own
 dependencies exist on ``sys.path`` and may import only the Python
 standard library.
 
-source: ADR-0749"""
+source: ADR-0749
+source: ADR-1092"""
 
 from __future__ import annotations
 
@@ -22,31 +23,10 @@ if _SCRIPTS_DIR not in sys.path:
 import launcher_deps_fs as _fs  # noqa: E402
 import launcher_deps_record as _record  # noqa: E402
 import launcher_pip as _pip  # noqa: E402
-import launcher_torch_cpu as _cpu  # noqa: E402
+import launcher_uv as _uv  # noqa: E402
 
 # source: ADR-0749
 _PIP_ERROR_TAIL_CHARS = 2000
-
-
-def constraint_without_extras(spec: str) -> str:
-    """Drop the ``[extra]`` clause from a pip spec, keeping the version.
-
-        Precondition: ``spec`` is a pip requirement string. Postcondition: the
-        return value carries no extras clause; everything else is unchanged.
-
-        pip documents constraints files as version-only and now rejects extras
-        outright, so ``psycopg[binary]==3.3.4`` (BASE_PACKAGES) failed the whole
-        ML install — silently, since only that install passes constraints:
-        FlashRank never landed and recall degraded to first-stage scores.
-
-    source: ADR-0749"""
-    head, bracket, rest = spec.partition("[")
-    if not bracket:
-        return spec
-    _dropped, closing, tail = rest.partition("]")
-    if not closing:
-        return spec  # unbalanced — not ours to rewrite; hand it to pip as-is
-    return head + tail
 
 
 def _remove_path(path: str, *, best_effort: bool = False) -> None:
@@ -144,7 +124,7 @@ def _entry_already_satisfied(
 def _commit_resolved_entries(tmp_dir: str, deps_dir: str) -> tuple[bool, str | None]:
     """Commit every top-level ``tmp_dir`` entry into ``deps_dir``.
 
-        Precondition: ``tmp_dir`` holds a completed, successful pip
+        Precondition: ``tmp_dir`` holds a completed, successful
         ``--target`` install. Postcondition: ``(True, None)`` iff every
         entry committed (or was already satisfied), every stale
         ``*.dist-info`` sibling has been pruned, and every top-level
@@ -214,43 +194,21 @@ def _report_failure(process: subprocess.CompletedProcess[str]) -> None:
     )
 
 
-def pip_install(
-    deps_dir: str, packages: list[str], constraints: list[str] | None = None
-) -> bool:
-    """Resolve into scratch, then retain the existing per-entry rollback policy.
+def install_locked_set(deps_dir: str, set_args: tuple[str, ...]) -> bool:
+    """Install one uv.lock set through scratch and commit.
 
-    Linux ML resolves a hash-checked CPU torch wheel even for partial installs.
-    A failed commit preserves scratch entries for recovery; no success stamp is
-    allowed by the caller when this function returns False.
-    """
-    tmp_dir = _pip.scratch_dir(deps_dir)
-    normalized = [constraint_without_extras(spec) for spec in constraints or []]
-    try:
-        process = _pip.resolve(deps_dir, packages, normalized)
-    except (OSError, _cpu.CpuWheelError) as exc:
-        print(
-            f"[cortex-launcher] dependency resolution failed: "
-            f"{str(exc)[-_PIP_ERROR_TAIL_CHARS:]}",
-            file=sys.stderr,
-        )
-        _cleanup_scratch(tmp_dir)
-        return False
-    return _commit_install(process, tmp_dir, deps_dir)
+        Precondition: ``set_args`` selects a set of uv.lock (launcher_sets).
+        Postcondition: True iff every entry committed, leaving one
+        ``*.dist-info`` per distribution the set locks; False leaves
+        ``deps_dir`` as it was for every uncommitted entry, after printing
+        why (including when uv itself could not be found or installed).
 
-
-def install_requirements(deps_dir: str, requirements: str) -> bool:
-    """Install a hash-pinned closure file through scratch and commit.
-
-        Precondition: ``requirements`` is a generated constraint file
-        (``requirements/setup.txt``). Postcondition: True iff every entry
-        committed, leaving one ``*.dist-info`` per distribution it pins;
-        False leaves ``deps_dir`` as it was for every uncommitted entry.
-
-    source: ADR-1063"""
+    source: ADR-1063
+    source: ADR-1092"""
     tmp_dir = _pip.scratch_dir(deps_dir)
     try:
-        process = _pip.install_requirements(deps_dir, requirements)
-    except OSError as exc:
+        process = _uv.install_locked_set(deps_dir, set_args, tmp_dir)
+    except (OSError, _uv.UvUnavailableError) as exc:
         print(f"[cortex-launcher] dependency install failed: {exc}", file=sys.stderr)
         _cleanup_scratch(tmp_dir)
         return False

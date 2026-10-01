@@ -8,6 +8,8 @@ source: .github/actions/test-suite/action.yml
 
 # ADR-0800 — .github/actions/test-suite/action.yml
 
+Records here that describe the exported `requirements/*.txt` files, `scripts/launcher_pins.py` or the launcher's pip resolution are superseded by ADR-1092; the others stand.
+
 Source rationale preserved verbatim. Identifiers inside historical quotations are not current identities.
 
 ## .github/actions/test-suite/action.yml — original line 7
@@ -245,3 +247,7 @@ Source rationale preserved verbatim. Identifiers inside historical quotations ar
 # it is checked where the number is known. The other repo-derived
 # badges are checked in the static job, which needs no suite.
 ````
+
+## Related
+
+- see_also → [adr/cortex/1092-make-uv-lock-the-only-dependency-source.md](adr/cortex/1092-make-uv-lock-the-only-dependency-source.md)

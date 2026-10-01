@@ -66,22 +66,11 @@ updates:
     commit-message:
       prefix: "build"
 
-  # Python dependencies are declared in pyproject.toml and locked in uv.lock.
-  #
-  # Note on what these PRs still require by hand: Dependabot rewrites a version
-  # specifier — in pyproject.toml, or directly in one of the generated
-  # requirements/*.txt exports it reads as a manifest — and never runs `uv lock`
-  # or scripts/generate_pip_constraints.py. Every `deps` PR therefore arrives
-  # failing the two Lint steps that guard exactly that chain (`uv lock --check`,
-  # `generate_pip_constraints.py --check`). Resync before merging:
-  #
-  #   uv lock --upgrade-package <name>      # uv 0.11.3, the version ci.yml pins
-  #   python scripts/generate_pip_constraints.py
-  #
-  # source: ADR-0801
-
-
-  - package-ecosystem: "pip"
+  # Python dependencies are declared in pyproject.toml and locked in uv.lock,
+  # the only dependency file: the uv ecosystem rewrites both through
+  # `uv lock --upgrade-package`, so its PRs need no follow-up commit.
+  # source: ADR-1092
+  - package-ecosystem: "uv"
     directory: "/"
     schedule:
       interval: "weekly"

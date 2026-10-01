@@ -3,7 +3,7 @@
 
 ``pyproject.toml``'s ``[tool.uv] override-dependencies`` steers ``mpmath``
 past the ``mpmath<1.4`` bound ``sympy``'s own metadata still declares. uv's
-resolver honours the override when it exports ``requirements/*.txt``; the
+resolver honours the override when it exports a requirements file; the
 requirements-file format cannot carry the override itself. Installing that
 file with ``--require-hashes`` but without ``--no-deps`` makes pip
 re-derive the graph from the unresolved metadata and abort with
@@ -33,9 +33,8 @@ from mcp_server.hooks.decision_gate import candidate_content
 
 _OVERRIDE = "CORTEX_NO_DEPS_GATE"
 
-# Every place a generated, hash-pinned constraint file is installed today:
-# CI workflows, the composite test-suite action, both Dockerfiles, the
-# devcontainer, and the shell/Python setup scripts — see ADR-1062.
+# Every place such an install lived until uv.lock replaced the exported
+# files (ADR-1092); the gate keeps it from coming back — see ADR-1062.
 _SCOPED_DIR_NAMES = frozenset({"scripts", ".devcontainer"})
 
 

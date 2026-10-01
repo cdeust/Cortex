@@ -6,6 +6,8 @@ source: .devcontainer/Dockerfile
 
 # ADR-0797 — .devcontainer/Dockerfile
 
+Records here that describe the exported `requirements/*.txt` files, `scripts/launcher_pins.py` or the launcher's pip resolution are superseded by ADR-1092; the others stand.
+
 Source rationale preserved verbatim. Identifiers inside historical quotations are not current identities.
 
 ## .devcontainer/Dockerfile — original line 1
@@ -111,3 +113,7 @@ Source rationale preserved verbatim. Identifiers inside historical quotations ar
 # pg_isready (see that file) — required for postCreateCommand to work.
 # git: contributor workflow inside the container.
 ````
+
+## Related
+
+- see_also → [adr/cortex/1092-make-uv-lock-the-only-dependency-source.md](adr/cortex/1092-make-uv-lock-the-only-dependency-source.md)

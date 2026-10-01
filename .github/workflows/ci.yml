@@ -48,7 +48,7 @@ jobs:
           filters: |
             code:
               - '**'
-              - '!{*.md,docs/**/*.md,tasks/**/*.md,Dockerfile,.dockerignore,docker/**,.devcontainer/**,.github/**,pyproject.toml,uv.lock,requirements/**,**/package.json,**/package-lock.json}'
+              - '!{*.md,docs/**/*.md,tasks/**/*.md,Dockerfile,.dockerignore,docker/**,.devcontainer/**,.github/**,pyproject.toml,uv.lock,**/package.json,**/package-lock.json}'
             docs:
               - '{*.md,docs/**/*.md,tasks/**/*.md}'
             docker:
@@ -56,7 +56,7 @@ jobs:
             workflows:
               - '.github/**'
             deps:
-              - '{pyproject.toml,uv.lock,requirements/**,**/package.json,**/package-lock.json}'
+              - '{pyproject.toml,uv.lock,**/package.json,**/package-lock.json}'
 
   # source: ADR-0802
 
@@ -156,14 +156,6 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Cache pip
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-3.12-sqlite-${{ hashFiles('pyproject.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-3.12-sqlite-
-
       - name: Cache HuggingFace models
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -175,21 +167,14 @@ jobs:
 
 
 
-      - name: Install dependencies (no postgresql extra)
-        # source: ADR-0802
+      - name: Install the locked dev+sqlite+codebase set (no postgresql extra)
+        uses: ./.github/actions/uv-locked-install
+        with:
+          set: --extra dev --extra sqlite --extra codebase
+          environment: ${{ env.pythonLocation }}
 
-
-
-
-
-
-
-
-
-
-        run: |
-          pip install --no-deps --require-hashes -r requirements/ci-sqlite.txt
-          pip install --no-deps -e .
+      - name: Install the project
+        run: pip install --no-deps -e .
 
       # source: ADR-0802
 
@@ -407,8 +392,6 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
-          cache: pip
-          cache-dependency-path: requirements/ci-sqlite-min.txt
 
       - name: Cache HuggingFace models
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -416,14 +399,16 @@ jobs:
           path: ~/.cache/huggingface
           key: ${{ runner.os }}-hf-all-MiniLM-L6-v2
 
-      - name: Install dependencies (no postgresql extra)
-        # source: ADR-0802
+      # Deliberately without the codebase extra: this job proves the SQLite
+      # backend stands up with no tree-sitter toolchain present.
+      - name: Install the locked dev+sqlite set (no postgresql extra)
+        uses: ./.github/actions/uv-locked-install
+        with:
+          set: --extra dev --extra sqlite
+          environment: ${{ env.pythonLocation }}
 
-
-
-        run: |
-          pip install --no-deps --require-hashes -r requirements/ci-sqlite-min.txt
-          pip install --no-deps -e .
+      - name: Install the project
+        run: pip install --no-deps -e .
 
       # source: ADR-0802
 
@@ -471,16 +456,22 @@ jobs:
         env:
           CLAUDE_PLUGIN_ROOT: ${{ github.workspace }}
           CLAUDE_PLUGIN_DATA: ${{ runner.temp }}/cortex-plugin-data
-        run: bash scripts/install-plugin.sh
+        # A user machine has no uv: drop the one setup-uv put on PATH so the
+        # installer must bootstrap its own pinned copy. source: ADR-1092
+        run: |
+          set -euo pipefail
+          while uv_bin="$(command -v uv)"; do
+            uv_dir="$(dirname "$uv_bin")"
+            stripped="$(printf '%s' "$PATH" | tr ':' '\n' | grep -vxF "$uv_dir" | paste -sd: -)"
+            [ "$stripped" != "$PATH" ] || { echo "cannot drop $uv_dir from PATH" >&2; exit 1; }
+            PATH="$stripped"
+          done
+          bash scripts/install-plugin.sh
+          ls "$CLAUDE_PLUGIN_DATA"/deps.uv-*/
 
-      # The step above ran the REAL install path, not the
-      # `pip install -r requirements/ci-sqlite-min.txt` shortcut two steps
-      # up. Issue #634 shipped because BASE_PACKAGES never named sqlite-vec
-      # while ci-sqlite-min.txt did (it always inherits the [sqlite]
-      # extra) -- every prior Windows CI run installed a dependency set no
-      # real user ever received. This checks the real path's own deps/
-      # output against pyproject.toml's [sqlite] extra directly, so a
-      # future package added to one list but not the other fails here.
+      # The step above ran the REAL install path, not the CI install two
+      # steps up. This checks its deps/ output against pyproject.toml's
+      # [sqlite] extra directly (issue #634). source: ADR-1091
       - name: Verify the real install path installed the [sqlite] extra
         shell: bash
         env:
@@ -540,7 +531,7 @@ jobs:
   release-deps:
     needs: [changes, lint]
     if: github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true')
-    name: Release dependency set (requirements/release.txt)
+    name: Release dependency set (uv.lock dev+postgresql)
     runs-on: ubuntu-latest
     # source: ADR-0802
     timeout-minutes: 4
@@ -551,8 +542,6 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
-          cache: pip
-          cache-dependency-path: requirements/release.txt
 
       - name: Cache HuggingFace models
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -560,13 +549,14 @@ jobs:
           path: ~/.cache/huggingface
           key: ${{ runner.os }}-hf-all-MiniLM-L6-v2
 
-      - name: Install the release dependency set (hash-pinned)
-        # source: ADR-0802
+      - name: Install the locked release set (dev+postgresql)
+        uses: ./.github/actions/uv-locked-install
+        with:
+          set: --extra dev --extra postgresql
+          environment: ${{ env.pythonLocation }}
 
-
-        run: |
-          pip install --no-deps --require-hashes -r requirements/release.txt
-          pip install --no-deps -e .
+      - name: Install the project
+        run: pip install --no-deps -e .
 
       # source: ADR-0802
 
@@ -599,17 +589,12 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
-          cache: pip
-          cache-dependency-path: requirements/lint.txt
 
-      - name: Install ruff
-        # source: ADR-0802
-
-
-
-
-
-        run: pip install --no-deps --require-hashes -r requirements/lint.txt
+      - name: Install ruff (locked lint group)
+        uses: ./.github/actions/uv-locked-install
+        with:
+          set: --only-group lint
+          environment: ${{ env.pythonLocation }}
 
       - name: Check formatting
         run: ruff format --check .
@@ -661,24 +646,6 @@ jobs:
 
 
 
-
-
-
-
-
-
-
-      - name: Install uv (pinned)
-        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
-        with:
-          version: "0.11.3"
-
-      # source: ADR-0802
-
-
-
-
-
       #
       # source: ADR-0802
 
@@ -705,9 +672,6 @@ jobs:
 
       - name: Check uv.lock matches pyproject.toml
         run: uv lock --check
-
-      - name: Check hash-pinned requirements match uv.lock
-        run: python scripts/generate_pip_constraints.py --check
 
       # source: ADR-0802
 
@@ -804,10 +768,6 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
-          cache: pip
-          cache-dependency-path: |
-            requirements/ci-typecheck.txt
-            requirements/typecheck-tool.txt
 
       # source: ADR-0802
 
@@ -817,18 +777,20 @@ jobs:
 
 
 
-      - name: Create .venv with the full type-check environment
-        # source: ADR-0802
+      - name: Create .venv for the type-check environment
+        run: python -m venv .venv
 
+      # The widest extra set on purpose: pyright resolves imports across
+      # every optional backend. The typecheck group is pyright itself.
+      # source: ADR-1092
+      - name: Install the locked type-check set into .venv
+        uses: ./.github/actions/uv-locked-install
+        with:
+          set: --extra dev --extra postgresql --extra sqlite --extra codebase --extra otel --group typecheck
+          environment: .venv
 
-
-        run: |
-          python -m venv .venv
-          .venv/bin/pip install --no-deps --require-hashes -r requirements/ci-typecheck.txt
-          .venv/bin/pip install --no-deps -e .
-          # source: ADR-0802
-          #
-          .venv/bin/pip install --no-deps --require-hashes -r requirements/typecheck-tool.txt
+      - name: Install the project into .venv
+        run: .venv/bin/pip install --no-deps -e .
 
       # source: ADR-0802
 
@@ -868,14 +830,12 @@ jobs:
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
-          cache: pip
-          cache-dependency-path: requirements/packaging.txt
 
-      - name: Install build tools
-        # source: ADR-0802
-
-
-        run: pip install --no-deps --require-hashes -r requirements/packaging.txt
+      - name: Install build tools (locked packaging group)
+        uses: ./.github/actions/uv-locked-install
+        with:
+          set: --only-group packaging
+          environment: ${{ env.pythonLocation }}
 
       - name: Build sdist and wheel
         run: python -m build

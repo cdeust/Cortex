@@ -1,0 +1,36 @@
+name: "Install one uv.lock set"
+description: >-
+  Install exactly the packages uv.lock pins for one extras/groups selection
+  into an existing Python environment, verifying every artifact against the
+  lock's sha256. uv.lock is the only dependency source (ADR-1092).
+
+# source: ADR-1092
+
+inputs:
+  set:
+    description: "uv sync selection flags, e.g. '--extra dev --extra sqlite' or '--only-group lint'."
+    required: true
+  environment:
+    description: "Prefix of the environment to install into (a setup-python pythonLocation or a venv)."
+    required: true
+
+runs:
+  using: composite
+
+  steps:
+    - name: Install uv (pinned)
+      uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      with:
+        version: "0.11.3"
+
+    # --inexact keeps what the environment already had (pip, setuptools);
+    # --locked fails instead of re-resolving when uv.lock is stale.
+    # source: ADR-1092
+    - name: Install the locked set
+      shell: bash
+      env:
+        UV_PROJECT_ENVIRONMENT: ${{ inputs.environment }}
+        UV_SET: ${{ inputs.set }}
+      run: |
+        # shellcheck disable=SC2086 # UV_SET is a flag list, split on purpose
+        uv sync --locked --inexact --no-install-project --no-default-groups $UV_SET

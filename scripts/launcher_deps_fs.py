@@ -74,13 +74,6 @@ def normalize_dist_key(name: str) -> str:
     return re.sub(r"[-_.]+", "_", name).strip("_").lower()
 
 
-def parse_pip_spec(spec: str) -> tuple[str, str]:
-    """Split ``'name[extra]==version'`` into ``(dist_key, version)``."""
-    name_part, _, version = spec.partition("==")
-    name_part = name_part.split("[", 1)[0].strip()
-    return normalize_dist_key(name_part), version.strip()
-
-
 def dist_info_versions(dir_path: str) -> dict[str, str]:
     """Map normalized dist key -> version for every distribution that has
     exactly one ``*.dist-info`` child.
@@ -117,21 +110,6 @@ def entry_dist_key(entry: str) -> str:
         dist_name, _, _version = base.rpartition("-")
         return normalize_dist_key(dist_name or base)
     return normalize_dist_key(entry)
-
-
-def dist_info_satisfies(deps_dir: str, spec: str) -> bool:
-    """True iff ``deps_dir``'s OWN ``.dist-info`` already matches ``spec``.
-
-        Precondition: ``spec`` is a pip spec (``name==version``, optionally
-        with ``[extras]``). Postcondition: pure filesystem read of
-        ``deps_dir`` — never consults ``sys.path``, ``sys.modules``, or does
-        any import. A package satisfied only by something ELSE on the
-        process's ``sys.path`` (the host interpreter's own global
-        site-packages, another PYTHONPATH entry) does not count.
-
-    source: ADR-0748"""
-    dist_key, version = parse_pip_spec(spec)
-    return dist_info_versions(deps_dir).get(dist_key) == version
 
 
 def current_extension_abi_suffix() -> str:

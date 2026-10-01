@@ -217,7 +217,7 @@ ok "Python $PY_VERSION"
 
 # source: ADR-1063
 source "$SCRIPT_DIR/lib/install_python_deps.sh"
-install_python_deps_step "$SCRIPT_DIR" "$PROJECT_DIR/requirements/setup.txt" "$DEPS_DIR"
+install_python_deps_step "$SCRIPT_DIR" "$DEPS_DIR"
 
 # ── Step 4: Database setup ──────────────────────────────────────────────
 

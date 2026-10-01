@@ -4,6 +4,8 @@
 
 Status: accepted; preserved from the existing implementation during issue #514.
 
+Records here that describe the exported `requirements/*.txt` files, `scripts/launcher_pins.py` or the launcher's pip resolution are superseded by ADR-1092; the others stand.
+
 These are historical implementation records, not new algorithm or threshold choices.
 Source: `scripts/launcher_pip.py`; original SHA-256 `c0f1a9131e1095abfbd8c48c002f8bc5d0aefee95160b2cf93184685ca7dd13a`.
 
@@ -26,3 +28,6 @@ https://pip.pypa.io/en/stable/topics/configuration/#pip-config-file
 # source: pip configuration docs — os.devnull disables every config file.
 ````
 
+## Related
+
+- see_also → [adr/cortex/1092-make-uv-lock-the-only-dependency-source.md](adr/cortex/1092-make-uv-lock-the-only-dependency-source.md)

@@ -12,6 +12,8 @@ title: Stamp 'neural' only after the vector actually lands
 
 accepted
 
+Records here that describe the exported `requirements/*.txt` files, `scripts/launcher_pins.py` or the launcher's pip resolution are superseded by ADR-1092; the others stand.
+
 ## Context
 
 The SQLite backend is Cortex's zero-config default. Its vector (semantic)
@@ -140,3 +142,7 @@ unchanged by this ADR: hardening it to raise at store-open time would
 change startup behavior on interpreters without loadable-extension
 support (common on macOS system/Framework Python) -- that is a decision
 for the maintainer, not bundled into this fix.
+
+## Related
+
+- see_also → [adr/cortex/1092-make-uv-lock-the-only-dependency-source.md](adr/cortex/1092-make-uv-lock-the-only-dependency-source.md)

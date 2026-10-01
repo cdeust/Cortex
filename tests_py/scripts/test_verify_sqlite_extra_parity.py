@@ -52,7 +52,7 @@ class SqliteExtraNamesTests(unittest.TestCase):
     def test_real_pyproject_toml_declares_sqlite_vec(self) -> None:
         """Guard the parser against the real file: a silently-empty parse
         (wrong section name, changed TOML shape) would make every check
-        below vacuously pass regardless of what BASE_PACKAGES installs."""
+        below vacuously pass regardless of what the launcher installs."""
         names = parity.sqlite_extra_names(
             parity.PYPROJECT_TOML.read_text(encoding="utf-8")
         )

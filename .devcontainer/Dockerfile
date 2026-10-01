@@ -43,24 +43,15 @@ WORKDIR /workspace
 COPY pyproject.toml README.md ./
 COPY mcp_server ./mcp_server
 
-# source: ADR-0797
-
-
-#
-# source: ADR-0797
-
-
-
-
-
-
-
-
-
-
-
-COPY requirements/devcontainer.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir --no-deps --require-hashes -r /tmp/requirements.txt
+# The same uv.lock CI and production resolve from, installed into the
+# image's Python as the lock pins it (postgresql + codebase + container,
+# CPU-only torch), every artifact checked against the lock's sha256.
+# source: ADR-1092
+COPY --from=ghcr.io/astral-sh/uv:0.11.3@sha256:90bbb3c16635e9627f49eec6539f956d70746c409209041800a0280b93152823 /uv /usr/local/bin/uv
+COPY uv.lock ./
+RUN UV_PROJECT_ENVIRONMENT=/usr/local uv sync --locked --inexact --no-cache \
+    --no-install-project --no-default-groups \
+    --extra postgresql --extra codebase --group container
 
 # source: ADR-0797
 

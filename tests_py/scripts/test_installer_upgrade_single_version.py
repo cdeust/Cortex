@@ -7,13 +7,14 @@ directory that already existed but still added the new ``*.dist-info``, so an
 upgrade left old code under new metadata. Both installers now go through the
 launcher's scratch-and-commit install.
 
-These tests run real pip, offline, against two locally built wheels of a probe
-distribution. The requirements file carries the same flags as
-``requirements/setup.txt`` would need offline (``--no-index``,
-``--find-links``) and a hash-pinned line, so ``--require-hashes`` and
-``--no-deps`` are exercised for real.
+These tests run the real shell step and the real launcher, offline, against
+two locally built wheels of a probe distribution. The ``uv`` they find on
+PATH is a stand-in at the pinned version: its ``export`` writes a hash-pinned
+probe requirement and its ``pip install`` hands that to real pip with
+``--require-hashes``, into the scratch ``--target`` the launcher chose.
 
-source: ADR-1063"""
+source: ADR-1063
+source: ADR-1092"""
 
 from __future__ import annotations
 
@@ -27,6 +28,8 @@ import zipfile
 from pathlib import Path
 
 import pytest
+
+from tests_py.scripts import _fake_uv
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS_DIR = REPO_ROOT / "scripts"
@@ -43,7 +46,7 @@ set -euo pipefail
 ok()   {{ echo "[ok] $1"; }}
 fail() {{ echo "[FAIL] $1"; exit 1; }}
 source "{lib_path}"
-install_python_deps_step "{scripts_dir}" "{requirements}" "{deps_dir}"
+install_python_deps_step "{scripts_dir}" "{deps_dir}"
 """
 
 
@@ -104,7 +107,7 @@ def _pip_target(deps: Path, wheels: Path, version: str) -> None:
 
 @pytest.fixture
 def layout(tmp_path: Path) -> dict[str, Path]:
-    """A deps directory at version N and a requirements file pinning N+1."""
+    """A deps directory at version N, a requirement pinning N+1 and a uv."""
     wheels = tmp_path / "wheels"
     wheels.mkdir()
     _build_wheel(wheels, _OLD)
@@ -118,7 +121,13 @@ def layout(tmp_path: Path) -> dict[str, Path]:
         f"{_DIST}=={_NEW} --hash=sha256:{wheel_hash}\n",
         encoding="utf-8",
     )
-    return {"wheels": wheels, "deps": deps, "requirements": requirements}
+    fake_uv = _fake_uv.install(tmp_path / "fake-uv-bin", requirements)
+    return {
+        "wheels": wheels,
+        "deps": deps,
+        "requirements": requirements,
+        "fake_uv": fake_uv,
+    }
 
 
 def _as_left_by_4_22_0(layout: dict[str, Path]) -> None:
@@ -144,11 +153,11 @@ def _run_setup_sh_step(layout: dict[str, Path]) -> subprocess.CompletedProcess:
     script = _HARNESS.format(
         lib_path=LIB_PATH,
         scripts_dir=SCRIPTS_DIR,
-        requirements=layout["requirements"],
         deps_dir=layout["deps"],
     )
     python_bin = str(Path(sys.executable).parent)
-    env = {"PATH": f"{python_bin}{os.pathsep}/usr/bin:/bin", "HOME": os.environ["HOME"]}
+    path = os.pathsep.join([str(layout["fake_uv"]), python_bin, "/usr/bin", "/bin"])
+    env = {"PATH": path, "HOME": os.environ["HOME"]}
     return subprocess.run(
         ["bash", "-c", script], capture_output=True, text=True, env=env
     )
@@ -159,7 +168,7 @@ def _run_setup_py_install_deps(layout: dict[str, Path], monkeypatch) -> None:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     monkeypatch.setattr(module, "DEPS_DIR", str(layout["deps"]))
-    monkeypatch.setattr(module, "_SETUP_CONSTRAINTS", layout["requirements"])
+    monkeypatch.setenv("PATH", _fake_uv.path_with(layout["fake_uv"]))
     module.install_deps()
 
 
@@ -198,12 +207,9 @@ def test_setup_sh_step_fails_loudly_when_the_install_fails(layout) -> None:
 
 
 def test_setup_sh_routes_step_3_through_the_library() -> None:
-    """The library is what the tests above drive; setup.sh must call it with
-    the generated closure, not keep a direct ``--target`` install of its own."""
+    """The library is what the tests above drive; setup.sh must call it, not
+    keep a direct ``--target`` install of its own."""
     text = SETUP_SH.read_text(encoding="utf-8")
     assert 'source "$SCRIPT_DIR/lib/install_python_deps.sh"' in text
-    assert (
-        'install_python_deps_step "$SCRIPT_DIR" '
-        '"$PROJECT_DIR/requirements/setup.txt" "$DEPS_DIR"'
-    ) in text
+    assert 'install_python_deps_step "$SCRIPT_DIR" "$DEPS_DIR"' in text
     assert "--target" not in text

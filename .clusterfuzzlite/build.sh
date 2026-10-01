@@ -5,15 +5,11 @@
 #
 #
 
-# source: ADR-0796
-#
-#
-#
-#
-#
-#
-#
-pip3 install --no-deps --require-hashes -r "$SRC/cortex/requirements/ci-sqlite-min.txt"
+# uv.lock's dev+sqlite set into the builder's own Python, hash-verified;
+# --inexact keeps the atheris the base image ships. source: ADR-1092
+UV_PROJECT_ENVIRONMENT="$(python3 -c 'import sys; print(sys.prefix)')" \
+    uv sync --project "$SRC/cortex" --locked --inexact --no-cache \
+    --no-install-project --no-default-groups --extra dev --extra sqlite
 pip3 install --no-deps -e "$SRC/cortex"
 
 # compile_python_fuzzer is provided by the base image. It wraps each harness

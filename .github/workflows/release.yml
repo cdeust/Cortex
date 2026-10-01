@@ -150,13 +150,11 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install build tools
-        # source: ADR-0808
-
-
-
-
-        run: pip install --no-deps --require-hashes -r requirements/packaging.txt
+      - name: Install build tools (locked packaging group)
+        uses: ./.github/actions/uv-locked-install
+        with:
+          set: --only-group packaging
+          environment: ${{ env.pythonLocation }}
 
       - name: Build sdist and wheel
         run: python -m build
@@ -238,6 +236,8 @@ jobs:
 
       - name: Install uv (pinned) + cyclonedx
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: "0.11.3"
 
       - name: Export the locked graph and build the SBOM
         run: |

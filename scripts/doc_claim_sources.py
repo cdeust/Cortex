@@ -75,7 +75,7 @@ def canonical_hook_count(read_fn: ReadFn) -> int:
     wire and what the console script accepts, so it is the only number a doc
     can mean. It is read as TEXT, like every other canonical source here, and
     never imported: the Lint job that runs this gate installs ruff and nothing
-    else (`requirements/lint.txt`, ci.yml), so `import mcp_server` raises
+    else (uv.lock's `lint` group, ci.yml), so `import mcp_server` raises
     ModuleNotFoundError there and takes the whole pipeline down with it.
     A late import does not help, because this is called unconditionally.
     """

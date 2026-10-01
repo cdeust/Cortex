@@ -8,6 +8,8 @@ source: .github/workflows/ci.yml
 
 # ADR-0802 — .github/workflows/ci.yml
 
+Records here that describe the exported `requirements/*.txt` files, `scripts/launcher_pins.py` or the launcher's pip resolution are superseded by ADR-1092; the others stand.
+
 Source rationale preserved verbatim. Identifiers inside historical quotations are not current identities.
 
 ## .github/workflows/ci.yml — original line 9
@@ -968,3 +970,7 @@ Source rationale preserved verbatim. Identifiers inside historical quotations ar
       # exhaust; the preinstalled toolchains below are worth ~10GB and are
       # not used by it.
 ````
+
+## Related
+
+- see_also → [adr/cortex/1092-make-uv-lock-the-only-dependency-source.md](adr/cortex/1092-make-uv-lock-the-only-dependency-source.md)

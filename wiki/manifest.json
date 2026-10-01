@@ -3535,6 +3535,10 @@
     "ADR-1091": {
       "mirror": "ADR-1091-target-the-windows-ci-leg-at-what-actually-broke-on-windows.md",
       "path": "adr/cortex/1091-target-the-windows-ci-leg-at-what-actually-broke-on-windows.md"
+    },
+    "ADR-1092": {
+      "mirror": "ADR-1092-make-uv-lock-the-only-dependency-source.md",
+      "path": "adr/cortex/1092-make-uv-lock-the-only-dependency-source.md"
     }
   },
   "project": "cortex",

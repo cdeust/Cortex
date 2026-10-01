@@ -1,6 +1,7 @@
-"""Pip resolution before dependency commit; stdlib only.
+"""The pip the launcher runs to bootstrap uv; stdlib only.
 
-source: ADR-0751"""
+source: ADR-0751
+source: ADR-1092"""
 
 from __future__ import annotations
 
@@ -8,12 +9,7 @@ import importlib.util
 import os
 import subprocess
 import sys
-from collections.abc import Iterator
-from contextlib import contextmanager
 from pathlib import Path
-
-import launcher_pins as _pins
-import launcher_torch_cpu as _cpu
 
 
 def clean_environment() -> dict[str, str]:
@@ -36,29 +32,10 @@ def clean_environment() -> dict[str, str]:
     return environment
 
 
-@contextmanager
-def constraint_args(deps_dir: str, constraints: list[str]) -> Iterator[list[str]]:
-    """Delete the resolver hint on every exit, reporting any cleanup failure."""
-    if not constraints:
-        yield []
-        return
-    path = Path(f"{deps_dir}.constraints-{os.getpid()}.txt")
-    with open(path, "w", encoding="utf-8") as stream:
-        stream.write("\n".join(constraints) + "\n")
-    try:
-        yield ["-c", str(path)]
-    finally:
-        try:
-            path.unlink()
-        except OSError as exc:
-            print(
-                f"[cortex-launcher] constraints cleanup failed: {exc}", file=sys.stderr
-            )
-
-
-def _install(
+def run_install(
     command: list[str], environment: dict[str, str]
 ) -> subprocess.CompletedProcess[str]:
+    """Run one pip install, retrying once past a PEP 668 refusal for --target."""
     process = subprocess.run(command, capture_output=True, text=True, env=environment)
     error = (process.stderr or "") + (process.stdout or "")
     if process.returncode and "externally-managed-environment" in error:
@@ -78,7 +55,7 @@ def _install(
 
 
 def scratch_dir(deps_dir: str) -> str:
-    """The per-process pip ``--target`` a commit later moves into ``deps_dir``."""
+    """The per-process install ``--target`` a commit later moves into ``deps_dir``."""
     return f"{deps_dir}.tmp-{os.getpid()}"
 
 
@@ -119,47 +96,3 @@ def pip_entry() -> list[str]:
             "interpreter, or run the launcher with one that has it."
         )
     return [sys.executable, str(wheel / "pip")]
-
-
-def _pip_command(*arguments: str) -> list[str]:
-    return [
-        *pip_entry(),
-        "install",
-        "-q",
-        "--index-url",
-        "https://pypi.org/simple/",
-        *arguments,
-    ]
-
-
-def resolve(
-    deps_dir: str, packages: list[str], constraints: list[str]
-) -> subprocess.CompletedProcess[str]:
-    """Resolve once into scratch; a CPU download failure aborts before install."""
-    environment = clean_environment()
-    if _cpu.required(packages):
-        constraints = [*constraints, _pins.TORCH_CPU_SPEC]
-    with constraint_args(deps_dir, constraints) as arguments:
-        with _cpu.local_targets(deps_dir, packages, environment) as targets:
-            command = _pip_command(
-                *arguments, "--target", scratch_dir(deps_dir), *targets
-            )
-            return _install(command, environment)
-
-
-def install_requirements(
-    deps_dir: str, requirements: str
-) -> subprocess.CompletedProcess[str]:
-    """Install a generated, hash-pinned closure file into scratch.
-
-    source: ADR-1059
-    source: ADR-1063"""
-    command = _pip_command(
-        "--target",
-        scratch_dir(deps_dir),
-        "--no-deps",
-        "--require-hashes",
-        "-r",
-        requirements,
-    )
-    return _install(command, clean_environment())

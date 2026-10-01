@@ -20,9 +20,7 @@ the same epistemic position.
 
 from __future__ import annotations
 
-import contextlib
 import importlib.util
-import json
 import os
 import subprocess
 import sys
@@ -53,6 +51,20 @@ def deps_mod():
     return module
 
 
+_SET = ("--only-group", "launcher-base")
+
+
+def _route_install(monkeypatch, deps_mod, fake_run) -> None:
+    """Send the locked install to ``fake_run``, with the real scratch target."""
+    monkeypatch.setattr(
+        deps_mod._install._uv,
+        "install_locked_set",
+        lambda _deps_dir, _set_args, target: fake_run(
+            ["uv", "pip", "install", "--target", target]
+        ),
+    )
+
+
 def _make_dist_info(root: Path, dist_name: str, version: str) -> None:
     """A ``*.dist-info`` whose ``RECORD`` lists the ``dist_name`` package, as
     pip writes one for every install (the guard reads owners from it)."""
@@ -78,11 +90,6 @@ def test_normalize_dist_key_folds_separators(deps_mod):
     assert deps_mod._normalize_dist_key("pydantic-settings") == "pydantic_settings"
     assert deps_mod._normalize_dist_key("pydantic_settings") == "pydantic_settings"
     assert deps_mod._normalize_dist_key("PyDantic.Settings") == "pydantic_settings"
-
-
-def test_parse_pip_spec_strips_extras_and_version(deps_mod):
-    assert deps_mod._parse_pip_spec("psycopg[binary]==3.3.3") == ("psycopg", "3.3.3")
-    assert deps_mod._parse_pip_spec("numpy==2.4.4") == ("numpy", "2.4.4")
 
 
 def test_dist_info_versions_scans_only_dist_info_dirs(deps_mod, tmp_path):
@@ -116,7 +123,6 @@ def test_dist_info_versions_omits_a_distribution_with_several_dist_infos(
     _make_dist_info(tmp_path, "flashrank", "0.2.10")
     _listdir_with_last(monkeypatch, last)
     assert deps_mod._dist_info_versions(str(tmp_path)) == {"flashrank": "0.2.10"}
-    assert not deps_mod._dist_info_satisfies(str(tmp_path), "numpy==2.4.4")
 
 
 # ----------------------------------------------------- foreign-ABI detection ---
@@ -374,8 +380,8 @@ def test_pip_install_never_touches_already_satisfied_entry(
 
         return _Result()
 
-    monkeypatch.setattr(deps_mod._install.subprocess, "run", fake_run)
-    ok = deps_mod._pip_install(str(deps_dir), ["numpy==2.4.4"])
+    _route_install(monkeypatch, deps_mod, fake_run)
+    ok = deps_mod._install_locked_set(str(deps_dir), _SET)
     assert ok is True
     # dest's original marker survives untouched -- never replaced.
     marker = (deps_dir / "numpy" / "__init__.py").read_text(encoding="utf-8")
@@ -404,8 +410,8 @@ def test_pip_install_replaces_entry_when_version_differs(
 
         return _Result()
 
-    monkeypatch.setattr(deps_mod._install.subprocess, "run", fake_run)
-    ok = deps_mod._pip_install(str(deps_dir), ["numpy==2.4.4"])
+    _route_install(monkeypatch, deps_mod, fake_run)
+    ok = deps_mod._install_locked_set(str(deps_dir), _SET)
     assert ok is True
     assert "NEW" in (deps_dir / "numpy" / "__init__.py").read_text(encoding="utf-8")
     assert (deps_dir / "numpy-2.4.4.dist-info").is_dir()
@@ -436,8 +442,8 @@ def test_pip_install_repairs_old_code_under_new_metadata(
         _make_dist_info(tmp_dir, "numpy", "2.4.4")
         return subprocess.CompletedProcess(cmd, 0, "", "")
 
-    monkeypatch.setattr(deps_mod._install.subprocess, "run", fake_run)
-    assert deps_mod._pip_install(str(deps_dir), ["numpy==2.4.4"]) is True
+    _route_install(monkeypatch, deps_mod, fake_run)
+    assert deps_mod._install_locked_set(str(deps_dir), _SET) is True
     assert "NEW" in (deps_dir / "numpy" / "__init__.py").read_text(encoding="utf-8")
     dist_infos = sorted(p.name for p in deps_dir.glob("numpy-*.dist-info"))
     assert dist_infos == ["numpy-2.4.4.dist-info"]
@@ -477,8 +483,8 @@ def test_pip_install_replaces_entry_with_foreign_abi_extension_despite_matching_
         "current_extension_abi_suffix",
         lambda: ".cpython-314-darwin.so",
     )
-    monkeypatch.setattr(deps_mod._install.subprocess, "run", fake_run)
-    ok = deps_mod._pip_install(str(deps_dir), ["websockets==15.0"])
+    _route_install(monkeypatch, deps_mod, fake_run)
+    ok = deps_mod._install_locked_set(str(deps_dir), _SET)
     assert ok is True
     pkg_dir = deps_dir / "websockets"
     assert (pkg_dir / "speedups.cpython-314-darwin.so").exists()
@@ -518,8 +524,8 @@ def test_pip_install_prunes_orphaned_top_level_foreign_abi_extension(
         "current_extension_abi_suffix",
         lambda: ".cpython-314-darwin.so",
     )
-    monkeypatch.setattr(deps_mod._install.subprocess, "run", fake_run)
-    ok = deps_mod._pip_install(str(deps_dir), ["cffi==1.17.1"])
+    _route_install(monkeypatch, deps_mod, fake_run)
+    ok = deps_mod._install_locked_set(str(deps_dir), _SET)
     assert ok is True
     assert (deps_dir / "_cffi_backend.cpython-314-darwin.so").exists()
     assert not (deps_dir / "_cffi_backend.cpython-313-darwin.so").exists()
@@ -555,7 +561,7 @@ def test_pip_install_rollback_on_mid_commit_failure(deps_mod, tmp_path, monkeypa
 
         return _Result()
 
-    monkeypatch.setattr(deps_mod._install.subprocess, "run", fake_run)
+    _route_install(monkeypatch, deps_mod, fake_run)
 
     real_replace = os.replace
 
@@ -573,7 +579,7 @@ def test_pip_install_rollback_on_mid_commit_failure(deps_mod, tmp_path, monkeypa
 
     monkeypatch.setattr(deps_mod._install.os, "replace", flaky_replace)
 
-    ok = deps_mod._pip_install(str(deps_dir), ["numpy==2.4.4"])
+    ok = deps_mod._install_locked_set(str(deps_dir), _SET)
 
     assert ok is False
     # Dest restored to its ORIGINAL content -- rollback succeeded.
@@ -622,7 +628,7 @@ def test_pip_install_rollback_preserves_dist_info_regardless_of_commit_order(
 
         return _Result()
 
-    monkeypatch.setattr(deps_mod._install.subprocess, "run", fake_run)
+    _route_install(monkeypatch, deps_mod, fake_run)
 
     real_replace = os.replace
 
@@ -650,7 +656,7 @@ def test_pip_install_rollback_preserves_dist_info_regardless_of_commit_order(
 
     monkeypatch.setattr(deps_mod._install.os, "listdir", forced_listdir)
 
-    ok = deps_mod._pip_install(str(deps_dir), ["numpy==2.4.4"])
+    ok = deps_mod._install_locked_set(str(deps_dir), _SET)
 
     assert ok is False
     assert "ORIGINAL" in (deps_dir / "numpy" / "__init__.py").read_text(
@@ -680,8 +686,8 @@ def test_pip_install_no_backup_leaked_on_success(deps_mod, tmp_path, monkeypatch
 
         return _Result()
 
-    monkeypatch.setattr(deps_mod._install.subprocess, "run", fake_run)
-    assert deps_mod._pip_install(str(deps_dir), ["numpy==2.4.4"]) is True
+    _route_install(monkeypatch, deps_mod, fake_run)
+    assert deps_mod._install_locked_set(str(deps_dir), _SET) is True
     leftovers = [p for p in deps_dir.iterdir() if ".bak-" in p.name]
     assert leftovers == []
 
@@ -702,407 +708,9 @@ def test_pip_install_failure_preserves_tmp_dir_and_returns_false(
 
         return _Result()
 
-    monkeypatch.setattr(deps_mod._install.subprocess, "run", fake_run)
-    ok = deps_mod._pip_install(str(deps_dir), ["numpy==2.4.4"])
+    _route_install(monkeypatch, deps_mod, fake_run)
+    ok = deps_mod._install_locked_set(str(deps_dir), _SET)
     assert ok is False
-
-
-# --------------------------------------------------------------- stamp/lock ---
-
-
-def test_stamp_round_trip(deps_mod, tmp_path):
-    deps_dir = tmp_path / "deps"
-    deps_dir.mkdir()
-    pins = ["fastmcp==3.2.4", "numpy==2.4.4"]
-    assert deps_mod._pins_satisfied(str(deps_dir), "base", pins) is False
-    deps_mod._write_stamp(str(deps_dir), "base", pins)
-    assert deps_mod._pins_satisfied(str(deps_dir), "base", pins) is True
-
-
-def test_stamp_mismatch_on_pin_change_self_heals(deps_mod, tmp_path):
-    """A pin bump (new Cortex release) invalidates the stamp -- 'un
-    stamp par version de pin suffit' means exact match required."""
-    deps_dir = tmp_path / "deps"
-    deps_dir.mkdir()
-    deps_mod._write_stamp(str(deps_dir), "base", ["numpy==2.4.4"])
-    assert deps_mod._pins_satisfied(str(deps_dir), "base", ["numpy==2.5.0"]) is False
-
-
-def test_stamp_corrupt_file_treated_as_absent(deps_mod, tmp_path):
-    deps_dir = tmp_path / "deps"
-    deps_dir.mkdir()
-    Path(deps_mod._stamp_path(str(deps_dir), "base")).write_text(
-        "not json{", encoding="utf-8"
-    )
-    assert deps_mod._pins_satisfied(str(deps_dir), "base", ["numpy==2.4.4"]) is False
-
-
-def test_pins_satisfied_false_when_python_version_differs(deps_mod, tmp_path):
-    """The stamp is keyed to BOTH the pin set and the interpreter minor
-    version -- a pins match with a stale python field must still miss,
-    exactly as an actual interpreter upgrade would."""
-    deps_dir = tmp_path / "deps"
-    deps_dir.mkdir()
-    pins = ["numpy==2.4.4"]
-    deps_mod._write_stamp(str(deps_dir), "base", pins)
-    Path(deps_mod._stamp_path(str(deps_dir), "base")).write_text(
-        json.dumps({"python": "0.0", "pins": sorted(pins)}), encoding="utf-8"
-    )
-    assert deps_mod._pins_satisfied(str(deps_dir), "base", pins) is False
-
-
-def test_pins_satisfied_ignores_the_caller_argument_order(deps_mod, tmp_path):
-    """Both the write and the read side sort -- a stamp written from one
-    ordering must satisfy a check called with the pins in any order."""
-    deps_dir = tmp_path / "deps"
-    deps_dir.mkdir()
-    deps_mod._write_stamp(str(deps_dir), "base", ["numpy==2.4.4", "fastmcp==3.4.5"])
-    reordered = ["fastmcp==3.4.5", "numpy==2.4.4"]
-    assert deps_mod._pins_satisfied(str(deps_dir), "base", reordered) is True
-
-
-def test_write_stamp_payload_shape_is_exact(deps_mod, tmp_path):
-    """Direct assertion on the written bytes -- not merely round-tripped
-    through ``_pins_satisfied`` -- so a key-name or sort-order mutation
-    in ``_write_stamp`` itself cannot hide behind a symmetrical read."""
-    deps_dir = tmp_path / "deps"
-    deps_dir.mkdir()
-    deps_mod._write_stamp(str(deps_dir), "base", ["numpy==2.4.4", "fastmcp==3.4.5"])
-    payload = json.loads(
-        Path(deps_mod._stamp_path(str(deps_dir), "base")).read_text(encoding="utf-8")
-    )
-    assert payload == {
-        "python": f"{sys.version_info.major}.{sys.version_info.minor}",
-        "pins": ["fastmcp==3.4.5", "numpy==2.4.4"],
-    }
-
-
-def test_write_stamp_swallows_an_unwritable_destination(deps_mod, tmp_path):
-    """Best-effort: a deps_dir that can't be written to must not raise --
-    the next call simply re-verifies from scratch."""
-    missing_deps_dir = tmp_path / "does-not-exist" / "deps"
-    deps_mod._write_stamp(str(missing_deps_dir), "base", ["numpy==2.4.4"])
-    assert not Path(deps_mod._stamp_path(str(missing_deps_dir), "base")).exists()
-
-
-def test_ensure_deps_skips_pip_entirely_when_stamp_matches(
-    deps_mod, tmp_path, monkeypatch
-):
-    """The hot-path fast path: a valid stamp means zero _pip_install
-    calls and zero _importable calls (issue #97 suggestion 4 — no
-    torch/numpy import just to answer 'is it installed')."""
-    deps_dir = tmp_path / "deps"
-    deps_dir.mkdir()
-    pins = [spec for _name, spec in deps_mod._BASE_PACKAGES]
-    deps_mod._write_stamp(str(deps_dir), "base", pins)
-    real_pins_satisfied = deps_mod._pins_satisfied
-    seen_kinds = []
-
-    def capturing_pins_satisfied(deps_dir_arg, kind_arg, pins_arg):
-        seen_kinds.append(kind_arg)
-        return real_pins_satisfied(deps_dir_arg, kind_arg, pins_arg)
-
-    monkeypatch.setattr(deps_mod, "_pins_satisfied", capturing_pins_satisfied)
-    calls = {"pip_install": 0, "importable": 0, "dist_info_satisfies": 0}
-    monkeypatch.setattr(
-        deps_mod,
-        "_pip_install",
-        lambda *a, **k: calls.__setitem__("pip_install", 1) or True,
-    )
-    monkeypatch.setattr(
-        deps_mod,
-        "_importable",
-        lambda *a, **k: (
-            calls.__setitem__("importable", calls["importable"] + 1) or True
-        ),
-    )
-    # The stamp's whole POINT (module docstring: "skips the dist-info scan
-    # entirely") is to avoid this filesystem walk once satisfied -- a
-    # mutated kind/deps_dir/pins argument on the OUTER check can still
-    # arrive at "0 pip calls" via the inner double-check's safety net
-    # (see the racing test below), so this scan-count assertion is what
-    # actually pins the outer check's own arguments.
-    monkeypatch.setattr(
-        deps_mod,
-        "_dist_info_satisfies",
-        lambda *a, **k: (
-            calls.__setitem__("dist_info_satisfies", calls["dist_info_satisfies"] + 1)
-            or True
-        ),
-    )
-    deps_mod.ensure_deps(str(deps_dir))
-    assert calls == {"pip_install": 0, "importable": 0, "dist_info_satisfies": 0}
-    # The literal kind STRING captured, not just the boolean outcome of a
-    # file lookup: immune to macOS APFS's case-insensitive filesystem
-    # equating "base" and "BASE" on disk (see the racing test's comment).
-    assert seen_kinds == ["base"]
-
-
-def test_ensure_deps_installs_and_stamps_when_missing(deps_mod, tmp_path, monkeypatch):
-    deps_dir = tmp_path / "deps"
-    deps_dir.mkdir()
-
-    installed = {"called": False}
-
-    def fake_importable(name, _deps_dir):
-        return installed["called"]  # False before install, True after
-
-    def fake_pip_install(_deps_dir, _packages):
-        installed["called"] = True
-        return True
-
-    monkeypatch.setattr(deps_mod, "_importable", fake_importable)
-    monkeypatch.setattr(deps_mod, "_pip_install", fake_pip_install)
-    deps_mod.ensure_deps(str(deps_dir))
-    pins = [spec for _name, spec in deps_mod._BASE_PACKAGES]
-    assert deps_mod._pins_satisfied(str(deps_dir), "base", pins) is True
-
-
-def test_ensure_deps_full_install_path_threads_exact_arguments(
-    deps_mod, tmp_path, monkeypatch
-):
-    """End-to-end through the missing/lock/pip/importable/write-stamp
-    path with every internal call's OWN arguments captured.
-
-    An outcome-only assertion (stamp ends up satisfied, pip ends up
-    called) can stay green even when one internal call site is fed the
-    wrong deps_dir/kind/name -- a later call along the same path, or the
-    lock's own double-check, can independently arrive at the same
-    observable result. Capturing every call's arguments closes that gap
-    directly, and the exact on-disk stamp filename check is immune to
-    macOS's case-preserving-but-case-insensitive filesystem (APFS)
-    silently equating ``.cortex-deps-stamp-base.json`` with a
-    "...-BASE.json" mistake that a case-sensitive Linux CI runner would
-    not."""
-    deps_dir = tmp_path / "deps"
-    deps_dir.mkdir()
-    expected_deps_dir = str(deps_dir)
-    pins = [spec for _name, spec in deps_mod._BASE_PACKAGES]
-
-    dist_info_calls = []
-    real_dist_info_satisfies = deps_mod._dist_info_satisfies
-
-    def capturing_dist_info_satisfies(deps_dir_arg, spec_arg):
-        dist_info_calls.append(deps_dir_arg)
-        return real_dist_info_satisfies(deps_dir_arg, spec_arg)
-
-    pip_calls = []
-
-    def fake_pip_install(deps_dir_arg, missing_arg):
-        pip_calls.append((deps_dir_arg, tuple(missing_arg)))
-        return True
-
-    importable_calls = []
-
-    def fake_importable(name_arg, deps_dir_arg):
-        importable_calls.append((name_arg, deps_dir_arg))
-        return True
-
-    monkeypatch.setattr(deps_mod, "_dist_info_satisfies", capturing_dist_info_satisfies)
-    monkeypatch.setattr(deps_mod, "_pip_install", fake_pip_install)
-    monkeypatch.setattr(deps_mod, "_importable", fake_importable)
-
-    deps_mod.ensure_deps(str(deps_dir))
-
-    assert dist_info_calls, "the missing-package scan never ran"
-    assert all(arg == expected_deps_dir for arg in dist_info_calls)
-    assert pip_calls == [
-        (expected_deps_dir, tuple(spec for _n, spec in deps_mod._BASE_PACKAGES))
-    ]
-    assert importable_calls == [
-        (name, expected_deps_dir) for name, _spec in deps_mod._BASE_PACKAGES
-    ]
-    on_disk = {
-        p.name for p in deps_dir.iterdir() if p.name.startswith(".cortex-deps-stamp-")
-    }
-    assert on_disk == {".cortex-deps-stamp-base.json"}
-    payload = json.loads(
-        (deps_dir / ".cortex-deps-stamp-base.json").read_text(encoding="utf-8")
-    )
-    assert payload["pins"] == sorted(pins)
-
-
-def test_ensure_deps_acquires_the_real_deps_dir_lock(deps_mod, tmp_path, monkeypatch):
-    """The lock acquired around the install must be deps_dir's OWN
-    ``<deps_dir>.lock`` -- verified by observing it actually held (i.e.
-    ``mkdir``'d) while pip is "running", not merely that ensure_deps
-    completes without error. A ``_deps_lock(None)`` bug would instead
-    create an unrelated ``None.lock`` and never touch this one."""
-    deps_dir = tmp_path / "deps"
-    deps_dir.mkdir()
-    lock_dir = Path(f"{deps_dir}.lock")
-    observed = {}
-
-    def fake_pip_install(*_a, **_k):
-        observed["lock_held"] = lock_dir.is_dir()
-        return True
-
-    monkeypatch.setattr(deps_mod, "_pip_install", fake_pip_install)
-    monkeypatch.setattr(deps_mod, "_importable", lambda *a, **k: True)
-    deps_mod.ensure_deps(str(deps_dir))
-    assert observed.get("lock_held") is True
-
-
-def test_ensure_deps_lock_double_check_uses_the_real_kind_and_pins_key(
-    deps_mod, tmp_path, monkeypatch
-):
-    """The RE-check inside the lock must query the SAME ("base", pins)
-    key the outer check and the eventual write use. Simulated by
-    wrapping the REAL ``_deps_lock`` so that, exactly as it is entered
-    (i.e. once this call has legitimately acquired it), a genuine
-    ``_write_stamp`` runs to model another process finishing the
-    install while this one waited -- the double-check must then find
-    that real stamp and return without ever calling pip."""
-    deps_dir = tmp_path / "deps"
-    deps_dir.mkdir()
-    pins = [spec for _name, spec in deps_mod._BASE_PACKAGES]
-    real_lock = deps_mod._deps_lock
-    real_pins_satisfied = deps_mod._pins_satisfied
-    seen_kinds = []
-
-    def capturing_pins_satisfied(deps_dir_arg, kind_arg, pins_arg):
-        seen_kinds.append(kind_arg)
-        return real_pins_satisfied(deps_dir_arg, kind_arg, pins_arg)
-
-    @contextlib.contextmanager
-    def racing_lock(path):
-        with real_lock(path) as acquired:
-            deps_mod._write_stamp(str(deps_dir), "base", pins)
-            yield acquired
-
-    def fail_if_called(*_a, **_k):
-        raise AssertionError("the double-check must have caught the race")
-
-    monkeypatch.setattr(deps_mod, "_deps_lock", racing_lock)
-    monkeypatch.setattr(deps_mod, "_pins_satisfied", capturing_pins_satisfied)
-    monkeypatch.setattr(deps_mod, "_pip_install", fail_if_called)
-    deps_mod.ensure_deps(str(deps_dir))
-    # Captured STRING values, not a file-lookup outcome: exact and immune
-    # to macOS APFS's case-insensitive (but case-preserving) filesystem,
-    # which would otherwise resolve a "base"/"BASE" mix-up to the SAME
-    # inode and mask the bug that a case-sensitive Linux CI runner would
-    # not.
-    assert seen_kinds == ["base", "base"]
-
-
-def test_ensure_deps_creates_the_directory_when_absent(deps_mod, tmp_path, monkeypatch):
-    """``deps_dir`` need not pre-exist -- ``os.makedirs(..., exist_ok=True)``
-    is the first thing ``ensure_deps`` does."""
-    deps_dir = tmp_path / "not-yet-created" / "deps"
-    monkeypatch.setattr(deps_mod, "_importable", lambda *a, **k: True)
-    monkeypatch.setattr(deps_mod, "_pip_install", lambda *a, **k: True)
-    assert not deps_dir.exists()
-    deps_mod.ensure_deps(str(deps_dir))
-    assert deps_dir.is_dir()
-
-
-def test_ensure_deps_writes_stamp_directly_when_dist_info_already_satisfies(
-    deps_mod, tmp_path, monkeypatch
-):
-    """No stamp yet, but every base pin's dist-info is already on disk
-    (e.g. carried over from a prior bootstrap that predates the stamp
-    feature): the ``missing == []`` short-circuit must stamp WITHOUT
-    ever calling pip or the lock."""
-    deps_dir = tmp_path / "deps"
-    deps_dir.mkdir()
-    for _name, spec in deps_mod._BASE_PACKAGES:
-        dist_name, version = deps_mod._parse_pip_spec(spec)
-        _make_dist_info(deps_dir, dist_name, version)
-
-    def fail_if_called(*_a, **_k):
-        raise AssertionError("pip must not be invoked when nothing is missing")
-
-    monkeypatch.setattr(deps_mod, "_pip_install", fail_if_called)
-    deps_mod.ensure_deps(str(deps_dir))
-    pins = [spec for _name, spec in deps_mod._BASE_PACKAGES]
-    assert deps_mod._pins_satisfied(str(deps_dir), "base", pins) is True
-    # Exact on-disk filename, not merely "some stamp reads back as
-    # satisfied": macOS's APFS is case-preserving but case-INSENSITIVE by
-    # default, so ``.cortex-deps-stamp-BASE.json`` and
-    # ``.cortex-deps-stamp-base.json`` are the SAME inode there --
-    # ``_pins_satisfied`` alone cannot tell a "base"/"BASE" kind mix-up
-    # apart on this platform, even though a case-sensitive Linux CI
-    # runner would. ``os.listdir``/``Path.iterdir`` return the name as
-    # actually STORED regardless of lookup case-sensitivity, so this
-    # assertion is exact on every platform.
-    on_disk = {
-        p.name for p in deps_dir.iterdir() if p.name.startswith(".cortex-deps-stamp-")
-    }
-    assert on_disk == {".cortex-deps-stamp-base.json"}
-
-
-def test_ensure_deps_lock_double_check_skips_pip_when_another_process_won(
-    deps_mod, tmp_path, monkeypatch
-):
-    """Two processes race past the outer (unlocked) check together; the
-    second one to acquire the lock must see the first one's finished
-    stamp on the RE-check inside the lock and skip pip entirely."""
-    deps_dir = tmp_path / "deps"
-    deps_dir.mkdir()
-    calls = {"pins_satisfied": 0}
-    real_pins_satisfied = deps_mod._pins_satisfied
-
-    def racing_pins_satisfied(deps_dir_arg, kind, pins_arg):
-        calls["pins_satisfied"] += 1
-        if calls["pins_satisfied"] == 1:
-            return False  # outer check: not yet satisfied
-        return True  # inside the lock: the "other process" just finished
-
-    def fail_if_called(*_a, **_k):
-        raise AssertionError("pip must not run once the double-check wins")
-
-    monkeypatch.setattr(deps_mod, "_pins_satisfied", racing_pins_satisfied)
-    monkeypatch.setattr(deps_mod, "_pip_install", fail_if_called)
-    deps_mod.ensure_deps(str(deps_dir))
-    assert calls["pins_satisfied"] == 2
-    monkeypatch.setattr(deps_mod, "_pins_satisfied", real_pins_satisfied)
-
-
-def test_ensure_deps_requests_only_the_genuinely_missing_packages(
-    deps_mod, tmp_path, monkeypatch
-):
-    """``missing`` must be the SUBSET of ``_BASE_PACKAGES`` whose dist-info
-    isn't already on disk -- not the full pin list -- so an already
-    correct entry is never re-resolved by pip."""
-    deps_dir = tmp_path / "deps"
-    deps_dir.mkdir()
-    satisfied_name, satisfied_spec = deps_mod._BASE_PACKAGES[0]
-    dist_name, version = deps_mod._parse_pip_spec(satisfied_spec)
-    _make_dist_info(deps_dir, dist_name, version)
-
-    requested = {}
-
-    def fake_pip_install(_deps_dir, packages):
-        requested["packages"] = list(packages)
-        return True
-
-    monkeypatch.setattr(deps_mod, "_pip_install", fake_pip_install)
-    monkeypatch.setattr(deps_mod, "_importable", lambda *a, **k: True)
-    deps_mod.ensure_deps(str(deps_dir))
-    assert satisfied_spec not in requested["packages"]
-    other_specs = [
-        spec for name, spec in deps_mod._BASE_PACKAGES if name != satisfied_name
-    ]
-    assert sorted(requested["packages"]) == sorted(other_specs)
-
-
-def test_ensure_deps_does_not_stamp_when_a_package_stays_unimportable(
-    deps_mod, tmp_path, monkeypatch
-):
-    """If ``pip`` reports success but the POST-install husk check still
-    fails for one package, the stamp must not be written -- the next
-    bootstrap has to try again rather than trust a false success."""
-    deps_dir = tmp_path / "deps"
-    deps_dir.mkdir()
-    bad_name = deps_mod._BASE_PACKAGES[-1][0]
-
-    monkeypatch.setattr(deps_mod, "_pip_install", lambda *a, **k: True)
-    monkeypatch.setattr(
-        deps_mod, "_importable", lambda name, _deps_dir: name != bad_name
-    )
-    deps_mod.ensure_deps(str(deps_dir))
-    pins = [spec for _name, spec in deps_mod._BASE_PACKAGES]
-    assert deps_mod._pins_satisfied(str(deps_dir), "base", pins) is False
 
 
 def test_deps_lock_mutual_exclusion(deps_mod, tmp_path):
@@ -1190,19 +798,6 @@ def test_sweep_stale_backups_ignores_non_matching_names(
     assert (deps_dir / "not-a-backup.txt").exists()
 
 
-def test_ensure_deps_sweeps_stale_backups(deps_mod, tmp_path, monkeypatch):
-    """The sweep runs unconditionally at the top of ensure_deps, even
-    when the stamp already short-circuits the rest of the bootstrap."""
-    deps_dir = tmp_path / "deps"
-    deps_dir.mkdir()
-    (deps_dir / "numpy.bak-4242").mkdir()
-    pins = [spec for _name, spec in deps_mod._BASE_PACKAGES]
-    deps_mod._write_stamp(str(deps_dir), "base", pins)
-    monkeypatch.setattr(deps_mod._fs, "pid_alive", lambda _pid: False)
-    deps_mod.ensure_deps(str(deps_dir))
-    assert not (deps_dir / "numpy.bak-4242").exists()
-
-
 # ------------------------------------------- residue 2: dist-info prune ---
 
 
@@ -1229,8 +824,8 @@ def test_pip_install_prunes_superseded_dist_info_on_version_bump(
 
         return _Result()
 
-    monkeypatch.setattr(deps_mod._install.subprocess, "run", fake_run)
-    ok = deps_mod._pip_install(str(deps_dir), ["numpy==2.5.1"])
+    _route_install(monkeypatch, deps_mod, fake_run)
+    ok = deps_mod._install_locked_set(str(deps_dir), _SET)
     assert ok is True
     assert (deps_dir / "numpy-2.5.1.dist-info").is_dir()
     assert not (deps_dir / "numpy-2.4.4.dist-info").exists()
@@ -1257,8 +852,8 @@ def test_pip_install_prune_does_not_touch_unrelated_dist_info(
 
         return _Result()
 
-    monkeypatch.setattr(deps_mod._install.subprocess, "run", fake_run)
-    deps_mod._pip_install(str(deps_dir), ["numpy==2.5.1"])
+    _route_install(monkeypatch, deps_mod, fake_run)
+    deps_mod._install_locked_set(str(deps_dir), _SET)
     assert (deps_dir / "pydantic-2.13.3.dist-info").is_dir()
 
 
@@ -1286,408 +881,15 @@ def test_pip_install_prune_not_reached_on_idempotence_skip(
         return _Result()
 
     pruned = {"called": False}
-    monkeypatch.setattr(deps_mod._install.subprocess, "run", fake_run)
+    _route_install(monkeypatch, deps_mod, fake_run)
     monkeypatch.setattr(
         deps_mod._install._fs,
         "prune_superseded_dist_info",
         lambda *a, **k: pruned.__setitem__("called", True),
     )
-    ok = deps_mod._pip_install(str(deps_dir), ["numpy==2.4.4"])
+    ok = deps_mod._install_locked_set(str(deps_dir), _SET)
     assert ok is True
     assert pruned["called"] is False
-
-
-# ---------------------------------------- residue 3: hermetic bootstrap ---
-
-
-def test_dist_info_satisfies_ignores_host_sys_path(deps_mod, tmp_path, monkeypatch):
-    """The install decision must be based on deps_dir's OWN dist-info,
-    not on whatever the host interpreter can import from the rest of
-    sys.path. Simulate a host-global numpy: it's importable, but
-    deps_dir itself has no numpy dist-info, so the pin must still read
-    as unsatisfied."""
-    deps_dir = tmp_path / "deps"
-    deps_dir.mkdir()
-    fake_site_packages = tmp_path / "host-site-packages"
-    _make_pkg_dir(fake_site_packages, "numpy")
-    monkeypatch.syspath_prepend(str(fake_site_packages))
-
-    assert deps_mod._importable("numpy", str(deps_dir)) is True  # host shadow
-    assert deps_mod._dist_info_satisfies(str(deps_dir), "numpy==2.4.4") is False
-
-
-def test_ensure_deps_requests_package_satisfied_only_by_host(
-    deps_mod, tmp_path, monkeypatch
-):
-    """End-to-end residue 3: a package importable only via the HOST's
-    global site-packages (not deps_dir) must still be requested from
-    pip -- it must not silently drop out of the install set and enter
-    deps_dir only later as an unpinned transitive."""
-    deps_dir = tmp_path / "deps"
-    deps_dir.mkdir()
-    fake_site_packages = tmp_path / "host-site-packages"
-    _make_pkg_dir(fake_site_packages, "numpy")
-    monkeypatch.syspath_prepend(str(fake_site_packages))
-
-    requested = {}
-
-    def fake_pip_install(_deps_dir, packages, constraints=None):
-        requested["packages"] = packages
-        return True
-
-    monkeypatch.setattr(deps_mod, "_pip_install", fake_pip_install)
-    monkeypatch.setattr(deps_mod, "_importable", lambda *a, **k: True)
-    deps_mod.ensure_deps(str(deps_dir))
-    numpy_spec = next(spec for name, spec in deps_mod._BASE_PACKAGES if name == "numpy")
-    assert numpy_spec in requested["packages"]
-
-
-def test_ensure_all_deps_passes_base_pins_as_constraints(
-    deps_mod, tmp_path, monkeypatch
-):
-    """Residue 3, second half: the ML install must constrain its resolve
-    to the base pins so a shared transitive (numpy) agrees with the
-    base install regardless of order."""
-    deps_dir = tmp_path / "deps"
-    deps_dir.mkdir()
-    base_pins = [spec for _name, spec in deps_mod._BASE_PACKAGES]
-    deps_mod._write_stamp(str(deps_dir), "base", base_pins)
-
-    captured = {}
-
-    def fake_pip_install(_deps_dir, packages, constraints=None):
-        captured["packages"] = packages
-        captured["constraints"] = constraints
-        return True
-
-    monkeypatch.setattr(deps_mod, "_pip_install", fake_pip_install)
-    monkeypatch.setattr(deps_mod, "_importable", lambda *a, **k: True)
-    deps_mod.ensure_all_deps(str(deps_dir))
-    assert captured["constraints"] == base_pins
-
-
-def test_ensure_all_deps_skips_pip_entirely_when_ml_stamp_matches(
-    deps_mod, tmp_path, monkeypatch
-):
-    """The ML hot path mirrors the base one: a valid ML stamp means zero
-    ``_pip_install`` calls for the ML packages."""
-    deps_dir = tmp_path / "deps"
-    deps_dir.mkdir()
-    base_pins = [spec for _name, spec in deps_mod._BASE_PACKAGES]
-    ml_pins = [spec for _name, spec in deps_mod._ML_PACKAGES]
-    deps_mod._write_stamp(str(deps_dir), "base", base_pins)
-    deps_mod._write_stamp(str(deps_dir), "ml", ml_pins)
-    real_pins_satisfied = deps_mod._pins_satisfied
-    seen = []
-
-    def capturing_pins_satisfied(deps_dir_arg, kind_arg, pins_arg):
-        seen.append(kind_arg)
-        return real_pins_satisfied(deps_dir_arg, kind_arg, pins_arg)
-
-    def fail_if_called(*_a, **_k):
-        raise AssertionError("pip must not run once both stamps already match")
-
-    monkeypatch.setattr(deps_mod, "_pins_satisfied", capturing_pins_satisfied)
-    monkeypatch.setattr(deps_mod, "_pip_install", fail_if_called)
-    deps_mod.ensure_all_deps(str(deps_dir))
-    # The EXACT sequence of literal kind strings -- immune to macOS
-    # APFS's case-insensitive filesystem, which can make a "ml"/"ML" (or
-    # "base"/"BASE") argument mix-up still resolve to the same on-disk
-    # stamp and mask the bug. Both stamps already match, so the correct
-    # code takes exactly two checks (ensure_deps's own "base", then this
-    # function's outer "ml") and never reaches the inner double-check;
-    # any wrong/missing kind argument makes at least one lookup miss and
-    # lengthens or alters this sequence.
-    assert seen == ["base", "ml"]
-
-
-def test_ensure_all_deps_writes_stamp_directly_when_dist_info_already_satisfies(
-    deps_mod, tmp_path, monkeypatch
-):
-    """No ML stamp yet, but both ML packages' dist-info is already on
-    disk: the ``missing == []`` short-circuit stamps without pip."""
-    deps_dir = tmp_path / "deps"
-    deps_dir.mkdir()
-    base_pins = [spec for _name, spec in deps_mod._BASE_PACKAGES]
-    deps_mod._write_stamp(str(deps_dir), "base", base_pins)
-    for _name, spec in deps_mod._ML_PACKAGES:
-        dist_name, version = deps_mod._parse_pip_spec(spec)
-        _make_dist_info(deps_dir, dist_name, version)
-
-    def fail_if_called(*_a, **_k):
-        raise AssertionError("pip must not be invoked when nothing is missing")
-
-    monkeypatch.setattr(deps_mod, "_pip_install", fail_if_called)
-    deps_mod.ensure_all_deps(str(deps_dir))
-    ml_pins = [spec for _name, spec in deps_mod._ML_PACKAGES]
-    assert deps_mod._pins_satisfied(str(deps_dir), "ml", ml_pins) is True
-    # Exact on-disk filename: macOS APFS is case-preserving but
-    # case-INSENSITIVE, so ``_pins_satisfied`` alone cannot tell a
-    # "ml"/"ML" kind mix-up in the fast-write branch apart on this
-    # platform, even though a case-sensitive Linux CI runner would.
-    on_disk = {
-        p.name for p in deps_dir.iterdir() if p.name.startswith(".cortex-deps-stamp-")
-    }
-    assert on_disk == {".cortex-deps-stamp-base.json", ".cortex-deps-stamp-ml.json"}
-
-
-def test_ensure_all_deps_lock_double_check_skips_pip_when_another_process_won(
-    deps_mod, tmp_path, monkeypatch
-):
-    """Same race as the base install's double-check, on the ML stamp."""
-    deps_dir = tmp_path / "deps"
-    deps_dir.mkdir()
-    base_pins = [spec for _name, spec in deps_mod._BASE_PACKAGES]
-    deps_mod._write_stamp(str(deps_dir), "base", base_pins)
-    calls = {"pins_satisfied": 0}
-    real_pins_satisfied = deps_mod._pins_satisfied
-
-    def racing_pins_satisfied(deps_dir_arg, kind, pins_arg):
-        if kind == "base":
-            return real_pins_satisfied(deps_dir_arg, kind, pins_arg)
-        calls["pins_satisfied"] += 1
-        return calls["pins_satisfied"] != 1  # first (outer) call: False
-
-    def fail_if_called(*_a, **_k):
-        raise AssertionError("pip must not run once the double-check wins")
-
-    monkeypatch.setattr(deps_mod, "_pins_satisfied", racing_pins_satisfied)
-    monkeypatch.setattr(deps_mod, "_pip_install", fail_if_called)
-    deps_mod.ensure_all_deps(str(deps_dir))
-    assert calls["pins_satisfied"] == 2
-    monkeypatch.setattr(deps_mod, "_pins_satisfied", real_pins_satisfied)
-
-
-def test_ensure_all_deps_requests_only_the_genuinely_missing_ml_packages(
-    deps_mod, tmp_path, monkeypatch
-):
-    deps_dir = tmp_path / "deps"
-    deps_dir.mkdir()
-    base_pins = [spec for _name, spec in deps_mod._BASE_PACKAGES]
-    deps_mod._write_stamp(str(deps_dir), "base", base_pins)
-    satisfied_name, satisfied_spec = deps_mod._ML_PACKAGES[0]
-    dist_name, version = deps_mod._parse_pip_spec(satisfied_spec)
-    _make_dist_info(deps_dir, dist_name, version)
-
-    requested = {}
-
-    def fake_pip_install(_deps_dir, packages, constraints=None):
-        requested["packages"] = list(packages)
-        return True
-
-    monkeypatch.setattr(deps_mod, "_pip_install", fake_pip_install)
-    monkeypatch.setattr(deps_mod, "_importable", lambda *a, **k: True)
-    deps_mod.ensure_all_deps(str(deps_dir))
-    assert satisfied_spec not in requested["packages"]
-    other_specs = [
-        spec for name, spec in deps_mod._ML_PACKAGES if name != satisfied_name
-    ]
-    assert sorted(requested["packages"]) == sorted(other_specs)
-
-
-def test_ensure_all_deps_does_not_stamp_when_a_package_stays_unimportable(
-    deps_mod, tmp_path, monkeypatch
-):
-    """``all(...)`` over BOTH ML packages: one staying unimportable after
-    a reported-successful pip run must still withhold the stamp."""
-    deps_dir = tmp_path / "deps"
-    deps_dir.mkdir()
-    base_pins = [spec for _name, spec in deps_mod._BASE_PACKAGES]
-    deps_mod._write_stamp(str(deps_dir), "base", base_pins)
-
-    monkeypatch.setattr(deps_mod, "_pip_install", lambda *a, **k: True)
-    monkeypatch.setattr(
-        deps_mod, "_importable", lambda name, _deps_dir: name != "flashrank"
-    )
-    deps_mod.ensure_all_deps(str(deps_dir))
-    ml_pins = [spec for _name, spec in deps_mod._ML_PACKAGES]
-    assert deps_mod._pins_satisfied(str(deps_dir), "ml", ml_pins) is False
-
-
-def test_ensure_all_deps_full_install_path_threads_exact_arguments(
-    deps_mod, tmp_path, monkeypatch
-):
-    """The ML-install mirror of
-    ``test_ensure_deps_full_install_path_threads_exact_arguments``: every
-    internal call's own arguments captured, plus an exact on-disk stamp
-    filename check immune to APFS's case-insensitivity."""
-    deps_dir = tmp_path / "deps"
-    deps_dir.mkdir()
-    expected_deps_dir = str(deps_dir)
-    base_pins = [spec for _name, spec in deps_mod._BASE_PACKAGES]
-    deps_mod._write_stamp(str(deps_dir), "base", base_pins)
-    ml_pins = [spec for _name, spec in deps_mod._ML_PACKAGES]
-
-    dist_info_calls = []
-    real_dist_info_satisfies = deps_mod._dist_info_satisfies
-
-    def capturing_dist_info_satisfies(deps_dir_arg, spec_arg):
-        dist_info_calls.append(deps_dir_arg)
-        return real_dist_info_satisfies(deps_dir_arg, spec_arg)
-
-    pip_calls = []
-
-    def fake_pip_install(deps_dir_arg, missing_arg, constraints=None):
-        pip_calls.append((deps_dir_arg, tuple(missing_arg), tuple(constraints or ())))
-        return True
-
-    importable_calls = []
-
-    def fake_importable(name_arg, deps_dir_arg):
-        importable_calls.append((name_arg, deps_dir_arg))
-        return True
-
-    monkeypatch.setattr(deps_mod, "_dist_info_satisfies", capturing_dist_info_satisfies)
-    monkeypatch.setattr(deps_mod, "_pip_install", fake_pip_install)
-    monkeypatch.setattr(deps_mod, "_importable", fake_importable)
-
-    deps_mod.ensure_all_deps(str(deps_dir))
-
-    assert dist_info_calls, "the ML missing-package scan never ran"
-    assert all(arg == expected_deps_dir for arg in dist_info_calls)
-    assert pip_calls == [
-        (
-            expected_deps_dir,
-            tuple(spec for _n, spec in deps_mod._ML_PACKAGES),
-            tuple(base_pins),
-        )
-    ]
-    assert importable_calls == [
-        ("sentence_transformers", expected_deps_dir),
-        ("flashrank", expected_deps_dir),
-    ]
-    on_disk = {
-        p.name for p in deps_dir.iterdir() if p.name.startswith(".cortex-deps-stamp-")
-    }
-    assert on_disk == {".cortex-deps-stamp-base.json", ".cortex-deps-stamp-ml.json"}
-    payload = json.loads(
-        (deps_dir / ".cortex-deps-stamp-ml.json").read_text(encoding="utf-8")
-    )
-    assert payload["pins"] == sorted(ml_pins)
-
-
-def test_ensure_all_deps_acquires_the_real_deps_dir_lock(
-    deps_mod, tmp_path, monkeypatch
-):
-    """Same ``_deps_lock(None)`` regression guard as the base install,
-    for the ML lock acquisition."""
-    deps_dir = tmp_path / "deps"
-    deps_dir.mkdir()
-    base_pins = [spec for _name, spec in deps_mod._BASE_PACKAGES]
-    deps_mod._write_stamp(str(deps_dir), "base", base_pins)
-    lock_dir = Path(f"{deps_dir}.lock")
-    observed = {}
-
-    def fake_pip_install(*_a, **_k):
-        observed["lock_held"] = lock_dir.is_dir()
-        return True
-
-    monkeypatch.setattr(deps_mod, "_pip_install", fake_pip_install)
-    monkeypatch.setattr(deps_mod, "_importable", lambda *a, **k: True)
-    deps_mod.ensure_all_deps(str(deps_dir))
-    assert observed.get("lock_held") is True
-
-
-def test_ensure_all_deps_lock_double_check_uses_the_real_kind_and_pins_key(
-    deps_mod, tmp_path, monkeypatch
-):
-    """The ML mirror of the base install's racing double-check test."""
-    deps_dir = tmp_path / "deps"
-    deps_dir.mkdir()
-    base_pins = [spec for _name, spec in deps_mod._BASE_PACKAGES]
-    deps_mod._write_stamp(str(deps_dir), "base", base_pins)
-    ml_pins = [spec for _name, spec in deps_mod._ML_PACKAGES]
-    real_lock = deps_mod._deps_lock
-    real_pins_satisfied = deps_mod._pins_satisfied
-    seen_ml_kinds = []
-
-    def capturing_pins_satisfied(deps_dir_arg, kind_arg, pins_arg):
-        if kind_arg != "base":
-            seen_ml_kinds.append(kind_arg)
-        return real_pins_satisfied(deps_dir_arg, kind_arg, pins_arg)
-
-    @contextlib.contextmanager
-    def racing_lock(path):
-        with real_lock(path) as acquired:
-            deps_mod._write_stamp(str(deps_dir), "ml", ml_pins)
-            yield acquired
-
-    def fail_if_called(*_a, **_k):
-        raise AssertionError("the double-check must have caught the race")
-
-    monkeypatch.setattr(deps_mod, "_deps_lock", racing_lock)
-    monkeypatch.setattr(deps_mod, "_pins_satisfied", capturing_pins_satisfied)
-    monkeypatch.setattr(deps_mod, "_pip_install", fail_if_called)
-    deps_mod.ensure_all_deps(str(deps_dir))
-    # Both the outer (miss, no stamp yet) and inner (hit, race modeled
-    # above) ML checks must use the exact literal "ml" -- captured as
-    # STRINGS so a "ml"/"ML" argument mix-up cannot hide behind macOS
-    # APFS's case-insensitive file lookup.
-    assert seen_ml_kinds == ["ml", "ml"]
-
-
-def test_pip_install_writes_and_cleans_constraints_file(
-    deps_mod, tmp_path, monkeypatch
-):
-    deps_dir = tmp_path / "deps"
-    deps_dir.mkdir()
-    monkeypatch.setattr(deps_mod._install._cpu, "required", lambda packages: False)
-    captured_cmd = {}
-
-    def fake_run(cmd, **kwargs):
-        captured_cmd["cmd"] = cmd
-        if "-c" in cmd:
-            constraints_path = cmd[cmd.index("-c") + 1]
-            captured_cmd["constraints_path"] = constraints_path
-            captured_cmd["constraints_contents"] = Path(constraints_path).read_text(
-                encoding="utf-8"
-            )
-        tmp_dir = Path(cmd[cmd.index("--target") + 1])
-        _make_pkg_dir(tmp_dir, "flashrank")
-        _make_dist_info(tmp_dir, "flashrank", "0.2.10")
-
-        class _Result:
-            returncode = 0
-            stdout = ""
-            stderr = ""
-
-        return _Result()
-
-    monkeypatch.setattr(deps_mod._install.subprocess, "run", fake_run)
-    ok = deps_mod._pip_install(
-        str(deps_dir), ["flashrank==0.2.10"], constraints=["numpy==2.4.4"]
-    )
-    assert ok is True
-    assert "-c" in captured_cmd["cmd"]
-    assert "numpy==2.4.4" in captured_cmd["constraints_contents"]
-    assert not Path(captured_cmd["constraints_path"]).exists()  # cleaned up
-
-
-def test_pip_install_no_constraints_file_when_none_given(
-    deps_mod, tmp_path, monkeypatch
-):
-    """The common (base-install) case passes no constraints -- must not
-    add a `-c` flag or create a stray file."""
-    deps_dir = tmp_path / "deps"
-    deps_dir.mkdir()
-    captured_cmd = {}
-
-    def fake_run(cmd, **kwargs):
-        captured_cmd["cmd"] = cmd
-        tmp_dir = Path(cmd[cmd.index("--target") + 1])
-        _make_pkg_dir(tmp_dir, "numpy")
-        _make_dist_info(tmp_dir, "numpy", "2.4.4")
-
-        class _Result:
-            returncode = 0
-            stdout = ""
-            stderr = ""
-
-        return _Result()
-
-    monkeypatch.setattr(deps_mod._install.subprocess, "run", fake_run)
-    deps_mod._pip_install(str(deps_dir), ["numpy==2.4.4"])
-    assert "-c" not in captured_cmd["cmd"]
 
 
 # ---------------------------------------------------- bare-import at runtime

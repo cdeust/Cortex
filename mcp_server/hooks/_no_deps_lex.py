@@ -25,10 +25,8 @@ _CONTINUATION_RE = re.compile(r"\\[ \t]*$")
 # as a separator would truncate a still-open command mid-scan.
 _SEGMENT_SPLIT_RE = re.compile(r"&&|;")
 
-# A ``-r`` argument naming a generated, hash-pinned constraint file: every
-# scoped call site either sits under a ``requirements/`` directory
-# (``requirements/setup.txt``) or is named ``requirements.txt`` verbatim
-# (``.devcontainer/Dockerfile``) — never a hand-written package list.
+# A ``-r`` argument naming an exported, hash-pinned requirements file, the
+# shape every such install had before uv.lock replaced them (ADR-1092).
 _REQUIREMENTS_R_RE = re.compile(r"(?:^|\s)-r\s+\S*\brequirements\S*\.txt")
 
 REQUIRE_HASHES = "--require-hashes"

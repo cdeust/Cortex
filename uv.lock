@@ -1290,6 +1290,24 @@ dev = [
 fuzz = [
     { name = "atheris", marker = "python_full_version >= '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'" },
 ]
+launcher-base = [
+    { name = "mcp" },
+    { name = "numpy", version = "2.2.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.11.*'" },
+    { name = "numpy", version = "2.5.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "pgvector" },
+    { name = "psycopg", extra = ["binary"] },
+    { name = "psycopg-pool" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "sqlite-vec" },
+]
+launcher-ml = [
+    { name = "flashrank" },
+    { name = "sentence-transformers" },
+    { name = "torch", version = "2.13.0", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'linux'" },
+    { name = "torch", version = "2.13.0+cpu", source = { registry = "https://download.pytorch.org/whl/cpu" }, marker = "sys_platform == 'linux'" },
+]
 lint = [
     { name = "ruff" },
 ]
@@ -1352,6 +1370,22 @@ container = [
 ]
 dev = [{ name = "mutmut", specifier = ">=3.6.0" }]
 fuzz = [{ name = "atheris", marker = "python_full_version >= '3.12' and platform_machine == 'x86_64' and sys_platform == 'linux'", specifier = ">=3.1.0" }]
+launcher-base = [
+    { name = "mcp" },
+    { name = "numpy" },
+    { name = "pgvector" },
+    { name = "psycopg", extras = ["binary"] },
+    { name = "psycopg-pool" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "sqlite-vec" },
+]
+launcher-ml = [
+    { name = "flashrank" },
+    { name = "sentence-transformers" },
+    { name = "torch", marker = "sys_platform != 'linux'" },
+    { name = "torch", marker = "sys_platform == 'linux'", index = "https://download.pytorch.org/whl/cpu" },
+]
 lint = [{ name = "ruff", specifier = "==0.16.6" }]
 packaging = [
     { name = "build", specifier = ">=1.2.0" },

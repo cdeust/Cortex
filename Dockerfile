@@ -55,30 +55,15 @@ COPY pyproject.toml README.md ./
 COPY mcp_server ./mcp_server
 COPY tests_py ./tests_py
 
-# source: ADR-0812
-
-
-
-#
-# source: ADR-0812
-
-
-
-
-
-
-#
-# source: ADR-0812
-
-
-
-
-
-
-
-
-COPY requirements/runtime-postgresql.txt requirements/packaging.txt /tmp/
-RUN pip install --no-cache-dir --no-deps --require-hashes -r /tmp/runtime-postgresql.txt
+# One locked set, installed exactly as uv.lock pins it, every artifact
+# checked against the lock's sha256: the postgresql extra, the container
+# group (CPU-only torch) and the packaging group that builds the wheel below.
+# source: ADR-1092
+COPY --from=ghcr.io/astral-sh/uv:0.11.3@sha256:90bbb3c16635e9627f49eec6539f956d70746c409209041800a0280b93152823 /uv /usr/local/bin/uv
+COPY uv.lock ./
+RUN UV_PROJECT_ENVIRONMENT=/opt/venv uv sync --locked --inexact --no-cache \
+    --no-install-project --no-default-groups \
+    --extra postgresql --group container --group packaging
 
 # The project itself, as a built wheel installed with --no-deps.
 #
@@ -90,8 +75,7 @@ RUN pip install --no-cache-dir --no-deps --require-hashes -r /tmp/runtime-postgr
 #
 # source: ADR-0812
 
-RUN pip install --no-cache-dir --no-deps --require-hashes -r /tmp/packaging.txt && \
-    python -m build --wheel --no-isolation --outdir /tmp/dist . && \
+RUN python -m build --wheel --no-isolation --outdir /tmp/dist . && \
     pip install --no-cache-dir --no-deps /tmp/dist/*.whl
 
 # ── Runtime stage ────────────────────────────────────────────────────────

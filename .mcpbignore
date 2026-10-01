@@ -42,11 +42,6 @@ fuzz/
 #   26951 files; pack from `git archive HEAD`: 2.8MB / 600 files.
 deps/
 
-# Hashed pip exports consumed by CI and the Docker images. The MCPB runtime
-# resolves from pyproject.toml + uv.lock via `uv run`, and every consumer of
-# these files (scripts/, docker/) is already excluded above.
-requirements/
-
 # Host plugin assets (not used by the MCPB / uv server runtime)
 .claude-plugin/
 .agents/

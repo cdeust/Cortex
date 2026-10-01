@@ -151,7 +151,7 @@ def pytest_sessionfinish(session, exitstatus) -> None:  # noqa: ARG001
 
 def _guard_against_venv_lock_drift() -> None:
     """Refuse to run if the postgresql-extra install has drifted from
-    ``requirements/ci-postgresql.txt`` (issue #287).
+    uv.lock's dev+postgresql+codebase set (issue #287).
 
     Same shape as the two guards above: a pure check
     (``postgresql_extra_drift``, unit-tested on its own in

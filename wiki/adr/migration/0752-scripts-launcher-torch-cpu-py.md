@@ -1,6 +1,6 @@
 # ADR-0752: scripts/launcher_torch_cpu.py implementation decisions
 
-Status: accepted; preserved from the existing implementation during issue #514.
+Status: superseded by ADR-1092; was accepted; preserved from the existing implementation during issue #514.
 
 These are historical implementation records, not new algorithm or threshold choices.
 Source: `scripts/launcher_torch_cpu.py`; original SHA-256 `71822d7b9f1fb5770669b57c6bf6369630f0caf995725ee2af376907c785ddd5`.
@@ -19,3 +19,6 @@ https://docs.astral.sh/uv/concepts/indexes/#pinning-a-package-to-an-index
 """
 ````
 
+## Related
+
+- superseded_by → [adr/cortex/1092-make-uv-lock-the-only-dependency-source.md](adr/cortex/1092-make-uv-lock-the-only-dependency-source.md)

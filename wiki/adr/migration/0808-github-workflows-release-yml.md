@@ -6,6 +6,8 @@ source: .github/workflows/release.yml
 
 # ADR-0808 — .github/workflows/release.yml
 
+Records here that describe the exported `requirements/*.txt` files, `scripts/launcher_pins.py` or the launcher's pip resolution are superseded by ADR-1092; the others stand.
+
 Source rationale preserved verbatim. Identifiers inside historical quotations are not current identities.
 
 ## .github/workflows/release.yml — original line 3
@@ -465,3 +467,7 @@ Source rationale preserved verbatim. Identifiers inside historical quotations ar
         # Trusted Publisher entry was removed) must NOT red-X the primary
         # marketplace/GitHub release.
 ````
+
+## Related
+
+- see_also → [adr/cortex/1092-make-uv-lock-the-only-dependency-source.md](adr/cortex/1092-make-uv-lock-the-only-dependency-source.md)

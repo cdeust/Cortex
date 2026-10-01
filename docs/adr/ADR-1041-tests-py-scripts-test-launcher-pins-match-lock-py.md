@@ -2,7 +2,7 @@
 
 # ADR-1041: tests_py/scripts/test_launcher_pins_match_lock.py design and historical evidence
 
-Status: accepted; existing test/harness evidence preserved during issue #514.
+Status: superseded by ADR-1092; was accepted; existing test/harness evidence preserved during issue #514.
 
 Source `tests_py/scripts/test_launcher_pins_match_lock.py`, original SHA-256 `91a8bdeb8910cec0967edcc2c914267d4257da259cd2e2af77db77641c29019f`.
 Assertions and runtime fixture literals remain unchanged.
@@ -43,3 +43,6 @@ second lock parser to fall out of step with uv's own.
 """
 ````
 
+## Related
+
+- superseded_by → [adr/cortex/1092-make-uv-lock-the-only-dependency-source.md](adr/cortex/1092-make-uv-lock-the-only-dependency-source.md)

@@ -2,6 +2,8 @@
 
 Status: accepted; preserved from the existing implementation during issue #514.
 
+Records here that describe the exported `requirements/*.txt` files, `scripts/launcher_pins.py` or the launcher's pip resolution are superseded by ADR-1092; the others stand.
+
 These are historical implementation records, not new algorithm or threshold choices.
 Source: `scripts/setup.sh`; original SHA-256 `655c9e489d0ecf27be6cec704b3bd57ba1f9091cd8754d67b7dd819099518456`.
 
@@ -53,3 +55,6 @@ Source: `scripts/setup.sh`; original SHA-256 `655c9e489d0ecf27be6cec704b3bd57ba1
 
 ````
 
+## Related
+
+- see_also → [adr/cortex/1092-make-uv-lock-the-only-dependency-source.md](adr/cortex/1092-make-uv-lock-the-only-dependency-source.md)

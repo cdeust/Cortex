@@ -126,14 +126,6 @@ runs:
 
 
 
-    - name: Cache pip
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ inputs.python-version }}-${{ hashFiles('pyproject.toml') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-${{ inputs.python-version }}-
-
     - name: Cache HuggingFace models
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
@@ -154,26 +146,16 @@ runs:
         path: ~/.cache/flashrank
         key: ${{ runner.os }}-flashrank-ms-marco-MiniLM-L-12-v2
 
-    - name: Install dependencies
+    - name: Install the locked dev+postgresql+codebase set
+      uses: ./.github/actions/uv-locked-install
+      with:
+        set: --extra dev --extra postgresql --extra codebase
+        environment: ${{ env.pythonLocation }}
+
+    - name: Install the project
       shell: bash
       # source: ADR-0800
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-      run: |
-        pip install --no-deps --require-hashes -r requirements/ci-postgresql.txt
-        pip install --no-deps -e .
+      run: pip install --no-deps -e .
 
     # source: ADR-0800
 

@@ -39,7 +39,7 @@ cd Cortex
 # CI's SQLite job installs ".[dev,sqlite,codebase]"; its PG job adds
 # `postgresql`. Install all of them so your run is the stricter one.
 # `uv sync`, not `pip install -e`: sync resolves from uv.lock, which is what
-# CI installs (as the hash-pinned requirements/ exported from it). Resolving
+# CI installs (`uv sync --locked`, hash-verified). Resolving
 # from the pyproject.toml ranges instead lands you on versions CI never had —
 # issue #253, where that gap cost a contributor a phantom type error.
 uv sync --no-default-groups \
@@ -60,9 +60,8 @@ python benchmarks/longmemeval/run_benchmark.py --variant s
 ### Reproducing the pyright gate locally
 
 The gate is zero-diagnostic, so its answer only means something if your
-environment is CI's. Build it from `uv.lock` — the same lock CI installs from,
-via the hash-pinned `requirements/ci-typecheck.txt` that
-`scripts/generate_pip_constraints.py` exports from it:
+environment is CI's. Build it from `uv.lock` — the same lock CI's Type Check
+job installs from with `uv sync --locked`:
 
 ```bash
 uv sync --no-default-groups \
@@ -76,8 +75,7 @@ Do **not** resolve this environment from the `pyproject.toml` ranges
 differs, so the gate reports one thing to you and another to CI. That is issue
 #253 — a contributor chasing a `tree-sitter-language-pack` diagnostic CI never
 saw. The extras above are not a hand-kept list: they are asserted equal to the
-`ci-typecheck.txt` / `typecheck-tool.txt` entries of
-`scripts/pip_constraint_sets.py` by
+`set:` CI's Type Check job installs by
 `tests_py/scripts/test_typecheck_env_parity.py`, which fails if this block and
 CI's install ever drift apart.
 

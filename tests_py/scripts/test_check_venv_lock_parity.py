@@ -121,47 +121,37 @@ class PostgresqlExtraDriftTests(unittest.TestCase):
     monkeypatched so the test is deterministic regardless of THIS machine's
     actual venv state (issue #287 is precisely about that state varying)."""
 
-    def _requirements_file(self, text: str) -> Path:
-        # `TestCase.enterContext` needs Python 3.11+; this repo's floor is
-        # 3.10 (pyproject.toml `requires-python`), so the cleanup is wired
-        # by hand via `addCleanup` instead.
-        tmp_dir = _tmp_dir()
-        self.addCleanup(tmp_dir.cleanup)
-        tmp = Path(tmp_dir.name) / "ci-postgresql.txt"
-        tmp.write_text(text, encoding="utf-8")
-        return tmp
-
     def test_none_when_psycopg_is_not_installed(self) -> None:
         with mock.patch.object(parity, "installed_version", return_value=None):
             self.assertIsNone(parity.postgresql_extra_drift())
 
     def test_none_when_installed_matches_the_pinned_file(self) -> None:
-        requirements = self._requirements_file("psycopg==3.3.4\npgvector==0.5.0\n")
+        locked = "psycopg==3.3.4\npgvector==0.5.0\n"
         versions = {"psycopg": "3.3.4", "pgvector": "0.5.0"}
         with (
-            mock.patch.object(parity, "CI_POSTGRESQL_TXT", requirements),
+            mock.patch.object(parity, "locked_requirements", return_value=locked),
             mock.patch.object(parity, "installed_version", side_effect=versions.get),
         ):
             self.assertIsNone(parity.postgresql_extra_drift())
 
     def test_reports_the_exact_drift_that_caused_issue_287(self) -> None:
         """psycopg importable, pgvector present but at the pre-drift version
-        — the concrete pair `test_launcher_pins_match_lock.py` measured the
-        day before this issue was filed. Exact equality (not `assertIn`): a
+        — the concrete pair measured the day before this issue was filed.
+        Exact equality (not `assertIn`): a
         wording tweak to any chunk of the message is a real change a
         reviewer should see reflected here, not something a substring check
         would silently keep passing under."""
-        requirements = self._requirements_file("psycopg==3.3.4\npgvector==0.5.0\n")
+        locked = "psycopg==3.3.4\npgvector==0.5.0\n"
         versions = {"psycopg": "3.3.4", "pgvector": "0.4.2"}
         with (
-            mock.patch.object(parity, "CI_POSTGRESQL_TXT", requirements),
+            mock.patch.object(parity, "locked_requirements", return_value=locked),
             mock.patch.object(parity, "installed_version", side_effect=versions.get),
         ):
             message = parity.postgresql_extra_drift()
         self.assertEqual(
             message,
-            "Local venv has drifted from requirements/ci-postgresql.txt — the "
-            "file CI's 'Check advertised test count' step installs from "
+            "Local venv has drifted from uv.lock's dev+postgresql+codebase set — "
+            "the set CI's 'Check advertised test count' step installs "
             "(issue #287). A version-mismatched postgresql-extra package can "
             "change which tests import successfully at collection time, so "
             "the locally collected test count silently stops matching CI's. "
@@ -176,16 +166,14 @@ class PostgresqlExtraDriftTests(unittest.TestCase):
         """A single-mismatch message can't distinguish the join separator
         from a corrupted one — both produce the same one-line output. Two+
         mismatches are required to pin that each gets its own line."""
-        requirements = self._requirements_file(
-            "psycopg==3.3.4\npgvector==0.5.0\npsycopg-pool==3.3.1\n"
-        )
+        locked = "psycopg==3.3.4\npgvector==0.5.0\npsycopg-pool==3.3.1\n"
         versions = {
             "psycopg": "3.3.4",
             "pgvector": "0.4.2",
             "psycopg-pool": "3.3.0",
         }
         with (
-            mock.patch.object(parity, "CI_POSTGRESQL_TXT", requirements),
+            mock.patch.object(parity, "locked_requirements", return_value=locked),
             mock.patch.object(parity, "installed_version", side_effect=versions.get),
         ):
             message = parity.postgresql_extra_drift()
@@ -197,33 +185,54 @@ class PostgresqlExtraDriftTests(unittest.TestCase):
             "  psycopg-pool: installed 3.3.0, lock pins 3.3.1",
         )
 
-    def test_reads_the_pinned_file_as_utf8_explicitly(self) -> None:
-        """Pins the `encoding="utf-8"` keyword itself (not just its decoded
-        result): `requirements/*.txt` carries no non-ASCII bytes today, so a
-        decoded-content assertion alone cannot distinguish `encoding="utf-8"`
-        from the platform-default `encoding=None` on this machine — only a
-        call-arguments assertion can."""
-        fake_path = mock.Mock(spec=Path)
-        fake_path.read_text.return_value = "psycopg==3.3.4\n"
+    def test_unreadable_lock_is_reported_not_passed(self) -> None:
+        unreadable = parity.LockUnreadableError("uv is not on PATH")
         with (
-            mock.patch.object(parity, "CI_POSTGRESQL_TXT", fake_path),
             mock.patch.object(parity, "installed_version", return_value="3.3.4"),
+            mock.patch.object(parity, "locked_requirements", side_effect=unreadable),
         ):
-            self.assertIsNone(parity.postgresql_extra_drift())
-        fake_path.read_text.assert_called_once_with(encoding="utf-8")
-
-    def test_real_ci_postgresql_txt_parses_to_a_realistic_package_set(self) -> None:
-        """Guard the parser against the real file: a silently-empty parse
-        (wrong path, changed export format) would make every reconciliation
-        above vacuously pass on the actual CI-installed set."""
-        versions = parity.parse_pinned_versions(
-            parity.CI_POSTGRESQL_TXT.read_text(encoding="utf-8")
+            message = parity.postgresql_extra_drift()
+        self.assertEqual(
+            message, "Cannot read uv.lock's pins to check this venv: uv is not on PATH"
         )
-        # ci-postgresql.txt installs dev+postgresql+codebase; the set is in
-        # the hundreds. 50 is a floor far below that and far above empty.
+
+    def test_real_lock_export_parses_to_a_realistic_package_set(self) -> None:
+        """Guard the parser against the real export: a silently-empty parse
+        would make every reconciliation above vacuously pass."""
+        versions = parity.parse_pinned_versions(parity.locked_requirements())
+        # dev+postgresql+codebase is ~90 packages; 50 is far above empty.
         self.assertGreater(len(versions), 50)
         self.assertIn("psycopg", versions)
         self.assertIn("pgvector", versions)
+
+
+class LockedRequirementsTests(unittest.TestCase):
+    def test_exports_the_ci_set_from_the_lock_without_hashes(self) -> None:
+        done = mock.Mock(returncode=0, stdout="x==1\n", stderr="")
+        with (
+            mock.patch.object(parity.shutil, "which", return_value="/bin/uv"),
+            mock.patch.object(parity.subprocess, "run", return_value=done) as run,
+        ):
+            self.assertEqual(parity.locked_requirements(), "x==1\n")
+        self.assertEqual(
+            run.call_args.args[0],
+            ["/bin/uv", "export", "--frozen", "--no-config", "--project"]
+            + [str(REPO), "--no-emit-project", "--no-default-groups"]
+            + ["--extra", "dev", "--extra", "postgresql", "--extra", "codebase"]
+            + ["--format", "requirements.txt", "--no-hashes"],
+        )
+
+    def test_missing_uv_or_failed_export_raises(self) -> None:
+        with mock.patch.object(parity.shutil, "which", return_value=None):
+            with self.assertRaises(parity.LockUnreadableError):
+                parity.locked_requirements()
+        failed = mock.Mock(returncode=2, stdout="", stderr="lock is stale")
+        with (
+            mock.patch.object(parity.shutil, "which", return_value="/bin/uv"),
+            mock.patch.object(parity.subprocess, "run", return_value=failed),
+        ):
+            with self.assertRaisesRegex(parity.LockUnreadableError, "lock is stale"):
+                parity.locked_requirements()
 
 
 class MainCliTests(unittest.TestCase):
@@ -234,7 +243,7 @@ class MainCliTests(unittest.TestCase):
         ):
             self.assertEqual(parity.main([]), 0)
         mock_print.assert_called_once_with(
-            "OK: no postgresql-extra version drift from requirements/ci-postgresql.txt"
+            "OK: no postgresql-extra version drift from uv.lock"
         )
 
     def test_main_prints_the_message_and_returns_1_on_drift(self) -> None:
@@ -260,12 +269,6 @@ class ConftestWiringTests(unittest.TestCase):
             conftest,
         )
         self.assertIn("_guard_against_venv_lock_drift()", conftest)
-
-
-def _tmp_dir():
-    import tempfile
-
-    return tempfile.TemporaryDirectory()
 
 
 if __name__ == "__main__":

@@ -1456,7 +1456,7 @@ class MainTests(unittest.TestCase):
 
 
 class LintJobEnvironmentTests(unittest.TestCase):
-    """The Lint job runs this gate with `requirements/lint.txt` installed and
+    """The Lint job runs this gate with uv.lock's `lint` group installed and
     nothing else (ci.yml): ruff, no editable install of this project, no
     PYTHONPATH. `python scripts/check_doc_claims.py` puts `scripts/` on
     sys.path, not the repository root, so `mcp_server` is not importable.

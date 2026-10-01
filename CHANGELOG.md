@@ -33,6 +33,20 @@ adheres to [Semantic Versioning](https://semver.org/).
     Energy results measured on real benchmark runs may now be committed,
     quoted with their machine, region and boundary.
 
+### Changed
+
+- **`uv.lock` is the only dependency source (ADR-1092).** The thirteen
+  generated `requirements/*.txt` exports, their generator and the launcher's
+  hand-kept pins are gone. CI jobs, the three Docker images and the
+  ClusterFuzzLite build install with `uv sync --locked`, hash-verified; the
+  plugin launcher and `scripts/setup.sh`/`setup.py` export one locked set as
+  a `pylock.toml` and install it with `uv pip install --require-hashes`.
+  When no uv 0.11.3 is on `PATH`, the launcher installs that exact uv wheel
+  with pip, hash-checked, beside its `deps/` directory, with no prompt; if
+  that fails, it says why and how to install uv by hand. Dependabot now uses
+  its `uv` ecosystem, which rewrites `pyproject.toml` and `uv.lock`
+  together, so its Python PRs no longer need a resync commit.
+
 ## [4.23.5] - 2026-09-23
 
 ### Fixed

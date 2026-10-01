@@ -2,7 +2,7 @@
 
 # ADR-0775: scripts/pip_constraint_sets.py implementation decisions
 
-Status: accepted; preserved from the existing implementation during issue #514.
+Status: superseded by ADR-1092; was accepted; preserved from the existing implementation during issue #514.
 
 These are historical implementation records, not new algorithm or threshold choices.
 Source: `scripts/pip_constraint_sets.py`; original SHA-256 `89b2e044fed3668cc3695032651744e5834817e2d7673c0e9f22b4ad70fd0948`.
@@ -58,3 +58,6 @@ could not produce one).
     """
 ````
 
+## Related
+
+- superseded_by → [adr/cortex/1092-make-uv-lock-the-only-dependency-source.md](adr/cortex/1092-make-uv-lock-the-only-dependency-source.md)

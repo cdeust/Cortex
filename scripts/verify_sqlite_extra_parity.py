@@ -2,19 +2,17 @@
 """Guard the real install path against silently dropping a [sqlite] extra
 package (issue #634's root cause, generalized).
 
-launcher_pins.py::BASE_PACKAGES and requirements/setup.txt are the two
-lists ``ensure_deps()``/``scripts/setup.py::install_deps()`` actually
-install into ``deps/``. pyproject.toml's own [sqlite] extra is the
-source of truth for what the SQLite backend needs. Issue #634 shipped
-because BASE_PACKAGES never named sqlite-vec while a CI shortcut
-(``pip install -r requirements/ci-sqlite-min.txt``, which always
-inherits [sqlite]) did -- so Windows CI ran a dependency set no real
-user ever received. This checks the deps directory the REAL install
-path (``install-plugin.sh`` -> ``scripts/setup.py``) actually
-populated, not the CI-only shortcut, against pyproject.toml directly,
-so a future package added to [sqlite] but not BASE_PACKAGES/setup.txt
-fails here instead of shipping silently again.
+The launcher-base group and the installer set (scripts/launcher_sets.py)
+are what ``ensure_deps()``/``scripts/setup.py::install_deps()`` actually
+install into ``deps/``. pyproject.toml's own [sqlite] extra is the source
+of truth for what the SQLite backend needs. Issue #634 shipped because the
+launcher never named sqlite-vec while a CI shortcut that always inherited
+[sqlite] did -- so Windows CI ran a dependency set no real user ever
+received. This checks the deps directory the REAL install path
+(``install-plugin.sh`` -> ``scripts/setup.py``) actually populated,
+against pyproject.toml directly.
 
+source: ADR-1092
 source: ADR-1091"""
 
 from __future__ import annotations
@@ -100,9 +98,8 @@ def main(argv: list[str]) -> int:
         f"not install every package pyproject.toml's [sqlite] extra "
         f"declares. Missing under {deps_dir}: "
         + ", ".join(missing)
-        + ". Add the missing package(s) to launcher_pins.py::BASE_PACKAGES "
-        "and to pip_constraint_sets.py's setup.txt ConstraintSet.extras "
-        "(issue #634's exact fix).",
+        + ". Add the missing package(s) to pyproject.toml's launcher-base "
+        "group and to launcher_sets.INSTALLER's extras (issue #634's fix).",
         file=sys.stderr,
     )
     return 1

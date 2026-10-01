@@ -132,8 +132,9 @@ devcontainer up --workspace-folder .
 Every dependency this container introduces is pinned to a value verified
 against this repo's own lockfile or the upstream registry, not guessed:
 
-- `torch==2.11.0`, `sentence-transformers==5.4.1`, `flashrank==0.2.10` —
-  `# source: uv.lock` (this repo).
+- Python packages (torch, sentence-transformers, flashrank and the rest) —
+  installed with `uv sync --locked` from this repo's `uv.lock`, each
+  artifact checked against the lock's sha256; no version is restated here.
 - `ghcr.io/anthropics/devcontainer-features/claude-code:1.0.5` — the
   feature's own manifest at this tag reports `"options": {}` (verified
   2026-07-14 against `ghcr.io/v2/anthropics/devcontainer-features/

@@ -6,6 +6,8 @@ source: .clusterfuzzlite/build.sh
 
 # ADR-0796 — .clusterfuzzlite/build.sh
 
+Records here that describe the exported `requirements/*.txt` files, `scripts/launcher_pins.py` or the launcher's pip resolution are superseded by ADR-1092; the others stand.
+
 Source rationale preserved verbatim. Identifiers inside historical quotations are not current identities.
 
 ## .clusterfuzzlite/build.sh — original line 3
@@ -40,3 +42,7 @@ Source rationale preserved verbatim. Identifiers inside historical quotations ar
 # seeds; starting from them keeps the fuzzer from rediscovering the shallow
 # surface on every run.
 ````
+
+## Related
+
+- see_also → [adr/cortex/1092-make-uv-lock-the-only-dependency-source.md](adr/cortex/1092-make-uv-lock-the-only-dependency-source.md)

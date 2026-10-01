@@ -3,16 +3,20 @@
 
 Public entry points used by launcher.py: ``ensure_deps`` (base runtime,
 every entry point) and ``ensure_all_deps`` (base + ML stack, SessionStart
-only). ``install_requirements``, also run as ``python3 launcher_deps.py -r
-FILE DEPS_DIR``, is the installers' path into the same directory.
+only). ``install_installer_set``, also run as ``python3 launcher_deps.py
+DEPS_DIR``, is the installers' path into the same directory. Every set is
+read from uv.lock through ``launcher_uv``; a stamp keyed on uv.lock's
+digest keeps the hot path free of any subprocess.
 
 source: ADR-0747
-source: ADR-1063"""
+source: ADR-1063
+source: ADR-1092"""
 
 from __future__ import annotations
 
 import argparse
 import contextlib
+import hashlib
 import json
 import os
 import shutil
@@ -25,24 +29,18 @@ _SCRIPTS_DIR = str(Path(__file__).resolve().parent)
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 import launcher_deps_fs as _fs  # noqa: E402
-import launcher_pins as _pins  # noqa: E402
+import launcher_sets as _sets  # noqa: E402
 import importlib  # noqa: E402
 
 # source: ADR-0747
 _pid_alive = _fs.pid_alive
 _normalize_dist_key = _fs.normalize_dist_key
-_parse_pip_spec = _fs.parse_pip_spec
 _dist_info_versions = _fs.dist_info_versions
 _entry_dist_key = _fs.entry_dist_key
-_dist_info_satisfies = _fs.dist_info_satisfies
 _sweep_stale_backups = _fs.sweep_stale_backups
 _prune_superseded_dist_info = _fs.prune_superseded_dist_info
 
-# source: ADR-0747
-_numpy_version = _pins.numpy_version
-_NUMPY_VERSION = _pins.numpy_version(sys.version_info[:2])
-_BASE_PACKAGES = _pins.BASE_PACKAGES
-_ML_PACKAGES = _pins.ML_PACKAGES
+LOCK_PATH = Path(_SCRIPTS_DIR).parent / "uv.lock"
 
 _STALE_LOCK_SECONDS = 120  # abandon a lock older than this (crashed holder)
 _LOCK_WAIT_SECONDS = 30  # give up waiting and proceed unlocked past this
@@ -114,27 +112,32 @@ def _stamp_path(deps_dir: str, kind: str) -> str:
     return os.path.join(deps_dir, f".cortex-deps-stamp-{kind}.json")
 
 
-def _pins_satisfied(deps_dir: str, kind: str, pins: list[str]) -> bool:
-    """True iff a prior successful bootstrap already covered these pins.
+def lock_digest() -> str | None:
+    """sha256 of uv.lock, or None when the plugin tree carries no lock."""
+    try:
+        return hashlib.sha256(LOCK_PATH.read_bytes()).hexdigest()
+    except OSError:
+        return None
 
-    Precondition: ``pins`` is the exact ordered pip-spec list to install.
-    Postcondition: reads the cached presence stamp without importing packages or
-    scanning dist-info.
 
-    source: ADR-0747"""
+def _stamp_matches(deps_dir: str, kind: str, digest: str) -> bool:
+    """True iff a prior successful install of ``kind`` used this exact lock.
+
+    source: ADR-0747
+    source: ADR-1092"""
     try:
         with open(_stamp_path(deps_dir, kind), encoding="utf-8") as fh:
             data = json.load(fh)
     except (OSError, ValueError):
         return False
     py = f"{sys.version_info.major}.{sys.version_info.minor}"
-    return data.get("python") == py and data.get("pins") == sorted(pins)
+    return data.get("python") == py and data.get("lock") == digest
 
 
-def _write_stamp(deps_dir: str, kind: str, pins: list[str]) -> None:
+def _write_stamp(deps_dir: str, kind: str, digest: str) -> None:
     payload = {
         "python": f"{sys.version_info.major}.{sys.version_info.minor}",
-        "pins": sorted(pins),
+        "lock": digest,
     }
     try:
         with open(_stamp_path(deps_dir, kind), "w", encoding="utf-8") as fh:
@@ -147,99 +150,74 @@ import launcher_deps_install as _install  # noqa: E402
 
 # source: ADR-0747
 _commit_entry = _install.commit_entry
-_pip_install = _install.pip_install
+_install_locked_set = _install.install_locked_set
 
 
-def ensure_deps(deps_dir: str) -> None:
-    """Install the base runtime if missing (every entry point).
+def _ensure(
+    deps_dir: str, kind: str, set_args: tuple[str, ...], imports: tuple[str, ...]
+) -> None:
+    """Install one uv.lock set unless this lock already stamped it.
 
-        Precondition: none. Postcondition: every package in
-        ``_BASE_PACKAGES`` has a matching ``.dist-info`` inside ``deps_dir``,
-        OR a diagnostic was printed to stderr and the caller's own import
-        will fail with a clear ImportError.
+        Postcondition: the ``kind`` stamp names the current uv.lock digest
+        iff the set installed and every name in ``imports`` imports; a
+        failure prints its cause and leaves the caller's import to fail.
 
-    source: ADR-0747"""
+    source: ADR-0747
+    source: ADR-1092"""
     os.makedirs(deps_dir, exist_ok=True)
     _sweep_stale_backups(deps_dir)
-    pins = [spec for _name, spec in _BASE_PACKAGES]
-    if _pins_satisfied(deps_dir, "base", pins):
+    digest = lock_digest()
+    if digest is None:
+        print(
+            f"[cortex-launcher] {LOCK_PATH} is missing; cannot install "
+            "dependencies. Reinstall the plugin.",
+            file=sys.stderr,
+        )
         return
-    missing = [
-        spec
-        for _name, spec in _BASE_PACKAGES
-        if not _dist_info_satisfies(deps_dir, spec)
-    ]
-    if not missing:
-        _write_stamp(deps_dir, "base", pins)
+    if _stamp_matches(deps_dir, kind, digest):
         return
     with _deps_lock(deps_dir):
         # Double-checked: another process may have finished installing
         # while this one waited for the lock.
-        if _pins_satisfied(deps_dir, "base", pins):
+        if _stamp_matches(deps_dir, kind, digest):
             return
-        missing = [
-            spec
-            for _name, spec in _BASE_PACKAGES
-            if not _dist_info_satisfies(deps_dir, spec)
-        ]
-        if missing:
-            _pip_install(deps_dir, missing)
-        if all(_importable(name, deps_dir) for name, _spec in _BASE_PACKAGES):
-            _write_stamp(deps_dir, "base", pins)
+        if not _install_locked_set(deps_dir, set_args):
+            return  # A failed install must never receive a success stamp.
+        if all(_importable(name, deps_dir) for name in imports):
+            _write_stamp(deps_dir, kind, digest)
+
+
+def ensure_deps(deps_dir: str) -> None:
+    """Install the base runtime set (every entry point).
+
+    source: ADR-0747"""
+    _ensure(deps_dir, "base", _sets.BASE, _sets.BASE_IMPORTS)
 
 
 def ensure_all_deps(deps_dir: str) -> None:
-    """Install base + ML dependencies (SessionStart hook only).
-
-        Base constraints keep shared ML transitives (notably numpy) on the same
-        pinned version as the base install (residue 3). Failed installs cannot
-        receive a success stamp, even when an older ML stack remains importable.
+    """Install base + ML sets (SessionStart hook only).
 
     source: ADR-0747"""
     ensure_deps(deps_dir)
-    ml_pins = [spec for _name, spec in _ML_PACKAGES]
-    if _pins_satisfied(deps_dir, "ml", ml_pins):
-        return
-    missing = [
-        spec for _name, spec in _ML_PACKAGES if not _dist_info_satisfies(deps_dir, spec)
-    ]
-    if not missing:
-        _write_stamp(deps_dir, "ml", ml_pins)
-        return
-    with _deps_lock(deps_dir):
-        if _pins_satisfied(deps_dir, "ml", ml_pins):
-            return
-        missing = [
-            spec
-            for _name, spec in _ML_PACKAGES
-            if not _dist_info_satisfies(deps_dir, spec)
-        ]
-        if missing:
-            base_pins = [spec for _name, spec in _BASE_PACKAGES]
-            if not _pip_install(deps_dir, missing, constraints=base_pins):
-                return  # A failed CPU upgrade must never receive a success stamp.
-        if _importable("sentence_transformers", deps_dir) and _importable(
-            "flashrank", deps_dir
-        ):
-            _write_stamp(deps_dir, "ml", ml_pins)
+    _ensure(deps_dir, "ml", _sets.ML, _sets.ML_IMPORTS)
 
 
-def install_requirements(deps_dir: str, requirements: str) -> bool:
-    """Install a generated closure file for scripts/setup.sh and setup.py.
+def install_installer_set(deps_dir: str) -> bool:
+    """Install the installers' set for scripts/setup.sh and setup.py.
 
-    source: ADR-1063"""
+    source: ADR-1063
+    source: ADR-1092"""
     os.makedirs(deps_dir, exist_ok=True)
     _sweep_stale_backups(deps_dir)
     with _deps_lock(deps_dir):
-        return _install.install_requirements(deps_dir, requirements)
+        return _install_locked_set(deps_dir, _sets.INSTALLER)
 
 
 def main(argv: list[str]) -> int:
-    parser = argparse.ArgumentParser(description=install_requirements.__doc__)
-    parser.add_argument("--requirement", "-r", required=True)
+    parser = argparse.ArgumentParser(description=install_installer_set.__doc__)
     parser.add_argument("deps_dir")
     args = parser.parse_args(argv)
-    return 0 if install_requirements(args.deps_dir, args.requirement) else 1
+    return 0 if install_installer_set(args.deps_dir) else 1
 
 
 if __name__ == "__main__":

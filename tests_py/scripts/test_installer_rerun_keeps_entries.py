@@ -6,12 +6,14 @@ by name, so every entry whose name is not its distribution's (``yaml``,
 the owners of each entry from the scratch ``RECORD`` files.
 
 These tests run real pip, offline, through the entry point both installers
-call (``python3 scripts/launcher_deps.py --requirement FILE DEPS_DIR``),
-against locally built wheels: ``cortexprobe-yaml`` ships the ``probeyaml``
+call (``python3 scripts/launcher_deps.py DEPS_DIR``), its ``uv`` a stand-in
+(``_fake_uv``) installing a hash-pinned probe requirement built from locally
+built wheels: ``cortexprobe-yaml`` ships the ``probeyaml``
 package and a console script (so it owns ``bin``), and ``cortexprobe-ns-a``
 and ``cortexprobe-ns-b`` share the ``probens`` namespace directory.
 
-source: ADR-1064"""
+source: ADR-1064
+source: ADR-1092"""
 
 from __future__ import annotations
 
@@ -25,6 +27,8 @@ import zipfile
 from pathlib import Path
 
 import pytest
+
+from tests_py.scripts import _fake_uv
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LAUNCHER_DEPS = REPO_ROOT / "scripts" / "launcher_deps.py"
@@ -82,16 +86,12 @@ def _write_requirements(layout: dict[str, Path], pins: dict[str, str]) -> None:
 
 
 def _install(layout: dict[str, Path]) -> None:
+    env = {**os.environ, "PATH": _fake_uv.path_with(layout["fake_uv"])}
     result = subprocess.run(
-        [
-            sys.executable,
-            str(LAUNCHER_DEPS),
-            "--requirement",
-            str(layout["requirements"]),
-            str(layout["deps"]),
-        ],
+        [sys.executable, str(LAUNCHER_DEPS), str(layout["deps"])],
         capture_output=True,
         text=True,
+        env=env,
     )
     assert result.returncode == 0, result.stdout + result.stderr
 
@@ -110,6 +110,7 @@ def layout(tmp_path: Path) -> dict[str, Path]:
         "deps": tmp_path / "data" / "deps",
         "requirements": tmp_path / "setup.txt",
     }
+    layout["fake_uv"] = _fake_uv.install(tmp_path / "fake-uv", layout["requirements"])
     _write_requirements(layout, {_YAML: "1.0", _NS_A: "1.0", _NS_B: "1.0"})
     _install(layout)
     assert {"probeyaml", "probens", "bin"} <= set(os.listdir(layout["deps"]))

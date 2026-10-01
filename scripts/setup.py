@@ -9,13 +9,14 @@ Usage:
     python3 scripts/setup.py                                # PostgreSQL path
     CORTEX_MEMORY_STORE_BACKEND=sqlite python3 scripts/setup.py   # SQLite path
 
-Dependency install (install_deps) installs ``requirements/setup.txt``, the
-generated hash-pinned closure, through the launcher's scratch-and-commit
-path (``scripts/launcher_deps.py``), never with a direct ``--target``.
+Dependency install (install_deps) installs the installer set of uv.lock
+through the launcher's scratch-and-commit path (``scripts/launcher_deps.py``,
+which installs the pinned uv first when none is available), never with a
+direct ``--target``.
 
 source: ADR-0782
-source: ADR-1059
-source: ADR-1063"""
+source: ADR-1063
+source: ADR-1092"""
 
 from __future__ import annotations
 
@@ -202,29 +203,17 @@ def check_postgresql() -> None:
 # ── Step 3: Python dependencies ───────────────────────────────────────
 
 
-# The same generated, hash-pinned closure scripts/setup.sh installs (see
-# scripts/pip_constraint_sets.py, entry "setup.txt") — never a hand list.
-_SETUP_CONSTRAINTS = PROJECT_DIR / "requirements" / "setup.txt"
-
-
 def install_deps() -> None:
+    """Install uv.lock's installer set into DEPS_DIR, or stop the setup.
+
+    source: ADR-1092"""
     step("Python dependencies")
 
     print("Installing Python packages...")
-    result = run(
-        [
-            sys.executable,
-            str(SCRIPT_DIR / "launcher_deps.py"),
-            "--requirement",
-            str(_SETUP_CONSTRAINTS),
-            DEPS_DIR,
-        ]
-    )
-
+    result = run([sys.executable, str(SCRIPT_DIR / "launcher_deps.py"), DEPS_DIR])
     if result.returncode != 0:
-        warn(f"pip install had issues: {result.stderr[:200]}")
-    else:
-        ok("Python packages installed")
+        fail(f"Dependency install failed:\n{result.stderr.strip()}")
+    ok("Python packages installed")
 
 
 # ── Step 4: Database setup ────────────────────────────────────────────
