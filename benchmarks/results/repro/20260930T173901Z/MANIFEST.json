@@ -1,0 +1,87 @@
+{
+  "git_sha": "372351e7c861e29cdc8b4a2986bd2278585bbcb4",
+  "machine_load_at_start": {
+    "load_average_1m": 7.1962890625,
+    "load_average_5m": 5.6962890625,
+    "load_average_15m": 4.767578125,
+    "cpu_count": 10,
+    "concurrent_pytest_processes": 0,
+    "concurrent_docker_containers": 0
+  },
+  "disk_space_at_start": {
+    "repo_root": {
+      "path": "/Users/cdeust/Developments/anthropic-partnership/cortex",
+      "free_bytes": 98505334784,
+      "total_bytes": 494384795648
+    },
+    "docker_root": null
+  },
+  "machine_load_at_end": {
+    "load_average_1m": 5.99658203125,
+    "load_average_5m": 7.52880859375,
+    "load_average_15m": 9.18212890625,
+    "cpu_count": 10,
+    "concurrent_pytest_processes": 0,
+    "concurrent_docker_containers": 1
+  },
+  "disk_space_at_end": {
+    "repo_root": {
+      "path": "/Users/cdeust/Developments/anthropic-partnership/cortex",
+      "free_bytes": 77462007808,
+      "total_bytes": 494384795648
+    },
+    "docker_root": null
+  },
+  "longmemeval_dataset_sha256": "08d8dad4be43ee2049a22ff5674eb86725d0ce5ff434cde2627e5e8e7e117894",
+  "datasets": {
+    "beam-100K": {
+      "repo": "Mohammadta/BEAM",
+      "split": "100K",
+      "revision": "3205395e897e7318c7b094ef4e6047b9b82dbb03"
+    },
+    "locomo": {
+      "source": "snap-research/locomo data/locomo10.json (Percena/locomo-mc10 raw mirror)",
+      "file": "locomo10.json",
+      "bytes": 2805274,
+      "sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4"
+    },
+    "longmemeval-s-cleaned": {
+      "repo": "xiaowu0162/longmemeval-cleaned",
+      "revision": "98d7416c24c778c2fee6e6f3006e7a073259d48f",
+      "filename": "longmemeval_s_cleaned.json",
+      "sha256": "d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442",
+      "size": 277383467,
+      "file": "longmemeval_s_cleaned.json",
+      "bytes": 277383467,
+      "n_records": 500
+    },
+    "longmemeval-s": {
+      "variant": "s",
+      "file": "longmemeval_s.json",
+      "bytes": 278025796,
+      "sha256": "08d8dad4be43ee2049a22ff5674eb86725d0ce5ff434cde2627e5e8e7e117894"
+    }
+  },
+  "pg_image": "pgvector/pgvector:pg16",
+  "bench_container_name": "cortex-bench-pg-44864-e6f49c2b",
+  "bench_container_port": 32770,
+  "bench_runner_pid": 44864,
+  "python": "3.13.7",
+  "packages": {
+    "datasets": "5.0.1",
+    "sentence-transformers": "6.0.1",
+    "torch": "2.13.0",
+    "psycopg": "3.3.5",
+    "psycopg-pool": "3.3.1"
+  },
+  "embedding_model_revision": "1110a243fdf4706b3f48f1d95db1a4f5529b4d41",
+  "reranker_active": true,
+  "reranker_state": "loaded",
+  "reranker_model_sha256": "d3dd7b09fcf06b0c070081d6819b5effbb40b667bcad78b2d7543400271141d1",
+  "results_files": [
+    "beam-100K.json",
+    "locomo.json",
+    "longmemeval-s-cleaned.json",
+    "longmemeval-s.json"
+  ]
+}

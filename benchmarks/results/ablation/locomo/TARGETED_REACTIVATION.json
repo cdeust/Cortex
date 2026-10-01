@@ -1,0 +1,25 @@
+{
+  "schema_version": 3,
+  "mechanism": "TARGETED_REACTIVATION",
+  "benchmark": "locomo",
+  "n_queries": 1982,
+  "baseline": {
+    "r_at_10": 0.8909999999999999,
+    "mrr": 0.782
+  },
+  "ablated": {
+    "r_at_10": 0.89,
+    "mrr": 0.781
+  },
+  "delta": {
+    "r_at_10": -0.001,
+    "mrr": -0.001
+  },
+  "wall_seconds": 3053.07,
+  "rss_peak_mb": 14.109,
+  "timestamp": "2026-10-01T03:28:51.573902+00:00",
+  "git_sha": "372351e7c861e29cdc8b4a2986bd2278585bbcb4",
+  "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+  "embedding_dim": 384,
+  "db_seed": "not-snapshotted"
+}

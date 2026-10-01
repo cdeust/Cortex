@@ -1,0 +1,25 @@
+{
+  "schema_version": 3,
+  "mechanism": "BASELINE",
+  "benchmark": "locomo",
+  "n_queries": 1982,
+  "baseline": {
+    "r_at_10": 0.8909999999999999,
+    "mrr": 0.782
+  },
+  "ablated": {
+    "r_at_10": 0.8909999999999999,
+    "mrr": 0.782
+  },
+  "delta": {
+    "r_at_10": 0.0,
+    "mrr": 0.0
+  },
+  "wall_seconds": 3477.223,
+  "rss_peak_mb": 252.76,
+  "timestamp": "2026-09-30T20:49:23.841992+00:00",
+  "git_sha": "372351e7c861e29cdc8b4a2986bd2278585bbcb4",
+  "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+  "embedding_dim": 384,
+  "db_seed": "not-snapshotted"
+}

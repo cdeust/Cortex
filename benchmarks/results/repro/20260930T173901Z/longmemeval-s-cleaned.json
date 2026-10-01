@@ -1,0 +1,64 @@
+{
+  "overall_mrr": 0.904318253968254,
+  "overall_recall10": 0.97,
+  "category_mrr": {
+    "Single-session (user)": 0.8262471655328798,
+    "Multi-session reasoning": 0.9511994271392767,
+    "Single-session (preference)": 0.6034259259259259,
+    "Temporal reasoning": 0.9104726100966702,
+    "Knowledge updates": 0.9438034188034187,
+    "Single-session (assistant)": 0.9821428571428571
+  },
+  "category_recall10": {
+    "Single-session (user)": 0.9428571428571428,
+    "Multi-session reasoning": 0.9924812030075187,
+    "Single-session (preference)": 0.8333333333333334,
+    "Temporal reasoning": 0.9699248120300752,
+    "Knowledge updates": 1.0,
+    "Single-session (assistant)": 0.9821428571428571
+  },
+  "elapsed_s": 1929.9419115833007,
+  "consolidation_total_wall_s": 0.0,
+  "consolidation_call_count": 0,
+  "manifest": {
+    "with_consolidation": false,
+    "with_consolidation_note": "Scores collected with consolidation=False do NOT reflect production behaviour.  Consolidation-only mechanisms (CASCADE, INTERFERENCE, HOMEOSTATIC_PLASTICITY, SYNAPTIC_PLASTICITY, MICROGLIAL_PRUNING, TWO_STAGE_MODEL, EMOTIONAL_DECAY, TRIPARTITE_SYNAPSE, SCHEMA_ENGINE) are exercised only when with_consolidation=True.  Delta between the two conditions is unmeasured in this run.",
+    "ablate_mechanism": null,
+    "ablate_env_var": null,
+    "n_questions": 500,
+    "n_runs": 1,
+    "dataset": {
+      "repo": "xiaowu0162/longmemeval-cleaned",
+      "revision": "98d7416c24c778c2fee6e6f3006e7a073259d48f",
+      "filename": "longmemeval_s_cleaned.json",
+      "sha256": "d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442",
+      "size": 277383467,
+      "file": "longmemeval_s_cleaned.json",
+      "bytes": 277383467,
+      "n_records": 500
+    },
+    "consolidation_call_count": 0,
+    "consolidation_total_wall_s": 0.0,
+    "repro": {
+      "git_commit": "372351e7c861e29cdc8b4a2986bd2278585bbcb4",
+      "git_dirty": true,
+      "python_version": "3.13.7 (main, Aug 14 2025, 11:12:11) [Clang 17.0.0 (clang-1700.0.13.3)]",
+      "platform_system": "Darwin",
+      "platform_machine": "arm64",
+      "platform_node": "mac-1.home",
+      "timestamp_utc": "2026-09-30T18:14:54.993650+00:00",
+      "lib_versions": {
+        "sentence-transformers": "6.0.1",
+        "torch": "2.13.0",
+        "numpy": "2.5.1",
+        "psycopg": "3.3.5",
+        "pgvector": "0.5.0",
+        "flashrank": "0.2.10"
+      },
+      "reranker_active": true,
+      "reranker_state": "loaded",
+      "reranker_model_path": "/Users/cdeust/.cache/flashrank/ms-marco-MiniLM-L-12-v2/flashrank-MiniLM-L-12-v2_Q.onnx",
+      "reranker_model_sha256": "d3dd7b09fcf06b0c070081d6819b5effbb40b667bcad78b2d7543400271141d1"
+    }
+  }
+}
