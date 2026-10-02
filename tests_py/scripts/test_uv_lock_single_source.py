@@ -105,3 +105,34 @@ def test_no_dependency_file_but_the_lock_is_left_for_dependabot() -> None:
     dependabot = (REPO / ".github/dependabot.yml").read_text(encoding="utf-8")
     assert 'package-ecosystem: "uv"' in dependabot
     assert 'package-ecosystem: "pip"' not in dependabot
+
+
+def test_every_uv_sync_installs_the_lock_as_it_is() -> None:
+    """``uv sync`` without ``--locked`` would re-resolve and rewrite uv.lock."""
+    tracked = subprocess.run(
+        ["git", "ls-files", ".github", ".clusterfuzzlite", ".devcontainer", "docker",
+         "scripts", "Dockerfile"],
+        cwd=REPO, capture_output=True, text=True, check=True,
+    ).stdout.splitlines()  # fmt: skip
+    commands = [
+        f"{path}: {line.strip()}"
+        for path in tracked
+        if path.endswith((".yml", ".sh", "Dockerfile"))
+        for line in (REPO / path).read_text(encoding="utf-8").splitlines()
+        if re.search(r"\buv sync\b", line) and not line.lstrip().startswith("#")
+        and "description:" not in line
+    ]  # fmt: skip
+    assert len(commands) == 5, commands
+    assert [c for c in commands if "--locked" not in c] == []
+
+
+def test_dependabot_skips_every_package_locked_per_platform() -> None:
+    """Dependabot asks uv for ONE version; a per-platform range refuses it."""
+    text = (REPO / ".github/dependabot.yml").read_text(encoding="utf-8")
+    uv_entry = text.split('package-ecosystem: "uv"', 1)[1]
+    skipped = set(
+        re.findall(r'- dependency-name: "([^"]+)"\n(?!\s+versions:)', uv_entry)
+    )
+    bounded = {_import_name(r).replace("_", "-") for r in _group("platform-bounds")}
+    assert bounded == {"torch", "onnxruntime", "numpy", "transformers", "cryptography"}
+    assert bounded | {"sentence-transformers"} == skipped

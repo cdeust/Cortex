@@ -137,3 +137,22 @@ updates:
 
       - dependency-name: "pydantic-core"
         versions: [">2.46.4,<2.48.0"]
+
+      # Locked at one version per platform range by the `platform-bounds`
+      # group of pyproject.toml (and sentence-transformers through its
+      # transformers range). Dependabot's updater asks uv for ONE version,
+      # `uv lock --upgrade-package <name>==<latest>`, which those ranges
+      # refuse: run against this lock, the updater recorded
+      # `dependency_file_not_resolvable` for each of them on every run and
+      # could never open their pull request. They are bumped by hand:
+      # `uv lock --upgrade-package <name>` moves each platform to the newest
+      # version its range allows (CONTRIBUTING.md). An ignored package gets
+      # no security pull request either: its alert still shows in the
+      # Security tab and is fixed with the same command.
+      # source: ADR-1092
+      - dependency-name: "torch"
+      - dependency-name: "onnxruntime"
+      - dependency-name: "numpy"
+      - dependency-name: "transformers"
+      - dependency-name: "sentence-transformers"
+      - dependency-name: "cryptography"

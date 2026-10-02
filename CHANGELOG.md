@@ -45,7 +45,17 @@ adheres to [Semantic Versioning](https://semver.org/).
   with pip, hash-checked, beside its `deps/` directory, with no prompt; if
   that fails, it says why and how to install uv by hand. Dependabot now uses
   its `uv` ecosystem, which rewrites `pyproject.toml` and `uv.lock`
-  together, so its Python PRs no longer need a resync commit.
+  together, so its Python PRs no longer need a resync commit: the grouped
+  update the real updater produces for this lock (45 packages) passes
+  `uv lock --check`, ruff, pyright and the full suite as produced. Six
+  packages locked per platform (torch, onnxruntime, numpy, transformers,
+  sentence-transformers, cryptography) are excluded from Dependabot, which
+  can only request one version of a package, and are bumped with
+  `uv lock --upgrade-package` (CONTRIBUTING.md). The launcher
+  reinstalls a set only when `uv.lock` changes that set: a lock change
+  elsewhere (a development tool) is recognised with one offline `uv export`
+  and downloads nothing. Every macOS the old pip resolution served keeps a
+  working ML stack from the lock, macOS 12 included (onnxruntime 1.19.2).
 
 ## [4.23.5] - 2026-09-23
 

@@ -60,8 +60,16 @@ bot pushes to `main`.
    and sha256, so the Linux `+cpu` torch needs no index flag and no second
    pin. The launcher's base and ML sets are the `launcher-base` and
    `launcher-ml` dependency groups in `pyproject.toml` (names only; adding
-   them changed no locked version). Stamps are keyed on the sha256 of
-   `uv.lock` and the interpreter's minor version.
+   them changed no locked version). A stamp records the sha256 of
+   `uv.lock`, the interpreter's minor version and the sha256 of the
+   exported set (the `pylock.toml` body without uv's header comment, which
+   names the output path). The hot path compares the lock digest alone and
+   runs no subprocess; when `uv.lock` changed, one `uv export` (about 40 ms,
+   offline) tells whether THIS set changed, and a set that did not is
+   restamped without any install. `uv.lock` changes on every dependency
+   bump, most of them in development tools the launcher never installs:
+   keyed on the lock alone, each plugin update would have downloaded both
+   sets again, where the old pin list reinstalled only on a changed pin.
 3. **uv is bootstrapped, pinned and verified.** The launcher uses a `uv` on
    `PATH` only when it reports exactly `UV_VERSION` (0.11.3, the version CI
    already pinned); otherwise pip installs that wheel, binary-only and
@@ -75,8 +83,11 @@ bot pushes to `main`.
    pylock`): the launcher never runs it under an arbitrary uv. The images
    copy the same uv from `ghcr.io/astral-sh/uv:0.11.3@sha256:90bbb3c1…`
    (index digest read 2026-10-01); the test above keeps CI, the images and
-   the launcher on one version, which Dependabot does not bump (its docker
-   parser reads `FROM` lines only).
+   the launcher on one version, which Dependabot does not bump: its docker
+   parser matches `FROM` lines only (`FROM_LINE`,
+   `docker/lib/dependabot/docker/file_parser.rb:19-43`, dependabot-core
+   `87fbf033`), and dependabot-core's own `uv/Dockerfile` says of
+   `COPY --from=...` that "Dependabot does not support that syntax yet".
 4. **Dependabot uses the `uv` ecosystem on `/`.** Its updater runs `pyenv
    exec uv lock --upgrade-package <name>` and rewrites `pyproject.toml` and
    `uv.lock` together (`uv/lib/dependabot/uv/file_updater/lock_file_updater.rb`,
@@ -84,6 +95,36 @@ bot pushes to `main`.
    its fetcher finds nothing else to patch. github.com supports uv security
    updates (`data/reusables/dependabot/supported-package-managers.md`,
    feature `dependabot-uv-security-support`, github/docs `c008b66a`).
+   The real updater (`dependabot update`, dependabot/cli 1.93.0, image
+   `ghcr.io/dependabot/dependabot-updater-uv`, uv 0.12.18) was run on this
+   branch on 2026-10-02 with the repository's group and ignore rules. It
+   produced a grouped pull request of 45 packages touching `uv.lock` and
+   three `pyproject.toml` lines (the `ruff` and `pyright` pins, the
+   `tree-sitter-language-pack` cap), plus one pull request each for
+   filelock and multidict. That grouped change, applied as produced, passes
+   `uv lock --check` under uv 0.11.3, ruff 0.16.9, pyright 1.1.414 (0
+   diagnostics) and the full suite. The same run failed on six packages:
+   torch, onnxruntime, numpy, transformers and sentence-transformers with
+   `dependency_file_not_resolvable`, cryptography with `Declaration not
+   found`. The updater requests a single version (`uv lock
+   --upgrade-package torch==2.14.0`), which the per-platform ranges of
+   decision 6 refuse. Those six are therefore listed under `ignore` and
+   bumped by hand with `uv lock --upgrade-package <name>`, which moves
+   each platform inside its range (checked: the old tiers stay, the newest
+   moves); a test keeps every `platform-bounds` package in that list.
+   Run again with the six ignored, the updater recorded no error and
+   produced the same three pull requests, with a byte-identical `uv.lock`
+   for the grouped one. The
+   class is wider than these six: `uv lock --upgrade-package <name>==<v>`
+   fails for any package the lock holds at two versions (reproduced on
+   scipy, pandas, networkx, huggingface-hub, scikit-learn and tokenizers).
+   The updater did not fail on those because it runs on Python 3.10, where
+   the Python-forked ones are already at their newest 3.10 release, and
+   because it checks a sub-dependency against the lock first and skips it
+   when unresolvable. A direct dependency that later reports
+   `dependency_file_not_resolvable` belongs in the `ignore` list. Ignored
+   packages get no Dependabot security pull request; their alerts remain
+   and are fixed with the same command.
 5. **Deleted:** `requirements/`, `scripts/generate_pip_constraints.py`,
    `scripts/pip_constraint_sets.py`, `scripts/launcher_pins.py`,
    `scripts/launcher_torch_cpu.py` and their tests, the Lint step
@@ -103,7 +144,10 @@ bot pushes to `main`.
    nothing newer there), numpy 1, transformers 4, onnxruntime below 1.24,
    cryptography below 49 (no x86_64 wheel from 49); Apple Silicon before
    macOS 14 (marker `platform_release < '23'`, Darwin 22 and older) torch
-   2.4 to 2.11 and onnxruntime below 1.24; everything else the newest. The
+   2.4 to 2.11 and onnxruntime below 1.24; macOS 12 and older (Darwin 21
+   and older, either architecture) onnxruntime below 1.20, because 1.19.2
+   is the last release with `macosx_11_0` wheels and the one the old pip
+   resolution installed there; everything else the newest. The
    ranges are paired with their opposite (`>=`), because uv keeps ONE
    version across platforms unless the specifiers cannot overlap: with
    `constraint-dependencies` alone, or a bound without its opposite, the
@@ -115,9 +159,8 @@ bot pushes to `main`.
    `NameError: name 'nn' is not defined`, run under Rosetta on 2026-10-02.
    `tests_py/scripts/test_launcher_platform_coverage.py` resolves both
    launcher sets for each platform and Python offline and fails when a
-   platform loses its wheels or its coherent stack. A Dependabot PR that raises
-one of these bounds (it reads them as ordinary requirements) fails that test
-in CI instead of reaching users.
+   platform loses its wheels or its coherent stack. Dependabot leaves
+   these bounds alone: their packages are in its `ignore` list (decision 4).
 
 ## Consequences
 
@@ -136,9 +179,11 @@ plus 8.1 s for the one-time uv bootstrap; ML set 175 s with pip, 64 s with
 uv.
 
 Coverage of the launcher's two sets, from `uv pip install --dry-run
---offline --python-platform` on uv 0.11.3 (2026-10-02; the raw runs are in
-`tasks/review-evidence-uv-lock-single-source.md`). Base resolves to wheels on
-every row. ML, with torch / onnxruntime / numpy / transformers:
+--offline --python-platform` on uv 0.11.3 and, for the macOS rows that
+differ only by `platform_release` (uv emulates one release for every macOS
+target), from the exported markers and wheel tags; both are what
+`tests_py/scripts/test_launcher_platform_coverage.py` runs (2026-10-02).
+Base resolves to wheels on every row. ML, with torch / onnxruntime / numpy / transformers:
 
 | Platform | CPython | ML set |
 |---|---|---|
@@ -147,7 +192,8 @@ every row. ML, with torch / onnxruntime / numpy / transformers:
 | macOS Apple Silicon 14+ (Darwin 23+) | 3.10 to 3.14 | torch 2.13.0, transformers 5.16.1; onnxruntime 1.28.0 (1.23.2 on 3.10) |
 | macOS Apple Silicon 13 (Darwin 22) | 3.10 to 3.13 | torch 2.11.0, onnxruntime 1.23.2, transformers 5.16.1; 3.14: none (onnxruntime publishes no cp314 wheel before macOS 14) |
 | macOS Intel (13+) | 3.10 to 3.12 | torch 2.2.2, numpy 1.26.4, transformers 4.57.6 with sentence-transformers 5.7.0, onnxruntime 1.23.2; 3.13, 3.14: none (no PyTorch wheel) |
-| macOS 12 and older, Windows ARM | any | none; unchanged for Windows ARM (psycopg-binary has no wheel); macOS 12 was served before with onnxruntime 1.19.2 and is not now (onnxruntime 1.23.2 needs macOS 13) |
+| macOS 12 (Darwin 21), Apple Silicon and Intel | 3.10 to 3.12 | onnxruntime 1.19.2, as the old pip resolution chose; torch 2.11.0 (Apple Silicon) or 2.2.2 with numpy 1.26.4 and transformers 4.57.6 (Intel); 3.13, 3.14: none (onnxruntime 1.19.2 stops at cp312) |
+| Windows ARM | any | none, unchanged (psycopg-binary has no wheel) |
 
 An uncovered row fails the install loudly at the wheel lookup, never a
 fallback, and a failed ML install writes no stamp, so the launcher retries at
