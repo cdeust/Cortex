@@ -713,13 +713,16 @@ launcher-ml = [
 # - Apple Silicon before macOS 14 (Darwin < 23): torch >= 2.12 and
 #   onnxruntime >= 1.24 publish macosx_14_0_arm64 wheels only. Its torch range
 #   must not overlap Intel's, or uv would give both the one version 2.2.2.
+# - macOS 12 and older (Darwin < 22): onnxruntime 1.19.2 is the last release
+#   with macosx_11_0 wheels (cp310 to cp312), on either architecture.
 # source: ADR-1092
 platform-bounds = [
     "torch==2.2.2 ; sys_platform == 'darwin' and platform_machine == 'x86_64' and python_full_version < '3.13'",
     "torch>=2.4,<2.12 ; sys_platform == 'darwin' and platform_machine == 'arm64' and platform_release < '23'",
     "torch>=2.12 ; sys_platform != 'darwin' or (platform_machine == 'arm64' and platform_release >= '23') or (platform_machine == 'x86_64' and python_full_version >= '3.13')",
-    "onnxruntime<1.24 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
-    "onnxruntime<1.24 ; sys_platform == 'darwin' and platform_machine == 'arm64' and platform_release < '23'",
+    "onnxruntime<1.20 ; sys_platform == 'darwin' and platform_release < '22'",
+    "onnxruntime>=1.20,<1.24 ; sys_platform == 'darwin' and platform_machine == 'x86_64' and platform_release >= '22'",
+    "onnxruntime>=1.20,<1.24 ; sys_platform == 'darwin' and platform_machine == 'arm64' and platform_release >= '22' and platform_release < '23'",
     "onnxruntime>=1.24 ; python_full_version >= '3.11' and (sys_platform != 'darwin' or (platform_machine == 'arm64' and platform_release >= '23'))",
     "numpy<2 ; sys_platform == 'darwin' and platform_machine == 'x86_64' and python_full_version < '3.13'",
     "numpy>=2 ; sys_platform != 'darwin' or platform_machine != 'x86_64' or python_full_version >= '3.13'",
