@@ -72,9 +72,9 @@ disable the plugin's hooks in Codex, to run the MCP server alone.
   (see [PRIVACY.md](https://github.com/cdeust/Cortex/blob/main/PRIVACY.md)).
 - Files referenced by the events the hooks receive, read-only, as described
   above. No hook writes to your repository.
-- The `uvx` cache, used for server and runtime-hook startup. The package
-  requirement is pinned to the installed plugin version. Intake does not wait
-  for package startup before persisting the session-end event.
+- The installed uv tool environment, prepared separately with binary wheels.
+  Runtime version validation matches the plugin; isolated Python imports prevent
+  project modules from shadowing it. Intake persists before starting the worker.
 
 Nothing leaves the machine except the one-time model download described in
 PRIVACY.md.

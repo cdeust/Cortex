@@ -193,7 +193,7 @@ def _patch_session_main(monkeypatch):
         "_count_pending_curations": 0,
         "_fetch_grooming_staleness": [],
         "_emit_banner_receipt": 7,
-        "_has_sentence_transformers": True,
+        "_sentence_transformers_installed": True,
         "_detect_external_sources": [],
     }
     for name, value in values.items():

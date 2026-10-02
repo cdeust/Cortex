@@ -1,11 +1,10 @@
 {
   "mcpServers": {
     "cortex": {
-      "command": "uvx",
+      "command": "python3",
       "args": [
-        "--from",
-        "hypermnesia-mcp[postgresql,sqlite]==4.23.5",
-        "hypermnesia-mcp"
+        "${PLUGIN_ROOT}/scripts/runtime.py",
+        "server"
       ],
       "env": {
         "CORTEX_RUNTIME": "cowork"

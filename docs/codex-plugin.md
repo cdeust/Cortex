@@ -23,34 +23,21 @@ MCP-only, `lean`-profile package.
 
 ## How the hooks run under Codex
 
-A Codex plugin ships only its own directory, never this repository, and never
-`scripts/launcher.py`, which is Claude-only. Runtime hooks invoke the
-console script the wheel declares (`hypermnesia-mcp-hook`, `pyproject.toml`,
-added in #605):
+The bundled `scripts/runtime.py` checks the installed uv tool's wheel version
+and executes its isolated interpreter (`-I`). The hook command is:
 
-```bash
-uvx --from "hypermnesia-mcp[postgresql,sqlite]==4.23.5" hypermnesia-mcp-hook <module>
+```sh
+python3 "${PLUGIN_ROOT}/scripts/runtime.py" <module>
 ```
 
-`mcp_server/hooks/entry.py` validates `<module>` against `HOOK_MODULES`, wires
-the composition root (issue #560), reads the one stdin event, normalizes it
-(`mcp_server/hooks/host_event.py`, #608) and dispatches to the hook module
-unchanged. Codex's `apply_patch` calls are expanded into one Edit/Write event
-per file operation, `exec_command`/`shell_command` become a `Bash`-shaped
-event, and `SubagentStart`'s `agent_type` is mapped to `agent_name`; a
-Claude-shaped event passes through untouched.
+No event resolves dependencies, downloads packages or compiles native extensions.
+Setup prepares the environment separately; absent or stale installations fail
+with a named setup diagnostic. The wheel's `mcp_server/hooks/entry.py` validates
+the hook module and wires the configured backend. SessionEnd first persists
+its event using the bundled standard-library queue, then invokes this same
+runtime in a replayable worker. No repository module can shadow the wheel.
 
-Runtime commands check that `uvx` is present and report a named diagnostic if
-it is missing. Session-end intake and startup recovery use the bundled
-`${PLUGIN_ROOT}/scripts/session_queue.py` through Python 3. They do not import
-the runtime before persisting or scheduling work.
-
-The MCP server and runtime hooks pin the wheel to the plugin version. This
-prevents a cached older wheel from silently handling newer event contracts.
-CI builds that candidate wheel and supplies it through `UV_FIND_LINKS` before
-the version is published; deployment uses the same requirement from PyPI.
-
-### Event names and matchers
+## Event names and matchers
 
 Event names are Codex's own, verified against
 [learn.chatgpt.com/docs/hooks](https://learn.chatgpt.com/docs/hooks) (read
@@ -125,20 +112,18 @@ The call continues through the normal permission flow, so don't count on a
 stalled hook to act as a gate." A timeout on a gate therefore fails **open**,
 so a tight one would trade a rare long wait for silently ungated edits.
 Warm, these cost 0.16s to 0.26s (measured 2026-09-22, same conditions as
-above); the long wait is only the first cold `uvx` resolve, which the prewarm
-removes. Note that this exposure is identical on Claude Code today, so it is
-a property of both manifests rather than something Codex introduces.
+above). The current Codex dispatcher requires prepared dependencies;
+no package resolution occurs during an event.
 
 Leaving the rest unset would not have been the parity case: on
-`UserPromptSubmit`, a stalled `uvx` resolve or a blocked database would hold
+`UserPromptSubmit`, a blocked database would hold
 up every prompt for ten minutes where Claude Code caps the same hook at five
 seconds. For those, failing open is the right trade, because what a cancelled
-run costs is one skipped enrichment. A cold `uv` cache will exceed those
-budgets; prewarming (below) removes the window.
+run costs is one skipped enrichment. An absent runtime is reported immediately with the setup instruction.
 
 ### Cost per edit
 
-Every runtime hook is its own `uvx` process, so one `apply_patch`, `Edit` or `Write`
+Every runtime hook is its own Python process, so one `apply_patch`, `Edit` or `Write`
 fires up to five of them: `decision_gate` and `no_deps_gate` before the call,
 then `post_tool_capture`, `preemptive_context` and `pipeline_impact_bump`
 after it. A patch touching several files still costs five processes, not five
@@ -149,8 +134,8 @@ Measured on 2026-09-22 (macOS 26.6.2 arm64, uv 0.11.3, warm `uv` cache,
 published 4.23.1 wheel), one such process takes 0.18s to 0.21s in steady
 state, with the first invocation of a given module slower (1.3s to 5.1s
 observed) while its caches fill. The two gates are the ones in the blocking
-path, at roughly 0.4s of that total. On a cold cache the first hook pays the
-full resolve instead, which is what the prewarm below is for.
+path, at roughly 0.4s of that total. These historical measurements used the former uvx dispatcher.
+Current dispatcher measurements are in `verification/codex-hooks-20261002.md`.
 
 Matchers are widened to carry Codex's native tool names alongside Claude's.
 The Codex docs state that for `apply_patch` "hook input still reports
@@ -189,7 +174,7 @@ codex plugin add hypermnesia-mcp-codex@cortex-codex-plugins
 ```
 
 Restart the ChatGPT desktop app and start a new task so Codex loads the new
-plugin components. The plugin uses `uvx`, so `uv` must be available on `PATH`.
+plugin components. The dispatcher uses `uv tool dir`, so `uv` must be available on `PATH`.
 The first launch installs both storage drivers. Direct MCP startup reads the
 same `~/.claude/methodology/backend.json` selection as the Claude launcher
 before loading memory settings. `CORTEX_CLAUDE_DIR` relocates that shared
@@ -207,34 +192,20 @@ configured but unreachable database URL remains an error rather than silently
 redirecting writes. Both hosts must use the same configuration root and storage
 settings to share memories; this does not merge previously separate stores.
 
-A prewarm downloads the package before restarting Codex:
+Prepare the matching wheel with the native Python before restarting Codex:
 
-```bash
-uv tool install "hypermnesia-mcp[postgresql,sqlite]==4.23.5"
+```sh
+python3 "<installed-plugin>/scripts/runtime.py" setup
 ```
 
-For the MCP server this is only a startup optimization, `startup_timeout_sec`
-already covers a cold resolve. For the lifecycle hooks it matters more: every
-hook is its own `uvx` invocation, so a cold cache makes the first one pay the
-full package resolve. Prewarming removes that window. Session-end intake runs before package resolution; a cold worker keeps its event
-queued until recording completes.
-
-The bundled server declares `startup_timeout_sec: 180`. This is a bounded
-startup ceiling, not a delay. Re-measured for the full profile on 2026-09-22
-with `scripts/verify_mcp_hosts.py`, the same script and flags CI runs, the
-exact two-driver command below completed `initialize`, `tools/list`, and a real
-`memory_stats` call over **59 tools in 120.17 seconds** from clean
-`UV_CACHE_DIR` and `UV_TOOL_DIR` directories on macOS 26.6.2 arm64 with uv
-0.11.3. The next run from that cache completed the same contract in 4.24
-seconds. CI reads the command, runtime policy, and timeout from the manifest
-itself and repeats the clean-cache contract against the `full` profile.
-
+This explicit setup is required for both MCP and lifecycle hooks. It installs
+binary wheels into the uv tool environment. SessionEnd preserves failures in
+its queue for later recovery. The MCP server retains its 180-second startup
+ceiling; this includes server initialization, not dependency preparation.
 The bundled MCP command is equivalent to:
 
-```bash
-env CORTEX_RUNTIME=cowork \
-  uvx --from "hypermnesia-mcp[postgresql,sqlite]==4.23.5" \
-  hypermnesia-mcp
+```sh
+env CORTEX_RUNTIME=cowork python3 "${PLUGIN_ROOT}/scripts/runtime.py" server
 ```
 
 `CORTEX_RUNTIME=cowork` selects Cortex's existing DB-optional local-runtime
@@ -265,3 +236,27 @@ this local package.
 
 See [shared memory and decisions](shared-host-memory.md) for the common storage
 and ADR-root contract, opt-in authoring, and the limits of the handoff tests.
+
+## Codex runtime setup and diagnosis (2 October 2026)
+
+The bundled `scripts/runtime.py` dispatches hooks through the installed
+`hypermnesia-mcp` uv tool environment and verifies its version against the plugin
+manifest. An absent or mismatched runtime fails with an explicit setup message.
+Hooks and SessionEnd replay do not resolve, download or compile dependencies.
+
+Before trusting the hooks, install the matching wheel using the native Python:
+
+```sh
+python3 "<installed-plugin>/scripts/runtime.py" setup
+```
+
+Setup uses `uv tool install --python <the setup interpreter> --no-build`; use a
+native interpreter on Apple Silicon. Source changes cannot repair an already
+published wheel: the published Intel cryptography bound needs a future release.
+After a plugin update, review changed definitions in the native `/hooks` browser.
+Do not write trust hashes or bypass review. A prepared runtime or direct-hook
+test proves neither native event delivery nor successful memory persistence.
+
+The 2 October failure occurred before hook code loaded: unqualified uvx selected
+Intel CPython on an ARM host and attempted cryptography compilation, then exceeded
+5/10-second hook deadlines. See `docs/verification/codex-hooks-20261002.md`.

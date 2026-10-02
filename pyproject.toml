@@ -21,6 +21,10 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
+    # source: ADR-1092
+    # macOS Intel wheels stop at cryptography 48.
+    # uvx resolves published metadata without the lock-shaping platform group.
+    "cryptography<49 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
     # source: ADR-0874
     #
     #

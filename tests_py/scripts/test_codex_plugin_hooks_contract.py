@@ -14,8 +14,6 @@ from mcp_server.hooks.entry import HOOK_MODULES
 from tests_py.scripts._codex_plugin_support import (
     CLAUDE_SUFFIX,
     CODEX_SUFFIX,
-    PLUGIN_PATH,
-    read_json as _json,
     claude_hooks,
     codex_hooks,
     every_hook,
@@ -68,9 +66,8 @@ def test_codex_hook_commands_run_the_published_wheel_not_this_repository() -> No
         if event == "SessionEnd":
             assert command == 'python3 "${PLUGIN_ROOT}/scripts/session_queue.py" intake'
             continue
-        assert "command -v uvx" in command
-        version = _json(PLUGIN_PATH)["version"]
-        assert f'uvx --from "hypermnesia-mcp[postgresql,sqlite]=={version}"' in command
+        assert 'python3 "${PLUGIN_ROOT}/scripts/runtime.py"' in command
+        assert "uvx" not in command
 
 
 def test_codex_hooks_use_only_codex_event_names() -> None:

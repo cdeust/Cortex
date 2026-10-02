@@ -149,12 +149,6 @@ def job_lock(path):
         os.close(fd)
 
 
-def package_requirement():
-    manifest = Path(__file__).resolve().parents[1] / ".codex-plugin/plugin.json"
-    version = json.loads(manifest.read_text())["version"]
-    return f"hypermnesia-mcp[postgresql,sqlite]=={version}"
-
-
 def run_job(path):
     if receipt(path).exists():
         path.unlink()
@@ -169,10 +163,8 @@ def run_job(path):
     env.update(job["environment"])
     result = subprocess.run(
         [
-            "uvx",
-            "--from",
-            package_requirement(),
-            "hypermnesia-mcp-hook",
+            sys.executable,
+            str(Path(__file__).with_name("runtime.py")),
             "session_lifecycle",
         ],
         input=json.dumps(job["event"]),

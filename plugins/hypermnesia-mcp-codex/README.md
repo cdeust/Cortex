@@ -16,15 +16,15 @@ codex plugin add hypermnesia-mcp-codex@cortex-codex-plugins
 ```
 
 Restart the ChatGPT desktop app and start a new task. The plugin launches the
-server and runtime hooks with `uvx`, so `uv` must be on `PATH`. Python 3
-must also be on `PATH` for durable session-end intake. The first launch
-resolves the `hypermnesia-mcp[postgresql,sqlite]` release from PyPI; later
-launches run from the cache. Prewarming that cache is worth it, see
-[docs/codex-plugin.md](https://github.com/cdeust/Cortex/blob/main/docs/codex-plugin.md):
+server and hooks through an explicitly prepared wheel environment. Install
+`uv`, then prepare that runtime using the native Python:
 
-```bash
-uv tool install "hypermnesia-mcp[postgresql,sqlite]==4.23.5"
+```sh
+python3 "<installed-plugin>/scripts/runtime.py" setup
 ```
+
+The dispatcher checks the wheel version and isolates Python imports. Hooks
+never resolve dependencies or compile packages.
 
 ## What it exposes
 
@@ -33,7 +33,7 @@ Codex gets the default `full` tool profile, the same surface the Claude Code
 plugin serves.
 
 `hooks/hooks.json` wires the 11 lifecycle hooks, each as
-`uvx --from "hypermnesia-mcp[postgresql,sqlite]==4.23.5" hypermnesia-mcp-hook <module>`
+`python3 "${PLUGIN_ROOT}/scripts/runtime.py" <module>`
 (or the bundled durable intake for session end):
 session-start context injection, per-prompt auto-recall, auto-capture of
 significant tool output, preemptive context, pipeline heat bumps, post-commit
@@ -62,3 +62,27 @@ PostgreSQL target was supplied. An explicitly configured but unreachable
 ## License
 
 MIT, see [LICENSE](./LICENSE).
+
+## Codex runtime setup and diagnosis (2 October 2026)
+
+The bundled `scripts/runtime.py` dispatches hooks through the installed
+`hypermnesia-mcp` uv tool environment and verifies its version against the plugin
+manifest. An absent or mismatched runtime fails with an explicit setup message.
+Hooks and SessionEnd replay do not resolve, download or compile dependencies.
+
+Before trusting the hooks, install the matching wheel using the native Python:
+
+```sh
+python3 "<installed-plugin>/scripts/runtime.py" setup
+```
+
+Setup uses `uv tool install --python <the setup interpreter> --no-build`; use a
+native interpreter on Apple Silicon. Source changes cannot repair an already
+published wheel: the published Intel cryptography bound needs a future release.
+After a plugin update, review changed definitions in the native `/hooks` browser.
+Do not write trust hashes or bypass review. A prepared runtime or direct-hook
+test proves neither native event delivery nor successful memory persistence.
+
+The 2 October failure occurred before hook code loaded: unqualified uvx selected
+Intel CPython on an ARM host and attempted cryptography compilation, then exceeded
+5/10-second hook deadlines. See `docs/verification/codex-hooks-20261002.md`.

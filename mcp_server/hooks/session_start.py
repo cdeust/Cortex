@@ -71,13 +71,17 @@ def _read_event() -> dict:
         return {}
 
 
-def _has_sentence_transformers() -> bool:
-    """Check if sentence-transformers is importable."""
-    try:
-        import sentence_transformers  # noqa: PLC0415, F401 — optional-feature probe: ImportError here is a handled degraded mode
+def _sentence_transformers_installed() -> bool:
+    """Check distribution presence; this does not validate semantic readiness.
 
+    source: docs/verification/codex-session-start-query-20261002.md
+    """
+    from importlib.metadata import PackageNotFoundError, version  # noqa: PLC0415 — banner needs package metadata without importing its ML dependencies
+
+    try:
+        version("sentence-transformers")
         return True
-    except ImportError:
+    except PackageNotFoundError:
         return False
 
 
@@ -136,8 +140,13 @@ def _connect_pg():
         import psycopg  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
         from psycopg.rows import DictRow, dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
+        # source: docs/verification/codex-session-start-query-20261002.md
+        # The short-lived hook cannot amortize JIT compilation for banner SQL.
         return psycopg.Connection[DictRow].connect(
-            _DATABASE_URL, row_factory=dict_row, autocommit=True
+            _DATABASE_URL,
+            row_factory=dict_row,
+            autocommit=True,
+            options="-c jit=off",
         )
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"PostgreSQL connect failed: {exc}")
@@ -402,16 +411,20 @@ def _fetch_grooming_staleness(conn) -> list[str]:
         from mcp_server.core.grooming_health import is_stale  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
 
         row = conn.execute(
+            # source: docs/verification/codex-session-start-query-20261002.md
+            # Materialize the indexed lesson subset before MAX: otherwise the
+            # planner scans the created_at index backwards for absent prefixes.
+            "WITH lessons AS MATERIALIZED ("
+            "  SELECT created_at, tags FROM memories "
+            "  WHERE tags @> '[\"lesson\"]'::jsonb) "
             "SELECT "
             "  (SELECT MAX(tended) FROM wiki.pages) AS wiki_last, "
-            "  (SELECT MAX(created_at) FROM memories m "
-            "     WHERE m.tags @> '[\"lesson\"]'::jsonb "
-            "     AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(m.tags) tg "
-            "                 WHERE tg LIKE 'distill-of:%')) AS distill_last, "
-            "  (SELECT MAX(created_at) FROM memories m "
-            "     WHERE m.tags @> '[\"lesson\"]'::jsonb "
-            "     AND EXISTS (SELECT 1 FROM jsonb_array_elements_text(m.tags) tg "
-            "                 WHERE tg LIKE 'promoted:%')) AS promo_last"
+            "  (SELECT MAX(created_at) FROM lessons m "
+            "     WHERE EXISTS (SELECT 1 FROM jsonb_array_elements_text(m.tags) tg "
+            "                   WHERE tg LIKE 'distill-of:%')) AS distill_last, "
+            "  (SELECT MAX(created_at) FROM lessons m "
+            "     WHERE EXISTS (SELECT 1 FROM jsonb_array_elements_text(m.tags) tg "
+            "                   WHERE tg LIKE 'promoted:%')) AS promo_last"
         ).fetchone()
         if not row:
             return []
@@ -718,13 +731,12 @@ def _build_context(
             "read the full memory with `recall(memory_id=id)`.*"
         )
 
-    # Warn if semantic search is degraded
-    if not _has_sentence_transformers():
+    # Report missing installation without importing the semantic stack.
+    if not _sentence_transformers_installed():
         lines.append("")
         lines.append(
-            "*Note: sentence-transformers is installing in the background. "
-            "Semantic search will improve next session. "
-            "Run `pip install sentence-transformers` to install immediately.*"
+            "*sentence-transformers is not installed in this runtime. "
+            "Semantic search requires that package.*"
         )
 
     return "\n".join(lines)

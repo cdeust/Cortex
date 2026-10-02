@@ -93,16 +93,18 @@ def test_interrupted_worker_leaves_event_for_next_drain(queue, tmp_path, monkeyp
     key = queue.enqueue(root, {"session_id": "interrupted"})
     fifo = tmp_path / "ready"
     os.mkfifo(fifo)
-    uvx = tmp_path / "uvx"
-    uvx.write_text(
+    sandbox_script = tmp_path / "session_queue.py"
+    sandbox_script.write_text(SCRIPT.read_text())
+    runtime_script = tmp_path / "runtime.py"
+    runtime_script.write_text(
         f"#!{sys.executable}\nimport os, signal\n"
         f"f=os.open({str(fifo)!r}, os.O_WRONLY)\n"
         "os.write(f,b'R')\nsignal.pause()\n"
     )
-    uvx.chmod(0o700)
+    runtime_script.chmod(0o700)
     monkeypatch.setenv("PATH", str(tmp_path) + os.pathsep + os.environ["PATH"])
     worker = subprocess.Popen(
-        [sys.executable, "-S", str(SCRIPT), "drain"], start_new_session=True
+        [sys.executable, "-S", str(sandbox_script), "drain"], start_new_session=True
     )
     try:
         with fifo.open("rb", buffering=0) as ready:
@@ -111,8 +113,8 @@ def test_interrupted_worker_leaves_event_for_next_drain(queue, tmp_path, monkeyp
     finally:
         os.killpg(worker.pid, signal.SIGKILL)
         worker.wait()
-    uvx.write_text(f"#!{sys.executable}\n")
-    subprocess.run([sys.executable, "-S", str(SCRIPT), "drain"], check=True)
+    runtime_script.write_text(f"#!{sys.executable}\n")
+    subprocess.run([sys.executable, "-S", str(sandbox_script), "drain"], check=True)
     assert queue.receipt(root / f"{key}.json").exists()
 
 
@@ -120,16 +122,19 @@ def test_concurrent_drains_process_event_once(queue, tmp_path, monkeypatch):
     root = queue.queue_root()
     queue.enqueue(root, {"session_id": "concurrent"})
     count = tmp_path / "calls"
-    uvx = tmp_path / "uvx"
-    uvx.write_text(
+    sandbox_script = tmp_path / "session_queue.py"
+    sandbox_script.write_text(SCRIPT.read_text())
+    runtime_script = tmp_path / "runtime.py"
+    runtime_script.write_text(
         f"#!{sys.executable}\nfrom pathlib import Path\n"
         f"p=Path({str(count)!r})\n"
         "with p.open('a') as f: f.write('called\\n')\n"
     )
-    uvx.chmod(0o700)
+    runtime_script.chmod(0o700)
     monkeypatch.setenv("PATH", str(tmp_path) + os.pathsep + os.environ["PATH"])
     workers = [
-        subprocess.Popen([sys.executable, "-S", str(SCRIPT), "drain"]) for _ in range(2)
+        subprocess.Popen([sys.executable, "-S", str(sandbox_script), "drain"])
+        for _ in range(2)
     ]
     assert [worker.wait() for worker in workers] == [0, 0]
     assert count.read_text().splitlines() == ["called"]
@@ -146,11 +151,17 @@ def test_nonzero_worker_keeps_event_unacknowledged(queue):
     assert "exited 1" in (root / f"{key}.error").read_text()
 
 
-def test_worker_requires_matching_plugin_version(queue):
-    manifest = json.loads((SCRIPT.parents[1] / ".codex-plugin/plugin.json").read_text())
-    assert queue.package_requirement() == (
-        "hypermnesia-mcp[postgresql,sqlite]==" + manifest["version"]
-    )
+def test_replay_uses_prepared_runtime_without_uvx(queue):
+    root = queue.queue_root()
+    queue.enqueue(root, {"session_id": "runtime-dispatch"})
+    with patch.object(queue.subprocess, "run") as run:
+        run.return_value.returncode = 0
+        queue.drain(root)
+    assert run.call_args.args[0] == [
+        sys.executable,
+        str(SCRIPT.with_name("runtime.py")),
+        "session_lifecycle",
+    ]
 
 
 def test_saved_backend_is_frozen_for_replay(queue, monkeypatch):

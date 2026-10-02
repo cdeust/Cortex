@@ -102,11 +102,10 @@ def test_codex_plugin_serves_the_full_profile_and_references_its_hooks() -> None
     assert (PLUGIN_ROOT / HOOKS_REF).resolve() == HOOKS_PATH.resolve()
 
     assert server == {
-        "command": "uvx",
+        "command": "python3",
         "args": [
-            "--from",
-            f"hypermnesia-mcp[postgresql,sqlite]=={plugin['version']}",
-            "hypermnesia-mcp",
+            "${PLUGIN_ROOT}/scripts/runtime.py",
+            "server",
         ],
         # Codex's local storage selection has the same auto contract as the
         # DB-optional sandbox surface: try PostgreSQL first and fall back only
@@ -139,7 +138,8 @@ def test_codex_plugin_ships_an_mcp_server_and_hooks_and_nothing_else() -> None:
     # installer script, and this one deliberately does not.
     # source: ADR-1084 (bundled stdlib intake, no installer script).
     assert {p.name for p in (PLUGIN_ROOT / "scripts").glob("*.py")} == {
-        "session_queue.py"
+        "session_queue.py",
+        "runtime.py",
     }
 
 

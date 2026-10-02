@@ -30,7 +30,7 @@ CLAUDE_PLUGIN_PATH = REPO_ROOT / ".claude-plugin/plugin.json"
 # nor scripts/launcher.py.
 HOOK_CONSOLE_SCRIPT = "hypermnesia-mcp-hook"
 # How each host's manifest spells the module at the end of a hook command.
-CODEX_SUFFIX = HOOK_CONSOLE_SCRIPT + " {module}'"
+CODEX_SUFFIX = 'scripts/runtime.py" {module}'
 CLAUDE_SUFFIX = "mcp_server.hooks.{module}'"
 
 
