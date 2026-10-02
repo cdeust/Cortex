@@ -15,6 +15,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEPS_MODULE_PATH = REPO_ROOT / "scripts" / "launcher_deps.py"
 DIGEST = "d" * 64
+SET = "5" * 64
 
 
 @pytest.fixture
@@ -45,6 +46,7 @@ def calls(deps_mod, monkeypatch) -> list[tuple[str, tuple[str, ...]]]:
         return True
 
     monkeypatch.setattr(deps_mod, "lock_digest", lambda: DIGEST)
+    monkeypatch.setattr(deps_mod, "_locked_set_digest", lambda *_a: SET)
     monkeypatch.setattr(deps_mod, "_install_locked_set", fake_install)
     monkeypatch.setattr(deps_mod, "_importable", lambda *_a: True)
     return seen
@@ -67,28 +69,31 @@ def test_lock_digest_is_none_without_a_lock(deps_mod, tmp_path, monkeypatch):
 
 def test_stamp_round_trip_and_exact_payload(deps_mod, deps_dir):
     assert deps_mod._stamp_matches(str(deps_dir), "base", DIGEST) is False
-    deps_mod._write_stamp(str(deps_dir), "base", DIGEST)
+    deps_mod._write_stamp(str(deps_dir), "base", DIGEST, SET)
     assert deps_mod._stamp_matches(str(deps_dir), "base", DIGEST) is True
     assert _stamp(deps_mod, deps_dir, "base") == {
         "python": f"{sys.version_info.major}.{sys.version_info.minor}",
         "lock": DIGEST,
+        "set": SET,
     }
 
 
 def test_stamp_misses_on_another_lock_python_or_corrupt_file(deps_mod, deps_dir):
-    deps_mod._write_stamp(str(deps_dir), "base", DIGEST)
+    deps_mod._write_stamp(str(deps_dir), "base", DIGEST, SET)
     assert deps_mod._stamp_matches(str(deps_dir), "base", "e" * 64) is False
     assert deps_mod._stamp_matches(str(deps_dir), "ml", DIGEST) is False
     path = Path(deps_mod._stamp_path(str(deps_dir), "base"))
     path.write_text(json.dumps({"python": "0.0", "lock": DIGEST}))
     assert deps_mod._stamp_matches(str(deps_dir), "base", DIGEST) is False
-    path.write_text("not json{")
-    assert deps_mod._stamp_matches(str(deps_dir), "base", DIGEST) is False
+    assert deps_mod._stamp(str(deps_dir), "base") == {}
+    for corrupt in ("not json{", json.dumps(["lock", DIGEST])):
+        path.write_text(corrupt)
+        assert deps_mod._stamp_matches(str(deps_dir), "base", DIGEST) is False
 
 
 def test_write_stamp_swallows_an_unwritable_destination(deps_mod, tmp_path):
     missing = tmp_path / "does-not-exist" / "deps"
-    deps_mod._write_stamp(str(missing), "base", DIGEST)
+    deps_mod._write_stamp(str(missing), "base", DIGEST, SET)
     assert not Path(deps_mod._stamp_path(str(missing), "base")).exists()
 
 
@@ -101,7 +106,7 @@ def test_ensure_deps_installs_the_base_set_then_stamps(deps_mod, deps_dir, calls
 
 
 def test_ensure_deps_runs_nothing_when_the_stamp_matches(deps_mod, deps_dir, calls):
-    deps_mod._write_stamp(str(deps_dir), "base", DIGEST)
+    deps_mod._write_stamp(str(deps_dir), "base", DIGEST, SET)
     deps_mod.ensure_deps(str(deps_dir))
     assert calls == []
 
@@ -114,7 +119,7 @@ def test_fast_path_reads_the_stamp_of_this_kind_and_lock(
     monkeypatch.setattr(
         deps_mod, "_stamp_matches", lambda *a: seen.append(a) or real(*a)
     )
-    deps_mod._write_stamp(str(deps_dir), "base", DIGEST)
+    deps_mod._write_stamp(str(deps_dir), "base", DIGEST, SET)
     deps_mod.ensure_deps(str(deps_dir))
     assert seen == [(str(deps_dir), "base", DIGEST)]
 
@@ -127,7 +132,7 @@ def test_ensure_deps_rechecks_the_stamp_under_the_lock(
 
     def lock_then_peer_stamps(path):
         assert path == str(deps_dir)
-        deps_mod._write_stamp(str(deps_dir), "base", DIGEST)
+        deps_mod._write_stamp(str(deps_dir), "base", DIGEST, SET)
         return real_lock(path)
 
     monkeypatch.setattr(deps_mod, "_deps_lock", lock_then_peer_stamps)
@@ -200,7 +205,7 @@ def test_ensure_deps_sweeps_stale_backups_even_on_the_fast_path(
     deps_mod, deps_dir, calls, monkeypatch
 ):
     (deps_dir / "numpy.bak-4242").mkdir()
-    deps_mod._write_stamp(str(deps_dir), "base", DIGEST)
+    deps_mod._write_stamp(str(deps_dir), "base", DIGEST, SET)
     monkeypatch.setattr(deps_mod._fs, "pid_alive", lambda _pid: False)
     deps_mod.ensure_deps(str(deps_dir))
     assert not (deps_dir / "numpy.bak-4242").exists()

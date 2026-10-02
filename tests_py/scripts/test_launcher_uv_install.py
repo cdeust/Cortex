@@ -4,6 +4,8 @@ source: ADR-1092"""
 
 from __future__ import annotations
 
+import hashlib
+import importlib.util
 import sys
 from pathlib import Path
 
@@ -60,20 +62,108 @@ def test_install_stops_at_a_failed_export(uv_mod, monkeypatch, uv_runs):
     assert [cmd[1] for cmd, _k in uv_runs[1:]] == ["export"]
 
 
-def test_install_feeds_the_exported_pylock_to_uv_pip(uv_mod, monkeypatch, uv_runs):
+def test_install_feeds_the_exported_pylock_to_uv_pip(
+    uv_mod, monkeypatch, uv_runs, tmp_path
+):
     monkeypatch.setattr(
         uv_mod.subprocess, "run", lambda cmd, **k: uv_runs.append((cmd, k)) or _done()
     )
     group = ("--only-group", "g")
-    assert uv_mod.install_locked_set("deps", group, "t").returncode == 0
+    target = tmp_path / "t"
+    target.mkdir()
+    (target / ".lock").write_text("")  # what uv leaves in its --target
+    (target / "kept").write_text("")
+    assert uv_mod.install_locked_set("deps", group, str(target)).returncode == 0
+    assert [entry.name for entry in target.iterdir()] == ["kept"]
     (export, export_kw), (install, install_kw) = uv_runs[1:]
     pylock = Path(export[export.index("--output-file") + 1])
     assert uv_runs[0] == ["deps"]
     assert export == uv_mod.export_command("uv", group, pylock)
-    assert install == uv_mod.install_command("uv", pylock, "t")
+    assert install == uv_mod.install_command("uv", pylock, str(target))
     assert pylock.name == "pylock.cortex.toml"
     assert pylock.parent.name.startswith(".cortex-pylock-")
     for kwargs in (export_kw, install_kw):
         assert kwargs == {"capture_output": True, "text": True, "env": kwargs["env"]}
         assert "UV_FROZEN" not in kwargs["env"]
         assert kwargs["env"]["PATH"] == uv_mod.os.environ["PATH"]
+
+
+def _exporting(uv_runs, body: bytes, returncode: int = 0, **streams):
+    def run(cmd, **kwargs):
+        uv_runs.append((cmd, kwargs))
+        Path(cmd[cmd.index("--output-file") + 1]).write_bytes(body)
+        return _done(returncode, **streams)
+
+    return run
+
+
+def test_set_digest_is_the_sha256_of_the_export_without_its_header(
+    uv_mod, monkeypatch, uv_runs
+):
+    body = b"# uv export --output-file /somewhere/else\nlock-version = 1\n#x\nb = 2\n"
+    monkeypatch.setattr(uv_mod.subprocess, "run", _exporting(uv_runs, body))
+    group = ("--only-group", "g")
+    digest = uv_mod.locked_set_digest("deps", group)
+    assert digest == hashlib.sha256(b"lock-version = 1\nb = 2").hexdigest()
+    (export, kwargs) = uv_runs[1]
+    pylock = Path(export[export.index("--output-file") + 1])
+    assert uv_runs[0] == ["deps"] and len(uv_runs) == 2
+    assert export == uv_mod.export_command("uv", group, pylock)
+    assert pylock.name == "pylock.cortex.toml"
+    assert pylock.parent.name.startswith(".cortex-pylock-")
+    assert kwargs == {"capture_output": True, "text": True, "env": kwargs["env"]}
+    assert "UV_FROZEN" not in kwargs["env"]
+    assert kwargs["env"]["PATH"] == uv_mod.os.environ["PATH"]
+
+
+@pytest.mark.parametrize(
+    ("streams", "message"),
+    [
+        ({"stderr": " lock is stale \n", "stdout": "ignored"}, "lock is stale"),
+        ({"stdout": " said on stdout \n"}, "said on stdout"),
+    ],
+)
+def test_set_digest_raises_uvs_own_error_when_the_export_fails(
+    uv_mod, monkeypatch, uv_runs, streams, message
+):
+    monkeypatch.setattr(
+        uv_mod.subprocess, "run", _exporting(uv_runs, b"partial", 2, **streams)
+    )
+    with pytest.raises(uv_mod.LockedSetError) as raised:
+        uv_mod.locked_set_digest("deps", ("--only-group", "g"))
+    assert str(raised.value) == message
+
+
+@pytest.fixture
+def install_mod(monkeypatch):
+    monkeypatch.syspath_prepend(str(REPO_ROOT / "scripts"))
+    spec = importlib.util.spec_from_file_location(
+        "scripts.launcher_deps_install", REPO_ROOT / "scripts/launcher_deps_install.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_installer_reads_the_set_digest_through_launcher_uv(install_mod, monkeypatch):
+    asked = []
+    monkeypatch.setattr(
+        install_mod._uv, "locked_set_digest", lambda *a: asked.append(a) or "abc"
+    )
+    assert install_mod.locked_set_digest("deps", ("--only-group", "g")) == "abc"
+    assert asked == [("deps", ("--only-group", "g"))]
+
+
+@pytest.mark.parametrize("error", ["UvUnavailableError", "LockedSetError", "OSError"])
+def test_installer_prints_why_a_set_digest_is_unavailable(
+    install_mod, monkeypatch, capsys, error
+):
+    kind = getattr(install_mod._uv, error, OSError)
+
+    def refuse(*_a):
+        raise kind("no uv here")
+
+    monkeypatch.setattr(install_mod._uv, "locked_set_digest", refuse)
+    assert install_mod.locked_set_digest("deps", ()) is None
+    expected = "[cortex-launcher] dependency install failed: no uv here\n"
+    assert capsys.readouterr().err == expected

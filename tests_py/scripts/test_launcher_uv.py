@@ -226,3 +226,13 @@ def test_bootstrap_failure_reports_stdout_when_stderr_is_empty(
     )
     with pytest.raises(uv_mod.UvUnavailableError, match="pip said no"):
         uv_mod._bootstrap(str(tmp_path / "deps"))
+
+
+def test_an_interrupted_bootstrap_leaves_no_scratch(uv_mod, monkeypatch, tmp_path):
+    def interrupted(*_a):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(uv_mod._pip, "run_install", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        uv_mod._bootstrap(str(tmp_path / "deps"))
+    assert list(tmp_path.iterdir()) == []

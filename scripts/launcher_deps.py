@@ -6,7 +6,9 @@ every entry point) and ``ensure_all_deps`` (base + ML stack, SessionStart
 only). ``install_installer_set``, also run as ``python3 launcher_deps.py
 DEPS_DIR``, is the installers' path into the same directory. Every set is
 read from uv.lock through ``launcher_uv``; a stamp keyed on uv.lock's
-digest keeps the hot path free of any subprocess.
+digest keeps the hot path free of any subprocess, and the digest of the
+exported set it also records keeps a lock change that leaves the set alone
+from reinstalling it.
 
 source: ADR-0747
 source: ADR-1063
@@ -120,23 +122,29 @@ def lock_digest() -> str | None:
         return None
 
 
+def _stamp(deps_dir: str, kind: str) -> dict:
+    """The stamp a successful install of ``kind`` left for THIS Python, else {}."""
+    try:
+        data = json.loads(Path(_stamp_path(deps_dir, kind)).read_bytes())
+    except (OSError, ValueError):
+        return {}
+    py = f"{sys.version_info.major}.{sys.version_info.minor}"
+    return data if isinstance(data, dict) and data.get("python") == py else {}
+
+
 def _stamp_matches(deps_dir: str, kind: str, digest: str) -> bool:
     """True iff a prior successful install of ``kind`` used this exact lock.
 
     source: ADR-0747
     source: ADR-1092"""
-    try:
-        data = json.loads(Path(_stamp_path(deps_dir, kind)).read_bytes())
-    except (OSError, ValueError):
-        return False
-    py = f"{sys.version_info.major}.{sys.version_info.minor}"
-    return data.get("python") == py and data.get("lock") == digest
+    return _stamp(deps_dir, kind).get("lock") == digest
 
 
-def _write_stamp(deps_dir: str, kind: str, digest: str) -> None:
+def _write_stamp(deps_dir: str, kind: str, digest: str, set_digest: str) -> None:
     payload = {
         "python": f"{sys.version_info.major}.{sys.version_info.minor}",
         "lock": digest,
+        "set": set_digest,
     }
     try:
         Path(_stamp_path(deps_dir, kind)).write_bytes(json.dumps(payload).encode())
@@ -149,6 +157,7 @@ import launcher_deps_install as _install  # noqa: E402
 # source: ADR-0747
 _commit_entry = _install.commit_entry
 _install_locked_set = _install.install_locked_set
+_locked_set_digest = _install.locked_set_digest
 
 
 def _ensure(
@@ -157,8 +166,10 @@ def _ensure(
     """Install one uv.lock set unless this lock already stamped it.
 
         Postcondition: the ``kind`` stamp names the current uv.lock digest
-        iff the set installed and every name in ``imports`` imports; a
-        failure prints its cause and leaves the caller's import to fail.
+        and the exported set's digest iff that set is installed and every
+        name in ``imports`` imports; a lock that changed elsewhere restamps
+        without installing; a failure prints its cause and leaves the
+        caller's import to fail.
 
     source: ADR-0747
     source: ADR-1092"""
@@ -179,10 +190,16 @@ def _ensure(
         # while this one waited for the lock.
         if _stamp_matches(deps_dir, kind, digest):
             return
-        if not _install_locked_set(deps_dir, set_args):
+        set_digest = _locked_set_digest(deps_dir, set_args)
+        if set_digest is None:
+            return  # Cause printed; a set uv cannot read is never stamped.
+        present = _stamp(deps_dir, kind).get("set") == set_digest and all(
+            _importable(name, deps_dir) for name in imports
+        )
+        if not present and not _install_locked_set(deps_dir, set_args):
             return  # A failed install must never receive a success stamp.
         if all(_importable(name, deps_dir) for name in imports):
-            _write_stamp(deps_dir, kind, digest)
+            _write_stamp(deps_dir, kind, digest, set_digest)
 
 
 def ensure_deps(deps_dir: str) -> None:

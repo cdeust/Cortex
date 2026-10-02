@@ -194,6 +194,17 @@ def _report_failure(process: subprocess.CompletedProcess[str]) -> None:
     )
 
 
+def locked_set_digest(deps_dir: str, set_args: tuple[str, ...]) -> str | None:
+    """sha256 of one exported uv.lock set, None after printing why uv gave none.
+
+    source: ADR-1092"""
+    try:
+        return _uv.locked_set_digest(deps_dir, set_args)
+    except (OSError, _uv.UvUnavailableError, _uv.LockedSetError) as exc:
+        print(f"[cortex-launcher] dependency install failed: {exc}", file=sys.stderr)
+        return None
+
+
 def install_locked_set(deps_dir: str, set_args: tuple[str, ...]) -> bool:
     """Install one uv.lock set through scratch and commit.
 

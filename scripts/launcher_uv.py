@@ -10,6 +10,7 @@ source: ADR-1092"""
 
 from __future__ import annotations
 
+import hashlib
 import os
 import shutil
 import subprocess
@@ -62,6 +63,10 @@ class UvUnavailableError(RuntimeError):
     """The pinned uv is neither on PATH nor installable; the message says why."""
 
 
+class LockedSetError(RuntimeError):
+    """uv could not export a set of uv.lock; the message is uv's own error."""
+
+
 def private_dir(deps_dir: str) -> Path:
     """Where the bootstrapped uv lives: beside ``deps_dir``, one per version."""
     return Path(f"{deps_dir}.uv-{UV_VERSION}")
@@ -108,6 +113,13 @@ def _bootstrap(deps_dir: str) -> Path:
     scratch = Path(f"{target}.tmp-{os.getpid()}")
     shutil.rmtree(scratch, ignore_errors=True)
     scratch.mkdir(parents=True)
+    try:
+        return _bootstrap_through(scratch, target)
+    finally:  # also when the download is interrupted (Ctrl-C)
+        shutil.rmtree(scratch, ignore_errors=True)
+
+
+def _bootstrap_through(scratch: Path, target: Path) -> Path:
     requirement = scratch / "uv-requirement.txt"
     hashes = " ".join(f"--hash=sha256:{digest}" for digest in UV_HASHES)
     requirement.write_bytes(f"uv=={UV_VERSION} {hashes}\n".encode())
@@ -118,7 +130,6 @@ def _bootstrap(deps_dir: str) -> Path:
         bootstrap_command(scratch / "site", requirement), _pip.clean_environment()
     )
     if process.returncode:
-        shutil.rmtree(scratch, ignore_errors=True)
         raise UvUnavailableError(
             f"could not install uv {UV_VERSION} from PyPI with pip: "
             f"{(process.stderr or process.stdout).strip()[-1500:]}\n"
@@ -132,7 +143,6 @@ def _bootstrap(deps_dir: str) -> Path:
     except OSError:
         if _binary_in(target) is None:  # not a concurrent winner: a real failure
             raise
-    shutil.rmtree(scratch, ignore_errors=True)
     binary = _binary_in(target)
     if binary is None:
         raise UvUnavailableError(
@@ -179,6 +189,29 @@ def export_command(uv: str, set_args: tuple[str, ...], output: Path) -> list[str
     ]
 
 
+def locked_set_digest(deps_dir: str, set_args: tuple[str, ...]) -> str:
+    """sha256 of one exported set of uv.lock: it changes iff that set does.
+
+    uv's header comment names the output path, so comment lines are left
+    out. Raises ``UvUnavailableError`` when uv cannot be found or installed
+    and ``LockedSetError`` when the export fails.
+    """
+    uv = locate(deps_dir)
+    with tempfile.TemporaryDirectory(prefix=".cortex-pylock-") as temporary:
+        pylock = Path(temporary) / "pylock.cortex.toml"
+        exported = subprocess.run(
+            export_command(uv, set_args, pylock),
+            capture_output=True,
+            text=True,
+            env=environment(),
+        )
+        if exported.returncode:
+            raise LockedSetError((exported.stderr or exported.stdout).strip())
+        lines = pylock.read_bytes().splitlines()
+    body = [line for line in lines if not line.startswith(b"#")]
+    return hashlib.sha256(b"\n".join(body)).hexdigest()
+
+
 def install_command(uv: str, pylock: Path, target: str) -> list[str]:
     """Install a pylock into ``target`` for THIS interpreter, hashes verified."""
     return [
@@ -219,9 +252,12 @@ def install_locked_set(
         )
         if exported.returncode:
             return exported
-        return subprocess.run(
+        installed = subprocess.run(
             install_command(uv, pylock, target),
             capture_output=True,
             text=True,
             env=env,
         )
+    # uv's own lock file for the target; nothing of it belongs in deps/.
+    Path(target, ".lock").unlink(missing_ok=True)
+    return installed
