@@ -9,10 +9,16 @@ resolving an Intel Python attempted cryptography 50.0.2 and failed.
 from __future__ import annotations
 
 from pathlib import Path
-import tomllib
+import sys
 
 from packaging.requirements import Requirement
 import pytest
+
+# source: tests_py/hooks/test_entry.py, Python >=3.10 compatibility.
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
 
 
 def _published_cryptography_bounds() -> list[Requirement]:

@@ -363,6 +363,7 @@ jobs:
           # The verifier and manifest runtime inherit the same prepared paths.
           uv run --no-project --with "$candidate_wheel" -- env \
             CORTEX_RUNTIME="$plugin_runtime" \
+            UV_FIND_LINKS="$RUNNER_TEMP/cortex-codex-wheel" \
             PYTHONPATH="$GITHUB_WORKSPACE" \
             python scripts/verify_mcp_hosts.py \
               --timeout "$plugin_timeout" --clients codex-cli --profiles full \

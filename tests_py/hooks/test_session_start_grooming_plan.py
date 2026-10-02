@@ -10,11 +10,11 @@ import ast
 from datetime import datetime, timezone
 import os
 from pathlib import Path
+import sys
+from types import ModuleType
+from unittest.mock import Mock, patch
 
-import psycopg
-from psycopg.rows import dict_row
 import pytest
-from unittest.mock import patch
 
 
 def _grooming_sql() -> str:
@@ -35,6 +35,10 @@ def _grooming_sql() -> str:
     raise AssertionError("grooming query absent")
 
 
+@pytest.mark.skipif(
+    os.environ.get("CORTEX_MEMORY_STORE_BACKEND", "").strip().lower() == "sqlite",
+    reason="PostgreSQL SQL fixtures do not apply to the explicit SQLite backend",
+)
 @pytest.mark.parametrize(
     ("rows", "distill_day", "promo_day"),
     [
@@ -61,6 +65,8 @@ def _grooming_sql() -> str:
     ],
 )
 def test_grooming_prefilter_preserves_timestamp_semantics(rows, distill_day, promo_day):
+    import psycopg
+    from psycopg.rows import dict_row
     from psycopg.types.json import Jsonb
 
     values = ", ".join("(%s::timestamptz, %s::jsonb)" for _ in rows)
@@ -112,7 +118,20 @@ def test_session_start_disables_jit_on_its_connection_without_environment_change
         namespace,
     )
     environment = dict(os.environ)
-    with patch.object(psycopg.Connection, "connect") as connect:
+    connect = Mock()
+
+    class Connection:
+        @classmethod
+        def __class_getitem__(cls, row_type):
+            return cls
+
+    Connection.connect = connect
+    driver = ModuleType("psycopg")
+    driver.Connection = Connection
+    rows = ModuleType("psycopg.rows")
+    rows.DictRow = dict
+    rows.dict_row = Mock()
+    with patch.dict(sys.modules, {"psycopg": driver, "psycopg.rows": rows}):
         assert namespace["_connect_pg"]() is connect.return_value
     assert connect.call_args.kwargs["options"] == "-c jit=off"
     assert connect.call_args.kwargs["autocommit"] is True
