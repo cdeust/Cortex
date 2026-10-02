@@ -342,6 +342,8 @@ jobs:
           "$cli_bin/codex" mcp list --json \
             | python -c 'import json,sys; ss=[s for s in json.load(sys.stdin) if s.get("name")=="cortex"]; assert len(ss)==1, ss; s=ss[0]; assert s["startup_timeout_sec"]==180.0, s; assert s["transport"]["command"]=="python3", s; assert s["transport"]["env"]["CORTEX_RUNTIME"]=="cowork", s'
           mapfile -t plugin_command < <(
+            # PLUGIN_ROOT is a literal Codex placeholder resolved by Python.
+            # shellcheck disable=SC2016
             python -c 'import json; from pathlib import Path; root=str(Path("plugins/hypermnesia-mcp-codex").resolve()); s=json.load(open(Path(root)/".mcp.json"))["mcpServers"]["cortex"]; print(s["command"]); print(*(arg.replace("${PLUGIN_ROOT}",root) for arg in s["args"]), sep="\n")'
           )
           plugin_timeout="$(
