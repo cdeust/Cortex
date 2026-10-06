@@ -1,10 +1,10 @@
 """The one store path for an admitted capture payload, wherever it runs.
 
-The resident worker awaits ``remember`` on its persistent loop; a platform the
-worker does not support (``capture_peer.is_supported()`` is false, e.g. Windows
-where CPython has no ``AF_UNIX``, no ``fcntl``, no ``geteuid``) runs the same
-function once per hook process through ``store_in_process``. Same validation,
-same handler, same payload: only the process that hosts the call differs.
+The resident worker awaits ``store`` (through ``remember``) on its persistent
+loop. A platform the worker does not support (``capture_peer.is_supported()``
+is false, e.g. Windows: no ``AF_UNIX``, no ``fcntl``, no ``geteuid``) runs the
+same function once per hook process through ``store_in_process``. Same
+validation, same handler, same payload: only the hosting process differs.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from mcp_server.hooks.capture_worker_policy import validate_payload
 logger = logging.getLogger(__name__)
 
 
-async def remember(payload: dict[str, object]) -> dict[str, object]:
+async def store(payload: dict[str, object]) -> dict[str, object]:
     """precondition: payload is the hook's unchanged ``remember`` payload.
     postcondition: payload was validated and handed to the remember handler;
     its result is returned. A refused payload or missing dependency raises."""
@@ -43,6 +43,11 @@ async def remember(payload: dict[str, object]) -> dict[str, object]:
     return result
 
 
+async def remember(payload: dict[str, object]) -> None:
+    """The resident worker's callback: store and discard the handler result."""
+    await store(payload)
+
+
 def store_in_process(payload: dict[str, object]) -> dict[str, object]:
     """Store ``payload`` in this process: the explicit path where no worker exists.
 
@@ -50,4 +55,4 @@ def store_in_process(payload: dict[str, object]) -> dict[str, object]:
     here, the hook boundary logs it."""
     import asyncio  # noqa: PLC0415 — only the in-process path needs its own event loop
 
-    return asyncio.run(remember(payload))
+    return asyncio.run(store(payload))

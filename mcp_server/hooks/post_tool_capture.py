@@ -257,7 +257,7 @@ def _load_remember():
 def _store_memory(tool_name: str, content: str, tags: list[str], cwd: str) -> None:
     """Store the unchanged remember payload: resident worker where the platform
     supports one (capability test), otherwise in this process. Both run
-    ``capture_store.remember``, so the stored memory is identical."""
+    ``capture_store.store``, so the stored memory is identical."""
     from mcp_server.hooks import capture_dispatch  # noqa: PLC0415 — hook filtering precedes all worker infrastructure imports
     from mcp_server.hooks.capture_store import store_in_process  # noqa: PLC0415 — the in-process path loads the handler only when taken
 

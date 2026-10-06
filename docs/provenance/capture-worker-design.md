@@ -55,7 +55,7 @@ cannot run on (Windows: CPython has no `AF_UNIX`, no `fcntl`, no `geteuid`, and
 `Popen` has no `pass_fds`) is decided by the capability test
 `capture_peer.is_supported()`, before any I/O, not by catching an error. There the
 hook stores in its own process through `capture_store.store_in_process`, the same
-`capture_store.remember` the worker awaits: same validation, same handler, same
+`capture_store.store` the worker awaits: same validation, same handler, same
 stored memory (issue #659). It pays per event the import and model-load cost the
 worker amortizes; that is the price of correctness where no same-user transport
 exists. No TCP or abstract-socket fallback exists, and a named pipe with a
