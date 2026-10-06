@@ -44,15 +44,23 @@ lose accepted work. There is no automatic replay after uncertain delivery, which
 could duplicate a write. Durable delivery is outside this change.
 
 Absent/refused socket triggers one launch attempt. Spawn, transport, malformed
-frame, unsupported platform and admission-deadline failures produce a diagnostic and a
-`capture_skipped` telemetry sample; inference never falls back into the hook.
+frame and admission-deadline failures produce a diagnostic and a
+`capture_skipped` telemetry sample; a failed worker never falls back into the hook.
 Dispatch, receive and processing errors report their measured monotonic duration.
 Listener/cleanup failures use a distinct `capture_worker_lifecycle` sample with
 their own measured duration. Neither event is recorded as `remember`, so these
 diagnostics do not enter the handler's `remember` latency series.
-Worker handler failure has the same observable error boundary. Windows is
-explicitly unsupported because this implementation requires Unix credentials,
-Unix socket paths and `flock`; no TCP or abstract-socket fallback exists.
+Worker handler failure has the same observable error boundary. A platform the worker
+cannot run on (Windows: CPython has no `AF_UNIX`, no `fcntl`, no `geteuid`, and
+`Popen` has no `pass_fds`) is decided by the capability test
+`capture_peer.is_supported()`, before any I/O, not by catching an error. There the
+hook stores in its own process through `capture_store.store_in_process`, the same
+`capture_store.remember` the worker awaits: same validation, same handler, same
+stored memory (issue #659). It pays per event the import and model-load cost the
+worker amortizes; that is the price of correctness where no same-user transport
+exists. No TCP or abstract-socket fallback exists, and a named pipe with a
+current-user DACL is not built: it would add a second transport, lease and spawn
+implementation to maintain with no Windows runner here able to prove it.
 
 ## Protocol and trust boundary
 

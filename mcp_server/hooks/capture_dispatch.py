@@ -12,6 +12,7 @@ from pathlib import Path
 
 from mcp_server.hooks.capture_worker_policy import limits, validate_payload
 from mcp_server.infrastructure.capture_client import deliver
+from mcp_server.infrastructure.capture_peer import is_supported
 from mcp_server.infrastructure.capture_transport import CaptureTransportError
 from mcp_server.infrastructure.config import CLAUDE_DIR
 
@@ -26,6 +27,11 @@ def report_failure(
 
     # source: ADR-0486
     telemetry.record(operation, latency_ms=elapsed * 1000.0, ok=False)
+
+
+def resident_worker_available() -> bool:
+    """Capability test for the resident worker's transport on this platform."""
+    return is_supported()
 
 
 def _spawn(listener: socket.socket, lease: int) -> None:

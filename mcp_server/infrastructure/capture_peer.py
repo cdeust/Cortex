@@ -13,8 +13,13 @@ import struct
 import sys
 
 
+def is_supported() -> bool:
+    """Capability test: AF_UNIX and kernel peer identity exist on this platform."""
+    return sys.platform in {"linux", "darwin"} and hasattr(socket, "AF_UNIX")
+
+
 def supported() -> None:
-    if sys.platform not in {"linux", "darwin"} or not hasattr(socket, "AF_UNIX"):
+    if not is_supported():
         raise OSError(
             "capture worker requires Linux/macOS Unix sockets; no TCP fallback"
         )
