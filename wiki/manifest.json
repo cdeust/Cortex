@@ -3539,6 +3539,10 @@
     "ADR-1092": {
       "mirror": "ADR-1092-make-uv-lock-the-only-dependency-source.md",
       "path": "adr/cortex/1092-make-uv-lock-the-only-dependency-source.md"
+    },
+    "ADR-1094": {
+      "mirror": "ADR-1094-spool-captures-for-a-detached-drainer-where-the-resident-worker-cannot-run.md",
+      "path": "adr/cortex/1094-spool-captures-for-a-detached-drainer-where-the-resident-worker-cannot-run.md"
     }
   },
   "project": "cortex",

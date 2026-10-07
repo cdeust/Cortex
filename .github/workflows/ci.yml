@@ -492,6 +492,10 @@ jobs:
       # test_semantic_fallback_169.py and test_doctor.py cover #634's
       # sqlite-vec install-and-backfill fix; test_wiki_maintenance.py and
       # test_wiki_backlog_pass.py cover #636's consolidate-on-SQLite fix.
+      # The three capture files join per issue #659: here, and only here,
+      # capture_peer.is_supported() is false natively, msvcrt takes the real
+      # drainer lock and the detached child runs with the real Windows
+      # creationflags. source: ADR-1094
       - name: Run portability + backend tests
         env:
           HF_HUB_OFFLINE: "1"
@@ -510,6 +514,9 @@ jobs:
           tests_py/test_doctor.py
           tests_py/handlers/consolidation/test_wiki_maintenance.py
           tests_py/handlers/consolidation/test_wiki_backlog_pass.py
+          tests_py/hooks/test_capture_unsupported_platform.py
+          tests_py/hooks/test_capture_drain.py
+          tests_py/infrastructure/test_capture_spool.py
 
   # source: ADR-0802
 

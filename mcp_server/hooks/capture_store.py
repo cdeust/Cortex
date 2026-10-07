@@ -2,9 +2,9 @@
 
 The resident worker awaits ``store`` (through ``remember``) on its persistent
 loop. A platform the worker does not support (``capture_peer.is_supported()``
-is false, e.g. Windows: no ``AF_UNIX``, no ``fcntl``, no ``geteuid``) runs the
-same function once per hook process through ``store_in_process``. Same
-validation, same handler, same payload: only the hosting process differs.
+is false, e.g. Windows: no ``AF_UNIX``, no ``fcntl``, no ``geteuid``) awaits the
+same function from the spool drainer (``capture_drain``). Same validation, same
+handler, same payload: only the hosting process differs.
 """
 
 from __future__ import annotations
@@ -46,13 +46,3 @@ async def store(payload: dict[str, object]) -> dict[str, object]:
 async def remember(payload: dict[str, object]) -> None:
     """The resident worker's callback: store and discard the handler result."""
     await store(payload)
-
-
-def store_in_process(payload: dict[str, object]) -> dict[str, object]:
-    """Store ``payload`` in this process: the explicit path where no worker exists.
-
-    postcondition: returns the handler result, or raises; nothing is swallowed
-    here, the hook boundary logs it."""
-    import asyncio  # noqa: PLC0415 — only the in-process path needs its own event loop
-
-    return asyncio.run(store(payload))

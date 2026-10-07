@@ -255,11 +255,8 @@ def _load_remember():
 
 
 def _store_memory(tool_name: str, content: str, tags: list[str], cwd: str) -> None:
-    """Store the unchanged remember payload: resident worker where the platform
-    supports one (capability test), otherwise in this process. Both run
-    ``capture_store.store``, so the stored memory is identical."""
-    from mcp_server.hooks import capture_dispatch  # noqa: PLC0415 — hook filtering precedes all worker infrastructure imports
-    from mcp_server.hooks.capture_store import store_in_process  # noqa: PLC0415 — the in-process path loads the handler only when taken
+    """Admit the unchanged remember payload to the resident worker."""
+    from mcp_server.hooks.capture_dispatch import dispatch  # noqa: PLC0415 — hook filtering precedes all worker infrastructure imports
 
     payload: dict[str, object] = {
         "content": content,
@@ -271,15 +268,8 @@ def _store_memory(tool_name: str, content: str, tags: list[str], cwd: str) -> No
         "write_class": "auto",
         "force": False,
     }
-    if capture_dispatch.resident_worker_available():
-        if capture_dispatch.dispatch(payload):
-            _log(f"queued {tool_name} for resident capture (persistence pending)")
-        return
-    result = store_in_process(payload)
-    if result.get("stored"):
-        _log(f"captured {tool_name} → memory_id={result.get('memory_id')}")
-    else:
-        _log(f"gated {tool_name}: {result.get('reason', 'below_threshold')}")
+    if dispatch(payload):
+        _log(f"queued {tool_name} for capture (persistence pending)")
 
 
 # ── Periodic cascade advancement ──────────────────────────────────────
