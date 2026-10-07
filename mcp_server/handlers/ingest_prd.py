@@ -55,6 +55,11 @@ schema = {
     "inputSchema": {
         "type": "object",
         "required": [],
+        # Exactly one source, enforced by ``_fetch_prd``; published per ADR-1093.
+        "oneOf": [
+            {"required": [k], "properties": {k: {"type": "string", "minLength": 1}}}
+            for k in ("path", "content", "pipeline_id")
+        ],
         "properties": {
             "path": {
                 "type": "string",

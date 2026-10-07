@@ -38,6 +38,16 @@ schema = {
     "inputSchema": {
         "type": "object",
         "required": [],
+        "anyOf": [
+            {
+                "required": ["entity_name"],
+                "properties": {"entity_name": {"type": "string", "minLength": 1}},
+            },
+            {
+                "required": ["memory_id"],
+                "properties": {"memory_id": {"type": "integer"}},
+            },
+        ],
         "properties": {
             "entity_name": {
                 "type": "string",
@@ -184,14 +194,6 @@ def _bfs_entity_graph(
 # ── Entity resolution ────────────────────────────────────────────────────
 
 
-def _resolve_start_entity_by_name(
-    entity_name: str,
-    store: MemoryStore,
-) -> dict | None:
-    """Look up a starting entity by name."""
-    return store.get_entity_by_name(entity_name)
-
-
 def _resolve_start_entity_from_memory(
     memory_id: int,
     store: MemoryStore,
@@ -219,7 +221,7 @@ def _resolve_start_entity(
 ) -> tuple[dict | None, str | None]:
     """Resolve starting entity from args. Returns (entity, error_reason)."""
     if args.get("entity_name"):
-        entity = _resolve_start_entity_by_name(args["entity_name"], store)
+        entity = store.get_entity_by_name(args["entity_name"])
         if not entity:
             return None, f"entity not found: {args['entity_name']}"
         return entity, None

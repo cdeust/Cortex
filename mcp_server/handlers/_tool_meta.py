@@ -4,6 +4,7 @@ source: ADR-0327"""
 
 from __future__ import annotations
 
+import copy
 from typing import TYPE_CHECKING, Any, Mapping
 
 if TYPE_CHECKING:
@@ -124,3 +125,62 @@ def apply_param_docs(mcp: MCPServer, schemas: Mapping[str, Mapping[str, Any]]) -
             description = documented.get(param_name, {}).get("description")
             if description and "description" not in param_schema:
                 param_schema["description"] = description
+
+
+# Root keywords a handler ``inputSchema`` may carry. The first group states a
+# cross-parameter constraint that ``required`` cannot ("one of", "if A then B")
+# and is published to clients; the second is already derived from the wrapper
+# signature. Any other root keyword (``not``, ``if``, ``then``...) would be
+# dropped silently, so it is refused.
+# source: JSON Schema 2020-12, Core §10.2 and Validation §6.5 (applicators and
+# dependentRequired), https://json-schema.org/draft/2020-12/json-schema-core
+CONSTRAINT_KEYWORDS = ("anyOf", "oneOf", "allOf", "dependentRequired")
+_SIGNATURE_DERIVED = ("type", "properties", "required", "additionalProperties")
+_BRANCH_KEYWORDS = ("required", "properties")
+
+
+def _cited_properties(tool: str, keyword: str, value: Any) -> set[str]:
+    """Property names a constraint mentions: a branch's ``required`` entries and
+    ``properties`` keys, or the keys and values of ``dependentRequired``.
+    Raises ``ValueError`` on a branch keyword it cannot check."""
+    if keyword == "dependentRequired":
+        return set(value) | {name for names in value.values() for name in names}
+    cited: set[str] = set()
+    for branch in value:
+        stray = set(branch) - set(_BRANCH_KEYWORDS)
+        if stray:
+            raise ValueError(f"{tool}: {keyword} branch uses unchecked {sorted(stray)}")
+        cited |= set(branch.get("required", [])) | set(branch.get("properties", {}))
+    return cited
+
+
+def apply_input_constraints(
+    mcp: MCPServer, schemas: Mapping[str, Mapping[str, Any]]
+) -> None:
+    """Publish each handler's root-level cross-parameter constraints.
+
+    Copies ``CONSTRAINT_KEYWORDS`` from the handler's ``inputSchema`` onto the
+    signature-derived schema so clients can reject an invalid call before
+    sending it. Publication only: the SDK validates against the wrapper
+    signature, never this dict, so enforcement stays in the handler. ``required``
+    is never copied (it is signature-derived). Raises ``ValueError`` on a root
+    keyword that is neither published nor signature-derived, and on a property
+    the wrapper signature does not expose.
+
+    source: ADR-1093"""
+    for tool in mcp._tool_manager.list_tools():
+        declared = schemas.get(tool.name, {}).get("inputSchema", {})
+        unhandled = set(declared) - set(CONSTRAINT_KEYWORDS) - set(_SIGNATURE_DERIVED)
+        if unhandled:
+            raise ValueError(f"{tool.name}: unpublishable keywords {sorted(unhandled)}")
+        known = set(tool.parameters.get("properties", {}))
+        for keyword in CONSTRAINT_KEYWORDS:
+            if keyword not in declared:
+                continue
+            unknown = _cited_properties(tool.name, keyword, declared[keyword]) - known
+            if unknown:
+                raise ValueError(
+                    f"{tool.name}: {keyword} cites {sorted(unknown)}, which the "
+                    f"registered wrapper does not expose"
+                )
+            tool.parameters[keyword] = copy.deepcopy(declared[keyword])

@@ -37,6 +37,7 @@ import asyncio
 from mcp.server.mcpserver import MCPServer
 
 from mcp_server.__main__ import merged_schemas, register_all
+from mcp_server.handlers._tool_meta import CONSTRAINT_KEYWORDS
 from mcp_server.infrastructure.memory_config import root_agent_topic
 
 # agent_topic is DELIBERATELY omitted from the "rooted" remember/recall
@@ -56,10 +57,18 @@ def _live_tools() -> dict[str, set[str]]:
     ``.input_schema`` (the wire-level ``mcp.types.Tool`` field mcp 2.0.0
     uses — was ``.parameters`` under FastMCP; verified against the
     installed mcp==2.0.0, 2026-08-10)."""
+    return {
+        name: set(schema.get("properties", {}).keys())
+        for name, schema in _live_input_schemas().items()
+    }
+
+
+def _live_input_schemas() -> dict[str, dict]:
+    """tool_name -> the full input schema the client receives."""
     server = MCPServer(name="parity", version="0.0.0")
     register_all(server, codebase=True, prd=True)
     tools = asyncio.run(server.list_tools())
-    return {t.name: set(t.input_schema.get("properties", {}).keys()) for t in tools}
+    return {t.name: t.input_schema for t in tools}
 
 
 def test_every_registered_tool_matches_its_handler_schema_exactly() -> None:
@@ -101,3 +110,52 @@ def test_every_tool_name_in_schemas_is_registered() -> None:
     assert not unaccounted, (
         f"schema map declares tool(s) with no registered wrapper: {sorted(unaccounted)}"
     )
+
+
+def _root_combinators(schema: dict) -> dict:
+    return {k: schema[k] for k in CONSTRAINT_KEYWORDS if k in schema}
+
+
+def test_root_combinators_published_match_handler_schema() -> None:
+    """A cross-parameter constraint the handler declares (``anyOf`` etc.)
+    reaches the client verbatim; none appears that the handler never declared
+    (#661: ``recall_hierarchical`` needs domain OR memory_ids, the published
+    schema said only ``query`` was required)."""
+    handlers = merged_schemas()
+    failures: list[str] = []
+    for name, schema in _live_input_schemas().items():
+        declared = _root_combinators(handlers[name].get("inputSchema", {}))
+        published = _root_combinators(schema)
+        if declared != published:
+            failures.append(
+                f"{name}: handler declares {declared} but client receives {published}"
+            )
+    assert not failures, "\n".join(failures)
+
+
+def _branches(name: str, keyword: str = "anyOf") -> dict[str, dict]:
+    """{required property: its branch subschema} of one published constraint."""
+    return {
+        b["required"][0]: b["properties"][b["required"][0]]
+        for b in _live_input_schemas()[name][keyword]
+    }
+
+
+def test_recall_hierarchical_publishes_domain_or_memory_ids() -> None:
+    schema = _live_input_schemas()["recall_hierarchical"]
+    assert schema["required"] == ["query"]
+    assert _branches("recall_hierarchical") == {
+        "domain": {"type": "string", "minLength": 1},
+        "memory_ids": {"type": "array", "minItems": 1},
+    }
+
+
+def test_get_causal_chain_publishes_entity_name_or_memory_id() -> None:
+    assert _branches("get_causal_chain") == {
+        "entity_name": {"type": "string", "minLength": 1},
+        "memory_id": {"type": "integer"},
+    }
+
+
+def test_ingest_prd_publishes_exactly_one_source() -> None:
+    assert set(_branches("ingest_prd", "oneOf")) == {"path", "content", "pipeline_id"}

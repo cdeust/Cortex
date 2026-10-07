@@ -59,7 +59,11 @@ from mcp_server.core import telemetry
 from mcp_server.telemetry_middleware import TelemetryMiddleware
 from mcp_server.tool_profile_middleware import ToolProfileMiddleware
 from mcp_server.core.wiki_classifier import configure_user_rules_provider
-from mcp_server.handlers._tool_meta import apply_output_schemas, apply_param_docs
+from mcp_server.handlers._tool_meta import (
+    apply_input_constraints,
+    apply_output_schemas,
+    apply_param_docs,
+)
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.mcp_client_pool import close_all
 from mcp_server.infrastructure.otel_exporter import build_otel_exporter
@@ -134,6 +138,7 @@ def register_all(mcp: MCPServer, *, codebase: bool, prd: bool) -> None:
     # source: ADR-0093
 
     apply_param_docs(mcp, merged_schemas())
+    apply_input_constraints(mcp, merged_schemas())
     apply_output_schemas(mcp, merged_schemas())
 
 
