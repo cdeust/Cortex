@@ -9,7 +9,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Any, BinaryIO
+from typing import IO, Any
 
 from mcp_server.hooks.capture_worker_policy import limits, validate_payload
 from mcp_server.infrastructure import capture_spool
@@ -39,13 +39,14 @@ def report_failure(
 _WINDOWS_DETACHED = 0x00000008 | 0x00000200
 
 
-def popen_options(platform: str, stream: BinaryIO) -> dict[str, Any]:
+def popen_options(platform: str, stream: IO[Any]) -> dict[str, Any]:
     """Options that start the drainer fully detached from the hook process.
 
-    postcondition: stdin is closed, stdout and stderr go to ``stream`` (so a crash
-    before the drainer's own log exists is not lost), and the child does not die
-    with the hook. Windows has no ``start_new_session`` (``subprocess`` ignores it
-    there) and no ``pass_fds``; it detaches through ``creationflags``."""
+    postcondition: stdin is closed, stdout and stderr go to ``stream``
+    (the drainer's one log, so a crash before its logging exists is not lost), and
+    the child does not die with the hook. Windows has no ``start_new_session``
+    (``subprocess`` ignores it there) and no ``pass_fds``; it detaches through
+    ``creationflags``."""
     options: dict[str, Any] = {
         "stdin": subprocess.DEVNULL,
         "stdout": stream,
@@ -61,7 +62,7 @@ def popen_options(platform: str, stream: BinaryIO) -> dict[str, Any]:
     return options
 
 
-def spawn_drainer(stream: BinaryIO) -> subprocess.Popen[Any]:
+def spawn_drainer(stream: IO[Any]) -> subprocess.Popen[Any]:
     """Start ``capture_drain`` and do not wait for it. source: ADR-1094"""
     command = [sys.executable, "-m", "mcp_server.hooks.capture_drain"]
     return subprocess.Popen(command, **popen_options(sys.platform, stream))
@@ -73,8 +74,17 @@ def _spool(payload: dict[str, object]) -> None:
     The file is written before the drainer starts, so a spawn failure loses
     nothing: the next capture's drainer stores it."""
     spool = capture_spool.spool_directory(CLAUDE_DIR)
+    age = capture_spool.oldest_pending_age(spool, time.time())
+    if age is not None and age > capture_spool.STALL_SECONDS:
+        # a drainer that is hung or cannot start leaves a growing backlog and, until
+        # now, said nothing: surface it through telemetry on every capture (ADR-1094)
+        report_failure(
+            f"capture spool stalled: oldest pending file is {age:.0f}s old",
+            age,
+            operation="capture_spool_stalled",
+        )
     capture_spool.write(spool, payload)
-    with capture_spool.error_log(spool) as stream:
+    with capture_spool.open_log(spool) as stream:
         spawn_drainer(stream)
 
 

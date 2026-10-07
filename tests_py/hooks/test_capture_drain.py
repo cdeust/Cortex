@@ -7,9 +7,12 @@ drainer from a parent that exits at once, with the real platform's detach option
 
 from __future__ import annotations
 
+import asyncio
+import os
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -112,6 +115,75 @@ class TestDrain(_Spool):
             capture_drain.drain(self.spool)
         self.assertEqual(len(seen), 2)
         self.assertEqual(capture_spool.pending(self.spool), [])
+
+    def test_a_hung_store_is_cancelled_rejected_and_reported_not_held_forever(self):
+        hung = capture_spool.write(self.spool, EXPECTED)
+        good = capture_spool.write(self.spool, {**EXPECTED, "content": "second"})
+        seen = []
+
+        async def store(value):
+            seen.append(value["content"])
+            if value["content"] != "second":
+                await asyncio.Event().wait()  # never set: only the deadline ends it
+            return STORED
+
+        with (
+            mock.patch.object(capture_drain, "store", store),
+            mock.patch.object(capture_spool, "STORE_SECONDS", 0.05),
+        ):
+            capture_drain.drain(self.spool)
+        self.assertEqual(len(seen), 2)  # the file behind the hung one was stored
+        self.assertFalse(good.exists())
+        self.assertFalse(hung.exists())
+        self.assertEqual(len(list(self.spool.glob("*.rejected"))), 1)
+        self.assertIn("TimeoutError", self.report.call_args.args[0])
+
+    def test_reject_failure_deletes_the_file_and_reports_once_without_crashing(self):
+        capture_spool.write(self.spool, EXPECTED)
+
+        async def store(value):
+            raise RuntimeError("database is down")
+
+        with (
+            mock.patch.object(capture_drain, "store", store),
+            mock.patch.object(
+                capture_spool, "reject", side_effect=OSError("read-only filesystem")
+            ),
+        ):
+            capture_drain.drain(self.spool)
+        self.assertEqual(capture_spool.pending(self.spool), [])
+        self.report.assert_called_once()
+        message = self.report.call_args.args[0]
+        self.assertIn("deleted, rename failed: read-only filesystem", message)
+        self.assertIn("database is down", message)
+
+    def test_a_file_that_can_neither_be_renamed_nor_deleted_is_reported_once_per_run(
+        self,
+    ):
+        stuck = capture_spool.write(self.spool, EXPECTED)
+
+        async def store(value):
+            raise RuntimeError("database is down")
+
+        with (
+            mock.patch.object(capture_drain, "store", store),
+            mock.patch.object(
+                capture_spool, "reject", side_effect=OSError("rename denied")
+            ),
+            mock.patch.object(Path, "unlink", side_effect=OSError("delete denied")),
+        ):
+            capture_drain.drain(self.spool)  # must terminate
+        self.assertEqual(capture_spool.pending(self.spool), [stuck])
+        self.report.assert_called_once()
+        self.assertIn("left in place", self.report.call_args.args[0])
+
+    def test_a_drain_sweeps_orphaned_partial_files(self):
+        orphan = self.spool / ".dead.partial"
+        orphan.write_text("{")
+        long_ago = time.time() - capture_spool.PARTIAL_KEEP_SECONDS - 10
+        os.utime(orphan, (long_ago, long_ago))
+        capture_drain.drain(self.spool)
+        self.assertFalse(orphan.exists())
 
 
 # The intermediate process plays the hook: it starts the drainer through the

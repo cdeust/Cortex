@@ -40,11 +40,13 @@ to `<CLAUDE_DIR>/.capture-worker/spool/` (`infrastructure/capture_spool.py`) and
 starts `python -m mcp_server.hooks.capture_drain` without waiting. POSIX is
 unchanged (the resident worker).
 
-- The spawn options are a pure function, `capture_dispatch.popen_options(platform)`:
+- The spawn options are a pure function, `capture_dispatch.popen_options(platform, stream)`:
   Windows `creationflags = DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP`,
-  `close_fds`, stdin to `DEVNULL`, stdout and stderr to an append-only
-  `drain.err` (so a crash before the drainer's own rotating `drain.log` exists is
-  not lost), the launcher's environment; no `pass_fds` and no `start_new_session`
+  `close_fds`, stdin to `DEVNULL`, stdout and stderr to `stream`, the drainer's one
+  log `drain.log` (owner-only mode, size-rotated at each spawn by
+  `open_rotating_log`, ADR-0655; the drainer's logging goes to its stderr, so a
+  crash before logging exists and library progress bars land in the same bounded
+  file), the launcher's environment; no `pass_fds` and no `start_new_session`
   (CPython ignores it on Windows). Other platforms use `start_new_session`.
 - The drainer takes a non-blocking kernel lock (`msvcrt.locking` `LK_NBLCK` /
   `flock` `LOCK_NB`; the pattern of the Codex SessionEnd queue, ADR-1084). A loser
@@ -56,7 +58,17 @@ unchanged (the resident worker).
 - Delivery is at-least-once: a file is deleted after `store` returned; a replay after
   a crash is absorbed by the write gate. A refused, unreadable or failing file is
   renamed `*.rejected` and reported through `report_failure("capture_skipped")`;
-  nothing is swallowed.
+  nothing is swallowed. If the rename itself fails the file is deleted after the
+  report (a payload already refused is not replayed by every later drainer); if
+  that fails too it is skipped for the run.
+- Bounded and observable. Each store is cancelled after `STORE_SECONDS` (120 s,
+  about ten times the measured cold capture) and the file refused like any
+  failure, so a hung handler cannot hold the lock for good. A hang that does not
+  yield to cancellation (a blocking call) is covered by the hook: when the oldest
+  pending file is older than `STALL_SECONDS` (600 s) it reports
+  `capture_spool_stalled` through telemetry on every capture, and still queues the
+  new payload. The drainer removes `.partial` files older than an hour (a hook that
+  died between write and rename) and `.rejected` files older than a week.
 - The directory is private under the configured Cortex root (mode 0700 where the
   platform has modes; on Windows it inherits the user-profile ACL).
 

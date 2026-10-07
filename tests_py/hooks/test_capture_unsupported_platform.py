@@ -12,6 +12,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from contextlib import contextmanager
 from pathlib import Path
@@ -135,7 +136,35 @@ class TestHookOnUnsupportedPlatform(unittest.TestCase):
             popen.call_args.kwargs, capture_dispatch.popen_options("win32", stream)
         )
         self.assertTrue(stream.closed)
-        self.assertTrue((self.root / ".capture-worker" / "drain.err").exists())
+        self.assertTrue((self.root / ".capture-worker" / "drain.log").exists())
+
+    def test_a_stalled_backlog_is_reported_and_the_capture_still_queues(self):
+        spool = capture_spool.spool_directory(self.root)
+        old = capture_spool.write(spool, EXPECTED)
+        long_ago = time.time() - capture_spool.STALL_SECONDS - 10
+        os.utime(old, (long_ago, long_ago))
+        with (
+            _windows(),
+            mock.patch.object(capture_dispatch.subprocess, "Popen"),
+            mock.patch.object(capture_dispatch, "report_failure") as report,
+            mock.patch.object(hook, "_log"),
+        ):
+            self._store()
+        report.assert_called_once()
+        self.assertEqual(report.call_args.kwargs["operation"], "capture_spool_stalled")
+        self.assertEqual(len(capture_spool.pending(spool)), 2)
+
+    def test_a_fresh_backlog_is_not_reported_as_stalled(self):
+        spool = capture_spool.spool_directory(self.root)
+        capture_spool.write(spool, EXPECTED)
+        with (
+            _windows(),
+            mock.patch.object(capture_dispatch.subprocess, "Popen"),
+            mock.patch.object(capture_dispatch, "report_failure") as report,
+            mock.patch.object(hook, "_log"),
+        ):
+            self._store()
+        report.assert_not_called()
 
     def test_spawn_failure_keeps_the_file_and_is_reported(self):
         with (

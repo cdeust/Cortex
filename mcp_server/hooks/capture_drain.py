@@ -18,37 +18,56 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from mcp_server.hooks._store_lifecycle import close_shared_store_on_exit
 from mcp_server.hooks.capture_dispatch import report_failure
 from mcp_server.hooks.capture_store import store
-from mcp_server.hooks.capture_worker_logging import LOG_BYTES
 from mcp_server.infrastructure import capture_spool
 from mcp_server.infrastructure.config import CLAUDE_DIR
 
-logger = logging.getLogger(__name__)
+
+def _refuse(path: Path, exc: BaseException, elapsed: float) -> bool:
+    """Retire a file that could not be stored and report it once.
+
+    postcondition: returns True when the file no longer matches ``pending``.
+    Normally it is renamed ``*.rejected``. If even that fails (a broken
+    filesystem), the file is deleted so it cannot be replayed by every later
+    drainer; if that fails too it stays and the caller skips it for this run.
+    Every outcome is part of the one ``capture_skipped`` report."""
+    detail = f"{type(exc).__name__}: {exc}"
+    resolved = True
+    try:
+        fate = capture_spool.reject(path).name
+    except OSError as rename_error:
+        try:
+            path.unlink(missing_ok=True)
+            fate = f"deleted, rename failed: {rename_error}"
+        except OSError as delete_error:
+            resolved = False
+            fate = f"left in place, rename and delete failed: {delete_error}"
+    report_failure(f"capture rejected after {elapsed:.3f}s ({fate}): {detail}", elapsed)
+    return resolved
 
 
-async def drain_pending(spool: Path) -> int:
+async def drain_pending(spool: Path, skip: set[Path]) -> int:
     """precondition: the caller holds ``capture_spool.drain_lock``.
-    postcondition: every file that was pending is either stored and deleted, or
-    renamed ``*.rejected`` after a ``capture_skipped`` report; returns the
-    number stored."""
+    postcondition: every pending file not in ``skip`` is stored and deleted, or
+    retired by ``_refuse`` (added to ``skip`` when it could not be); a store that
+    exceeds ``capture_spool.STORE_SECONDS`` is cancelled and refused like any
+    failure. Returns the number stored."""
     stored = 0
     for path in capture_spool.pending(spool):
+        if path in skip:
+            continue
         started = time.monotonic()
         try:
-            await store(capture_spool.read(path))
-        except Exception as exc:  # noqa: BLE001 — per-file boundary: a refused or failing payload must not strand the files behind it; it is reported and kept as *.rejected
-            elapsed = time.monotonic() - started
-            rejected = capture_spool.reject(path)
-            report_failure(
-                f"capture rejected after {elapsed:.3f}s ({rejected.name}): "
-                f"{type(exc).__name__}: {exc}",
-                elapsed,
+            await asyncio.wait_for(
+                store(capture_spool.read(path)), capture_spool.STORE_SECONDS
             )
+        except Exception as exc:  # noqa: BLE001 — per-file boundary: a refused, failing or hung payload must not strand the files behind it; it is reported and retired
+            if not _refuse(path, exc, time.monotonic() - started):
+                skip.add(path)
             continue
         path.unlink()
         stored += 1
@@ -56,28 +75,27 @@ async def drain_pending(spool: Path) -> int:
 
 
 def drain(spool: Path) -> None:
-    """Drain until a scan taken after releasing the lock finds nothing.
+    """Drain until a scan taken after releasing the lock finds nothing new.
 
-    invariant: each pass either returns or consumed at least one file (stored or
-    renamed), so the loop ends; a lost lock returns immediately."""
+    invariant: each pass stores, retires or skips every file it sees, so the
+    loop ends; a lost lock returns immediately."""
+    skip: set[Path] = set()
     while True:
         with capture_spool.drain_lock(spool) as held:
             if not held:
                 return
-            asyncio.run(drain_pending(spool))
-        if not capture_spool.pending(spool):
+            asyncio.run(drain_pending(spool, skip))
+            capture_spool.sweep(spool, time.time())
+        if not [p for p in capture_spool.pending(spool) if p not in skip]:
             return
 
 
 def main() -> None:
     spool = capture_spool.spool_directory(CLAUDE_DIR)
-    # source: ADR-0488 (private rotating diagnostics, same budget as the worker's)
-    handler = RotatingFileHandler(
-        spool.parent / "drain.log", maxBytes=LOG_BYTES, backupCount=1, encoding="utf-8"
+    # the single log is this process's stderr (see ``capture_spool.open_log``)
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
-    root = logging.getLogger()
-    root.setLevel(logging.INFO)
-    root.addHandler(handler)
     with close_shared_store_on_exit():
         drain(spool)
 

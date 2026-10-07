@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import stat
 import sys
 import tempfile
@@ -10,6 +11,7 @@ from pathlib import Path
 from unittest import mock
 
 from mcp_server.infrastructure import capture_spool
+from mcp_server.shared import log_rotation
 
 
 class TestCaptureSpool(unittest.TestCase):
@@ -30,11 +32,62 @@ class TestCaptureSpool(unittest.TestCase):
         for directory in (capture, self.spool):
             self.assertEqual(stat.S_IMODE(directory.stat().st_mode), 0o700)
 
-    def test_error_log_appends_across_openings(self):
-        for text in (b"one\n", b"two\n"):
-            with capture_spool.error_log(self.spool) as stream:
+    def test_log_appends_across_openings(self):
+        for text in ("one\n", "two\n"):
+            with capture_spool.open_log(self.spool) as stream:
                 stream.write(text)
-        self.assertEqual((self.spool.parent / "drain.err").read_bytes(), b"one\ntwo\n")
+        self.assertEqual(capture_spool.log_path(self.spool).read_text(), "one\ntwo\n")
+
+    @unittest.skipIf(sys.platform == "win32", "Windows has no POSIX modes")
+    def test_log_is_owner_only_even_when_it_pre_exists_with_a_wider_mode(self):
+        path = capture_spool.log_path(self.spool)
+        with capture_spool.open_log(self.spool):
+            pass
+        self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+        path.chmod(0o644)
+        with capture_spool.open_log(self.spool):
+            pass
+        self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
+
+    def test_log_is_rotated_so_it_stays_bounded(self):
+        path = capture_spool.log_path(self.spool)
+        path.write_bytes(b"x" * log_rotation.MAX_LOG_BYTES)
+        with capture_spool.open_log(self.spool) as stream:
+            stream.write("fresh\n")
+        self.assertEqual(path.read_text(), "fresh\n")
+        self.assertEqual(
+            path.with_name(path.name + ".1").stat().st_size, log_rotation.MAX_LOG_BYTES
+        )
+
+    def test_oldest_pending_age_is_none_when_empty_else_the_oldest_files_age(self):
+        self.assertIsNone(capture_spool.oldest_pending_age(self.spool, 1000.0))
+        old = capture_spool.write(self.spool, {"n": 1})
+        capture_spool.write(self.spool, {"n": 2})
+        os.utime(old, (100.0, 100.0))
+        self.assertEqual(capture_spool.oldest_pending_age(self.spool, 1000.0), 900.0)
+
+    def test_sweep_removes_only_expired_partial_and_rejected_files(self):
+        now = 10_000_000.0
+        stale_partial = self.spool / ".a.partial"
+        fresh_partial = self.spool / ".b.partial"
+        stale_rejected = capture_spool.reject(capture_spool.write(self.spool, {"n": 1}))
+        fresh_rejected = capture_spool.reject(capture_spool.write(self.spool, {"n": 2}))
+        live = capture_spool.write(self.spool, {"n": 3})
+        for path in (stale_partial, fresh_partial):
+            path.write_text("{")
+        age = {
+            stale_partial: capture_spool.PARTIAL_KEEP_SECONDS + 1,
+            fresh_partial: 1,
+            stale_rejected: capture_spool.REJECTED_KEEP_SECONDS + 1,
+            fresh_rejected: capture_spool.PARTIAL_KEEP_SECONDS + 1,
+            live: capture_spool.REJECTED_KEEP_SECONDS + 1,
+        }
+        for path, seconds in age.items():
+            os.utime(path, (now - seconds, now - seconds))
+        self.assertEqual(capture_spool.sweep(self.spool, now), 2)
+        self.assertEqual(
+            {p for p in self.spool.iterdir()}, {fresh_partial, fresh_rejected, live}
+        )
 
     def test_a_written_payload_round_trips_and_leaves_no_partial_file(self):
         path = capture_spool.write(self.spool, {"content": "é☃"})

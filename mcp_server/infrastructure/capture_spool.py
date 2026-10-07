@@ -20,7 +20,9 @@ import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import BinaryIO
+from typing import TextIO
+
+from mcp_server.shared.log_rotation import open_rotating_log
 
 if sys.platform == "win32":
     import msvcrt
@@ -30,9 +32,24 @@ else:
 # source: ADR-1084 (private directory under the configured Cortex root, mode 0700
 # where the platform has modes; on Windows it inherits the user-profile ACL)
 PRIVATE_DIR = 0o700
+# source: ADR-0488 (the worker's log is 0o600)
+PRIVATE_FILE = 0o600
 # source: ADR-0486 (the worker's own private ``.capture-worker`` directory)
 SPOOL_ROOT = ".capture-worker"
 REJECTED_SUFFIX = ".rejected"
+_PARTIAL_SUFFIX = ".partial"
+# source: ADR-1094 (measured 2026-10-07: a cold capture takes 10.5 s; the bound is
+# about ten times that, so only a hang reaches it, and then the file is rejected
+# and reported instead of holding the lock for good)
+STORE_SECONDS = 120.0
+# source: ADR-1094 (a backlog older than this means the drainer is not making
+# progress, it spends at most STORE_SECONDS per file; the hook reports it)
+STALL_SECONDS = 600.0
+# source: ADR-1094 (a ``.partial`` is a hook that died between write and rename, a
+# write takes milliseconds, so an hour is long past any live writer)
+PARTIAL_KEEP_SECONDS = 3600.0
+# source: ADR-1094 (refused payloads are kept a week for inspection, then removed)
+REJECTED_KEEP_SECONDS = 7 * 86400.0
 _PAYLOAD_SUFFIX = ".json"
 # source: https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/locking
 # (``msvcrt.locking`` locks ``nbytes`` from the current position; one byte is
@@ -50,15 +67,29 @@ def spool_directory(root: Path) -> Path:
     return spool
 
 
-def error_log(spool: Path) -> BinaryIO:
-    """Append-only stream for the drainer's raw stdout/stderr (``drain.err``).
+def log_path(spool: Path) -> Path:
+    return spool.parent / "drain.log"
 
-    Holds only what happens before the drainer's own rotating log exists or
-    outside it (an import failure, an interpreter crash): empty when all is well."""
-    descriptor = os.open(
-        spool.parent / "drain.err", os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600
-    )
-    return os.fdopen(descriptor, "ab")
+
+@contextmanager
+def open_log(spool: Path) -> Iterator[TextIO]:
+    """The drainer's single log, private and size-rotated, for its stdout/stderr.
+
+    The drainer (stdio, logging, tracebacks, library progress bars) writes only
+    here, so one file records everything, including a crash before its own
+    logging exists. Rotation happens at each open (``open_rotating_log``, ADR-0655:
+    one ``.1`` generation), so the file stays bounded. The Popen must run inside
+    this context. source: ADR-0488 (private diagnostics, owner-only mode)"""
+    path = log_path(spool)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(path, flags, PRIVATE_FILE)
+    try:
+        if sys.platform != "win32":
+            os.fchmod(descriptor, PRIVATE_FILE)
+    finally:
+        os.close(descriptor)
+    with open_rotating_log(path) as stream:
+        yield stream
 
 
 def write(spool: Path, payload: dict[str, object]) -> Path:
@@ -66,7 +97,7 @@ def write(spool: Path, payload: dict[str, object]) -> Path:
     postcondition: one complete ``*.json`` file holds ``payload``; a reader never
     sees a partial one (written under another suffix, then ``os.replace``d)."""
     name = f"{time.time_ns():020d}-{os.getpid()}-{uuid.uuid4().hex[:8]}"
-    partial = spool / f".{name}.partial"
+    partial = spool / f".{name}{_PARTIAL_SUFFIX}"
     target = spool / f"{name}{_PAYLOAD_SUFFIX}"
     partial.write_text(json.dumps(payload), encoding="utf-8")
     os.replace(partial, target)
@@ -77,6 +108,37 @@ def pending(spool: Path) -> list[Path]:
     """Complete payload files in name order: write time first, so oldest first up to
     the clock's resolution; captures are independent, ties need no order."""
     return sorted(spool.glob(f"*{_PAYLOAD_SUFFIX}"))
+
+
+def oldest_pending_age(spool: Path, now: float) -> float | None:
+    """Age in seconds of the oldest complete payload file, or None when none exists.
+    A file the drainer removes while we look is skipped, not an error."""
+    for path in pending(spool):
+        try:
+            return now - path.stat().st_mtime
+        except FileNotFoundError:
+            continue
+    return None
+
+
+def sweep(spool: Path, now: float) -> int:
+    """Remove orphaned ``.partial`` files and expired ``.rejected`` files.
+
+    postcondition: returns how many were removed; a file that vanished meanwhile
+    counts as removed by someone else."""
+    removed = 0
+    for suffix, keep in (
+        (_PARTIAL_SUFFIX, PARTIAL_KEEP_SECONDS),
+        (REJECTED_SUFFIX, REJECTED_KEEP_SECONDS),
+    ):
+        for path in spool.glob(f"*{suffix}"):
+            try:
+                if now - path.stat().st_mtime > keep:
+                    path.unlink()
+                    removed += 1
+            except FileNotFoundError:
+                continue
+    return removed
 
 
 def read(path: Path) -> dict[str, object]:

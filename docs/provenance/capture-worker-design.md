@@ -60,7 +60,7 @@ hook `timeout` of 10 s. It validates the payload, writes it atomically to
 `.capture-worker/spool/<time>-<pid>-<id>.json` and starts `capture_drain` detached
 (`capture_dispatch.popen_options`: `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP` on
 Windows, `start_new_session` elsewhere, no inherited descriptors; stderr to
-`drain.err`), without waiting.
+`drain.log`), without waiting.
 The drainer takes a non-blocking kernel lock (`msvcrt.locking` / `flock`); a drainer
 that loses it exits, the winner stores every pending file through the same
 `capture_store.store` the worker awaits (one model load per burst), deletes each file
