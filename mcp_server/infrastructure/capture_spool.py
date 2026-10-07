@@ -80,15 +80,11 @@ def open_log(spool: Path) -> Iterator[TextIO]:
     logging exists. Rotation happens at each open (``open_rotating_log``, ADR-0655:
     one ``.1`` generation), so the file stays bounded. The Popen must run inside
     this context. source: ADR-0488 (private diagnostics, owner-only mode)"""
-    path = log_path(spool)
-    flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0)
-    descriptor = os.open(path, flags, PRIVATE_FILE)
-    try:
+    with open_rotating_log(log_path(spool)) as stream:
+        # on the descriptor that is actually written, after any rotation
+        # created a fresh file with the umask's mode
         if sys.platform != "win32":
-            os.fchmod(descriptor, PRIVATE_FILE)
-    finally:
-        os.close(descriptor)
-    with open_rotating_log(path) as stream:
+            os.fchmod(stream.fileno(), PRIVATE_FILE)
         yield stream
 
 
@@ -105,20 +101,22 @@ def write(spool: Path, payload: dict[str, object]) -> Path:
 
 
 def pending(spool: Path) -> list[Path]:
-    """Complete payload files in name order: write time first, so oldest first up to
-    the clock's resolution; captures are independent, ties need no order."""
+    """Complete payload files in name order. The order is not a contract: captures
+    are independent and the name's clock prefix is only a hint (ADR-1094), so
+    nothing may infer age or sequence from it; use the files' mtime."""
     return sorted(spool.glob(f"*{_PAYLOAD_SUFFIX}"))
 
 
 def oldest_pending_age(spool: Path, now: float) -> float | None:
     """Age in seconds of the oldest complete payload file, or None when none exists.
     A file the drainer removes while we look is skipped, not an error."""
+    mtimes = []
     for path in pending(spool):
         try:
-            return now - path.stat().st_mtime
+            mtimes.append(path.stat().st_mtime)
         except FileNotFoundError:
             continue
-    return None
+    return now - min(mtimes) if mtimes else None
 
 
 def sweep(spool: Path, now: float) -> int:

@@ -61,10 +61,26 @@ class TestCaptureSpool(unittest.TestCase):
 
     def test_oldest_pending_age_is_none_when_empty_else_the_oldest_files_age(self):
         self.assertIsNone(capture_spool.oldest_pending_age(self.spool, 1000.0))
-        old = capture_spool.write(self.spool, {"n": 1})
-        capture_spool.write(self.spool, {"n": 2})
-        os.utime(old, (100.0, 100.0))
+        files = [capture_spool.write(self.spool, {"n": n}) for n in range(5)]
+        # mtimes set explicitly, in an order unrelated to the names, so neither the
+        # clock tick nor the name order can decide the result
+        mtimes = (700.0, 100.0, 900.0, 300.0, 500.0)
+        for path, mtime in zip(files, mtimes, strict=True):
+            os.utime(path, (mtime, mtime))
         self.assertEqual(capture_spool.oldest_pending_age(self.spool, 1000.0), 900.0)
+
+    @unittest.skipIf(sys.platform == "win32", "Windows has no POSIX modes")
+    def test_log_is_owner_only_after_a_real_rotation(self):
+        path = capture_spool.log_path(self.spool)
+        path.write_bytes(b"x" * log_rotation.MAX_LOG_BYTES)
+        path.chmod(0o644)
+        old_umask = os.umask(0o022)
+        self.addCleanup(os.umask, old_umask)
+        with capture_spool.open_log(self.spool):
+            pass
+        previous = path.with_name(path.name + ".1")
+        self.assertEqual(previous.stat().st_size, log_rotation.MAX_LOG_BYTES)
+        self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o600)
 
     def test_sweep_removes_only_expired_partial_and_rejected_files(self):
         now = 10_000_000.0

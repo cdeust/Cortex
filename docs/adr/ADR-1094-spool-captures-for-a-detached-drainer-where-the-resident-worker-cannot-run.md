@@ -69,6 +69,11 @@ unchanged (the resident worker).
   `capture_spool_stalled` through telemetry on every capture, and still queues the
   new payload. The drainer removes `.partial` files older than an hour (a hook that
   died between write and rename) and `.rejected` files older than a week.
+- Order is not a contract. Captures are independent writes to a write-gated store, so
+  the drainer processes files in name order only for determinism; the name's clock
+  prefix can tie or invert (Windows clock resolution is about 15.6 ms). Age is
+  therefore taken from the files' own `mtime` (the oldest of all pending files),
+  never from the name.
 - The directory is private under the configured Cortex root (mode 0700 where the
   platform has modes; on Windows it inherits the user-profile ACL).
 
