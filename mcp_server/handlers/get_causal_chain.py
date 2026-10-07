@@ -39,7 +39,16 @@ schema = {
         "type": "object",
         "required": [],
         # One-of constraint published to clients, source: ADR-1093.
-        "anyOf": [{"required": ["entity_name"]}, {"required": ["memory_id"]}],
+        "anyOf": [
+            {
+                "required": ["entity_name"],
+                "properties": {"entity_name": {"type": "string", "minLength": 1}},
+            },
+            {
+                "required": ["memory_id"],
+                "properties": {"memory_id": {"type": "integer"}},
+            },
+        ],
         "properties": {
             "entity_name": {
                 "type": "string",

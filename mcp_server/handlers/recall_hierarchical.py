@@ -56,7 +56,16 @@ schema = {
         # source: ADR-0045 R3, ADR-1093 — one scope is mandatory; ``required`` cannot
         # express "one of", so the constraint is a root ``anyOf`` published by
         # ``_tool_meta.apply_input_constraints`` (enforcement stays below).
-        "anyOf": [{"required": ["domain"]}, {"required": ["memory_ids"]}],
+        "anyOf": [
+            {
+                "required": ["domain"],
+                "properties": {"domain": {"type": "string", "minLength": 1}},
+            },
+            {
+                "required": ["memory_ids"],
+                "properties": {"memory_ids": {"type": "array", "minItems": 1}},
+            },
+        ],
         "properties": {
             "query": {
                 "type": "string",

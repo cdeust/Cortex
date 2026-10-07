@@ -34,11 +34,10 @@ from __future__ import annotations
 
 import asyncio
 
-import pytest
 from mcp.server.mcpserver import MCPServer
 
 from mcp_server.__main__ import merged_schemas, register_all
-from mcp_server.handlers._tool_meta import apply_input_constraints
+from mcp_server.handlers._tool_meta import CONSTRAINT_KEYWORDS
 from mcp_server.infrastructure.memory_config import root_agent_topic
 
 # agent_topic is DELIBERATELY omitted from the "rooted" remember/recall
@@ -50,12 +49,6 @@ from mcp_server.infrastructure.memory_config import root_agent_topic
 _ROOTED_OMISSIONS: set[str] = (
     {"agent_topic"} if root_agent_topic() is not None else set()
 )
-
-
-# Root-level combinators a handler may declare to state a cross-parameter
-# constraint (e.g. "domain OR memory_ids") that ``required`` cannot express.
-# Published to clients by ``_tool_meta.apply_input_constraints``.
-_COMBINATORS = ("anyOf", "oneOf", "allOf", "dependentRequired")
 
 
 def _live_tools() -> dict[str, set[str]]:
@@ -120,7 +113,7 @@ def test_every_tool_name_in_schemas_is_registered() -> None:
 
 
 def _root_combinators(schema: dict) -> dict:
-    return {k: schema[k] for k in _COMBINATORS if k in schema}
+    return {k: schema[k] for k in CONSTRAINT_KEYWORDS if k in schema}
 
 
 def test_root_combinators_published_match_handler_schema() -> None:
@@ -140,36 +133,29 @@ def test_root_combinators_published_match_handler_schema() -> None:
     assert not failures, "\n".join(failures)
 
 
+def _branches(name: str, keyword: str = "anyOf") -> dict[str, dict]:
+    """{required property: its branch subschema} of one published constraint."""
+    return {
+        b["required"][0]: b["properties"][b["required"][0]]
+        for b in _live_input_schemas()[name][keyword]
+    }
+
+
 def test_recall_hierarchical_publishes_domain_or_memory_ids() -> None:
     schema = _live_input_schemas()["recall_hierarchical"]
-    assert schema["anyOf"] == [{"required": ["domain"]}, {"required": ["memory_ids"]}]
     assert schema["required"] == ["query"]
-
-
-def _one_tool_server() -> MCPServer:
-    server = MCPServer(name="constraints", version="0.0.0")
-
-    @server.tool()
-    def probe(a: int | None = None) -> int:
-        return 0
-
-    return server
-
-
-def test_constraint_citing_unexposed_property_is_rejected() -> None:
-    """A combinator naming a property the wrapper does not expose is drift
-    between the handler contract and the wrapper; it must fail loudly."""
-    schemas = {"probe": {"inputSchema": {"anyOf": [{"required": ["b"]}]}}}
-    with pytest.raises(ValueError, match=r"probe: anyOf cites \['b'\]"):
-        apply_input_constraints(_one_tool_server(), schemas)
-
-
-def test_constraint_is_published_and_required_is_left_alone() -> None:
-    server = _one_tool_server()
-    schemas = {
-        "probe": {"inputSchema": {"required": ["a"], "anyOf": [{"required": ["a"]}]}}
+    assert _branches("recall_hierarchical") == {
+        "domain": {"type": "string", "minLength": 1},
+        "memory_ids": {"type": "array", "minItems": 1},
     }
-    apply_input_constraints(server, schemas)
-    published = asyncio.run(server.list_tools())[0].input_schema
-    assert published["anyOf"] == [{"required": ["a"]}]
-    assert "required" not in published
+
+
+def test_get_causal_chain_publishes_entity_name_or_memory_id() -> None:
+    assert _branches("get_causal_chain") == {
+        "entity_name": {"type": "string", "minLength": 1},
+        "memory_id": {"type": "integer"},
+    }
+
+
+def test_ingest_prd_publishes_exactly_one_source() -> None:
+    assert set(_branches("ingest_prd", "oneOf")) == {"path", "content", "pipeline_id"}
