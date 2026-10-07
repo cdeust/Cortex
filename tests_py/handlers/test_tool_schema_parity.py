@@ -34,9 +34,11 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
 from mcp.server.mcpserver import MCPServer
 
 from mcp_server.__main__ import merged_schemas, register_all
+from mcp_server.handlers._tool_meta import apply_input_constraints
 from mcp_server.infrastructure.memory_config import root_agent_topic
 
 # agent_topic is DELIBERATELY omitted from the "rooted" remember/recall
@@ -50,16 +52,30 @@ _ROOTED_OMISSIONS: set[str] = (
 )
 
 
+# Root-level combinators a handler may declare to state a cross-parameter
+# constraint (e.g. "domain OR memory_ids") that ``required`` cannot express.
+# Published to clients by ``_tool_meta.apply_input_constraints``.
+_COMBINATORS = ("anyOf", "oneOf", "allOf", "dependentRequired")
+
+
 def _live_tools() -> dict[str, set[str]]:
     """tool_name -> the parameter names the MCP SDK actually derived from
     the registered wrapper's signature — the client-visible truth. Reads
     ``.input_schema`` (the wire-level ``mcp.types.Tool`` field mcp 2.0.0
     uses — was ``.parameters`` under FastMCP; verified against the
     installed mcp==2.0.0, 2026-08-10)."""
+    return {
+        name: set(schema.get("properties", {}).keys())
+        for name, schema in _live_input_schemas().items()
+    }
+
+
+def _live_input_schemas() -> dict[str, dict]:
+    """tool_name -> the full input schema the client receives."""
     server = MCPServer(name="parity", version="0.0.0")
     register_all(server, codebase=True, prd=True)
     tools = asyncio.run(server.list_tools())
-    return {t.name: set(t.input_schema.get("properties", {}).keys()) for t in tools}
+    return {t.name: t.input_schema for t in tools}
 
 
 def test_every_registered_tool_matches_its_handler_schema_exactly() -> None:
@@ -101,3 +117,59 @@ def test_every_tool_name_in_schemas_is_registered() -> None:
     assert not unaccounted, (
         f"schema map declares tool(s) with no registered wrapper: {sorted(unaccounted)}"
     )
+
+
+def _root_combinators(schema: dict) -> dict:
+    return {k: schema[k] for k in _COMBINATORS if k in schema}
+
+
+def test_root_combinators_published_match_handler_schema() -> None:
+    """A cross-parameter constraint the handler declares (``anyOf`` etc.)
+    reaches the client verbatim; none appears that the handler never declared
+    (#661: ``recall_hierarchical`` needs domain OR memory_ids, the published
+    schema said only ``query`` was required)."""
+    handlers = merged_schemas()
+    failures: list[str] = []
+    for name, schema in _live_input_schemas().items():
+        declared = _root_combinators(handlers[name].get("inputSchema", {}))
+        published = _root_combinators(schema)
+        if declared != published:
+            failures.append(
+                f"{name}: handler declares {declared} but client receives {published}"
+            )
+    assert not failures, "\n".join(failures)
+
+
+def test_recall_hierarchical_publishes_domain_or_memory_ids() -> None:
+    schema = _live_input_schemas()["recall_hierarchical"]
+    assert schema["anyOf"] == [{"required": ["domain"]}, {"required": ["memory_ids"]}]
+    assert schema["required"] == ["query"]
+
+
+def _one_tool_server() -> MCPServer:
+    server = MCPServer(name="constraints", version="0.0.0")
+
+    @server.tool()
+    def probe(a: int | None = None) -> int:
+        return 0
+
+    return server
+
+
+def test_constraint_citing_unexposed_property_is_rejected() -> None:
+    """A combinator naming a property the wrapper does not expose is drift
+    between the handler contract and the wrapper; it must fail loudly."""
+    schemas = {"probe": {"inputSchema": {"anyOf": [{"required": ["b"]}]}}}
+    with pytest.raises(ValueError, match=r"probe: anyOf cites \['b'\]"):
+        apply_input_constraints(_one_tool_server(), schemas)
+
+
+def test_constraint_is_published_and_required_is_left_alone() -> None:
+    server = _one_tool_server()
+    schemas = {
+        "probe": {"inputSchema": {"required": ["a"], "anyOf": [{"required": ["a"]}]}}
+    }
+    apply_input_constraints(server, schemas)
+    published = asyncio.run(server.list_tools())[0].input_schema
+    assert published["anyOf"] == [{"required": ["a"]}]
+    assert "required" not in published

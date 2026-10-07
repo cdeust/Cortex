@@ -1,0 +1,59 @@
+---
+created: 2026-10-07T12:00:00Z
+kind: adr
+number: 1093
+status: accepted
+tags: [mcp, tool-schema, recall_hierarchical, get_causal_chain]
+title: Publish cross-parameter constraints in the tool input schema
+---
+# ADR-1093: Publish cross-parameter constraints in the tool input schema
+
+## Status
+
+accepted
+
+## Context
+
+`recall_hierarchical` requires `domain` or `memory_ids` (ADR-0045 R3), but
+the client-visible schema listed only `query` as required and both other
+parameters as nullable with default `null`. The client schema is derived by
+the MCP SDK from the registered wrapper's signature
+(`tool_registry_nav.py`); `_tool_meta.apply_param_docs` copies only parameter
+descriptions onto it. The constraint therefore existed in prose only, agents
+followed the schema, and the handler rejected the call (issue #661: 28 of 76
+calls failed). `get_causal_chain` has the same shape (`entity_name` or
+`memory_id`).
+
+## Decision
+
+1. A handler declares a cross-parameter constraint as a root-level JSON
+   Schema combinator in its own `inputSchema` (`anyOf`, `oneOf`, `allOf`,
+   `dependentRequired`), never through `required`.
+2. `_tool_meta.apply_input_constraints`, run by `register_all` after
+   `apply_param_docs`, copies those combinators onto the published schema. It
+   raises `ValueError` if a combinator cites a property the wrapper signature
+   does not expose.
+3. Publication only. The handler stays the single enforcement point: the SDK
+   validates calls through pydantic against the wrapper signature, never
+   against the published dict.
+4. `test_tool_schema_parity.py` asserts that the root combinators every
+   client receives equal those the handler declared.
+
+Applied to `recall_hierarchical` (`domain` | `memory_ids`) and
+`get_causal_chain` (`entity_name` | `memory_id`).
+
+## Rejected
+
+- Defaulting `domain` from the working directory: `resolve_cwd` returns an
+  empty string outside a known repository and the server cwd is not the
+  client's project (`.mcpb`, Cowork), so the call would silently return empty.
+- Making `domain` required in the wrapper: breaks the `memory_ids` path.
+- A pydantic model validator: second enforcement point, and it emits no
+  `anyOf`.
+
+## Consequences
+
+`domain: null` still validates against the schema and is rejected by the
+handler. Whether a given client enforces `anyOf` before sending is not
+verified here; the schema is the machine-readable contract, not a guarantee
+of client behaviour.

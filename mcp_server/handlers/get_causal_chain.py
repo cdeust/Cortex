@@ -38,6 +38,8 @@ schema = {
     "inputSchema": {
         "type": "object",
         "required": [],
+        # One-of constraint published to clients, source: ADR-1093.
+        "anyOf": [{"required": ["entity_name"]}, {"required": ["memory_id"]}],
         "properties": {
             "entity_name": {
                 "type": "string",

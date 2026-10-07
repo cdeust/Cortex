@@ -53,6 +53,10 @@ schema = {
     "inputSchema": {
         "type": "object",
         "required": ["query"],
+        # source: ADR-0045 R3, ADR-1093 — one scope is mandatory; ``required`` cannot
+        # express "one of", so the constraint is a root ``anyOf`` published by
+        # ``_tool_meta.apply_input_constraints`` (enforcement stays below).
+        "anyOf": [{"required": ["domain"]}, {"required": ["memory_ids"]}],
         "properties": {
             "query": {
                 "type": "string",

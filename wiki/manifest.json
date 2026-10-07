@@ -3539,6 +3539,10 @@
     "ADR-1092": {
       "mirror": "ADR-1092-make-uv-lock-the-only-dependency-source.md",
       "path": "adr/cortex/1092-make-uv-lock-the-only-dependency-source.md"
+    },
+    "ADR-1093": {
+      "mirror": "ADR-1093-publish-cross-parameter-constraints-in-the-tool-input-schema.md",
+      "path": "adr/cortex/1093-publish-cross-parameter-constraints-in-the-tool-input-schema.md"
     }
   },
   "project": "cortex",

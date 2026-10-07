@@ -124,3 +124,45 @@ def apply_param_docs(mcp: MCPServer, schemas: Mapping[str, Mapping[str, Any]]) -
             description = documented.get(param_name, {}).get("description")
             if description and "description" not in param_schema:
                 param_schema["description"] = description
+
+
+# Root-level JSON Schema combinators that state a cross-parameter constraint
+# which ``required`` cannot ("one of", "if A then B").
+_CONSTRAINT_KEYWORDS = ("anyOf", "oneOf", "allOf", "dependentRequired")
+
+
+def _cited_properties(keyword: str, value: Any) -> set[str]:
+    """Property names a combinator refers to (``required`` lists, and the
+    keys and values of ``dependentRequired``)."""
+    if keyword == "dependentRequired":
+        return set(value) | {name for names in value.values() for name in names}
+    return {name for branch in value for name in branch.get("required", [])}
+
+
+def apply_input_constraints(
+    mcp: MCPServer, schemas: Mapping[str, Mapping[str, Any]]
+) -> None:
+    """Publish each handler's root-level cross-parameter constraints.
+
+        Copies ``anyOf`` / ``oneOf`` / ``allOf`` / ``dependentRequired`` from the
+        handler's ``inputSchema`` onto the signature-derived schema so clients
+        can reject an invalid call before sending it. Publication only: the
+        handler remains the sole enforcement point (the SDK validates against
+        the wrapper signature, never this dict). ``required`` is never copied
+        (it is signature-derived). Raises ``ValueError`` when a combinator
+        cites a property the wrapper signature does not expose.
+
+    source: ADR-0327"""
+    for tool in mcp._tool_manager.list_tools():
+        declared = schemas.get(tool.name, {}).get("inputSchema", {})
+        known = set(tool.parameters.get("properties", {}))
+        for keyword in _CONSTRAINT_KEYWORDS:
+            if keyword not in declared:
+                continue
+            unknown = _cited_properties(keyword, declared[keyword]) - known
+            if unknown:
+                raise ValueError(
+                    f"{tool.name}: {keyword} cites {sorted(unknown)}, which the "
+                    f"registered wrapper does not expose"
+                )
+            tool.parameters[keyword] = declared[keyword]
