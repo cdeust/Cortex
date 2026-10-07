@@ -38,7 +38,6 @@ schema = {
     "inputSchema": {
         "type": "object",
         "required": [],
-        # One-of constraint published to clients, source: ADR-1093.
         "anyOf": [
             {
                 "required": ["entity_name"],
@@ -195,14 +194,6 @@ def _bfs_entity_graph(
 # ── Entity resolution ────────────────────────────────────────────────────
 
 
-def _resolve_start_entity_by_name(
-    entity_name: str,
-    store: MemoryStore,
-) -> dict | None:
-    """Look up a starting entity by name."""
-    return store.get_entity_by_name(entity_name)
-
-
 def _resolve_start_entity_from_memory(
     memory_id: int,
     store: MemoryStore,
@@ -230,7 +221,7 @@ def _resolve_start_entity(
 ) -> tuple[dict | None, str | None]:
     """Resolve starting entity from args. Returns (entity, error_reason)."""
     if args.get("entity_name"):
-        entity = _resolve_start_entity_by_name(args["entity_name"], store)
+        entity = store.get_entity_by_name(args["entity_name"])
         if not entity:
             return None, f"entity not found: {args['entity_name']}"
         return entity, None
