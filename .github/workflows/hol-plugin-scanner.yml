@@ -50,7 +50,7 @@ jobs:
           persist-credentials: false
 
       - name: Scan the plugin repository
-        uses: hashgraph-online/ai-plugin-scanner-action@89815d8bc8d0f7f4110b7cc7442fefbe5643fa0d # v1.2.731
+        uses: hashgraph-online/ai-plugin-scanner-action@ac513da02cd2d28e6da5593e55add3f5b4cdce1e # v1.2.767
         with:
           plugin_dir: "."
           format: sarif
