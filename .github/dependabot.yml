@@ -156,3 +156,14 @@ updates:
       - dependency-name: "transformers"
       - dependency-name: "sentence-transformers"
       - dependency-name: "cryptography"
+
+      # Not a platform-bounds package, but locked at two versions because of
+      # one: torch 2.11, the newest the macOS < 14 Apple Silicon range allows,
+      # requires `setuptools<82`, torch 2.13 takes any (PyPI requires_dist),
+      # so the lock holds setuptools 81 and 84. A request for one setuptools
+      # version, which uv does not refuse, is met by moving that range back to
+      # torch 2.10, and the platform-coverage test fails (PR #669, run
+      # 37666850067). Bumped by hand with `uv lock --upgrade-package
+      # setuptools`, which keeps each range on its newest torch.
+      # source: ADR-1092
+      - dependency-name: "setuptools"

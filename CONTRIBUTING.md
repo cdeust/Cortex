@@ -64,13 +64,14 @@ python benchmarks/longmemeval/run_benchmark.py --variant s
 ### Bumping a dependency
 
 Dependabot's `uv` updates rewrite `pyproject.toml` and `uv.lock` together and
-need no follow-up commit. Six packages are excluded from them in
+need no follow-up commit. Seven packages are excluded from them in
 `.github/dependabot.yml` (torch, onnxruntime, numpy, transformers,
-sentence-transformers, cryptography): the lock holds one version of each per
-platform range (the `platform-bounds` group of `pyproject.toml`), and
-Dependabot can only ask for a single version. That also means no automatic
-security pull request for them: a Dependabot alert on one of the six is
-fixed with the same command. Bump those by hand, then run the suite:
+sentence-transformers, cryptography, setuptools): the lock holds one version
+of each per platform range (the `platform-bounds` group of `pyproject.toml`;
+setuptools because torch 2.11 requires `setuptools<82`), and Dependabot can
+only ask for a single version. That also means no automatic security pull
+request for them: a Dependabot alert on one of the seven is fixed with the
+same command. Bump those by hand, then run the suite:
 
 ```bash
 uv lock --upgrade-package torch      # each platform moves within its range

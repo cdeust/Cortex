@@ -135,4 +135,10 @@ def test_dependabot_skips_every_package_locked_per_platform() -> None:
     )
     bounded = {_import_name(r).replace("_", "-") for r in _group("platform-bounds")}
     assert bounded == {"torch", "onnxruntime", "numpy", "transformers", "cryptography"}
-    assert bounded | {"sentence-transformers"} == skipped
+    # setuptools is no platform-bounds package, but torch 2.11 (the newest the
+    # macOS < 14 Apple Silicon range allows) requires ``setuptools<82`` while
+    # torch 2.13 takes any, so the lock holds setuptools at 81 and 84. A
+    # request for ``setuptools==83`` uv answers by moving that range to
+    # torch 2.10 instead of refusing it (Dependabot PR #669).
+    # source: PyPI torch 2.11.0 / 2.13.0 ``requires_dist``, ADR-1092
+    assert bounded | {"sentence-transformers", "setuptools"} == skipped
