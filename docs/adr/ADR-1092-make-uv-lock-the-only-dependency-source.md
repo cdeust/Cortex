@@ -124,7 +124,15 @@ bot pushes to `main`.
    when unresolvable. A direct dependency that later reports
    `dependency_file_not_resolvable` belongs in the `ignore` list. Ignored
    packages get no Dependabot security pull request; their alerts remain
-   and are fixed with the same command.
+   and are fixed with the same command. A second class joined on 2026-10-08
+   (Dependabot PR #669): a sub-dependency that a platform-bounded package
+   caps. torch 2.11, the newest the macOS < 14 Apple Silicon range allows,
+   requires `setuptools<82` and torch 2.13 takes any, so the lock holds
+   setuptools 81 and 84. The updater's `--upgrade-package setuptools==83.0.0`
+   was not refused: uv moved that range back to torch 2.10, which
+   `test_launcher_platform_coverage.py` rejects. setuptools is therefore in
+   the `ignore` list as well; its bump is `uv lock --upgrade-package
+   setuptools`, which already sits at the newest each range admits.
 5. **Deleted:** `requirements/`, `scripts/generate_pip_constraints.py`,
    `scripts/pip_constraint_sets.py`, `scripts/launcher_pins.py`,
    `scripts/launcher_torch_cpu.py` and their tests, the Lint step
