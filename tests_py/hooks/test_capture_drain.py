@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -202,10 +203,25 @@ class TestDetachedDrainer(unittest.TestCase):
         self.assertEqual(capture_spool.pending(spool), [])
         capture_spool.write(spool, EXPECTED)
         before = _stored_rows()
+        repo_root = Path(capture_dispatch.__file__).resolve().parents[2]
+        # The drainer is started through the plugin launcher (issue #667). The
+        # real launcher installs deps/ over the network; this test is about
+        # detachment, so a stand-in launcher with the same argv contract runs
+        # the module (the real one is exercised by test_launcher_command).
+        plugin_root = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, plugin_root, True)
+        (plugin_root / "scripts").mkdir()
+        (plugin_root / "scripts" / "launcher.py").write_text(
+            "import runpy, sys\n"
+            f"sys.path.insert(0, {str(repo_root)!r})\n"
+            "sys.argv = sys.argv[1:]\n"
+            "runpy.run_module(sys.argv[0], run_name='__main__', alter_sys=True)\n"
+        )
         hook = subprocess.Popen(
             [sys.executable, "-c", HOOK],
             stderr=subprocess.PIPE,
-            cwd=Path(capture_dispatch.__file__).resolve().parents[2],
+            cwd=repo_root,
+            env={**os.environ, "CLAUDE_PLUGIN_ROOT": str(plugin_root)},
         )
         self.assertEqual(hook.wait(), 0)  # the parent is gone ...
         assert hook.stderr is not None

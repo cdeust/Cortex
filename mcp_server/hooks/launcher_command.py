@@ -1,4 +1,5 @@
-"""The one place a hook builds the command line of a child Python process.
+"""The one place a hook builds the command line of a child Python process
+(consolidation, capture worker and drainer, ingest and re-analyse workers).
 
 Problem: ``scripts/launcher.py`` isolates ``deps/`` from user site-packages
 (issue #621, ``launcher_site.isolate_deps``) and wires the composition root
@@ -31,6 +32,23 @@ def launcher_path() -> Path:
     return Path(plugin_root) / "scripts" / "launcher.py"
 
 
+def launcher_child_command(module: str, *arguments: str) -> list[str] | None:
+    """``[python, launcher, module, *arguments]``, or None without a launcher.
+
+    For a spawn that has no meaning outside a plugin install (it needs
+    ``deps/``) and is skipped there, instead of falling back to ``-m``.
+
+    precondition: ``module`` is a dotted hook module name.
+    postcondition: non-None only when ``scripts/launcher.py`` exists.
+
+    source: issue #667, ADR-0498
+    """
+    launcher = launcher_path()
+    if not launcher.exists():
+        return None
+    return [python_executable(), str(launcher), module, *arguments]
+
+
 def child_command(module: str, *arguments: str) -> list[str]:
     """Command line that runs ``module`` as ``__main__`` in a child process.
 
@@ -46,7 +64,9 @@ def child_command(module: str, *arguments: str) -> list[str]:
 
     source: issue #667, ADR-0498
     """
-    launcher = launcher_path()
-    if launcher.exists():
-        return [python_executable(), str(launcher), module, *arguments]
-    return [python_executable(), "-m", module, *arguments]
+    return launcher_child_command(module, *arguments) or [
+        python_executable(),
+        "-m",
+        module,
+        *arguments,
+    ]

@@ -11,6 +11,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from mcp_server.hooks.launcher_command import launcher_path
 from tests_py.hooks.test_capture_worker_policy import payload
 
 
@@ -89,9 +90,12 @@ class TestCaptureDispatch(unittest.TestCase):
             with mock.patch.object(subprocess, "Popen") as spawn:
                 self.dispatch._spawn(listener, 8)
         arguments, options = spawn.call_args.args[0], spawn.call_args.kwargs
+        # issue #667: through the launcher (deps isolation), never a bare -m
         self.assertEqual(
-            arguments[:3], [sys.executable, "-m", "mcp_server.hooks.capture_worker"]
+            arguments[:3],
+            [sys.executable, str(launcher_path()), "mcp_server.hooks.capture_worker"],
         )
+        self.assertEqual(arguments[3:], ["--listener-fd", "7", "--lease-fd", "8"])
         self.assertEqual(options["pass_fds"], (7, 8))
         self.assertTrue(options["start_new_session"])
         self.assertEqual(options["env"], expected_environment)

@@ -43,7 +43,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from mcp_server.shared.platform import python_executable
+from mcp_server.hooks.launcher_command import launcher_child_command
 from mcp_server.shared.log_rotation import methodology_log_path, open_rotating_log
 
 _LOG_PREFIX = "[post-commit-reindex]"
@@ -211,22 +211,12 @@ def _spawn_reanalyze(root: str) -> bool:
     group, stdio redirected to the shared re-analyse log, so this hook
     returns immediately and the commit is never blocked.
     """
-    plugin_root = os.environ.get("CLAUDE_PLUGIN_ROOT") or str(
-        Path(__file__).resolve().parents[2]
+    cmd = launcher_child_command(
+        "mcp_server.hooks.ingest_codebase_background", root, "--reindex"
     )
-    launcher = Path(plugin_root) / "scripts" / "launcher.py"
-    if not launcher.exists():
+    if cmd is None:
         return False
 
-    # source: ADR-0494
-    py = python_executable()
-    cmd = [
-        py,
-        str(launcher),
-        "mcp_server.hooks.ingest_codebase_background",
-        root,
-        "--reindex",
-    ]
     log_path = methodology_log_path("pipeline_reanalyze.log")
     try:
         with open_rotating_log(log_path) as log:

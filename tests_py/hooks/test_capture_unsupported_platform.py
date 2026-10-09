@@ -21,6 +21,7 @@ from unittest import mock
 
 from mcp_server.hooks import capture_dispatch, post_tool_capture as hook
 from mcp_server.infrastructure import capture_peer, capture_spool
+from mcp_server.hooks.launcher_command import launcher_path
 from tests_py.hooks.test_capture_worker_policy import payload
 
 CONTENT = (
@@ -130,7 +131,11 @@ class TestHookOnUnsupportedPlatform(unittest.TestCase):
         self.assertEqual([capture_spool.read(f) for f in files], [EXPECTED])
         popen.assert_called_once()
         command = popen.call_args.args[0]
-        self.assertEqual(command[1:], ["-m", "mcp_server.hooks.capture_drain"])
+        # issue #667: through the launcher (deps isolation), never a bare -m
+        self.assertEqual(
+            command,
+            [sys.executable, str(launcher_path()), "mcp_server.hooks.capture_drain"],
+        )
         stream = popen.call_args.kwargs["stdout"]
         self.assertEqual(
             popen.call_args.kwargs, capture_dispatch.popen_options("win32", stream)

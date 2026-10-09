@@ -75,5 +75,18 @@ def trigger_background_model_download(
         "name, rev, cf = sys.argv[1], sys.argv[2] or None, sys.argv[3] or None\n"
         "SentenceTransformer(name, revision=rev, cache_folder=cf)\n"
     )
-    cmd = [sys.executable, "-c", prog, model_name, revision or "", cache_folder or ""]
+    # ``-s`` keeps user site-packages off the child's sys.path: it imports the
+    # torch stack, and a user-site torchvision built for another torch breaks
+    # that import (issue #667, the failure scripts/launcher_site.isolate_deps
+    # prevents for launcher-started processes; a ``-c`` child has no module
+    # to hand to the launcher). source: issue #667
+    cmd = [
+        sys.executable,
+        "-s",
+        "-c",
+        prog,
+        model_name,
+        revision or "",
+        cache_folder or "",
+    ]
     _spawn_detached(cmd, f"download of embedding model {model_name}")

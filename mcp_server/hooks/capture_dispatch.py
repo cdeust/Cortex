@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 from typing import IO, Any
 
+from mcp_server.hooks.launcher_command import child_command
 from mcp_server.hooks.capture_worker_policy import limits, validate_payload
 from mcp_server.infrastructure import capture_spool
 from mcp_server.infrastructure.capture_client import deliver
@@ -64,7 +65,7 @@ def popen_options(platform: str, stream: IO[Any]) -> dict[str, Any]:
 
 def spawn_drainer(stream: IO[Any]) -> subprocess.Popen[Any]:
     """Start ``capture_drain`` and do not wait for it. source: ADR-1094"""
-    command = [sys.executable, "-m", "mcp_server.hooks.capture_drain"]
+    command = child_command("mcp_server.hooks.capture_drain")
     return subprocess.Popen(command, **popen_options(sys.platform, stream))
 
 
@@ -89,15 +90,13 @@ def _spool(payload: dict[str, object]) -> None:
 
 
 def _spawn(listener: socket.socket, lease: int) -> None:
-    command = [
-        sys.executable,
-        "-m",
+    command = child_command(
         "mcp_server.hooks.capture_worker",
         "--listener-fd",
         str(listener.fileno()),
         "--lease-fd",
         str(lease),
-    ]
+    )
     # source: ADR-0486
     subprocess.Popen(
         command,
