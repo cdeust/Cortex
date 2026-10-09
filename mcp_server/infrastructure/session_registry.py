@@ -5,7 +5,7 @@ Windows (issue #665, ADR-1096): an unreadable process table or an undocumented
 or probe liveness. Hooks and handlers log it; ``scripts/groomer.py`` has no
 handler, so a manual Windows run ends in a traceback and a nonzero exit.
 
-source: ADR-0597, ADR-1096"""
+source: ADR-1096 (Windows; POSIX: ADR-0597)"""
 
 from __future__ import annotations
 
@@ -59,7 +59,7 @@ def _cached_process_start_signature(pid: int) -> str | None:
         process and exits with it, so the pid cannot be recycled under a
         live server (ADR-1096 point 4).
 
-    source: ADR-0597, ADR-1096"""
+    source: ADR-1096 (Windows; POSIX: ADR-0597)"""
     cached = _start_signature_cache.get(pid)
     if cached is not None:
         return cached
@@ -72,7 +72,7 @@ def _cached_process_start_signature(pid: int) -> str | None:
 def _process_start_signature(pid: int) -> str | None:
     """Opaque per-process start-time token.
 
-    source: ADR-0597 (POSIX), ADR-1096 (Windows)"""
+    source: ADR-1096 (Windows branch; POSIX: ADR-0597)"""
     if host_platform.IS_WINDOWS:
         return process_ancestry.start_signature(pid)
     stat_path = Path(f"/proc/{pid}/stat")
@@ -126,7 +126,7 @@ def find_claude_ancestor(max_depth: int = _MAX_ANCESTOR_DEPTH) -> int | None:
     claude. Return None on probe failure, reaching a root process, or exhausting
     max_depth. Intended for hook processes.
 
-    source: ADR-0597 (POSIX), ADR-1096 (Windows)"""
+    source: ADR-1096 (Windows branch; POSIX: ADR-0597)"""
     if host_platform.IS_WINDOWS:
         return process_ancestry.claude_ancestor_pid(os.getpid(), max_depth)
     pid = os.getppid()
@@ -218,7 +218,7 @@ def current_window_session() -> str | None:
     ``_window_claude_pid`` for how its window is found). Rejects missing,
     unreadable, malformed, tombstoned, or stale-lineage registry entries.
 
-    source: ADR-0597 (POSIX), ADR-1096 (Windows)"""
+    source: ADR-1096 (Windows branch; POSIX: ADR-0597)"""
     claude_pid = _window_claude_pid()
     if claude_pid is None:
         return None
@@ -248,7 +248,7 @@ def purge_dead_entries() -> int:
     postcondition: returns count of files removed; raises no I/O error (an
         unreadable directory or file is skipped) — Windows: see module note.
 
-    source: ADR-0597 (POSIX), ADR-1096 (Windows)"""
+    source: ADR-1096 (Windows branch; POSIX: ADR-0597)"""
     removed = 0
     d = registry_dir()
     try:
@@ -276,7 +276,7 @@ def has_active_session_window() -> bool:
     True on the first live ``claude_pid`` whose entry has a non-empty
     ``session_id``. Windows: may raise ``OSError`` (see module note).
 
-    source: ADR-0597 (POSIX), ADR-1096 (Windows)"""
+    source: ADR-1096 (Windows branch; POSIX: ADR-0597)"""
     d = registry_dir()
     try:
         entries = list(d.iterdir())

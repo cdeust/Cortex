@@ -92,7 +92,7 @@ def start_signature(pid: int, *, creation: Creation | None = None) -> str | None
     return None if filetime is None else str(filetime)
 
 
-# source: ADR-1096
+# source: ADR-1096 — per-process cache of the window claude pid
 _window_pid_cache: dict[int, int] = {}
 
 
