@@ -26,9 +26,6 @@ PRE_TOOL_USE = "PreToolUse"
 
 _PROJECT_ROOT_VAR = "CLAUDE_PROJECT_ROOT"
 
-# The two PreToolUse hooks among entry.HOOK_MODULES (.claude-plugin/plugin.json).
-_PRE_TOOL_USE_HOOKS = frozenset({"decision_gate", "no_deps_gate"})
-
 
 def apply_project_root(environ: MutableMapping[str, str], cwd: str | None) -> None:
     """Set ``CLAUDE_PROJECT_ROOT`` from the event's ``cwd``, but never
@@ -116,19 +113,18 @@ def derive_events(module: str, raw: str) -> tuple[list[str], str | None, str | N
 
 
 def read_event_or_exit(name: str) -> str:
-    """The exact stdin text, or exit with the hook error contract.
+    """The exact stdin text, or report undecodable bytes and exit 1.
 
     Precondition: ``name`` is an allowlisted hook name (``entry.HOOK_MODULES``).
     Postcondition: returns the UTF-8 decoded stdin text; on undecodable bytes
-    prints ``[hypermnesia-mcp-hook] <module>: <err>`` and exits 2 for the
-    PreToolUse hooks, 1 otherwise. The event name cannot be read from bytes
-    that do not decode, so the hook module decides: this is the same mapping
-    ``derive_events`` applies to a ``HostEventError`` (a PreToolUse event that
-    cannot be read safely fails closed; ADR-0485 reserves exit 2 for
-    validation hooks), and a non-gate hook has nothing to block.
+    prints ``[hypermnesia-mcp-hook] <module>: <err>`` and exits 1 for every
+    hook. The failure is loud and never blocks a tool call: the PreToolUse
+    gates keep their documented contract that a read or parse failure does
+    not block (``decision_gate``, ADR-1060). Nothing is decoded with
+    replacement and nothing is stored.
     """
     try:
         return read_event_text()
     except HookStdinDecodeError as exc:
         print(f"[hypermnesia-mcp-hook] mcp_server.hooks.{name}: {exc}", file=sys.stderr)
-        sys.exit(2 if name in _PRE_TOOL_USE_HOOKS else 1)
+        sys.exit(1)

@@ -1,8 +1,8 @@
 """Every reader reports undecodable stdin through the hook error contract.
 
-Invalid UTF-8 is a hard, reported failure (issue #664), never a replacement.
-Exit codes follow ``host_dispatch.derive_events``: 2 (fail closed) for the
-PreToolUse gates, 1 otherwise (ADR-0485 reserves 2 for validation hooks).
+Invalid UTF-8 is a hard, reported failure (issue #664), never a replacement,
+and it never blocks: exit 1 for every hook, the PreToolUse gates included
+(ADR-1060: a read or parse failure never blocks a tool call).
 """
 
 from __future__ import annotations
@@ -34,7 +34,6 @@ from mcp_server.hooks import (
 from mcp_server.hooks.stdin_event import HookStdinDecodeError
 
 ROOT = Path(__file__).resolve().parents[2]
-GATES = {"decision_gate", "no_deps_gate"}
 BAD = b'{"note": "\xff\xfe"}'
 
 
@@ -46,7 +45,7 @@ def _bad_stdin(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.parametrize("name", sorted(entry.HOOK_MODULES))
-def test_entry_reports_undecodable_stdin_per_hook_kind(
+def test_entry_reports_undecodable_stdin_with_exit_1_for_every_hook(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], name: str
 ) -> None:
     monkeypatch.setattr(sys, "argv", ["hypermnesia-mcp-hook", name])
@@ -56,24 +55,21 @@ def test_entry_reports_undecodable_stdin_per_hook_kind(
     _bad_stdin(monkeypatch)
     with pytest.raises(SystemExit) as caught:
         entry.main()
-    assert caught.value.code == (2 if name in GATES else 1)
+    assert caught.value.code == 1
     err = capsys.readouterr().err
     assert err.startswith(f"[hypermnesia-mcp-hook] mcp_server.hooks.{name}: ")
     assert "not valid UTF-8" in err
 
 
 @pytest.mark.parametrize("module", [decision_gate, no_deps_gate])
-def test_gates_fail_closed_on_undecodable_stdin(
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-    module: ModuleType,
+def test_gates_keep_their_non_blocking_contract_on_undecodable_stdin(
+    monkeypatch: pytest.MonkeyPatch, module: ModuleType
 ) -> None:
+    """The failure is loud (it reaches the launcher's report) and never exit 2."""
     _bad_stdin(monkeypatch)
     monkeypatch.setattr(module, "evaluate", pytest.fail)
-    with pytest.raises(SystemExit) as caught:
+    with pytest.raises(HookStdinDecodeError):
         module.main()
-    assert caught.value.code == 2
-    assert "fail closed" in capsys.readouterr().err
 
 
 def _session_lifecycle_main(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -28,54 +28,92 @@ def _stdin_names(tree: ast.AST) -> set[str]:
     return names
 
 
-def stdin_violations(source: str, allow_buffer: bool = False) -> list[int]:
-    """Line numbers where ``source`` reaches stdin other than via the reader.
-
-    Allowed: ``sys.stdin.isatty()`` (inspects the stream) and, when
-    ``allow_buffer``, ``sys.stdin.buffer`` and assigning ``sys.stdin`` (the
-    reader's own ``install_event_stdin``). Everything else is flagged:
-    any other use of ``sys.stdin`` (reads, iteration, ``json.load``,
-    assignment), ``from sys import stdin``, aliases of either, ``fileinput``,
-    ``input()`` and ``open(0)``.
-    """
-    tree = ast.parse(source)
-    names = _stdin_names(tree)
-    parents = {c: p for p in ast.walk(tree) for c in ast.iter_child_nodes(p)}
-    hits: set[int] = set()
-    for node in ast.walk(tree):
-        is_stdin_attr = (
-            isinstance(node, ast.Attribute)
-            and node.attr == "stdin"
+def _is_sys_stdin(node: ast.AST, names: set[str]) -> bool:
+    """``sys.stdin`` / ``sys.__stdin__`` (any alias), or an imported ``stdin``."""
+    if isinstance(node, ast.Attribute):
+        return (
+            node.attr in {"stdin", "__stdin__"}
             and isinstance(node.value, ast.Name)
             and node.value.id in names
         )
-        is_stdin_name = (
-            isinstance(node, ast.Name) and node.id in names and node.id != "sys"
-        )
-        if is_stdin_attr or is_stdin_name:
-            parent = parents.get(node)
-            allowed = {"isatty"} | ({"buffer"} if allow_buffer else set())
-            installs = allow_buffer and isinstance(node.ctx, ast.Store)
-            if not installs and not (
-                isinstance(parent, ast.Attribute) and parent.attr in allowed
-            ):
-                hits.add(node.lineno)
+    return isinstance(node, ast.Name) and node.id in names and node.id != "sys"
+
+
+def _stream_use_hits(tree: ast.AST, names: set[str], allow_buffer: bool) -> set[int]:
+    """Uses of the text stream other than ``.isatty`` (and the permitted buffer)."""
+    parents = {c: p for p in ast.walk(tree) for c in ast.iter_child_nodes(p)}
+    allowed = {"isatty"} | ({"buffer"} if allow_buffer else set())
+    hits: set[int] = set()
+    for node in ast.walk(tree):
+        if not _is_sys_stdin(node, names):
+            continue
+        installs = allow_buffer and isinstance(getattr(node, "ctx", None), ast.Store)
+        parent = parents.get(node)
+        if not installs and not (
+            isinstance(parent, ast.Attribute) and parent.attr in allowed
+        ):
+            hits.add(node.lineno)
+    return hits
+
+
+def _import_hits(tree: ast.AST) -> set[int]:
+    """``from sys import stdin`` and any ``fileinput`` import."""
+    hits: set[int] = set()
+    for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom) and node.module == "sys":
-            if any(a.name == "stdin" for a in node.names):
+            if any(a.name in {"stdin", "__stdin__"} for a in node.names):
                 hits.add(node.lineno)
         if isinstance(node, (ast.Import, ast.ImportFrom)):
             modules = [a.name for a in node.names] + [getattr(node, "module", "")]
             if "fileinput" in modules:
                 hits.add(node.lineno)
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-            first = node.args[0] if node.args else None
-            if node.func.id == "input" or (
-                node.func.id == "open"
-                and isinstance(first, ast.Constant)
-                and first.value == 0
-            ):
+    return hits
+
+
+def _is_const(node: ast.AST | None, value: object) -> bool:
+    return isinstance(node, ast.Constant) and node.value == value
+
+
+def _call_hits(tree: ast.AST, names: set[str]) -> set[int]:
+    """``input()``, ``open(0)``, ``os.read(0, ...)``, ``getattr(sys, "stdin")``."""
+    hits: set[int] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        first = node.args[0] if node.args else None
+        second = node.args[1] if len(node.args) > 1 else None
+        func = node.func
+        if isinstance(func, ast.Name):
+            direct = func.id == "input" or (func.id == "open" and _is_const(first, 0))
+            via_getattr = (
+                func.id == "getattr"
+                and isinstance(first, ast.Name)
+                and first.id in names
+                and (_is_const(second, "stdin") or _is_const(second, "__stdin__"))
+            )
+            if direct or via_getattr:
                 hits.add(node.lineno)
-    return sorted(hits)
+        if isinstance(func, ast.Attribute) and func.attr == "read":
+            if isinstance(func.value, ast.Name) and func.value.id == "os":
+                if _is_const(first, 0):
+                    hits.add(node.lineno)
+    return hits
+
+
+def stdin_violations(source: str, allow_buffer: bool = False) -> list[int]:
+    """Line numbers where ``source`` reaches stdin other than via the reader.
+
+    Allowed: ``sys.stdin.isatty()`` (inspects the stream) and, when
+    ``allow_buffer``, ``sys.stdin.buffer`` and assigning ``sys.stdin`` (the
+    reader's own ``install_event_stdin``). Everything else is flagged, one
+    predicate per bypass family: stream uses (``sys.stdin``, ``sys.__stdin__``,
+    aliases), imports (``from sys import stdin``, ``fileinput``) and calls
+    (``input()``, ``open(0)``, ``os.read(0, ...)``, ``getattr(sys, "stdin")``).
+    """
+    tree = ast.parse(source)
+    names = _stdin_names(tree)
+    hits = _stream_use_hits(tree, names, allow_buffer)
+    return sorted(hits | _import_hits(tree) | _call_hits(tree, names))
 
 
 def _guarded_files() -> list[Path]:
@@ -115,6 +153,9 @@ def test_no_hook_event_reader_bypasses_the_stdin_reader() -> None:
         "line = input()\n",
         "open(0).read()\n",
         "import sys\nsys.stdin = object()\n",
+        'import sys\ndata = getattr(sys, "stdin").read()\n',
+        "import sys\ndata = sys.__stdin__.read()\n",
+        "import os\ndata = os.read(0, 4096)\n",
         "import sys\nsys.stdin.buffer.read()\n",
     ],
 )

@@ -25,7 +25,7 @@ import os
 import sys
 from pathlib import Path
 
-from mcp_server.hooks.stdin_event import HookStdinDecodeError, read_event_text
+from mcp_server.hooks.stdin_event import read_event_text
 from mcp_server.hooks import _decision_gate_lex as lex
 
 # A run of this many consecutive comment lines is prose, not a pointer.
@@ -160,26 +160,8 @@ def evaluate(event: dict) -> int:
     return 2
 
 
-def read_gate_event(gate: str) -> str:
-    """The stripped event text from stdin, or exit 2 when it is not UTF-8.
-
-    Precondition: called once, before the event is parsed. Postcondition:
-    returns the stripped text, or reports ``[gate] ...`` on stderr and exits
-    2. An event that cannot be decoded cannot be evaluated, and a PreToolUse
-    gate that cannot evaluate fails closed: exit 2 is the code ``_refuse``
-    already uses to block, and the code ``host_dispatch.derive_events`` maps
-    to an unreadable PreToolUse event (ADR-0485: exit 2 is reserved for
-    validation hooks).
-    """
-    try:
-        return read_event_text().strip()
-    except HookStdinDecodeError as exc:
-        print(f"[{gate}] {exc}; refusing the tool call (fail closed)", file=sys.stderr)
-        sys.exit(2)
-
-
 def main() -> int:
-    raw = read_gate_event("decision-gate")
+    raw = read_event_text().strip()
     if not raw:
         return 0
     try:

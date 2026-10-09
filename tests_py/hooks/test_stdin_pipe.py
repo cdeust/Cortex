@@ -70,7 +70,9 @@ def test_real_hook_process_allows_a_utf8_event(tmp_path: Path) -> None:
     assert done.returncode == 0, done.stderr
 
 
-def test_real_gate_process_fails_closed_on_invalid_bytes(tmp_path: Path) -> None:
+def test_real_gate_process_reports_invalid_bytes_and_does_not_block(
+    tmp_path: Path,
+) -> None:
     done = _run(["-m", "mcp_server.hooks.decision_gate"], b"\xff\xfe", tmp_path)
-    assert done.returncode == 2
-    assert b"fail closed" in done.stderr
+    assert done.returncode == 1
+    assert b"not valid UTF-8" in done.stderr

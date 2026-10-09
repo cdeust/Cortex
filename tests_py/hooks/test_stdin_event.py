@@ -1,6 +1,6 @@
 """The one stdin reader (issue #664): strict UTF-8, one place, no bypass.
 
-source: issue #664; https://docs.python.org/3/library/sys.html#sys.stdin
+source: issue #664; CPython Doc/library/sys.rst (``sys.stdin``)
 """
 
 from __future__ import annotations
