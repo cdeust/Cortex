@@ -99,6 +99,7 @@ def _register_rebuild_profiles(mcp: MCPServer) -> None:
     async def tool_rebuild_profiles(
         domain: str | None = None,
         force: bool = False,
+        replace_accumulated_profiles: bool = False,
     ) -> dict[str, Any]:
         """Full rescan of all session data to rebuild methodology profiles."""
         return await safe_handler(
@@ -106,6 +107,7 @@ def _register_rebuild_profiles(mcp: MCPServer) -> None:
             {
                 "domain": domain,
                 "force": force,
+                "replace_accumulated_profiles": replace_accumulated_profiles,
             },
             tool_name="rebuild_profiles",
         )

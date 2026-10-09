@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
+from mcp_server.core.profile_rebuild_policy import ProfileBuild
 from mcp_server.handlers.rebuild_profiles import handler
 
 
@@ -53,45 +54,17 @@ def _write_memory(proj_dir, name="note.md", body="We chose JWT over sessions."):
 
 
 @pytest.fixture
-def hermetic_claude_home(tmp_path, monkeypatch):
-    """Redirect every ~/.claude path constant the handler touches at a
-    synthetic tmp dir, so the rebuild runs against fixture data — never the
-    developer's live session history (issue #174 isolation violation).
-
-    Seeds two real projects, each with a session and a memory file, so the
+def hermetic_claude_home(hermetic_claude_dirs):
+    """Seed two real projects, each with a session and a memory file, so the
     scanner yields a non-empty ``list`` of memory records and the full
-    scan → group → assemble → bridge pipeline executes for real.
+    scan -> group -> assemble -> bridge pipeline executes for real.
     """
-    projects = tmp_path / "projects"
+    projects = hermetic_claude_dirs / "projects"
     _write_session(projects / "proj-a")
     _write_memory(projects / "proj-a", body="cache works just as a free energy filter")
     _write_session(projects / "proj-b")
     _write_memory(projects / "proj-b", body="a second decision note")
-
-    methodology = tmp_path / "methodology"
-    domains = methodology / "domains"
-    monkeypatch.setattr("mcp_server.infrastructure.scanner.CLAUDE_DIR", tmp_path)
-    monkeypatch.setattr(
-        "mcp_server.infrastructure.brain_index_store.BRAIN_INDEX_PATH",
-        tmp_path / "brain-index.json",
-    )
-    monkeypatch.setattr(
-        "mcp_server.infrastructure.profile_store.PROFILES_PATH",
-        methodology / "profiles.json",
-    )
-    monkeypatch.setattr(
-        "mcp_server.infrastructure.profile_store.METHODOLOGY_DIR", methodology
-    )
-    monkeypatch.setattr("mcp_server.infrastructure.profile_store.DOMAINS_DIR", domains)
-    monkeypatch.setattr(
-        "mcp_server.infrastructure.profile_store.INDEX_PATH",
-        methodology / "index.json",
-    )
-    monkeypatch.setattr(
-        "mcp_server.infrastructure.profile_store.LEGACY_BACKUP_PATH",
-        methodology / "profiles.json.v1_backup",
-    )
-    return tmp_path
+    return hermetic_claude_dirs
 
 
 class TestRebuildProfilesHandler:
@@ -140,7 +113,7 @@ class TestRebuildProfilesHandler:
             ),
             patch(
                 "mcp_server.handlers.rebuild_profiles.build_domain_profiles",
-                return_value={"domains": {}},
+                return_value=ProfileBuild(profiles={"domains": {}}, outcomes=[]),
             ),
             patch("mcp_server.handlers.rebuild_profiles.save_profiles"),
         ):
@@ -194,7 +167,9 @@ class TestRebuildSmartCaching:
             ),
             patch(
                 "mcp_server.handlers.rebuild_profiles.build_domain_profiles",
-                return_value={"domains": {"rebuilt": {}}},
+                return_value=ProfileBuild(
+                    profiles={"domains": {"rebuilt": {}}}, outcomes=[]
+                ),
             ),
             patch("mcp_server.handlers.rebuild_profiles.save_profiles"),
         ):
@@ -229,7 +204,7 @@ class TestRebuildSmartCaching:
             ),
             patch(
                 "mcp_server.handlers.rebuild_profiles.build_domain_profiles",
-                return_value={"domains": {}},
+                return_value=ProfileBuild(profiles={"domains": {}}, outcomes=[]),
             ),
             patch("mcp_server.handlers.rebuild_profiles.save_profiles"),
         ):
@@ -263,7 +238,7 @@ class TestRebuildSmartCaching:
             ),
             patch(
                 "mcp_server.handlers.rebuild_profiles.build_domain_profiles",
-                return_value={"domains": {}},
+                return_value=ProfileBuild(profiles={"domains": {}}, outcomes=[]),
             ),
             patch("mcp_server.handlers.rebuild_profiles.save_profiles"),
         ):
@@ -296,7 +271,7 @@ class TestRebuildSmartCaching:
             ),
             patch(
                 "mcp_server.handlers.rebuild_profiles.build_domain_profiles",
-                return_value={"domains": {}},
+                return_value=ProfileBuild(profiles={"domains": {}}, outcomes=[]),
             ),
             patch("mcp_server.handlers.rebuild_profiles.save_profiles"),
         ):
@@ -327,7 +302,7 @@ class TestRebuildSmartCaching:
             ),
             patch(
                 "mcp_server.handlers.rebuild_profiles.build_domain_profiles",
-                return_value={"domains": {}},
+                return_value=ProfileBuild(profiles={"domains": {}}, outcomes=[]),
             ),
             patch("mcp_server.handlers.rebuild_profiles.save_profiles"),
         ):
@@ -355,7 +330,7 @@ class TestRebuildSmartCaching:
             ),
             patch(
                 "mcp_server.handlers.rebuild_profiles.build_domain_profiles",
-                return_value={"domains": {}},
+                return_value=ProfileBuild(profiles={"domains": {}}, outcomes=[]),
             ) as mock_build,
             patch("mcp_server.handlers.rebuild_profiles.save_profiles"),
         ):

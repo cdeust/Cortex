@@ -221,6 +221,8 @@ flowchart TD
     style SPARSE fill:#8b5cf6,color:#fff
 ```
 
+A domain whose scan sees fewer sessions than its stored profile records (Claude Code deletes old transcripts) keeps its stored profile; the result reports it per domain. `replace_accumulated_profiles` is the explicit, destructive override.
+
 ### Pipeline Stages
 
 | Stage | Module | Output |

@@ -2,7 +2,7 @@
 
 import re
 
-from mcp_server.core.profile_assembler import build_domain_profiles
+from mcp_server.core.profile_assembler import build_domain_profiles as _assemble
 from mcp_server.core.profile_builder import apply_session_update
 
 
@@ -27,6 +27,11 @@ def _empty_profiles():
     return {"domains": {}}
 
 
+def _build(**kwargs):
+    """The assembled profile set; outcomes: test_profile_rebuild_policy."""
+    return _assemble(**kwargs).profiles
+
+
 def _by_project(project_id, conversations):
     return {project_id: conversations}
 
@@ -44,7 +49,7 @@ class TestBuildDomainProfiles:
                 allText="Add new feature endpoint for the API",
             ),
         ]
-        result = build_domain_profiles(
+        result = _build(
             existing_profiles=_empty_profiles(),
             conversations=convs,
             memories={},
@@ -71,7 +76,7 @@ class TestBuildDomainProfiles:
 
     def test_confidence_scales_with_sessions(self):
         few = [_make_conversation()]
-        r1 = build_domain_profiles(
+        r1 = _build(
             existing_profiles=_empty_profiles(),
             conversations=few,
             memories={},
@@ -79,7 +84,7 @@ class TestBuildDomainProfiles:
             by_project=_by_project("-Users-dev-proj", few),
         )
         many = [_make_conversation() for _ in range(50)]
-        r2 = build_domain_profiles(
+        r2 = _build(
             existing_profiles=_empty_profiles(),
             conversations=many,
             memories={},
@@ -92,7 +97,7 @@ class TestBuildDomainProfiles:
 
     def test_sets_global_style(self):
         convs = [_make_conversation() for _ in range(10)]
-        result = build_domain_profiles(
+        result = _build(
             existing_profiles=_empty_profiles(),
             conversations=convs,
             memories={},
@@ -119,7 +124,7 @@ class TestBuildDomainProfiles:
             },
         }
         new_convs = [_make_conversation()]
-        result = build_domain_profiles(
+        result = _build(
             existing_profiles=existing,
             conversations=new_convs,
             memories={},
@@ -142,7 +147,7 @@ class TestBuildDomainProfiles:
             "sessionCount": 0,
         }
 
-        result = build_domain_profiles(
+        result = _build(
             existing_profiles=existing,
             conversations=[*convs_a, *convs_b],
             memories={},
@@ -154,7 +159,7 @@ class TestBuildDomainProfiles:
         assert result["domains"]["other"]["sessionCount"] == 0
 
     def test_empty_by_project(self):
-        result = build_domain_profiles(
+        result = _build(
             existing_profiles=_empty_profiles(),
             conversations=[],
             memories={},
@@ -168,7 +173,7 @@ class TestBuildDomainProfiles:
             _make_conversation(startedAt="2025-01-10T00:00:00Z"),
             _make_conversation(startedAt="2025-01-20T00:00:00Z"),
         ]
-        result = build_domain_profiles(
+        result = _build(
             existing_profiles=_empty_profiles(),
             conversations=convs,
             memories={},
@@ -186,7 +191,7 @@ class TestBuildDomainProfiles:
             )
             for _ in range(5)
         ]
-        result = build_domain_profiles(
+        result = _build(
             existing_profiles=_empty_profiles(),
             conversations=convs,
             memories={},

@@ -21,19 +21,27 @@ schema = {
     "annotations": IDEMPOTENT_WRITE,
     "description": (
         "Full rescan of Claude Code session data to rebuild methodology "
-        "profiles from scratch. Walks ~/.claude/projects/, parses JSONL "
-        "transcripts, groups by project, and re-derives per-domain "
-        "cognitive style (Felder-Silverman), entry patterns, blind spots, "
-        "and cross-domain bridges via the profile_assembler pipeline. Use "
-        "this on first install, after a major workflow change, or when "
-        "`query_methodology` returns coldStart=true. Skipped automatically "
-        "if profiles are <1h old unless force=true. Distinct from "
+        "profiles. Walks ~/.claude/projects/, parses JSONL transcripts, "
+        "groups by project, and re-derives per-domain cognitive style "
+        "(Felder-Silverman), entry patterns, blind spots, and cross-domain "
+        "bridges via the profile_assembler pipeline. Use this on first "
+        "install, after a major workflow change, or when `query_methodology` "
+        "returns coldStart=true. Skipped automatically if profiles are <1h "
+        "old unless force=true, which only bypasses that freshness check and "
+        "never replaces a profile. Transcripts on disk are a sliding window "
+        "(Claude Code deletes old ones) while a stored profile accumulates "
+        "one session per `record_session_end`, so a domain whose scan sees "
+        "fewer sessions than its stored profile records is KEPT unchanged "
+        "and reported; only replace_accumulated_profiles=true replaces it "
+        "with the smaller scan. Distinct from "
         "`query_methodology` (read the cached profile, no rescan), "
         "`record_session_end` (incremental EMA update for one session, no "
         "full rebuild), and `detect_domain` (just classifies, doesn't "
         "rebuild). Mutates ~/.claude/methodology/profiles.json. Latency "
-        "<10s on typical histories. Returns {rebuilt_domains, "
-        "total_sessions, duration_ms}."
+        "<10s on typical histories. Returns {domains, totalSessions, "
+        "totalMemories, duration, domainOutcomes: [{domain, action "
+        "(created|rebuilt|kept|replaced), storedSessions, scannedSessions, "
+        "resultingSessions}]}."
     ),
     "inputSchema": {
         "type": "object",
@@ -52,6 +60,20 @@ schema = {
                 "description": (
                     "Bypass the 1-hour freshness check and rebuild even if "
                     "profiles were updated recently."
+                ),
+                "default": False,
+            },
+            "replace_accumulated_profiles": {
+                "type": "boolean",
+                "description": (
+                    "DESTRUCTIVE. Replace a domain's stored profile with one "
+                    "built only from the transcripts currently on disk even "
+                    "when the scan sees fewer sessions than the profile "
+                    "records (the accumulated session count and cognitive-"
+                    "style state are lost; no transcript can rebuild them). "
+                    "Independent of `force`, which only bypasses the 1-hour "
+                    "freshness check. Every replaced domain is listed in "
+                    "domainOutcomes with its before and after counts."
                 ),
                 "default": False,
             },
@@ -104,14 +126,16 @@ async def handler(args: dict | None = None) -> dict:
     conversations = discover_conversations()
     by_project = group_by_project(conversations)
 
-    updated_profiles = build_domain_profiles(
+    build = build_domain_profiles(
         existing_profiles=load_profiles(),
         conversations=conversations,
         memories=memories,
         brain_index=load_brain_index(),
         by_project=by_project,
         target_domain=domain,
+        replace_accumulated=args.get("replace_accumulated_profiles", False),
     )
+    updated_profiles = build.profiles
     save_profiles(updated_profiles)
 
     duration = int((time.monotonic() - start_time) * 1000)
@@ -119,5 +143,6 @@ async def handler(args: dict | None = None) -> dict:
         "domains": list(updated_profiles.get("domains", {}).keys()),
         "totalSessions": len(conversations),
         "totalMemories": len(memories),
+        "domainOutcomes": [o.to_dict() for o in build.outcomes],
         "duration": duration,
     }

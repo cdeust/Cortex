@@ -34,6 +34,7 @@ SCHEMAS: dict[str, dict] = {
         "properties": {
             "domain": {"type": "string"},
             "force": {"type": "boolean", "default": False},
+            "replace_accumulated_profiles": {"type": "boolean", "default": False},
         },
         "required": [],
     },

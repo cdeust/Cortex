@@ -1823,11 +1823,6 @@
       "detail": "PROFICIENCY_ALPHA"
     },
     {
-      "file": "mcp_server/core/profile_assembler.py",
-      "kind": "file-size",
-      "detail": "exceeds 300-line cap"
-    },
-    {
       "file": "mcp_server/core/profile_builder.py",
       "kind": "unsourced-constant",
       "detail": "_BURST_THRESHOLD_MS"

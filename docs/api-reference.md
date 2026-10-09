@@ -47,14 +47,17 @@ Lightweight domain classification without full profile generation.
 
 ### `rebuild_profiles`
 
-Full rescan of session data to rebuild all cognitive profiles.
+Full rescan of session data to rebuild cognitive profiles. The transcripts on disk are a sliding window, while a stored profile accumulates one session per `record_session_end`, so a domain whose scan sees fewer sessions than its stored profile records is kept unchanged and reported.
 
 **Input Schema:**
 
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `domain` | string | No | — | Rebuild only this domain |
-| `force` | boolean | No | `false` | Force rebuild even if profiles are fresh (<1hr) |
+| `force` | boolean | No | `false` | Bypass the 1-hour freshness check only; never replaces a profile |
+| `replace_accumulated_profiles` | boolean | No | `false` | Destructive: replace a domain's stored profile with the smaller scan when the scan sees fewer sessions than the profile records |
+
+**Returns:** `domains`, `totalSessions`, `totalMemories`, `duration`, and `domainOutcomes`, one entry per scanned domain: `{domain, action, storedSessions, scannedSessions, resultingSessions}` where `action` is `created`, `rebuilt` (scan saw at least as many sessions), `kept` (scan saw fewer; stored profile unchanged) or `replaced` (scan saw fewer and `replace_accumulated_profiles` was set).
 
 **Target Latency:** <10s
 

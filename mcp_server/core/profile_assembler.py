@@ -13,100 +13,24 @@ from mcp_server.core.blindspot_detector import detect_blind_spots
 from mcp_server.core.bridge_finder import find_bridges
 from mcp_server.core.pattern_extractor import extract_patterns
 from mcp_server.core.persona_vector import build_persona_vector
+from mcp_server.core.profile_domain_stats import (
+    compute_category_distribution,
+    compute_global_style,
+    compute_timestamps,
+    extract_top_keywords,
+)
+from mcp_server.core.profile_domain_grouping import (
+    build_project_domain_map,
+    group_conversations_by_domain,
+)
+from mcp_server.core.profile_rebuild_policy import (
+    DomainOutcome,
+    ProfileBuild,
+    decide_domain_outcome,
+)
 from mcp_server.core.sparse_dictionary import encode_session, learn_dictionary
 from mcp_server.core.style_classifier import classify_style
-from mcp_server.shared.categorizer import categorize_with_scores
-from mcp_server.shared.domain_mapping import resolve_domain
-from mcp_server.shared.project_ids import domain_id_from_label, project_id_to_label
-
-
-def _build_project_domain_map(
-    profiles: dict,
-    by_project: dict[str, list[dict]],
-) -> dict[str, str]:
-    """Map each project ID to its domain ID."""
-    project_domains: dict[str, str] = {}
-    for domain_id, domain in (profiles.get("domains") or {}).items():
-        for proj in domain.get("projects") or []:
-            project_domains[proj] = domain_id
-
-    for proj in by_project:
-        if proj in project_domains:
-            continue
-        canonical = resolve_domain(proj)
-        if canonical and not canonical.startswith("-"):
-            project_domains[proj] = canonical
-            continue
-        label = project_id_to_label(proj)
-        project_domains[proj] = domain_id_from_label(label)
-
-    return project_domains
-
-
-def _group_conversations_by_domain(
-    by_project: dict[str, list[dict]],
-    project_domains: dict[str, str],
-    target_domain: str | None,
-) -> dict[str, dict]:
-    """Group conversations by domain, optionally filtering to target_domain."""
-    domain_conversations: dict[str, dict] = {}
-    for proj, convs in by_project.items():
-        domain_id = project_domains.get(proj)
-        if not domain_id:
-            continue
-        if target_domain and domain_id != target_domain:
-            continue
-        if domain_id not in domain_conversations:
-            domain_conversations[domain_id] = {"conversations": [], "projects": set()}
-        domain_conversations[domain_id]["conversations"].extend(convs)
-        domain_conversations[domain_id]["projects"].add(proj)
-    return domain_conversations
-
-
-def _compute_category_distribution(convs: list[dict]) -> dict[str, float]:
-    """Compute multi-category distribution across conversations."""
-    categories: dict[str, float] = {}
-    total = 0
-    for conv in convs:
-        text = conv.get("allText") or conv.get("firstMessage") or ""
-        if not text:
-            continue
-        scores = categorize_with_scores(text)
-        for cat in scores:
-            categories[cat] = categories.get(cat, 0) + 1
-        if not scores:
-            categories["general"] = categories.get("general", 0) + 1
-        total += 1
-
-    if total > 0:
-        for cat in categories:
-            categories[cat] = round((categories[cat] / total) * 100) / 100
-
-    return categories
-
-
-def _extract_top_keywords(convs: list[dict], limit: int = 20) -> list[str]:
-    """Extract the most frequent keywords across conversations."""
-    freq: dict[str, int] = {}
-    for conv in convs:
-        kws = conv.get("keywords")
-        if not kws:
-            continue
-        for kw in kws if isinstance(kws, (list, set)) else []:
-            freq[kw] = freq.get(kw, 0) + 1
-    return [
-        kw for kw, _ in sorted(freq.items(), key=lambda x: x[1], reverse=True)[:limit]
-    ]
-
-
-def _compute_timestamps(convs: list[dict]) -> tuple[str | None, str | None]:
-    """Extract first_seen and last_updated from sorted timestamps."""
-    timestamps = sorted(
-        t for c in convs for t in [c.get("startedAt") or c.get("endedAt")] if t
-    )
-    first_seen = timestamps[0] if timestamps else None
-    last_updated = timestamps[-1] if timestamps else None
-    return first_seen, last_updated
+from mcp_server.shared.project_ids import project_id_to_label
 
 
 def _build_single_domain(
@@ -117,9 +41,9 @@ def _build_single_domain(
     convs = data["conversations"]
     patterns = extract_patterns(convs)
     metacognitive = classify_style(convs)
-    categories = _compute_category_distribution(convs)
-    top_keywords = _extract_top_keywords(convs)
-    first_seen, last_updated = _compute_timestamps(convs)
+    categories = compute_category_distribution(convs)
+    top_keywords = extract_top_keywords(convs)
+    first_seen, last_updated = compute_timestamps(convs)
 
     data_quality = min(len(convs) / 10, 1.0)
     confidence = round(min(len(convs) / 50, 1.0) * data_quality * 100) / 100
@@ -179,8 +103,12 @@ def _encode_domain_activations(
     domain_conversations: dict[str, dict],
     profiles: dict,
     feature_dictionary: dict,
+    kept: set[str],
 ) -> dict[str, list]:
-    """Encode sessions per domain and attach feature activations + persona vectors."""
+    """Encode every scanned domain's sessions; attach feature activations and
+    persona vectors to every domain except the ``kept`` ones, which keep their
+    stored values (their encodings still feed the persistence statistics).
+    """
     raw_fd = feature_dictionary["_raw"]
     domain_activations: dict[str, list] = {}
 
@@ -189,6 +117,8 @@ def _encode_domain_activations(
             continue
         encodings = [encode_session(c, raw_fd) for c in data["conversations"]]
         domain_activations[domain_id] = encodings
+        if domain_id in kept:
+            continue
 
         mean_activations: dict[str, float] = {}
         for enc in encodings:
@@ -205,47 +135,22 @@ def _encode_domain_activations(
     return domain_activations
 
 
-def _compute_global_style(profiles: dict) -> None:
-    """Compute session-weighted global cognitive style across all domains."""
-    all_domains = list(profiles.get("domains", {}).values())
-    if not all_domains:
-        return
-
-    total_sessions = 0
-    ar_sum = si_sum = sg_sum = 0.0
-    for d in all_domains:
-        sc = d.get("sessionCount") or 0
-        total_sessions += sc
-        mc = d.get("metacognitive") or {}
-        ar_sum += (mc.get("activeReflective") or 0) * sc
-        si_sum += (mc.get("sensingIntuitive") or 0) * sc
-        sg_sum += (mc.get("sequentialGlobal") or 0) * sc
-
-    if total_sessions > 0:
-        profiles["globalStyle"] = {
-            "activeReflective": round((ar_sum / total_sessions) * 100) / 100,
-            "sensingIntuitive": round((si_sum / total_sessions) * 100) / 100,
-            "sequentialGlobal": round((sg_sum / total_sessions) * 100) / 100,
-            "confidence": round(min(total_sessions / 100, 1.0) * 100) / 100,
-            "sessionCount": total_sessions,
-        }
-
-
-def _apply_cross_domain_analysis(
+def _attach_bridges_and_blind_spots(
     profiles: dict,
     domain_conversations: dict[str, dict],
     conversations: list[dict],
     brain_index: dict | None,
     memories: dict | list[dict] | None,
+    kept: set[str],
 ) -> None:
-    """Attach bridges, blind spots, features, and persistent features."""
+    """Write bridges and blind spots to every domain that is not ``kept``."""
     bridges = find_bridges(profiles, brain_index, memories)
     for domain_id, domain_bridges in bridges.items():
-        if domain_id in profiles["domains"]:
+        if domain_id in profiles["domains"] and domain_id not in kept:
             profiles["domains"][domain_id]["connectionBridges"] = domain_bridges
 
     for domain_id, data in domain_conversations.items():
-        if domain_id not in profiles["domains"]:
+        if domain_id in kept or domain_id not in profiles["domains"]:
             continue
         blind_spots = detect_blind_spots(
             domain_id,
@@ -255,6 +160,26 @@ def _apply_cross_domain_analysis(
         )
         profiles["domains"][domain_id]["blindSpots"] = blind_spots
 
+
+def _apply_cross_domain_analysis(
+    profiles: dict,
+    domain_conversations: dict[str, dict],
+    conversations: list[dict],
+    brain_index: dict | None,
+    memories: dict | list[dict] | None,
+    kept: set[str],
+) -> None:
+    """Attach bridges, blind spots, features, and persistent features.
+
+    A ``kept`` domain's stored profile is not written to: its bridges, blind
+    spots, feature activations and persona vector are not recomputed from a
+    scan that saw fewer sessions than the profile records. Its scanned
+    sessions still feed the shared dictionary and the persistence statistics.
+    """
+    _attach_bridges_and_blind_spots(
+        profiles, domain_conversations, conversations, brain_index, memories, kept
+    )
+
     fd = _build_feature_dictionary(domain_conversations)
     profiles["featureDictionary"] = {k: v for k, v in fd.items() if k != "_raw"}
 
@@ -262,6 +187,7 @@ def _apply_cross_domain_analysis(
         domain_conversations,
         profiles,
         fd,
+        kept,
     )
     persistent_features = detect_persistent_features(
         profiles.get("domains"),
@@ -273,6 +199,28 @@ def _apply_cross_domain_analysis(
     profiles["persistentFeatures"] = [pf.model_dump() for pf in persistent_features]
 
 
+def _rebuild_or_keep(
+    profiles: dict,
+    domain_conversations: dict[str, dict],
+    replace_accumulated: bool,
+) -> list[DomainOutcome]:
+    """Build each scanned domain's profile unless its stored one is kept."""
+    outcomes: list[DomainOutcome] = []
+    for domain_id, data in domain_conversations.items():
+        if not data["conversations"]:
+            continue
+        outcome = decide_domain_outcome(
+            domain_id,
+            profiles["domains"].get(domain_id),
+            len(data["conversations"]),
+            replace_accumulated,
+        )
+        outcomes.append(outcome)
+        if outcome.action != "kept":
+            profiles["domains"][domain_id] = _build_single_domain(domain_id, data)
+    return outcomes
+
+
 def build_domain_profiles(
     *,
     existing_profiles: dict,
@@ -281,11 +229,17 @@ def build_domain_profiles(
     brain_index: dict | None,
     by_project: dict[str, list[dict]],
     target_domain: str | None = None,
-) -> dict:
-    """Build or update domain profiles from scanned conversation data."""
+    replace_accumulated: bool = False,
+) -> ProfileBuild:
+    """Build or update domain profiles from scanned conversation data.
+
+    Post: each scanned domain is built from the scan unless ``kept`` (see
+    ``decide_domain_outcome``), which leaves its stored profile unchanged;
+    unscanned domains are untouched; one outcome per scanned domain.
+    """
     profiles = existing_profiles
-    project_domains = _build_project_domain_map(profiles, by_project)
-    domain_conversations = _group_conversations_by_domain(
+    project_domains = build_project_domain_map(profiles, by_project)
+    domain_conversations = group_conversations_by_domain(
         by_project,
         project_domains,
         target_domain,
@@ -294,18 +248,16 @@ def build_domain_profiles(
     if "domains" not in profiles:
         profiles["domains"] = {}
 
-    for domain_id, data in domain_conversations.items():
-        if not data["conversations"]:
-            continue
-        profiles["domains"][domain_id] = _build_single_domain(domain_id, data)
-
+    outcomes = _rebuild_or_keep(profiles, domain_conversations, replace_accumulated)
+    kept = {o.domain for o in outcomes if o.action == "kept"}
     _apply_cross_domain_analysis(
         profiles,
         domain_conversations,
         conversations,
         brain_index,
         memories,
+        kept,
     )
-    _compute_global_style(profiles)
+    compute_global_style(profiles)
 
-    return profiles
+    return ProfileBuild(profiles=profiles, outcomes=outcomes)
