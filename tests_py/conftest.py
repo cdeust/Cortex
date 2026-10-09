@@ -80,6 +80,7 @@ from tests_py._store_cleanup import (  # noqa: E402
 __all__ = ["_TABLES_TO_CLEAN"]  # re-exported: tests import it from conftest
 
 import tests_py._composition_root_wiring  # noqa: E402,F401 — source: issue #560
+from tests_py._process_leak_guard import _session_process_leak_guard  # noqa: E402,F401 — source: this PR
 
 # On Windows asyncio defaults to ProactorEventLoop, whose GC-time teardown
 # emits a noisy "Event loop is closed" PytestUnraisableExceptionWarning that
