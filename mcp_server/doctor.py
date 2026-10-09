@@ -427,7 +427,7 @@ def _i10_config() -> Check:
 def _auto_capture() -> Check:
     """Required: auto-capture works, judged from what it recorded (issue #660).
 
-    source: ADR-1094"""
+    source: ADR-1095"""
     try:
         verdict = capture_verdict(CLAUDE_DIR, time.time())
     except OSError as exc:

@@ -7,7 +7,7 @@ pipeline worked) and ``capture_skipped`` when one was declined (hook, worker or
 drainer). The host never surfaces the hook's stderr, so this record is the only
 channel (issue #660).
 
-source: ADR-1094
+source: ADR-1095
 """
 
 from __future__ import annotations

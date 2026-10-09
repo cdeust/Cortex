@@ -5,7 +5,7 @@ evidence. It creates nothing (a doctor must not leave state behind) and reads th
 rotated generation of the telemetry log before the live one, so a window that
 straddles a rotation is not cut in half.
 
-source: ADR-1094
+source: ADR-1095
 """
 
 from __future__ import annotations
@@ -19,13 +19,21 @@ from mcp_server.core.capture_health import CaptureVerdict, assess
 from mcp_server.infrastructure import capture_spool
 
 
+class UndecodableLogError(OSError):
+    """A telemetry generation holds bytes that are not UTF-8 (a damaged file)."""
+
+
 def _lines(path: Path) -> Iterator[str]:
-    """A missing generation is no evidence, not an error; anything else raises."""
+    """A missing generation is no evidence, not an error; anything else raises:
+    ``OSError`` for an unreadable file, ``UndecodableLogError`` (an ``OSError`` that
+    names the file) for one that is not valid UTF-8 (ADR-1095)."""
     try:
         with open(path, encoding="utf-8") as stream:
             yield from stream
     except FileNotFoundError:
         return
+    except UnicodeDecodeError as exc:
+        raise UndecodableLogError(f"{path} is not valid UTF-8 ({exc.reason})") from exc
 
 
 def read_events(telemetry_log: Path) -> tuple[list[tuple[float, str]], int]:
@@ -48,8 +56,8 @@ def read_events(telemetry_log: Path) -> tuple[list[tuple[float, str]], int]:
 def capture_verdict(claude_dir: Path, now: float) -> CaptureVerdict:
     """precondition: ``claude_dir`` is the Cortex root (``~/.claude`` by default).
     postcondition: the verdict of ``assess`` over the telemetry log and the spool
-    under that root; an unreadable log raises ``OSError`` to the caller, which
-    reports it as a failed check."""
+    under that root; an unreadable or undecodable log raises ``OSError`` naming
+    the file to the caller, which reports it as a failed check."""
     if os.environ.get("CORTEX_TELEMETRY_DISABLED") == "1":
         return CaptureVerdict(
             True,

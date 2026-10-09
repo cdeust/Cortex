@@ -3547,6 +3547,10 @@
     "ADR-1094": {
       "mirror": "ADR-1094-spool-captures-for-a-detached-drainer-where-the-resident-worker-cannot-run.md",
       "path": "adr/cortex/1094-spool-captures-for-a-detached-drainer-where-the-resident-worker-cannot-run.md"
+    },
+    "ADR-1095": {
+      "mirror": "ADR-1095-judge-auto-capture-health-from-the-telemetry-log-and-the-spool.md",
+      "path": "adr/cortex/1095-judge-auto-capture-health-from-the-telemetry-log-and-the-spool.md"
     }
   },
   "project": "cortex",

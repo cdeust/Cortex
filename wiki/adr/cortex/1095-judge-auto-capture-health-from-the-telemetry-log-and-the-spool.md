@@ -1,0 +1,33 @@
+---
+created: 2026-10-09T06:40:05Z
+kind: adr
+number: 1095
+status: accepted
+tags: [capture, telemetry, doctor, issue-660]
+title: Judge auto-capture health from the telemetry log and the spool
+---
+# ADR-1095: Judge auto-capture health from the telemetry log and the spool
+
+## Status
+
+accepted
+
+## Context
+
+Issue #660: `check_setup` answered `ready: true` while every auto-capture was refused. Two causes. First, `doctor.active_checks()` had no check that reads capture outcomes. Second, the capture path recorded nothing a check could use: a declined capture was `telemetry.record(op, ok=False)`, the same shape as a real error, and a successful capture recorded nothing in telemetry. ADR-1094 fixed the outage itself (#659) and names this defect as separate. It owns the 600 s spool stall limit (`STALL_SECONDS`) and nothing else used here. The telemetry sample contract of ADR-0282 had two outcomes (ok, fail); a refusal is neither a success nor an error of the system.
+
+Rejected alternatives: counting rows in the memories table (mixes manual and automatic writes and needs a per-backend query); a SessionStart banner or new stderr channel (the host does not surface hook stderr, and no channel is invented here); a catch-and-degrade check (the check is required, an unreadable log fails it); a 512 KB tail read (rotation spans two files, so both are read).
+
+## Decision
+
+1. Telemetry has three outcomes. `record(..., skipped=True)` marks a declined operation (`ok` false). `ok=True` with `skipped=True` raises ValueError. The JSONL sample gains a `skipped` field, the counters a `skipped` bucket (`fail` no longer counts skips) and the OTel status the value `skipped`. `capture_dispatch.report_failure` is the one emitter: `capture_skipped` is a skip; `capture_spool_stalled` and `capture_worker_lifecycle` stay errors. Old JSONL lines without `skipped` are read by operation name only, as existing data.
+2. `capture_store.store`, the one path both the resident worker and the spool drainer await, records `capture_processed` after the handler returns. A payload refused by the write gate counts as processed.
+3. `core/capture_health.assess` is a pure function. The check reports not ready when (a) the latest skip is within `WINDOW_SECONDS` (24 h) and either no capture was ever processed or at least `FAILURE_RUN` (5) skips follow the last processed one, or (b) the oldest pending spool file is older than `STALL_SECONDS` (600 s, ADR-1094). The 24 h window and the run of 5 are own choices, labelled `# source: own choice` at the constants with their reasoning: a day covers a working session and the restart that repairs it, and five consecutive refusals after a success are not noise from one bad payload.
+4. `doctor_capture` gathers the evidence (rotated and live `telemetry.jsonl`, the spool; it creates nothing). `doctor._auto_capture` is a required check on both backends, shared by `python -m mcp_server.doctor` and `check_setup`. An unreadable or undecodable log fails the check and names the file; unparsable lines are counted in the detail. `CORTEX_TELEMETRY_DISABLED=1` is reported as unverifiable, not as healthy.
+5. This amends the telemetry sample contract of ADR-0282 (two outcomes become three) and completes the observability that ADR-1094 left to a separate defect.
+
+## Consequences
+
+Positive: `check_setup` and the doctor answer the question of #660 with counts and ages; a refusal is distinguishable from an error in the log, the counters and OTel; an external alert on `fail` for `capture_skipped` stops firing, which is intended.
+
+Negative and known limits: nothing calls the doctor automatically (no SessionStart call), so a user still learns of a broken capture only by running the doctor or reading the telemetry log; a surface at SessionStart is a separate decision. A gated payload counts as processed, so a bug that gates every capture would read healthy. With telemetry disabled the check cannot see a stalled spool. An installation whose log holds skips from before this change and no `capture_processed` yet reads "none ever processed" until the first success or until the last skip is a day old. A skip dated in the future (clock skew) fails the check.
