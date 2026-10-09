@@ -46,6 +46,12 @@ TOKEN_VAR = "CORTEX_TEST_SESSION_TOKEN"
 # source: procps ps(1) on Linux: the "e" modifier does the same.
 _PS_ENV_FLAGS = "-axwwE" if sys.platform == "darwin" else "axwwe"
 
+# source: CPython Lib/multiprocessing/resource_tracker.py -- the tracker is
+# started by multiprocessing as a child of its user and exits by itself on EOF
+# of its pipe when that user exits, so it cannot outlive pytest. Exempted only
+# as a DIRECT child of pytest; a detached or re-parented copy is still a leak.
+_OWN_HELPER = "multiprocessing.resource_tracker"
+
 os.environ[TOKEN_VAR] = uuid.uuid4().hex
 
 
@@ -53,15 +59,15 @@ def live_tokened_processes(token: str) -> list[tuple[int, str]]:
     """Return (pid, command) of every live process carrying ``token``.
 
     precondition: ``token`` was exported in the environment of every process
-    under test. postcondition: pytest itself and the ``ps`` that took the
-    snapshot are excluded; the result is a single point-in-time snapshot of
-    the process table (no waiting, no retry). Empty on Windows (see module
-    docstring).
+    under test. postcondition: pytest itself, the ``ps`` that took the
+    snapshot and pytest's own direct ``multiprocessing`` resource tracker are
+    excluded; the result is a single point-in-time snapshot of the process
+    table (no waiting, no retry). Empty on Windows (see module docstring).
     """
     if sys.platform == "win32":
         return []
     ps = subprocess.Popen(  # noqa: S603 — fixed argv, no shell
-        ["ps", _PS_ENV_FLAGS, "-o", "pid=,command="],
+        ["ps", _PS_ENV_FLAGS, "-o", "pid=,ppid=,command="],
         stdout=subprocess.PIPE,
         text=True,
     )
@@ -69,12 +75,15 @@ def live_tokened_processes(token: str) -> list[tuple[int, str]]:
     needle = f"{TOKEN_VAR}={token}"
     found: list[tuple[int, str]] = []
     for line in out.splitlines():
-        pid_text, _, command = line.strip().partition(" ")
-        if not pid_text.isdigit() or needle not in command:
+        fields = line.split(None, 2)
+        if len(fields) < 3 or not (fields[0] + fields[1]).isdigit():
             continue
-        pid = int(pid_text)
-        if pid not in (os.getpid(), ps.pid):
-            found.append((pid, command.split(needle)[0].strip()))
+        pid, ppid, command = int(fields[0]), int(fields[1]), fields[2]
+        if needle not in command or pid in (os.getpid(), ps.pid):
+            continue
+        if ppid == os.getpid() and _OWN_HELPER in command:
+            continue
+        found.append((pid, command.split(needle)[0].strip()))
     return found
 
 

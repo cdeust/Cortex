@@ -25,7 +25,7 @@ from unittest.mock import patch
 
 import pytest
 
-from mcp_server.infrastructure.upstream_identity import BINARY_NAMES
+from tests_py._hermetic_hook_env import hermetic_hook_env
 
 # tomllib is 3.11+; requires-python is >=3.10 (pyproject.toml), so the
 # fallback backport is used on 3.10, exactly like build/hatchling's own
@@ -81,70 +81,10 @@ def _isolated_env(tmp_path: Path) -> dict[str, str]:
     return env
 
 
-# The names pipeline_discovery looks up on PATH: "cortex-pipeline" plus
-# upstream_identity.BINARY_NAMES (pipeline_discovery._BINARY_CANDIDATES).
-_PIPELINE_BINARIES = ("cortex-pipeline", *BINARY_NAMES)
-
-
-def _path_without_pipeline_binaries(path: str) -> str:
-    """``path`` minus every directory that holds a pipeline binary, so
-    ``shutil.which`` inside the hook finds none whatever the host installed."""
-    kept = [
-        d
-        for d in path.split(os.pathsep)
-        if not any(os.access(os.path.join(d, b), os.X_OK) for b in _PIPELINE_BINARIES)
-    ]
-    return os.pathsep.join(kept)
-
-
-_SEED_CONSOLIDATE_STAMP = (
-    "from mcp_server.infrastructure.groomer_coordinator import "
-    "GroomerCoordinator, resolve_store_key; "
-    "GroomerCoordinator(resolve_store_key()).ensure_cycle("
-    "period_hours=6, spawn_fn=lambda: None)"
-)
-
-
-def _hermetic_hook_env(tmp_path: Path) -> tuple[dict[str, str], Path]:
-    """Environment and working directory under which a SessionStart hook can
-    start no detached background worker, so the run leaves no process behind.
-
-    SessionStart (session_start.main) spawns two detached workers
-    (``start_new_session=True``, reparented to pid 1 when the hook exits):
-    ``ingest_codebase_background`` from ``_maybe_background_reanalyze`` and
-    ``consolidate_background`` from ``_maybe_background_consolidate``. This
-    isolates each through the production contract, not a test-only branch:
-
-    * ingest: ``CORTEX_AUTO_INSTALL_PIPELINE=0`` stops the installer from
-      downloading the prebuilt binary into the temp HOME (the cause of the
-      leak: discovery then finds it), the scrubbed PATH hides any host
-      install, and the cwd is a temp project, never this repository, so
-      nothing resolves ``../ai-architect-mcp-codebase`` or ingests the repo.
-      ``discover_pipeline_command()`` returns None and the hook returns.
-    * consolidate: the coordinator's public ``ensure_cycle`` records a cycle
-      as just run (spawn_fn that starts nothing), so the hook sees
-      ``skipped_fresh`` for the 6 h period.
-    """
-    env = _isolated_env(tmp_path)
-    env["CORTEX_AUTO_INSTALL_PIPELINE"] = "0"
-    env["PATH"] = _path_without_pipeline_binaries(env.get("PATH", ""))
-    env["PYTHONPATH"] = str(REPO_ROOT)
-    project = tmp_path / "project"
-    project.mkdir(exist_ok=True)
-    subprocess.run(
-        [sys.executable, "-c", _SEED_CONSOLIDATE_STAMP],
-        env=env,
-        cwd=project,
-        check=True,
-        capture_output=True,
-    )
-    return env, project
-
-
 @pytest.mark.parametrize("module", HOOK_MODULES)
 def test_entry_matches_launcher_on_benign_event(module: str, tmp_path: Path) -> None:
     event = _benign_event(tmp_path)
-    env, project = _hermetic_hook_env(tmp_path)
+    env, project = hermetic_hook_env(_isolated_env(tmp_path), tmp_path)
 
     via_entry = subprocess.run(
         [sys.executable, "-m", "mcp_server.hooks.entry", module],

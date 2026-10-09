@@ -7,7 +7,6 @@ import json
 import os
 import subprocess
 import sys
-from pathlib import Path
 
 import pytest
 
@@ -15,6 +14,7 @@ from mcp_server.handlers.forget import _get_store
 from mcp_server.handlers.remember import handler
 from mcp_server.hooks.agent_briefing_query import _fetch_agent_context
 from mcp_server.hooks.session_start import _fetch_team_decisions
+from tests_py._hermetic_hook_env import hermetic_hook_env
 
 
 def _write(content, **kwargs):
@@ -23,9 +23,9 @@ def _write(content, **kwargs):
     return result["memory_id"]
 
 
-def _hook(module, cwd):
-    env = os.environ.copy()
-    env.pop("CLAUDE_PROJECT_ROOT", None)
+def _hook(module, cwd, tmp_path):
+    base = {k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_ROOT"}
+    env, project = hermetic_hook_env(base, tmp_path)
     result = subprocess.run(
         [sys.executable, "-m", f"mcp_server.hooks.{module}"],
         input=json.dumps(
@@ -38,26 +38,26 @@ def _hook(module, cwd):
         capture_output=True,
         text=True,
         env=env,
-        cwd=Path(__file__).resolve().parents[2],
+        cwd=project,
     )
     assert result.returncode == 0, result.stderr
     return result.stdout
 
 
 @pytest.mark.parametrize("module", ["auto_recall", "session_start"])
-def test_team_decision_hooks_remain_project_scoped(module):
+def test_team_decision_hooks_remain_project_scoped(module, tmp_path):
     content = "Decision: retain the ledger dossier layout for ORCHID_SCOPE_MARKER"
     _write(content, agent_topic="engineer", directory="/tmp/project-a")
-    assert "ORCHID_SCOPE_MARKER" in _hook(module, "/tmp/project-a")
-    assert "ORCHID_SCOPE_MARKER" not in _hook(module, "/tmp/project-b")
+    assert "ORCHID_SCOPE_MARKER" in _hook(module, "/tmp/project-a", tmp_path)
+    assert "ORCHID_SCOPE_MARKER" not in _hook(module, "/tmp/project-b", tmp_path)
 
 
 @pytest.mark.parametrize("module", ["auto_recall", "session_start"])
-def test_explicit_global_hooks_cross_projects(module):
+def test_explicit_global_hooks_cross_projects(module, tmp_path):
     content = "Decision: retain the ledger dossier layout for GLOBAL_SCOPE_MARKER"
     _write(content, agent_topic="engineer", directory="/tmp/project-a", is_global=True)
-    assert "GLOBAL_SCOPE_MARKER" in _hook(module, "/tmp/project-a")
-    assert "GLOBAL_SCOPE_MARKER" in _hook(module, "/tmp/project-b")
+    assert "GLOBAL_SCOPE_MARKER" in _hook(module, "/tmp/project-a", tmp_path)
+    assert "GLOBAL_SCOPE_MARKER" in _hook(module, "/tmp/project-b", tmp_path)
 
 
 def test_pg_team_readers_scope_both_agent_passes():
