@@ -19,6 +19,16 @@ isolated here through the production contract, never a test-only branch:
   just run (a ``spawn_fn`` that starts nothing), so the hook sees
   ``skipped_fresh`` for the 6 h period.
 
+A third worker is the resident capture worker (ADR-0486, ADR-0508): a real
+PostToolUse hook run admits its capture to a worker that, by design, outlives
+the hook and exits only after ``CORTEX_CAPTURE_IDLE_SECONDS`` without traffic
+(default 300 s). It is started on Linux only: on macOS the temp directory sits
+under the ``/var`` symlink, which the worker's directory check refuses, so the
+capture is skipped before any spawn (measured 2026-10-09). The hermetic env sets
+the idle window to one second (the production variable), and
+``await_capture_worker_exit`` blocks on the worker's own lifetime lease, the
+kernel ``flock`` it holds until it exits, so no sleep or poll decides anything.
+
 source: this PR; spawn sites mcp_server/hooks/session_start.py
 (_maybe_background_reanalyze, _maybe_background_consolidate)
 """
@@ -28,8 +38,10 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
+from mcp_server.infrastructure import capture_socket
 from mcp_server.infrastructure.upstream_identity import BINARY_NAMES
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -71,6 +83,9 @@ def hermetic_hook_env(
     env = dict(base)
     env["HOME"] = str(home)
     env["CORTEX_AUTO_INSTALL_PIPELINE"] = "0"
+    # source: ADR-0489 (capture worker idle window), ADR-0519 (embedding opt-out)
+    env["CORTEX_CAPTURE_IDLE_SECONDS"] = "1"
+    env["CORTEX_EMBEDDING_ZERO_DOWNLOAD"] = "1"
     env["PATH"] = _path_without_pipeline_binaries(env.get("PATH", ""))
     env["PYTHONPATH"] = str(REPO_ROOT)
     project = tmp_path / "project"
@@ -83,3 +98,22 @@ def hermetic_hook_env(
         capture_output=True,
     )
     return env, project
+
+
+# source: ADR-0489 -- the worker polls its shutdown flag at min(transport, idle)
+# seconds and the idle window is one second here; 30 s is a deadline, not a delay.
+_WORKER_EXIT_DEADLINE_SECONDS = 30.0
+
+
+def await_capture_worker_exit(env: dict[str, str]) -> None:
+    """Block until no resident capture worker serves ``env``'s Claude dir.
+
+    postcondition: the worker's lifetime lease (``worker.lock``) was acquired,
+    i.e. the worker, if one was started, has exited; raises on the deadline.
+    """
+    runtime = Path(env["CORTEX_CLAUDE_DIR"]) / ".capture-worker"
+    if not runtime.is_dir():
+        return  # no capture was admitted, so nothing was spawned
+    deadline = time.monotonic() + _WORKER_EXIT_DEADLINE_SECONDS
+    with capture_socket.lease(runtime / "worker.lock", deadline):
+        pass

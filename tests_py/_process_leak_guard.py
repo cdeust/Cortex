@@ -37,6 +37,7 @@ import os
 import subprocess
 import sys
 import uuid
+import warnings
 
 import pytest
 
@@ -55,31 +56,22 @@ _OWN_HELPER = "multiprocessing.resource_tracker"
 os.environ[TOKEN_VAR] = uuid.uuid4().hex
 
 
-def live_tokened_processes(token: str) -> list[tuple[int, str]]:
-    """Return (pid, command) of every live process carrying ``token``.
+def parse_process_table(
+    table: str, token: str, own_pids: tuple[int, ...]
+) -> list[tuple[int, str]]:
+    """Return (pid, command) of every tokened line of a ``ps`` table.
 
-    precondition: ``token`` was exported in the environment of every process
-    under test. postcondition: pytest itself, the ``ps`` that took the
-    snapshot and pytest's own direct ``multiprocessing`` resource tracker are
-    excluded; the result is a single point-in-time snapshot of the process
-    table (no waiting, no retry). Empty on Windows (see module docstring).
-    """
-    if sys.platform == "win32":
-        return []
-    ps = subprocess.Popen(  # noqa: S603 — fixed argv, no shell
-        ["ps", _PS_ENV_FLAGS, "-o", "pid=,ppid=,command="],
-        stdout=subprocess.PIPE,
-        text=True,
-    )
-    out, _ = ps.communicate()
+    postcondition: ``own_pids`` and pytest's direct ``multiprocessing`` resource
+    tracker are excluded; a line that is not ``pid ppid command`` is skipped (the
+    ``ps`` header and wrapped continuation lines, never a process)."""
     needle = f"{TOKEN_VAR}={token}"
     found: list[tuple[int, str]] = []
-    for line in out.splitlines():
+    for line in table.splitlines():
         fields = line.split(None, 2)
         if len(fields) < 3 or not (fields[0] + fields[1]).isdigit():
             continue
         pid, ppid, command = int(fields[0]), int(fields[1]), fields[2]
-        if needle not in command or pid in (os.getpid(), ps.pid):
+        if needle not in command or pid in own_pids:
             continue
         if ppid == os.getpid() and _OWN_HELPER in command:
             continue
@@ -87,11 +79,41 @@ def live_tokened_processes(token: str) -> list[tuple[int, str]]:
     return found
 
 
-@pytest.fixture(scope="session", autouse=True)
-def _session_process_leak_guard():
-    """Fail the session if any process it spawned outlives it."""
-    yield
-    leaked = live_tokened_processes(os.environ[TOKEN_VAR])
+def live_tokened_processes(token: str) -> list[tuple[int, str]]:
+    """Return (pid, command) of every live process carrying ``token``.
+
+    precondition: ``token`` was exported in the environment of every process
+    under test. postcondition: one point-in-time snapshot of the process table
+    (no waiting, no retry); a ``ps`` that fails (missing, or without the
+    environment flag as in busybox) raises instead of reporting "no leak".
+    Windows: warns once and returns [] (see module docstring)."""
+    if sys.platform == "win32":
+        warnings.warn(
+            "process leak guard is inactive on Windows: no process-environment "
+            "reader without psutil; an empty result is NOT 'no leak found'",
+            stacklevel=2,
+        )
+        return []
+    argv = ["ps", _PS_ENV_FLAGS, "-o", "pid=,ppid=,command="]
+    ps = subprocess.Popen(  # noqa: S603 — fixed argv, no shell
+        argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+    )
+    out, err = ps.communicate()
+    if ps.returncode != 0:
+        raise RuntimeError(
+            f"leak guard cannot read the process table: `{' '.join(argv)}` "
+            f"exited {ps.returncode} (flag set {_PS_ENV_FLAGS!r} for "
+            f"{sys.platform}): {err.strip()}"
+        )
+    return parse_process_table(out, token, (os.getpid(), ps.pid))
+
+
+def fail_on_leaks(token: str) -> None:
+    """Fail (``pytest.fail``) listing every live process carrying ``token``.
+
+    The error is attached to the last test of the session, not to the test that
+    started the process; the listing (command, cwd, temp dir) names the origin."""
+    leaked = live_tokened_processes(token)
     if leaked:
         listing = "\n".join(f"  pid {pid}: {cmd[:300]}" for pid, cmd in leaked)
         pytest.fail(
@@ -100,3 +122,10 @@ def _session_process_leak_guard():
             f"{listing}",
             pytrace=False,
         )
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _session_process_leak_guard():
+    """Fail the session if any process it spawned outlives it."""
+    yield
+    fail_on_leaks(os.environ[TOKEN_VAR])

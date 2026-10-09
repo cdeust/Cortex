@@ -7,6 +7,8 @@ import json
 import sys
 from unittest.mock import patch
 
+import pytest
+
 from mcp_server.hooks.session_lifecycle import (
     process_event,
     _resolve_domain,
@@ -79,6 +81,16 @@ class TestResolveDomain:
 
 
 class TestProcessEvent:
+    @pytest.fixture(autouse=True)
+    def spawn(self):
+        """``process_event`` ends by starting the detached dream cycle
+        (``_spawn_consolidation``); a test of the session-log bookkeeping must not
+        start a real process nobody waits on. The spawn itself is tested in
+        ``TestSpawnConsolidation`` with ``Popen`` replaced. Found by the process
+        leak guard on Linux, where the cycle was still running at teardown."""
+        with patch("mcp_server.hooks.session_lifecycle._spawn_consolidation") as spawn:
+            yield spawn
+
     @patch("mcp_server.hooks.session_lifecycle.save_profile")
     @patch("mcp_server.hooks.session_lifecycle.save_session_log")
     @patch(
@@ -89,7 +101,7 @@ class TestProcessEvent:
         "mcp_server.hooks.session_lifecycle.load_profiles",
         return_value=_profiles_with_domain(),
     )
-    def test_updates_existing_domain(self, mock_lp, mock_lsl, mock_ssl, mock_sp):
+    def test_updates_existing_domain(self, mock_lp, mock_lsl, mock_ssl, mock_sp, spawn):
         event = {
             "session_id": "test-123",
             "cwd": "/Users/dev/my-project",
@@ -99,6 +111,7 @@ class TestProcessEvent:
             "keywords": ["refactor", "cleanup"],
         }
         process_event(event)
+        spawn.assert_called_once_with(turn_count=12)
         mock_ssl.assert_called_once()
         mock_sp.assert_called_once()
         saved_log = mock_ssl.call_args[0][0]

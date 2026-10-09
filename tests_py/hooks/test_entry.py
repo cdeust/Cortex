@@ -25,7 +25,7 @@ from unittest.mock import patch
 
 import pytest
 
-from tests_py._hermetic_hook_env import hermetic_hook_env
+from tests_py._hermetic_hook_env import await_capture_worker_exit, hermetic_hook_env
 
 # tomllib is 3.11+; requires-python is >=3.10 (pyproject.toml), so the
 # fallback backport is used on 3.10, exactly like build/hatchling's own
@@ -53,12 +53,21 @@ HOOK_MODULES = (
 )
 
 
-def _benign_event(tmp_path: Path) -> str:
+# session_lifecycle with a session_id ends by starting the detached dream cycle
+# (``--consolidate``) and its dependency bootstrap: processes nobody can wait
+# on, still running at teardown on a slow runner. Its event therefore carries no
+# session_id, so the hook takes its documented "No session_id" exit; the
+# spawn is covered with Popen replaced in test_session_lifecycle.py.
+_NO_DETACHED_WORK_EVENT = {"session_lifecycle": None}
+
+
+def _benign_event(tmp_path: Path, module: str = "") -> str:
     target = tmp_path / "seen.txt"
     target.write_text("hello\n", encoding="utf-8")
+    session_id = _NO_DETACHED_WORK_EVENT.get(module, "t")
     return json.dumps(
         {
-            "session_id": "t",
+            "session_id": session_id,
             "cwd": str(tmp_path),
             "tool_name": "Read",
             "tool_input": {"file_path": str(target)},
@@ -83,7 +92,7 @@ def _isolated_env(tmp_path: Path) -> dict[str, str]:
 
 @pytest.mark.parametrize("module", HOOK_MODULES)
 def test_entry_matches_launcher_on_benign_event(module: str, tmp_path: Path) -> None:
-    event = _benign_event(tmp_path)
+    event = _benign_event(tmp_path, module)
     env, project = hermetic_hook_env(_isolated_env(tmp_path), tmp_path)
 
     via_entry = subprocess.run(
@@ -102,6 +111,8 @@ def test_entry_matches_launcher_on_benign_event(module: str, tmp_path: Path) -> 
         env=env,
         cwd=project,
     )
+
+    await_capture_worker_exit(env)  # a worker the hook admitted to has exited
 
     assert via_entry.returncode == via_launcher.returncode, (
         via_entry.stderr,
