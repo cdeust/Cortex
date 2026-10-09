@@ -3,7 +3,8 @@
 
 Like ``launcher_deps.py`` and ``launcher.py``, this module runs before
 the plugin's own dependencies exist on ``sys.path`` and may import only
-the Python standard library.
+the Python standard library, plus ``mcp_server.shared.process_liveness``
+(itself stdlib-only; see the comment above its import, issue #665).
 
 source: ADR-0748"""
 
@@ -14,7 +15,21 @@ import importlib.machinery
 import os
 import re
 import shutil
+import sys
 import sysconfig
+from pathlib import Path
+
+# ``pid_alive`` is NOT defined here: one probe serves every caller
+# (``mcp_server.shared.process_liveness``, issue #665). That module is stdlib
+# only (shared layer: ``os`` + ``ctypes``) and the ``mcp_server`` and
+# ``mcp_server.shared`` packages import nothing, so the bootstrap's
+# "stdlib only before the deps exist" rule still holds. The plugin root is
+# this file's grandparent, the same root ``launcher.py`` puts on ``sys.path``.
+# source: ADR-0748
+_PLUGIN_ROOT = str(Path(__file__).resolve().parent.parent)
+if _PLUGIN_ROOT not in sys.path:
+    sys.path.insert(0, _PLUGIN_ROOT)
+from mcp_server.shared.process_liveness import pid_alive as pid_alive  # noqa: E402
 
 # Matches the backup basename `_commit_entry` (launcher_deps.py) creates:
 # `<entry>.bak-<pid>`, e.g. `numpy.bak-4242` or
@@ -36,30 +51,6 @@ _BACKUP_NAME_RE = re.compile(r"^(?P<entry>.+)\.bak-(?P<pid>\d+)$")
 _ABI_TAGGED_EXTENSION_RE = re.compile(
     r"\.(?:cpython|cp)-?\d+[\w.-]*\.(?:so|pyd|dylib)$"
 )
-
-
-def pid_alive(pid: int) -> bool:
-    """True iff ``pid`` currently identifies a live process. Never
-    raises; a permission error (pid exists, owned by another user)
-    still counts as alive.
-
-    Duplicated from
-    ``mcp_server.infrastructure.session_registry._pid_alive`` rather
-    than imported: this module must stay stdlib-only (see module
-    docstring), and ``mcp_server`` is an outer layer this bootstrap
-    script must never import from.
-    """
-    if pid <= 0:
-        return False
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    except OSError:
-        return False
-    return True
 
 
 def normalize_dist_key(name: str) -> str:

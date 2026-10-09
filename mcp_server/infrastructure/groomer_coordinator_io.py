@@ -11,22 +11,7 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-
-def pid_alive(pid: int) -> bool:
-    """True iff ``pid`` currently names a live process.
-
-    source: ADR-0528"""
-    if pid <= 0:
-        return False
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    except OSError:
-        return False
-    return True
+from mcp_server.shared.process_liveness import pid_alive as pid_alive
 
 
 def parse_iso(raw: str | None) -> datetime | None:

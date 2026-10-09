@@ -1,5 +1,9 @@
 """Per-window session registry — T2-handlers increment H1 (foundation).
 
+Windows (issue #665): an unreadable process table, or an undocumented
+``OpenProcess`` error from the liveness probe, raises ``OSError`` out of the
+functions that resolve a pid or probe liveness; callers log it.
+
 source: ADR-0597"""
 
 from __future__ import annotations
@@ -11,7 +15,10 @@ import tempfile
 import time
 from pathlib import Path
 
+from mcp_server.infrastructure import process_ancestry
 from mcp_server.infrastructure.file_io import read_json
+from mcp_server.shared import platform as host_platform
+from mcp_server.shared.process_liveness import pid_alive as _pid_alive
 
 # source: ADR-0597
 _SCHEMA_VERSION = 1
@@ -36,23 +43,6 @@ def registry_dir() -> Path:
 def registry_path(claude_pid: int) -> Path:
     """Registry file for one window, keyed by its ``claude`` pid."""
     return registry_dir() / f"{claude_pid}.json"
-
-
-def _pid_alive(pid: int) -> bool:
-    """True iff ``pid`` currently identifies a live process.
-
-    source: ADR-0597"""
-    if pid <= 0:
-        return False
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    except OSError:
-        return False
-    return True
 
 
 # source: ADR-0597
@@ -82,6 +72,8 @@ def _process_start_signature(pid: int) -> str | None:
     """Opaque per-process start-time token.
 
     source: ADR-0597"""
+    if host_platform.IS_WINDOWS:
+        return process_ancestry.start_signature(pid)
     stat_path = Path(f"/proc/{pid}/stat")
     if stat_path.exists():
         try:
@@ -134,6 +126,8 @@ def find_claude_ancestor(max_depth: int = _MAX_ANCESTOR_DEPTH) -> int | None:
     max_depth. Intended for hook processes.
 
     source: ADR-0597"""
+    if host_platform.IS_WINDOWS:
+        return process_ancestry.claude_ancestor_pid(os.getpid(), max_depth)
     pid = os.getppid()
     for _ in range(max_depth):
         info = _ppid_and_comm(pid)
@@ -206,14 +200,27 @@ def tombstone(claude_pid: int) -> bool:
     return write_session(None, claude_pid=claude_pid)
 
 
-def current_window_session() -> str | None:
-    """Return the current MCP server window session identity, or None when no valid
-    session is registered. Called from a direct child of the window claude
-    process. Rejects missing, unreadable, malformed, tombstoned, or stale-
-    lineage registry entries.
+def _window_claude_pid() -> int | None:
+    """The ``claude`` pid of this MCP server's window: ``os.getppid()`` on
+    POSIX; on Windows (server parent is ``cmd.exe``) the nearest
+    ``claude.exe`` ancestor, cached per server process.
 
     source: ADR-0597"""
-    claude_pid = os.getppid()
+    if not host_platform.IS_WINDOWS:
+        return os.getppid()
+    return process_ancestry.cached_window_pid(find_claude_ancestor)
+
+
+def current_window_session() -> str | None:
+    """Return the current MCP server window session identity, or None when no valid
+    session is registered. Called from the MCP server process (see
+    ``_window_claude_pid`` for how its window is found). Rejects missing,
+    unreadable, malformed, tombstoned, or stale-lineage registry entries.
+
+    source: ADR-0597"""
+    claude_pid = _window_claude_pid()
+    if claude_pid is None:
+        return None
     data = read_json(registry_path(claude_pid))
     if not isinstance(data, dict):
         return None
@@ -237,8 +244,8 @@ def purge_dead_entries() -> int:
         Exposed for H2 to call from the SessionStart hook. No daemon, no
         TTL: the only leak is a closed window's file.
 
-    postcondition: returns count of files removed; never raises — an
-        unreadable directory or file is skipped, not fatal.
+    postcondition: returns count of files removed; raises no I/O error (an
+        unreadable directory or file is skipped) — Windows: see module note.
 
     source: ADR-0597"""
     removed = 0

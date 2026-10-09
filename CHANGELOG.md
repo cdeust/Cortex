@@ -35,6 +35,23 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Windows: each Claude window gets its own session identity, and no liveness
+  probe can signal a live process** (#665). Three causes, one fix each. (1) The
+  registry walked ancestors with `ps -o`, which Git Bash does not have; the
+  walk now reads the Windows process table through a small `ctypes` layer
+  (`mcp_server/shared/win32_process.py`, kernel32 only, no new dependency).
+  (2) The match was `basename == "claude"` while the process is `claude.exe`;
+  it is now a case-insensitive `claude.exe` match on the nearest ancestor, with
+  a creation-time check so a recycled parent pid is never followed. (3) The MCP
+  server's parent is `cmd.exe`, not `claude`; on Windows the reader walks to
+  the `claude.exe` ancestor instead of calling `os.getppid()` and caches it for
+  the server's lifetime. POSIX paths are unchanged. Separately, every
+  `os.kill(pid, 0)` liveness probe (`session_registry`, `GroomerCoordinator`,
+  the launcher's backup sweep) is replaced by one `pid_alive`
+  (`mcp_server/shared/process_liveness.py`): on Windows `os.kill` with signal 0
+  is `GenerateConsoleCtrlEvent(CTRL_C_EVENT, pid)`, not an existence check, and
+  any other signal is `TerminateProcess`; the Windows probe is now
+  `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)` + `GetExitCodeProcess`.
 - **Windows: hooks decoded their event JSON as cp1252, so captured memories
   stored mojibake (#664).** Claude Code and Codex write the hook event as
   UTF-8, but a text-mode `sys.stdin` decodes with the locale code page, so

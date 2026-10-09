@@ -496,6 +496,10 @@ jobs:
       # capture_peer.is_supported() is false natively, msvcrt takes the real
       # drainer lock and the detached child runs with the real Windows
       # creationflags. source: ADR-1094
+      # The five process-table files join per issue #665: this is the only host
+      # where win32_process runs against the real kernel32 (the win32-only
+      # tests in test_win32_process.py skip everywhere else) and where
+      # pid_alive proves it does not terminate a live process. source: ADR-0597
       - name: Run portability + backend tests
         env:
           HF_HUB_OFFLINE: "1"
@@ -517,6 +521,11 @@ jobs:
           tests_py/hooks/test_capture_unsupported_platform.py
           tests_py/hooks/test_capture_drain.py
           tests_py/infrastructure/test_capture_spool.py
+          tests_py/shared/test_win32_process.py
+          tests_py/shared/test_win32_process_logic.py
+          tests_py/shared/test_process_liveness.py
+          tests_py/infrastructure/test_process_ancestry.py
+          tests_py/infrastructure/test_session_registry_windows.py
 
   # source: ADR-0802
 
