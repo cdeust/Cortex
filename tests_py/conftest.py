@@ -41,11 +41,6 @@ from scripts.check_venv_lock_parity import postgresql_extra_drift
 # so the env var must be set before the first import — conftest.py is loaded
 # before any test module, and nothing above this point imports mcp_server.
 _TEST_CLAUDE_DIR = tempfile.mkdtemp(prefix="cortex_test_claude_")
-# The embedding opt-out (ADR-0519): without it the first embed in a container
-# without model weights starts a detached `sentence_transformers` download that
-# outlives the session (found by the process leak guard on Linux, 2026-10-09).
-# Tests of the downloader itself set or clear it with monkeypatch.
-os.environ["CORTEX_EMBEDDING_ZERO_DOWNLOAD"] = "1"
 
 
 def _redirect_real_data_roots() -> str:

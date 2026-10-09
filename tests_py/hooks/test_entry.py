@@ -53,21 +53,13 @@ HOOK_MODULES = (
 )
 
 
-# session_lifecycle with a session_id ends by starting the detached dream cycle
-# (``--consolidate``) and its dependency bootstrap: processes nobody can wait
-# on, still running at teardown on a slow runner. Its event therefore carries no
-# session_id, so the hook takes its documented "No session_id" exit; the
-# spawn is covered with Popen replaced in test_session_lifecycle.py.
-_NO_DETACHED_WORK_EVENT = {"session_lifecycle": None}
-
-
 def _benign_event(tmp_path: Path, module: str = "") -> str:
     target = tmp_path / "seen.txt"
     target.write_text("hello\n", encoding="utf-8")
-    session_id = _NO_DETACHED_WORK_EVENT.get(module, "t")
+    # a session_id starts a detached dream cycle nobody can wait on
     return json.dumps(
         {
-            "session_id": session_id,
+            "session_id": None if module == "session_lifecycle" else "t",
             "cwd": str(tmp_path),
             "tool_name": "Read",
             "tool_input": {"file_path": str(target)},
@@ -112,8 +104,7 @@ def test_entry_matches_launcher_on_benign_event(module: str, tmp_path: Path) -> 
         cwd=project,
     )
 
-    await_capture_worker_exit(env)  # a worker the hook admitted to has exited
-
+    await_capture_worker_exit(env)
     assert via_entry.returncode == via_launcher.returncode, (
         via_entry.stderr,
         via_launcher.stderr,
