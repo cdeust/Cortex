@@ -7,6 +7,7 @@ from __future__ import annotations
 import os
 import shutil
 import sys
+import time
 from pathlib import Path
 from typing import Callable
 
@@ -18,7 +19,9 @@ from mcp_server.handlers.admission import DEFAULT_SEMAPHORE
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 from mcp_server.infrastructure.backend_marker import effective_backend
+from mcp_server.doctor_capture import capture_verdict
 from mcp_server.doctor_mcp import run_mcp
+from mcp_server.infrastructure.config import CLAUDE_DIR
 from mcp_server.shared.subprocess_safe import run_with_hard_timeout
 
 # source: validate_memory.py:29 precedent (_GIT_CHECK_TIMEOUT_S)
@@ -421,6 +424,17 @@ def _i10_config() -> Check:
         return Check("I10 pool capacity", False, f"{type(exc).__name__}: {exc}", "")
 
 
+def _auto_capture() -> Check:
+    """Required: auto-capture works, judged from what it recorded (issue #660).
+
+    source: ADR-1094"""
+    try:
+        verdict = capture_verdict(CLAUDE_DIR, time.time())
+    except OSError as exc:
+        return Check("auto-capture", False, f"cannot read the evidence: {exc}")
+    return Check("auto-capture", verdict.ok, verdict.detail, verdict.fix)
+
+
 def _sqlite_store() -> Check:
     """SQLite backend: the store opens and its schema initializes.
 
@@ -494,6 +508,7 @@ CHECKS: list[Callable[[], Check]] = [
     _pg_connection,
     _pg_extensions,
     _methodology_dir,
+    _auto_capture,
     _i10_config,
     _codebase_pipeline,  # optional — doesn't fail doctor
     _worktree_locations,  # optional — doesn't fail doctor
@@ -504,6 +519,7 @@ SQLITE_CHECKS: list[Callable[[], Check]] = [
     _sqlite_store,
     _sqlite_vector_search,
     _methodology_dir,
+    _auto_capture,
     _i10_config,
     _codebase_pipeline,  # optional — doesn't fail doctor
     _worktree_locations,  # optional — doesn't fail doctor

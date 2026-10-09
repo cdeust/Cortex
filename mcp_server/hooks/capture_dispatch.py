@@ -25,11 +25,22 @@ logger = logging.getLogger(__name__)
 def report_failure(
     message: str, elapsed: float, operation: str = "capture_skipped"
 ) -> None:
+    """Log and record a failed capture step.
+
+    postcondition: a ``capture_skipped`` report is a declined capture, recorded as
+    skipped; any other operation (worker lifecycle, a stalled spool) is an error.
+    The two are counted apart so a skip cannot hide among real errors (issue #660)."""
     logger.error("[cortex-capture-worker] %s", message)
     from mcp_server.core import telemetry  # noqa: PLC0415 — hook composition emits telemetry only on failure, no store/model import
+    from mcp_server.core.capture_health import CAPTURE_SKIPPED  # noqa: PLC0415 — same: nothing under mcp_server.core loads at hook import
 
     # source: ADR-0486
-    telemetry.record(operation, latency_ms=elapsed * 1000.0, ok=False)
+    telemetry.record(
+        operation,
+        latency_ms=elapsed * 1000.0,
+        ok=False,
+        skipped=operation == CAPTURE_SKIPPED,
+    )
 
 
 # source: https://learn.microsoft.com/en-us/windows/win32/procthread/process-creation-flags

@@ -57,10 +57,21 @@ _PAYLOAD_SUFFIX = ".json"
 _LOCK_BYTES = 1
 
 
+def spool_path(root: Path) -> Path:
+    """Where the spool is (or would be); creates nothing, so a reader (the doctor)
+    can look without leaving state behind."""
+    return root.expanduser().absolute() / SPOOL_ROOT / "spool"
+
+
+def rejected_count(spool: Path) -> int:
+    """Refused payloads kept for inspection; zero when the spool does not exist."""
+    return sum(1 for _ in spool.glob(f"*{REJECTED_SUFFIX}"))
+
+
 def spool_directory(root: Path) -> Path:
     """postcondition: ``<root>/.capture-worker/spool`` exists; its path is returned."""
     root = root.expanduser().absolute()
-    spool = root / SPOOL_ROOT / "spool"
+    spool = spool_path(root)
     # one level at a time: ``mkdir(parents=True)`` applies ``mode`` to the leaf only
     for directory in (root, spool.parent, spool):
         directory.mkdir(mode=PRIVATE_DIR, exist_ok=True)

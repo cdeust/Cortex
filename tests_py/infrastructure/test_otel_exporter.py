@@ -175,6 +175,19 @@ class TestExportMapping:
 
         calls.add.assert_called_once_with(1, {"tool": "remember", "status": "fail"})
 
+    def test_export_maps_skipped_status_apart_from_failure(self):
+        exporter, duration, calls, results = (
+            self._build_exporter_with_mock_instruments()
+        )
+
+        exporter.export(
+            {"op": "capture_skipped", "latency_ms": 1.0, "ok": False, "skipped": True}
+        )
+
+        calls.add.assert_called_once_with(
+            1, {"tool": "capture_skipped", "status": "skipped"}
+        )
+
     def test_export_skips_result_histogram_when_zero(self):
         exporter, duration, calls, results = (
             self._build_exporter_with_mock_instruments()

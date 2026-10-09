@@ -62,7 +62,7 @@ class TestCaptureDispatch(unittest.TestCase):
                     self.assertFalse(self.dispatch.dispatch(payload()))
         self.assertIn("fixture spawn failed", " ".join(logs.output))
         self.record.assert_called_once_with(
-            "capture_skipped", latency_ms=250.0, ok=False
+            "capture_skipped", latency_ms=250.0, ok=False, skipped=True
         )
 
     def test_invalid_payload_never_reaches_spawn_or_transport(self):
@@ -78,7 +78,7 @@ class TestCaptureDispatch(unittest.TestCase):
                 "fixture cleanup", 0.25, "capture_worker_lifecycle"
             )
         self.record.assert_called_once_with(
-            "capture_worker_lifecycle", latency_ms=250.0, ok=False
+            "capture_worker_lifecycle", latency_ms=250.0, ok=False, skipped=False
         )
 
     def test_spawn_detaches_every_stdio_stream_and_passes_only_worker_fds(self):

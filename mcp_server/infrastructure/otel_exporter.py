@@ -69,7 +69,9 @@ class OtelTelemetryExporter:
     def export(self, sample: dict[str, Any]) -> None:
         op = str(sample.get("op", "unknown"))
         ok = bool(sample.get("ok", True))
-        attributes = {"tool": op, "status": "ok" if ok else "fail"}
+        # source: issue #660 (a skipped operation is its own status, not "fail")
+        status = "ok" if ok else "skipped" if sample.get("skipped") else "fail"
+        attributes = {"tool": op, "status": status}
         try:
             self._duration.record(float(sample.get("latency_ms", 0.0)), attributes)
             self._calls.add(1, attributes)

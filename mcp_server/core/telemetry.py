@@ -28,7 +28,9 @@ class TelemetryExporter(Protocol):
     Contract:
       - ``export`` receives the same dict shape written to the JSONL log
         (``ts``, ``op``, ``latency_ms``, ``bytes_in``, ``bytes_out``,
-        ``result_count``, ``ok``, ``tier``, ``reranked_count``).
+        ``result_count``, ``ok``, ``skipped``, ``tier``,
+        ``reranked_count``). ``skipped`` is true only on a declined
+        operation (``ok`` is then false): it is not an error.
       - ``export`` MUST NOT raise for control flow that reaches the
         caller -- ``record()`` catches any exception defensively, but a
         well-behaved implementation handles its own I/O errors.
@@ -80,6 +82,7 @@ class TelemetrySample(TypedDict):
     bytes_out: int
     result_count: int
     ok: bool
+    skipped: bool
     tier: str | None
     reranked_count: int
 
@@ -121,8 +124,17 @@ def record(
     bytes_out: int = 0,
     result_count: int = 0,
     ok: bool = True,
+    skipped: bool = False,
 ) -> None:
-    """Capture one operation, or publish immediately outside an MCP request."""
+    """Capture one operation, or publish immediately outside an MCP request.
+
+    precondition: ``skipped`` implies ``not ok`` -- a skipped operation did not
+    succeed, it was declined; a contradictory pair raises ``ValueError``.
+    postcondition: the sample carries one of three outcomes: ok, skipped (not ok,
+    skipped), or error (not ok, not skipped). Counters keep them apart.
+    """
+    if ok and skipped:
+        raise ValueError(f"telemetry sample for {op!r} is both ok and skipped")
     if _disabled():
         return
     retrieval = retrieval_metrics()
@@ -134,6 +146,7 @@ def record(
         "bytes_out": bytes_out,
         "result_count": result_count,
         "ok": ok,
+        "skipped": skipped,
         "tier": retrieval.tier,
         "reranked_count": retrieval.reranked_count,
     }
@@ -154,6 +167,7 @@ def _update_counters(sample: TelemetrySample) -> None:
                 "count": 0,
                 "ok": 0,
                 "fail": 0,
+                "skipped": 0,
                 "bytes_in": 0,
                 "bytes_out": 0,
                 "result_count": 0,
@@ -162,7 +176,8 @@ def _update_counters(sample: TelemetrySample) -> None:
             },
         )
         c["count"] += 1
-        c["ok" if sample["ok"] else "fail"] += 1
+        # source: issue #660 (a skip is a declined operation, not an error)
+        c["ok" if sample["ok"] else "skipped" if sample["skipped"] else "fail"] += 1
         c["bytes_in"] += sample["bytes_in"]
         c["bytes_out"] += sample["bytes_out"]
         c["result_count"] += sample["result_count"]
