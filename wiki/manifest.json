@@ -3551,6 +3551,10 @@
     "ADR-1095": {
       "mirror": "ADR-1095-judge-auto-capture-health-from-the-telemetry-log-and-the-spool.md",
       "path": "adr/cortex/1095-judge-auto-capture-health-from-the-telemetry-log-and-the-spool.md"
+    },
+    "ADR-1096": {
+      "mirror": "ADR-1096-read-the-windows-process-table-through-ctypes-and-probe-liveness-without-os.kill.md",
+      "path": "adr/cortex/1096-read-the-windows-process-table-through-ctypes-and-probe-liveness-without-os.kill.md"
     }
   },
   "project": "cortex",

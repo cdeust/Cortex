@@ -1,0 +1,38 @@
+---
+created: 2026-10-09T07:18:56Z
+kind: adr
+number: 1096
+status: accepted
+tags: [windows, session-registry, process-liveness, issue-665, issue-666]
+title: Read the Windows process table through ctypes and probe liveness without os.kill
+---
+# ADR-1096: Read the Windows process table through ctypes and probe liveness without os.kill
+
+## Status
+
+accepted
+
+## Context
+
+Issue #665: on Windows (Git Bash, Claude Code desktop app) the per-window session registry of ADR-0597 is never written. Three causes. First, `ps -o` does not exist in Git Bash, so the ancestor walk and the start signature fail at their first step. Second, the process is `claude.exe` while the match was the name `claude`. Third, the MCP server is not a direct child of claude (its parent is `cmd.exe`), while the reader used `os.getppid()`. Measured trees: hook `claude.exe -> bash.exe -> bash.exe -> bash.exe -> python.exe`; MCP server `claude.exe -> cmd.exe -> python.exe`; above `claude.exe` sits the shared desktop app, also named `Claude.exe`.
+
+The review of PR #676 (issue #666) found a second defect on the same path. Three liveness probes (`session_registry._pid_alive`, `groomer_coordinator_io.pid_alive`, `scripts/launcher_deps_fs.pid_alive`) call `os.kill(pid, 0)`. On Windows CPython sends signal 0 as CTRL_C_EVENT to `GenerateConsoleCtrlEvent(0, pid)`. Microsoft documents that CTRL_C_EVENT cannot be limited to a process group and that with a nonzero group id the call succeeds without the group receiving the signal, so signal 0 is not an existence test. In CPython 3.10 and 3.11 (never fixed) and in 3.12.0 to 3.12.8 and 3.13.0 to 3.13.1 (fixed in 3.12.9 and 3.13.2 by gh-128932, the fix of gh-58689) a failed `GenerateConsoleCtrlEvent` falls through to `OpenProcess(PROCESS_ALL_ACCESS)` and `TerminateProcess(handle, 0)`. A pid that is not a group id on the caller's console behaves as group 0, which sends Ctrl+C to every process on that console. `requires-python` is `>=3.10`, so a probe pointed at a live `claude.exe` pid could terminate that window or interrupt a console. The old probes only ever saw dead hook pids; the fixed ancestor walk makes live claude pids the probe's normal input.
+
+ADR-0597 states rules this decision reverses on Windows: the reader uses `os.getppid()`; the window session is resolved fresh on every call and never cached; `_pid_alive`, `purge_dead_entries` and `has_active_session_window` never raise; platform helpers degrade to None or False; the `_start_signature_cache` correctness argument rests on POSIX reparenting. ADR-0748 kept the launcher bootstrap free of `mcp_server` imports.
+
+## Decision
+
+1. One ctypes layer reads the Windows process table: `mcp_server/shared/win32_process.py` (kernel32 only, no new dependency). It provides the process snapshot (`CreateToolhelp32Snapshot`, `Process32FirstW`, `Process32NextW`, `PROCESSENTRY32W`), the creation time (`GetProcessTimes`) and a liveness probe. Every call declares argtypes and restype, handles are closed in `finally`, `use_last_error` is on. The snapshot raises OSError unless enumeration ends with ERROR_NO_MORE_FILES. A failed read raises; it never answers "dead" or "no ancestor".
+2. One liveness probe replaces the three `os.kill(pid, 0)` copies: `mcp_server/shared/process_liveness.pid_alive`. POSIX keeps its existing behaviour byte for byte. Windows uses `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)` then `GetExitCodeProcess` compared with STILL_ACTIVE (259). Error 5 (access denied) means alive, error 87 (invalid parameter) means dead, any other error raises OSError. `os.kill` is never called on Windows for liveness.
+3. The nearest `claude.exe` ancestor is found by `mcp_server/infrastructure/process_ancestry.py`, case-insensitive, at most 15 edges. A parent younger than its child (by creation time) is not followed, which rejects a recycled parent pid.
+4. The reader on Windows walks to that ancestor instead of reading `os.getppid()`. The ancestor pid is resolved once per server process and cached; `session_id` is still read fresh on every call. This replaces the "never cached" rule of ADR-0597 on Windows only. The Windows start signature is the process creation FILETIME as an opaque token, and its per-server cache is kept: the case where the claude process dies without SessionEnd, its pid is recycled and the same server keeps answering is not reachable, because the server is a descendant of that claude process and exits with it.
+5. The rules of ADR-0597 that said these functions never raise are amended: on Windows `_pid_alive`, `purge_dead_entries`, `has_active_session_window` and `current_window_session` can raise OSError when the process table is unreadable or kernel32 returns an undocumented error. Hooks and handlers already catch and log it; `scripts/groomer.py` has no handler, so a manual run on Windows ends with a traceback and a nonzero exit, a hard failure by design. The launcher's `sweep_stale_backups` also lets it propagate, so a failing dependency install is loud.
+6. `scripts/launcher_deps_fs.py` imports `mcp_server.shared.process_liveness` instead of keeping a mirror. This amends ADR-0748: that one module is allowed in the launcher bootstrap because it imports only the standard library, and ctypes loads lazily and only on Windows.
+7. Known limit: if the chain contains only the shared desktop `Claude.exe` and no session CLI `claude.exe`, the walk returns the desktop pid, a shared identity. This does not occur on the tree measured in #665. No install that runs the session CLI under another name (for example `node.exe`) was checked.
+8. Not run on a real Windows host in this session: the seven `test_real_*` tests of `tests_py/shared/test_win32_process.py` run only in the CI job `Test (Windows, SQLite backend)`. They cover the real kernel32 calls, the 568-byte struct on x64, and the no-termination property of the probe. The x86 struct size (556), the elevated-process path and the real desktop process tree were not verified.
+
+## Consequences
+
+Positive: on Windows each window gets its own registry entry, `checkpoint`, `recall` and the wiki tools stop falling back to the shared `default` identity, and no liveness probe can terminate or interrupt another window. The walk, the match, the recycled-parent guard and the cache are tested on every platform with a fake process table; the ctypes layer is tested structurally everywhere and for real on win32. POSIX behaviour is unchanged.
+
+Negative: the Windows reader now holds a per-server cache and can raise where it used to answer None. The launcher imports one `mcp_server` module. The shared-desktop limit of point 7 remains until a chain without a session CLI is observed. Callers of PR #676 (the groomer coordinator keyed by the window's claude pid) depend on this decision and must catch OSError at the hook boundary.
