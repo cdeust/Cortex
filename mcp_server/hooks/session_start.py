@@ -29,6 +29,7 @@ from mcp_server.handlers.injection_receipts import (
     session_id_from_transcript,
 )
 from mcp_server.hooks._telemetry import observe_hook
+from mcp_server.hooks.launcher_command import child_command
 from mcp_server.shared.freshness import provenance_suffix
 from mcp_server.shared.platform import python_executable
 from mcp_server.shared.log_rotation import methodology_log_path, open_rotating_log
@@ -853,17 +854,7 @@ def _spawn_consolidate_cycle() -> int | None:
     autonomous wiki maintenance — this is the SAME cycle as before; #171
     changes only WHO decides to start it, never what it does.
     """
-    plugin_root = os.environ.get("CLAUDE_PLUGIN_ROOT") or str(
-        Path(__file__).resolve().parents[2]
-    )
-    launcher = Path(plugin_root) / "scripts" / "launcher.py"
-    # source: ADR-0498
-    py = python_executable()
-    if launcher.exists():
-        cmd = [py, str(launcher), "mcp_server.hooks.consolidate_background"]
-    else:
-        # Fall back to direct -m invocation (dev source is the package root).
-        cmd = [py, "-m", "mcp_server.hooks.consolidate_background"]
+    cmd = child_command("mcp_server.hooks.consolidate_background")
 
     log_path = methodology_log_path("consolidate.log")
     with open_rotating_log(log_path) as log:

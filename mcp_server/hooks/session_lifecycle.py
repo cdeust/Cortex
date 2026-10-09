@@ -54,6 +54,7 @@ try:
     )
     from mcp_server.infrastructure.hook_counter_lock import counter_lock
     from mcp_server.core.profile_builder import apply_session_update
+    from mcp_server.hooks.launcher_command import child_command
     from mcp_server.handlers.injection_receipts import (
         session_id_from_transcript,
     )
@@ -68,7 +69,6 @@ try:
     from mcp_server.infrastructure.transcript_activity import transcript_activity
     from mcp_server.shared.categorizer import categorize
     from mcp_server.shared.log_rotation import methodology_log_path, open_rotating_log
-    from mcp_server.shared.platform import python_executable
     from mcp_server.shared.project_ids import (
         cwd_to_project_id,
         domain_id_from_label,
@@ -165,13 +165,9 @@ def _spawn_consolidation(turn_count: int = 0) -> None:
     source: ADR-1082"""
     mode = _consolidation_mode(turn_count)
     try:
-        cmd = [
-            python_executable(),
-            "-m",
-            "mcp_server.hooks.session_lifecycle",
-            _CONSOLIDATE_FLAG,
-            mode,
-        ]
+        cmd = child_command(
+            "mcp_server.hooks.session_lifecycle", _CONSOLIDATE_FLAG, mode
+        )
         log_path = methodology_log_path("consolidate.log")
         with open_rotating_log(log_path) as log:
             subprocess.Popen(  # noqa: S603 — cmd built from trusted sources
@@ -210,7 +206,7 @@ def _run_consolidation_cycle(mode: str) -> None:
         compressed = result.get("compression", {}).get(
             "compressed_to_gist", 0
         ) + result.get("compression", {}).get("compressed_to_tag", 0)
-        cls_count = result.get("cls", {}).get("abstractions_created", 0)
+        cls_count = result.get("cls", {}).get("new_semantics_created", 0)
         _log(
             f"Dream ({mode}): {decayed} decayed, {compressed} compressed"
             + (f", {cls_count} CLS abstractions" if cls_count else "")

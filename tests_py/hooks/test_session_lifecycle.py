@@ -4,6 +4,7 @@ session-lifecycle.test.js."""
 from __future__ import annotations
 
 import json
+import sys
 from unittest.mock import patch
 
 from mcp_server.hooks.session_lifecycle import (
@@ -292,6 +293,31 @@ class TestSpawnConsolidation:
         mock_popen.return_value.wait.assert_not_called()
 
     @patch("mcp_server.hooks.session_lifecycle.subprocess.Popen")
+    def test_the_dream_cycle_starts_through_the_launcher_not_python_dash_m(
+        self, mock_popen, tmp_path, monkeypatch
+    ):
+        """Issue #667: a bare ``python -m`` child never runs
+        ``launcher_site.isolate_deps()``, so a user-site package shadows
+        ``deps/`` (the #621 failure, one level down). With a launcher
+        present the child must be ``<python> <launcher> <module> ...``."""
+        plugin_root = tmp_path / "plugin"
+        (plugin_root / "scripts").mkdir(parents=True)
+        launcher = plugin_root / "scripts" / "launcher.py"
+        launcher.write_text("# stub\n")
+        monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(plugin_root))
+        monkeypatch.setenv("CORTEX_CLAUDE_DIR", str(tmp_path))
+
+        _spawn_consolidation(turn_count=30)
+
+        assert mock_popen.call_args[0][0] == [
+            sys.executable,
+            str(launcher),
+            "mcp_server.hooks.session_lifecycle",
+            "--consolidate",
+            "full",
+        ]
+
+    @patch("mcp_server.hooks.session_lifecycle.subprocess.Popen")
     def test_a_spawn_failure_does_not_raise(self, mock_popen, tmp_path, monkeypatch):
         monkeypatch.setenv("CORTEX_CLAUDE_DIR", str(tmp_path))
         mock_popen.side_effect = OSError("no such file or directory")
@@ -534,3 +560,33 @@ class TestSessionEntryActivity:
 
         assert entry["toolsUsed"] == []
         assert entry["turnCount"] == 0
+
+
+class TestConsolidationLogsTheClsCount:
+    """``run_cls_cycle`` reports ``new_semantics_created``; the log line
+    read a key (``abstractions_created``) that does not exist, so the CLS
+    suffix could never appear (issue #667, "Minor, same function")."""
+
+    def test_the_cls_suffix_reports_new_semantics_created(self, capsys):
+        async def _handler(args):
+            return {"cls": {"new_semantics_created": 3}}
+
+        with patch("mcp_server.handlers.consolidate.handler", _handler):
+            _run_consolidation_cycle("full")
+
+        assert ", 3 CLS abstractions" in capsys.readouterr().err
+
+
+class TestConsolidationLogsTheClsCount:
+    """``run_cls_cycle`` reports ``new_semantics_created``; the log line
+    read a key (``abstractions_created``) that does not exist, so the CLS
+    suffix could never appear (issue #667, "Minor, same function")."""
+
+    def test_the_cls_suffix_reports_new_semantics_created(self, capsys):
+        async def _handler(args):
+            return {"cls": {"new_semantics_created": 3}}
+
+        with patch("mcp_server.handlers.consolidate.handler", _handler):
+            _run_consolidation_cycle("full")
+
+        assert ", 3 CLS abstractions" in capsys.readouterr().err
