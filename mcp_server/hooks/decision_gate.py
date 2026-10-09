@@ -25,6 +25,7 @@ import os
 import sys
 from pathlib import Path
 
+from mcp_server.hooks.stdin_event import read_event_text
 from mcp_server.hooks import _decision_gate_lex as lex
 
 # A run of this many consecutive comment lines is prose, not a pointer.
@@ -160,7 +161,7 @@ def evaluate(event: dict) -> int:
 
 
 def main() -> int:
-    raw = sys.stdin.read().strip()
+    raw = read_event_text().strip()
     if not raw:
         return 0
     try:

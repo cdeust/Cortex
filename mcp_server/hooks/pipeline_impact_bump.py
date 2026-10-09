@@ -26,6 +26,7 @@ import sys
 import time
 from typing import Any, cast
 
+from mcp_server.hooks.stdin_event import read_event_text
 from mcp_server.shared.hook_state_paths import cooldown_path
 
 _LOG_PREFIX = "[pipeline-impact-bump]"
@@ -216,7 +217,7 @@ def process_event(event: dict[str, Any]) -> None:
 def main() -> None:
     if sys.stdin.isatty():
         return
-    raw = sys.stdin.read().strip()
+    raw = read_event_text().strip()
     if not raw:
         return
     try:

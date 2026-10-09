@@ -22,6 +22,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from mcp_server.hooks import agent_briefing as hook
+from tests_py.hooks.stdin_support import utf8_stdin
 
 
 @pytest.fixture(autouse=True)
@@ -362,8 +363,7 @@ def test_main_ignores_an_interactive_terminal(monkeypatch):
 
 
 def test_main_ignores_empty_stdin(monkeypatch):
-    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
-    monkeypatch.setattr(sys.stdin, "read", lambda: "  \n")
+    monkeypatch.setattr(sys, "stdin", utf8_stdin("  \n"))
     with patch.object(hook, "process_event") as processed:
         with pytest.raises(SystemExit):
             hook.main()
@@ -371,8 +371,7 @@ def test_main_ignores_empty_stdin(monkeypatch):
 
 
 def test_main_ignores_malformed_json(monkeypatch):
-    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
-    monkeypatch.setattr(sys.stdin, "read", lambda: "{not json")
+    monkeypatch.setattr(sys, "stdin", utf8_stdin("{not json"))
     with patch.object(hook, "process_event") as processed:
         with pytest.raises(SystemExit):
             hook.main()
@@ -381,8 +380,7 @@ def test_main_ignores_malformed_json(monkeypatch):
 
 def test_main_forwards_a_valid_event(monkeypatch):
     event = {"agent_name": "engineer", "prompt": "improve reranker latency now"}
-    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
-    monkeypatch.setattr(sys.stdin, "read", lambda: json.dumps(event))
+    monkeypatch.setattr(sys, "stdin", utf8_stdin(json.dumps(event)))
     with patch.object(hook, "process_event") as processed:
         hook.main()
     processed.assert_called_once_with(event)

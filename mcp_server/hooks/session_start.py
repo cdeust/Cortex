@@ -20,6 +20,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from mcp_server.hooks.stdin_event import read_event_text
 from mcp_server.handlers.injection_receipts import (
     emit_hook_receipt,
     emit_injection_receipt,
@@ -65,7 +66,7 @@ def _read_event() -> dict:
     if sys.stdin.isatty():
         return {}
     try:
-        raw = sys.stdin.read().strip()
+        raw = read_event_text().strip()
         return json.loads(raw) if raw else {}
     except (OSError, ValueError):
         return {}

@@ -27,6 +27,7 @@ import sys
 from pathlib import Path
 from typing import MutableMapping
 
+from mcp_server.hooks.stdin_event import read_event_text
 from mcp_server.hooks.host_dispatch import apply_project_root, derive_events, run_all
 from mcp_server.infrastructure.backend_marker import apply_backend_resolution
 
@@ -141,7 +142,7 @@ def main() -> None:
     wire_composition_root()
 
     module = f"mcp_server.hooks.{name}"
-    raw = sys.stdin.read()
+    raw = read_event_text()
     payloads, hook_event_name, cwd = derive_events(module, raw)
     apply_project_root(os.environ, cwd)
     sys.exit(run_all(module, payloads, hook_event_name))

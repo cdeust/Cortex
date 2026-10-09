@@ -4,7 +4,6 @@ source: ADR-0743"""
 
 from __future__ import annotations
 
-import io
 import json
 import os
 import sys
@@ -13,12 +12,13 @@ import sys
 def skip_capture() -> bool:
     """Run only for a non-full capture invocation after plugin path setup."""
     from mcp_server.hooks._headless_guard import exit_if_headless_authoring_child  # noqa: PLC0415 — plugin path is established by launcher.main before this entry
+    from mcp_server.hooks.stdin_event import install_event_stdin, read_event_text  # noqa: PLC0415 — plugin path is established by launcher.main before this entry
 
     exit_if_headless_authoring_child()
     if sys.stdin.isatty():
         return False
     try:
-        raw = sys.stdin.read()
+        raw = read_event_text()
     except Exception as exc:  # noqa: BLE001 — same visible failure boundary as launcher.run_module
         print(
             "[cortex-launcher] Failed to run "
@@ -26,7 +26,7 @@ def skip_capture() -> bool:
             file=sys.stderr,
         )
         raise SystemExit(1) from exc
-    sys.stdin = io.StringIO(raw)
+    install_event_stdin(raw)
     try:
         event = json.loads(raw.strip())
     except json.JSONDecodeError:

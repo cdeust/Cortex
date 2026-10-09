@@ -35,7 +35,7 @@ sys.meta_path.insert(0, Guard())
 launcher.launcher_deps.ensure_deps = lambda path: bootstrap.append('base')
 launcher.launcher_deps.ensure_all_deps = lambda path: bootstrap.append('all')
 def dispatch(module, **kwargs):
-    replay = isinstance(sys.stdin, io.StringIO)
+    replay = isinstance(getattr(sys.stdin, 'buffer', None), io.BytesIO)
     fd_child = None
     if replay:
         fd_child = subprocess.check_output(

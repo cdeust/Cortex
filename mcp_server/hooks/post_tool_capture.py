@@ -15,6 +15,7 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
+from mcp_server.hooks.stdin_event import read_event_text
 from mcp_server.core.gist_extraction import (
     HIGH_VALUE_PATTERNS,
     extract_gist,
@@ -378,7 +379,7 @@ def main(dispatch: Callable[[dict[str, Any]], None] | None = None) -> None:
         _log("No stdin data (TTY mode), exiting")
         return
 
-    raw = sys.stdin.read().strip()
+    raw = read_event_text().strip()
     if not raw:
         _log("Empty stdin, exiting")
         return

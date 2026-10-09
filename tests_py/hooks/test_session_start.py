@@ -25,6 +25,7 @@ from unittest.mock import MagicMock, patch
 
 from mcp_server.hooks import session_start as hook
 from mcp_server.shared import log_rotation
+from tests_py.hooks.stdin_support import utf8_stdin
 
 # ── Event reading ─────────────────────────────────────────────────────
 
@@ -35,20 +36,17 @@ def test_read_event_returns_empty_on_tty(monkeypatch):
 
 
 def test_read_event_returns_empty_on_blank_stdin(monkeypatch):
-    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
-    monkeypatch.setattr(sys.stdin, "read", lambda: "  \n")
+    monkeypatch.setattr(sys, "stdin", utf8_stdin("  \n"))
     assert hook._read_event() == {}
 
 
 def test_read_event_returns_empty_on_malformed_json(monkeypatch):
-    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
-    monkeypatch.setattr(sys.stdin, "read", lambda: "{nope")
+    monkeypatch.setattr(sys, "stdin", utf8_stdin("{nope"))
     assert hook._read_event() == {}
 
 
 def test_read_event_parses_a_valid_event(monkeypatch):
-    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
-    monkeypatch.setattr(sys.stdin, "read", lambda: json.dumps({"session_id": "s"}))
+    monkeypatch.setattr(sys, "stdin", utf8_stdin(json.dumps({"session_id": "s"})))
     assert hook._read_event() == {"session_id": "s"}
 
 

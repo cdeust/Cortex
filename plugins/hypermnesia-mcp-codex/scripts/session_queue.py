@@ -209,7 +209,9 @@ def main():
         drain(root)
         return
     if mode == "intake":
-        enqueue(root, json.load(sys.stdin))
+        # The host writes the event as UTF-8; text-mode stdin would decode it
+        # with the locale code page (cp1252 on Windows), issue #664.
+        enqueue(root, json.loads(sys.stdin.buffer.read().decode("utf-8")))
     elif mode != "recover":
         raise ValueError(f"unknown queue mode: {mode}")
     pending = list(root.glob("*.json"))

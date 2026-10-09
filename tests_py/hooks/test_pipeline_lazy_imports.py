@@ -39,14 +39,15 @@ class ColdImportTests(unittest.TestCase):
 
     def test_rejected_events_do_not_import_store_or_lifecycle(self):
         self.run_cold("""
-import io, json, runpy, sys
+import json, runpy, sys
 from unittest.mock import patch
+from tests_py.hooks.stdin_support import utf8_stdin
 blocked = ('mcp_server.__main__', 'mcp_server.hooks._store_lifecycle',
            'mcp_server.infrastructure.memory_store')
 for raw in ('', '{', json.dumps({'tool_name': 'Read'}),
             json.dumps({'tool_name': 'Bash'}),
             json.dumps({'tool_name': 'Edit', 'tool_input': {}})):
-    with patch('sys.stdin', io.StringIO(raw)):
+    with patch('sys.stdin', utf8_stdin(raw)):
         runpy.run_module('mcp_server.hooks.pipeline_impact_bump', run_name='__main__')
     imported = set(blocked).intersection(sys.modules)
     assert not imported, imported

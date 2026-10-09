@@ -42,6 +42,7 @@ import sys
 from datetime import datetime, timezone
 from typing import Any
 
+from mcp_server.hooks.stdin_event import read_event_text
 from mcp_server.handlers.injection_receipts import (
     emit_hook_receipt,
     emit_injection_receipt,
@@ -426,7 +427,7 @@ def main() -> None:
     if sys.stdin.isatty():
         sys.exit(0)
 
-    raw = sys.stdin.read().strip()
+    raw = read_event_text().strip()
     if not raw:
         sys.exit(0)
 

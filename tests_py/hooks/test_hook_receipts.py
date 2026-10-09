@@ -228,13 +228,12 @@ def test_session_start_banner_receipt_roundtrip(_db) -> None:
 
 
 def test_session_start_read_event_tolerates_garbage(monkeypatch) -> None:
-    import io
-
     from mcp_server.hooks import session_start as ss
+    from tests_py.hooks.stdin_support import utf8_stdin
 
-    monkeypatch.setattr("sys.stdin", io.StringIO("not json at all"))
+    monkeypatch.setattr("sys.stdin", utf8_stdin("not json at all"))
     assert ss._read_event() == {}
-    monkeypatch.setattr("sys.stdin", io.StringIO(""))
+    monkeypatch.setattr("sys.stdin", utf8_stdin(""))
     assert ss._read_event() == {}
 
 

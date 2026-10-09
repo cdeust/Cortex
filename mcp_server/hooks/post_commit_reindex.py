@@ -44,6 +44,7 @@ from pathlib import Path
 from typing import Any
 
 from mcp_server.hooks.launcher_command import launcher_child_command
+from mcp_server.hooks.stdin_event import read_event_text
 from mcp_server.shared.log_rotation import methodology_log_path, open_rotating_log
 
 _LOG_PREFIX = "[post-commit-reindex]"
@@ -261,7 +262,7 @@ def process_event(event: dict[str, Any]) -> None:
 def main() -> None:
     if sys.stdin.isatty():
         return
-    raw = sys.stdin.read().strip()
+    raw = read_event_text().strip()
     if not raw:
         return
     try:

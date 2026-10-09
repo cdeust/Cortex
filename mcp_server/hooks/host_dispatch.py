@@ -7,13 +7,13 @@ event-derivation and per-run mechanics it delegates to).
 
 from __future__ import annotations
 
-import io
 import json
 import runpy
 import sys
 from typing import MutableMapping
 
 from mcp_server.hooks.host_event import HostEventError, normalize_event
+from mcp_server.hooks.stdin_event import install_event_stdin
 
 # Hook classes that block a tool call by exiting non-zero, per
 # .claude-plugin/plugin.json: decision_gate and no_deps_gate are the only
@@ -44,7 +44,7 @@ def run_event(module: str, payload: str) -> int:
     """Run ``module`` as ``__main__`` against one derived stdin payload; its
     exit code, or 1 with a stderr line for any exception it left uncaught."""
     sys.argv = [module]
-    sys.stdin = io.StringIO(payload)
+    install_event_stdin(payload)
     try:
         runpy.run_module(module, run_name="__main__", alter_sys=True)
     except SystemExit as exc:

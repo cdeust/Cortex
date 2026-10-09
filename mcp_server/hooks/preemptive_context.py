@@ -44,6 +44,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from mcp_server.hooks.stdin_event import read_event_text
 from mcp_server.shared.hook_state_paths import cooldown_path
 from mcp_server.shared.project_scope import resolve_project_root
 from mcp_server.hooks.shell_read_events import completed_shell_read
@@ -174,7 +175,7 @@ def main() -> None:
     if sys.stdin.isatty():
         return
 
-    raw = sys.stdin.read().strip()
+    raw = read_event_text().strip()
     if not raw:
         return
 

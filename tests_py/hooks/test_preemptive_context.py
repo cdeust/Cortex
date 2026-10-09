@@ -17,6 +17,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from mcp_server.hooks import preemptive_context as hook
+from tests_py.hooks.stdin_support import utf8_stdin
 
 
 @pytest.fixture(autouse=True)
@@ -189,16 +190,14 @@ def test_main_ignores_an_interactive_terminal(monkeypatch):
 
 
 def test_main_ignores_empty_stdin(monkeypatch):
-    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
-    monkeypatch.setattr(sys.stdin, "read", lambda: "   \n")
+    monkeypatch.setattr(sys, "stdin", utf8_stdin("   \n"))
     with patch.object(hook, "process_event") as processed:
         hook.main()
     processed.assert_not_called()
 
 
 def test_main_ignores_malformed_json(monkeypatch):
-    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
-    monkeypatch.setattr(sys.stdin, "read", lambda: "{not json")
+    monkeypatch.setattr(sys, "stdin", utf8_stdin("{not json"))
     with patch.object(hook, "process_event") as processed:
         hook.main()
     processed.assert_not_called()
@@ -206,8 +205,7 @@ def test_main_ignores_malformed_json(monkeypatch):
 
 def test_main_forwards_a_valid_event(monkeypatch):
     event = {"tool_name": "Edit", "tool_input": {"file_path": "/a.py"}}
-    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
-    monkeypatch.setattr(sys.stdin, "read", lambda: json.dumps(event))
+    monkeypatch.setattr(sys, "stdin", utf8_stdin(json.dumps(event)))
     with patch.object(hook, "process_event") as processed:
         hook.main()
     processed.assert_called_once_with(event)

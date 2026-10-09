@@ -448,7 +448,9 @@ class TestMain:
     @patch("sys.stdin")
     def test_reads_from_stdin(self, mock_stdin, mock_pe):
         mock_stdin.isatty.return_value = False
-        mock_stdin.read.return_value = json.dumps({"session_id": "x"})
+        mock_stdin.buffer.read.return_value = (json.dumps({"session_id": "x"})).encode(
+            "utf-8"
+        )
         main()
         mock_pe.assert_called_once_with({"session_id": "x"})
 
@@ -463,7 +465,7 @@ class TestMain:
     @patch("sys.stdin")
     def test_handles_invalid_json(self, mock_stdin, mock_pe):
         mock_stdin.isatty.return_value = False
-        mock_stdin.read.return_value = "not json{"
+        mock_stdin.buffer.read.return_value = ("not json{").encode("utf-8")
         main()
         mock_pe.assert_not_called()
 
@@ -471,7 +473,7 @@ class TestMain:
     @patch("sys.stdin")
     def test_handles_empty_stdin(self, mock_stdin, mock_pe):
         mock_stdin.isatty.return_value = False
-        mock_stdin.read.return_value = ""
+        mock_stdin.buffer.read.return_value = ("").encode("utf-8")
         main()
         mock_pe.assert_not_called()
 

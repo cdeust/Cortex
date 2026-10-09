@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-import io
 import json
+import io
 import sys
 from types import SimpleNamespace
 
@@ -19,6 +19,7 @@ from mcp_server.shared.telemetry_context import (
     retrieval_metrics,
     set_retrieval_tier,
 )
+from tests_py.hooks.stdin_support import utf8_stdin
 
 
 @pytest.fixture(autouse=True)
@@ -223,9 +224,7 @@ def test_session_main_counts_banner_receipt_and_external_sources(
 
 
 def _patch_auto_main(monkeypatch):
-    monkeypatch.setattr(
-        sys, "stdin", io.StringIO('{"prompt":"remember this decision"}')
-    )
+    monkeypatch.setattr(sys, "stdin", utf8_stdin('{"prompt":"remember this decision"}'))
     monkeypatch.setattr(auto_recall, "_refresh_session_registry", lambda event: None)
     monkeypatch.setattr(auto_recall, "_backend_is_sqlite", lambda: False)
     monkeypatch.setattr(
@@ -275,7 +274,7 @@ def test_isolated_session_records_all_context_operations(
 def test_auto_recall_main_silent_exits_are_recorded(
     raw, telemetry_log, monkeypatch, capsys
 ):
-    monkeypatch.setattr(sys, "stdin", io.StringIO(raw))
+    monkeypatch.setattr(sys, "stdin", utf8_stdin(raw))
     monkeypatch.setattr(auto_recall, "_refresh_session_registry", lambda event: None)
 
     with pytest.raises(SystemExit) as caught:

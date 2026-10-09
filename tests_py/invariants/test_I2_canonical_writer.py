@@ -56,7 +56,7 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     # Atomic project-scoped file-cue boost, moved from the hook in ADR-1086.
     ("infrastructure/file_memory_priming.py", 37),
     # Pipeline-impact boost.
-    ("hooks/pipeline_impact_bump.py", 164),
+    ("hooks/pipeline_impact_bump.py", 165),
     # CAS-guarded deliberate reheat.
     ("infrastructure/pg_store_memory_reheat.py", 104),
 }

@@ -33,6 +33,20 @@ adheres to [Semantic Versioning](https://semver.org/).
     Energy results measured on real benchmark runs may now be committed,
     quoted with their machine, region and boundary.
 
+### Fixed
+
+- **Windows: hooks decoded their event JSON as cp1252, so captured memories
+  stored mojibake (#664).** Claude Code and Codex write the hook event as
+  UTF-8, but a text-mode `sys.stdin` decodes with the locale code page, so
+  `é` was stored as `Ã©` and bytes with no cp1252 mapping became lone
+  surrogates that failed on write. Every hook now reads its event through
+  one reader, `mcp_server/hooks/stdin_event.py`, which decodes the bytes of
+  `sys.stdin.buffer` as strict UTF-8; invalid bytes raise
+  `HookStdinDecodeError` instead of being replaced. The Codex
+  `session_queue.py` intake decodes the same way. Unverified on a real
+  Windows host: the cause is simulated with a cp1252 `TextIOWrapper`.
+  Memories already stored garbled are not repaired by this change.
+
 ### Changed
 
 - **`uv.lock` is the only dependency source (ADR-1092).** The thirteen

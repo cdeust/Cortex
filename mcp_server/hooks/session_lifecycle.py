@@ -46,6 +46,8 @@ import sys
 from datetime import datetime, timezone
 from typing import Any
 
+from mcp_server.hooks.stdin_event import read_event_text
+
 try:
     from mcp_server.infrastructure.config import METHODOLOGY_DIR
     from mcp_server.infrastructure.file_io import ensure_dir
@@ -400,7 +402,7 @@ def main() -> None:
         _log("No stdin data (TTY mode), exiting")
         return
 
-    raw = sys.stdin.read().strip()
+    raw = read_event_text().strip()
     if not raw:
         _log("Empty stdin, exiting")
         return
