@@ -2,7 +2,7 @@
 kernel32 (issue #665). Runs on every platform; the real kernel32 is covered by
 the ``win32``-only tests in ``test_win32_process.py``.
 
-source: ADR-0597"""
+source: ADR-1096"""
 
 from __future__ import annotations
 

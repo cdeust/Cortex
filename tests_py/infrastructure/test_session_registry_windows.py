@@ -6,7 +6,7 @@ asserts the three causes of #665: no ``ps`` (the table is read through
 ``win32_process``), ``claude.exe`` names, and a server whose parent is
 ``cmd.exe`` (the reader walks to the ``claude.exe`` ancestor).
 
-source: ADR-0597"""
+source: ADR-1096"""
 
 from __future__ import annotations
 

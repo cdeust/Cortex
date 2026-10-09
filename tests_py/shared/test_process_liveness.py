@@ -1,12 +1,13 @@
 """``pid_alive``: the one liveness probe, on POSIX and simulated Windows.
 
-``os.kill(pid, 0)`` is no existence check on Windows: CPython sends
-``GenerateConsoleCtrlEvent(CTRL_C_EVENT == 0, pid)`` (Python docs ``os.kill``
-3.10 to 3.13; ``Modules/posixmodule.c``), and any signal other than
-CTRL_C_EVENT/CTRL_BREAK_EVENT is ``TerminateProcess``. These tests pin that no
-caller of the probe reaches ``os.kill`` when the platform is Windows.
+``os.kill`` must never run on Windows (ADR-1096): CPython sends signal 0 to
+``GenerateConsoleCtrlEvent(0, pid)``, and in 3.10, 3.11, 3.12.0 to 3.12.8 and
+3.13.0 to 3.13.1 a failed call falls through to ``OpenProcess`` +
+``TerminateProcess(handle, 0)`` (gh-58689, fixed by gh-128932); a pid that is
+not a group id acts as group 0, a Ctrl+C to the whole console (gh-87128). These
+tests pin that no caller of the probe reaches ``os.kill`` on Windows.
 
-source: ADR-0597"""
+source: ADR-1096"""
 
 from __future__ import annotations
 

@@ -48,10 +48,15 @@ adheres to [Semantic Versioning](https://semver.org/).
   the server's lifetime. POSIX paths are unchanged. Separately, every
   `os.kill(pid, 0)` liveness probe (`session_registry`, `GroomerCoordinator`,
   the launcher's backup sweep) is replaced by one `pid_alive`
-  (`mcp_server/shared/process_liveness.py`): on Windows `os.kill` with signal 0
-  is `GenerateConsoleCtrlEvent(CTRL_C_EVENT, pid)`, not an existence check, and
-  any other signal is `TerminateProcess`; the Windows probe is now
-  `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)` + `GetExitCodeProcess`.
+  (`mcp_server/shared/process_liveness.py`). On Windows `os.kill` is no
+  existence check and was a live hazard: signal 0 goes to
+  `GenerateConsoleCtrlEvent(0, pid)`, and in CPython 3.10, 3.11, 3.12.0 to
+  3.12.8 and 3.13.0 to 3.13.1 a failed call falls through to
+  `TerminateProcess(handle, 0)` (gh-58689, fixed in 3.12.9 and 3.13.2 by
+  gh-128932), then raises `SystemError`; a pid that is not a console group id
+  acts as group 0 and sends Ctrl+C to the whole console (gh-87128). The
+  Windows probe is now `OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION)` +
+  `GetExitCodeProcess`; the decision is ADR-1096.
 - **Windows: hooks decoded their event JSON as cp1252, so captured memories
   stored mojibake (#664).** Claude Code and Codex write the hook event as
   UTF-8, but a text-mode `sys.stdin` decodes with the locale code page, so

@@ -4,7 +4,7 @@ Shared by ``test_process_ancestry.py`` and ``test_session_registry_windows.py``
 so the walk, the name match and the caching are exercised on every platform
 without a Windows host. Rows are ``(pid, ppid, exe_name, creation_filetime)``.
 
-source: ADR-0597"""
+source: ADR-1096"""
 
 from __future__ import annotations
 

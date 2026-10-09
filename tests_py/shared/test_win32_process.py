@@ -6,7 +6,7 @@ of kernel32. (3) ``win32``-only tests against the real kernel32, skipped
 elsewhere (they run in CI job "Test (Windows, SQLite backend)"). Tier (2), the
 logic of the ``*_with(dll, ...)`` functions, is ``test_win32_process_logic.py``.
 
-source: ADR-0597"""
+source: ADR-1096"""
 
 from __future__ import annotations
 
@@ -187,17 +187,21 @@ def test_real_creation_time_is_stable_and_orders_parent_before_child():
 @_WIN_ONLY
 def test_real_walk_finds_the_nearest_matching_ancestor():
     # claude.exe cannot be fabricated portably; the walk and the real table
-    # are exercised by matching on the interpreter's own image name instead.
+    # are exercised by matching on the image name the snapshot reports for
+    # the child's direct parent, whatever launcher started the test run.
     code = (
-        "import os, sys\n"
+        "import os\n"
         "from mcp_server.infrastructure import process_ancestry as pa\n"
-        "pa._CLAUDE_EXE_NAME = 'python.exe'\n"
-        "print(pa.claude_ancestor_pid(os.getpid(), 15), os.getppid())\n"
+        "from mcp_server.shared import win32_process as w\n"
+        "ppid = os.getppid()\n"
+        "name = {r.pid: r.exe_name for r in w.snapshot_rows()}[ppid]\n"
+        "pa._CLAUDE_EXE_NAME = name.lower()\n"
+        "print(pa.claude_ancestor_pid(os.getpid(), 15), ppid)\n"
     )
     out = subprocess.run(
         [sys.executable, "-c", code], capture_output=True, text=True, check=True
     ).stdout.split()
-    assert out[0] == out[1], "nearest python.exe ancestor must be the direct parent"
+    assert out[0] == out[1], "nearest same-named ancestor must be the direct parent"
     assert process_ancestry._CLAUDE_EXE_NAME == "claude.exe"
 
 

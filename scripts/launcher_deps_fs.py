@@ -25,7 +25,7 @@ from pathlib import Path
 # ``mcp_server.shared`` packages import nothing, so the bootstrap's
 # "stdlib only before the deps exist" rule still holds. The plugin root is
 # this file's grandparent, the same root ``launcher.py`` puts on ``sys.path``.
-# source: ADR-0748
+# source: ADR-1096
 _PLUGIN_ROOT = str(Path(__file__).resolve().parent.parent)
 if _PLUGIN_ROOT not in sys.path:
     sys.path.insert(0, _PLUGIN_ROOT)

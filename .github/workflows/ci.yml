@@ -499,7 +499,7 @@ jobs:
       # The five process-table files join per issue #665: this is the only host
       # where win32_process runs against the real kernel32 (the win32-only
       # tests in test_win32_process.py skip everywhere else) and where
-      # pid_alive proves it does not terminate a live process. source: ADR-0597
+      # pid_alive proves it does not terminate a live process. source: ADR-1096
       - name: Run portability + backend tests
         env:
           HF_HUB_OFFLINE: "1"

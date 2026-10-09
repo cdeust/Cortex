@@ -390,11 +390,11 @@ def _resolve_session_id() -> str | None:
 
     precondition: none. postcondition: returns the current window's
     session id, or None on absence/tombstone/pid-divergence (the
-    registry's own contract — ``current_window_session`` never raises
-    by construction, ``session_registry.py`` docstring) OR on any
-    unforeseen exception surfacing from the registry. Recall's primary
-    read path must never fail because of a blame-path side channel —
-    a bare ``except Exception`` here is the named degradation mode
+    registry's contract — ``current_window_session`` returns None on every
+    POSIX miss and can raise ``OSError`` on Windows, ``session_registry.py``
+    module note) OR on any unforeseen exception surfacing from the registry.
+    Recall's primary read path must never fail because of a blame-path side
+    channel — a bare ``except Exception`` here is the named degradation mode
     (design risk/§1: a false attribution is worse than a missing one,
     and a failed recall is worse than an unattributed receipt).
     """

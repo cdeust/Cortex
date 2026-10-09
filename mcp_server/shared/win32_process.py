@@ -7,15 +7,20 @@ platform dispatch of ``process_liveness``) is plain Python over these three
 functions and is exercised on every platform with a fake; this module itself
 is exercised for real only on ``win32``.
 
-Why not ``os.kill(pid, 0)`` for liveness: on Windows CPython routes
-``sig == CTRL_C_EVENT`` (0) to ``GenerateConsoleCtrlEvent(0, pid)`` and any
-other signal but ``CTRL_BREAK_EVENT`` to ``TerminateProcess`` (CPython
-``Modules/posixmodule.c``, ``os_kill_impl``, tags 3.10 and 3.13; Python docs
-``os.kill``, 3.10 to 3.13). ``GenerateConsoleCtrlEvent`` with a nonzero
-group id "will succeed, but the CTRL+C signal will not be received" by that
-group, so it neither detects a dead pid nor reports a live one.
+Why never ``os.kill`` on Windows (ADR-1096): CPython's ``os_kill_impl``
+(``Modules/posixmodule.c``) sends ``CTRL_C_EVENT`` (0) and ``CTRL_BREAK_EVENT``
+(1) to ``GenerateConsoleCtrlEvent(sig, pid)``. In 3.10, 3.11, 3.12.0 to 3.12.8
+and 3.13.0 to 3.13.1 (tags read; 3.10 and 3.11 never fixed) a failed call does
+not return: it falls through to ``OpenProcess(PROCESS_ALL_ACCESS)`` and
+``TerminateProcess(handle, sig)``, so a probe of a live pid in another console
+could kill it with exit code 0 (gh-58689, fixed in 3.12.9 and 3.13.2 by
+gh-128932); after a successful kill the function raises ``SystemError``, which
+``except OSError`` does not catch. A pid that is not a process group id on the
+caller's console acts as group 0, a Ctrl+C to every process on that console
+(gh-87128). Signal 0 is therefore no existence check and a live pid is a
+hazard, not an input.
 
-source: ADR-0597"""
+source: ADR-1096"""
 
 from __future__ import annotations
 
@@ -151,7 +156,7 @@ def pid_alive_with(dll: Any, pid: int) -> bool:
     error must not be read as "dead". Caveat from the Microsoft page: a
     process that itself exited with code 259 reads as alive.
 
-    source: ADR-0597"""
+    source: ADR-1096"""
     handle = dll.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid)
     if not handle:
         error = _last_error()
@@ -177,7 +182,7 @@ def creation_filetime_with(dll: Any, pid: int) -> int | None:
     life; a recycled pid yields a different one. Other failures raise
     ``OSError``. The handle is closed on every path.
 
-    source: ADR-0597"""
+    source: ADR-1096"""
     handle = dll.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid)
     if not handle:
         error = _last_error()

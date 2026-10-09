@@ -132,8 +132,8 @@ def _get_store() -> MemoryStore:
 def _resolve_session_id() -> str | None:
     """Best-effort session-identity lookup (T2-H4, mirrors recall.py's
     ``_resolve_session_id`` — same registry, same degradation mode: the
-    registry's own contract never raises by construction, but the read
-    path must not depend on that holding forever).
+    registry returns None on every POSIX miss but can raise ``OSError`` on
+    Windows, and the read path must not depend on that holding).
     """
     try:
         return current_window_session()

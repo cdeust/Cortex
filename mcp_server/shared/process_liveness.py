@@ -6,7 +6,7 @@ with signal 0 is the POSIX existence check; it is NOT one on Windows (see
 ``win32_process`` for the CPython source and docs), where this module uses
 ``OpenProcess`` + ``GetExitCodeProcess`` instead.
 
-source: ADR-0597"""
+source: ADR-1096"""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ def pid_alive(pid: int) -> bool:
     target on any platform. Windows raises ``OSError`` on an undocumented
     failure rather than answering "dead".
 
-    source: ADR-0597"""
+    source: ADR-1096"""
     if pid <= 0:
         return False
     if host_platform.IS_WINDOWS:

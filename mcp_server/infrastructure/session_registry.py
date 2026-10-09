@@ -1,10 +1,11 @@
 """Per-window session registry — T2-handlers increment H1 (foundation).
 
-Windows (issue #665): an unreadable process table, or an undocumented
-``OpenProcess`` error from the liveness probe, raises ``OSError`` out of the
-functions that resolve a pid or probe liveness; callers log it.
+Windows (issue #665, ADR-1096): an unreadable process table or an undocumented
+``OpenProcess`` error raises ``OSError`` from the functions that resolve a pid
+or probe liveness. Hooks and handlers log it; ``scripts/groomer.py`` has no
+handler, so a manual Windows run ends in a traceback and a nonzero exit.
 
-source: ADR-0597"""
+source: ADR-0597, ADR-1096"""
 
 from __future__ import annotations
 
@@ -52,13 +53,13 @@ _start_signature_cache: dict[int, str] = {}
 def _cached_process_start_signature(pid: int) -> str | None:
     """Process-lifetime cache wrapper around ``_process_start_signature``.
 
-    precondition: none beyond ``_process_start_signature``'s.
-        postcondition: returns the same value ``_process_start_signature
-        (pid)`` would, but the underlying ``/proc`` read or ``ps``
-        subprocess runs at most once per distinct ``pid`` for this
-        server's lifetime.
+    postcondition: same value as ``_process_start_signature(pid)``, read at
+        most once per distinct ``pid`` for this server's lifetime. Windows
+        keeps the cache too: the server is a descendant of the claude
+        process and exits with it, so the pid cannot be recycled under a
+        live server (ADR-1096 point 4).
 
-    source: ADR-0597"""
+    source: ADR-0597, ADR-1096"""
     cached = _start_signature_cache.get(pid)
     if cached is not None:
         return cached
@@ -71,7 +72,7 @@ def _cached_process_start_signature(pid: int) -> str | None:
 def _process_start_signature(pid: int) -> str | None:
     """Opaque per-process start-time token.
 
-    source: ADR-0597"""
+    source: ADR-0597 (POSIX), ADR-1096 (Windows)"""
     if host_platform.IS_WINDOWS:
         return process_ancestry.start_signature(pid)
     stat_path = Path(f"/proc/{pid}/stat")
@@ -125,7 +126,7 @@ def find_claude_ancestor(max_depth: int = _MAX_ANCESTOR_DEPTH) -> int | None:
     claude. Return None on probe failure, reaching a root process, or exhausting
     max_depth. Intended for hook processes.
 
-    source: ADR-0597"""
+    source: ADR-0597 (POSIX), ADR-1096 (Windows)"""
     if host_platform.IS_WINDOWS:
         return process_ancestry.claude_ancestor_pid(os.getpid(), max_depth)
     pid = os.getppid()
@@ -205,7 +206,7 @@ def _window_claude_pid() -> int | None:
     POSIX; on Windows (server parent is ``cmd.exe``) the nearest
     ``claude.exe`` ancestor, cached per server process.
 
-    source: ADR-0597"""
+    source: ADR-1096"""
     if not host_platform.IS_WINDOWS:
         return os.getppid()
     return process_ancestry.cached_window_pid(find_claude_ancestor)
@@ -217,7 +218,7 @@ def current_window_session() -> str | None:
     ``_window_claude_pid`` for how its window is found). Rejects missing,
     unreadable, malformed, tombstoned, or stale-lineage registry entries.
 
-    source: ADR-0597"""
+    source: ADR-0597 (POSIX), ADR-1096 (Windows)"""
     claude_pid = _window_claude_pid()
     if claude_pid is None:
         return None
@@ -247,7 +248,7 @@ def purge_dead_entries() -> int:
     postcondition: returns count of files removed; raises no I/O error (an
         unreadable directory or file is skipped) — Windows: see module note.
 
-    source: ADR-0597"""
+    source: ADR-0597 (POSIX), ADR-1096 (Windows)"""
     removed = 0
     d = registry_dir()
     try:
@@ -271,12 +272,11 @@ def purge_dead_entries() -> int:
 
 
 def has_active_session_window() -> bool:
-    """Precondition: none. Postcondition: scans every ``registry_dir()`` entry; returns
-    True on
-        the first live ``claude_pid`` whose entry carries a non-empty
-        ``session_id``.
+    """Precondition: none. Postcondition: scans every ``registry_dir()`` entry;
+    True on the first live ``claude_pid`` whose entry has a non-empty
+    ``session_id``. Windows: may raise ``OSError`` (see module note).
 
-    source: ADR-0597"""
+    source: ADR-0597 (POSIX), ADR-1096 (Windows)"""
     d = registry_dir()
     try:
         entries = list(d.iterdir())

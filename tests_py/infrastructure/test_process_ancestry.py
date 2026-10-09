@@ -3,7 +3,7 @@
 Runs on every platform: the walk, the ``claude.exe`` match, the pid-reuse
 guard and the per-process cache are plain Python over an injected table.
 
-source: ADR-0597"""
+source: ADR-1096"""
 
 from __future__ import annotations
 
