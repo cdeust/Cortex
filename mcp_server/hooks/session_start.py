@@ -874,41 +874,66 @@ def _maybe_background_consolidate() -> None:
 
     The session is keyed by its window's ``claude`` pid. When that identity
     cannot be resolved (no ``claude`` ancestor, or the process table is
-    unreadable) the hook fails hard: it logs an ERROR and starts no cycle. It
-    does NOT take the legacy path, which bypasses the coordinator's lock and
-    ``groomer.pid`` guard and would let overlapping windows spawn duplicate
-    cycles (the race #171 removed).
+    unreadable, here or during the liveness probe) the hook fails hard: it
+    logs an ERROR and starts no cycle. It does NOT take the legacy path,
+    which bypasses the coordinator's lock and ``groomer.pid`` guard and would
+    let overlapping windows spawn duplicate cycles (the race #171 removed).
+    The legacy path remains for other coordinator failures (I/O).
 
-    source: ADR-0498 (identity failure: ADR-0527 single-instance guard)"""
+    source: ADR-1097 (coordinator: ADR-0527; consolidate period: ADR-0498)"""
     try:
         from mcp_server.infrastructure.groomer_coordinator import (  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
             GroomerCoordinator,
-            WindowIdentityUnavailableError,
             resolve_store_key,
-            window_pid,
         )
 
-        try:
-            session_pid = window_pid()
-        except (WindowIdentityUnavailableError, OSError) as exc:
-            _log(
-                f"ERROR: groomer coordinator: window identity unavailable ({exc}); "
-                "no consolidate cycle started this session"
-            )
-            return
         coord = GroomerCoordinator(resolve_store_key())
-        coord.register(session_pid)
-        outcome = coord.ensure_cycle(
-            period_hours=_CONSOLIDATE_TTL_HOURS,
-            spawn_fn=_spawn_consolidate_cycle,
-        )
-        _log(f"groomer coordinator: {outcome}")
+        outcome = _ensure_coordinated_cycle(coord)
+        if outcome is not None:
+            _log(f"groomer coordinator: {outcome}")
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(
             f"NOTICE: groomer coordinator unavailable ({exc}); falling back "
             "to legacy per-session consolidate spawn"
         )
         _legacy_background_consolidate()
+
+
+def _ensure_coordinated_cycle(coord) -> str | None:
+    """Register this window and ensure the cycle; None on a hard failure.
+
+    postcondition: on an unresolved window identity or an unreadable process
+    table (ADR-1097 points 2, 3) logs ERROR with the cause and returns None
+    with nothing registered, spawned or stamped.
+
+    source: ADR-1097"""
+    from mcp_server.infrastructure.groomer_identity import (  # noqa: PLC0415 — hook latency boundary: see _maybe_background_consolidate
+        LivenessProbeUnavailableError,
+        WindowIdentityUnavailableError,
+        window_pid,
+    )
+
+    try:
+        session_pid = window_pid()
+    except (WindowIdentityUnavailableError, OSError) as exc:
+        _log(
+            f"ERROR: groomer coordinator: window identity unavailable ({exc}); "
+            "no consolidate cycle started this session"
+        )
+        return None
+    coord.register(session_pid)
+    try:
+        return coord.ensure_cycle(
+            period_hours=_CONSOLIDATE_TTL_HOURS,
+            spawn_fn=_spawn_consolidate_cycle,
+        )
+    except LivenessProbeUnavailableError as exc:
+        coord.deregister(session_pid)
+        _log(
+            f"ERROR: groomer coordinator: liveness probe failed ({exc}); "
+            "no consolidate cycle started this session"
+        )
+        return None
 
 
 def _legacy_background_consolidate() -> None:

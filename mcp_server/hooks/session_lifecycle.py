@@ -309,11 +309,14 @@ def _deregister_groomer_coordinator() -> None:
     ``GroomerCoordinator``; if it was the LAST live session, the groomer's
     single-instance marker is cleared (last-exit stop). Never raises — must
     not block the profile update / consolidation that follows.
-    """
+
+    source: ADR-1097 (SessionEnd stays non-fatal, point 4)"""
     try:
         from mcp_server.infrastructure.groomer_coordinator import (  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
             GroomerCoordinator,
             resolve_store_key,
+        )
+        from mcp_server.infrastructure.groomer_identity import (  # noqa: PLC0415 — hook latency boundary: see above
             window_pid,
         )
 

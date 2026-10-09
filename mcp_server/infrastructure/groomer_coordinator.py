@@ -23,7 +23,7 @@ import hashlib
 import os
 from mcp_server.infrastructure.backend_marker import effective_backend
 from mcp_server.infrastructure.memory_config import get_memory_settings
-from mcp_server.infrastructure import session_registry
+from mcp_server.infrastructure.groomer_identity import LivenessProbeUnavailableError
 
 logger = logging.getLogger(__name__)
 
@@ -34,33 +34,6 @@ SKIPPED_RUNNING = "skipped_running"  # a cycle is already in flight (single-inst
 SKIPPED_LOCKED = "skipped_locked"  # source: ADR-0527
 
 _SCHEMA_VERSION = 1  # registration-file schema; unknown versions ignored on read.
-
-
-class WindowIdentityUnavailableError(RuntimeError):
-    """The window's ``claude`` process could not be resolved.
-
-    source: ADR-0527"""
-
-
-def window_pid() -> int:
-    """Pid of the ``claude`` process that owns the calling hook.
-
-    precondition: called from a hook process, a descendant of the window's
-        ``claude`` process. postcondition: returns that pid. SessionStart and
-        SessionEnd of one window resolve the same pid, and it stays alive for
-        the whole session; the hook's own pid does not (it exits within a
-        second, so ``live_session_count`` reclaims it). Raises
-        ``WindowIdentityUnavailableError`` when the ancestor walk finds no
-        ``claude`` process; no other pid stands in for it.
-
-    source: ADR-0527 (liveness-validated registrations), ADR-0597 (window
-    identity is the ``claude`` ancestor pid)"""
-    pid = session_registry.find_claude_ancestor()
-    if pid is None:
-        raise WindowIdentityUnavailableError(
-            "no claude ancestor process found; cannot key the session registration"
-        )
-    return pid
 
 
 def resolve_store_key(env: dict[str, str] | None = None) -> str:
@@ -172,12 +145,21 @@ class GroomerCoordinator:
         """True iff ``groomer.pid`` names a live process (liveness-validated, not
         a bare flag).
 
-        source: ADR-0527"""
+        precondition: none. postcondition: False when ``groomer.pid`` is
+        missing or unparseable. Raises
+        ``LivenessProbeUnavailableError`` when the liveness probe cannot read
+        the process table (ADR-1097 point 3).
+
+        source: ADR-0527 (probe failure: ADR-1097)"""
         try:
-            raw = self.pid_path.read_text(encoding="utf-8").strip()
-            return pid_alive(int(raw))
+            pid = int(self.pid_path.read_text(encoding="utf-8").strip())
         except (OSError, ValueError):
             return False
+        try:
+            return pid_alive(pid)
+        except OSError as exc:
+            # must not read as "not running": that would spawn a duplicate cycle
+            raise LivenessProbeUnavailableError(str(exc)) from exc
 
     # ── the exactly-one-per-period gate ─────────────────────────────────
 

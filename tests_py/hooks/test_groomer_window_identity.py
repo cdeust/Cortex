@@ -8,7 +8,7 @@ Each hook below runs in a REAL child process that exits before the next hook
 starts, with the ancestor walk answering the pid of a long-lived stand-in for
 the window's ``claude`` process.
 
-source: ADR-0527 (coordinator; window identity: ADR-0597; Windows walk: ADR-1096)
+source: ADR-1097 (coordinator: ADR-0527; Windows walk: ADR-1096)
 """
 
 from __future__ import annotations
@@ -30,8 +30,10 @@ from mcp_server.shared import win32_process
 from tests_py.infrastructure.process_table_fakes import FakeProcessTable
 from mcp_server.infrastructure.groomer_coordinator import (
     GroomerCoordinator,
-    WindowIdentityUnavailableError,
     resolve_store_key,
+)
+from mcp_server.infrastructure.groomer_identity import (
+    WindowIdentityUnavailableError,
     window_pid,
 )
 
@@ -254,3 +256,32 @@ def test_session_end_with_unreadable_process_table_stops_nothing(
     assert coord.is_groomer_running()
     assert coord.live_session_count() == 1
     assert any("process table unreadable" in m for m in logged)
+
+
+def test_session_start_with_unreadable_liveness_probe_fails_hard(
+    start_hook, cache, live_pids, monkeypatch
+):
+    """ADR-1097 point 3: pid_alive raising OSError inside ensure_cycle is the
+    same abnormal condition as an unresolved identity: no spawn, no legacy."""
+    from mcp_server.infrastructure import groomer_coordinator
+
+    win_a, _win_b, groomer = live_pids
+    session_start, calls = start_hook
+    coord = _coord(cache)
+    coord.base_dir.mkdir(parents=True)
+    coord.pid_path.write_text(str(groomer), encoding="utf-8")
+    monkeypatch.setattr(session_registry, "find_claude_ancestor", lambda: win_a)
+
+    def unreadable(_pid):
+        raise OSError("process table unreadable")
+
+    monkeypatch.setattr(groomer_coordinator, "pid_alive", unreadable)
+    session_start._maybe_background_consolidate()
+
+    assert calls["spawn"] == 0
+    assert calls["legacy"] == 0, "no legacy bypass of the coordinator"
+    assert not coord.stamp_path.exists()
+    assert coord.pid_path.read_text(encoding="utf-8") == str(groomer)
+    assert list(coord._iter_session_files()) == []
+    errors = [m for m in calls["log"] if "ERROR" in m]
+    assert len(errors) == 1 and "process table unreadable" in errors[0]
