@@ -165,10 +165,11 @@ class PgEntityMixin(PgStoreHost):
         return {row["source_entity_id"] for row in rows}
 
     def get_memories_mentioning_entity(
-        self, entity_name: str, limit: int = 20, heads_only: bool = False
+        self, entity_name: str, limit: int = 20, heads_only: bool = True
     ) -> list[dict[str, Any]]:
-        """Fetch memories mentioning the entity. heads_only=True restricts both
-        full-text and fallback queries to current chain heads.
+        """Fetch memories mentioning the entity. Both the full-text and the
+        fallback query read current chain heads by default; heads_only=False
+        is the maintenance caller's explicit request for the physical chain.
 
         source: ADR-0547"""
         src = "current_memories" if heads_only else "memories"

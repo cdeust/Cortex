@@ -157,10 +157,11 @@ class SqliteEntityMixin:
         return [self._normalize_memory_row(r) for r in rows]
 
     def get_memories_mentioning_entity(
-        self, entity_name: str, limit: int = 20, heads_only: bool = False
+        self, entity_name: str, limit: int = 20, heads_only: bool = True
     ) -> list[dict[str, Any]]:
-        """Mirror of PgEntityMixin.get_memories_mentioning_entity — heads_only
-        routes BOTH branches (FTS5 + LIKE fallback) through current_memories.
+        """Mirror of PgEntityMixin.get_memories_mentioning_entity — BOTH
+        branches (FTS5 + LIKE fallback) read current_memories by default;
+        heads_only=False requests the physical chain.
         """
         src = "current_memories" if heads_only else "memories"
         # source: ADR-0607

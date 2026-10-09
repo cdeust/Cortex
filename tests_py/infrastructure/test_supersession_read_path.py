@@ -135,8 +135,11 @@ def test_get_memories_for_domain_heads_only(store):
         for m in store.get_memories_for_domain(_DOMAIN, min_heat=0.0, heads_only=True)
     ]
     assert new_id in heads and old_id not in heads
-    # Maintenance default sees the full chain.
-    full = [m["id"] for m in store.get_memories_for_domain(_DOMAIN, min_heat=0.0)]
+    # A maintenance caller asks for the full chain explicitly.
+    full = [
+        m["id"]
+        for m in store.get_memories_for_domain(_DOMAIN, min_heat=0.0, heads_only=False)
+    ]
     assert old_id in full and new_id in full
 
 

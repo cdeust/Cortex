@@ -35,10 +35,11 @@ class SqliteQueryMixin:
         domain: str,
         min_heat: float = 0.05,
         limit: int = 50,
-        heads_only: bool = False,
+        heads_only: bool = True,
     ) -> list[dict[str, Any]]:
-        """Mirror of PgQueryMixin.get_memories_for_domain — heads_only routes
-        through the current_memories view (supersession chain heads only).
+        """Mirror of PgQueryMixin.get_memories_for_domain — chain heads only
+        by default (the current_memories view); heads_only=False is the
+        maintenance caller's explicit request for the physical chain.
         """
         src = "current_memories" if heads_only else "memories"
         rows = self._conn.execute(
@@ -49,10 +50,12 @@ class SqliteQueryMixin:
         return [self._normalize_memory_row(r) for r in rows]
 
     def get_memories_for_directory(
-        self, directory: str, min_heat: float = 0.05
+        self, directory: str, min_heat: float = 0.05, heads_only: bool = True
     ) -> list[dict[str, Any]]:
+        """Mirror of PgQueryMixin.get_memories_for_directory."""
+        src = "current_memories" if heads_only else "memories"
         rows = self._conn.execute(
-            "SELECT * FROM memories WHERE (directory_context = ? OR is_global = 1) "
+            f"SELECT * FROM {src} WHERE (directory_context = ? OR is_global = 1) "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
             "AND heat_base >= ? ORDER BY heat_base DESC",
             (directory, min_heat),
         ).fetchall()
@@ -63,11 +66,12 @@ class SqliteQueryMixin:
         min_heat: float = 0.7,
         limit: int = 20,
         include_benchmarks: bool = False,
-        heads_only: bool = False,
+        heads_only: bool = True,
         directory_ancestors: list[str] | None = None,
     ) -> list[dict[str, Any]]:
-        """Mirror of PgQueryMixin.get_hot_memories — heads_only routes
-        through the current_memories view (supersession chain heads only).
+        """Mirror of PgQueryMixin.get_hot_memories — chain heads only by
+        default (the current_memories view); heads_only=False is the
+        maintenance caller's explicit request for the physical chain.
 
         directory_ancestors, when not None, restricts rows to is_global or
         an ancestor directory_context, applied before ORDER BY/LIMIT so
@@ -155,7 +159,7 @@ class SqliteQueryMixin:
         return [self._normalize_memory_row(r) for r in rows]
 
     def get_memories_by_tag(self, tag: str, limit: int = 20) -> list[dict[str, Any]]:
-        """Most-recent-first memories carrying ``tag``.
+        """Most-recent-first chain heads carrying ``tag``.
 
         PgMemoryStore parity (``pg_store_queries.py::get_memories_by_tag``).
         SQLite lacks the ``@>`` jsonb containment operator; ``json_each``
@@ -164,7 +168,7 @@ class SqliteQueryMixin:
         without a full-table Python filter.
         """
         rows = self._conn.execute(
-            "SELECT m.* FROM memories m "
+            "SELECT m.* FROM current_memories m "
             "WHERE m.is_stale = 0 AND EXISTS ("
             "  SELECT 1 FROM json_each(m.tags) je WHERE je.value = ?"
             ") ORDER BY m.created_at DESC LIMIT ?",
