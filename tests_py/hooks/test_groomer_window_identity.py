@@ -8,7 +8,7 @@ Each hook below runs in a REAL child process that exits before the next hook
 starts, with the ancestor walk answering the pid of a long-lived stand-in for
 the window's ``claude`` process.
 
-source: ADR-0527, ADR-0597
+source: ADR-0527 (coordinator; window identity: ADR-0597; Windows walk: ADR-1096)
 """
 
 from __future__ import annotations
@@ -23,6 +23,11 @@ from pathlib import Path
 import pytest
 
 from mcp_server.infrastructure import session_registry
+from mcp_server.infrastructure import process_ancestry
+from mcp_server.shared import platform as host_platform
+from mcp_server.shared import process_liveness
+from mcp_server.shared import win32_process
+from tests_py.infrastructure.process_table_fakes import FakeProcessTable
 from mcp_server.infrastructure.groomer_coordinator import (
     GroomerCoordinator,
     WindowIdentityUnavailableError,
@@ -144,3 +149,108 @@ def test_session_end_without_window_identity_stops_nothing(
     assert coord.is_groomer_running()
     assert coord.live_session_count() == 1
     assert "stopped_last_exit" not in _outcomes(coord)
+
+
+# A Windows chain with no claude.exe anywhere: init -> bash.exe -> python.exe.
+# source: process_table_fakes.WINDOWS_WINDOW_TREE minus its claude.exe rows
+_NO_CLAUDE_TREE = [
+    (1, 0, "init", 10),
+    (30, 1, "bash.exe", 300),
+    (40, 30, "python.exe", 400),
+]
+# source: the python.exe pid in _NO_CLAUDE_TREE
+_HOOK_PID = 40
+
+
+@pytest.fixture
+def windows_walk(monkeypatch):
+    """The real Windows ancestor walk over a fake table; yields a setter."""
+    state = {"table": FakeProcessTable(_NO_CLAUDE_TREE)}
+
+    def snapshot():
+        return state["table"].snapshot()
+
+    monkeypatch.setattr(host_platform, "IS_WINDOWS", True)
+    monkeypatch.setattr(win32_process, "snapshot_rows", snapshot)
+    monkeypatch.setattr(
+        win32_process, "creation_filetime", lambda p: state["table"].creation(p)
+    )
+    # liveness of the REAL stand-in processes stays the POSIX probe
+    monkeypatch.setattr(win32_process, "pid_alive", process_liveness._posix_pid_alive)
+    monkeypatch.setattr(os, "getpid", lambda: _HOOK_PID)
+    process_ancestry._window_pid_cache.clear()
+    yield state
+    process_ancestry._window_pid_cache.clear()
+
+
+def _unreadable_table():
+    raise OSError("process table unreadable")
+
+
+@pytest.fixture
+def start_hook(monkeypatch, cache):
+    """session_start with the spawn and the legacy path recorded."""
+    from mcp_server.hooks import session_start
+
+    calls = {"spawn": 0, "legacy": 0, "log": []}
+
+    def spawn():
+        calls["spawn"] += 1
+        return os.getpid()
+
+    def legacy():
+        calls["legacy"] += 1
+
+    monkeypatch.setattr(session_start, "_spawn_consolidate_cycle", spawn)
+    monkeypatch.setattr(session_start, "_legacy_background_consolidate", legacy)
+    monkeypatch.setattr(session_start, "_log", calls["log"].append)
+    return session_start, calls
+
+
+def test_session_start_without_ancestor_registers_and_spawns_nothing(
+    windows_walk, start_hook, cache
+):
+    session_start, calls = start_hook
+    session_start._maybe_background_consolidate()
+    session_start._maybe_background_consolidate()  # an overlapping second window
+
+    coord = _coord(cache)
+    assert calls["spawn"] == 0
+    assert calls["legacy"] == 0, "no legacy bypass of the coordinator"
+    assert not coord.sessions_dir.exists()
+    assert not coord.stamp_path.exists()
+    assert not coord.pid_path.exists()
+    assert sum("no claude ancestor" in m for m in calls["log"]) == 2
+
+
+def test_session_start_with_unreadable_process_table_fails_hard(
+    windows_walk, start_hook, cache
+):
+    session_start, calls = start_hook
+    windows_walk["table"].snapshot = _unreadable_table
+    session_start._maybe_background_consolidate()
+
+    coord = _coord(cache)
+    assert calls["spawn"] == 0
+    assert calls["legacy"] == 0
+    assert not coord.sessions_dir.exists()
+    assert any("process table unreadable" in m for m in calls["log"])
+
+
+def test_session_end_with_unreadable_process_table_stops_nothing(
+    windows_walk, live_pids, cache, monkeypatch
+):
+    from mcp_server.hooks import session_lifecycle
+
+    win_a, _win_b, groomer = live_pids
+    _run_hook("start", cache, win_a, groomer)
+    coord = _coord(cache)
+    logged: list[str] = []
+    monkeypatch.setattr(session_lifecycle, "_log", logged.append)
+    windows_walk["table"].snapshot = _unreadable_table
+
+    session_lifecycle._deregister_groomer_coordinator()
+
+    assert coord.is_groomer_running()
+    assert coord.live_session_count() == 1
+    assert any("process table unreadable" in m for m in logged)

@@ -872,16 +872,32 @@ def _spawn_consolidate_cycle() -> int | None:
 def _maybe_background_consolidate() -> None:
     """Ensure ONE consolidate cycle runs per period across N sessions (#171).
 
-    source: ADR-0498"""
+    The session is keyed by its window's ``claude`` pid. When that identity
+    cannot be resolved (no ``claude`` ancestor, or the process table is
+    unreadable) the hook fails hard: it logs an ERROR and starts no cycle. It
+    does NOT take the legacy path, which bypasses the coordinator's lock and
+    ``groomer.pid`` guard and would let overlapping windows spawn duplicate
+    cycles (the race #171 removed).
+
+    source: ADR-0498 (identity failure: ADR-0527 single-instance guard)"""
     try:
         from mcp_server.infrastructure.groomer_coordinator import (  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
             GroomerCoordinator,
+            WindowIdentityUnavailableError,
             resolve_store_key,
             window_pid,
         )
 
+        try:
+            session_pid = window_pid()
+        except (WindowIdentityUnavailableError, OSError) as exc:
+            _log(
+                f"ERROR: groomer coordinator: window identity unavailable ({exc}); "
+                "no consolidate cycle started this session"
+            )
+            return
         coord = GroomerCoordinator(resolve_store_key())
-        coord.register(window_pid())
+        coord.register(session_pid)
         outcome = coord.ensure_cycle(
             period_hours=_CONSOLIDATE_TTL_HOURS,
             spawn_fn=_spawn_consolidate_cycle,
