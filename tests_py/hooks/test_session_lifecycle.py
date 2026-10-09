@@ -575,18 +575,3 @@ class TestConsolidationLogsTheClsCount:
             _run_consolidation_cycle("full")
 
         assert ", 3 CLS abstractions" in capsys.readouterr().err
-
-
-class TestConsolidationLogsTheClsCount:
-    """``run_cls_cycle`` reports ``new_semantics_created``; the log line
-    read a key (``abstractions_created``) that does not exist, so the CLS
-    suffix could never appear (issue #667, "Minor, same function")."""
-
-    def test_the_cls_suffix_reports_new_semantics_created(self, capsys):
-        async def _handler(args):
-            return {"cls": {"new_semantics_created": 3}}
-
-        with patch("mcp_server.handlers.consolidate.handler", _handler):
-            _run_consolidation_cycle("full")
-
-        assert ", 3 CLS abstractions" in capsys.readouterr().err
