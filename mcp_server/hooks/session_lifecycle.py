@@ -402,7 +402,7 @@ def main() -> None:
         _log("No stdin data (TTY mode), exiting")
         return
 
-    raw = read_event_text().strip()
+    raw = read_event_text(_log).strip()
     if not raw:
         _log("Empty stdin, exiting")
         return

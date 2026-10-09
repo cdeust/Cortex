@@ -229,7 +229,7 @@ def main() -> None:
     if sys.stdin.isatty():
         sys.exit(0)
 
-    raw = read_event_text().strip()
+    raw = read_event_text(_log).strip()
     if not raw:
         sys.exit(0)
 

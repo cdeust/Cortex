@@ -66,7 +66,7 @@ def _read_event() -> dict:
     if sys.stdin.isatty():
         return {}
     try:
-        raw = read_event_text().strip()
+        raw = read_event_text(_log).strip()
         return json.loads(raw) if raw else {}
     except (OSError, ValueError):
         return {}

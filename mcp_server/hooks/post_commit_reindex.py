@@ -262,7 +262,7 @@ def process_event(event: dict[str, Any]) -> None:
 def main() -> None:
     if sys.stdin.isatty():
         return
-    raw = read_event_text().strip()
+    raw = read_event_text(_log).strip()
     if not raw:
         return
     try:

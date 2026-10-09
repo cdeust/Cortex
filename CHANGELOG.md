@@ -42,7 +42,9 @@ adheres to [Semantic Versioning](https://semver.org/).
   surrogates that failed on write. Every hook now reads its event through
   one reader, `mcp_server/hooks/stdin_event.py`, which decodes the bytes of
   `sys.stdin.buffer` as strict UTF-8; invalid bytes raise
-  `HookStdinDecodeError` instead of being replaced. The Codex
+  `HookStdinDecodeError` instead of being replaced; the PreToolUse gates
+  (`decision_gate`, `no_deps_gate`) fail closed (exit 2) on undecodable
+  bytes, other hooks exit 1 with a `[hypermnesia-mcp-hook]` line. The Codex
   `session_queue.py` intake decodes the same way. Unverified on a real
   Windows host: the cause is simulated with a cp1252 `TextIOWrapper`.
   Memories already stored garbled are not repaired by this change.

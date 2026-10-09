@@ -104,7 +104,7 @@ def main() -> None:
         _log("No stdin data (TTY mode), exiting")
         return
 
-    raw = read_event_text().strip()
+    raw = read_event_text(_log).strip()
     event = None
     if raw:
         try:

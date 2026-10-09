@@ -28,9 +28,8 @@ import os
 import sys
 from pathlib import Path
 
-from mcp_server.hooks.stdin_event import read_event_text
 from mcp_server.hooks import _no_deps_lex as lex
-from mcp_server.hooks.decision_gate import candidate_content
+from mcp_server.hooks.decision_gate import candidate_content, read_gate_event
 
 _OVERRIDE = "CORTEX_NO_DEPS_GATE"
 
@@ -94,7 +93,7 @@ def evaluate(event: dict) -> int:
 
 
 def main() -> int:
-    raw = read_event_text().strip()
+    raw = read_gate_event("no-deps-gate")
     if not raw:
         return 0
     try:

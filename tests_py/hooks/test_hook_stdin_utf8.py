@@ -6,9 +6,8 @@ Claude Code writes the hook event as UTF-8 bytes. On Windows a text-mode
 is an ``io.TextIOWrapper`` over the UTF-8 bytes with ``encoding="cp1252"``
 and ``errors="surrogateescape"`` -- the exact decoding the issue measured.
 
-source: https://docs.python.org/3/library/sys.html#sys.stdin ("These streams
-are regular text files ... the encoding is the locale encoding", and on
-Windows the console/pipe default is the ANSI code page); issue #664.
+source: CPython Doc/library/sys.rst (``sys.stdin``): on Windows, pipes and disk
+files use the system locale encoding, the ANSI code page; issue #664.
 """
 
 from __future__ import annotations

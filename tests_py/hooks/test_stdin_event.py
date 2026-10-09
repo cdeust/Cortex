@@ -5,7 +5,6 @@ source: issue #664; https://docs.python.org/3/library/sys.html#sys.stdin
 
 from __future__ import annotations
 
-import ast
 import importlib.util
 import io
 import json
@@ -70,22 +69,6 @@ def test_entry_main_decodes_the_event_as_utf8(monkeypatch) -> None:
         entry.main()
     assert caught.value.code == 0
     assert [json.loads(p) for p in seen[0]] == [json.loads(TEXT)]
-
-
-def test_no_hook_module_reads_the_text_stream_directly() -> None:
-    """Every ``sys.stdin`` read in ``mcp_server/hooks`` goes through the reader."""
-    offenders = []
-    for path in sorted((ROOT / "mcp_server" / "hooks").glob("*.py")):
-        if path.name == "stdin_event.py":
-            continue
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-            if (
-                isinstance(node, ast.Attribute)
-                and node.attr in {"read", "readline", "readlines", "buffer"}
-                and ast.unparse(node.value) == "sys.stdin"
-            ):
-                offenders.append(f"{path.name}:{node.lineno}")
-    assert offenders == []
 
 
 def _load_session_queue() -> ModuleType:

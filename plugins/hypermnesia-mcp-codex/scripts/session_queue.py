@@ -200,6 +200,23 @@ def drain(root):
                     stream.write(message)
 
 
+def read_event():
+    """The SessionEnd event from stdin, decoded as UTF-8.
+
+    The host writes UTF-8; text-mode stdin would decode with the locale code
+    page (cp1252 on Windows), issue #664. Invalid UTF-8 is reported on stderr
+    and exits 1 (this hook blocks nothing), never replaced.
+    """
+    try:
+        return json.loads(sys.stdin.buffer.read().decode("utf-8"))
+    except UnicodeDecodeError as exc:
+        print(
+            f"[cortex SessionEnd] event on stdin is not valid UTF-8: {exc}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+
 def main():
     if os.environ.get("CORTEX_HEADLESS_AUTHORING_CHILD") == "1":
         return
@@ -209,9 +226,7 @@ def main():
         drain(root)
         return
     if mode == "intake":
-        # The host writes the event as UTF-8; text-mode stdin would decode it
-        # with the locale code page (cp1252 on Windows), issue #664.
-        enqueue(root, json.loads(sys.stdin.buffer.read().decode("utf-8")))
+        enqueue(root, read_event())
     elif mode != "recover":
         raise ValueError(f"unknown queue mode: {mode}")
     pending = list(root.glob("*.json"))
