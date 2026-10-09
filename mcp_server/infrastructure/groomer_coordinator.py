@@ -23,6 +23,7 @@ import hashlib
 import os
 from mcp_server.infrastructure.backend_marker import effective_backend
 from mcp_server.infrastructure.memory_config import get_memory_settings
+from mcp_server.infrastructure import session_registry
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,33 @@ SKIPPED_RUNNING = "skipped_running"  # a cycle is already in flight (single-inst
 SKIPPED_LOCKED = "skipped_locked"  # source: ADR-0527
 
 _SCHEMA_VERSION = 1  # registration-file schema; unknown versions ignored on read.
+
+
+class WindowIdentityUnavailableError(RuntimeError):
+    """The window's ``claude`` process could not be resolved.
+
+    source: ADR-0527"""
+
+
+def window_pid() -> int:
+    """Pid of the ``claude`` process that owns the calling hook.
+
+    precondition: called from a hook process, a descendant of the window's
+        ``claude`` process. postcondition: returns that pid. SessionStart and
+        SessionEnd of one window resolve the same pid, and it stays alive for
+        the whole session; the hook's own pid does not (it exits within a
+        second, so ``live_session_count`` reclaims it). Raises
+        ``WindowIdentityUnavailableError`` when the ancestor walk finds no
+        ``claude`` process; no other pid stands in for it.
+
+    source: ADR-0527 (liveness-validated registrations), ADR-0597 (window
+    identity is the ``claude`` ancestor pid)"""
+    pid = session_registry.find_claude_ancestor()
+    if pid is None:
+        raise WindowIdentityUnavailableError(
+            "no claude ancestor process found; cannot key the session registration"
+        )
+    return pid
 
 
 def resolve_store_key(env: dict[str, str] | None = None) -> str:

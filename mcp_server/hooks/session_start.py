@@ -877,10 +877,11 @@ def _maybe_background_consolidate() -> None:
         from mcp_server.infrastructure.groomer_coordinator import (  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
             GroomerCoordinator,
             resolve_store_key,
+            window_pid,
         )
 
         coord = GroomerCoordinator(resolve_store_key())
-        coord.register(os.getpid())
+        coord.register(window_pid())
         outcome = coord.ensure_cycle(
             period_hours=_CONSOLIDATE_TTL_HOURS,
             spawn_fn=_spawn_consolidate_cycle,
