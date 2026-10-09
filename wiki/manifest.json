@@ -3555,6 +3555,10 @@
     "ADR-1096": {
       "mirror": "ADR-1096-read-the-windows-process-table-through-ctypes-and-probe-liveness-without-os.kill.md",
       "path": "adr/cortex/1096-read-the-windows-process-table-through-ctypes-and-probe-liveness-without-os.kill.md"
+    },
+    "ADR-1097": {
+      "mirror": "ADR-1097-fail-hard-when-a-hook-cannot-resolve-its-window-identity.md",
+      "path": "adr/cortex/1097-fail-hard-when-a-hook-cannot-resolve-its-window-identity.md"
     }
   },
   "project": "cortex",
