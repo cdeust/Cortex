@@ -26,8 +26,13 @@ the hook and exits only after ``CORTEX_CAPTURE_IDLE_SECONDS`` without traffic
 under the ``/var`` symlink, which the worker's directory check refuses, so the
 capture is skipped before any spawn (measured 2026-10-09). The hermetic env sets
 the idle window to one second (the production variable), and
-``await_capture_worker_exit`` blocks on the worker's own lifetime lease, the
-kernel ``flock`` it holds until it exits, so no sleep or poll decides anything.
+``await_capture_worker_exit`` blocks until the worker PROCESS has exited: first
+on its lifetime lease (the kernel ``flock``, released by ``capture_worker.main``
+before the interpreter shuts down, so the lease alone is NOT proof of exit),
+then on the process itself through the kernel (Linux ``pidfd_open``, macOS
+``kqueue`` with ``NOTE_EXIT``). The pid comes from the leak guard's own token
+listing, because the hook starts the worker detached, so no handle exists. No
+sleep or poll decides anything.
 
 source: this PR; spawn sites mcp_server/hooks/session_start.py
 (_maybe_background_reanalyze, _maybe_background_consolidate)
@@ -36,6 +41,7 @@ source: this PR; spawn sites mcp_server/hooks/session_start.py
 from __future__ import annotations
 
 import os
+import select
 import subprocess
 import sys
 import time
@@ -43,6 +49,7 @@ from pathlib import Path
 
 from mcp_server.infrastructure import capture_socket
 from mcp_server.infrastructure.upstream_identity import BINARY_NAMES
+from tests_py._process_leak_guard import TOKEN_VAR, live_tokened_processes
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 # The names pipeline_discovery looks up on PATH: "cortex-pipeline" plus
@@ -105,11 +112,57 @@ def hermetic_hook_env(
 _WORKER_EXIT_DEADLINE_SECONDS = 30.0
 
 
+# source: mcp_server/hooks/capture_worker.py -- the module the hook starts detached
+_WORKER_MODULE = "mcp_server.hooks.capture_worker"
+
+
+def wait_for_process_exit(pid: int, deadline: float) -> None:
+    """Block until process ``pid`` has exited, through the kernel, not a poll.
+
+    postcondition: returns when ``pid`` is gone (also when it was already gone
+    at registration); raises ``TimeoutError`` at the ``time.monotonic()``
+    ``deadline``. Linux: ``os.pidfd_open`` readable on exit. macOS/BSD:
+    ``kqueue`` ``KQ_NOTE_EXIT``. Windows has no capture worker (ADR-0486).
+
+    source: pidfd_open(2); kqueue(2) EVFILT_PROC NOTE_EXIT"""
+    timeout = max(0.0, deadline - time.monotonic())
+    if sys.platform.startswith("linux"):
+        try:
+            handle = os.pidfd_open(pid)
+        except ProcessLookupError:
+            return
+        try:
+            ready, _, _ = select.select([handle], [], [], timeout)
+        finally:
+            os.close(handle)
+        if not ready:
+            raise TimeoutError(f"process {pid} still alive after the deadline")
+        return
+    queue = select.kqueue()
+    try:
+        watch = select.kevent(
+            pid,
+            select.KQ_FILTER_PROC,
+            select.KQ_EV_ADD | select.KQ_EV_ONESHOT,
+            select.KQ_NOTE_EXIT,
+        )
+        try:
+            events = queue.control([watch], 1, timeout)
+        except ProcessLookupError:
+            return
+        if not events:
+            raise TimeoutError(f"process {pid} still alive after the deadline")
+    finally:
+        queue.close()
+
+
 def await_capture_worker_exit(env: dict[str, str]) -> None:
     """Block until no resident capture worker serves ``env``'s Claude dir.
 
-    postcondition: the worker's lifetime lease (``worker.lock``) was acquired,
-    i.e. the worker, if one was started, has exited; raises on the deadline.
+    postcondition: the worker's lifetime lease (``worker.lock``) was acquired
+    AND every capture worker process of this test session has exited (the lease
+    is released before the interpreter finishes shutting down); raises
+    ``TimeoutError`` on the shared deadline.
     """
     runtime = Path(env["CORTEX_CLAUDE_DIR"]) / ".capture-worker"
     if not runtime.is_dir():
@@ -117,3 +170,6 @@ def await_capture_worker_exit(env: dict[str, str]) -> None:
     deadline = time.monotonic() + _WORKER_EXIT_DEADLINE_SECONDS
     with capture_socket.lease(runtime / "worker.lock", deadline):
         pass
+    for pid, command in live_tokened_processes(os.environ[TOKEN_VAR]):
+        if _WORKER_MODULE in command:
+            wait_for_process_exit(pid, deadline)

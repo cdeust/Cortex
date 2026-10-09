@@ -54,11 +54,6 @@ _PS_ENV_FLAGS = "-axwwE" if sys.platform == "darwin" else "axwwe"
 _OWN_HELPER = "multiprocessing.resource_tracker"
 
 os.environ[TOKEN_VAR] = uuid.uuid4().hex
-# source: ADR-0519 -- the embedding opt-out; without it the first embed on a
-# machine without model weights starts a detached download that outlives the
-# session (found by this guard on Linux, 2026-10-09). Set here because this
-# module is imported before any embedding code runs.
-os.environ["CORTEX_EMBEDDING_ZERO_DOWNLOAD"] = "1"
 
 
 def parse_process_table(
