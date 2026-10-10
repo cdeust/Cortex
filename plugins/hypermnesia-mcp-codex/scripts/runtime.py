@@ -17,7 +17,7 @@ import sys
 
 def requirement() -> tuple[str, str]:
     manifest = Path(__file__).resolve().parents[1] / ".codex-plugin/plugin.json"
-    version = json.loads(manifest.read_text())["version"]
+    version = json.loads(manifest.read_text(encoding="utf-8"))["version"]
     return version, f"hypermnesia-mcp[postgresql,sqlite]=={version}"
 
 
@@ -32,7 +32,9 @@ def installed_python(version: str) -> Path:
     )
     if len(metadata) != 1:
         raise RuntimeError("Cortex runtime absent; run runtime.py setup first")
-    installed = email.parser.Parser().parsestr(metadata[0].read_text())["Version"]
+    installed = email.parser.Parser().parsestr(metadata[0].read_text(encoding="utf-8"))[
+        "Version"
+    ]
     if installed != version:
         raise RuntimeError(
             f"Cortex runtime {installed} differs from plugin {version}; "

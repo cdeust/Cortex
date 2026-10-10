@@ -155,6 +155,40 @@ def test_the_launcher_uses_the_shared_path_on_both_of_its_entry_functions() -> N
     assert not _reconfigure_lines(tree)
 
 
+def _default_encoding_text_io(tree: ast.AST) -> list[int]:
+    """Lines of read_text/write_text/os.fdopen text opens without ``encoding=``."""
+    hits: list[int] = []
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
+            continue
+        name = node.func.attr
+        text_open = name in {"read_text", "write_text"} or (
+            name == "fdopen"
+            and not any(
+                isinstance(a, ast.Constant) and "b" in str(a.value)
+                for a in node.args[1:]
+            )
+        )
+        if text_open and not any(k.arg == "encoding" for k in node.keywords):
+            hits.append(node.lineno)
+    return hits
+
+
+def test_codex_plugin_scripts_name_the_encoding_of_every_text_file() -> None:
+    """They cannot import the shared path; the product's own text files are
+    UTF-8, not the locale code page."""
+    offenders = {
+        p.name: lines
+        for p in sorted(PLUGIN_SCRIPTS.glob("*.py"))
+        if (lines := _default_encoding_text_io(ast.parse(p.read_text("utf-8"))))
+    }
+    assert not offenders, f"default-encoding text I/O in plugin scripts: {offenders}"
+    assert _default_encoding_text_io(ast.parse("p.read_text()")) == [1]
+    assert _default_encoding_text_io(ast.parse("os.fdopen(fd, 'w')")) == [1]
+    assert not _default_encoding_text_io(ast.parse("os.fdopen(fd, 'wb')"))
+    assert not _default_encoding_text_io(ast.parse("p.read_text(encoding='utf-8')"))
+
+
 def test_the_installer_script_uses_the_shared_path_before_it_prints() -> None:
     """install-plugin.sh pipes scripts/setup.py through tee, so its stdout is a
     pipe with the locale encoding on Windows."""
