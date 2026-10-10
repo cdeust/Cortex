@@ -73,6 +73,10 @@ def pair(store):
         {**common, "content": "zorbalisting fact: new value"}, old_id
     )
     assert new_id is not None and head == old_id
+    entity_id = store.insert_entity({"name": "zorbalisting", "type": "concept"})
+    store.insert_memory_entity(old_id, entity_id)
+    store.insert_memory_entity(new_id, entity_id)
+    store._test_entity = entity_id
     return old_id, new_id
 
 
@@ -98,6 +102,10 @@ _READERS = {
     ),
     "get_memories_by_tag": lambda s: s.get_memories_by_tag(_TAG),
     "get_recent_memories": lambda s: s.get_recent_memories(limit=50),
+    "get_all_memories_for_validation": lambda s: s.get_all_memories_for_validation(
+        limit=500
+    ),
+    "get_memories_for_entity": lambda s: s.get_memories_for_entity(s._test_entity),
 }
 
 
@@ -133,10 +141,17 @@ _MAINTENANCE_CALLS = {
     "get_recently_accessed_memories": lambda s: s.get_recently_accessed_memories(
         limit=50, min_access_count=0, heads_only=False
     ),
+    "get_memories_by_tag": lambda s: s.get_memories_by_tag(_TAG, heads_only=False),
+    "get_all_memories_for_validation": lambda s: s.get_all_memories_for_validation(
+        limit=500, heads_only=False
+    ),
+    "get_memories_for_entity": lambda s: s.get_memories_for_entity(
+        s._test_entity, heads_only=False
+    ),
 }
 
 
-@pytest.mark.parametrize("reader", _FLAGGED)
+@pytest.mark.parametrize("reader", sorted(_MAINTENANCE_CALLS))
 def test_maintenance_callers_can_still_see_the_physical_chain(store, pair, reader):
     old_id, new_id = pair
     ids = _ids(_MAINTENANCE_CALLS[reader](store))
@@ -171,3 +186,85 @@ def test_the_superseded_row_stays_readable_by_id(store, pair):
     old_id, new_id = pair
     row = store.get_memory(old_id)
     assert row is not None and row["superseded_by_id"] == new_id
+
+
+# ── The limit counts heads, not physical rows ────────────────────────────
+
+# source: arbitrary fixture sizes; any N below the physical row count (2N) works
+_CHAINS = 3
+# source: arbitrary instant later than any real row, so retracted rows sort first
+_FUTURE = "2999-01-01T00:00:00+00:00"
+
+
+def _force_older_rows_first(store, old_ids):
+    """Rank every superseded row above its replacement on every sort key a
+    listing uses (heat, recency, access), so a LIMIT applied before the head
+    filter would fill the whole window with retracted rows."""
+    p = "%s" if _is_pg(store) else "?"
+    marks = ",".join([p] * len(old_ids))
+    sql = (
+        f"UPDATE memories SET created_at = {p}, last_accessed = {p}, "
+        f"access_count = 5 WHERE id IN ({marks})"
+    )
+    args = (_FUTURE, _FUTURE, *old_ids)
+    if _is_pg(store):
+        store._execute(sql, args)
+    else:
+        store._conn.execute(sql, args)
+    store._conn.commit()
+
+
+def _is_pg(store) -> bool:
+    return not isinstance(store, SqliteMemoryStore)
+
+
+@pytest.fixture
+def chains(store):
+    """Three superseded/head pairs; the retracted rows are the hottest."""
+    base = {
+        "embedding": _embedding(),
+        "source": "user",
+        "domain": _DOMAIN,
+        "directory_context": _DIRECTORY,
+        "tags": [_TAG],
+    }
+    old_ids, new_ids = [], []
+    for i in range(_CHAINS):
+        old_id = store.insert_memory(
+            {**base, "content": f"zorbalisting chain {i}: old", "heat": 0.99}
+        )
+        new_id, _head = store.supersede_atomic(
+            {**base, "content": f"zorbalisting chain {i}: new", "heat": 0.5}, old_id
+        )
+        old_ids.append(old_id)
+        new_ids.append(new_id)
+    _force_older_rows_first(store, old_ids)
+    return set(old_ids), set(new_ids)
+
+
+_LIMITED_READERS = {
+    "get_memories_for_domain": lambda s: s.get_memories_for_domain(
+        _DOMAIN, min_heat=0.0, limit=_CHAINS
+    ),
+    "get_hot_memories": lambda s: s.get_hot_memories(min_heat=0.0, limit=_CHAINS),
+    "get_memories_mentioning_entity": lambda s: s.get_memories_mentioning_entity(
+        "zorbalisting", limit=_CHAINS
+    ),
+    "get_recently_accessed_memories": lambda s: s.get_recently_accessed_memories(
+        limit=_CHAINS, min_access_count=0
+    ),
+    "get_memories_by_tag": lambda s: s.get_memories_by_tag(_TAG, limit=_CHAINS),
+    "get_recent_memories": lambda s: s.get_recent_memories(limit=_CHAINS),
+}
+
+
+@pytest.mark.parametrize("reader", sorted(_LIMITED_READERS))
+def test_a_listing_of_n_returns_n_heads_when_more_than_n_rows_exist(
+    store, chains, reader
+):
+    """Six physical rows exist and the three retracted ones sort first: the
+    limit has to be applied after the head filter, not before it."""
+    old_ids, _new_ids = chains
+    ids = _ids(_LIMITED_READERS[reader](store))
+    assert len(ids) == _CHAINS
+    assert not set(ids) & old_ids

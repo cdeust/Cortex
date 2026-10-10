@@ -374,7 +374,7 @@ def _select_memories(args: dict, store: MemoryStore) -> list[dict]:
 
     after_id = int(args.get("after_id", 0) or 0)
     return store.get_all_memories_for_validation(
-        limit=1000, after_id=after_id, include_stale=True
+        limit=1000, after_id=after_id, include_stale=True, heads_only=False
     )
 
 

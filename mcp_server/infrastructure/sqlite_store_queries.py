@@ -121,12 +121,17 @@ class SqliteQueryMixin:
         *,
         after_id: int = 0,
         include_stale: bool = False,
+        heads_only: bool = True,
     ) -> list[dict[str, Any]]:
         """Page through memories for validation, ``id`` order (I6-D6).
 
+        Chain heads by default (ADR-1100); ``heads_only=False`` pages the
+        physical chain for the maintenance passes that grade every row.
+
         source: ADR-0612"""
+        src = "current_memories" if heads_only else "memories"
         rows = self._conn.execute(
-            "SELECT * FROM memories WHERE id > ? AND (NOT is_stale OR ?) "
+            f"SELECT * FROM {src} WHERE id > ? AND (NOT is_stale OR ?) "  # noqa: S608 — src is one of two literals
             "ORDER BY id ASC LIMIT ?",
             (after_id, int(include_stale), limit),
         ).fetchall()
@@ -158,8 +163,12 @@ class SqliteQueryMixin:
         ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]
 
-    def get_memories_by_tag(self, tag: str, limit: int = 20) -> list[dict[str, Any]]:
-        """Most-recent-first chain heads carrying ``tag``.
+    def get_memories_by_tag(
+        self, tag: str, limit: int = 20, heads_only: bool = True
+    ) -> list[dict[str, Any]]:
+        """Most-recent-first chain heads carrying ``tag`` (ADR-1100);
+        ``heads_only=False`` reads the physical chain for the idempotency
+        scans that must see a marker on a since-superseded row.
 
         PgMemoryStore parity (``pg_store_queries.py::get_memories_by_tag``).
         SQLite lacks the ``@>`` jsonb containment operator; ``json_each``
@@ -167,8 +176,9 @@ class SqliteQueryMixin:
         ``= ANY(...)`` through it) gives the same containment predicate
         without a full-table Python filter.
         """
+        src = "current_memories" if heads_only else "memories"
         rows = self._conn.execute(
-            "SELECT m.* FROM current_memories m "
+            f"SELECT m.* FROM {src} m "  # noqa: S608 — src is one of two literals
             "WHERE m.is_stale = 0 AND EXISTS ("
             "  SELECT 1 FROM json_each(m.tags) je WHERE je.value = ?"
             ") ORDER BY m.created_at DESC LIMIT ?",

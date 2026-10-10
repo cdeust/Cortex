@@ -35,7 +35,7 @@ ResolveExistingFn = Callable[[list[str], str], set[str]]
 
 class _StaleStore(Protocol):
     def get_all_memories_for_validation(
-        self, limit: int, *, after_id: int, include_stale: bool
+        self, limit: int, *, after_id: int, include_stale: bool, heads_only: bool
     ) -> list[dict[str, Any]]: ...
 
     def mark_memory_stale(self, memory_id: int, stale: bool = True) -> None: ...
@@ -82,6 +82,9 @@ def revalidate_staleness(
             limit=min(_PAGE, limit - counts["scanned"]),
             after_id=after_id,
             include_stale=False,
+            # heads_only=False (ADR-1100): the staleness sweep grades the
+            # physical rows, like every consolidation pass.
+            heads_only=False,
         )
         if not page:
             break

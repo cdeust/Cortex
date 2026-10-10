@@ -124,7 +124,9 @@ def run_synaptic_tagging(
     try:
         if importance < _MIN_TAGGING_IMPORTANCE or not new_entity_names:
             return tagged
-        recent = store.get_hot_memories(min_heat=0.0, limit=50)
+        # heads_only=True (ADR-1100): the boost is meant for memories a later
+        # recall can serve; a retracted version never is.
+        recent = store.get_hot_memories(min_heat=0.0, limit=50, heads_only=True)
         candidates = _build_tagging_candidates(
             recent,
             mem_id,
@@ -211,7 +213,11 @@ def _find_shared_entities(
 
         shared_ids = []
         for eid, ename in id_to_name.items():
-            mentioning = store.get_memories_mentioning_entity(ename, limit=50)
+            # heads_only=True (ADR-1100): mem_id was just written, so it is a
+            # head; retracted rows must not use up the 50-row window.
+            mentioning = store.get_memories_mentioning_entity(
+                ename, limit=50, heads_only=True
+            )
             if any(m["id"] == mem_id for m in mentioning):
                 shared_ids.append(eid)
     except Exception as exc:  # noqa: BLE001 — source: ADR-0321

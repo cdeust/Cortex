@@ -352,12 +352,12 @@ def _count_pending_curations(conn) -> int:
         # `column "effective_heat" does not exist` and the schema
         # integrity test catches it.
         rows = conn.execute(
-            "SELECT id, content, tags, "
+            "SELECT m.id, m.content, m.tags, "
             "effective_heat(m, NOW()) AS effective_heat, "
-            "created_at, domain "
-            "FROM memories m "
-            "WHERE NOT is_stale "
-            "ORDER BY last_accessed DESC NULLS LAST, created_at DESC "
+            "m.created_at, m.domain "
+            "FROM memories m JOIN current_memories cm ON cm.id = m.id "
+            "WHERE NOT m.is_stale "
+            "ORDER BY m.last_accessed DESC NULLS LAST, m.created_at DESC "
             "LIMIT 500"
         ).fetchall()
         memories: list[dict] = []
@@ -1038,7 +1038,7 @@ def _lookup_cached_graph_path(project_root: str) -> str | None:
     try:
         tag = code_graph_tag(project_root)
         rows = conn.execute(
-            "SELECT content FROM memories WHERE tags @> %s::jsonb "
+            "SELECT content FROM current_memories WHERE tags @> %s::jsonb "
             "AND NOT is_stale ORDER BY heat_base_set_at DESC LIMIT 1",
             (f'["{tag}"]',),
         ).fetchall()

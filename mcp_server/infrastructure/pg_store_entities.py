@@ -252,10 +252,15 @@ class PgEntityMixin(PgStoreHost):
             out.setdefault(mid, set()).add(eid)
         return out
 
-    def get_memories_for_entity(self, entity_id: int) -> list[dict[str, Any]]:
-        """Return all memories linked to an entity via the join table."""
+    def get_memories_for_entity(
+        self, entity_id: int, heads_only: bool = True
+    ) -> list[dict[str, Any]]:
+        """Return the memories linked to an entity via the join table: chain
+        heads by default (ADR-1100), the physical chain with
+        ``heads_only=False``."""
+        src = "current_memories" if heads_only else "memories"
         rows = self._execute(
-            "SELECT m.* FROM memories m "
+            f"SELECT m.* FROM {src} m "  # noqa: S608 — src is one of two literals
             "JOIN memory_entities me ON me.memory_id = m.id "
             "WHERE me.entity_id = %s ORDER BY m.heat_base DESC",
             (entity_id,),

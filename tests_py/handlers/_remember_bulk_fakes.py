@@ -88,7 +88,7 @@ class TraceStore(Store):
     def update_memory_heat(self, memory_id, heat):
         self.events.append(("heat", memory_id, heat))
 
-    def get_memories_for_entity(self, entity_id):
+    def get_memories_for_entity(self, entity_id, heads_only=True):
         return [{"id": len(self.rows) + 1}]
 
 

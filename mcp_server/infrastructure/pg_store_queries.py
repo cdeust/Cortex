@@ -106,12 +106,17 @@ class PgQueryMixin(PgStoreHost):
         *,
         after_id: int = 0,
         include_stale: bool = False,
+        heads_only: bool = True,
     ) -> list[dict[str, Any]]:
         """Page through memories for validation, ``id`` order (I6-D6).
 
+        Chain heads by default (ADR-1100); ``heads_only=False`` pages the
+        physical chain for the maintenance passes that grade every row.
+
         source: ADR-0560"""
+        src = "current_memories" if heads_only else "memories"
         rows = self._execute(
-            "SELECT * FROM memories WHERE id > %s AND (NOT is_stale OR %s) "
+            f"SELECT * FROM {src} WHERE id > %s AND (NOT is_stale OR %s) "  # noqa: S608 — src is one of two literals
             "ORDER BY id ASC LIMIT %s",
             (after_id, include_stale, limit),
         ).fetchall()
@@ -141,8 +146,12 @@ class PgQueryMixin(PgStoreHost):
         rows = self._execute("SELECT * FROM memories WHERE NOT is_stale").fetchall()
         return [self._normalize_memory_row(r) for r in rows]
 
-    def get_memories_by_tag(self, tag: str, limit: int = 20) -> list[dict[str, Any]]:
-        """Most-recent-first chain heads carrying ``tag``.
+    def get_memories_by_tag(
+        self, tag: str, limit: int = 20, heads_only: bool = True
+    ) -> list[dict[str, Any]]:
+        """Most-recent-first chain heads carrying ``tag`` (ADR-1100);
+        ``heads_only=False`` reads the physical chain for the idempotency
+        scans that must see a marker on a since-superseded row.
 
         Replaces full-table scans that filtered by tag in Python
         (bounded-I/O audit 2026-06-09). Recency correctness is guaranteed
@@ -150,8 +159,9 @@ class PgQueryMixin(PgStoreHost):
         skip dead entries (e.g. graph memos whose path was deleted) get
         ``limit`` candidates of headroom.
         """
+        src = "current_memories" if heads_only else "memories"
         rows = self._execute(
-            "SELECT * FROM current_memories "
+            f"SELECT * FROM {src} "  # noqa: S608 — src is one of two literals
             "WHERE tags @> %s::jsonb AND NOT is_stale "
             "ORDER BY created_at DESC LIMIT %s",
             (json.dumps([tag]), limit),
