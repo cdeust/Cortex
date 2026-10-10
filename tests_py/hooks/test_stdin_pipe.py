@@ -76,3 +76,26 @@ def test_real_gate_process_reports_invalid_bytes_and_does_not_block(
     done = _run(["-m", "mcp_server.hooks.decision_gate"], b"\xff\xfe", tmp_path)
     assert done.returncode == 1
     assert b"not valid UTF-8" in done.stderr
+
+
+PRINT = (
+    "from mcp_server.hooks.stdin_event import read_event_text\n"
+    "read_event_text()\n"
+    "print('\u27e6 supprim\u00e9 \u2192')\n"
+)
+
+
+def test_hook_output_is_utf8_when_the_stdout_pipe_is_cp1252(tmp_path: Path) -> None:
+    """Issue #688: print() raised UnicodeEncodeError on a cp1252 stdout pipe."""
+    env = _env(tmp_path)
+    env["PYTHONIOENCODING"] = "cp1252"
+    done = subprocess.run(
+        [sys.executable, "-c", PRINT],
+        input=TEXT.encode("utf-8"),
+        capture_output=True,
+        env=env,
+        cwd=ROOT,
+        timeout=None,
+    )
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.decode("utf-8").strip() == "\u27e6 supprim\u00e9 \u2192"

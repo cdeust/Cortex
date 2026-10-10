@@ -35,6 +35,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Hooks write their output as UTF-8 on every platform (issue #688).** On Windows a
+  piped `sys.stdout` encodes with the ANSI code page, so `auto_recall` raised
+  `UnicodeEncodeError` printing an injection that holds `⟦` or accented text. The
+  one stdin reader, which every printing event hook calls first, now switches
+  `sys.stdout` to UTF-8.
+
 - **Windows: each Claude window gets its own session identity, and no liveness
   probe can signal a live process** (#665). Three causes, one fix each. (1) The
   registry walked ancestors with `ps -o`, which Git Bash does not have; the
