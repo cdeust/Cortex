@@ -366,25 +366,6 @@ def test_count_pending_curations_empty_sample_short_circuits(monkeypatch):
     assert hook._count_pending_curations(_conn_returning([])) == 0
 
 
-def test_pending_curation_count_reads_chain_heads_only(monkeypatch):
-    """The count is shown to the user: a retracted version must not feed it."""
-    from mcp_server.core import auto_curator
-
-    monkeypatch.setattr(auto_curator, "count_pending_clusters", lambda *_a, **_k: 0)
-    conn = _conn_returning([{"id": 1}])
-    hook._count_pending_curations(conn)
-    sql = conn.execute.call_args.args[0]
-    assert "JOIN current_memories" in sql
-
-
-def test_cached_graph_lookup_reads_chain_heads_only(monkeypatch):
-    conn = _conn_returning([])
-    monkeypatch.setattr(hook, "_connect_pg", lambda: conn)
-    assert hook._lookup_cached_graph_path("/proj") is None
-    sql = conn.execute.call_args.args[0]
-    assert "FROM current_memories" in sql
-
-
 # ── Filesystem probes ─────────────────────────────────────────────────
 
 

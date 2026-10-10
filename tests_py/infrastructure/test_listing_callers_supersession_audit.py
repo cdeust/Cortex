@@ -8,10 +8,16 @@ caller that passes ``heads_only=False`` receives retracted rows, so every such
 call site must be a reviewed maintenance site, named here. Two checks:
 
 * a literal ``heads_only=False`` outside ``_MAINTENANCE_SITES`` fails;
-* a maintenance module (``handlers/consolidation/`` and
-  ``handlers/validate_memory.py``) that calls a listing without stating
-  ``heads_only`` at all fails, so a new maintenance caller cannot silently
-  inherit the content-serving default.
+* a maintenance module (``handlers/consolidation/``,
+  ``handlers/validate_memory.py`` and everything under ``scripts/``) that
+  calls a listing without stating ``heads_only`` at all fails, so a new
+  maintenance caller cannot silently inherit the content-serving default;
+* the ``heads_only`` default of every listing is the same on SQLite and
+  PostgreSQL, compared from the declared signatures (no server needed), and
+  every non-test class that defines a listing accepts the keyword.
+
+The walk covers every Python file of the repository outside the tests, the
+virtualenv and vendored trees, ``scripts/`` and ``benchmarks/`` included.
 
 Limit of this test, by construction: it reads source text. It cannot see a
 ``heads_only`` value computed at run time, a listing reached through
@@ -24,13 +30,19 @@ from __future__ import annotations
 
 import ast
 import inspect
+import os
 from pathlib import Path
 
 import pytest
 
 from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 
-_ROOT = Path(__file__).resolve().parents[2] / "mcp_server"
+_REPO = Path(__file__).resolve().parents[2]
+_INFRA = _REPO / "mcp_server" / "infrastructure"
+# source: directories that hold no production caller of a store listing
+_SKIPPED_DIRS = frozenset(
+    {".git", ".venv", ".claude", "node_modules", "tests_py", "tests_js", "wiki"}
+)
 
 
 def _listings(cls: type) -> frozenset[str]:
@@ -45,8 +57,9 @@ _LISTINGS = _listings(SqliteMemoryStore)
 
 # source: reviewed 2026-10-10 by the author of this change. Each entry is a
 # maintenance caller that needs the physical chain.
-_VALIDATE = "handlers/validate_memory.py"
-_CONSOLIDATION = "handlers/consolidation/"
+_VALIDATE = "mcp_server/handlers/validate_memory.py"
+_CONSOLIDATION = "mcp_server/handlers/consolidation/"
+_SCRIPTS = "scripts/"
 _MAINTENANCE_SITES = frozenset(
     {
         # validation re-grades every row, superseded ones included
@@ -59,19 +72,30 @@ _MAINTENANCE_SITES = frozenset(
         f"{_CONSOLIDATION}memory_staleness_pass.py::get_all_memories_for_validation",
         # idempotency marker scans must still see a superseded carrier
         f"{_CONSOLIDATION}memify_derive.py::get_memories_by_tag",
-        "handlers/curate_distill.py::get_memories_by_tag",
+        "mcp_server/handlers/curate_distill.py::get_memories_by_tag",
+        # duplicate prevention: a retracted carrier must still block a re-write
+        "mcp_server/handlers/ingest_findings_writers.py::get_memories_by_tag",
+        "mcp_server/handlers/ingest_document_writers.py::get_memories_by_tag",
     }
 )
 
 
 def _is_maintenance_module(rel: str) -> bool:
-    return rel.startswith(_CONSOLIDATION) or rel == _VALIDATE
+    return rel.startswith((_CONSOLIDATION, _SCRIPTS)) or rel == _VALIDATE
+
+
+def _python_files():
+    for root, dirs, files in os.walk(_REPO):
+        dirs[:] = sorted(d for d in dirs if d not in _SKIPPED_DIRS)
+        for name in sorted(files):
+            if name.endswith(".py"):
+                yield Path(root) / name
 
 
 def _calls():
-    for path in sorted(_ROOT.rglob("*.py")):
-        rel = path.relative_to(_ROOT).as_posix()
-        if rel.startswith("infrastructure/"):
+    for path in _python_files():
+        rel = path.relative_to(_REPO).as_posix()
+        if rel.startswith("mcp_server/infrastructure/"):
             continue
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if (
@@ -106,3 +130,51 @@ def test_a_maintenance_module_states_heads_only_on_every_listing_call():
         if _is_maintenance_module(rel) and "heads_only" not in kws
     )
     assert silent == []
+
+
+def _declared_defaults(prefix: str) -> dict[str, object]:
+    """``heads_only`` default of every method declared in ``<prefix>_store*.py``."""
+    found: dict[str, object] = {}
+    for path in sorted(_INFRA.glob(f"{prefix}_store*.py")):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if not isinstance(node, ast.FunctionDef):
+                continue
+            a = node.args
+            positional = a.posonlyargs + a.args
+            defaults = [None] * (len(positional) - len(a.defaults)) + list(a.defaults)
+            pairs = list(zip(positional, defaults, strict=True)) + list(
+                zip(a.kwonlyargs, a.kw_defaults, strict=True)
+            )
+            for arg, default in pairs:
+                if arg.arg == "heads_only":
+                    found[node.name] = (
+                        default.value if isinstance(default, ast.Constant) else default
+                    )
+    return found
+
+
+def test_the_heads_only_defaults_are_the_same_on_both_backends():
+    sqlite = _declared_defaults("sqlite")
+    pg = _declared_defaults("pg")
+    assert sqlite == pg
+    assert set(sqlite) == _LISTINGS
+    # ADR-1100 search_vectors is the one listing keyed by physical rows
+    assert {n for n, d in sqlite.items() if d is not True} == {"search_vectors"}
+    assert sqlite["search_vectors"] is False
+
+
+def test_every_non_test_class_defining_a_listing_accepts_heads_only():
+    refusing = []
+    for path in _python_files():
+        rel = path.relative_to(_REPO).as_posix()
+        if rel.startswith("mcp_server/infrastructure/"):
+            continue
+        for cls in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if not isinstance(cls, ast.ClassDef):
+                continue
+            for fn in cls.body:
+                if isinstance(fn, ast.FunctionDef) and fn.name in _LISTINGS:
+                    names = {a.arg for a in fn.args.args + fn.args.kwonlyargs}
+                    if "heads_only" not in names and fn.args.kwarg is None:
+                        refusing.append(f"{rel}::{cls.name}.{fn.name}")
+    assert refusing == []

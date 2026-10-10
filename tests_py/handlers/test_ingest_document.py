@@ -55,7 +55,9 @@ class _FakeStore:
             self._by_tag.setdefault(tag, []).append(row)
         return mid
 
-    def get_memories_by_tag(self, tag: str, limit: int = 20) -> list[dict]:
+    def get_memories_by_tag(
+        self, tag: str, limit: int = 20, heads_only: bool = True
+    ) -> list[dict]:
         return self._by_tag.get(tag, [])
 
 

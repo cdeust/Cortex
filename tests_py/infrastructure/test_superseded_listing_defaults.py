@@ -255,6 +255,9 @@ _LIMITED_READERS = {
     ),
     "get_memories_by_tag": lambda s: s.get_memories_by_tag(_TAG, limit=_CHAINS),
     "get_recent_memories": lambda s: s.get_recent_memories(limit=_CHAINS),
+    "get_all_memories_for_validation": lambda s: s.get_all_memories_for_validation(
+        _CHAINS, after_id=0, include_stale=False
+    ),
 }
 
 
