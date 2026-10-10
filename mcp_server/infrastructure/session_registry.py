@@ -69,6 +69,24 @@ def _cached_process_start_signature(pid: int) -> str | None:
     return sig
 
 
+def _ps(columns: str, pid: int) -> str | None:
+    """stdout of POSIX ``ps -o <columns> -p <pid>``; None when it cannot run.
+
+    The encoding is named: ``ps`` runs under a UTF-8 locale (PEP 540)."""
+    try:
+        out = subprocess.run(
+            ["ps", "-o", columns, "-p", str(pid)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=_PS_TIMEOUT_S,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return out.stdout
+
+
 def _process_start_signature(pid: int) -> str | None:
     """Opaque per-process start-time token.
 
@@ -84,36 +102,14 @@ def _process_start_signature(pid: int) -> str | None:
             return fields[19]  # field 22 overall = index 19 after comm+state
         except (OSError, IndexError, ValueError):
             return None
-    try:
-        out = subprocess.run(
-            ["ps", "-o", "lstart=", "-p", str(pid)],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",  # POSIX ps, whose locale is UTF-8 (PEP 540)
-            timeout=_PS_TIMEOUT_S,
-            check=False,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return None
-    line = out.stdout.strip()
+    line = (_ps("lstart=", pid) or "").strip()
     return line or None
 
 
 def _ppid_and_comm(pid: int) -> tuple[int, str] | None:
     """One ancestor-walk step: ``(parent pid, comm)`` of ``pid``, or
     None on any probe failure (dead pid, unsupported platform)."""
-    try:
-        out = subprocess.run(
-            ["ps", "-o", "ppid=,comm=", "-p", str(pid)],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",  # POSIX ps, whose locale is UTF-8 (PEP 540)
-            timeout=_PS_TIMEOUT_S,
-            check=False,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return None
-    parts = out.stdout.strip().split(None, 1)
+    parts = (_ps("ppid=,comm=", pid) or "").strip().split(None, 1)
     if len(parts) != _PPID_COMM_PARTS:
         return None
     try:
