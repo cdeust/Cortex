@@ -1,0 +1,35 @@
+---
+created: 2026-10-10T04:34:21Z
+kind: adr
+number: 1098
+status: accepted
+tags: [hooks, windows, encoding, issue-688, issue-692]
+title: Write hook and launcher output as UTF-8 through one shared path
+---
+# ADR-1098: Write hook and launcher output as UTF-8 through one shared path
+
+## Status
+
+accepted
+
+## Context
+
+Issue #688: on Windows with a cp1252 code page and a piped stdout, `mcp_server/hooks/auto_recall.py` raises `UnicodeEncodeError: 'charmap' codec can't encode character '⟦'` from `print(injection)`, and the hook is lost. A measurement of the full suite on windows-latest on 2026-10-10 (main at 18bd25b2, run 38008915302) found 16 failing tests whose common cause is the default text encoding; four of them were this product defect.
+
+ADR-0742 records the earlier fix of issue #96: only `scripts/launcher.py` reconfigured stdout and stderr, with `errors="replace"`, a guarantee that the call never raises, and a silent skip when `reconfigure()` fails. Two things follow from that design. The console entry and a direct `python -m` run never pass through the launcher, so they kept the platform code page. And `errors="replace"` plus the silent skip is the catch-and-degrade the repository rejects: a stream that cannot be reconfigured, or a character that cannot be encoded, changed the output instead of failing. PR #675 made the hook INPUT strict UTF-8 on every platform through `mcp_server/hooks/stdin_event.py` and an AST guard test; the output side was left to the launcher.
+
+The Claude Code host consumes hook output as UTF-8 whatever the locale, so UTF-8 is what the consumer already expects.
+
+## Decision
+
+1. One module decides the output encoding of every hook process: `mcp_server/hooks/output_streams.py`, function `use_utf8_output`. stdout is strict UTF-8. stderr is UTF-8 with CPython's own default error handler for stderr (`backslashreplace`), so a diagnostic never fails to print. A stream that cannot be reconfigured (closed, None, not a text stream) raises `HookOutputStreamError`. This supersedes the output half of ADR-0742: `errors="replace"`, the never-raises guarantee and the silent skip are removed.
+2. The call is made first in the `__main__` block of every hook module that writes to a standard stream, in `mcp_server/hooks/entry.py` `main`, in `scripts/launcher.py` (`entrypoint` and `main`, replacing the old private reconfiguration) and in `scripts/setup.py` `main`. The doctor entry points (`mcp_server/doctor.py` and `mcp_server/doctor_mcp.py`) are hook-adjacent preflights that print to stdout and use the same call. An AST guard test fails a writing hook entry point that does not call it, in the way the stdin guard of PR #675 does.
+3. Files that hooks and their helpers read or write name their encoding (`utf-8`); the locale default is never relied on. Child processes whose output is decoded as text name the encoding too.
+4. Outside the contract, by decision: developer tools under `scripts/*.py` (they only get a guard that the literals they print are encodable); stdlib-only plugin scripts for Codex, which cannot import the shared module (a guard pins them to stderr-only output and explicit text encodings); the MCP stdio channel, which the MCP SDK wraps as UTF-8 itself (the launcher change leaves newline translation alone; checked on macOS with a real `initialize` request under `PYTHONIOENCODING=cp1252`); and about 40 default-encoding sites in `benchmarks/`, of which only `pg_recall_plans/run.py` was fixed.
+5. Evidence is dated: the Windows runs without `PYTHONUTF8` (run 38018564737) were made on commit 418a4c4a of PR #695: Windows 187 passed and 1 failed for an unrelated reason (the capture worker needs Unix sockets), macOS 190 passed. Later commits were not re-run on Windows, and the other hooks (`session_start`, `decision_gate` and the rest) were never run on Windows.
+
+## Consequences
+
+Positive: a hook can print any Unicode text on a Windows pipe, the console entry and a direct module run follow the same rule as the launcher, a new hook that skips the shared path fails a test, and a stream that cannot be reconfigured fails loudly instead of changing the output.
+
+Negative and known limits: a lone surrogate in a hook's output now raises `UnicodeEncodeError`, exits 1 and writes nothing to stdout, where it used to be replaced silently; the host treats exit 1 as a non-blocking error. Files written earlier in the locale encoding, such as an old cp1252 README or INDEX page that is not valid UTF-8, are left untouched and reported through the existing exception path; this is not yet a clear hard failure and no test pins it. The AST guard does not catch the call placed after a print, nor a `__main__` block that delegates printing to a helper module, so it is weaker than the stdin guard on ordering and delegation. The `benchmarks/` default-encoding sites remain.

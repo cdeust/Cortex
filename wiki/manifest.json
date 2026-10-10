@@ -3559,6 +3559,10 @@
     "ADR-1097": {
       "mirror": "ADR-1097-fail-hard-when-a-hook-cannot-resolve-its-window-identity.md",
       "path": "adr/cortex/1097-fail-hard-when-a-hook-cannot-resolve-its-window-identity.md"
+    },
+    "ADR-1098": {
+      "mirror": "ADR-1098-write-hook-and-launcher-output-as-utf-8-through-one-shared-path.md",
+      "path": "adr/cortex/1098-write-hook-and-launcher-output-as-utf-8-through-one-shared-path.md"
     }
   },
   "project": "cortex",
