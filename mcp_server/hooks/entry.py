@@ -33,6 +33,7 @@ from mcp_server.hooks.host_dispatch import (
     read_event_or_exit,
     run_all,
 )
+from mcp_server.hooks.output_streams import use_utf8_output
 from mcp_server.infrastructure.backend_marker import apply_backend_resolution
 
 # The eleven hook modules the Claude Code plugin manifest wires
@@ -118,8 +119,9 @@ def main() -> None:
     """Validate argv[1] against the allowlist, then dispatch to the hook.
 
     Precondition: none (argv may be missing its module argument).
-    Postcondition: exits 2 with nothing on stdout when argv[1] is absent or
-    not in HOOK_MODULES; otherwise wires every core/ injection seam (issue
+    Postcondition: stdout and stderr write UTF-8 (``use_utf8_output``, the
+    one place hooks decide it); exits 2 with nothing on stdout when argv[1]
+    is absent or not in HOOK_MODULES; otherwise wires every core/ injection seam (issue
     number 560, mirroring ``scripts/launcher.py`` lines 150-155), then runs
     ``mcp_server.hooks.<module>`` once per event derived from stdin. For a
     ``PreToolUse`` event the first non-zero exit among the derived events
@@ -132,6 +134,7 @@ def main() -> None:
     is set from the event's ``cwd`` via ``apply_project_root`` (never
     overriding an existing value).
     """
+    use_utf8_output()
     name = sys.argv[1] if len(sys.argv) > 1 else None
     if name not in HOOK_MODULES:
         _print_usage()

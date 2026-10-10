@@ -18,6 +18,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from mcp_server.hooks.output_streams import use_utf8_output
 from mcp_server.hooks.stdin_event import read_event_text
 from mcp_server.handlers.injection_receipts import (
     emit_hook_receipt,
@@ -82,7 +83,7 @@ def _parse_frontmatter_name(path: Path) -> str | None:
     no name field. No side effects.
     """
     try:
-        head = path.read_text(errors="ignore")[:4096]
+        head = path.read_text(encoding="utf-8", errors="ignore")[:4096]
     except OSError:
         return None
     m = _YAML_NAME_RE.search(head)
@@ -243,6 +244,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    use_utf8_output()
     # No-op inside the headless wiki-authoring subprocess (see
     # _headless_guard): prevents recursion + memory pollution when
     # ``claude -p --setting-sources user`` loads the user hooks.

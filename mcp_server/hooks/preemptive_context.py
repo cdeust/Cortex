@@ -44,6 +44,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from mcp_server.hooks.output_streams import use_utf8_output
 from mcp_server.hooks.stdin_event import read_event_text
 from mcp_server.shared.hook_state_paths import cooldown_path
 from mcp_server.shared.project_scope import resolve_project_root
@@ -188,6 +189,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    use_utf8_output()
     # No-op inside the headless wiki-authoring subprocess (see
     # _headless_guard): prevents recursion + memory pollution when
     # ``claude -p --setting-sources user`` loads the user hooks.

@@ -48,35 +48,30 @@ def _resolve_paths() -> tuple[str, str]:
     return plugin_root, deps_dir
 
 
-def _reconfigure_streams_utf8() -> None:
-    """Force UTF-8 encoding on stdout/stderr, replacing unencodable chars.
+def _use_utf8_output(plugin_root: str) -> None:
+    """Set stdout/stderr to UTF-8 through the one shared hook output path.
 
-        Precondition: none — safe to call unconditionally, before argv parsing.
-        Postcondition: sys.stdout and sys.stderr each either (a) have
-        encoding="utf-8" and errors="replace", or (b) are left untouched if
-        reconfigure() is unavailable/fails — never raises.
+    Precondition: ``plugin_root`` holds ``mcp_server`` (``_resolve_paths``).
+    Postcondition: ``mcp_server.hooks.output_streams.use_utf8_output`` has run
+    (stdout strict UTF-8, stderr UTF-8 with backslashreplace); a stream that
+    cannot be reconfigured raises ``HookOutputStreamError``, it is not skipped.
+    The module is stdlib-only and ``mcp_server/__init__`` and
+    ``mcp_server/hooks/__init__`` import nothing, so this is safe before
+    ``ensure_deps``.
 
-        Claude Code consumes hook stdout as UTF-8 regardless of the host
-        locale, so forcing utf-8 here is what the consumer already expects;
-        errors="replace" is a defense-in-depth fallback for any character
-        not exercised by the reporter's A/B.
+    source: ADR-0742 (the launcher's UTF-8 choke point), issue #688.
+    """
+    if plugin_root not in sys.path:
+        sys.path.insert(0, plugin_root)
+    from mcp_server.hooks.output_streams import use_utf8_output  # noqa: PLC0415 — resolvable only once plugin_root is on sys.path
 
-        reconfigure() is a TextIOWrapper method (Python 3.7+); it can raise
-        if the stream isn't a TextIOWrapper (e.g. already replaced by a
-        test harness) — caught per-stream so one stream's failure can't
-        skip the other's.
-
-    source: ADR-0742"""
-    for stream in (sys.stdout, sys.stderr):
-        try:
-            stream.reconfigure(encoding="utf-8", errors="replace")
-        except (AttributeError, ValueError, OSError):
-            pass
+    use_utf8_output()
 
 
 def main() -> None:
     # source: ADR-0742
-    _reconfigure_streams_utf8()
+    plugin_root, deps_dir = _resolve_paths()
+    _use_utf8_output(plugin_root)
 
     if len(sys.argv) < _MIN_ARGC:
         print(
@@ -87,8 +82,6 @@ def main() -> None:
 
     module = sys.argv[1]
     install_deps = "--install-deps" in sys.argv
-
-    plugin_root, deps_dir = _resolve_paths()
 
     # Set up environment
     path_sep = ";" if sys.platform == "win32" else ":"
@@ -183,6 +176,7 @@ def main() -> None:
 def entrypoint() -> None:
     """Keep cleanup imports and registry I/O out of per-tool hook launches."""
     arguments = sys.argv[1:]
+    _use_utf8_output(_resolve_paths()[0])
     if arguments and arguments[0].partition("=")[0] in {
         "--cleanup-deps",
         "--dry-run",
@@ -191,7 +185,6 @@ def entrypoint() -> None:
     }:
         from launcher_cleanup import cli  # noqa: PLC0415 — explicit maintenance only
 
-        _reconfigure_streams_utf8()
         sys.exit(cli(arguments))
     if (
         arguments

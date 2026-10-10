@@ -91,7 +91,7 @@ def test_entry_matches_launcher_on_benign_event(module: str, tmp_path: Path) -> 
         [sys.executable, "-m", "mcp_server.hooks.entry", module],
         input=event,
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         env=env,
         cwd=project,
     )
@@ -99,7 +99,7 @@ def test_entry_matches_launcher_on_benign_event(module: str, tmp_path: Path) -> 
         [sys.executable, str(LAUNCHER_PATH), f"mcp_server.hooks.{module}"],
         input=event,
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         env=env,
         cwd=project,
     )

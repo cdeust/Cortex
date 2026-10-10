@@ -295,7 +295,10 @@ class CheckModeTests(_CanonicalSourceTestCase):
     def test_a_hand_edited_badge_is_reported_as_stale(self):
         gen.main(["--test-count", "42"])
         target = self._root / "assets" / "badge-version.svg"
-        target.write_text(target.read_text().replace("4.16.0", "9.9.9"))
+        target.write_text(
+            target.read_text(encoding="utf-8").replace("4.16.0", "9.9.9"),
+            encoding="utf-8",
+        )
         self.assertEqual(gen.main(["--check", "--test-count", "42"]), 1)
 
     def test_check_does_not_repair_the_file_it_rejects(self):
@@ -306,15 +309,15 @@ class CheckModeTests(_CanonicalSourceTestCase):
         """
         gen.main(["--test-count", "42"])
         target = self._root / "assets" / "badge-version.svg"
-        tampered = target.read_text().replace("4.16.0", "9.9.9")
-        target.write_text(tampered)
+        tampered = target.read_text(encoding="utf-8").replace("4.16.0", "9.9.9")
+        target.write_text(tampered, encoding="utf-8")
         gen.main(["--check", "--test-count", "42"])
-        self.assertEqual(target.read_text(), tampered)
+        self.assertEqual(target.read_text(encoding="utf-8"), tampered)
 
     def test_a_drifted_count_is_rewritten_on_a_real_run(self):
         gen.main(["--test-count", "42"])
         self.assertEqual(gen.main(["--test-count", "43"]), 0)
-        body = (self._root / "assets" / "badge-tests.svg").read_text()
+        body = (self._root / "assets" / "badge-tests.svg").read_text(encoding="utf-8")
         self.assertIn("43 tests passing", body)
 
     def test_an_unreadable_canonical_source_exits_two_not_one(self):
@@ -359,7 +362,7 @@ class StaleTestsBadgeTests(_CanonicalSourceTestCase):
     def test_a_title_without_a_count_is_reported(self):
         target = self._root / "assets" / "badge-tests.svg"
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text("<svg><title>not a count</title></svg>")
+        target.write_text("<svg><title>not a count</title></svg>", encoding="utf-8")
         self.assertIn("no test-count figure", gen.stale_tests_badge(42))
 
     def test_an_exact_match_is_not_reported(self):
@@ -381,7 +384,10 @@ class StaleTestsBadgeTests(_CanonicalSourceTestCase):
         only the number, never label/colour/provenance drift."""
         self._commit(41)
         target = self._root / "assets" / "badge-tests.svg"
-        target.write_text(target.read_text().replace("tests", "TESTS", 1))
+        target.write_text(
+            target.read_text(encoding="utf-8").replace("tests", "TESTS", 1),
+            encoding="utf-8",
+        )
         self.assertIsNotNone(gen.stale_tests_badge(42))
 
     def test_stale_tests_badge_pins_utf8_on_read(self):
@@ -699,13 +705,13 @@ class RepositoryTests(unittest.TestCase):
         self.assertEqual(gen.main(["--check"]), 0)
 
     def test_the_readme_shows_the_committed_files(self):
-        readme = (Path(gen.REPO_ROOT) / "README.md").read_text()
+        readme = (Path(gen.REPO_ROOT) / "README.md").read_text(encoding="utf-8")
         for badge in gen.build_badges(test_count=None):
             with self.subTest(badge=badge.filename):
                 self.assertIn(f"assets/{badge.filename}", readme)
 
     def test_the_readme_hotlinks_no_shields_badge(self):
-        readme = (Path(gen.REPO_ROOT) / "README.md").read_text()
+        readme = (Path(gen.REPO_ROOT) / "README.md").read_text(encoding="utf-8")
         self.assertNotIn("img.shields.io", readme)
 
     def test_the_live_status_badges_stay_live(self):
@@ -715,6 +721,6 @@ class RepositoryTests(unittest.TestCase):
         would assert a standing we might no longer hold — stale is tolerable
         for a dated claim, false is not for a live one.
         """
-        readme = (Path(gen.REPO_ROOT) / "README.md").read_text()
+        readme = (Path(gen.REPO_ROOT) / "README.md").read_text(encoding="utf-8")
         self.assertIn("actions/workflows/ci.yml/badge.svg", readme)
         self.assertIn("bestpractices.dev/projects/13836/badge", readme)

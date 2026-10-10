@@ -39,7 +39,9 @@ def validate_container(name: str, expected_id: str) -> dict[str, object]:
     result = command(["docker", "inspect", name])
     info = json.loads(result.stdout)[0]
     driver = Path(__file__).parents[1] / "reproduce.sh"
-    match = re.search(r'^PG_IMAGE="([^"]+)"$', driver.read_text(), re.MULTILINE)
+    match = re.search(
+        r'^PG_IMAGE="([^"]+)"$', driver.read_text(encoding="utf-8"), re.MULTILINE
+    )
     if match is None:
         raise RuntimeError("cannot verify reproduce.sh image")
     config = info["Config"]
@@ -67,7 +69,7 @@ def host_evidence() -> dict[str, str]:
 
 def run_experiment(args: argparse.Namespace, database: str) -> None:
     script = experiment_sql(args.rows)
-    (args.output / "experiment.sql").write_text(script)
+    (args.output / "experiment.sql").write_text(script, encoding="utf-8")
     argv = [
         "docker",
         "exec",
@@ -84,9 +86,9 @@ def run_experiment(args: argparse.Namespace, database: str) -> None:
         database,
     ]
     result = subprocess.run(argv, input=script, text=True, capture_output=True)
-    (args.output / "results.jsonl").write_text(result.stdout)
-    (args.output / "nested-plans.log").write_text(result.stderr)
-    (args.output / "command.json").write_text(json.dumps(argv))
+    (args.output / "results.jsonl").write_text(result.stdout, encoding="utf-8")
+    (args.output / "nested-plans.log").write_text(result.stderr, encoding="utf-8")
+    (args.output / "command.json").write_text(json.dumps(argv), encoding="utf-8")
     result.check_returncode()
 
 
@@ -111,7 +113,9 @@ def main() -> None:
         script = args.output / "experiment.sql"
         if script.exists():
             metadata["script_sha256"] = hashlib.sha256(script.read_bytes()).hexdigest()
-        (args.output / "manifest.json").write_text(json.dumps(metadata, indent=2))
+        (args.output / "manifest.json").write_text(
+            json.dumps(metadata, indent=2), encoding="utf-8"
+        )
 
 
 if __name__ == "__main__":

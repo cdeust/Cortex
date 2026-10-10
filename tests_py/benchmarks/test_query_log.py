@@ -19,7 +19,7 @@ RESULTS = [
 
 
 def _lines(path: Path) -> list[dict]:
-    return [json.loads(line) for line in path.read_text().splitlines()]
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
 
 
 def test_sidecars_sit_beside_the_results_file(tmp_path: Path) -> None:

@@ -34,7 +34,7 @@ def test_codex_plugin_is_confined_to_a_dedicated_subdirectory() -> None:
     assert PLUGIN_PATH.is_file()
     assert MCP_PATH.is_file()
 
-    ignored = (REPO_ROOT / ".mcpbignore").read_text().splitlines()
+    ignored = (REPO_ROOT / ".mcpbignore").read_text(encoding="utf-8").splitlines()
     assert ".agents/" in ignored
     assert "plugins/hypermnesia-mcp-codex/" in ignored
     assert "plugins/cortex-deprecated/" in ignored
@@ -218,7 +218,7 @@ def test_legacy_viz_identity_is_a_frozen_nonfunctional_migration_shim() -> None:
 
 
 def test_readme_carries_the_complete_viz_and_spec_identity_migrations() -> None:
-    readme = (REPO_ROOT / "README.md").read_text()
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
 
     assert "claude plugin uninstall cortex-viz@cortex-plugins" in readme
     assert "claude plugin install hypermnesia-mcp-viz@cortex-plugins" in readme
@@ -233,7 +233,7 @@ def test_readme_carries_the_complete_viz_and_spec_identity_migrations() -> None:
 
 
 def test_current_companion_docs_use_canonical_publication_identities() -> None:
-    readme = (REPO_ROOT / "README.md").read_text()
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
     assert (
         '<a href="https://github.com/cdeust/cortex-viz">hypermnesia-mcp-viz</a>'
         in readme
@@ -246,7 +246,7 @@ def test_current_companion_docs_use_canonical_publication_identities() -> None:
         REPO_ROOT / "docs/module-inventory.md",
     ]
     for path in current_docs:
-        content = path.read_text()
+        content = path.read_text(encoding="utf-8")
         assert "prd-spec-generator" not in content
         assert "**cortex-viz** MCP" not in content
         assert "Install cortex-viz" not in content

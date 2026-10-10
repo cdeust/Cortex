@@ -70,7 +70,13 @@ def test_returns_none_on_real_timeout_without_hanging():
 
 def test_encoding_parameter_is_honored():
     out = run_with_hard_timeout(
-        [sys.executable, "-c", "print('café')"], timeout=5, encoding="utf-8"
+        [
+            sys.executable,
+            "-c",
+            "import sys; sys.stdout.buffer.write('café'.encode('utf-8'))",
+        ],
+        timeout=5,
+        encoding="utf-8",
     )
     assert out == "café"
 

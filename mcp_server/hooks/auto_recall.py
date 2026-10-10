@@ -42,6 +42,7 @@ import sys
 from datetime import datetime, timezone
 from typing import Any
 
+from mcp_server.hooks.output_streams import use_utf8_output
 from mcp_server.hooks.stdin_event import read_event_text
 from mcp_server.handlers.injection_receipts import (
     emit_hook_receipt,
@@ -440,6 +441,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    use_utf8_output()
     # No-op inside the headless wiki-authoring subprocess (see
     # _headless_guard): prevents recursion + memory pollution when
     # ``claude -p --setting-sources user`` loads the user hooks.

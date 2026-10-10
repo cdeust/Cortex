@@ -36,7 +36,7 @@ class TestLogRotation(unittest.TestCase):
     def test_below_threshold_appends_without_rotation(self) -> None:
         self.append("first\n")
         self.append("second\n")
-        self.assertEqual(self.path.read_text(), "first\nsecond\n")
+        self.assertEqual(self.path.read_text(encoding="utf-8"), "first\nsecond\n")
         self.assertFalse(self.previous.exists())
 
     def test_actual_f9_threshold_rotates_before_worker_open(self) -> None:
@@ -49,7 +49,7 @@ class TestLogRotation(unittest.TestCase):
             self.assertEqual(self.previous.stat().st_size, log_rotation.MAX_LOG_BYTES)
             self.assertEqual(self.path.stat().st_size, 0)
             stream.write("worker\n")
-        self.assertEqual(self.path.read_text(), "worker\n")
+        self.assertEqual(self.path.read_text(encoding="utf-8"), "worker\n")
         self.assertTrue(stream.closed)
 
     def test_utf8_bytes_trigger_rotation_and_keep_complete_records(self) -> None:
@@ -59,15 +59,15 @@ class TestLogRotation(unittest.TestCase):
         ):
             self.append(first)
             self.append(second)
-        self.assertEqual(self.previous.read_text(), first)
-        self.assertEqual(self.path.read_text(), second)
+        self.assertEqual(self.previous.read_text(encoding="utf-8"), first)
+        self.assertEqual(self.path.read_text(encoding="utf-8"), second)
 
     def test_only_one_previous_segment_is_retained(self) -> None:
         with patch.object(log_rotation, "MAX_LOG_BYTES", len("first\n")):
             for line in ("first\n", "next!\n", "last!\n"):
                 self.append(line)
-        self.assertEqual(self.path.read_text(), "last!\n")
-        self.assertEqual(self.previous.read_text(), "next!\n")
+        self.assertEqual(self.path.read_text(encoding="utf-8"), "last!\n")
+        self.assertEqual(self.previous.read_text(encoding="utf-8"), "next!\n")
         self.assertEqual(
             {path.name for path in self.root.iterdir()},
             {"log.jsonl", "log.jsonl.1", "log.jsonl.lock"},
@@ -77,8 +77,10 @@ class TestLogRotation(unittest.TestCase):
         with patch.object(log_rotation, "MAX_LOG_BYTES", len("old\n")):
             self.append("old\n")
             self.append("one oversized complete record\n")
-        self.assertEqual(self.previous.read_text(), "old\n")
-        self.assertEqual(self.path.read_text(), "one oversized complete record\n")
+        self.assertEqual(self.previous.read_text(encoding="utf-8"), "old\n")
+        self.assertEqual(
+            self.path.read_text(encoding="utf-8"), "one oversized complete record\n"
+        )
 
     def test_error_closes_stream_and_releases_lock_for_next_write(self) -> None:
         with self.assertRaisesRegex(RuntimeError, "fixture failure"):
@@ -86,7 +88,7 @@ class TestLogRotation(unittest.TestCase):
                 raise RuntimeError("fixture failure")
         self.assertTrue(stream.closed)
         self.append("next write\n")
-        self.assertEqual(self.path.read_text(), "next write\n")
+        self.assertEqual(self.path.read_text(encoding="utf-8"), "next write\n")
 
     def test_rotation_error_preserves_existing_file_and_propagates(self) -> None:
         self.path.write_text("first\n", encoding="utf-8")
@@ -96,7 +98,7 @@ class TestLogRotation(unittest.TestCase):
             ):
                 with self.assertRaisesRegex(PermissionError, "busy file"):
                     self.append("next\n")
-        self.assertEqual(self.path.read_text(), "first\n")
+        self.assertEqual(self.path.read_text(encoding="utf-8"), "first\n")
         self.assertFalse(self.previous.exists())
 
     @unittest.skipIf(
@@ -114,7 +116,7 @@ class TestLogRotation(unittest.TestCase):
         with patch.object(log_rotation, "MAX_LOG_BYTES", len("old\n")):
             with self.assertRaisesRegex(OSError, "regular file"):
                 self.append("new\n")
-        self.assertEqual(target.read_text(), "untouched")
+        self.assertEqual(target.read_text(encoding="utf-8"), "untouched")
 
     def test_two_independent_processes_keep_both_records_across_rotation(self) -> None:
         script = """
@@ -136,7 +138,10 @@ with log_rotation.open_rotating_log(
             self.addCleanup(_stop_process, process)
         for process in processes:
             self.assertEqual(process.wait(timeout=10), 0)
-        records = [json.loads(path.read_text()) for path in (self.path, self.previous)]
+        records = [
+            json.loads(path.read_text(encoding="utf-8"))
+            for path in (self.path, self.previous)
+        ]
         self.assertEqual({record["writer"] for record in records}, {"one", "two"})
 
 

@@ -35,6 +35,21 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Hooks write UTF-8 to stdout and stderr on every platform and entry point,
+  and the wiki reindex reads and writes UTF-8** (#688). A text-mode stdout
+  encodes with the locale code page (cp1252 on a Windows pipe), so
+  `auto_recall` died with `UnicodeEncodeError` on the `U+27E6` that opens every
+  injection receipt. Only the plugin launcher reconfigured its streams (with
+  `errors="replace"`); the Codex `hypermnesia-mcp-hook` entry and a direct
+  `python -m mcp_server.hooks.<hook>` run did not. The decision now lives in
+  one place, `mcp_server/hooks/output_streams.py`: stdout is strict UTF-8 (a
+  lone surrogate fails loudly, nothing is replaced), stderr is UTF-8 with
+  CPython's own `backslashreplace`, and a stream that cannot be reconfigured
+  raises. Every hook `__main__` block that writes, `hooks/entry.py` and the
+  launcher call it; `tests_py/hooks/test_output_streams_guard.py` fails a hook
+  entry point that writes without it. `wiki_reindex_io` and the Codex
+  `session_queue` error file no longer use the default encoding.
+
 - **Windows: each Claude window gets its own session identity, and no liveness
   probe can signal a live process** (#665). Three causes, one fix each. (1) The
   registry walked ancestors with `ps -o`, which Git Bash does not have; the

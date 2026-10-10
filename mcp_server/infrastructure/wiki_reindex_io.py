@@ -24,7 +24,7 @@ def _refresh_readme_if_safe(root: Path, page_paths: list[str]) -> None:
     should_write = True
     if readme_path.exists():
         try:
-            existing = readme_path.read_text()
+            existing = readme_path.read_text(encoding="utf-8")
             if auto_marker not in existing:
                 should_write = False  # hand-written, don't touch
         except (OSError, UnicodeDecodeError) as exc:
@@ -33,7 +33,7 @@ def _refresh_readme_if_safe(root: Path, page_paths: list[str]) -> None:
     if should_write:
         readme_md = build_plain_readme(page_paths)
         readme_md += f"\n{auto_marker}\n"
-        readme_path.write_text(readme_md)
+        readme_path.write_text(readme_md, encoding="utf-8")
 
 
 def try_reindex(root: Path) -> None:
@@ -48,7 +48,7 @@ def try_reindex(root: Path) -> None:
         index_md = build_index(page_paths)
         gen_dir = root / ".generated"
         gen_dir.mkdir(exist_ok=True)
-        (gen_dir / "INDEX.md").write_text(index_md)
+        (gen_dir / "INDEX.md").write_text(index_md, encoding="utf-8")
         _refresh_readme_if_safe(root, page_paths)
         cleanup_id_prefixed_pages(root)
     except Exception as exc:  # noqa: BLE001 — index rebuild is best-effort after a write

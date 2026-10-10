@@ -17,6 +17,7 @@ via ``PYTHONIOENCODING=cp1252`` here — no Windows box required.
 from __future__ import annotations
 
 import importlib.util
+import io
 import subprocess
 import sys
 import textwrap
@@ -43,54 +44,31 @@ def launcher_module():
     return module
 
 
-def test_reconfigure_streams_utf8_sets_encoding(launcher_module):
-    """Postcondition: reconfigure() is invoked with utf-8/replace."""
-    calls = []
-
-    class _FakeStream:
-        def reconfigure(self, encoding, errors):
-            calls.append((encoding, errors))
-
-    import sys as _sys
-
-    fake_out, fake_err = _FakeStream(), _FakeStream()
-    orig_out, orig_err = _sys.stdout, _sys.stderr
-    try:
-        _sys.stdout, _sys.stderr = fake_out, fake_err
-        launcher_module._reconfigure_streams_utf8()
-    finally:
-        _sys.stdout, _sys.stderr = orig_out, orig_err
-
-    assert calls == [("utf-8", "replace"), ("utf-8", "replace")]
-
-
-def test_reconfigure_streams_utf8_survives_stream_without_reconfigure(
-    launcher_module,
+def test_use_utf8_output_sets_strict_stdout_and_backslashreplace_stderr(
+    launcher_module, monkeypatch
 ):
-    """A stream lacking reconfigure() (AttributeError) must not raise —
-    one stream's failure can't skip the other's attempt."""
+    """Postcondition: the launcher goes through the shared hook output path,
+    so stdout is strict UTF-8 and stderr UTF-8 with backslashreplace."""
+    out = io.TextIOWrapper(io.BytesIO(), encoding="cp1252")
+    err = io.TextIOWrapper(io.BytesIO(), encoding="cp1252")
+    monkeypatch.setattr(sys, "stdout", out)
+    monkeypatch.setattr(sys, "stderr", err)
 
-    class _NoReconfigure:
-        pass
+    launcher_module._use_utf8_output(str(REPO_ROOT))
 
-    class _FakeStream:
-        def __init__(self):
-            self.called = False
+    assert (out.encoding, out.errors) == ("utf-8", "strict")
+    assert (err.encoding, err.errors) == ("utf-8", "backslashreplace")
 
-        def reconfigure(self, encoding, errors):
-            self.called = True
 
-    import sys as _sys
+def test_use_utf8_output_raises_for_a_stream_it_cannot_reconfigure(
+    launcher_module, monkeypatch
+):
+    """A stream without reconfigure() is a hard failure, never skipped."""
+    from mcp_server.hooks.output_streams import HookOutputStreamError
 
-    bad, good = _NoReconfigure(), _FakeStream()
-    orig_out, orig_err = _sys.stdout, _sys.stderr
-    try:
-        _sys.stdout, _sys.stderr = bad, good
-        launcher_module._reconfigure_streams_utf8()  # must not raise
-    finally:
-        _sys.stdout, _sys.stderr = orig_out, orig_err
-
-    assert good.called is True
+    monkeypatch.setattr(sys, "stdout", io.StringIO())
+    with pytest.raises(HookOutputStreamError):
+        launcher_module._use_utf8_output(str(REPO_ROOT))
 
 
 def _run_marker_module(
@@ -131,7 +109,7 @@ def _run_marker_module(
 def test_cp1252_pipe_no_longer_crashes_the_launcher(tmp_path):
     """Green-after: with the launcher's UTF-8 reconfigure in place, a
     cp1252-forced pipe still encodes the "⟦" marker successfully
-    (errors="replace" is the fallback path; utf-8 succeeds outright)."""
+    (utf-8 succeeds outright, nothing is replaced)."""
     result = _run_marker_module(tmp_path, encoding_env="cp1252")
     assert result.returncode == 0, result.stderr.decode("utf-8", "replace")
     assert b"charmap" not in result.stderr

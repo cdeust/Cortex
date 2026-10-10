@@ -28,6 +28,7 @@ import os
 import sys
 from pathlib import Path
 
+from mcp_server.hooks.output_streams import use_utf8_output
 from mcp_server.hooks import _no_deps_lex as lex
 from mcp_server.hooks.stdin_event import read_event_text
 from mcp_server.hooks.decision_gate import candidate_content
@@ -105,6 +106,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    use_utf8_output()
     from mcp_server.hooks._headless_guard import exit_if_headless_authoring_child
 
     exit_if_headless_authoring_child()

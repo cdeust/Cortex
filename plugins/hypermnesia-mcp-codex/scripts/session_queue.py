@@ -196,7 +196,7 @@ def drain(root):
                     os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
                     0o600,
                 )
-                with os.fdopen(fd, "w") as stream:
+                with os.fdopen(fd, "w", encoding="utf-8") as stream:
                     stream.write(message)
 
 
@@ -237,7 +237,7 @@ def main():
             file=sys.stderr,
         )
         for error in root.glob("*.error"):
-            print(error.read_text(), file=sys.stderr)
+            print(error.read_text(encoding="utf-8"), file=sys.stderr)
         spawn(root)
 
 
