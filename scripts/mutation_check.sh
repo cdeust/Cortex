@@ -11,6 +11,13 @@ fi
 
 TESTS="$1"; shift
 read -r -a TEST_ARR <<< "$TESTS"
+# An empty list would expand "${TEST_ARR[@]}" below to nothing: bash < 4.4 (macOS
+# /bin/bash 3.2.57) aborts there with "unbound variable" under set -u, newer bash
+# would run mutmut on no tests. Refuse it up front, the same way on every bash.
+if [ "${#TEST_ARR[@]}" -eq 0 ]; then
+  echo "error: the test list (first argument) is empty." >&2
+  exit 2
+fi
 PY="$ROOT/pyproject.toml"
 BAK="$(mktemp)"
 cp "$PY" "$BAK"
