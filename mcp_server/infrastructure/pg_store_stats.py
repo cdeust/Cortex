@@ -106,7 +106,7 @@ class PgStatsMixin(PgStoreHost):
         self, limit: int = 20, min_access_count: int = 1, heads_only: bool = True
     ) -> list[dict[str, Any]]:
         """Shared primitive with mixed callers. Chain heads only by default
-        (the current_memories view); heads_only=False requests the physical
+        (ADR-1100, the current_memories view); heads_only=False requests the physical
         chain.
         """
         src = "current_memories" if heads_only else "memories"

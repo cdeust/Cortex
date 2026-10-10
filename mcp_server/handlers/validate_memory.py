@@ -360,7 +360,7 @@ def _select_memories(args: dict, store: MemoryStore) -> list[dict]:
         mem = store.get_memory(int(args["memory_id"]))
         return [mem] if mem else []
 
-    # heads_only=False: validation re-grades the physical chain, superseded
+    # heads_only=False (ADR-1100): validation re-grades the physical chain, superseded
     # rows included; its output is a report, not memory content for a session.
     if args.get("domain"):
         return store.get_memories_for_domain(

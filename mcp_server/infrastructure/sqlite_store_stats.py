@@ -119,7 +119,7 @@ class SqliteStatsMixin:
         self, limit: int = 20, min_access_count: int = 1, heads_only: bool = True
     ) -> list[dict[str, Any]]:
         """Mirror of PgStatsMixin.get_recently_accessed_memories — chain heads
-        only by default (the current_memories view); heads_only=False requests
+        only by default (ADR-1100, the current_memories view); heads_only=False requests
         the physical chain.
         """
         src = "current_memories" if heads_only else "memories"

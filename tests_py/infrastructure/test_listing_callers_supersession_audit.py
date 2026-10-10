@@ -1,7 +1,7 @@
 """Only a reviewed maintenance caller may ask a listing for the physical chain.
 
-Decision: listings that serve content return chain heads by default (the
-ADR is cited here once it is applied on this branch).
+ADR-1100: listings that serve content return chain heads by default, and a
+maintenance reader asks for the physical chain explicitly.
 
 The shared listing primitives return supersession chain heads by default. A
 caller that passes ``heads_only=False`` receives retracted rows, so every such
