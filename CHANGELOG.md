@@ -47,8 +47,10 @@ adheres to [Semantic Versioning](https://semver.org/).
   CPython's own `backslashreplace`, and a stream that cannot be reconfigured
   raises. Every hook `__main__` block that writes, `hooks/entry.py` and the
   launcher call it; `tests_py/hooks/test_output_streams_guard.py` fails a hook
-  entry point that writes without it. `wiki_reindex_io` and the Codex
-  `session_queue` error file no longer use the default encoding.
+  entry point that writes without it. `scripts/setup.py` (piped through `tee`
+  by the installer) uses it too, three developer-script arrows outside cp1252
+  are now ASCII, and `wiki_reindex_io` and the Codex `session_queue` error file
+  no longer use the default encoding.
 
 - **Windows: each Claude window gets its own session identity, and no liveness
   probe can signal a live process** (#665). Three causes, one fix each. (1) The
