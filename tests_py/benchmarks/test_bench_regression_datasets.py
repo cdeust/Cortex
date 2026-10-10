@@ -4,11 +4,22 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import shutil
 import subprocess
 
 import pytest
 
 LIBRARY = Path(__file__).resolve().parents[2] / "benchmarks/lib/bench_regression.sh"
+# Every distinct bash a user can have: the system one (3.2.57 on macOS, which
+# the script must support) and the first on PATH (often newer).
+# source: issue #690 (macOS /bin/bash 3.2.57 failed on "wt_dir: unbound variable")
+BASHES = sorted(
+    {
+        path
+        for path in ("/bin/bash", shutil.which("bash"))
+        if path and os.access(path, os.X_OK)
+    }
+)
 DATASETS = {
     "longmemeval": "longmemeval_s.json",
     "locomo": "locomo10.json",
@@ -19,8 +30,8 @@ def _git(repo: Path, *args: str) -> str:
     return subprocess.check_output(["git", "-C", str(repo), *args], text=True).strip()
 
 
-def _repository(tmp_path: Path) -> Path:
-    repo = tmp_path / "repo"
+def _repository(tmp_path: Path, directory: str = "repo") -> Path:
+    repo = tmp_path / directory
     repo.mkdir()
     _git(repo, "init", "-q")
     _git(repo, "config", "user.email", "fixture@example.invalid")
@@ -64,8 +75,21 @@ if [ "$FAIL_RUNNER" = 1 ]; then exit 17; fi
     return binary
 
 
-def _run(tmp_path: Path, selected: str, *, missing=False, fail=False):
-    repo = _repository(tmp_path)
+@pytest.fixture(params=BASHES, ids=lambda path: f"bash={path}")
+def bash(request) -> str:
+    return request.param
+
+
+def _run(
+    bash: str,
+    tmp_path: Path,
+    selected: str,
+    *,
+    missing=False,
+    fail=False,
+    directory="repo",
+):
+    repo = _repository(tmp_path, directory)
     for name, filename in DATASETS.items():
         if name in selected.split(",") and not missing:
             (repo / "benchmarks" / name / filename).write_bytes(
@@ -88,7 +112,7 @@ def _run(tmp_path: Path, selected: str, *, missing=False, fail=False):
     )
     result = subprocess.run(
         [
-            "bash",
+            bash,
             "-c",
             """set -euo pipefail
 source "$LIBRARY"
@@ -105,23 +129,34 @@ run_baseline_benchmarks
 
 
 @pytest.mark.parametrize("selected", ["longmemeval", "locomo", "longmemeval,locomo"])
-def test_baseline_uses_exact_selected_ignored_inputs(tmp_path, selected):
-    result, repo, calls = _run(tmp_path, selected)
+def test_baseline_uses_exact_selected_ignored_inputs(bash, tmp_path, selected):
+    result, repo, calls = _run(bash, tmp_path, selected)
     assert result.returncode == 0, result.stderr
     assert calls.read_text().splitlines() == selected.split(",")
     assert _git(repo, "worktree", "list", "--porcelain").count("worktree ") == 1
 
 
-def test_missing_dataset_fails_before_runner_and_cleans_worktree(tmp_path):
-    result, repo, calls = _run(tmp_path, "longmemeval", missing=True)
+def test_missing_dataset_fails_before_runner_and_cleans_worktree(bash, tmp_path):
+    result, repo, calls = _run(bash, tmp_path, "longmemeval", missing=True)
     assert result.returncode != 0
     assert "dataset missing or unreadable" in result.stderr
     assert not calls.exists()
     assert _git(repo, "worktree", "list", "--porcelain").count("worktree ") == 1
 
 
-def test_first_runner_failure_is_preserved_and_cleans_worktree(tmp_path):
-    result, repo, calls = _run(tmp_path, "longmemeval,locomo", fail=True)
+def test_first_runner_failure_is_preserved_and_cleans_worktree(bash, tmp_path):
+    result, repo, calls = _run(bash, tmp_path, "longmemeval,locomo", fail=True)
     assert result.returncode == 17
+    assert calls.read_text().splitlines() == ["longmemeval"]
+    assert _git(repo, "worktree", "list", "--porcelain").count("worktree ") == 1
+
+
+def test_cleanup_trap_quotes_a_repository_path_with_spaces_and_quotes(bash, tmp_path):
+    """The trap body is built at definition time, so the path must survive the
+    re-parse the trap does when it fires."""
+    result, repo, calls = _run(
+        bash, tmp_path, "longmemeval,locomo", fail=True, directory="re po 'q' $x"
+    )
+    assert result.returncode == 17, result.stderr
     assert calls.read_text().splitlines() == ["longmemeval"]
     assert _git(repo, "worktree", "list", "--porcelain").count("worktree ") == 1

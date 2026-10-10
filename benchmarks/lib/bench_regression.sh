@@ -72,8 +72,14 @@ run_baseline_benchmarks() {
     # source: ADR-0067
     (
         # Preserve errexit and clean up on subshell exit.
+        # The trap body is built NOW, with printf %q quoting, not expanded when
+        # the trap fires: bash 3.2.57 (macOS /bin/bash) has dropped this
+        # function's locals by then when the library is run through
+        # `bash -c`, so a single-quoted body died on "wt_dir: unbound
+        # variable" under set -u and left the worktree behind (issue #690).
         # source: ADR-0067
-        trap 'git -C "$REPO_ROOT" worktree remove --force "$wt_dir" >/dev/null 2>&1 || true' EXIT
+        # shellcheck disable=SC2064 -- early expansion is the point
+        trap "$(printf 'git -C %q worktree remove --force %q >/dev/null 2>&1 || true' "$REPO_ROOT" "$wt_dir")" EXIT
         copy_regression_datasets "$wt_dir"
         cd "$wt_dir"
         if want_bench longmemeval; then
