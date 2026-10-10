@@ -113,6 +113,7 @@ def _git(root: str, args: list[str]) -> str | None:
             ["git", "-C", root, *args],
             capture_output=True,
             text=True,
+            encoding="utf-8",  # git writes UTF-8 paths and messages
             timeout=5,
         )
     except (OSError, subprocess.SubprocessError):

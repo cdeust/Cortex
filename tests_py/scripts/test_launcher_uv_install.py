@@ -83,7 +83,12 @@ def test_install_feeds_the_exported_pylock_to_uv_pip(
     assert pylock.name == "pylock.cortex.toml"
     assert pylock.parent.name.startswith(".cortex-pylock-")
     for kwargs in (export_kw, install_kw):
-        assert kwargs == {"capture_output": True, "text": True, "env": kwargs["env"]}
+        assert kwargs == {
+            "capture_output": True,
+            "text": True,
+            "encoding": "utf-8",
+            "env": kwargs["env"],
+        }
         assert "UV_FROZEN" not in kwargs["env"]
         assert kwargs["env"]["PATH"] == uv_mod.os.environ["PATH"]
 
@@ -111,7 +116,12 @@ def test_set_digest_is_the_sha256_of_the_export_without_its_header(
     assert export == uv_mod.export_command("uv", group, pylock)
     assert pylock.name == "pylock.cortex.toml"
     assert pylock.parent.name.startswith(".cortex-pylock-")
-    assert kwargs == {"capture_output": True, "text": True, "env": kwargs["env"]}
+    assert kwargs == {
+        "capture_output": True,
+        "text": True,
+        "encoding": "utf-8",
+        "env": kwargs["env"],
+    }
     assert "UV_FROZEN" not in kwargs["env"]
     assert kwargs["env"]["PATH"] == uv_mod.os.environ["PATH"]
 

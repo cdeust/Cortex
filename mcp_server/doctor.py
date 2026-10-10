@@ -14,6 +14,7 @@ from typing import Callable
 from mcp_server.observability import silent_failure
 from mcp_server.shared.platform import home_dir
 from mcp_server.core.reranker import ensure_reranker_loaded
+from mcp_server.hooks.output_streams import use_utf8_output
 from mcp_server.hooks.wiring import wire_composition_root
 from mcp_server.handlers.admission import DEFAULT_SEMAPHORE
 from mcp_server.infrastructure.memory_config import get_memory_settings
@@ -541,7 +542,12 @@ def active_checks() -> list[Callable[[], Check]]:
 def run() -> int:
     """Entry point. Dispatches to subcommand if given, else full check.
 
-    source: ADR-0322"""
+    The report prints U+2192 (fix hints): stdout is set to UTF-8 first, so a
+    Windows pipe in cp1252 cannot crash the preflight on the very failure it
+    reports.
+
+    source: ADR-0322 (output encoding: ADR-1098)"""
+    use_utf8_output()
     argv = sys.argv[1:]
     if argv and argv[0] == "mcp":
         flags = argv[1:]

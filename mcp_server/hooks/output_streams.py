@@ -19,8 +19,9 @@ Every hook ``__main__`` block and every hook console entry point calls
 (``tests_py/hooks/test_output_streams_guard.py``) fails any hook entry point
 that prints without calling it.
 
-source: CPython Doc/library/sys.rst (``sys.stdout``, ``sys.stderr``) and
-Doc/library/io.rst (``TextIOWrapper.reconfigure``); issues #96, #688.
+source: ADR-1098 (supersedes the output half of ADR-0742); CPython
+Doc/library/sys.rst (``sys.stdout``, ``sys.stderr``) and Doc/library/io.rst
+(``TextIOWrapper.reconfigure``); issues #96, #688.
 """
 
 from __future__ import annotations

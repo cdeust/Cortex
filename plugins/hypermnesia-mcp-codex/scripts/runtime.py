@@ -22,7 +22,11 @@ def requirement() -> tuple[str, str]:
 
 
 def installed_python(version: str) -> Path:
-    directory = subprocess.check_output(["uv", "tool", "dir"], text=True).strip()
+    # uv is a Rust program: it writes the path as UTF-8 bytes to a pipe, so
+    # the locale code page of a Windows host must not decode it.
+    directory = subprocess.check_output(
+        ["uv", "tool", "dir"], text=True, encoding="utf-8"
+    ).strip()
     runtime = Path(directory) / "hypermnesia-mcp"
     metadata = list(
         runtime.glob("lib/python*/site-packages/hypermnesia_mcp-*.dist-info/METADATA")

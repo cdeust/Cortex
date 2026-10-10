@@ -203,6 +203,7 @@ def locked_set_digest(deps_dir: str, set_args: tuple[str, ...]) -> str:
             export_command(uv, set_args, pylock),
             capture_output=True,
             text=True,
+            encoding="utf-8",  # uv writes UTF-8 (a Rust program)
             env=environment(),
         )
         if exported.returncode:
@@ -248,6 +249,7 @@ def install_locked_set(
             export_command(uv, set_args, pylock),
             capture_output=True,
             text=True,
+            encoding="utf-8",  # uv writes UTF-8 (a Rust program)
             env=env,
         )
         if exported.returncode:
@@ -256,6 +258,7 @@ def install_locked_set(
             install_command(uv, pylock, target),
             capture_output=True,
             text=True,
+            encoding="utf-8",  # uv writes UTF-8 (a Rust program)
             env=env,
         )
     # uv's own lock file for the target; nothing of it belongs in deps/.

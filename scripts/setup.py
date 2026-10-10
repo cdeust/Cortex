@@ -431,6 +431,8 @@ def _use_utf8_output() -> None:
     stdout is a cp1252 pipe and a plugin path outside cp1252 (a user name) in
     the progress lines would raise ``UnicodeEncodeError``. The module is
     stdlib-only, so importing it before ``install_deps`` is safe.
+
+    source: ADR-1098
     """
     if str(PROJECT_DIR) not in sys.path:
         sys.path.insert(0, str(PROJECT_DIR))

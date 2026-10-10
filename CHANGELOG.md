@@ -50,7 +50,11 @@ adheres to [Semantic Versioning](https://semver.org/).
   entry point that writes without it. `scripts/setup.py` (piped through `tee`
   by the installer) uses it too, three developer-script arrows outside cp1252
   are now ASCII, and `wiki_reindex_io` and the Codex `session_queue` error file
-  no longer use the default encoding.
+  no longer use the default encoding. The doctor entry points (`cortex-doctor`
+  and `cortex-doctor mcp`) set stdout to UTF-8 first: their fix hints print
+  `U+2192`, and on a cp1252 pipe they died on the failure they were reporting.
+  Product code that decodes a child process's output names the encoding (`uv`,
+  `git`, the Codex session queue). The decision is ADR-1098.
 
 - **`benchmarks/lib/bench_regression.sh` runs under the macOS system bash
   3.2.57** (#690). The baseline worktree cleanup trap expanded a function-local

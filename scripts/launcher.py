@@ -59,7 +59,8 @@ def _use_utf8_output(plugin_root: str) -> None:
     ``mcp_server/hooks/__init__`` import nothing, so this is safe before
     ``ensure_deps``.
 
-    source: ADR-0742 (the launcher's UTF-8 choke point), issue #688.
+    source: ADR-1098 (supersedes the output half of ADR-0742; its choke
+    point stays), issue #688.
     """
     if plugin_root not in sys.path:
         sys.path.insert(0, plugin_root)
@@ -69,7 +70,7 @@ def _use_utf8_output(plugin_root: str) -> None:
 
 
 def main() -> None:
-    # source: ADR-0742
+    # source: ADR-1098 (supersedes the output half of ADR-0742)
     plugin_root, deps_dir = _resolve_paths()
     _use_utf8_output(plugin_root)
 

@@ -169,6 +169,7 @@ def run_job(path):
         ],
         input=json.dumps(job["event"]),
         text=True,
+        encoding="utf-8",  # the hook reads its stdin as strict UTF-8 (#664)
         env=env,
         cwd=job["cwd"],
         check=False,

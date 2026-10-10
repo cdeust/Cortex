@@ -133,6 +133,8 @@ def main() -> None:
     stdout from every run passes through untouched. ``CLAUDE_PROJECT_ROOT``
     is set from the event's ``cwd`` via ``apply_project_root`` (never
     overriding an existing value).
+
+    source: ADR-1098
     """
     use_utf8_output()
     name = sys.argv[1] if len(sys.argv) > 1 else None

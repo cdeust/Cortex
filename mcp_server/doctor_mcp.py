@@ -12,6 +12,7 @@ import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from mcp_server.hooks.output_streams import use_utf8_output
 from mcp_server.shared.platform import home_dir, python_executable
 from mcp_server.shared.redaction import redact_url, scrub_secrets
 
@@ -85,6 +86,7 @@ def _check_python_interpreter() -> McpCheck:
                         [path, "--version"],
                         capture_output=True,
                         text=True,
+                        encoding="utf-8",
                         timeout=5,
                     )
                     raw = (proc.stdout or proc.stderr or "").strip()
@@ -328,6 +330,10 @@ def _check_launcher_smoke(install_path: str | None) -> McpCheck:
             cmd,
             capture_output=True,
             text=True,
+            # The launcher writes UTF-8 (ADR-1098); a byte it did not write,
+            # from the interpreter before the launcher runs, shows escaped.
+            encoding="utf-8",
+            errors="backslashreplace",
             timeout=10,
         )
     except (OSError, subprocess.SubprocessError) as exc:
@@ -687,7 +693,9 @@ def run_mcp(json_output: bool = False, copy_header: bool = False) -> int:
     """Entry point for `cortex-doctor mcp`.
 
     Returns 0 on full green (or warn-only), 1 on any required failure.
+    Sets stdout to UTF-8 first: the fix hints print U+2192 (source: ADR-1098).
     """
+    use_utf8_output()
     report = collect_mcp_report()
     if json_output:
         print(json.dumps(mcp_report_to_dict(report), indent=2))

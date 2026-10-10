@@ -126,6 +126,7 @@ def _try_setup_db() -> dict | None:
             capture_output=True,
             timeout=15,
             text=True,
+            encoding="utf-8",  # setup_db.py prints json.dumps, ASCII
             env={**os.environ, "DATABASE_URL": _DATABASE_URL},
         )
         if r.stdout.strip():

@@ -50,3 +50,26 @@ def test_reindex_does_no_default_encoding_io_and_writes_utf8(tmp_path: Path) -> 
     readme = (tmp_path / "README.md").read_bytes().decode("utf-8")
     index = (tmp_path / ".generated" / "INDEX.md").read_bytes().decode("utf-8")
     assert "réunion" in readme + index
+
+
+def test_a_readme_written_in_cp1252_is_left_untouched(tmp_path: Path) -> None:
+    """A README an older run wrote in the locale code page is not valid UTF-8.
+    The reindex keeps it byte for byte (it reports through its existing except
+    branch) rather than rewriting or garbling it; ADR-1098 records that this is
+    a documented refusal and not yet a hard failure, and this pins it."""
+    old = "# café — notes\n".encode("cp1252")
+    (tmp_path / "README.md").write_bytes(old)
+    child = (
+        "import sys\n"
+        "from pathlib import Path\n"
+        "from mcp_server.infrastructure.wiki_reindex_io import try_reindex\n"
+        "try_reindex(Path(sys.argv[1]))\n"
+    )
+    done = subprocess.run(
+        [sys.executable, "-c", child, str(tmp_path)],
+        capture_output=True,
+        env={"CORTEX_CLAUDE_DIR": str(tmp_path / "claude"), "PYTHONPATH": str(ROOT)},
+        cwd=ROOT,
+    )
+    assert done.returncode == 0, done.stderr.decode("utf-8", "backslashreplace")
+    assert (tmp_path / "README.md").read_bytes() == old

@@ -89,6 +89,7 @@ def _process_start_signature(pid: int) -> str | None:
             ["ps", "-o", "lstart=", "-p", str(pid)],
             capture_output=True,
             text=True,
+            encoding="utf-8",  # POSIX ps, whose locale is UTF-8 (PEP 540)
             timeout=_PS_TIMEOUT_S,
             check=False,
         )
@@ -106,6 +107,7 @@ def _ppid_and_comm(pid: int) -> tuple[int, str] | None:
             ["ps", "-o", "ppid=,comm=", "-p", str(pid)],
             capture_output=True,
             text=True,
+            encoding="utf-8",  # POSIX ps, whose locale is UTF-8 (PEP 540)
             timeout=_PS_TIMEOUT_S,
             check=False,
         )

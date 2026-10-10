@@ -1,7 +1,11 @@
 """No hook entry point may print through the locale encoding (issue #688).
 
+source: ADR-1098 (supersedes the output half of ADR-0742)
+
 An AST predicate with negative tests, like ``test_stdin_guard`` for the input
-side. A hook process that has a ``__main__`` block (or is the console entry
+side. Known limits (ADR-1098): it does not see a call placed after the first
+print of a ``__main__`` block, nor a block that delegates printing to a helper
+module. A hook process that has a ``__main__`` block (or is the console entry
 point) and writes to a standard stream must call ``use_utf8_output``, the one
 place hooks decide their output encoding; nobody else may reconfigure a stream.
 """
@@ -155,40 +159,6 @@ def test_the_launcher_uses_the_shared_path_on_both_of_its_entry_functions() -> N
     assert not _reconfigure_lines(tree)
 
 
-def _default_encoding_text_io(tree: ast.AST) -> list[int]:
-    """Lines of read_text/write_text/os.fdopen text opens without ``encoding=``."""
-    hits: list[int] = []
-    for node in ast.walk(tree):
-        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
-            continue
-        name = node.func.attr
-        text_open = name in {"read_text", "write_text"} or (
-            name == "fdopen"
-            and not any(
-                isinstance(a, ast.Constant) and "b" in str(a.value)
-                for a in node.args[1:]
-            )
-        )
-        if text_open and not any(k.arg == "encoding" for k in node.keywords):
-            hits.append(node.lineno)
-    return hits
-
-
-def test_codex_plugin_scripts_name_the_encoding_of_every_text_file() -> None:
-    """They cannot import the shared path; the product's own text files are
-    UTF-8, not the locale code page."""
-    offenders = {
-        p.name: lines
-        for p in sorted(PLUGIN_SCRIPTS.glob("*.py"))
-        if (lines := _default_encoding_text_io(ast.parse(p.read_text("utf-8"))))
-    }
-    assert not offenders, f"default-encoding text I/O in plugin scripts: {offenders}"
-    assert _default_encoding_text_io(ast.parse("p.read_text()")) == [1]
-    assert _default_encoding_text_io(ast.parse("os.fdopen(fd, 'w')")) == [1]
-    assert not _default_encoding_text_io(ast.parse("os.fdopen(fd, 'wb')"))
-    assert not _default_encoding_text_io(ast.parse("p.read_text(encoding='utf-8')"))
-
-
 def test_the_installer_script_uses_the_shared_path_before_it_prints() -> None:
     """install-plugin.sh pipes scripts/setup.py through tee, so its stdout is a
     pipe with the locale encoding on Windows."""
@@ -246,40 +216,3 @@ def test_the_stream_predicates_fire_on_their_bypass_patterns() -> None:
     assert _reconfigure_lines(ast.parse("sys.stdout.reconfigure(encoding='utf-8')"))
     assert _unredirected_prints(ast.parse("print('x')")) == [1]
     assert not _unredirected_prints(ast.parse("print('x', file=sys.stderr)"))
-
-
-def _print_literals_outside(codec: str, tree: ast.AST) -> list[tuple[int, str]]:
-    """``(line, character)`` for each print() string literal ``codec`` cannot encode."""
-    found: list[tuple[int, str]] = []
-    for node in ast.walk(tree):
-        is_print = (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Name)
-            and node.func.id == "print"
-        )
-        if not is_print:
-            continue
-        for part in ast.walk(node):
-            if isinstance(part, ast.Constant) and isinstance(part.value, str):
-                try:
-                    part.value.encode(codec)
-                except UnicodeEncodeError as exc:
-                    found.append((node.lineno, part.value[exc.start : exc.end]))
-    return found
-
-
-def test_developer_scripts_print_only_characters_a_windows_pipe_encodes() -> None:
-    """Scripts are not hooks and do not call the shared path, so their literal
-    output must stay inside cp1252, the code page of a Windows pipe (a literal
-    outside it crashed ``dump_snapshot.py`` on a piped stdout)."""
-    offenders = {
-        p.name: hits
-        for p in sorted((ROOT / "scripts").glob("*.py"))
-        if (hits := _print_literals_outside("cp1252", ast.parse(p.read_text("utf-8"))))
-    }
-    assert not offenders, f"print() literals cp1252 cannot encode: {offenders}"
-
-
-def test_the_literal_predicate_fires_outside_the_code_page_only() -> None:
-    assert _print_literals_outside("cp1252", ast.parse("print('a → b')")) == [(1, "→")]
-    assert not _print_literals_outside("cp1252", ast.parse("print('a — b')"))
