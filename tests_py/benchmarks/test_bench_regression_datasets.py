@@ -80,6 +80,33 @@ def bash(request) -> str:
     return request.param
 
 
+# Run through `bash -c`, the mode in which bash 3.2.57 drops a function's locals
+# before its subshell EXIT trap fires (issue #690).
+_DRIVER = """set -euo pipefail
+source "$LIBRARY"
+PASSTHROUGH=()
+want_bench() { case ",$ONLY," in *",$1,"*) return 0;; *) return 1;; esac; }
+run_baseline_benchmarks
+"""
+
+
+def _environment(tmp_path: Path, repo: Path, selected: str, fail: bool):
+    return dict(
+        os.environ,
+        PATH=str(_runner(tmp_path)) + os.pathsep + os.environ["PATH"],
+        REPO_ROOT=str(repo),
+        RESULTS_DIR=str(repo / "results"),
+        BASELINE_REF="baseline",
+        ONLY=selected,
+        QUICK="0",
+        LIMIT="",
+        BENCH_DB_URL="unused-fixture",
+        RUNNER_LOG=str(tmp_path / "calls"),
+        FAIL_RUNNER="1" if fail else "0",
+        LIBRARY=str(LIBRARY),
+    )
+
+
 def _run(
     bash: str,
     tmp_path: Path,
@@ -95,33 +122,9 @@ def _run(
             (repo / "benchmarks" / name / filename).write_bytes(
                 b'["exact", "\xc3\xa9"]\n'
             )
-    binary = _runner(tmp_path)
-    environment = dict(
-        os.environ,
-        PATH=str(binary) + os.pathsep + os.environ["PATH"],
-        REPO_ROOT=str(repo),
-        RESULTS_DIR=str(repo / "results"),
-        BASELINE_REF="baseline",
-        ONLY=selected,
-        QUICK="0",
-        LIMIT="",
-        BENCH_DB_URL="unused-fixture",
-        RUNNER_LOG=str(tmp_path / "calls"),
-        FAIL_RUNNER="1" if fail else "0",
-        LIBRARY=str(LIBRARY),
-    )
     result = subprocess.run(
-        [
-            bash,
-            "-c",
-            """set -euo pipefail
-source "$LIBRARY"
-PASSTHROUGH=()
-want_bench() { case ",$ONLY," in *",$1,"*) return 0;; *) return 1;; esac; }
-run_baseline_benchmarks
-""",
-        ],
-        env=environment,
+        [bash, "-c", _DRIVER],
+        env=_environment(tmp_path, repo, selected, fail),
         capture_output=True,
         text=True,
     )
