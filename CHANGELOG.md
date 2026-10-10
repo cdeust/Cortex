@@ -35,6 +35,15 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **`benchmarks/lib/bench_regression.sh` runs under the macOS system bash
+  3.2.57** (#690). The baseline worktree cleanup trap expanded a function-local
+  `wt_dir` when it fired; under `bash -c` and 3.2 the locals are already gone
+  then, so `set -u` aborted with `wt_dir: unbound variable`, the worktree was
+  left behind and the runner's exit status was lost. The trap body is now built
+  when it is set. `test_bench_regression_datasets.py` runs under `/bin/bash` and
+  the first `bash` on `PATH`. Every other shell script was checked for bash 3.2
+  constructs (none found; `benchmarks/energy/run.sh` is zsh).
+
 - **Windows: each Claude window gets its own session identity, and no liveness
   probe can signal a live process** (#665). Three causes, one fix each. (1) The
   registry walked ancestors with `ps -o`, which Git Bash does not have; the
