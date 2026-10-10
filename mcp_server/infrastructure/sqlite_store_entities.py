@@ -146,10 +146,15 @@ class SqliteEntityMixin:
         ).fetchall()
         return [dict(r) for r in rows]
 
-    def get_memories_for_entity(self, entity_id: int) -> list[dict[str, Any]]:
-        """Return all memories linked to an entity via the join table."""
+    def get_memories_for_entity(
+        self, entity_id: int, heads_only: bool = True
+    ) -> list[dict[str, Any]]:
+        """Return the memories linked to an entity via the join table: chain
+        heads by default (ADR-1100), the physical chain with
+        ``heads_only=False``."""
+        src = "current_memories" if heads_only else "memories"
         rows = self._conn.execute(
-            "SELECT m.* FROM memories m "
+            f"SELECT m.* FROM {src} m "  # noqa: S608 — src is one of two literals
             "JOIN memory_entities me ON me.memory_id = m.id "
             "WHERE me.entity_id = ? ORDER BY m.heat_base DESC",
             (entity_id,),
@@ -157,10 +162,11 @@ class SqliteEntityMixin:
         return [self._normalize_memory_row(r) for r in rows]
 
     def get_memories_mentioning_entity(
-        self, entity_name: str, limit: int = 20, heads_only: bool = False
+        self, entity_name: str, limit: int = 20, heads_only: bool = True
     ) -> list[dict[str, Any]]:
-        """Mirror of PgEntityMixin.get_memories_mentioning_entity — heads_only
-        routes BOTH branches (FTS5 + LIKE fallback) through current_memories.
+        """Mirror of PgEntityMixin.get_memories_mentioning_entity — BOTH
+        branches (FTS5 + LIKE fallback) read current_memories by default;
+        heads_only=False requests the physical chain.
         """
         src = "current_memories" if heads_only else "memories"
         # source: ADR-0607

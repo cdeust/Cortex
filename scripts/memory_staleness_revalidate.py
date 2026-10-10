@@ -44,9 +44,15 @@ class _DryRunStore:
     def __init__(self, inner):
         self._inner = inner
 
-    def get_all_memories_for_validation(self, limit, *, after_id, include_stale):
+    def get_all_memories_for_validation(
+        self, limit, *, after_id, include_stale, heads_only
+    ):
+        # ADR-1100 the sweep states heads_only itself; forward it unchanged.
         return self._inner.get_all_memories_for_validation(
-            limit, after_id=after_id, include_stale=include_stale
+            limit,
+            after_id=after_id,
+            include_stale=include_stale,
+            heads_only=heads_only,
         )
 
     def mark_memory_stale(self, memory_id, stale=True):

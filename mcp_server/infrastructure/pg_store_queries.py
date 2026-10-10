@@ -21,12 +21,13 @@ class PgQueryMixin(PgStoreHost):
         domain: str,
         min_heat: float = 0.05,
         limit: int = 50,
-        heads_only: bool = False,
+        heads_only: bool = True,
     ) -> list[dict[str, Any]]:
-        """Shared primitive with mixed callers. heads_only routes the read
-        through the current_memories view (supersession chain heads only):
-        content-serving callers (recall_hierarchical, drill_down) pass True;
-        maintenance callers (validate_memory) keep False to see full chains.
+        """Shared primitive with mixed callers. Supersession chain heads only
+        by default (the current_memories view): a listing serves content, and
+        a retracted row must never be served. A maintenance caller that needs
+        the physical chain (validate_memory, consolidation) passes
+        heads_only=False.
         """
         src = "current_memories" if heads_only else "memories"
         rows = self._execute(
@@ -37,10 +38,13 @@ class PgQueryMixin(PgStoreHost):
         return [self._normalize_memory_row(r) for r in rows]
 
     def get_memories_for_directory(
-        self, directory: str, min_heat: float = 0.05
+        self, directory: str, min_heat: float = 0.05, heads_only: bool = True
     ) -> list[dict[str, Any]]:
+        """Directory-scoped listing; chain heads only unless heads_only=False
+        (see get_memories_for_domain)."""
+        src = "current_memories" if heads_only else "memories"
         rows = self._execute(
-            "SELECT * FROM memories WHERE (directory_context = %s OR is_global = TRUE) "
+            f"SELECT * FROM {src} WHERE (directory_context = %s OR is_global = TRUE) "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
             "AND heat_base >= %s ORDER BY heat_base DESC",
             (directory, min_heat),
         ).fetchall()
@@ -51,13 +55,12 @@ class PgQueryMixin(PgStoreHost):
         min_heat: float = 0.7,
         limit: int = 20,
         include_benchmarks: bool = False,
-        heads_only: bool = False,
+        heads_only: bool = True,
         directory_ancestors: list[str] | None = None,
     ) -> list[dict[str, Any]]:
-        """Shared primitive with mixed callers. heads_only routes the read
-        through the current_memories view (supersession chain heads only):
-        content-serving callers (drill_down, write-gate struct_nov) pass
-        True; maintenance/stats callers keep False.
+        """Shared primitive with mixed callers. Supersession chain heads only
+        by default (the current_memories view); maintenance callers that need
+        the physical chain (consolidation) pass heads_only=False.
 
         directory_ancestors, when not None, restricts rows to is_global or
         an ancestor directory_context (project_scope.project_ancestors),
@@ -103,12 +106,17 @@ class PgQueryMixin(PgStoreHost):
         *,
         after_id: int = 0,
         include_stale: bool = False,
+        heads_only: bool = True,
     ) -> list[dict[str, Any]]:
         """Page through memories for validation, ``id`` order (I6-D6).
 
+        Chain heads by default (ADR-1100); ``heads_only=False`` pages the
+        physical chain for the maintenance passes that grade every row.
+
         source: ADR-0560"""
+        src = "current_memories" if heads_only else "memories"
         rows = self._execute(
-            "SELECT * FROM memories WHERE id > %s AND (NOT is_stale OR %s) "
+            f"SELECT * FROM {src} WHERE id > %s AND (NOT is_stale OR %s) "  # noqa: S608 — src is one of two literals
             "ORDER BY id ASC LIMIT %s",
             (after_id, include_stale, limit),
         ).fetchall()
@@ -138,8 +146,12 @@ class PgQueryMixin(PgStoreHost):
         rows = self._execute("SELECT * FROM memories WHERE NOT is_stale").fetchall()
         return [self._normalize_memory_row(r) for r in rows]
 
-    def get_memories_by_tag(self, tag: str, limit: int = 20) -> list[dict[str, Any]]:
-        """Most-recent-first memories carrying ``tag``.
+    def get_memories_by_tag(
+        self, tag: str, limit: int = 20, heads_only: bool = True
+    ) -> list[dict[str, Any]]:
+        """Most-recent-first chain heads carrying ``tag`` (ADR-1100);
+        ``heads_only=False`` reads the physical chain for the idempotency
+        scans that must see a marker on a since-superseded row.
 
         Replaces full-table scans that filtered by tag in Python
         (bounded-I/O audit 2026-06-09). Recency correctness is guaranteed
@@ -147,8 +159,9 @@ class PgQueryMixin(PgStoreHost):
         skip dead entries (e.g. graph memos whose path was deleted) get
         ``limit`` candidates of headroom.
         """
+        src = "current_memories" if heads_only else "memories"
         rows = self._execute(
-            "SELECT * FROM memories "
+            f"SELECT * FROM {src} "  # noqa: S608 — src is one of two literals
             "WHERE tags @> %s::jsonb AND NOT is_stale "
             "ORDER BY created_at DESC LIMIT %s",
             (json.dumps([tag]), limit),

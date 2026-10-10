@@ -74,10 +74,14 @@ class _FakeStore:
     def get_all_entities(self, min_heat: float = 0.0) -> list[dict]:
         return self._entities
 
-    def get_memories_for_entity(self, entity_id: int) -> list[dict]:
+    def get_memories_for_entity(
+        self, entity_id: int, heads_only: bool = True
+    ) -> list[dict]:
         return self._memories_by_entity.get(entity_id, [])
 
-    def get_memories_by_tag(self, tag: str, limit: int = 20) -> list[dict]:
+    def get_memories_by_tag(
+        self, tag: str, limit: int = 20, heads_only: bool = True
+    ) -> list[dict]:
         return self._derived_memories
 
 

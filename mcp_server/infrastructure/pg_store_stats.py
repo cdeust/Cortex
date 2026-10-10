@@ -94,19 +94,20 @@ class PgStatsMixin(PgStoreHost):
     # ── Dashboard ─────────────────────────────────────────────────────
 
     def get_recent_memories(self, limit: int = 20) -> list[dict[str, Any]]:
+        """Most recently created chain heads (curate_wiki / curate_distill
+        author from this content, so a retracted row is never returned)."""
         rows = self._execute(
-            "SELECT * FROM memories ORDER BY created_at DESC LIMIT %s",
+            "SELECT * FROM current_memories ORDER BY created_at DESC LIMIT %s",
             (limit,),
         ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]
 
     def get_recently_accessed_memories(
-        self, limit: int = 20, min_access_count: int = 1, heads_only: bool = False
+        self, limit: int = 20, min_access_count: int = 1, heads_only: bool = True
     ) -> list[dict[str, Any]]:
-        """Shared primitive with mixed callers. heads_only routes the read
-        through the current_memories view (supersession chain heads only):
-        content-serving callers (navigate_memory SR graph, curate_wiki,
-        auto_task_record_writer) pass True.
+        """Shared primitive with mixed callers. Chain heads only by default
+        (ADR-1100, the current_memories view); heads_only=False requests the physical
+        chain.
         """
         src = "current_memories" if heads_only else "memories"
         rows = self._execute(

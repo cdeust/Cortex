@@ -360,15 +360,21 @@ def _select_memories(args: dict, store: MemoryStore) -> list[dict]:
         mem = store.get_memory(int(args["memory_id"]))
         return [mem] if mem else []
 
+    # heads_only=False (ADR-1100): validation re-grades the physical chain, superseded
+    # rows included; its output is a report, not memory content for a session.
     if args.get("domain"):
-        return store.get_memories_for_domain(args["domain"], min_heat=0.0, limit=500)
+        return store.get_memories_for_domain(
+            args["domain"], min_heat=0.0, limit=500, heads_only=False
+        )
 
     if args.get("directory"):
-        return store.get_memories_for_directory(args["directory"], min_heat=0.0)
+        return store.get_memories_for_directory(
+            args["directory"], min_heat=0.0, heads_only=False
+        )
 
     after_id = int(args.get("after_id", 0) or 0)
     return store.get_all_memories_for_validation(
-        limit=1000, after_id=after_id, include_stale=True
+        limit=1000, after_id=after_id, include_stale=True, heads_only=False
     )
 
 

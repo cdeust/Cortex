@@ -91,8 +91,11 @@ def _select_co_access_sample(
     a larger cap than the pre-#13 value.
     """
     if memories is None:
+        # heads_only=False (ADR-1100): consolidation maintains the physical chain.
         return store.get_hot_memories(
-            min_heat=_CO_ACCESS_MIN_HEAT, limit=_CO_ACCESS_SAMPLE_CAP
+            min_heat=_CO_ACCESS_MIN_HEAT,
+            limit=_CO_ACCESS_SAMPLE_CAP,
+            heads_only=False,
         )
     hot = [m for m in memories if float(m.get("heat", 0.0)) >= _CO_ACCESS_MIN_HEAT]
     if len(hot) <= _CO_ACCESS_SAMPLE_CAP:

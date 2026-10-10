@@ -31,7 +31,9 @@ class _FakeStore:
         self.memories.append({**data, "id": mid})
         return mid
 
-    def get_memories_by_tag(self, tag: str, limit: int = 20) -> list[dict]:
+    def get_memories_by_tag(
+        self, tag: str, limit: int = 20, heads_only: bool = True
+    ) -> list[dict]:
         self.last_tag_query = (tag, limit)
         return self._existing_by_tag.get(tag, [])
 

@@ -88,7 +88,12 @@ def _get_store() -> MemoryStore:
 # that page as a corrupted derivative (issue #622). The exclusion sits
 # on every branch — an explicit memory_id included — because this is the
 # pass that first admits a memory into the drafting chain.
-_SELECT_CANDIDATE = "SELECT m.id, m.content, m.tags, m.source FROM memories m WHERE "
+#
+# Chain heads only (current_memories): claims mined from a superseded memory
+# would feed wiki drafts with content its author retracted.
+_SELECT_CANDIDATE = (
+    "SELECT m.id, m.content, m.tags, m.source FROM current_memories m WHERE "
+)
 
 _NO_CLAIMS_YET = (
     "NOT EXISTS (SELECT 1 FROM wiki.claim_events c WHERE c.memory_id = m.id)"

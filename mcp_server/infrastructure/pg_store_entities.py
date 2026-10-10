@@ -165,10 +165,11 @@ class PgEntityMixin(PgStoreHost):
         return {row["source_entity_id"] for row in rows}
 
     def get_memories_mentioning_entity(
-        self, entity_name: str, limit: int = 20, heads_only: bool = False
+        self, entity_name: str, limit: int = 20, heads_only: bool = True
     ) -> list[dict[str, Any]]:
-        """Fetch memories mentioning the entity. heads_only=True restricts both
-        full-text and fallback queries to current chain heads.
+        """Fetch memories mentioning the entity. Both the full-text and the
+        fallback query read current chain heads by default; heads_only=False
+        is the maintenance caller's explicit request for the physical chain.
 
         source: ADR-0547"""
         src = "current_memories" if heads_only else "memories"
@@ -251,10 +252,15 @@ class PgEntityMixin(PgStoreHost):
             out.setdefault(mid, set()).add(eid)
         return out
 
-    def get_memories_for_entity(self, entity_id: int) -> list[dict[str, Any]]:
-        """Return all memories linked to an entity via the join table."""
+    def get_memories_for_entity(
+        self, entity_id: int, heads_only: bool = True
+    ) -> list[dict[str, Any]]:
+        """Return the memories linked to an entity via the join table: chain
+        heads by default (ADR-1100), the physical chain with
+        ``heads_only=False``."""
+        src = "current_memories" if heads_only else "memories"
         rows = self._execute(
-            "SELECT m.* FROM memories m "
+            f"SELECT m.* FROM {src} m "  # noqa: S608 — src is one of two literals
             "JOIN memory_entities me ON me.memory_id = m.id "
             "WHERE me.entity_id = %s ORDER BY m.heat_base DESC",
             (entity_id,),

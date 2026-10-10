@@ -94,7 +94,9 @@ class _FakeStore:
         self.memories.append({**data, "id": mid})
         return mid
 
-    def get_memories_by_tag(self, tag: str, limit: int = 20) -> list[dict]:
+    def get_memories_by_tag(
+        self, tag: str, limit: int = 20, heads_only: bool = True
+    ) -> list[dict]:
         return [m for m in self.memories if tag in m.get("tags", [])]
 
 

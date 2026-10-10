@@ -47,7 +47,9 @@ def find_existing_memory(
     """Return the memory id already written for this finding, or None."""
     tag = finding_tag(run_id, finding_id)
     try:
-        mems = store.get_memories_by_tag(tag, limit=5)
+        # ADR-1100 heads_only=False: duplicate prevention must still see a
+        # superseded carrier, or a retracted text is written back as a head.
+        mems = store.get_memories_by_tag(tag, limit=5, heads_only=False)
     except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
         silent_failure.note("ingest_findings.find_existing", exc)
         return None

@@ -3567,6 +3567,10 @@
     "ADR-1099": {
       "mirror": "ADR-1099-a-profile-rescan-never-lowers-a-domain-s-accumulated-session-evidence.md",
       "path": "adr/cortex/1099-a-profile-rescan-never-lowers-a-domain-s-accumulated-session-evidence.md"
+    },
+    "ADR-1100": {
+      "mirror": "ADR-1100-listings-that-serve-content-return-supersession-chain-heads-by-default.md",
+      "path": "adr/cortex/1100-listings-that-serve-content-return-supersession-chain-heads-by-default.md"
     }
   },
   "project": "cortex",

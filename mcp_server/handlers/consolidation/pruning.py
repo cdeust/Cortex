@@ -118,7 +118,8 @@ def _collect_memory_entity_ids(
 ) -> set[int]:
     """Collect entity IDs mentioned in hot memories."""
     memory_entity_ids: set[int] = set()
-    hot_mems = store.get_hot_memories(min_heat=0.01, limit=200)
+    # heads_only=False (ADR-1100): consolidation maintains the physical chain.
+    hot_mems = store.get_hot_memories(min_heat=0.01, limit=200, heads_only=False)
     for ent in entities:
         name = ent.get("name", "")
         if not name:

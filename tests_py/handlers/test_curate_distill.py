@@ -67,7 +67,9 @@ class _FakeStore:
         self._all_by_id = {m["id"]: m for mems in self._by_tag.values() for m in mems}
         self._all_by_id.update({m["id"]: m for m in self._recent})
 
-    def get_memories_by_tag(self, tag: str, limit: int = 20) -> list[dict]:
+    def get_memories_by_tag(
+        self, tag: str, limit: int = 20, heads_only: bool = True
+    ) -> list[dict]:
         if self._raise_on_tag:
             raise RuntimeError("PG unreachable")
         return list(self._by_tag.get(tag, []))

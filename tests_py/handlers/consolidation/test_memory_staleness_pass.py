@@ -20,7 +20,7 @@ class _FakeStore:
         self.marked: list[tuple[int, bool]] = []
 
     def get_all_memories_for_validation(
-        self, limit: int, *, after_id: int, include_stale: bool
+        self, limit: int, *, after_id: int, include_stale: bool, heads_only: bool
     ) -> list[dict[str, Any]]:
         rows = [
             m

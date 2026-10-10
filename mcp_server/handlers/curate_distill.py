@@ -154,7 +154,11 @@ def _existing_distill_markers(store: Any) -> set[str]:
     if not hasattr(store, "get_memories_by_tag"):
         return set()
     try:
-        mems = store.get_memories_by_tag("lesson", limit=_TAG_SCAN_LIMIT)
+        # heads_only=False (ADR-1100): a distill-of marker is an idempotency
+        # record and must survive the supersession of the lesson carrying it.
+        mems = store.get_memories_by_tag(
+            "lesson", limit=_TAG_SCAN_LIMIT, heads_only=False
+        )
     except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("curate_distill.existing_markers")
         silent_failure.note("curate_distill.existing_markers", exc)
         return set()

@@ -107,17 +107,20 @@ class SqliteStatsMixin:
     # ── Dashboard ─────────────────────────────────────────────────────
 
     def get_recent_memories(self, limit: int = 20) -> list[dict[str, Any]]:
+        """Most recently created chain heads (curate_wiki / curate_distill
+        author from this content, so a retracted row is never returned)."""
         rows = self._conn.execute(
-            "SELECT * FROM memories ORDER BY created_at DESC LIMIT ?",
+            "SELECT * FROM current_memories ORDER BY created_at DESC LIMIT ?",
             (limit,),
         ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]
 
     def get_recently_accessed_memories(
-        self, limit: int = 20, min_access_count: int = 1, heads_only: bool = False
+        self, limit: int = 20, min_access_count: int = 1, heads_only: bool = True
     ) -> list[dict[str, Any]]:
-        """Mirror of PgStatsMixin.get_recently_accessed_memories — heads_only
-        routes through the current_memories view (chain heads only).
+        """Mirror of PgStatsMixin.get_recently_accessed_memories — chain heads
+        only by default (ADR-1100, the current_memories view); heads_only=False requests
+        the physical chain.
         """
         src = "current_memories" if heads_only else "memories"
         rows = self._conn.execute(

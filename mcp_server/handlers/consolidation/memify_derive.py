@@ -158,7 +158,12 @@ def _existing_derived_markers(store: MemoryStore) -> set[str]:
     try:
         if not hasattr(store, "get_memories_by_tag"):
             return set()
-        mems = store.get_memories_by_tag("derived", limit=_CANDIDATE_SCAN_LIMIT)
+        # heads_only=False (ADR-1100): the marker is an idempotency record; a
+        # corrected derived fact need not carry it, and the relationship
+        # must not be derived a second time.
+        mems = store.get_memories_by_tag(
+            "derived", limit=_CANDIDATE_SCAN_LIMIT, heads_only=False
+        )
     except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
         silent_failure.note("memify_derive.derived_markers", exc)
         return set()
@@ -192,7 +197,8 @@ def _provenance_memory_ids(store: MemoryStore, rel: dict[str, Any]) -> list[int]
     per_entity_cap = max(1, _PROVENANCE_SRC_CAP // 2)
     for entity_id in (rel["source_entity_id"], rel["target_entity_id"]):
         try:
-            mems = store.get_memories_for_entity(entity_id)
+            # heads_only=True (ADR-1100): provenance must cite live memories.
+            mems = store.get_memories_for_entity(entity_id, heads_only=True)
         except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
             silent_failure.note("memify_derive.provenance_memories", exc)
             mems = []

@@ -94,7 +94,10 @@ def test_get_memories_for_domain_heads_only(store):
         for m in store.get_memories_for_domain(_DOMAIN, min_heat=0.0, heads_only=True)
     ]
     assert new_id in heads and old_id not in heads
-    full = [m["id"] for m in store.get_memories_for_domain(_DOMAIN, min_heat=0.0)]
+    full = [
+        m["id"]
+        for m in store.get_memories_for_domain(_DOMAIN, min_heat=0.0, heads_only=False)
+    ]
     assert old_id in full
 
 
