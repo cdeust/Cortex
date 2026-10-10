@@ -89,20 +89,52 @@ runs:
         #
         #
         #
+        # source: issue #681 (suggested 120-second per-attempt bound)
+        APT_TIMEOUT=120
         apt_update_ok=""
+        apt_update_timed_out=""
         for attempt in 1 2 3; do
-          if sudo apt-get update; then apt_update_ok=1; break; fi
-          echo "apt-get update attempt ${attempt}/3 failed; retrying in 5s" >&2
+          if sudo timeout "${APT_TIMEOUT}s" apt-get update; then apt_update_ok=1; break; else
+            apt_status=$?
+            if [ "$apt_status" -eq 124 ]; then
+              apt_update_timed_out=1
+              echo "apt-get update timed out after ${APT_TIMEOUT}s on attempt ${attempt}/3" >&2
+            else
+              echo "apt-get update attempt ${attempt}/3 failed; retrying in 5s" >&2
+            fi
+          fi
           sleep 5
         done
-        [ -n "$apt_update_ok" ] || { echo "apt-get update failed after 3 attempts" >&2; exit 1; }
+        [ -n "$apt_update_ok" ] || {
+          if [ -n "$apt_update_timed_out" ]; then
+            echo "apt-get update timed out after 3 attempts (${APT_TIMEOUT}s per attempt)" >&2
+          else
+            echo "apt-get update failed after 3 attempts" >&2
+          fi
+          exit 1
+        }
         apt_install_ok=""
+        apt_install_timed_out=""
         for attempt in 1 2 3; do
-          if sudo apt-get install -y "postgresql-${PG_VER}-pgvector"; then apt_install_ok=1; break; fi
-          echo "apt-get install attempt ${attempt}/3 failed; retrying in 5s" >&2
+          if sudo timeout "${APT_TIMEOUT}s" apt-get install -y "postgresql-${PG_VER}-pgvector"; then apt_install_ok=1; break; else
+            apt_status=$?
+            if [ "$apt_status" -eq 124 ]; then
+              apt_install_timed_out=1
+              echo "apt-get install timed out after ${APT_TIMEOUT}s on attempt ${attempt}/3" >&2
+            else
+              echo "apt-get install attempt ${attempt}/3 failed; retrying in 5s" >&2
+            fi
+          fi
           sleep 5
         done
-        [ -n "$apt_install_ok" ] || { echo "apt-get install postgresql-${PG_VER}-pgvector failed after 3 attempts" >&2; exit 1; }
+        [ -n "$apt_install_ok" ] || {
+          if [ -n "$apt_install_timed_out" ]; then
+            echo "apt-get install timed out after 3 attempts (${APT_TIMEOUT}s per attempt)" >&2
+          else
+            echo "apt-get install postgresql-${PG_VER}-pgvector failed after 3 attempts" >&2
+          fi
+          exit 1
+        }
         # Role + DB expected by DATABASE_URL.
         sudo -u postgres psql -v ON_ERROR_STOP=1 \
           -c "CREATE ROLE cortex LOGIN SUPERUSER PASSWORD 'cortex';"
