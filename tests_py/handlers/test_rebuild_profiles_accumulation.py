@@ -11,7 +11,9 @@ import asyncio
 import json
 
 import pytest
+from mcp.server.mcpserver import MCPServer
 
+from mcp_server import tool_registry_core
 from mcp_server.handlers.rebuild_profiles import handler, schema
 from mcp_server.infrastructure.profile_store import (
     load_profile,
@@ -212,3 +214,33 @@ class TestToolContract:
     def test_force_alone_never_replaces(self, window):
         _store(window, 32)
         assert _run({"force": True})["domainOutcomes"][0]["action"] == "kept"
+
+
+class TestRegisteredToolPath:
+    """The value must survive the registered wrapper, not only the handler.
+
+    A client reaches the handler through ``mcp.call_tool``. A wrapper that
+    keeps the parameter but forwards a constant would pass every direct
+    handler test above, so these go through the registered tool and read the
+    stored profile back.
+    """
+
+    @staticmethod
+    def _call(arguments):
+        mcp = MCPServer(name="rebuild-profiles-registry-test")
+        tool_registry_core._register_rebuild_profiles(mcp)
+        asyncio.run(mcp.call_tool("rebuild_profiles", arguments))
+
+    def test_true_reaches_the_handler_and_replaces(self, window):
+        _store(window, 32)
+        self._call({"force": True, "replace_accumulated_profiles": True})
+        replaced = load_profile(window)
+        assert replaced["sessionCount"] == 8
+        assert "accumulatedMarker" not in replaced
+
+    def test_force_alone_keeps_the_accumulated_profile(self, window):
+        _store(window, 32)
+        self._call({"force": True})
+        kept = load_profile(window)
+        assert kept["sessionCount"] == 32
+        assert kept["accumulatedMarker"] == _MARKER
