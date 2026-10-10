@@ -155,6 +155,22 @@ def test_the_launcher_uses_the_shared_path_on_both_of_its_entry_functions() -> N
     assert not _reconfigure_lines(tree)
 
 
+def test_the_installer_script_uses_the_shared_path_before_it_prints() -> None:
+    """install-plugin.sh pipes scripts/setup.py through tee, so its stdout is a
+    pipe with the locale encoding on Windows."""
+    tree = ast.parse((ROOT / "scripts" / "setup.py").read_text(encoding="utf-8"))
+    main = next(
+        n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "main"
+    )
+    helper = next(
+        n
+        for n in ast.walk(tree)
+        if isinstance(n, ast.FunctionDef) and n.name == "_use_utf8_output"
+    )
+    assert _calls(helper, CALL)
+    assert _call_line(main, "_use_utf8_output") < _call_line(main, "print")
+
+
 def test_codex_plugin_scripts_write_only_to_stderr() -> None:
     """They are stdlib-only (they cannot import the shared path), so their
     stdout must stay empty; stderr already tolerates any character."""

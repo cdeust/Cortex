@@ -424,7 +424,23 @@ def verify() -> None:
 # ── Main ─────────────────────────────────────────────────────────────
 
 
+def _use_utf8_output() -> None:
+    """Route stdout/stderr through the shared hook output path (issue #688).
+
+    install-plugin.sh pipes this script through ``tee``, so on Windows its
+    stdout is a cp1252 pipe and a plugin path outside cp1252 (a user name) in
+    the progress lines would raise ``UnicodeEncodeError``. The module is
+    stdlib-only, so importing it before ``install_deps`` is safe.
+    """
+    if str(PROJECT_DIR) not in sys.path:
+        sys.path.insert(0, str(PROJECT_DIR))
+    from mcp_server.hooks.output_streams import use_utf8_output  # noqa: PLC0415 — resolvable only once PROJECT_DIR is on sys.path
+
+    use_utf8_output()
+
+
 def main() -> None:
+    _use_utf8_output()
     print(f"Cortex setup — {sys.platform}")
     print(f"  Plugin root: {PROJECT_DIR}")
     print(f"  Deps dir:    {DEPS_DIR}")
