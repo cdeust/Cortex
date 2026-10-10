@@ -41,8 +41,11 @@ adheres to [Semantic Versioning](https://semver.org/).
   then, so `set -u` aborted with `wt_dir: unbound variable`, the worktree was
   left behind and the runner's exit status was lost. The trap body is now built
   when it is set. `test_bench_regression_datasets.py` runs under `/bin/bash` and
-  the first `bash` on `PATH`. Every other shell script was checked for bash 3.2
-  constructs (none found; `benchmarks/energy/run.sh` is zsh).
+  the first `bash` on `PATH`.
+- **`scripts/mutation_check.sh` refuses an empty test list** (#690 sibling
+  search). The first argument empty used to exit 0 under `/bin/bash` 3.2.57
+  (mutmut ran on one empty test name) and exit 1 under bash 5.3 (no tests to
+  collect); both now print an error and exit 2.
 
 - **Windows: each Claude window gets its own session identity, and no liveness
   probe can signal a live process** (#665). Three causes, one fix each. (1) The

@@ -78,10 +78,11 @@ run_baseline_benchmarks() {
         # `bash -c`, so a single-quoted body died on "wt_dir: unbound
         # variable" under set -u and left the worktree behind (issue #690).
         # source: ADR-0067
-        # shellcheck disable=SC2064 -- early expansion is the point
+        # Early expansion is the point (see above), so SC2064 does not apply.
+        # shellcheck disable=SC2064
         trap "$(printf 'git -C %q worktree remove --force %q >/dev/null 2>&1 || true' "$REPO_ROOT" "$wt_dir")" EXIT
         copy_regression_datasets "$wt_dir"
-        cd "$wt_dir"
+        cd "$wt_dir" || exit 1
         if want_bench longmemeval; then
             echo "==> [baseline] longmemeval-s"
             DATABASE_URL="$BENCH_DB_URL" uv run --extra benchmarks python \
