@@ -19,7 +19,8 @@ TEXT = "décision ✓ 日本語 ⟦rcpt:1⟧"
 
 def _cp1252_stream() -> tuple[io.TextIOWrapper, io.BytesIO]:
     raw = io.BytesIO()
-    return io.TextIOWrapper(raw, encoding="cp1252"), raw
+    # newline="\n": no \r\n translation, so the bytes are the same on Windows.
+    return io.TextIOWrapper(raw, encoding="cp1252", newline="\n"), raw
 
 
 def test_stdout_receives_the_exact_utf8_bytes(monkeypatch: pytest.MonkeyPatch) -> None:
