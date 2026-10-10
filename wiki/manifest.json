@@ -3563,6 +3563,10 @@
     "ADR-1098": {
       "mirror": "ADR-1098-write-hook-and-launcher-output-as-utf-8-through-one-shared-path.md",
       "path": "adr/cortex/1098-write-hook-and-launcher-output-as-utf-8-through-one-shared-path.md"
+    },
+    "ADR-1099": {
+      "mirror": "ADR-1099-a-profile-rescan-never-lowers-a-domain-s-accumulated-session-evidence.md",
+      "path": "adr/cortex/1099-a-profile-rescan-never-lowers-a-domain-s-accumulated-session-evidence.md"
     }
   },
   "project": "cortex",
