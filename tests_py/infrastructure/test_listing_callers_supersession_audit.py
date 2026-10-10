@@ -39,9 +39,10 @@ from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 
 _REPO = Path(__file__).resolve().parents[2]
 _INFRA = _REPO / "mcp_server" / "infrastructure"
-# source: directories that hold no production caller of a store listing
+# source: directories that hold no production caller of a store listing. "deps"
+# is the launcher's vendored install (.gitignore:77 /deps/), third-party code.
 _SKIPPED_DIRS = frozenset(
-    {".git", ".venv", ".claude", "node_modules", "tests_py", "tests_js", "wiki"}
+    {".git", ".venv", ".claude", "deps", "node_modules", "tests_py", "tests_js", "wiki"}
 )
 
 
