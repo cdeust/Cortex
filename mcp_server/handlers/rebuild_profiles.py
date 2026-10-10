@@ -13,12 +13,12 @@ from mcp_server.infrastructure.scanner import (
     discover_conversations,
     group_by_project,
 )
-from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
+from mcp_server.handlers._tool_meta import DESTRUCTIVE
 from mcp_server.observability import silent_failure
 
 schema = {
     "title": "Rebuild profiles",
-    "annotations": IDEMPOTENT_WRITE,
+    "annotations": DESTRUCTIVE,
     "description": (
         "Full rescan of Claude Code session data to rebuild methodology "
         "profiles. Walks ~/.claude/projects/, parses JSONL transcripts, "

@@ -8,10 +8,10 @@ profile built from N recorded sessions with one built from M < N transcripts
 destroys evidence, so a rescan that sees fewer sessions keeps the stored
 profile unless the caller explicitly asks to replace it.
 
-source: measured 2026-10-10 on the owner's machine, a forced rebuild turned
-the cortex domain from 32 recorded sessions into 8 (April backup of the same
-key). The accumulation it protects is ADR-0434's record_session_end; the rule
-itself is a new decision, pending registration as a wiki ADR.
+source: ADR-1099 (amends ADR-0429 and ADR-0227). Measured 2026-10-10 on the
+owner's machine: a forced rebuild turned the cortex domain from 32 recorded
+sessions into 8. The accumulation it protects is record_session_end's
+(ADR-0434).
 """
 
 from __future__ import annotations

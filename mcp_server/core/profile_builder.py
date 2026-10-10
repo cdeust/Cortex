@@ -1,8 +1,7 @@
-"""Profile building facade — backward-compatible re-exports + incremental update.
+"""Incremental profile update.
 
 Full profile assembly is in profile_assembler.py.
-This module provides apply_session_update for incremental EMA updates
-and re-exports build_domain_profiles for backward compatibility.
+This module provides apply_session_update for incremental EMA updates.
 """
 
 from __future__ import annotations

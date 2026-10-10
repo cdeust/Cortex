@@ -1,6 +1,7 @@
 """Rebuild-versus-keep policy: a rescan never lowers a domain's evidence."""
 
 import copy
+from unittest.mock import patch
 
 import pytest
 
@@ -119,6 +120,25 @@ class TestBuildDomainProfilesKeepsAccumulatedEvidence:
         build = _build(stored, 8)
         assert build.profiles["domains"]["cortex"] == expected
         assert [o.action for o in build.outcomes] == ["kept"]
+
+    def test_kept_domain_bridges_are_not_recomputed(self):
+        stored = _stored(32)
+        with patch(
+            "mcp_server.core.profile_assembler.find_bridges",
+            return_value={"cortex": ["fresh-bridge"]},
+        ):
+            build = _build(stored, 8)
+        assert build.profiles["domains"]["cortex"]["connectionBridges"] == ["stored"]
+
+    def test_rebuilt_domain_gets_the_computed_bridges(self):
+        with patch(
+            "mcp_server.core.profile_assembler.find_bridges",
+            return_value={"cortex": ["fresh-bridge"]},
+        ):
+            build = _build(_stored(3), 8)
+        assert build.profiles["domains"]["cortex"]["connectionBridges"] == [
+            "fresh-bridge"
+        ]
 
     def test_replace_builds_from_the_scan(self):
         build = _build(_stored(32), 8, replace_accumulated=True)
