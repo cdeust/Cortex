@@ -39,5 +39,5 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from mcp_server.server.graph_snapshot import write_from_graph_cache  # noqa: E402
 
 snap_path, snap_bytes = write_from_graph_cache(nodes, edges)
-print(f"[dump] Written: {snap_bytes:,} bytes → {snap_path}", flush=True)
+print(f"[dump] Written: {snap_bytes:,} bytes -> {snap_path}", flush=True)
 print("[dump] Done. The Cortex native app will read this file directly.", flush=True)

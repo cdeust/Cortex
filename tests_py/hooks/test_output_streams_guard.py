@@ -196,3 +196,40 @@ def test_the_stream_predicates_fire_on_their_bypass_patterns() -> None:
     assert _reconfigure_lines(ast.parse("sys.stdout.reconfigure(encoding='utf-8')"))
     assert _unredirected_prints(ast.parse("print('x')")) == [1]
     assert not _unredirected_prints(ast.parse("print('x', file=sys.stderr)"))
+
+
+def _print_literals_outside(codec: str, tree: ast.AST) -> list[tuple[int, str]]:
+    """``(line, character)`` for each print() string literal ``codec`` cannot encode."""
+    found: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        is_print = (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "print"
+        )
+        if not is_print:
+            continue
+        for part in ast.walk(node):
+            if isinstance(part, ast.Constant) and isinstance(part.value, str):
+                try:
+                    part.value.encode(codec)
+                except UnicodeEncodeError as exc:
+                    found.append((node.lineno, part.value[exc.start : exc.end]))
+    return found
+
+
+def test_developer_scripts_print_only_characters_a_windows_pipe_encodes() -> None:
+    """Scripts are not hooks and do not call the shared path, so their literal
+    output must stay inside cp1252, the code page of a Windows pipe (a literal
+    outside it crashed ``dump_snapshot.py`` on a piped stdout)."""
+    offenders = {
+        p.name: hits
+        for p in sorted((ROOT / "scripts").glob("*.py"))
+        if (hits := _print_literals_outside("cp1252", ast.parse(p.read_text("utf-8"))))
+    }
+    assert not offenders, f"print() literals cp1252 cannot encode: {offenders}"
+
+
+def test_the_literal_predicate_fires_outside_the_code_page_only() -> None:
+    assert _print_literals_outside("cp1252", ast.parse("print('a → b')")) == [(1, "→")]
+    assert not _print_literals_outside("cp1252", ast.parse("print('a — b')"))

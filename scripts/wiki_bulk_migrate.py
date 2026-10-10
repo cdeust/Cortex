@@ -423,7 +423,7 @@ def main() -> int:
         print("  Proposed renames (first 10):", file=sys.stderr)
         for item in proposed[:10]:
             print(f"    {item.rel_path}", file=sys.stderr)
-            print(f"    → {item.proposed_path}", file=sys.stderr)
+            print(f"    -> {item.proposed_path}", file=sys.stderr)
             print(f"      ({item.pattern}: {item.reason})", file=sys.stderr)
     return 0
 

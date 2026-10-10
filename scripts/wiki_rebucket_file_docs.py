@@ -416,7 +416,7 @@ def main() -> int:
         plannable = [m for m in moves if not m.skip_reason][:5]
         for m in plannable:
             print(f"    {m.rel_path}", file=sys.stderr)
-            print(f"    → {m.target_path}", file=sys.stderr)
+            print(f"    -> {m.target_path}", file=sys.stderr)
     return 0
 
 
