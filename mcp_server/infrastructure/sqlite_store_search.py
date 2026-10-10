@@ -1,12 +1,14 @@
 """Search and retrieval mixin for SqliteMemoryStore.
 
-Implements client-side WRRF fusion, FTS5 search, vector search,
+Implements client-side score fusion (max-normalised weighted sum, the
+semantics of the PL/pgSQL ``recall_memories``), FTS5 search, vector search,
 and spread activation — replacing PL/pgSQL stored procedures.
 """
 
 from __future__ import annotations
 
 import json
+import math
 import sqlite3
 from mcp_server.infrastructure.sqlite_compat import PsycopgCompatConnection
 from typing import Any
@@ -17,6 +19,30 @@ from mcp_server.observability import silent_failure
 from mcp_server.shared.code_tokenize import expand_fts_query as _expand_fts_query
 from mcp_server.infrastructure.embedding_engine import current_embedding_mode
 from mcp_server.infrastructure.sqlite_scope_clause import directory_scope_clause
+
+
+_SCORE_FLOOR = 0.001  # source: pg_schema.py recall_memories (floor)
+_COSINE_SHIFT = -1.0  # source: pg_schema.py recall_memories (vector)
+_RECENCY_DECAY_PER_DAY = 0.01  # source: pg_schema.py recall_memories (recency)
+
+
+def _normalised(
+    raw: dict[int, float], weight: float, shift: float = 0.0
+) -> dict[int, float]:
+    """``weight * (raw - shift) / max(max(raw) - shift, floor)`` per id.
+
+    source: pg_schema.py recall_memories, ``fused`` CTE"""
+    hi = max(raw.values()) if raw else _SCORE_FLOOR
+    denominator = max(hi - shift, _SCORE_FLOOR)
+    return {i: weight * (v - shift) / denominator for i, v in raw.items()}
+
+
+def _fuse(contributions: list[dict[int, float]]) -> dict[int, float]:
+    scores: dict[int, float] = {}
+    for contribution in contributions:
+        for memory_id, value in contribution.items():
+            scores[memory_id] = scores.get(memory_id, 0.0) + value
+    return scores
 
 
 def _decode_tags(raw: Any) -> list:
@@ -58,22 +84,16 @@ class SqliteSearchMixin:
         trusted_origins: tuple[str, ...] = (),
         untrusted_factor: float = 1.0,
     ) -> list[dict[str, Any]]:
-        """Client-side WRRF fusion: vector + FTS5 + heat + recency.
+        """Max-normalised weighted score fusion, as PL/pgSQL ``recall_memories``.
+
+        No trigram signal on SQLite; ``wrrf_k`` only scales the agent bonus.
 
         source: ADR-0616"""
         w = weights or {}
         w_vector = w.get("vector", 1.0)
-        w_fts = w.get("fts", 0.5)
-        w_heat = w.get("heat", 0.3)
-        w_recency = w.get("recency", 0.0)
         pool = max_results * 10
-        scores: dict[int, float] = {}
-
-        self._signal_vector(scores, query_embedding, w_vector, wrrf_k, pool)
-        self._signal_fts(scores, query_text, w_fts, wrrf_k, pool)
-        self._signal_heat(scores, w_heat, wrrf_k, pool, min_heat, domain, directory)
-        self._signal_recency(
-            scores, w_recency, wrrf_k, pool, min_heat, domain, directory
+        scores = self._fused_scores(
+            query_text, query_embedding, w, pool, min_heat, domain, directory
         )
         self._apply_agent_boost(scores, agent_topic, w_vector, wrrf_k)
         self._apply_trust_factor(scores, trusted_origins, untrusted_factor)
@@ -84,19 +104,49 @@ class SqliteSearchMixin:
             scores, max_results, min_heat, domain, directory
         )
 
+    def _fused_scores(
+        self,
+        query_text: str,
+        query_embedding: bytes | None,
+        w: dict[str, float],
+        pool: int,
+        min_heat: float,
+        domain: str | None,
+        directory: str | None,
+    ) -> dict[int, float]:
+        w_vector = w.get("vector", 1.0)
+        w_fts = w.get("fts", 0.5)
+        w_heat = w.get("heat", 0.3)
+        w_recency = w.get("recency", 0.0)
+        vector = self._signal_vector(query_embedding, w_vector, pool)
+        fts = self._signal_fts(query_text, w_fts, pool)
+        heat = self._signal_heat(w_heat, pool, min_heat, domain, directory)
+        recency = self._signal_recency(w_recency, pool, min_heat, domain, directory)
+        return _fuse(
+            [
+                _normalised(vector, w_vector, _COSINE_SHIFT),
+                _normalised(fts, w_fts),
+                _normalised(heat, w_heat),
+                _normalised(recency, w_recency),
+            ]
+        )
+
     def _signal_vector(
         self,
-        scores: dict[int, float],
         query_embedding: bytes | None,
         weight: float,
-        k: int,
         pool: int,
-    ) -> None:
+    ) -> dict[int, float]:
+        """Cosine similarity per KNN hit.
+
+        sqlite-vec returns the L2 distance ``d``; for the unit vectors the
+        embedding engine produces, ``cos = 1 - d**2 / 2``.
+        """
         if not self._has_vec or query_embedding is None or weight <= 0:
-            return
+            return {}
         vec = self._bytes_to_vector(query_embedding)
         if vec is None:
-            return
+            return {}
         try:
             rows = self._conn.execute(
                 "SELECT rowid, distance FROM memories_vec "
@@ -105,38 +155,37 @@ class SqliteSearchMixin:
             ).fetchall()
             # source: ADR-0616
             keep = self._vec_rows_in_query_space([r["rowid"] for r in rows])
-            rank = 0
-            for r in rows:
-                if r["rowid"] not in keep:
-                    continue
-                rank += 1
-                scores[r["rowid"]] = scores.get(r["rowid"], 0) + weight / (k + rank)
+            return {
+                r["rowid"]: 1.0 - r["distance"] ** 2 / 2.0
+                for r in rows
+                if r["rowid"] in keep
+            }
         except Exception as exc:  # noqa: BLE001 — search degrades to the remaining signals
-            silent_failure.note("sqlite_store.rrf_vector_signal", exc)
+            silent_failure.note("sqlite_store.fusion_vector_signal", exc)
+            return {}
 
     def _signal_fts(
         self,
-        scores: dict[int, float],
         query_text: str,
         weight: float,
-        k: int,
         pool: int,
-    ) -> None:
+    ) -> dict[int, float]:
+        """BM25 relevance per FTS5 hit (``-rank``: FTS5 ranks are negative)."""
         if not query_text or weight <= 0:
-            return
+            return {}
         match = _expand_fts_query(query_text)
         if not match:
-            return
+            return {}
         try:
             rows = self._conn.execute(
                 "SELECT rowid, rank FROM memories_fts "
                 "WHERE memories_fts MATCH ? ORDER BY rank LIMIT ?",
                 (match, pool),
             ).fetchall()
-            for rank, r in enumerate(rows, 1):
-                scores[r["rowid"]] = scores.get(r["rowid"], 0) + weight / (k + rank)
+            return {r["rowid"]: -r["rank"] for r in rows}
         except Exception as exc:  # noqa: BLE001 — search degrades to the remaining signals
-            silent_failure.note("sqlite_store.rrf_fts_signal", exc)
+            silent_failure.note("sqlite_store.fusion_fts_signal", exc)
+            return {}
 
     def _vec_rows_in_query_space(self, rowids: list[int]) -> set[int]:
         """Subset of ``rowids`` whose embedding space matches the query's.
@@ -169,47 +218,46 @@ class SqliteSearchMixin:
 
     def _signal_heat(
         self,
-        scores: dict[int, float],
         weight: float,
-        k: int,
         pool: int,
         min_heat: float,
         domain: str | None,
         directory: str | None,
-    ) -> None:
+    ) -> dict[int, float]:
         if weight <= 0:
-            return
+            return {}
         conds, params = self._build_filter(min_heat, domain, directory)
         params.append(pool)
         rows = self._conn.execute(
-            f"SELECT id FROM current_memories WHERE {' AND '.join(conds)} "  # noqa: S608 — conditions are in-code literal fragments from _build_filter; values are bound parameters (docs/ASSURANCE-CASE.md §5)
+            f"SELECT id, heat_base FROM current_memories WHERE {' AND '.join(conds)} "  # noqa: S608 — conditions are in-code literal fragments from _build_filter; values are bound parameters (docs/ASSURANCE-CASE.md §5)
             f"ORDER BY heat_base DESC LIMIT ?",
             params,
         ).fetchall()
-        for rank, r in enumerate(rows, 1):
-            scores[r["id"]] = scores.get(r["id"], 0) + weight / (k + rank)
+        return {r["id"]: r["heat_base"] for r in rows}
 
     def _signal_recency(
         self,
-        scores: dict[int, float],
         weight: float,
-        k: int,
         pool: int,
         min_heat: float,
         domain: str | None,
         directory: str | None,
-    ) -> None:
+    ) -> dict[int, float]:
+        """``exp(-0.01 * age_days)`` for the ``pool`` most recent memories."""
         if weight <= 0:
-            return
+            return {}
         conds, params = self._build_filter(min_heat, domain, directory)
         params.append(pool)
         rows = self._conn.execute(
-            f"SELECT id FROM current_memories WHERE {' AND '.join(conds)} "  # noqa: S608 — conditions are in-code literal fragments from _build_filter; values are bound parameters (docs/ASSURANCE-CASE.md §5)
+            "SELECT id, julianday('now') - julianday(created_at) AS age_days "  # noqa: S608 — conditions are in-code literal fragments from _build_filter; values are bound parameters (docs/ASSURANCE-CASE.md §5)
+            f"FROM current_memories WHERE {' AND '.join(conds)} "
             f"ORDER BY created_at DESC LIMIT ?",
             params,
         ).fetchall()
-        for rank, r in enumerate(rows, 1):
-            scores[r["id"]] = scores.get(r["id"], 0) + weight / (k + rank)
+        return {
+            r["id"]: math.exp(-_RECENCY_DECAY_PER_DAY * (r["age_days"] or 0.0))
+            for r in rows
+        }
 
     @staticmethod
     def _build_filter(
