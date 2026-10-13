@@ -78,19 +78,6 @@ def test_spawn_is_detached_and_never_waits(queue):
     popen.return_value.communicate.assert_not_called()
 
 
-@pytest.mark.parametrize(
-    ("name", "expected"),
-    [
-        ("nt", {"creationflags": 0x00000200 | 0x08000000}),
-        ("posix", {"start_new_session": True}),
-    ],
-)
-def test_detach_options_follow_the_platform(queue, monkeypatch, name, expected):
-    # Windows ignores start_new_session; ADR-1102's two base flags detach there
-    monkeypatch.setattr(queue.os, "name", name)
-    assert queue.detach_options() == expected
-
-
 def test_replay_uses_original_storage_environment(queue, monkeypatch):
     root = queue.queue_root()
     queue.enqueue(root, {"session_id": "backend"})

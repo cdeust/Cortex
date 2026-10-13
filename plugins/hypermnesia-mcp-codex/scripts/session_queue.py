@@ -6,7 +6,9 @@ source: ADR-1084
 from __future__ import annotations
 
 import errno
+import functools
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -113,18 +115,25 @@ def enqueue(root, event):
     return key
 
 
-# CPython ignores start_new_session on Windows; there the drain detaches through
-# CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW. This script is stdlib-only and
-# shipped without mcp_server (ADR-1084), so it repeats the two values that
-# mcp_server.shared.detached_spawn decides from, without its job probe; a test
-# keeps them equal.
-# source: ADR-1102 (process-creation-flags values 0x00000200 and 0x08000000)
-WINDOWS_DETACH_FLAGS = 0x00000200 | 0x08000000
+# CPython ignores start_new_session on Windows; there the drain's flags are
+# decided from the measured job by windows_job.py, the stdlib copy of
+# mcp_server.shared.detached_spawn (this script ships without mcp_server).
+# source: ADR-1102 (the Codex drain follows the shared decision).
+_WINDOWS = os.name == "nt"
+
+
+@functools.lru_cache(maxsize=1)
+def _windows_job():
+    path = Path(__file__).with_name("windows_job.py")
+    spec = importlib.util.spec_from_file_location("cortex_codex_windows_job", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def detach_options():
-    if os.name == "nt":
-        return {"creationflags": WINDOWS_DETACH_FLAGS}
+    if _WINDOWS:
+        return {"creationflags": _windows_job().measured_creationflags()}
     return {"start_new_session": True}
 
 

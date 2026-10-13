@@ -24,10 +24,13 @@ logger = logging.getLogger(__name__)
 # source: the Microsoft page process-creation-flags (learn.microsoft.com/
 #   windows/win32/procthread); this one: not signalled with the parent's group
 CREATE_NEW_PROCESS_GROUP = 0x00000200
-# No console window; console children of the child share its hidden console.
-# Ignored with DETACHED_PROCESS, which would make each console grandchild open
-# a visible window of its own.
-# source: same page as CREATE_NEW_PROCESS_GROUP (CREATE_NO_WINDOW row)
+# A console child runs without a console window; the flag is ignored with
+# DETACHED_PROCESS (the page says "ignored", not "exclusive").
+# source: same page as CREATE_NEW_PROCESS_GROUP (CREATE_NO_WINDOW row). Why not
+#   DETACHED_PROCESS is inferred, not measured, from the Microsoft page
+#   "Creation of a Console": a console process inherits its parent's console by
+#   default, and the system creates a new console (a new window) when it starts
+#   a console process; a DETACHED_PROCESS child has no console to pass on.
 CREATE_NO_WINDOW = 0x08000000
 # source: same page as CREATE_NEW_PROCESS_GROUP (requires the caller's job to
 #   set JOB_OBJECT_LIMIT_BREAKAWAY_OK; no effect outside a job)
@@ -63,7 +66,12 @@ def platform_options(platform: str, job_limit_flags: int | None) -> dict[str, An
 
 
 def _warn_if_job_bound(job_limit_flags: int | None) -> None:
-    """Say so when the child cannot leave a job that kills it on close."""
+    """Say so when the child cannot leave a job that kills it on close.
+
+    Reads the immediate job only: a child that leaves it may still sit in an
+    ancestor job that kills on close (Microsoft page "Nested Jobs": breakaway
+    moves up the chain until a job that does not permit it), and no warning
+    says so. The flag decision itself depends on the immediate job alone."""
     may_leave = (
         win32_job.JOB_OBJECT_LIMIT_BREAKAWAY_OK
         | win32_job.JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK

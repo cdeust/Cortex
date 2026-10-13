@@ -7,11 +7,9 @@ source: ADR-1102"""
 
 from __future__ import annotations
 
-import importlib.util
 import logging
 import subprocess
 import sys
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -28,10 +26,6 @@ from tests_py._windows_spawn_fake import (
 BASE = 0x00000200 | 0x08000000
 # source: ADR-1102 — the breakaway request, CREATE_BREAKAWAY_FROM_JOB
 BREAKAWAY = 0x01000000
-_QUEUE = (
-    Path(__file__).resolve().parents[2]
-    / "plugins/hypermnesia-mcp-codex/scripts/session_queue.py"
-)
 
 
 @pytest.mark.parametrize(
@@ -125,13 +119,6 @@ def test_embedding_downloads_detach_through_the_shared_options(monkeypatch):
     as_windows_in_breakaway_job(monkeypatch)
     embedding_downloads._spawn_detached(["true"], "fixture")
     assert_detached_on_windows(seen)
-
-
-def test_the_codex_queue_repeats_the_shared_base_flags():
-    spec = importlib.util.spec_from_file_location("codex_session_queue", _QUEUE)
-    queue = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(queue)
-    assert queue.WINDOWS_DETACH_FLAGS == d.windows_creationflags(None)
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="real kernel32 and CreateProcess")

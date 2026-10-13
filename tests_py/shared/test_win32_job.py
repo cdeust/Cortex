@@ -73,8 +73,9 @@ def test_a_job_without_limits_is_still_a_job(monkeypatch):
 def test_an_unreadable_job_state_raises_instead_of_reading_no_job(monkeypatch, failing):
     dll = _FakeKernel32(monkeypatch, in_job=True)
     setattr(dll, failing, False)
-    with pytest.raises(OSError):
+    with pytest.raises(OSError, match=r"failed \(Windows error [56]\)") as raised:
         j.job_limit_flags_with(dll)
+    assert raised.value.errno != dll.error, "a Win32 code is never an errno"
 
 
 @pytest.mark.skipif(ctypes.sizeof(ctypes.c_void_p) != 8, reason="64-bit layout")

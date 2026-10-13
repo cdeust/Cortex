@@ -113,6 +113,17 @@ def _last_error() -> int:
     return ctypes.get_last_error()
 
 
+def _win32_error(call: str) -> OSError:
+    """The failed call's last error as ``winerror``, never as ``errno``.
+
+    source: Python docs, built-in exceptions, OSError: "Under Windows, if the
+    winerror constructor argument is an integer, the errno attribute is
+    determined from the Windows error code, and the errno argument is
+    ignored." The code is also in the message for other platforms' fakes."""
+    code = _last_error()
+    return OSError(0, f"{call} failed (Windows error {code})", None, code)
+
+
 def job_limit_flags_with(dll: Any) -> int | None:
     """``LimitFlags`` of the job the current process runs in, or None when it
     runs in no job.
@@ -123,7 +134,7 @@ def job_limit_flags_with(dll: Any) -> int | None:
     unknown job state is never read as "no job"."""
     in_job = ctypes.c_int32()
     if not dll.IsProcessInJob(dll.GetCurrentProcess(), None, ctypes.byref(in_job)):
-        raise OSError(_last_error(), "IsProcessInJob failed")
+        raise _win32_error("IsProcessInJob")
     if not in_job.value:
         return None
     limits = ExtendedLimits()
@@ -134,7 +145,7 @@ def job_limit_flags_with(dll: Any) -> int | None:
         ctypes.sizeof(limits),
         None,
     ):
-        raise OSError(_last_error(), "QueryInformationJobObject failed")
+        raise _win32_error("QueryInformationJobObject")
     return int(limits.BasicLimitInformation.LimitFlags)
 
 

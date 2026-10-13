@@ -11,7 +11,7 @@ from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from unittest.mock import patch
 
-from mcp_server.shared import log_rotation
+from mcp_server.shared import detached_spawn, log_rotation
 
 
 class TestWorkerLogRotation(unittest.TestCase):
@@ -59,7 +59,8 @@ class TestWorkerLogRotation(unittest.TestCase):
 
     def test_consolidate_spawn_rotates_and_closes_parent_descriptor(self) -> None:
         self.assert_spawn_rotates(
-            "consolidate.log", self.session._spawn_consolidate_cycle
+            "consolidate.log",
+            lambda: self.session._spawn_consolidate_cycle(detached_spawn.options()),
         )
 
     def test_post_commit_spawn_rotates_and_closes_parent_descriptor(self) -> None:
