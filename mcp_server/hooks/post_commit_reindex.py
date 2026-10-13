@@ -46,6 +46,7 @@ from typing import Any
 from mcp_server.hooks.output_streams import use_utf8_output
 from mcp_server.hooks.launcher_command import launcher_child_command
 from mcp_server.hooks.stdin_event import read_event_text
+from mcp_server.shared import detached_spawn
 from mcp_server.shared.log_rotation import methodology_log_path, open_rotating_log
 
 _LOG_PREFIX = "[post-commit-reindex]"
@@ -228,7 +229,7 @@ def _spawn_reanalyze(root: str) -> bool:
                 stdin=subprocess.DEVNULL,
                 stdout=log,
                 stderr=subprocess.STDOUT,
-                start_new_session=True,
+                **detached_spawn.options(),
             )
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"spawn failed: {exc}")

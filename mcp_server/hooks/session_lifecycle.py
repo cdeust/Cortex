@@ -70,6 +70,7 @@ try:
     )
     from mcp_server.infrastructure.transcript_activity import transcript_activity
     from mcp_server.shared.categorizer import categorize
+    from mcp_server.shared import detached_spawn
     from mcp_server.shared.log_rotation import methodology_log_path, open_rotating_log
     from mcp_server.shared.project_ids import (
         cwd_to_project_id,
@@ -177,7 +178,7 @@ def _spawn_consolidation(turn_count: int = 0) -> None:
                 stdin=subprocess.DEVNULL,
                 stdout=log,
                 stderr=subprocess.STDOUT,
-                start_new_session=True,
+                **detached_spawn.options(),
             )
         _log(f"consolidation spawned (mode={mode}) -> {log_path}")
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal

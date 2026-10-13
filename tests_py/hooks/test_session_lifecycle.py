@@ -19,6 +19,10 @@ from mcp_server.hooks.session_lifecycle import (
     main,
     MAX_SESSION_LOG_ENTRIES,
 )
+from tests_py._windows_spawn_fake import (
+    as_windows_in_breakaway_job,
+    assert_detached_on_windows,
+)
 
 
 def _empty_profiles():
@@ -291,6 +295,7 @@ class TestSpawnConsolidation:
         self, mock_popen, tmp_path, monkeypatch
     ):
         monkeypatch.setenv("CORTEX_CLAUDE_DIR", str(tmp_path))
+        as_windows_in_breakaway_job(monkeypatch)
 
         _spawn_consolidation(turn_count=12)
 
@@ -300,7 +305,7 @@ class TestSpawnConsolidation:
             "--consolidate",
             "standard",
         ]
-        assert mock_popen.call_args.kwargs["start_new_session"] is True
+        assert_detached_on_windows(mock_popen.call_args.kwargs)
         # Never waited on: a session end that blocked on a "dream" cycle is
         # exactly the bug this spawn replaces.
         mock_popen.return_value.wait.assert_not_called()

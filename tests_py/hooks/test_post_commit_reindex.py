@@ -22,6 +22,10 @@ import pytest
 
 from mcp_server.hooks import post_commit_reindex as hook
 from mcp_server.shared import log_rotation
+from tests_py._windows_spawn_fake import (
+    as_windows_in_breakaway_job,
+    assert_detached_on_windows,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -169,6 +173,7 @@ class TestSpawnReanalyzeInterpreterResolution:
 
         monkeypatch.setattr(hook.subprocess, "Popen", _fake_popen)
         monkeypatch.setattr(log_rotation, "open", _tracking_open, raising=False)
+        as_windows_in_breakaway_job(monkeypatch)
 
         assert hook._spawn_reanalyze("/some/repo") is True
         launcher = plugin_root / "scripts" / "launcher.py"
@@ -181,7 +186,7 @@ class TestSpawnReanalyzeInterpreterResolution:
         ]
         assert captured["kwargs"]["stdin"] == hook.subprocess.DEVNULL
         assert captured["kwargs"]["stderr"] == hook.subprocess.STDOUT
-        assert captured["kwargs"]["start_new_session"] is True
+        assert_detached_on_windows(captured["kwargs"])
         # Exact (case-sensitive) log path string — asserting via
         # Path.exists() alone is not portable: case-insensitive filesystems
         # (default macOS APFS) treat ".claude" and ".CLAUDE" as identical.

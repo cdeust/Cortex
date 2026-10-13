@@ -66,11 +66,29 @@ def test_failure_retains_event_and_recovery_reports_it(queue, capsys):
 
 
 def test_spawn_is_detached_and_never_waits(queue):
-    with patch.object(queue.subprocess, "Popen") as popen:
+    detach = {"creationflags": 0x1234}  # source: arbitrary marker (issue #684)
+    with (
+        patch.object(queue.subprocess, "Popen") as popen,
+        patch.object(queue, "detach_options", return_value=detach),
+    ):
         queue.spawn(queue.queue_root())
-    assert popen.call_args.kwargs["start_new_session"] is True
+    assert popen.call_args.kwargs["creationflags"] == 0x1234
+    assert "start_new_session" not in popen.call_args.kwargs
     popen.return_value.wait.assert_not_called()
     popen.return_value.communicate.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        ("nt", {"creationflags": 0x00000200 | 0x08000000}),
+        ("posix", {"start_new_session": True}),
+    ],
+)
+def test_detach_options_follow_the_platform(queue, monkeypatch, name, expected):
+    # Windows ignores start_new_session; ADR-1102's two base flags detach there
+    monkeypatch.setattr(queue.os, "name", name)
+    assert queue.detach_options() == expected
 
 
 def test_replay_uses_original_storage_environment(queue, monkeypatch):

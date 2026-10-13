@@ -113,6 +113,21 @@ def enqueue(root, event):
     return key
 
 
+# CPython ignores start_new_session on Windows; there the drain detaches through
+# CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW. This script is stdlib-only and
+# shipped without mcp_server (ADR-1084), so it repeats the two values that
+# mcp_server.shared.detached_spawn decides from, without its job probe; a test
+# keeps them equal.
+# source: ADR-1102 (process-creation-flags values 0x00000200 and 0x08000000)
+WINDOWS_DETACH_FLAGS = 0x00000200 | 0x08000000
+
+
+def detach_options():
+    if os.name == "nt":
+        return {"creationflags": WINDOWS_DETACH_FLAGS}
+    return {"start_new_session": True}
+
+
 def spawn(root):
     fd = os.open(root / "worker.log", os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
     with os.fdopen(fd, "a", encoding="utf-8") as log:
@@ -121,8 +136,8 @@ def spawn(root):
             stdin=subprocess.DEVNULL,
             stdout=log,
             stderr=log,
-            start_new_session=True,
             close_fds=True,
+            **detach_options(),
             cwd=root,
             env={**os.environ, "CORTEX_CLAUDE_DIR": str(root.parent.parent)},
         )

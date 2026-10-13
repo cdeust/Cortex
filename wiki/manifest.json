@@ -3571,6 +3571,10 @@
     "ADR-1100": {
       "mirror": "ADR-1100-listings-that-serve-content-return-supersession-chain-heads-by-default.md",
       "path": "adr/cortex/1100-listings-that-serve-content-return-supersession-chain-heads-by-default.md"
+    },
+    "ADR-1102": {
+      "mirror": "ADR-1102-detach-windows-children-with-create_no_window-and-a-breakaway-decided-from-the-m.md",
+      "path": "adr/cortex/1102-detach-windows-children-with-create_no_window-and-a-breakaway-decided-from-the-m.md"
     }
   },
   "project": "cortex",

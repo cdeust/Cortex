@@ -22,6 +22,7 @@ from unittest import mock
 from mcp_server.hooks import capture_dispatch, post_tool_capture as hook
 from mcp_server.infrastructure import capture_peer, capture_spool
 from mcp_server.hooks.launcher_command import launcher_path
+from mcp_server.shared import detached_spawn, win32_job
 from tests_py.hooks.test_capture_worker_policy import payload
 
 CONTENT = (
@@ -46,10 +47,12 @@ def _windows():
     # Scoped to the two modules that read the platform: a process-wide
     # sys.platform would also redirect unrelated lazy imports (msvcrt) that
     # this POSIX test host cannot load.
+    # The job probe calls kernel32, absent here: it reports "no job".
     fake = SimpleNamespace(platform="win32", executable=sys.executable)
     with (
-        mock.patch.object(capture_dispatch, "sys", fake),
+        mock.patch.object(detached_spawn, "sys", fake),
         mock.patch.object(capture_peer, "sys", fake),
+        mock.patch.object(win32_job, "job_limit_flags", return_value=None),
     ):
         yield
 
@@ -79,17 +82,23 @@ class TestCapability(unittest.TestCase):
             capture_peer.supported()
 
 
+def _options(platform):
+    return capture_dispatch.popen_options(
+        STREAM, detached_spawn.platform_options(platform, None)
+    )
+
+
 class TestPopenOptions(unittest.TestCase):
     def test_windows_detaches_through_creationflags_only(self):
-        options = capture_dispatch.popen_options("win32", STREAM)
-        # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP (Win32 process-creation flags)
-        self.assertEqual(options["creationflags"], 0x00000008 | 0x00000200)
+        options = _options("win32")
+        # CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW (ADR-1102; no job here)
+        self.assertEqual(options["creationflags"], 0x00000200 | 0x08000000)
         for ignored_or_unsupported in ("start_new_session", "pass_fds"):
             self.assertNotIn(ignored_or_unsupported, options)
 
     def test_every_platform_closes_stdin_logs_output_and_inherits_the_environment(self):
         for name in ("win32", "linux", "darwin", "freebsd14"):
-            options = capture_dispatch.popen_options(name, STREAM)
+            options = _options(name)
             self.assertTrue(options["close_fds"])
             self.assertIs(options["stdin"], subprocess.DEVNULL)
             self.assertIs(options["stdout"], STREAM)
@@ -98,7 +107,7 @@ class TestPopenOptions(unittest.TestCase):
 
     def test_posix_detaches_through_a_new_session(self):
         for name in ("linux", "darwin", "freebsd14"):
-            options = capture_dispatch.popen_options(name, STREAM)
+            options = _options(name)
             self.assertIs(options["start_new_session"], True)
             self.assertNotIn("creationflags", options)
 
@@ -138,7 +147,10 @@ class TestHookOnUnsupportedPlatform(unittest.TestCase):
         )
         stream = popen.call_args.kwargs["stdout"]
         self.assertEqual(
-            popen.call_args.kwargs, capture_dispatch.popen_options("win32", stream)
+            popen.call_args.kwargs,
+            capture_dispatch.popen_options(
+                stream, detached_spawn.platform_options("win32", None)
+            ),
         )
         self.assertTrue(stream.closed)
         self.assertTrue((self.root / ".capture-worker" / "drain.log").exists())

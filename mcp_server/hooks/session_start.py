@@ -32,6 +32,7 @@ from mcp_server.handlers.injection_receipts import (
 )
 from mcp_server.hooks._telemetry import observe_hook
 from mcp_server.hooks.launcher_command import child_command, launcher_child_command
+from mcp_server.shared import detached_spawn
 from mcp_server.shared.freshness import provenance_suffix
 from mcp_server.shared.log_rotation import methodology_log_path, open_rotating_log
 from mcp_server.shared.project_scope import (
@@ -865,7 +866,7 @@ def _spawn_consolidate_cycle() -> int | None:
             stdin=subprocess.DEVNULL,
             stdout=log,
             stderr=subprocess.STDOUT,
-            start_new_session=True,
+            **detached_spawn.options(),
         )
     _log(f"background consolidate spawned → {log_path}")
     return proc.pid
@@ -1017,7 +1018,7 @@ def _maybe_background_reanalyze() -> None:
                 stdin=subprocess.DEVNULL,
                 stdout=log,
                 stderr=subprocess.STDOUT,
-                start_new_session=True,
+                **detached_spawn.options(),
             )
         _log(f"background pipeline reanalysis spawned → {log_path}")
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
