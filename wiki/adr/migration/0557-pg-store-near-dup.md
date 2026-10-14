@@ -138,3 +138,5 @@ Review rationale and source changes together. Historical evidence is preserved r
 -- factor this table's readers were written for (auto is the only
 -- class the fold/scalar mechanism regulates; see homeostatic.py).
 ````
+
+Update 2026-10-14: the per-anchor top-K runs with `SET LOCAL hnsw.iterative_scan = strict_order` in its own transaction. Without it, the HNSW index returned at most `hnsw.ef_search` (40) candidates before the `current_memories` view's `superseded_by_id` filter and `NOT is_stale` were applied, so a duplicate behind superseded rows was never paired (measured: 300 superseded rows around a pair hid it). This requires pgvector 0.8.0 or later; on older versions PostgreSQL rejects the parameter and the scan fails with that error. The iterative scan stops after `hnsw.max_scan_tuples` (default 20000) index tuples. Test: `tests_py/infrastructure/test_pg_store_near_dup_index_path.py`.

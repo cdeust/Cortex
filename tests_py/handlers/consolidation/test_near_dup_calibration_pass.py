@@ -17,6 +17,7 @@ from mcp_server.handlers.consolidation.near_dup_calibration_pass import (
 )
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import get_shared_store
+from tests_py._pg_hnsw import empty_memories_index
 
 EMBEDDING_DIM = 384
 
@@ -72,6 +73,16 @@ def _fetch_superseded_by(conn, memory_id: int):
         cur.execute("SELECT superseded_by_id FROM memories WHERE id = %s", (memory_id,))
         row = cur.fetchone()
         return row["superseded_by_id"] if isinstance(row, dict) else row[0]
+
+
+@pytest.fixture(autouse=True)
+def _empty_hnsw_index():
+    """Each test asserts on the HNSW top-K: start from an empty index
+    (tests_py/_pg_hnsw.py)."""
+    store = _store()
+    if hasattr(store, "batch_pool"):
+        with store.batch_pool.connection() as conn:
+            empty_memories_index(conn)
 
 
 class TestRunNearDupSample:

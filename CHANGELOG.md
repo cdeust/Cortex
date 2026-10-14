@@ -35,6 +35,19 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **The near-duplicate scan pairs duplicates that superseded rows used to
+  hide** (ADR-0557). Its per-anchor top-K used the HNSW index, which returned
+  at most `hnsw.ef_search` (40) candidates before `current_memories`
+  filtered superseded rows and the scan filtered stale ones; 300 superseded
+  rows around a pair hid it. The scan now runs with
+  `SET LOCAL hnsw.iterative_scan = strict_order`, which needs pgvector 0.8.0
+  or later (older versions reject the parameter, loudly). The intermittent
+  local failures of `test_near_dup_calibration_pass.py` had a test-side
+  cause: rows deleted by earlier tests stay in the index, and identical unit
+  vectors left new rows unreachable; those tests now start from an emptied
+  `memories` table (`tests_py/_pg_hnsw.py`). CI runs no PostgreSQL, so these
+  tests skip there.
+
 - **A marketplace install reaches "Cortex ready" at the first session with
   no other step** (ADR-1104). Measured on main with the real Claude Code CLI
   on a clean HOME (`scripts/install_e2e/run.py`): the plugin's `postInstall`
