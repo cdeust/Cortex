@@ -12,6 +12,7 @@ from psycopg.rows import DictRow, dict_row
 from pgvector.psycopg import register_vector
 from psycopg_pool import ConnectionPool
 
+from mcp_server.infrastructure.pg_iterative_scan import enable_iterative_scan
 from mcp_server.infrastructure.pg_store_host import PgStoreHost
 from mcp_server.infrastructure.memory_config import get_memory_settings
 
@@ -38,7 +39,16 @@ class PgSchemaMixin(PgStoreHost):
         """Pool callback: set up each checked-out connection.
 
         source: ADR-0565"""
+        self._prepare_connection(conn)
+
+    def _prepare_connection(self, conn: psycopg.Connection[DictRow]) -> None:
+        """Vector adapters plus the iterative HNSW scan, on every connection
+        the store queries through: the pools' ``configure`` callback, the
+        persistent ``_conn`` once the schema exists, and every reconnect.
+
+        source: ADR-1105"""
         register_vector(conn)
+        enable_iterative_scan(conn)
 
     def _open_interactive_pool(self) -> ConnectionPool[psycopg.Connection[DictRow]]:
         """Open the hot-path pool on first use."""
@@ -128,4 +138,4 @@ class PgSchemaMixin(PgStoreHost):
         except Exception as exc:  # noqa: BLE001 — the old connection is being replaced anyway
             logger.debug("close of stale connection failed during reconnect: %s", exc)
         self._conn = self._create_connection()
-        register_vector(self._conn)
+        self._prepare_connection(self._conn)

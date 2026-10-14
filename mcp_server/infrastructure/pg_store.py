@@ -7,7 +7,6 @@ from __future__ import annotations
 import logging
 
 import psycopg
-from pgvector.psycopg import register_vector
 from psycopg.rows import DictRow
 from psycopg_pool import ConnectionPool
 
@@ -91,7 +90,8 @@ class PgMemoryStore(
         self._init_schema()
         # source: ADR-0538
         self._deallocate_all()
-        register_vector(self._conn)
+        # source: ADR-1105 — after _init_schema, which creates the extension.
+        self._prepare_connection(self._conn)
         # source: ADR-0538
         self._interactive_pool: ConnectionPool[psycopg.Connection[DictRow]] | None = (
             None

@@ -159,8 +159,18 @@ def _create_db(host: str, port: str, dbname: str) -> tuple[bool, str]:
         return False, str(e)
 
 
+# source: ADR-1105 — the loaded pgvector library must define
+# hnsw.iterative_scan (0.8.0+); the store refuses to start otherwise.
+_ITERATIVE_SCAN_CHECK = (
+    "DO $$ BEGIN PERFORM '[1]'::vector; "
+    "IF current_setting('hnsw.iterative_scan', true) IS NULL THEN "
+    "RAISE EXCEPTION 'Cortex needs hnsw.iterative_scan (pgvector >= 0.8.0); "
+    "upgrade pgvector'; END IF; END $$;"
+)
+
+
 def _create_extensions(host: str, port: str, dbname: str) -> tuple[bool, str]:
-    """Create pgvector and pg_trgm extensions."""
+    """Create pgvector and pg_trgm extensions; require pgvector >= 0.8.0."""
     psql = shutil.which("psql")
     if not psql:
         return False, "psql not found"
@@ -176,7 +186,7 @@ def _create_extensions(host: str, port: str, dbname: str) -> tuple[bool, str]:
                 dbname,
                 "-c",
                 "CREATE EXTENSION IF NOT EXISTS vector; "
-                "CREATE EXTENSION IF NOT EXISTS pg_trgm;",
+                "CREATE EXTENSION IF NOT EXISTS pg_trgm; " + _ITERATIVE_SCAN_CHECK,
             ],
             capture_output=True,
             timeout=10,
@@ -319,7 +329,7 @@ def main() -> None:
     if not ok:
         _result(
             "create_failed",
-            f"Could not create extensions (pgvector/pg_trgm): {err}\n"
+            f"Could not create extensions (pgvector >= 0.8.0, pg_trgm): {err}\n"
             f"Install pgvector: brew install pgvector (macOS) or "
             f"see https://github.com/pgvector/pgvector#installation",
         )

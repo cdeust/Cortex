@@ -161,9 +161,16 @@ install_pgvector_macos() {
     fi
 }
 
+# Cortex needs pgvector >= 0.8.0 (hnsw.iterative_scan, ADR-1105).
+pgvector_available_ok() {
+    local version
+    version=$(psql -d postgres -tAc "SELECT default_version FROM pg_available_extensions WHERE name = 'vector'" 2>/dev/null | tr -d '[:space:]')
+    [ -n "$version" ] && [ "$(printf '%s\n%s\n' 0.8.0 "$version" | sort -V | head -n1)" = "0.8.0" ]
+}
+
 install_pgvector_linux() {
-    # Check if pgvector is already available
-    if psql -d postgres -tAc "SELECT 1 FROM pg_available_extensions WHERE name = 'vector'" 2>/dev/null | grep -q 1; then
+    # Check if pgvector >= 0.8.0 is already available
+    if pgvector_available_ok; then
         ok "pgvector available"
         return
     fi
@@ -172,7 +179,8 @@ install_pgvector_linux() {
     if command -v apt-get &>/dev/null; then
         # Try the package first (available on Ubuntu 24.04+)
         PG_VERSION=$(psql -tAc "SHOW server_version_num" -d postgres 2>/dev/null | head -c2)
-        if sudo apt-get install -y -qq "postgresql-${PG_VERSION}-pgvector" 2>/dev/null; then
+        if sudo apt-get install -y -qq "postgresql-${PG_VERSION}-pgvector" 2>/dev/null \
+            && pgvector_available_ok; then
             ok "pgvector installed via apt"
             return
         fi
@@ -273,6 +281,14 @@ try:
     checks.append(('Extensions (pgvector, pg_trgm)', row[0] == 2))
 except Exception:
     checks.append(('Extensions', False))
+
+# Check pgvector >= 0.8.0: the loaded library defines hnsw.iterative_scan (ADR-1105)
+try:
+    conn.execute(\"SELECT '[1]'::vector\")
+    row = conn.execute(\"SELECT current_setting('hnsw.iterative_scan', true)\").fetchone()
+    checks.append(('pgvector >= 0.8.0 (hnsw.iterative_scan)', row[0] is not None))
+except Exception:
+    checks.append(('pgvector >= 0.8.0 (hnsw.iterative_scan)', False))
 
 # Check stored procedures
 try:

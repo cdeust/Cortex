@@ -35,6 +35,20 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Recall and every vector query reach past `hnsw.ef_search`** (ADR-1105).
+  pgvector's HNSW index returned at most 40 candidates before the filters
+  (superseded, stale, other domain, heat, tag, age) were applied, so relevant
+  memories behind filtered neighbours were silently dropped and the
+  `recall_memories()` vector pool (`max_results * 10`) never got past 40.
+  Every store connection (pools, persistent connection, reconnects) now runs
+  `SET hnsw.iterative_scan = relaxed_order`; the three Python ANN queries
+  re-sort outside a materialized CTE. Read-only on the owner's store (68,496
+  memories, 100 queries): recall's top-10 equals the exact (index-free)
+  ranking for 81 queries instead of 51; vector-pool recall against an exact
+  scan 0.578 -> 0.939. **Requires pgvector >= 0.8.0**: the store refuses to
+  start on an older loaded library (it would drop the setting with a warning
+  only), and `python -m mcp_server.doctor`, `scripts/setup_db.py` and
+  `scripts/setup.sh` check it. The near-duplicate scan shares the same check.
 - **The near-duplicate apply pass no longer supersedes memories through a
   chain** (ADR-0370). It grouped pairs at or above the threshold into
   connected components, which is single-linkage: A~B and B~C put A and C
@@ -66,7 +80,6 @@ adheres to [Semantic Versioning](https://semver.org/).
   allocation. `anchor_limit` is removed from `list_candidate_pairs`,
   `run_near_dup_sample` and `run_near_dup_apply_pass`; the scan takes
   `batch_size`, which bounds one query, not coverage.
-
 - **The near-duplicate scan pairs duplicates that superseded rows used to
   hide** (ADR-0557). Its per-anchor top-K used the HNSW index, which returned
   at most `hnsw.ef_search` (40) candidates before `current_memories`

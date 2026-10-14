@@ -1,0 +1,61 @@
+---
+created: 2026-10-14T12:00:00Z
+kind: adr
+number: 1105
+status: accepted
+tags: [retrieval, postgresql, pgvector, hnsw, recall]
+title: Every ANN query scans the HNSW index iteratively
+---
+# ADR-1105: Every ANN query scans the HNSW index iteratively
+
+## Status
+
+accepted
+
+## Context
+
+pgvector's HNSW index hands the executor at most `hnsw.ef_search` (40 by default) candidates; WHERE filters, and the `current_memories` view's `superseded_by_id IS NULL`, are applied only after that (pgvector README, "Iterative Index Scans"). A vector top-K followed by filters therefore silently missed relevant rows sitting behind filtered neighbours, and a LIMIT above ef_search could not be reached through the index at all. ADR-0557 fixed this for the near-duplicate scan only (#754).
+
+The vector top-K queries in `mcp_server` (every `<=> ... ORDER BY`):
+
+1. `recall_memories()` (`pg_schema.py`, the `vec` CTE): `ORDER BY embedding <=> q LIMIT v_pool` (`v_pool = p_max_results * 10`, above 40 for any `max_results` over 4) over `eligible`, which filters heat, `NOT is_stale`, domain/globals and directory, then `effective_heat`.
+2. `search_by_tag_vector` (`pg_store_queries.py`): tag, heat, stale and domain filters.
+3. `search_vectors` (`pg_store_search.py`): heat, stale, and superseded with `heads_only`.
+4. `search_newer_neighbors` (`pg_store_search.py`): `created_at > after`, `id <> exclude`, stale.
+5. `list_candidate_pairs` (`pg_store_near_dup.py`): already iterative (ADR-0557).
+
+All five run on connections the store opens: the interactive and batch pools and the persistent `_conn` (`POOL_DISABLED`, reconnects). The hooks that open their own connections (`auto_recall.py`, `session_start_db.py`, `agent_briefing_query.py`), `doctor*.py` and `migrate.py` run no vector query. The wiki tables' HNSW indexes have no `<=>` query in `mcp_server`. `benchmarks/llm_head_to_head/retriever_baselines.py` is a raw comparison baseline, not Cortex retrieval.
+
+Measured 2026-10-14, read-only on the owner's store (68,496 memories, 1,014 superseded, 826 stale; pgvector 0.8.2, PostgreSQL 17.9), 100 queries (embedding and first 120 characters of live rows, `ORDER BY md5(id)`), `recall_memories(max_results=10)` with each row's domain, against the same call with `enable_indexscan = off` (no HNSW, exact):
+
+| `hnsw.iterative_scan` | recall top-10 identical to exact | top-10 overlap | vec pool (100) recall vs exact | pools short of exact |
+|---|---|---|---|---|
+| off (main) | 51/100 | 0.697 | 0.578 (mean 57.4 rows) | 51/100 |
+| strict_order | 72/100 | 0.930 | 0.919 | 4/100 |
+| relaxed_order | 81/100 | 0.949 | 0.939 | 4/100 |
+
+Rerunning `off` changed 5 of 100 top-10 sets (noise); strict and relaxed each changed 48.
+
+## Decision
+
+1. **One place, every connection.** `PgSchemaMixin._prepare_connection` registers the vector adapters, checks the capability and runs `SET hnsw.iterative_scan = relaxed_order` for the session. It runs in the pools' `configure` callback, on the persistent connection right after `_init_schema` (which creates the extension, so not in `_create_connection`), and on every `_reconnect`. A plain `SET` on an autocommit connection outlives the statement; psycopg_pool rolls back an unfinished transaction on return and resets nothing else. Covering the session covers the PL/pgSQL function and every Python query without touching their text.
+2. **relaxed_order.** The README: strict "ensures results are in the exact order by distance"; relaxed "allows results to be slightly out of order by distance, but provides better recall", re-sorted with a materialized CTE. The table above measured that: relaxed found more of the exact neighbours. `recall_memories()` fuses raw scores normalised by their maximum, so the order inside `vec` does not matter. The three Python queries take their first rows as the nearest, so each is now `WITH nearest AS MATERIALIZED (... ORDER BY distance LIMIT k) SELECT ... ORDER BY distance + 0` (the README's form; `+ 0` stops PostgreSQL 17+ from trusting the CTE's order). The near-duplicate scan keeps its own `SET LOCAL ... strict_order` (ADR-0557).
+3. **Loud capability check.** `pg_iterative_scan.require_iterative_scan` loads the library (`SELECT '[1]'::vector`) and requires `current_setting('hnsw.iterative_scan', true)` to be non-NULL, else raises "Cortex needs hnsw.iterative_scan (pgvector >= 0.8.0)". The store does not start on an older library: without the check, a library that lacks the parameter drops the SET with a WARNING only and every vector query stays lossy (review of #754). `extversion` is not consulted: it can lag an upgraded binary. The near-duplicate scan uses the same check.
+4. **pgvector >= 0.8.0 is a stated prerequisite**: README storage table, `CONTRIBUTING.md`, `docs/troubleshooting.md`, a required `python -m mcp_server.doctor` check, `scripts/setup_db.py` (fails extension setup on an older library) and `scripts/setup.sh` (on Linux, an available pgvector older than 0.8.0 is not accepted; the verification step checks the loaded library).
+5. **`hnsw.max_scan_tuples` stays at its default (20,000).** On the same 100 live queries (relaxed_order), 100,000 changed nothing (recall 0.9387, the same 4 short pools), nor did `hnsw.scan_mem_multiplier` 4 or 16. The 4 short pools (18 to 22 of 100 rows) are all in the 23,750-row `cortex` domain, inside a cluster of about 1,650 near-identical auto-captured tool rows (cosine distance < 0.05, up to 101 identical vectors): the graph does not reach further, the degenerate-graph case of `tests_py/_pg_hnsw.py`, not a scan bound.
+
+## Benchmark
+
+`benchmarks/reproduce.sh --only longmemeval,locomo --no-ablation --no-regression --baseline-ref origin/main` (pgvector/pgvector:pg16, pgvector 0.8.6; HEAD 8a6d995a against origin/main fee4c61a; `benchmarks/results/repro/20261014T121110Z/`), plus a second LongMemEval run of the branch (`20261014T142625Z/`) to measure run-to-run noise:
+
+| | LongMemEval-S R@10 | MRR | time | LoCoMo R@10 | MRR | time |
+|---|---|---|---|---|---|---|
+| origin/main | 0.9820 | 0.9043 | 1748 s | 0.8875 | 0.7803 | 2156 s |
+| this change | 0.9800 | 0.9057 | 1893 s | 0.8900 | 0.7801 | 2211 s |
+| this change, rerun | 0.9780 | 0.9050 | 1765 s | | | |
+
+The regression gate passes (tolerance 0.005). The benchmarks store one small haystack per question, where the planner mostly reads the table without the index, so they bound side effects rather than measure the fix. Where the index is used, the vector pool is now complete: 22 of 500 LongMemEval top-10 lists change. One question (`f4f1d8a4`) loses its answer session from the top 10 in both runs of the branch (the larger pool shifts the fused normalisation); the two branch runs differ from each other in 7 lists and one hit (`cf22b7bf`), so one question is within run-to-run noise.
+
+## Consequences
+
+Positive: on the live store, recall's top-10 now equals the exact ranking for 81 queries in 100 instead of 51, and the vector pool holds the 100 rows it asks for (mean 96.4) instead of at most 40 before filters (57.4 here). Tests on PostgreSQL with the index path forced (`tests_py/infrastructure/test_pg_ann_iterative_scan.py`, 300 distinct rows nearer the query than the relevant one) fail on main and pass now, for the PL/pgSQL function (superseded, stale and other-domain neighbours) and each Python query. Measured latency of `recall_memories()` did not grow (p50 1.12 s off, 0.90 s relaxed; same machine, same run). Negative: a server whose loaded pgvector is older than 0.8.0 no longer starts Cortex on PostgreSQL; the error and the doctor check name the upgrade. Near-identical vector clusters still limit what an HNSW scan can reach; that is a graph-quality question, not addressed here.

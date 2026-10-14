@@ -3579,6 +3579,10 @@
     "ADR-1104": {
       "mirror": "ADR-1104-zero-ops-plugin-install.md",
       "path": "adr/cortex/1104-zero-ops-plugin-install.md"
+    },
+    "ADR-1105": {
+      "mirror": "ADR-1105-every-ann-query-scans-the-hnsw-index-iteratively.md",
+      "path": "adr/cortex/1105-every-ann-query-scans-the-hnsw-index-iteratively.md"
     }
   },
   "project": "cortex",

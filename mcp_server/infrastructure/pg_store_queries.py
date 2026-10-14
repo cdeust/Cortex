@@ -174,14 +174,18 @@ class PgQueryMixin(PgStoreHost):
         """Vector-ranked branch of ``search_by_tag_vector`` (embedding present).
 
         source: ADR-0560"""
+        # source: ADR-1105 — relaxed_order iterative scan, re-sorted outside
+        # a materialized CTE (pgvector README; "+ 0" for PostgreSQL 17+).
         rows = self._execute(
+            "WITH nearest AS MATERIALIZED ("
             "SELECT *, (1.0 - (embedding <=> %s))::REAL AS score "
             "FROM current_memories "
             "WHERE tags @> %s::jsonb AND heat_base >= %s AND NOT is_stale "
             "AND embedding IS NOT NULL "
             "AND ((%s::TEXT IS NULL) OR domain = %s OR is_global = TRUE) "
-            "ORDER BY embedding <=> %s LIMIT %s",
-            (emb, json.dumps([tag]), min_heat, domain, domain, emb, limit),
+            "ORDER BY embedding <=> %s LIMIT %s"
+            ") SELECT * FROM nearest ORDER BY (embedding <=> %s) + 0",
+            (emb, json.dumps([tag]), min_heat, domain, domain, emb, limit, emb),
         ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]
 

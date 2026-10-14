@@ -1,0 +1,58 @@
+{
+  "overall_mrr": 0.780103270706197,
+  "overall_recall10": 0.8900100908173562,
+  "category_mrr": {
+    "multi_hop": 0.6956571725263314,
+    "temporal": 0.5338121118012422,
+    "single_hop": 0.7273415512777215,
+    "open_domain": 0.8303809712549308,
+    "adversarial": 0.8302405865186134
+  },
+  "category_recall10": {
+    "multi_hop": 0.8130841121495327,
+    "temporal": 0.7608695652173914,
+    "single_hop": 0.9326241134751773,
+    "open_domain": 0.9096313912009513,
+    "adversarial": 0.9080717488789237
+  },
+  "elapsed_s": 2211.1596348285675,
+  "consolidation_total_wall_s": 0.0,
+  "consolidation_call_count": 0,
+  "manifest": {
+    "with_consolidation": false,
+    "ablate_mechanism": null,
+    "ablate_env_var": null,
+    "n_conversations": 10,
+    "n_questions": 1982,
+    "n_runs": 1,
+    "dataset": {
+      "source": "snap-research/locomo data/locomo10.json (Percena/locomo-mc10 raw mirror)",
+      "file": "locomo10.json",
+      "bytes": 2805274,
+      "sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4"
+    },
+    "consolidation_call_count": 0,
+    "consolidation_total_wall_s": 0.0,
+    "repro": {
+      "git_commit": "8a6d995a9ff82423266391850244bb4bb4406b47",
+      "git_dirty": true,
+      "python_version": "3.13.7 (main, Aug 14 2025, 11:12:11) [Clang 17.0.0 (clang-1700.0.13.3)]",
+      "platform_system": "Darwin",
+      "platform_machine": "arm64",
+      "platform_node": "mac-1.home",
+      "timestamp_utc": "2026-10-14T12:42:55.171917+00:00",
+      "lib_versions": {
+        "sentence-transformers": "6.0.1",
+        "torch": "2.13.0",
+        "numpy": "2.5.1",
+        "psycopg": "3.3.5",
+        "pgvector": "0.5.0",
+        "flashrank": "0.2.10"
+      },
+      "reranker_active": true,
+      "reranker_state": "loaded",
+      "reranker_model_path": "/Users/cdeust/.cache/flashrank/ms-marco-MiniLM-L-12-v2/flashrank-MiniLM-L-12-v2_Q.onnx",
+      "reranker_model_sha256": "d3dd7b09fcf06b0c070081d6819b5effbb40b667bcad78b2d7543400271141d1"
+    }
+  }
+}

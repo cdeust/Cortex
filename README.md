@@ -291,7 +291,7 @@ bash <plugin-dir>/scripts/install-plugin.sh --postgres
 
 |  | SQLite (default) | PostgreSQL 15+ |
 |---|---|---|
-| Setup | none | pgvector, pg_trgm |
+| Setup | none | pgvector >= 0.8.0, pg_trgm |
 | All 57 tools | yes | yes |
 | Retrieval contract | identical | identical |
 | Fusion | in-process | server-side PL/pgSQL |

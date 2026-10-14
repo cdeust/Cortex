@@ -27,10 +27,10 @@ import pytest
 
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import get_shared_store
-from mcp_server.infrastructure.pg_store_near_dup import (
-    _require_iterative_scan,
-    list_candidate_pairs,
+from mcp_server.infrastructure.pg_iterative_scan import (
+    require_iterative_scan as _require_iterative_scan,
 )
+from mcp_server.infrastructure.pg_store_near_dup import list_candidate_pairs
 from tests_py._pg_hnsw import empty_memories_index
 
 _DIM = 384  # source: memory_config EMBEDDING_DIM (all-MiniLM-L6-v2)

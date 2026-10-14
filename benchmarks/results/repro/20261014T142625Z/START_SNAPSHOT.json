@@ -1,0 +1,19 @@
+{
+  "captured_at_utc": "2026-10-14T14:26:25.823643+00:00",
+  "machine_load": {
+    "load_average_1m": 5.71484375,
+    "load_average_5m": 8.45849609375,
+    "load_average_15m": 8.47705078125,
+    "cpu_count": 10,
+    "concurrent_pytest_processes": 0,
+    "concurrent_docker_containers": 0
+  },
+  "disk_space": {
+    "repo_root": {
+      "path": "/Users/cdeust/Developments/anthropic-partnership/Cortex/.claude/worktrees/recall-iterative-scan",
+      "free_bytes": 39176323072,
+      "total_bytes": 494384795648
+    },
+    "docker_root": null
+  }
+}

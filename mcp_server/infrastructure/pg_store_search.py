@@ -176,13 +176,15 @@ class PgSearchMixin(PgStoreHost):
         source: ADR-0566"""
         src = "current_memories" if heads_only else "memories"
         emb = self._bytes_to_vector(query_embedding)
+        # source: ADR-1105 — relaxed_order iterative scan, re-sorted outside
+        # a materialized CTE (pgvector README; "+ 0" for PostgreSQL 17+).
         rows = self._execute(
-            "SELECT id, embedding <=> %s AS distance "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
-            f"FROM {src} "
+            "WITH nearest AS MATERIALIZED ("  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
+            f"SELECT id, embedding <=> %s AS distance FROM {src} "
             "WHERE heat_base >= %s AND NOT is_stale AND embedding IS NOT NULL "
-            "ORDER BY embedding <=> %s "
-            "LIMIT %s",
-            (emb, min_heat, emb, top_k),
+            "ORDER BY distance LIMIT %s"
+            ") SELECT id, distance FROM nearest ORDER BY distance + 0",
+            (emb, min_heat, top_k),
         ).fetchall()
         return [(r["id"], r["distance"]) for r in rows]
 
@@ -204,13 +206,18 @@ class PgSearchMixin(PgStoreHost):
         chronic noisy-OR and reads the strongest pair as the acute interferer.
         """
         emb = self._bytes_to_vector(query_embedding)
+        # source: ADR-1105 — relaxed_order iterative scan, re-sorted outside
+        # a materialized CTE (pgvector README; "+ 0" for PostgreSQL 17+).
         rows = self._execute(
-            "SELECT 1 - (embedding <=> %s) AS similarity, "
+            "WITH nearest AS MATERIALIZED ("
+            "SELECT embedding <=> %s AS distance, "
             "EXTRACT(EPOCH FROM (NOW() - created_at)) / 3600.0 AS age_hours "
             "FROM memories "
             "WHERE created_at > %s::timestamptz AND id <> %s "
             "AND NOT is_stale AND embedding IS NOT NULL "
-            "ORDER BY embedding <=> %s LIMIT %s",
-            (emb, after, exclude_id, emb, top_k),
+            "ORDER BY distance LIMIT %s"
+            ") SELECT 1 - distance AS similarity, age_hours "
+            "FROM nearest ORDER BY distance + 0",
+            (emb, after, exclude_id, top_k),
         ).fetchall()
         return [(float(r["similarity"]), float(r["age_hours"])) for r in rows]

@@ -1,0 +1,63 @@
+{
+  "git_sha": "845512dee5e59bd1b4a011e628ee8c55099c0e89",
+  "machine_load_at_start": {
+    "load_average_1m": 5.71484375,
+    "load_average_5m": 8.45849609375,
+    "load_average_15m": 8.47705078125,
+    "cpu_count": 10,
+    "concurrent_pytest_processes": 0,
+    "concurrent_docker_containers": 0
+  },
+  "disk_space_at_start": {
+    "repo_root": {
+      "path": "/Users/cdeust/Developments/anthropic-partnership/Cortex/.claude/worktrees/recall-iterative-scan",
+      "free_bytes": 39176323072,
+      "total_bytes": 494384795648
+    },
+    "docker_root": null
+  },
+  "machine_load_at_end": {
+    "load_average_1m": 5.337890625,
+    "load_average_5m": 4.57958984375,
+    "load_average_15m": 4.9609375,
+    "cpu_count": 10,
+    "concurrent_pytest_processes": 0,
+    "concurrent_docker_containers": 1
+  },
+  "disk_space_at_end": {
+    "repo_root": {
+      "path": "/Users/cdeust/Developments/anthropic-partnership/Cortex/.claude/worktrees/recall-iterative-scan",
+      "free_bytes": 36919234560,
+      "total_bytes": 494384795648
+    },
+    "docker_root": null
+  },
+  "longmemeval_dataset_sha256": "08d8dad4be43ee2049a22ff5674eb86725d0ce5ff434cde2627e5e8e7e117894",
+  "datasets": {
+    "longmemeval-s": {
+      "variant": "s",
+      "file": "longmemeval_s.json",
+      "bytes": 278025796,
+      "sha256": "08d8dad4be43ee2049a22ff5674eb86725d0ce5ff434cde2627e5e8e7e117894"
+    }
+  },
+  "pg_image": "pgvector/pgvector:pg16",
+  "bench_container_name": "cortex-bench-pg-53328-679b0ee9",
+  "bench_container_port": 32769,
+  "bench_runner_pid": 53328,
+  "python": "3.13.7",
+  "packages": {
+    "datasets": "5.0.1",
+    "sentence-transformers": "6.0.1",
+    "torch": "2.13.0",
+    "psycopg": "3.3.5",
+    "psycopg-pool": "3.3.3"
+  },
+  "embedding_model_revision": "1110a243fdf4706b3f48f1d95db1a4f5529b4d41",
+  "reranker_active": true,
+  "reranker_state": "loaded",
+  "reranker_model_sha256": "d3dd7b09fcf06b0c070081d6819b5effbb40b667bcad78b2d7543400271141d1",
+  "results_files": [
+    "longmemeval-s.json"
+  ]
+}

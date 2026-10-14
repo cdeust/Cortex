@@ -21,6 +21,7 @@ from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 from mcp_server.infrastructure.backend_marker import effective_backend
 from mcp_server.doctor_capture import capture_verdict
 from mcp_server.doctor_mcp import run_mcp
+from mcp_server.doctor_pgvector import pgvector_iterative_scan
 from mcp_server.infrastructure.config import CLAUDE_DIR
 from mcp_server.shared.subprocess_safe import run_with_hard_timeout
 
@@ -184,6 +185,11 @@ def _pg_extensions() -> Check:
             f"{type(exc).__name__}: {exc}",
             "",
         )
+
+
+def _pgvector_iterative_scan() -> Check:
+    """pgvector >= 0.8.0, asked of the loaded library (ADR-1105)."""
+    return pgvector_iterative_scan(Check)
 
 
 def _methodology_dir() -> Check:
@@ -507,6 +513,7 @@ CHECKS: list[Callable[[], Check]] = [
     _database_url,
     _pg_connection,
     _pg_extensions,
+    _pgvector_iterative_scan,
     _methodology_dir,
     _auto_capture,
     _i10_config,

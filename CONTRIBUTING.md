@@ -29,7 +29,7 @@ installed, pytest's start-up check (`scripts/check_venv_lock_parity.py`) runs
 `uv export` to compare your venv with `uv.lock`, and stops with an explicit
 error when `uv` is missing. The launcher tests resolve the locked sets with it too.
 The default store is a local SQLite file — nothing to provision. PostgreSQL 17
-+ pgvector is only needed to run the PostgreSQL-backed integration tests.
++ pgvector >= 0.8.0 is only needed to run the PostgreSQL-backed integration tests.
 
 ```bash
 git clone https://github.com/cdeust/Cortex.git

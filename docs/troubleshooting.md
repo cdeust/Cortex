@@ -232,6 +232,26 @@ psql postgresql://127.0.0.1:5432/cortex -c "CREATE EXTENSION IF NOT EXISTS vecto
 psql postgresql://127.0.0.1:5432/cortex -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
 ```
 
+### pgvector older than 0.8.0
+
+Cortex refuses to start, and `python -m mcp_server.doctor` fails the
+`pgvector >= 0.8.0 (hnsw.iterative_scan)` check, with "Cortex needs
+hnsw.iterative_scan (pgvector >= 0.8.0)". Every vector query runs with
+`hnsw.iterative_scan = relaxed_order`; without it, an HNSW top-K followed by
+filters (superseded, stale, other-domain rows) silently drops relevant
+memories (ADR-1105). The check asks the library PostgreSQL has loaded, not
+the catalogue:
+
+```bash
+psql postgresql://127.0.0.1:5432/cortex -c "SELECT '[1]'::vector; SELECT current_setting('hnsw.iterative_scan', true);"
+# NULL means the loaded pgvector is older than 0.8.0
+```
+
+Upgrade pgvector (`brew upgrade pgvector` on macOS; the PGDG package
+`postgresql-<major>-pgvector` or https://github.com/pgvector/pgvector#installation
+on Linux), restart PostgreSQL, then run
+`ALTER EXTENSION vector UPDATE;` in the `cortex` database.
+
 ### DATABASE_URL not set
 
 The Cortex MCP server and `scripts/dev_run_ingest.py` both require

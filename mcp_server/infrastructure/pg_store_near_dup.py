@@ -4,6 +4,7 @@ source: ADR-0557"""
 
 from __future__ import annotations
 
+from mcp_server.infrastructure.pg_iterative_scan import require_iterative_scan
 from mcp_server.infrastructure.row_factory import DICT_ROW
 
 from typing import TYPE_CHECKING
@@ -36,32 +37,9 @@ DEFAULT_ANCHOR_BATCH = 5000
 
 # source: pgvector README, "Iterative Index Scans" (0.8.0+): strict_order
 # keeps exact distance order, which the per-anchor ORDER BY ... LIMIT needs.
+# The store's connections scan iteratively for the whole session with
+# relaxed_order (ADR-1105); this scan keeps strict_order in its transaction.
 _ITERATIVE_SCAN = "SET LOCAL hnsw.iterative_scan = strict_order"
-# source: PostgreSQL docs, current_setting(name, missing_ok): NULL when the
-# parameter does not exist. Loading vector.so (any vector value) defines the
-# hnsw.* parameters, so the question is answered by the library in use.
-_LOAD_VECTOR = "SELECT '[1]'::vector"
-_ITERATIVE_SCAN_SETTING = (
-    "SELECT current_setting('hnsw.iterative_scan', true) AS setting"
-)
-
-
-def _require_iterative_scan(cur) -> None:
-    """Refuse to scan on a pgvector that cannot do it (before 0.8.0).
-
-    PostgreSQL accepts the SET on a connection that has not loaded the
-    extension yet and, on a library without the parameter, drops it with a
-    server WARNING only (measured in review of #754): the scan would run the
-    old, lossy way without a word. The loaded library decides, not the
-    catalogue's extversion, which can lag an upgraded binary."""
-    cur.execute(_LOAD_VECTOR)
-    cur.execute(_ITERATIVE_SCAN_SETTING)
-    row = cur.fetchone()
-    if row is None or row["setting"] is None:
-        raise RuntimeError(
-            "the near-duplicate scan needs hnsw.iterative_scan (pgvector >= "
-            "0.8.0); the pgvector library loaded by this server does not define it"
-        )
 
 
 # source: PostgreSQL docs, "Numeric Types": memories.id is SERIAL (integer,
@@ -120,7 +98,7 @@ def _scan_anchor_batch(
     was never paired. An iterative scan keeps reading the index, in exact
     distance order, until top_k rows pass (bounded by hnsw.max_scan_tuples)."""
     with conn.transaction(), conn.cursor(row_factory=DICT_ROW) as cur:
-        _require_iterative_scan(cur)
+        require_iterative_scan(cur)
         cur.execute(_ITERATIVE_SCAN)
         cur.execute(_LAST_ANCHOR_SQL, params)
         row = cur.fetchone()
