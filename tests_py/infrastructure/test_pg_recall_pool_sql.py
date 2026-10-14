@@ -31,12 +31,24 @@ def test_signature_return_shape_and_fusion_unchanged():
     )
 
 
-def test_every_pool_breaks_exact_ties_newest_first():
-    """ADR-1106: no LIMIT in recall_memories() cuts ties in heap order."""
+# pool -> its ORDER BY, the score alone (a tie spans the whole ORDER BY list).
+_POOL_ORDER = {
+    "vec": "c.embedding <=> p_query_emb",
+    "fts": "ts_rank_cd(c.content_tsv, v_tsq) DESC",
+    "ngram": "similarity(c.content, p_query_text) DESC",
+    "hot": "effective_heat(c, NOW(), v_factor) DESC",
+    "recency": "c.created_at DESC",
+}
+
+
+def test_every_pool_keeps_its_whole_boundary_tie_group():
+    """ADR-1109: no pool's cut chooses among rows tied on its score."""
     function = RECALL_MEMORIES_LAZY_FN
-    for pool in ("vec", "fts", "ngram", "hot", "recency"):
+    for pool, order in _POOL_ORDER.items():
         query = compact(function.split(f"    {pool} AS (")[1].split("    ),")[0])
-        assert query.endswith("c.created_at DESC, c.id DESC LIMIT v_pool"), pool
+        assert query.endswith(
+            f"ORDER BY {order} FETCH FIRST (v_pool) ROWS WITH TIES"
+        ), pool
 
 
 def test_common_filters_inline_and_union_materializes_only_bounded_ids():
@@ -58,7 +70,8 @@ def test_common_filters_inline_and_union_materializes_only_bounded_ids():
         f"SELECT id FROM {pool}" in bounded
         for pool in ("vec", "fts", "ngram", "hot", "recency")
     )
-    assert function.count("LIMIT v_pool") == 5
+    assert function.count("FETCH FIRST (v_pool) ROWS WITH TIES") == 5
+    assert "LIMIT v_pool" not in function
     assert "v_pool   INT := p_max_results * 10" in function
 
 
@@ -69,7 +82,7 @@ def test_each_pool_filters_exact_heat_before_limit_and_exposes_index_operator():
         assert "FROM eligible c" in query
         assert query.index(
             "effective_heat(c, NOW(), v_factor) >= p_min_heat"
-        ) < query.index("LIMIT v_pool")
+        ) < query.index("FETCH FIRST (v_pool)")
     assert "ORDER BY c.embedding <=> p_query_emb" in function
     assert "c.content_tsv @@ v_tsq" in function
     assert "c.content % p_query_text" in function

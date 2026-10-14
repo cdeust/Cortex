@@ -91,7 +91,7 @@ _HIDING = {
 
 @pytest.mark.parametrize("kind", sorted(_HIDING))
 def test_recall_memories_finds_a_row_behind_filtered_neighbours(index_store, kind):
-    """The PL/pgSQL vec CTE: ORDER BY distance LIMIT v_pool over eligible."""
+    """The PL/pgSQL vec CTE: ORDER BY distance, first v_pool rows with ties (ADR-1109)."""
     hidden = hidden_near(_query(), _HIDDEN_ROWS, **{"domain": "mine", **_HIDING[kind]})
     ids = insert_rows(index_store, [relevant_row(_query(), domain="mine")])
     insert_rows(index_store, hidden + _decoys("mine"))
