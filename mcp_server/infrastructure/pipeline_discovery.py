@@ -90,12 +90,14 @@ _LEGACY_AUTOGEN_COMMENT = (
 )
 
 
-def discover_pipeline_command() -> Optional[list[str]]:
+def discover_pipeline_command(project_root: Optional[str]) -> Optional[list[str]]:
     """Return [command, *args] for the pipeline MCP server, or None.
 
         None means "no pipeline found" — callers should leave the mcp
         config alone and let ingest_codebase fail with the standard
         McpConnectionError when invoked (ingestion is explicitly opt-in).
+
+    ``project_root`` anchors the sibling scan (``_source_checkout_binary``).
 
     source: ADR-0584"""
     # Canonical: the marketplace-installed AP plugin.
@@ -112,8 +114,24 @@ def discover_pipeline_command() -> Optional[list[str]]:
         if path:
             return [path]
 
+    built = _source_checkout_binary(project_root)
+    return [built] if built else None
+
+
+def _source_checkout_binary(project_root: Optional[str]) -> Optional[str]:
+    """The first built binary of a ``_SOURCE_DIRS`` checkout, or None.
+
+    The scan is anchored on ``project_root``, never ``os.getcwd()``: hooks
+    and the server run under ``scripts/launcher.py``, which ``chdir``s to the
+    plugin root, so a cwd-relative scan probed the plugin's siblings instead
+    of the project's (the 2026-10-14 detached-ingest leak). ``None`` (project
+    unknown) scans nothing.
+
+    source: ADR-0584"""
+    if project_root is None:
+        return None
     for source in _SOURCE_DIRS:
-        root = Path(source).expanduser().resolve()
+        root = (Path(project_root) / Path(source).expanduser()).resolve()
         if not root.is_dir():
             continue
         for rel in _BUILT_RELATIVE:
@@ -122,8 +140,7 @@ def discover_pipeline_command() -> Optional[list[str]]:
             if built.is_file() and (
                 sys.platform == "win32" or built.stat().st_mode & 0o111
             ):
-                return [str(built)]
-
+                return str(built)
     return None
 
 
@@ -142,7 +159,7 @@ def _backfill_call_timeout(path: Path, existing: dict, entry: dict) -> None:
         logger.warning("Failed to backfill callTimeoutMs in %s: %s", path, exc)
 
 
-def ensure_pipeline_connection() -> dict:
+def ensure_pipeline_connection(project_root: Optional[str]) -> dict:
     """Write the ``codebase`` entry into mcp-connections.json when absent.
 
     Returns a small audit dict describing what happened:
@@ -151,10 +168,11 @@ def ensure_pipeline_connection() -> dict:
       path:   path to the config file (always)
       binary: resolved pipeline binary path (when discovered)
 
-    Idempotent. Safe to call every SessionStart.
+    Idempotent. Safe to call every SessionStart. ``project_root`` is
+    forwarded to ``discover_pipeline_command`` as its sibling-scan anchor.
     """
     path = Path(MCP_CONNECTIONS_PATH)
-    command = discover_pipeline_command()
+    command = discover_pipeline_command(project_root)
     existing = read_json(path) or {}
 
     existing_codebase = existing.get("servers", {}).get("codebase")
@@ -190,7 +208,7 @@ def ensure_pipeline_connection() -> dict:
 
         install_result = install_pipeline()
         if install_result.get("action") == "installed":
-            command = discover_pipeline_command()
+            command = discover_pipeline_command(project_root)
 
     if command is None:
         return {"action": "no_pipeline_found", "path": str(path)}

@@ -35,6 +35,23 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **The background code-graph re-analysis ingests the session's project,
+  never the plugin root.** `scripts/launcher.py` `chdir`s to the plugin root
+  before it runs a hook, yet `session_start._maybe_background_reanalyze` and
+  `post_commit_reindex` took `CLAUDE_PROJECT_ROOT or os.getcwd()` as the
+  project, and `pipeline_discovery` scanned its sibling source checkouts
+  (`../ai-architect-mcp-codebase`, ADR-0584) relative to the cwd. Without
+  `CLAUDE_PROJECT_ROOT` the hooks therefore spawned a detached ingest of the
+  plugin directory, found through the plugin's siblings. In the test suite,
+  run from a checkout with that sibling, `tests_py/hooks/test_entry.py` left
+  the worker and its `ai-architect-mcp-codebase` child alive, which the #679
+  leak guard reported at teardown. Both hooks now take the project from
+  `resolve_project_root(event, os.environ)` (issue #604) and spawn nothing
+  when it is unresolved; `discover_pipeline_command` and
+  `ensure_pipeline_connection` take the project root as their sibling-scan
+  anchor, and `None` scans no sibling. The server probe anchors on
+  `CLAUDE_PROJECT_ROOT`; `setup.sh` on its working directory.
+
 - **Hooks write UTF-8 to stdout and stderr on every platform and entry point,
   and the wiki reindex reads and writes UTF-8** (#688). A text-mode stdout
   encodes with the locale code page (cp1252 on a Windows pipe), so

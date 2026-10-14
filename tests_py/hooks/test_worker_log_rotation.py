@@ -69,7 +69,7 @@ class TestWorkerLogRotation(unittest.TestCase):
 
     def test_session_reanalyze_rotates_and_closes_parent_descriptor(self) -> None:
         discovery = ModuleType("mcp_server.infrastructure.pipeline_discovery")
-        discovery.discover_pipeline_command = lambda: ["fixture"]
+        discovery.discover_pipeline_command = lambda project_root: ["fixture"]
         ttl = ModuleType("mcp_server.infrastructure.pipeline_graph_ttl")
         ttl.graph_is_stale = lambda path: True
         with patch.dict(
@@ -79,7 +79,8 @@ class TestWorkerLogRotation(unittest.TestCase):
                 self.session, "_lookup_cached_graph_path", return_value="fixture"
             ):
                 self.assert_spawn_rotates(
-                    "pipeline_reanalyze.log", self.session._maybe_background_reanalyze
+                    "pipeline_reanalyze.log",
+                    lambda: self.session._maybe_background_reanalyze("fixture"),
                 )
 
 

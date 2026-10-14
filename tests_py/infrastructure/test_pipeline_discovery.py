@@ -80,7 +80,9 @@ class TestMarketplaceResolution:
             upstream_identity.CANONICAL_PLUGIN_KEY,
             upstream_identity.CANONICAL_BINARY,
         )
-        assert pipeline_discovery.discover_pipeline_command() == [str(binary)]
+        assert pipeline_discovery.discover_pipeline_command(str(tmp_path)) == [
+            str(binary)
+        ]
 
     def test_legacy_plugin_key_still_resolves(self, tmp_path, monkeypatch):
         """A host installed before v0.9.0 keeps working; the rename is not a
@@ -91,7 +93,9 @@ class TestMarketplaceResolution:
             upstream_identity.LEGACY_PLUGIN_KEYS[0],
             upstream_identity.LEGACY_BINARIES[0],
         )
-        assert pipeline_discovery.discover_pipeline_command() == [str(binary)]
+        assert pipeline_discovery.discover_pipeline_command(str(tmp_path)) == [
+            str(binary)
+        ]
 
     def test_canonical_wins_over_legacy(self, tmp_path, monkeypatch):
         """Both present: the current install must not lose to a stale one."""
@@ -107,7 +111,9 @@ class TestMarketplaceResolution:
             upstream_identity.CANONICAL_PLUGIN_KEY,
             upstream_identity.CANONICAL_BINARY,
         )
-        assert pipeline_discovery.discover_pipeline_command() == [str(canonical)]
+        assert pipeline_discovery.discover_pipeline_command(str(tmp_path)) == [
+            str(canonical)
+        ]
 
 
 class TestUpstreamAllowlist:
@@ -145,7 +151,7 @@ class TestDiscoverCommand:
             "which",
             lambda name: str(fake_binary) if name == "cortex-pipeline" else None,
         )
-        cmd = pipeline_discovery.discover_pipeline_command()
+        cmd = pipeline_discovery.discover_pipeline_command(str(tmp_path))
         assert cmd == [str(fake_binary)]
 
     def test_no_pipeline_returns_none(self, monkeypatch, tmp_path):
@@ -157,7 +163,7 @@ class TestDiscoverCommand:
             "_SOURCE_DIRS",
             ("/nonexistent/ai-architect-mcp-codebase",),
         )
-        assert pipeline_discovery.discover_pipeline_command() is None
+        assert pipeline_discovery.discover_pipeline_command(str(tmp_path)) is None
 
     def test_source_checkout_with_built_binary(self, tmp_path, monkeypatch):
         """Sibling git checkout wins when PATH has nothing."""
@@ -169,7 +175,7 @@ class TestDiscoverCommand:
         built.write_text("#!/bin/sh\n")
         built.chmod(0o755)
         monkeypatch.setattr(pipeline_discovery, "_SOURCE_DIRS", (str(source),))
-        cmd = pipeline_discovery.discover_pipeline_command()
+        cmd = pipeline_discovery.discover_pipeline_command(str(tmp_path))
         assert cmd == [str(built)]
 
     def test_install_symlink_wins_when_present(self, tmp_path, monkeypatch):
@@ -192,7 +198,7 @@ class TestDiscoverCommand:
         # PATH and sources empty — should still find the symlink.
         monkeypatch.setattr(pipeline_discovery.shutil, "which", lambda n: None)
         monkeypatch.setattr(pipeline_discovery, "_SOURCE_DIRS", ())
-        cmd = pipeline_discovery.discover_pipeline_command()
+        cmd = pipeline_discovery.discover_pipeline_command(str(tmp_path))
         assert cmd == [str(symlink)]
 
 
@@ -204,10 +210,10 @@ class TestEnsureConnection:
         monkeypatch.setattr(
             pipeline_discovery,
             "discover_pipeline_command",
-            lambda: ["/usr/local/bin/automatised-pipeline"],
+            lambda project_root: ["/usr/local/bin/automatised-pipeline"],
         )
 
-        result = pipeline_discovery.ensure_pipeline_connection()
+        result = pipeline_discovery.ensure_pipeline_connection(str(tmp_path))
         assert result["action"] == "wrote_config"
         assert config_path.exists()
         data = json.loads(config_path.read_text())
@@ -220,9 +226,9 @@ class TestEnsureConnection:
         config_path = tmp_path / "mcp-connections.json"
         monkeypatch.setattr(pipeline_discovery, "MCP_CONNECTIONS_PATH", config_path)
         monkeypatch.setattr(
-            pipeline_discovery, "discover_pipeline_command", lambda: None
+            pipeline_discovery, "discover_pipeline_command", lambda project_root: None
         )
-        result = pipeline_discovery.ensure_pipeline_connection()
+        result = pipeline_discovery.ensure_pipeline_connection(str(tmp_path))
         assert result["action"] == "no_pipeline_found"
         assert not config_path.exists()
 
@@ -249,10 +255,11 @@ class TestEnsureConnection:
         monkeypatch.setattr(
             pipeline_discovery,
             "discover_pipeline_command",
-            lambda: ["/usr/local/bin/automatised-pipeline"],  # would overwrite
+            # would overwrite
+            lambda project_root: ["/usr/local/bin/automatised-pipeline"],
         )
 
-        result = pipeline_discovery.ensure_pipeline_connection()
+        result = pipeline_discovery.ensure_pipeline_connection(str(tmp_path))
         assert result["action"] == "already_configured"
         # Verify file unchanged.
         data = json.loads(config_path.read_text())
@@ -278,7 +285,7 @@ class TestEnsureConnection:
         # Simulate fresh discovery finding nothing (no install attempted
         # because we monkeypatch install_pipeline import).
         monkeypatch.setattr(
-            pipeline_discovery, "discover_pipeline_command", lambda: None
+            pipeline_discovery, "discover_pipeline_command", lambda project_root: None
         )
         from mcp_server.infrastructure import pipeline_installer
 
@@ -288,7 +295,7 @@ class TestEnsureConnection:
             lambda: {"action": "missing_toolchain", "missing": ["cargo"]},
         )
 
-        result = pipeline_discovery.ensure_pipeline_connection()
+        result = pipeline_discovery.ensure_pipeline_connection(str(tmp_path))
         # Other servers preserved; stale codebase entry gone.
         data = json.loads(config_path.read_text())
         assert "codebase" not in data["servers"]
@@ -312,10 +319,10 @@ class TestEnsureConnection:
         monkeypatch.setattr(
             pipeline_discovery,
             "discover_pipeline_command",
-            lambda: ["/usr/local/bin/automatised-pipeline"],
+            lambda project_root: ["/usr/local/bin/automatised-pipeline"],
         )
 
-        result = pipeline_discovery.ensure_pipeline_connection()
+        result = pipeline_discovery.ensure_pipeline_connection(str(tmp_path))
         assert result["action"] == "added_codebase"
         data = json.loads(config_path.read_text())
         # Both entries preserved
@@ -333,9 +340,9 @@ class TestEnsureConnection:
         monkeypatch.setattr(
             pipeline_discovery,
             "discover_pipeline_command",
-            lambda: ["/usr/local/bin/automatised-pipeline"],
+            lambda project_root: ["/usr/local/bin/automatised-pipeline"],
         )
-        pipeline_discovery.ensure_pipeline_connection()
+        pipeline_discovery.ensure_pipeline_connection(str(tmp_path))
         data = json.loads(config_path.read_text())
         assert data["servers"]["codebase"]["callTimeoutMs"] == 0
 
@@ -561,14 +568,14 @@ class TestInstallPipeline:
         config_path = tmp_path / "mcp-connections.json"
         monkeypatch.setattr(pipeline_discovery, "MCP_CONNECTIONS_PATH", config_path)
         monkeypatch.setattr(
-            pipeline_discovery, "discover_pipeline_command", lambda: None
+            pipeline_discovery, "discover_pipeline_command", lambda project_root: None
         )
         monkeypatch.setattr(
             pipeline_installer,
             "install_pipeline",
             lambda: {"action": "missing_toolchain", "missing": ["cargo", "git"]},
         )
-        result = pipeline_discovery.ensure_pipeline_connection()
+        result = pipeline_discovery.ensure_pipeline_connection(str(tmp_path))
         assert result["action"] == "no_pipeline_found"
         assert not config_path.exists()
 

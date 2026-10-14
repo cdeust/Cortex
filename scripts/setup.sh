@@ -340,6 +340,7 @@ fi
 
 PYTHONPATH="${PROJECT_DIR}:${PYTHONPATH:-}" \
   python3 -c "
+import os
 from mcp_server.infrastructure.pipeline_installer import install_pipeline
 from mcp_server.infrastructure.pipeline_discovery import ensure_pipeline_connection
 r = install_pipeline()
@@ -382,7 +383,7 @@ elif action == 'home_readonly':
 else:
     print(f'[!!] pipeline install failed ({action}); ingest_codebase will be unavailable')
 
-cfg = ensure_pipeline_connection()
+cfg = ensure_pipeline_connection(os.getcwd())
 cfg_action = cfg.get('action', 'unknown')
 if cfg_action == 'no_pipeline_found':
     print('[!!] mcp-connections.json not written — ingest_codebase will fail until you')
