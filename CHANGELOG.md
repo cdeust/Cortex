@@ -35,6 +35,17 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Recall returns the same memories whatever the table's physical layout**
+  (ADR-1106). Every `ORDER BY ... LIMIT` on the recall path cut exact score
+  ties in heap order, which VACUUM, CLUSTER and free-space reuse change: the
+  five `recall_memories()` pools, its final cut, `spread_activation_memories()`,
+  `search_fts`, `search_by_tag_vector` and the hook recalls. LongMemEval
+  `f4f1d8a4` (110 rows at heat 0.05) dropped 10 arbitrary rows from the heat
+  pool, and two runs of the same commit gave different scores. Exact ties now
+  go to the newer memory (`created_at DESC, id DESC`) on PostgreSQL and SQLite;
+  entity name lookups take the oldest row, the one `insert_entity` returns.
+  Existing databases get the new function on the next store open (schema
+  hash). The HNSW plan is kept (Index Scan + Incremental Sort).
 - **Recall and every vector query reach past `hnsw.ef_search`** (ADR-1105).
   pgvector's HNSW index returned at most 40 candidates before the filters
   (superseded, stale, other domain, heat, tag, age) were applied, so relevant

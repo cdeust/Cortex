@@ -3583,6 +3583,10 @@
     "ADR-1105": {
       "mirror": "ADR-1105-every-ann-query-scans-the-hnsw-index-iteratively.md",
       "path": "adr/cortex/1105-every-ann-query-scans-the-hnsw-index-iteratively.md"
+    },
+    "ADR-1106": {
+      "mirror": "ADR-1106-recall-breaks-exact-score-ties-newest-first.md",
+      "path": "adr/cortex/1106-recall-breaks-exact-score-ties-newest-first.md"
     }
   },
   "project": "cortex",
