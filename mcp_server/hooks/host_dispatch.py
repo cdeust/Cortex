@@ -35,10 +35,11 @@ def apply_project_root(environ: MutableMapping[str, str], cwd: str | None) -> No
     is the source event's ``cwd`` field, or ``None`` when the event carried
     none. Postcondition: ``environ[_PROJECT_ROOT_VAR]`` is unchanged if it
     was already set OR ``cwd`` is falsy; otherwise it is set to ``cwd``.
-    Read from ``pipeline_impact_bump.py:195``, ``post_commit_reindex.py:255``
-    and ``session_start.py:919``, all of which fall back to ``os.getcwd()``
-    when this variable is unset -- under the Claude launcher ``cwd`` is the
-    plugin root, so an existing value must win.
+    ``session_start`` and ``post_commit_reindex`` read it through
+    ``resolve_project_root(event, os.environ)`` and spawn nothing when it is
+    unresolved; ``pipeline_impact_bump`` still falls back to ``os.getcwd()``
+    when it is unset -- under the Claude launcher ``cwd`` is the plugin root,
+    so an existing value must win.
     """
     if cwd and _PROJECT_ROOT_VAR not in environ:
         environ[_PROJECT_ROOT_VAR] = cwd

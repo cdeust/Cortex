@@ -1,7 +1,8 @@
 """The sibling source-checkout scan is anchored on the session's project root.
 
-ADR-0584: the ``_SOURCE_DIRS`` entries are "relative to each user's working
-dir (the MCP server runs in the user's project root)". A hook runs under
+ADR-0584 preserves the original comment: the ``_SOURCE_DIRS`` entries are
+"relative to each user's working dir (the MCP server runs in the user's
+project root)". That premise is false: a hook runs under
 ``scripts/launcher.py``, which ``chdir``s to the plugin root first, so a scan
 relative to ``os.getcwd()`` probed the plugin's siblings, not the project's:
 from the main checkout it found ``../ai-architect-mcp-codebase`` and the

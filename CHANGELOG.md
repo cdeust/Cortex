@@ -50,7 +50,11 @@ adheres to [Semantic Versioning](https://semver.org/).
   when it is unresolved; `discover_pipeline_command` and
   `ensure_pipeline_connection` take the project root as their sibling-scan
   anchor, and `None` scans no sibling. The server probe anchors on
-  `CLAUDE_PROJECT_ROOT`; `setup.sh` on its working directory.
+  `CLAUDE_PROJECT_ROOT`, which only the hook dispatcher exports, so in the
+  MCP server process the sibling scan is off unless the host exports it: a
+  server started from a checkout next to `../ai-architect-mcp-codebase` no
+  longer finds that build (marketplace and `PATH` discovery are unchanged).
+  `setup.sh` anchors on the checkout it installs, never on its cwd.
 
 - **Hooks write UTF-8 to stdout and stderr on every platform and entry point,
   and the wiki reindex reads and writes UTF-8** (#688). A text-mode stdout
