@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 import threading
 
 # The initialize-handshake revisions of the locked MCP SDK (uv.lock mcp
@@ -25,6 +26,7 @@ SERVER_INFO = {"name": "methodology-agent", "version": "1.0.0"}
 CHILD_START_SECONDS = 1800  # source: ADR-1104
 CHILD_EXIT_SECONDS = 10  # source: ADR-1104 (an idle server exits on EOF in < 1 s)
 NOT_READY_CODE = -32002  # source: JSON-RPC 2.0 server-error range (-32000..-32099)
+START_FAILED_CODE = -32003  # source: JSON-RPC 2.0 server-error range (-32000..-32099)
 METHOD_NOT_FOUND = -32601  # source: JSON-RPC 2.0 section 5.1
 _EMPTY_LISTS = {
     "tools/list": "tools",
@@ -67,14 +69,24 @@ def initialize_result(request_id, version: str) -> dict:
                 "tools": changing,
             },
             "serverInfo": SERVER_INFO,
-            "instructions": tool_profiles.instructions(tool_profiles.resolve([])),
+            # The server resolves its profile from the args after the module.
+            "instructions": tool_profiles.instructions(
+                tool_profiles.resolve(sys.argv[2:])
+            ),
         },
     }
 
 
-def local_answer(message: dict) -> dict:
-    """The stand-in's answer to a request before hand-over."""
+def local_answer(message: dict, failure: str = "") -> dict:
+    """The stand-in's answer to a request it handles itself.
+
+    After a failed hand-over (``failure``), every request but ``ping`` gets
+    that cause as an error: an empty list would read as a working server.
+    """
     method, request_id = message["method"], message["id"]
+    if failure and method != "ping":
+        error = {"code": START_FAILED_CODE, "message": failure}
+        return {"jsonrpc": "2.0", "id": request_id, "error": error}
     if method in _EMPTY_LISTS:
         return {
             "jsonrpc": "2.0",

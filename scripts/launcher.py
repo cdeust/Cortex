@@ -108,10 +108,15 @@ def _apply_backend() -> None:
     if option and not os.environ.get("DATABASE_URL", "").strip():
         os.environ["DATABASE_URL"] = option
     from mcp_server.infrastructure.backend_marker import (  # noqa: PLC0415 — resolvable once plugin_root is on sys.path
+        BackendMarkerError,
         apply_backend_resolution,
     )
 
-    apply_backend_resolution(os.environ, default="sqlite")
+    try:
+        apply_backend_resolution(os.environ, default="sqlite")
+    except BackendMarkerError as exc:
+        print(f"[cortex-launcher] Cortex not ready: {exc}", file=sys.stderr)
+        sys.exit(1)
     if (
         "DATABASE_URL" not in os.environ
         and os.environ.get("CORTEX_MEMORY_STORE_BACKEND", "") == "postgresql"

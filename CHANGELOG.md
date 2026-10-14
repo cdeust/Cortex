@@ -55,7 +55,9 @@ adheres to [Semantic Versioning](https://semver.org/).
   set and shows "Cortex ready: <store>, <n> memories; <how recall ranks>"
   or "Cortex not ready: <cause>"; semantic search installs in one background
   job from `uv.lock`; installs hold an OS lock released on the holder's
-  death. The `postInstall` field and the PostgreSQL install recipes printed
+  death. A backend marker that exists but is invalid is an error naming the
+  file, never read as absent; a stand-in whose server cannot start answers
+  every request with that cause. The `postInstall` field and the PostgreSQL install recipes printed
   by the hook are removed. `scripts/install_e2e/run.py` runs in CI on Linux
   and macOS.
 

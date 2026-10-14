@@ -18,6 +18,7 @@ import pytest
 from mcp_server.infrastructure.backend_marker import (
     apply_backend_resolution,
     effective_backend,
+    BackendMarkerError,
     read_backend_marker,
     resolve_backend_env,
 )
@@ -39,14 +40,17 @@ class TestReadBackendMarker:
     def test_missing_file_returns_none(self, tmp_path):
         assert read_backend_marker(tmp_path / "absent.json") is None
 
-    def test_invalid_json_returns_none(self, tmp_path):
-        assert read_backend_marker(_marker(tmp_path, "{not json")) is None
-
-    def test_non_dict_returns_none(self, tmp_path):
-        assert read_backend_marker(_marker(tmp_path, ["sqlite"])) is None
-
-    def test_unknown_backend_returns_none(self, tmp_path):
-        assert read_backend_marker(_marker(tmp_path, {"backend": "mongodb"})) is None
+    @pytest.mark.parametrize(
+        "content", ["{not json", ["sqlite"], {"backend": "mongodb"}]
+    )
+    def test_an_invalid_marker_is_an_error_not_an_absence(self, tmp_path, content):
+        """ADR-1104: an absent marker lets the plugin default apply; a corrupt
+        one must not, or a PostgreSQL user lands on SQLite."""
+        path = _marker(tmp_path, content)
+        with pytest.raises(BackendMarkerError, match=str(path)):
+            read_backend_marker(path)
+        with pytest.raises(BackendMarkerError):
+            apply_backend_resolution({}, marker_path=path, default="sqlite")
 
     @pytest.mark.parametrize("backend", ["sqlite", "postgresql"])
     def test_valid_marker_returned(self, tmp_path, backend):

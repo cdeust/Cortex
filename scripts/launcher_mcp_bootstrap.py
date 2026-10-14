@@ -51,6 +51,7 @@ class StandIn:
         self.child_started = threading.Event()
         self.agreed_version = ""
         self.init_params: dict = {}
+        self.failure = ""  # why the real server never started; answered from then on
 
     def to_host(self, message: dict) -> None:
         self.write_line(json.dumps(message))
@@ -77,26 +78,31 @@ class StandIn:
             self.handing_over = threading.Thread(target=self.hand_over, daemon=True)
             self.handing_over.start()
             return
-        self.to_host(_wire.local_answer(message))
+        self.to_host(_wire.local_answer(message, self.failure))
 
     def hand_over(self) -> None:
         """Start the real server, initialize it, then forward both ways."""
         env = dict(os.environ)
         env[DIRECT_ENV] = "1"
-        self.child = subprocess.Popen(
-            self.child_argv,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            env=env,
-            text=True,
-            encoding="utf-8",
-        )
-        self.child_started.set()
+        try:
+            self.child = subprocess.Popen(
+                self.child_argv,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                env=env,
+                text=True,
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            self._fail(f"the server could not start: {exc}")
+            return
+        finally:
+            self.child_started.set()
         try:
             self._initialize_child()
         except _wire.HandOverError as exc:
-            print(f"[cortex-launcher] MCP hand-over failed: {exc}", file=sys.stderr)
             self.child.kill()
+            self._fail(str(exc))
             return
         self.forwarding.set()
         threading.Thread(target=self._copy_child_output, daemon=True).start()
@@ -104,6 +110,13 @@ class StandIn:
             self.to_host(
                 {"jsonrpc": "2.0", "method": f"notifications/{kind}/list_changed"}
             )
+
+    def _fail(self, cause: str) -> None:
+        """No server will come: every later request gets this cause, not
+        "installing", and the host is told its lists changed (to errors)."""
+        self.failure = f"Cortex could not start its MCP server: {cause}"
+        print(f"[cortex-launcher] {self.failure}", file=sys.stderr)
+        self.to_host({"jsonrpc": "2.0", "method": "notifications/tools/list_changed"})
 
     def _initialize_child(self) -> None:
         assert self.child is not None and self.child.stdin is not None

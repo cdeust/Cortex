@@ -130,7 +130,7 @@ def test_a_server_that_dies_before_initialize_is_reported(modules, capsys):
     stand_in = bootstrap.StandIn([sys.executable, "-c", "raise SystemExit(3)"], _Host())
     stand_in.agreed_version = "2025-11-25"
     stand_in.hand_over()
-    assert "MCP hand-over failed" in capsys.readouterr().err
+    assert "could not start its MCP server" in capsys.readouterr().err
     assert not stand_in.forwarding.is_set()
 
 
@@ -171,3 +171,36 @@ def test_the_stand_in_describes_itself_as_the_real_server_does(modules, tmp_path
 def test_what_runs_before_the_reexec_parses_as_python_3_9(name: str):
     """A Mac's /usr/bin/python3 is 3.9: these files run on it before re-exec."""
     ast.parse((SCRIPTS / name).read_text(encoding="utf-8"), feature_version=(3, 9))
+
+
+def test_a_failed_hand_over_answers_with_the_cause_never_installing(modules, capsys):
+    """Review of #749: the host must not see a working server with no tools."""
+    bootstrap, wire = modules
+    host = _Host()
+    stand_in = bootstrap.StandIn([sys.executable, "-c", "raise SystemExit(3)"], host)
+    stand_in.handle(_initialize())
+    stand_in.handing_over.join(30)
+    stand_in.handle(_request(1, "tools/list"))
+    stand_in.handle(_request(2, "tools/call", {"name": "recall"}))
+    stand_in.handle(_request(3, "ping"))
+    by_id = {m["id"]: m for m in host.messages if "id" in m}
+    for request_id in (1, 2):
+        error = by_id[request_id]["error"]
+        assert error["code"] == wire.START_FAILED_CODE
+        assert "could not start its MCP server" in error["message"]
+        assert "code 3" in error["message"]
+    assert by_id[3]["result"] == {}
+    assert "could not start its MCP server" in capsys.readouterr().err
+
+
+def test_a_server_that_cannot_be_executed_is_reported(modules, tmp_path):
+    bootstrap, wire = modules
+    host = _Host()
+    stand_in = bootstrap.StandIn([str(tmp_path / "no-such-python")], host)
+    stand_in.handle(_initialize())
+    stand_in.handing_over.join(30)
+    stand_in.handle(_request(1, "tools/list"))
+    error = next(m for m in host.messages if m.get("id") == 1)["error"]
+    assert error["code"] == wire.START_FAILED_CODE
+    assert "could not start" in error["message"]
+    stand_in.close()

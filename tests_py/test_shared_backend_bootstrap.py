@@ -98,9 +98,33 @@ def test_explicit_backend_takes_precedence_over_marker(tmp_path, overrides):
     )
 
 
-@pytest.mark.parametrize("marker", [None, {"backend": "unknown"}])
-def test_no_valid_marker_keeps_existing_auto_behavior(tmp_path, marker):
-    assert probe(tmp_path, marker)["backend"] == "auto"
+def test_no_marker_keeps_existing_auto_behavior(tmp_path):
+    assert probe(tmp_path, None)["backend"] == "auto"
+
+
+def test_an_invalid_marker_stops_the_server_and_names_the_file(tmp_path):
+    """ADR-1104: a corrupt marker is never read as "no marker"."""
+    root = tmp_path / "claude"
+    (root / "methodology").mkdir(parents=True)
+    marker = root / "methodology" / "backend.json"
+    marker.write_text(json.dumps({"backend": "unknown"}))
+    env = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.startswith(("CORTEX_", "CLAUDE_", "PYTHON"))
+        and key != "DATABASE_URL"
+    }
+    env.update(CORTEX_CLAUDE_DIR=str(root), PYTHONPATH=str(REPO))
+    result = subprocess.run(
+        [sys.executable, "-c", PROBE],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=PROCESS_TIMEOUT,
+    )
+    assert result.returncode != 0
+    assert "BackendMarkerError" in result.stderr and str(marker) in result.stderr
 
 
 def test_blank_manifest_dsn_does_not_override_marker(tmp_path):

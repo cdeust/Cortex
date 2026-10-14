@@ -48,21 +48,33 @@ _BACKEND_ALIASES = {
 }
 
 
-def read_backend_marker(path: Path | None = None) -> dict | None:
-    """Read the installer's backend marker; ``None`` when absent/invalid.
+class BackendMarkerError(ValueError):
+    """The marker exists but cannot say which backend: never guess one."""
 
-    source: ADR-0505"""
+
+def read_backend_marker(path: Path | None = None) -> dict | None:
+    """Read the installer's backend marker; ``None`` only when it is absent.
+
+    An unreadable or invalid marker raises ``BackendMarkerError`` naming the
+    file: treating it as absent would hand a PostgreSQL user the SQLite
+    default (ADR-1104).
+
+    source: ADR-0505
+    source: ADR-1104"""
     marker_path = path or BACKEND_MARKER_PATH
     try:
         data = json.loads(marker_path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         return None
     except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
-        logger.warning("unreadable backend marker %s: %s", marker_path, exc)
-        return None
+        raise BackendMarkerError(
+            f"backend marker {marker_path} is unreadable ({exc}); fix or delete it"
+        ) from exc
     if not isinstance(data, dict) or data.get("backend") not in VALID_BACKENDS:
-        logger.warning("invalid backend marker %s: %r", marker_path, data)
-        return None
+        raise BackendMarkerError(
+            f"backend marker {marker_path} names no backend of {sorted(VALID_BACKENDS)}"
+            f" ({data!r}); fix or delete it"
+        )
     return data
 
 

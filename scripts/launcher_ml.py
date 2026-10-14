@@ -127,4 +127,12 @@ def run_job(deps_dir: str, install, run) -> None:
         _write_status(deps_dir, {"status": "installing", "pid": os.getpid()})
         os.environ[STATUS_ENV] = str(status_file(deps_dir))
         install()
+        if not launcher_deps.set_ready(deps_dir, "ml"):
+            # The install printed its own cause into the job log; record
+            # that cause's place, not the ImportError a warm-up would hit.
+            _write_status(
+                deps_dir,
+                {"status": "failed", "error": "the locked ML set did not install"},
+            )
+            return
         run()

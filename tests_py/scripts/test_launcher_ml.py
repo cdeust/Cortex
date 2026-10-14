@@ -97,6 +97,7 @@ def test_run_job_marks_the_attempt_then_installs_then_warms_up(
     ml_mod, deps_dir, monkeypatch
 ):
     monkeypatch.setenv(ml_mod.STATUS_ENV, "restored by monkeypatch after the test")
+    monkeypatch.setattr(ml_mod.launcher_deps, "set_ready", lambda d, k: True)
     order: list = []
     ml_mod.run_job(
         deps_dir, lambda: order.append("install"), lambda: order.append("run")
@@ -118,3 +119,14 @@ def test_the_status_variable_matches_the_warmup_module(ml_mod):
     from mcp_server.infrastructure import embedding_warmup
 
     assert embedding_warmup.STATUS_ENV == ml_mod.STATUS_ENV
+
+
+def test_a_failed_ml_install_is_recorded_as_such_and_skips_the_warm_up(
+    ml_mod, deps_dir, monkeypatch
+):
+    monkeypatch.setenv(ml_mod.STATUS_ENV, "restored by monkeypatch after the test")
+    monkeypatch.setattr(ml_mod.launcher_deps, "set_ready", lambda d, k: False)
+    ml_mod.run_job(deps_dir, lambda: None, lambda: pytest.fail("warmed up"))
+    state, detail = ml_mod.state(deps_dir)
+    assert state == "failed"
+    assert "the locked ML set did not install" in detail
