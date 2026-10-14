@@ -48,7 +48,9 @@ _LENGTH_FIELD = 4
 _AUTH_OK = 0  # source: PostgreSQL docs, protocol-message-formats, AuthenticationOk
 _TERMINATE = b"X\x00\x00\x00\x04"  # source: PostgreSQL docs, protocol-message-formats
 _WRITTEN_BY = "launcher (first launch, ADR-1104)"  # source: ADR-1104
-_PASSWORD_ASKED = "password"  # sentinel: the server wants credentials
+_CREDENTIALS_ASKED = (
+    "credentials"  # sentinel: the server asks the client to authenticate
+)
 
 
 def has_earlier_state(methodology_dir: Path, marker_name: str) -> bool:
@@ -105,6 +107,9 @@ def _negotiate_ssl(sock: socket.socket, deadline: _Deadline) -> socket.socket:
         return sock
     context = ssl.create_default_context()
     context.check_hostname = False
+    # source: PostgreSQL docs, runtime-config-connection, ssl_min_protocol_version
+    # (default TLSv1.2 since PostgreSQL 13)
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
     context.verify_mode = ssl.CERT_NONE
     deadline.arm(sock)
     return context.wrap_socket(sock, server_hostname=LEGACY_HOST)
@@ -123,11 +128,11 @@ def _session_opens(sock: socket.socket, deadline: _Deadline) -> str:
             fields = [f for f in payload.split(b"\x00") if f[:1] == b"M"]
             return fields[0][1:].decode(errors="replace") if fields else "error"
         if kind == b"R" and struct.unpack("!i", payload[:4])[0] != _AUTH_OK:
-            return _PASSWORD_ASKED
+            return _CREDENTIALS_ASKED
 
 
 def local_database_answer(user: str) -> str:
-    """'' when the local ``cortex`` database opens a session, ``"password"``
+    """'' when the local ``cortex`` database opens a session, ``"credentials"``
     when it asks for credentials, else the reason it does not answer."""
     deadline = _Deadline(PROBE_SECONDS)
     try:
@@ -156,9 +161,9 @@ def _legacy_store(environ: dict) -> str:
     except LookupError as exc:
         return str(exc)
     reason = local_database_answer(user)
-    if reason != _PASSWORD_ASKED:
+    if reason != _CREDENTIALS_ASKED:
         return reason
-    if launcher_pgpass.has_password(
+    if launcher_pgpass.has_credentials(
         environ, LEGACY_HOST, LEGACY_PORT, LEGACY_DATABASE, user
     ):
         return ""

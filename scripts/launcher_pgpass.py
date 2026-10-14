@@ -71,7 +71,9 @@ def _file_has_entry(path: Path, wanted: tuple) -> bool:
     return False
 
 
-def has_password(environ: dict, host: str, port: int, database: str, user: str) -> bool:
+def has_credentials(
+    environ: dict, host: str, port: int, database: str, user: str
+) -> bool:
     """Whether libpq would send a password for this connection."""
     if environ.get("PGPASSWORD"):
         return True

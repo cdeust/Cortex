@@ -25,7 +25,7 @@ def _pgpass(tmp_path: Path, text: str, mode: int = 0o600) -> dict:
 
 
 def test_pgpassword_counts():
-    assert launcher_pgpass.has_password({"PGPASSWORD": "x"}, *_TARGET)
+    assert launcher_pgpass.has_credentials({"PGPASSWORD": "x"}, *_TARGET)
 
 
 @pytest.mark.parametrize(
@@ -34,7 +34,7 @@ def test_pgpassword_counts():
 )
 def test_a_matching_line_counts(tmp_path, line):
     env = _pgpass(tmp_path, "# comment\n\n" + line + "\n")
-    assert launcher_pgpass.has_password(env, *_TARGET)
+    assert launcher_pgpass.has_credentials(env, *_TARGET)
 
 
 @pytest.mark.parametrize(
@@ -42,24 +42,24 @@ def test_a_matching_line_counts(tmp_path, line):
              "localhost:5432:other:me:pw", "localhost:5432:cortex:you:pw"],
 )  # fmt: skip
 def test_a_line_for_another_connection_does_not(tmp_path, line):
-    assert not launcher_pgpass.has_password(_pgpass(tmp_path, line), *_TARGET)
+    assert not launcher_pgpass.has_credentials(_pgpass(tmp_path, line), *_TARGET)
 
 
 def test_escaped_colons_are_part_of_a_field(tmp_path):
     env = _pgpass(tmp_path, "localhost:5432:cortex:me:p\\:w\n")
-    assert launcher_pgpass.has_password(env, *_TARGET)
+    assert launcher_pgpass.has_credentials(env, *_TARGET)
     assert launcher_pgpass._fields("a\\:b:c\\\\d") == ["a:b", "c\\d"]
 
 
 def test_the_first_match_decides(tmp_path):
     env = _pgpass(tmp_path, "localhost:5432:cortex:me:\n*:*:*:*:pw\n")
-    assert not launcher_pgpass.has_password(env, *_TARGET)
+    assert not launcher_pgpass.has_credentials(env, *_TARGET)
 
 
 @pytest.mark.skipif(os.name == "nt", reason="libpq checks permissions on POSIX only")
 def test_a_file_others_can_read_is_ignored_as_libpq_does(tmp_path):
     env = _pgpass(tmp_path, "*:*:*:*:pw\n", mode=0o644)
-    assert not launcher_pgpass.has_password(env, *_TARGET)
+    assert not launcher_pgpass.has_credentials(env, *_TARGET)
 
 
 def test_pguser_wins_over_the_login():
