@@ -4,7 +4,8 @@ Covers:
   * Tool name gating (only Edit/Write/MultiEdit)
   * Cooldown deduplication
   * Pipeline call + symbol extraction
-  * Heat-bump SQL assembly (with/without symbols)
+  * Heat bump through the configured store (a real SQLite store here, #750)
+  * Project root from the event, never the launcher's cwd (#750)
 
 Source: docs/program/phase-5-pool-admission-design.md pipeline-3;
 user directive "codebase analysis feeding the memory and wiki".
@@ -17,12 +18,14 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from mcp_server.hooks import pipeline_impact_bump as hook
-from tests_py.conftest import requires_psycopg  # type: ignore
+from mcp_server.infrastructure import memory_store
+from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 
 
 @pytest.fixture(autouse=True)
 def _clean_cooldown(tmp_path, monkeypatch):
     monkeypatch.setattr(hook, "_COOLDOWN_FILE", tmp_path / "cooldown.json")
+    monkeypatch.setenv("CLAUDE_PROJECT_ROOT", str(tmp_path))
     yield
 
 
@@ -77,29 +80,74 @@ class TestCooldown:
             mock_run.assert_not_called()
 
 
-@requires_psycopg
+@pytest.fixture()
+def sqlite_store(tmp_path, monkeypatch):
+    """A real SQLite store served as the process-wide shared store."""
+    store = SqliteMemoryStore(str(tmp_path / "memory.db"))
+    monkeypatch.setattr(memory_store, "get_shared_store", lambda *a, **k: store)
+    yield store
+    store.close()
+
+
 class TestHeatBump:
     def test_no_symbols_returns_zero(self):
         assert hook._bump_heat_for_symbols([]) == 0
 
-    def test_sql_query_shape(self):
-        """Assembles a SQL UPDATE with one ILIKE clause per symbol and
-        heat_base_set_at refresh (A3 canonical writer path)."""
-        # Grab the SQL without running a real DB — fake psycopg.connect
-        # and verify the call args.
-        fake_conn = MagicMock()
-        fake_conn.execute.return_value = MagicMock(rowcount=5)
-        with patch.object(hook, "psycopg", create=True, MagicMock=MagicMock):
-            with patch("psycopg.connect", return_value=fake_conn):
-                with patch.dict("os.environ", {"DATABASE_URL": "postgresql://x/y"}):
-                    count = hook._bump_heat_for_symbols(["foo::bar", "baz::qux"])
-        assert count == 5
-        # Assert SQL includes A3 columns and uses ILIKE for each symbol
-        call_args = fake_conn.execute.call_args
-        sql = call_args[0][0]
-        assert "heat_base = LEAST(heat_base + %s, 1.0)" in sql
-        assert "heat_base_set_at = NOW()" in sql
-        assert sql.count("content ILIKE %s") == 2
+    def test_bumps_mentioning_memories_on_sqlite(self, sqlite_store):
+        hit = sqlite_store.insert_memory(
+            {"content": "handle_tool_call parses the request", "heat": 0.5}
+        )
+        miss = sqlite_store.insert_memory(
+            {"content": "unrelated release notes", "heat": 0.5}
+        )
+        hot = sqlite_store.insert_memory(
+            {"content": "handle_tool_call is hot already", "heat": 1.0}
+        )
+        assert hook._bump_heat_for_symbols(["handle_tool_call"]) == 1
+        assert sqlite_store.get_memory(hit)["heat_base"] == pytest.approx(
+            0.5 + hook._IMPACT_BOOST
+        )
+        assert sqlite_store.get_memory(miss)["heat_base"] == pytest.approx(0.5)
+        assert sqlite_store.get_memory(hot)["heat_base"] == pytest.approx(1.0)
+
+    def test_a_memory_matching_two_symbols_is_bumped_once(self, sqlite_store):
+        both = sqlite_store.insert_memory(
+            {"content": "parse_args feeds handle_tool_call", "heat": 0.5}
+        )
+        assert hook._bump_heat_for_symbols(["parse_args", "handle_tool_call"]) == 1
+        assert sqlite_store.get_memory(both)["heat_base"] == pytest.approx(
+            0.5 + hook._IMPACT_BOOST
+        )
+
+
+class TestProjectRoot:
+    """#750: the project is the event's, never the launcher's plugin-root cwd."""
+
+    def _run(self, event):
+        with patch.object(hook, "_pipeline_detect_changes", new=MagicMock()) as pipe:
+            with patch("asyncio.run", return_value=[]):
+                hook.process_event(event)
+        return pipe
+
+    def test_event_cwd_is_the_project(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("CLAUDE_PROJECT_ROOT", raising=False)
+        plugin = tmp_path / "plugin"
+        plugin.mkdir()
+        monkeypatch.chdir(plugin)
+        pipe = self._run(
+            {
+                "tool_name": "Edit",
+                "tool_input": {"file_path": "/proj/a.py"},
+                "cwd": "/proj",
+            }
+        )
+        pipe.assert_called_once_with("/proj", "/proj/a.py")
+
+    def test_unresolved_project_calls_no_pipeline(self, monkeypatch, capsys):
+        monkeypatch.delenv("CLAUDE_PROJECT_ROOT", raising=False)
+        pipe = self._run({"tool_name": "Edit", "tool_input": {"file_path": "/a.py"}})
+        pipe.assert_not_called()
+        assert "project root unresolved" in capsys.readouterr().err
 
 
 class TestProcessEventIntegration:

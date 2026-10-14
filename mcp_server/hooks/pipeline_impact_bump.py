@@ -14,21 +14,17 @@ source: ADR-0493"""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from typing_extensions import LiteralString
-
 import asyncio
 import json
 import os
 import sys
 import time
-from typing import Any, cast
+from typing import Any
 
 from mcp_server.hooks.output_streams import use_utf8_output
 from mcp_server.hooks.stdin_event import read_event_text
 from mcp_server.shared.hook_state_paths import cooldown_path
+from mcp_server.shared.project_scope import resolve_project_root
 
 _LOG_PREFIX = "[pipeline-impact-bump]"
 _COOLDOWN_SECONDS = 30
@@ -140,45 +136,30 @@ async def _pipeline_detect_changes(project_root: str, file_path: str) -> list[st
 
 
 def _bump_heat_for_symbols(symbol_names: list[str]) -> int:
-    """Boost heat_base on memories that mention any of these symbols.
+    """Boost heat_base on the current memories that mention any of these
+    symbols, through the configured store (SQLite or PostgreSQL).
 
-    Uses the canonical A3 writer path. Returns number of memories bumped.
+    A psycopg-only UPDATE did nothing on SQLite, the plugin default, after
+    the hook had already paid for the graph lookup and the ``detect_changes``
+    call (issue #750). Uses the canonical A3 writer (``bump_heat_raw``).
+    Returns the number of memories bumped.
     """
     if not symbol_names:
         return 0
-    try:
-        import psycopg  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
-    except ImportError:
-        return 0
+    from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: PLC0415 — hook latency boundary: rejected events never import the store
 
-    db_url = os.environ.get("DATABASE_URL", "postgresql://localhost:5432/cortex")
-    try:
-        conn = psycopg.connect(db_url, autocommit=True)
-    except psycopg.Error:
-        return 0
-
-    # Build an ILIKE OR clause with bounded params. Match any qualified name.
-    try:
-        like_clauses = " OR ".join(["content ILIKE %s"] * len(symbol_names))
-        params = [f"%{name}%" for name in symbol_names]
-        sql = (
-            "UPDATE memories "
-            "SET heat_base = LEAST(heat_base + %s, 1.0), "
-            "    heat_base_set_at = NOW(), "
-            "    last_accessed = NOW() "
-            "WHERE NOT is_benchmark "
-            "  AND NOT is_stale "
-            "  AND heat_base < 1.0 "
-            "  AND (" + like_clauses + ")"
-        )
-        result = conn.execute(cast("LiteralString", sql), [_IMPACT_BOOST, *params])
-        count = result.rowcount if result else 0
-    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
-        _log(f"heat bump failed: {exc}")
-        count = 0
-    finally:
-        conn.close()
-    return int(count)
+    store = get_shared_store()
+    bumped: set[int] = set()
+    for name in symbol_names:
+        for mem in store.get_memories_mentioning_entity(name, limit=_MAX_BUMPS):
+            heat = float(mem.get("heat_base") or 0.0)
+            if mem["id"] in bumped or heat >= 1.0:
+                continue
+            if mem.get("is_benchmark") or mem.get("is_stale"):
+                continue
+            store.bump_heat_raw(mem["id"], heat + _IMPACT_BOOST)
+            bumped.add(mem["id"])
+    return len(bumped)
 
 
 def process_event(event: dict[str, Any]) -> None:
@@ -194,23 +175,24 @@ def process_event(event: dict[str, Any]) -> None:
     if _check_cooldown(file_path):
         return
 
-    project_root = os.environ.get("CLAUDE_PROJECT_ROOT") or os.getcwd()
+    # Never os.getcwd(): under scripts/launcher.py it is the plugin root.
+    project_root = resolve_project_root(event, os.environ)
+    if project_root is None:
+        _log("impact bump skipped: project root unresolved (issue #604)")
+        return
     try:
         from mcp_server.hooks._store_lifecycle import close_shared_store_on_exit  # noqa: PLC0415 — rejected events must not import the store teardown path
 
         # source: ADR-0493
         with close_shared_store_on_exit():
             symbols = asyncio.run(_pipeline_detect_changes(project_root, file_path))
+            count = _bump_heat_for_symbols(symbols) if symbols else 0
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
-        _log(f"pipeline call failed: {exc}")
+        _log(f"pipeline impact bump failed: {exc}")
         return
     finally:
         _update_cooldown(file_path)
 
-    if not symbols:
-        return
-
-    count = _bump_heat_for_symbols(symbols)
     if count > 0:
         _log(f"bumped {count} memories for {len(symbols)} impacted symbols")
 

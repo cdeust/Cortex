@@ -73,6 +73,16 @@ adheres to [Semantic Versioning](https://semver.org/).
   so a failed, slow or concurrent ingest no longer makes each new session
   start another one within `CORTEX_PIPELINE_GRAPH_TTL_HOURS` (default 24 h).
 
+- **The PostToolUse impact bump raises heat on SQLite too, and targets the
+  session's project** (#750). `pipeline_impact_bump` paid for the graph
+  lookup and the `detect_changes` call on every edit, then raised heat with a
+  psycopg-only `UPDATE` that did nothing on SQLite. It now bumps through the
+  configured store (`get_memories_mentioning_entity` + the A3 writer
+  `bump_heat_raw`, at most once per memory, chain heads only). It also
+  resolved the project as `CLAUDE_PROJECT_ROOT or os.getcwd()`, the plugin
+  root under the launcher; it now uses `resolve_project_root(event,
+  os.environ)` and does nothing when the project is unresolved.
+
 - **The background code-graph re-analysis ingests the session's project,
   never the plugin root.** `scripts/launcher.py` `chdir`s to the plugin root
   before it runs a hook, yet `session_start._maybe_background_reanalyze` and

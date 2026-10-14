@@ -18,7 +18,11 @@ class MissCooldowns(unittest.TestCase):
         tree = tempfile.TemporaryDirectory(prefix="cortex-miss-test-")
         self.addCleanup(tree.cleanup)
         self.root = Path(tree.name)
-        self.event = {"tool_name": "Edit", "tool_input": {"file_path": "/no/memory.py"}}
+        self.event = {
+            "tool_name": "Edit",
+            "tool_input": {"file_path": "/no/memory.py"},
+            "cwd": str(self.root),
+        }
         for module in (preemptive, impact):
             edit = patch.object(
                 module, "_COOLDOWN_FILE", self.root / f"{module.__name__}.json"
