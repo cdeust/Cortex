@@ -96,3 +96,20 @@ def test_an_invalid_marker_alone_is_cortex_not_ready(tmp_path):
     with pytest.raises(subprocess.CalledProcessError) as stopped:
         _resolve(tmp_path, {"backend": "postgres"})
     assert "Cortex not ready: backend marker" in stopped.value.stderr
+
+
+def _marker(tmp_path: Path) -> dict | None:
+    path = tmp_path / "home" / ".claude" / "methodology" / "backend.json"
+    return json.loads(path.read_text()) if path.exists() else None
+
+
+def test_a_fresh_home_records_the_sqlite_choice_once(tmp_path):
+    """Review of #749: the first launch persists its decision as the marker."""
+    _resolve(tmp_path)
+    assert _marker(tmp_path)["backend"] == "sqlite"
+    assert _resolve(tmp_path)["CORTEX_MEMORY_STORE_BACKEND"] == "sqlite"
+
+
+def test_a_configured_url_writes_no_marker(tmp_path):
+    _resolve(tmp_path, DATABASE_URL="postgresql://db.example:5432/cortex")
+    assert _marker(tmp_path) is None

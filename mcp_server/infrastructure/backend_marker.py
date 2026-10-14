@@ -26,6 +26,8 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import tempfile
 from pathlib import Path
 from typing import Mapping, MutableMapping
 
@@ -78,6 +80,29 @@ def read_backend_marker(path: Path | None = None) -> dict | None:
     return data
 
 
+def write_backend_marker(
+    backend: str, written_by: str, path: Path | None = None
+) -> Path:
+    """Persist ``backend`` as the marker, atomically (no reader sees half a file).
+
+    Pre:  ``backend`` is one of ``VALID_BACKENDS``.
+    source: ADR-1104"""
+    if backend not in VALID_BACKENDS:
+        raise BackendMarkerError(f"refusing to persist unknown backend {backend!r}")
+    marker_path = path or BACKEND_MARKER_PATH
+    marker_path.parent.mkdir(parents=True, exist_ok=True)
+    text = json.dumps({"backend": backend, "written_by": written_by}, indent=2)
+    fd, tmp = tempfile.mkstemp(dir=marker_path.parent, prefix=marker_path.name + ".")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(text + "\n")
+        os.replace(tmp, marker_path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
+    return marker_path
+
+
 def resolve_backend_env(
     environ: Mapping[str, str], marker: dict | None, default: str = ""
 ) -> dict[str, str]:
@@ -101,7 +126,7 @@ def resolve_backend_env(
     return {}
 
 
-def _environment_decides(environ: Mapping[str, str]) -> bool:
+def environment_decides(environ: Mapping[str, str]) -> bool:
     """Steps 1-3 of the precedence: an explicit setting, so no marker is read.
 
     source: ADR-1104 (an invalid marker must not stop a user it never governs)"""
@@ -116,7 +141,7 @@ def _environment_decides(environ: Mapping[str, str]) -> bool:
 def _marker_unless_decided(
     environ: Mapping[str, str], marker_path: Path | None
 ) -> dict | None:
-    return None if _environment_decides(environ) else read_backend_marker(marker_path)
+    return None if environment_decides(environ) else read_backend_marker(marker_path)
 
 
 def apply_backend_resolution(

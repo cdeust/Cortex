@@ -25,6 +25,7 @@ from pathlib import Path
 _SCRIPTS_DIR = str(Path(__file__).resolve().parent)
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
+import launcher_backend  # noqa: E402
 import launcher_deps  # noqa: E402
 import launcher_mcp_bootstrap  # noqa: E402
 import launcher_ml  # noqa: E402
@@ -98,8 +99,10 @@ def _apply_backend() -> None:
     The host passes the user's ``database_url`` to the MCP server as
     ``DATABASE_URL`` and to hooks only as ``CLAUDE_PLUGIN_OPTION_DATABASE_URL``;
     both mean the same setting. Then the shared precedence (backend_marker)
-    with the plugin's default: nothing configured means the SQLite store.
-    PostgreSQL's local URL default applies only when a marker chose it.
+    with the plugin's default. A HOME nothing decides gets its marker once
+    (launcher_backend): SQLite when fresh, the earlier local PostgreSQL when
+    it still answers. PostgreSQL's local URL default applies only when a
+    marker chose it.
 
     source: ADR-0505
     source: ADR-1104
@@ -110,11 +113,15 @@ def _apply_backend() -> None:
     from mcp_server.infrastructure.backend_marker import (  # noqa: PLC0415 — resolvable once plugin_root is on sys.path
         BackendMarkerError,
         apply_backend_resolution,
+        environment_decides,
+        read_backend_marker,
     )
 
     try:
+        if not environment_decides(os.environ) and read_backend_marker() is None:
+            launcher_backend.persist_first_decision()
         apply_backend_resolution(os.environ, default="sqlite")
-    except BackendMarkerError as exc:
+    except (BackendMarkerError, OSError) as exc:
         print(f"[cortex-launcher] Cortex not ready: {exc}", file=sys.stderr)
         sys.exit(1)
     if (
