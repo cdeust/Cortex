@@ -67,13 +67,14 @@ class SqliteRelationshipMixin:
     def get_relationships_for_entity(
         self, entity_id: int, direction: str = "both", limit: int = 50
     ) -> list[dict[str, Any]]:
+        # source: ADR-1106 -- in every branch exact weight ties go to the newer edge.
         if direction == "outgoing":
             rows = self._conn.execute(
                 "SELECT r.*, e.name AS target_name, e.type AS target_type "
                 "FROM relationships r "
                 "JOIN entities e ON e.id = r.target_entity_id "
                 "WHERE r.source_entity_id = ? "
-                "ORDER BY r.weight DESC LIMIT ?",
+                "ORDER BY r.weight DESC, r.created_at DESC, r.id DESC LIMIT ?",
                 (entity_id, limit),
             ).fetchall()
         elif direction == "incoming":
@@ -82,14 +83,14 @@ class SqliteRelationshipMixin:
                 "FROM relationships r "
                 "JOIN entities e ON e.id = r.source_entity_id "
                 "WHERE r.target_entity_id = ? "
-                "ORDER BY r.weight DESC LIMIT ?",
+                "ORDER BY r.weight DESC, r.created_at DESC, r.id DESC LIMIT ?",
                 (entity_id, limit),
             ).fetchall()
         else:
             rows = self._conn.execute(
                 "SELECT r.* FROM relationships r "
                 "WHERE r.source_entity_id = ? OR r.target_entity_id = ? "
-                "ORDER BY r.weight DESC LIMIT ?",
+                "ORDER BY r.weight DESC, r.created_at DESC, r.id DESC LIMIT ?",
                 (entity_id, entity_id, limit),
             ).fetchall()
         return [dict(r) for r in rows]

@@ -180,13 +180,15 @@ class PgEntityMixin(PgStoreHost):
         rows = self._execute(
             f"SELECT * FROM {src} "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
             "WHERE content_tsv @@ phraseto_tsquery('english', %s) "
-            "ORDER BY heat_base DESC LIMIT %s",
+            # source: ADR-1106 -- exact ties go to the newer memory.
+            "ORDER BY heat_base DESC, created_at DESC, id DESC LIMIT %s",
             (entity_name, limit),
         ).fetchall()
         if not rows:
             rows = self._execute(
                 f"SELECT * FROM {src} WHERE content ILIKE %s "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
-                "AND NOT is_stale ORDER BY heat_base DESC LIMIT %s",
+                "AND NOT is_stale "
+                "ORDER BY heat_base DESC, created_at DESC, id DESC LIMIT %s",
                 (
                     "%{}%".format(
                         entity_name.replace("\\", "\\\\")
@@ -227,7 +229,10 @@ class PgEntityMixin(PgStoreHost):
         rows = self._execute(
             "SELECT e.* FROM entities e "
             "JOIN memory_entities me ON me.entity_id = e.id "
-            "WHERE me.memory_id = %s ORDER BY e.heat DESC",
+            "WHERE me.memory_id = %s "
+            # source: ADR-1106 -- a heat ranking cut by the caller's slice:
+            # exact ties go to the newer entity.
+            "ORDER BY e.heat DESC, e.created_at DESC, e.id DESC",
             (memory_id,),
         ).fetchall()
         return [dict(r) for r in rows]

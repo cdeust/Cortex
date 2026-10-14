@@ -30,7 +30,8 @@ _ANCHORS_SQL = (
     # source: ADR-0498
     "AND m.superseded_by_id IS NULL "
     "AND (m.is_global = TRUE OR m.directory_context = ANY(%s::TEXT[])) "
-    "ORDER BY effective_heat(m, NOW()) DESC LIMIT %s"
+    # source: ADR-1106 -- exact ties go to the newer memory.
+    "ORDER BY effective_heat(m, NOW()) DESC, m.created_at DESC, m.id DESC LIMIT %s"
 )
 
 # source: ADR-0498
@@ -47,7 +48,8 @@ _TEAM_DECISIONS_SQL = (
     "AND m.agent_context != '' "
     # source: ADR-0498
     "AND m.superseded_by_id IS NULL "
-    "ORDER BY effective_heat(m, NOW()) DESC LIMIT 5"
+    # source: ADR-1106 -- exact ties go to the newer memory.
+    "ORDER BY effective_heat(m, NOW()) DESC, m.created_at DESC, m.id DESC LIMIT 5"
 )
 
 # contract: zetetic-team-subagents memory/contract.md §8b
@@ -67,7 +69,8 @@ _HOT_SQL = (
     # source: ADR-0498
     "AND superseded_by_id IS NULL "
     "AND (is_global = TRUE OR directory_context = ANY(%s::TEXT[])) "
-    "ORDER BY heat_base DESC LIMIT %s"
+    # source: ADR-1106 -- exact ties go to the newer memory.
+    "ORDER BY heat_base DESC, created_at DESC, id DESC LIMIT %s"
 )
 
 

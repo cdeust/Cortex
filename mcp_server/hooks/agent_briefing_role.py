@@ -43,7 +43,8 @@ def _sqlite_role_rows(conn, agent, project_root, remaining):
         "AND NOT COALESCE(m.is_team_decision, 0) "
         "AND NOT COALESCE(m.is_benchmark, 0) AND m.superseded_by_id IS NULL "
         + scope
-        + "ORDER BY m.heat_base DESC LIMIT ?",
+        # source: ADR-1106 -- exact ties go to the newer memory.
+        + "ORDER BY m.heat_base DESC, m.created_at DESC, m.id DESC LIMIT ?",
         (agent, _MIN_HEAT, *params, remaining),
     ).fetchall()
 
@@ -56,6 +57,8 @@ def _pg_role_rows(conn, agent, project_root, remaining):
         "AND NOT COALESCE(m.is_team_decision, FALSE) AND NOT m.is_benchmark "
         "AND m.superseded_by_id IS NULL "
         "AND (m.is_global = TRUE OR m.directory_context = ANY(%s::TEXT[])) "
-        "ORDER BY effective_heat(m, NOW()) DESC LIMIT %s",
+        # source: ADR-1106 -- exact ties go to the newer memory.
+        "ORDER BY effective_heat(m, NOW()) DESC, m.created_at DESC, m.id DESC "
+        "LIMIT %s",
         (agent, _MIN_HEAT, project_ancestors(project_root), remaining),
     ).fetchall()

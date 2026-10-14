@@ -39,7 +39,11 @@ adheres to [Semantic Versioning](https://semver.org/).
   (ADR-1106). Every `ORDER BY ... LIMIT` on the recall path cut exact score
   ties in heap order, which VACUUM, CLUSTER and free-space reuse change: the
   five `recall_memories()` pools, its final cut, `spread_activation_memories()`,
-  `search_fts`, `search_by_tag_vector` and the hook recalls. LongMemEval
+  `search_fts`, `search_by_tag_vector`, the hook queries (auto-recall, the
+  agent briefing on both backends, the SessionStart banner) and the listings
+  they and `include_related` read (`get_hot_memories`,
+  `get_memories_mentioning_entity`, `get_entities_for_memory`,
+  `get_relationships_for_entity`). LongMemEval
   `f4f1d8a4` (110 rows at heat 0.05) dropped 10 arbitrary rows from the heat
   pool, and two runs of the same commit gave different scores. Exact ties now
   go to the newer memory (`created_at DESC, id DESC`) on PostgreSQL and SQLite;

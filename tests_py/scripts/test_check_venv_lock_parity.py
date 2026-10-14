@@ -159,7 +159,8 @@ class PostgresqlExtraDriftTests(unittest.TestCase):
             message = parity.postgresql_extra_drift()
         self.assertEqual(
             message,
-            "Local venv has drifted from uv.lock's dev+postgresql+codebase set — "
+            "Local venv has drifted from uv.lock's dev+postgresql+sqlite+codebase "
+            "set — "
             "the set CI's 'Check advertised test count' step installs "
             "(issue #287). A version-mismatched postgresql-extra package can "
             "change which tests import successfully at collection time, so "
@@ -209,7 +210,7 @@ class PostgresqlExtraDriftTests(unittest.TestCase):
         """Guard the parser against the real export: a silently-empty parse
         would make every reconciliation above vacuously pass."""
         versions = parity.parse_pinned_versions(parity.locked_requirements())
-        # dev+postgresql+codebase is ~90 packages; 50 is far above empty.
+        # dev+postgresql+sqlite+codebase is ~90 packages; 50 is far above empty.
         self.assertGreater(len(versions), 50)
         self.assertIn("psycopg", versions)
         self.assertIn("pgvector", versions)
@@ -227,7 +228,8 @@ class LockedRequirementsTests(unittest.TestCase):
             run.call_args.args[0],
             ["/bin/uv", "export", "--frozen", "--no-config", "--project"]
             + [str(REPO), "--no-emit-project", "--no-default-groups"]
-            + ["--extra", "dev", "--extra", "postgresql", "--extra", "codebase"]
+            + ["--extra", "dev", "--extra", "postgresql"]
+            + ["--extra", "sqlite", "--extra", "codebase"]
             + ["--format", "requirements.txt", "--no-hashes"],
         )
 

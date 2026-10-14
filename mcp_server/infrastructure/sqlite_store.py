@@ -52,6 +52,7 @@ from mcp_server.infrastructure.sqlite_store_relationships import (
 )
 from mcp_server.infrastructure.sqlite_store_rules import SqliteRuleMixin
 from mcp_server.infrastructure.sqlite_store_search import SqliteSearchMixin
+from mcp_server.infrastructure.sqlite_store_spread import SqliteSpreadActivationMixin
 from mcp_server.infrastructure.sqlite_store_stats import SqliteStatsMixin
 from mcp_server.observability import silent_failure
 from mcp_server.shared.code_tokenize import augment_content
@@ -110,6 +111,7 @@ class SqliteMemoryStore(
     SqliteMoodMixin,
     SqliteProceduralMixin,
     SqliteSearchMixin,
+    SqliteSpreadActivationMixin,
 ):
     """SQLite + FTS5 + sqlite-vec storage engine for Cortex memory system."""
 

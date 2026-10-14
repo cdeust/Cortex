@@ -146,10 +146,12 @@ runs:
         path: ~/.cache/flashrank
         key: ${{ runner.os }}-flashrank-ms-marco-MiniLM-L-12-v2
 
-    - name: Install the locked dev+postgresql+codebase set
+    # source: ADR-1106 -- the sqlite extra (sqlite-vec) as well, so the SQLite
+    # tests that need vec0 run in this matrix instead of returning early.
+    - name: Install the locked dev+postgresql+sqlite+codebase set
       uses: ./.github/actions/uv-locked-install
       with:
-        set: --extra dev --extra postgresql --extra codebase
+        set: --extra dev --extra postgresql --extra sqlite --extra codebase
         environment: ${{ env.pythonLocation }}
 
     - name: Install the project

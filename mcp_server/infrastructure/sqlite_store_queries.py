@@ -83,7 +83,8 @@ class SqliteQueryMixin:
         if include_benchmarks:
             rows = self._conn.execute(
                 f"SELECT * FROM {src} WHERE heat_base >= ? {scope_filter}"  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
-                "ORDER BY heat_base DESC LIMIT ?",
+                # source: ADR-1106 -- exact ties go to the newer memory.
+                "ORDER BY heat_base DESC, created_at DESC, id DESC LIMIT ?",
                 (min_heat, *scope_params, limit),
             ).fetchall()
         else:
@@ -91,7 +92,8 @@ class SqliteQueryMixin:
                 f"SELECT * FROM {src} WHERE heat_base >= ? "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
                 "AND NOT COALESCE(is_benchmark, 0) "
                 f"{scope_filter}"
-                "ORDER BY heat_base DESC LIMIT ?",
+                # source: ADR-1106 -- exact ties go to the newer memory.
+                "ORDER BY heat_base DESC, created_at DESC, id DESC LIMIT ?",
                 (min_heat, *scope_params, limit),
             ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]

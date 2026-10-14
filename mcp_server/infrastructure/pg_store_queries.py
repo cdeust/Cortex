@@ -77,13 +77,14 @@ class PgQueryMixin(PgStoreHost):
         if limit > 0:
             rows = self._execute(
                 f"SELECT * FROM {src} {where}"  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
-                "ORDER BY heat_base DESC LIMIT %s",
+                # source: ADR-1106 -- exact ties go to the newer memory.
+                "ORDER BY heat_base DESC, created_at DESC, id DESC LIMIT %s",
                 (*params, limit),
             ).fetchall()
         else:
             rows = self._execute(
                 f"SELECT * FROM {src} {where}"  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
-                "ORDER BY heat_base DESC",
+                "ORDER BY heat_base DESC, created_at DESC, id DESC",
                 params,
             ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]

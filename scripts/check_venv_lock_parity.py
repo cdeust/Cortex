@@ -3,10 +3,11 @@
 tests.
 
 The pins compared against are uv.lock's, exported for the set CI's Test job
-installs (dev + postgresql + codebase) by ``uv export``.
+installs (dev + postgresql + sqlite + codebase) by ``uv export``.
 
 source: ADR-0716
-source: ADR-1092"""
+source: ADR-1092
+source: ADR-1106"""
 
 from __future__ import annotations
 
@@ -21,8 +22,17 @@ from typing import Callable
 from packaging.markers import Marker
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-# The Test (Python 3.x) job's set. source: ADR-1092
-CI_SET = ("--extra", "dev", "--extra", "postgresql", "--extra", "codebase")
+# The Test (Python 3.x) job's set. source: ADR-1092, ADR-1106 (sqlite added)
+CI_SET = (
+    "--extra",
+    "dev",
+    "--extra",
+    "postgresql",
+    "--extra",
+    "sqlite",
+    "--extra",
+    "codebase",
+)
 
 
 class LockUnreadableError(RuntimeError):
@@ -128,7 +138,8 @@ def postgresql_extra_drift() -> str | None:
         return None
 
     return (
-        "Local venv has drifted from uv.lock's dev+postgresql+codebase set — "
+        "Local venv has drifted from uv.lock's dev+postgresql+sqlite+codebase "
+        "set — "
         "the set CI's 'Check advertised test count' step installs "
         "(issue #287). A version-mismatched postgresql-extra package can "
         "change which tests import successfully at collection time, so the "
