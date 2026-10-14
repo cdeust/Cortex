@@ -4,6 +4,8 @@ source: ADR-0557"""
 
 from __future__ import annotations
 
+import re
+
 from mcp_server.infrastructure.row_factory import DICT_ROW
 
 from typing import TYPE_CHECKING
@@ -26,8 +28,28 @@ DEFAULT_ANCHOR_LIMIT = 20000
 
 # source: pgvector README, "Iterative Index Scans" (0.8.0+): strict_order
 # keeps exact distance order, which the per-anchor ORDER BY ... LIMIT needs.
-# Below pgvector 0.8.0 PostgreSQL rejects the parameter (loud, not caught).
 _ITERATIVE_SCAN = "SET LOCAL hnsw.iterative_scan = strict_order"
+# source: pgvector README / CHANGELOG 0.8.0 (hnsw.iterative_scan added)
+_ITERATIVE_SCAN_SINCE = (0, 8, 0)
+
+
+def _require_iterative_scan(cur) -> None:
+    """Refuse to scan on a pgvector that cannot do it.
+
+    Below 0.8.0 the parameter does not exist, yet PostgreSQL accepts the SET
+    on a connection that has not loaded the extension and later drops it with
+    a server WARNING only (measured in review of #754): the scan would run
+    the old, lossy way without a word. So the version decides, loudly."""
+    cur.execute("SELECT extversion FROM pg_extension WHERE extname = 'vector'")
+    row = cur.fetchone()
+    version = row["extversion"] if row else None
+    numbers = tuple(int(n) for n in re.findall(r"\d+", version or "")[:3])
+    if version is None or numbers < _ITERATIVE_SCAN_SINCE:
+        found = version or "no vector extension"
+        raise RuntimeError(
+            "the near-duplicate scan needs pgvector >= 0.8.0 "
+            f"(hnsw.iterative_scan); this database has {found}"
+        )
 
 
 def list_candidate_pairs(
@@ -79,6 +101,7 @@ def list_candidate_pairs(
     # was never paired. An iterative scan keeps reading the index, in exact
     # distance order, until top_k rows pass (bounded by hnsw.max_scan_tuples).
     with conn.transaction(), conn.cursor(row_factory=DICT_ROW) as cur:
+        _require_iterative_scan(cur)
         cur.execute(_ITERATIVE_SCAN)
         cur.execute(
             sql,

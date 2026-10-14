@@ -27,7 +27,10 @@ import pytest
 
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import get_shared_store
-from mcp_server.infrastructure.pg_store_near_dup import list_candidate_pairs
+from mcp_server.infrastructure.pg_store_near_dup import (
+    _require_iterative_scan,
+    list_candidate_pairs,
+)
 from tests_py._pg_hnsw import empty_memories_index
 
 _DIM = 384  # source: memory_config EMBEDDING_DIM (all-MiniLM-L6-v2)
@@ -124,18 +127,56 @@ def test_a_duplicate_behind_superseded_rows_is_paired():
     assert any({p.id_a, p.id_b} == {first_id, second_id} for p in pairs), pairs
 
 
+def _index_bytes(conn) -> int:
+    row = conn.execute(
+        "SELECT pg_relation_size('idx_memories_embedding') AS size"
+    ).fetchone()
+    return row["size"]
+
+
 def test_an_emptied_index_no_longer_hides_new_rows():
     """The test precondition (tests_py/_pg_hnsw.py): rows deleted by earlier
     tests stay in the index; emptying it makes the near-dup tests independent
-    of what ran before them."""
+    of what ran before them. The index size is checked as well, so the test
+    does not depend on which tests ran first."""
     store = _store()
     vector = _vector(122)
     with store.batch_pool.connection() as conn:
+        empty_memories_index(conn)
+        empty_size = _index_bytes(conn)
         with conn.cursor() as cur:
             earlier = _insert_many(cur, [vector] * _DELETED_ROWS)
             cur.execute("DELETE FROM memories WHERE id = ANY(%s)", (earlier,))
+        assert _index_bytes(conn) > empty_size
         empty_memories_index(conn)
+        assert _index_bytes(conn) == empty_size
         with conn.cursor() as cur:
             first, second = _insert(cur, vector), _insert(cur, vector)
         pairs = _pairs_on_the_index_path(conn)
     assert any({p.id_a, p.id_b} == {first, second} for p in pairs), pairs
+
+
+@pytest.mark.parametrize("version", ["0.7.4", "0.5.1", None])
+def test_a_pgvector_without_iterative_scan_is_refused(version):
+    """Review of #754: below 0.8.0 PostgreSQL drops the unknown SET with a
+    WARNING only, so the scan would silently run the old, lossy way."""
+    with pytest.raises(RuntimeError, match=r"needs pgvector >= 0\.8\.0"):
+        _require_iterative_scan(_VersionCursor(version))
+
+
+@pytest.mark.parametrize("version", ["0.8.0", "0.8.2", "1.0.0"])
+def test_a_pgvector_with_iterative_scan_is_accepted(version):
+    _require_iterative_scan(_VersionCursor(version))
+
+
+class _VersionCursor:
+    """Answers the pg_extension lookup without a database."""
+
+    def __init__(self, version: str | None) -> None:
+        self._version = version
+
+    def execute(self, sql: str) -> None:
+        assert "pg_extension" in sql
+
+    def fetchone(self):
+        return None if self._version is None else {"extversion": self._version}
