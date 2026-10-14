@@ -4,8 +4,6 @@ source: ADR-0557"""
 
 from __future__ import annotations
 
-import re
-
 from mcp_server.infrastructure.row_factory import DICT_ROW
 
 from typing import TYPE_CHECKING
@@ -29,26 +27,30 @@ DEFAULT_ANCHOR_LIMIT = 20000
 # source: pgvector README, "Iterative Index Scans" (0.8.0+): strict_order
 # keeps exact distance order, which the per-anchor ORDER BY ... LIMIT needs.
 _ITERATIVE_SCAN = "SET LOCAL hnsw.iterative_scan = strict_order"
-# source: pgvector README / CHANGELOG 0.8.0 (hnsw.iterative_scan added)
-_ITERATIVE_SCAN_SINCE = (0, 8, 0)
+# source: PostgreSQL docs, current_setting(name, missing_ok): NULL when the
+# parameter does not exist. Loading vector.so (any vector value) defines the
+# hnsw.* parameters, so the question is answered by the library in use.
+_LOAD_VECTOR = "SELECT '[1]'::vector"
+_ITERATIVE_SCAN_SETTING = (
+    "SELECT current_setting('hnsw.iterative_scan', true) AS setting"
+)
 
 
 def _require_iterative_scan(cur) -> None:
-    """Refuse to scan on a pgvector that cannot do it.
+    """Refuse to scan on a pgvector that cannot do it (before 0.8.0).
 
-    Below 0.8.0 the parameter does not exist, yet PostgreSQL accepts the SET
-    on a connection that has not loaded the extension and later drops it with
-    a server WARNING only (measured in review of #754): the scan would run
-    the old, lossy way without a word. So the version decides, loudly."""
-    cur.execute("SELECT extversion FROM pg_extension WHERE extname = 'vector'")
+    PostgreSQL accepts the SET on a connection that has not loaded the
+    extension yet and, on a library without the parameter, drops it with a
+    server WARNING only (measured in review of #754): the scan would run the
+    old, lossy way without a word. The loaded library decides, not the
+    catalogue's extversion, which can lag an upgraded binary."""
+    cur.execute(_LOAD_VECTOR)
+    cur.execute(_ITERATIVE_SCAN_SETTING)
     row = cur.fetchone()
-    version = row["extversion"] if row else None
-    numbers = tuple(int(n) for n in re.findall(r"\d+", version or "")[:3])
-    if version is None or numbers < _ITERATIVE_SCAN_SINCE:
-        found = version or "no vector extension"
+    if row is None or row["setting"] is None:
         raise RuntimeError(
-            "the near-duplicate scan needs pgvector >= 0.8.0 "
-            f"(hnsw.iterative_scan); this database has {found}"
+            "the near-duplicate scan needs hnsw.iterative_scan (pgvector >= "
+            "0.8.0); the pgvector library loaded by this server does not define it"
         )
 
 

@@ -156,27 +156,37 @@ def test_an_emptied_index_no_longer_hides_new_rows():
     assert any({p.id_a, p.id_b} == {first, second} for p in pairs), pairs
 
 
-@pytest.mark.parametrize("version", ["0.7.4", "0.5.1", None])
-def test_a_pgvector_without_iterative_scan_is_refused(version):
-    """Review of #754: below 0.8.0 PostgreSQL drops the unknown SET with a
+def test_a_pgvector_without_iterative_scan_is_refused():
+    """Review of #754: a library without the parameter drops the SET with a
     WARNING only, so the scan would silently run the old, lossy way."""
-    with pytest.raises(RuntimeError, match=r"needs pgvector >= 0\.8\.0"):
-        _require_iterative_scan(_VersionCursor(version))
+    cur = _SettingCursor(None)
+    with pytest.raises(RuntimeError, match=r"needs hnsw\.iterative_scan"):
+        _require_iterative_scan(cur)
+    assert cur.queries[0] == "SELECT '[1]'::vector"  # the library is loaded first
 
 
-@pytest.mark.parametrize("version", ["0.8.0", "0.8.2", "1.0.0"])
-def test_a_pgvector_with_iterative_scan_is_accepted(version):
-    _require_iterative_scan(_VersionCursor(version))
+def test_a_pgvector_with_iterative_scan_is_accepted():
+    cur = _SettingCursor("off")
+    _require_iterative_scan(cur)
+    assert "current_setting('hnsw.iterative_scan', true)" in cur.queries[1]
 
 
-class _VersionCursor:
-    """Answers the pg_extension lookup without a database."""
+def test_the_check_uses_the_loaded_library_not_extversion():
+    """An upgraded binary whose catalogue still says 0.7.x can scan."""
+    cur = _SettingCursor("off")
+    _require_iterative_scan(cur)
+    assert not any("extversion" in q for q in cur.queries)
 
-    def __init__(self, version: str | None) -> None:
-        self._version = version
+
+class _SettingCursor:
+    """Answers the library load and the setting lookup without a database."""
+
+    def __init__(self, setting: str | None) -> None:
+        self._setting = setting
+        self.queries: list[str] = []
 
     def execute(self, sql: str) -> None:
-        assert "pg_extension" in sql
+        self.queries.append(sql)
 
     def fetchone(self):
-        return None if self._version is None else {"extversion": self._version}
+        return {"setting": self._setting}

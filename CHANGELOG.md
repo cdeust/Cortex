@@ -41,8 +41,9 @@ adheres to [Semantic Versioning](https://semver.org/).
   filtered superseded rows and the scan filtered stale ones; 300 superseded
   rows around a pair hid it. The scan now runs with
   `SET LOCAL hnsw.iterative_scan = strict_order`, which needs pgvector 0.8.0
-  or later: the scan checks `extversion` and raises below it (PostgreSQL
-  alone would drop the unknown parameter with a warning). On a 66,490-memory
+  or later: the scan asks the loaded library whether the parameter exists
+  and raises when it does not (a library without it would drop the SET with
+  a warning and run the lossy scan). On a 66,490-memory
   store: 17 more pairs, none lost, 10 s against 11 s. The intermittent
   local failures of `test_near_dup_calibration_pass.py` had a test-side
   cause: rows deleted by earlier tests stay in the index, and identical unit
