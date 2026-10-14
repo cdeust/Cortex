@@ -79,7 +79,10 @@ class TestWorkerLogRotation(unittest.TestCase):
                 self.session, "_lookup_cached_graph_path", return_value="fixture"
             ):
                 self.assert_spawn_rotates(
-                    "pipeline_reanalyze.log", self.session._maybe_background_reanalyze
+                    "pipeline_reanalyze.log",
+                    lambda: self.session._maybe_background_reanalyze(
+                        {"cwd": "fixture-project"}
+                    ),
                 )
 
 
