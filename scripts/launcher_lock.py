@@ -15,7 +15,7 @@ import contextlib
 import os
 import sys
 import time
-from typing import Iterator
+from typing import Callable, Iterator
 
 _POLL_SECONDS = 0.2  # source: ADR-0747 (the poll interval of the lock this replaces)
 
@@ -56,17 +56,34 @@ def held(path: str, wait_seconds: float) -> Iterator[None]:
 
     Raises ``LockTimeoutError`` when the holder keeps it past the bound.
     """
+    with held_unless(path, wait_seconds, lambda: False):
+        yield
+
+
+@contextlib.contextmanager
+def held_unless(
+    path: str, wait_seconds: float, done: Callable[[], bool]
+) -> Iterator[bool]:
+    """Hold ``path``, unless ``done()`` turns true while waiting for it.
+
+    Yields True when held, False when ``done()`` made holding unnecessary
+    (another holder finished the work this caller needed). Raises
+    ``LockTimeoutError`` when neither happens within ``wait_seconds``.
+    """
     fd = _open(path)
     try:
         deadline = time.monotonic() + wait_seconds
         while not _try(fd):
+            if done():
+                yield False
+                return
             if time.monotonic() >= deadline:
                 raise LockTimeoutError(
                     f"{path} is still held by another Cortex process after "
                     f"{wait_seconds:.0f} s"
                 )
             time.sleep(_POLL_SECONDS)
-        yield
+        yield True
     finally:
         os.close(fd)  # closing the descriptor releases the lock
 

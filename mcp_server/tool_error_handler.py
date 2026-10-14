@@ -17,26 +17,19 @@ from mcp_server.observability import metrics
 
 logger = logging.getLogger(__name__)
 
+# The real error first, then what the user can change: no install recipe
+# (source: ADR-1104).
 _DB_SETUP_GUIDE = (
-    "Cortex could not connect to PostgreSQL. "
-    "This usually means the database is not set up yet.\n\n"
-    "Quick fix:\n"
-    "  brew install postgresql@17 pgvector\n"
-    "  brew services start postgresql@17\n"
-    "  createdb cortex\n"
-    '  psql -d cortex -c "CREATE EXTENSION IF NOT EXISTS vector; '
-    'CREATE EXTENSION IF NOT EXISTS pg_trgm;"\n'
-    "  export DATABASE_URL=postgresql://localhost:5432/cortex\n\n"
-    "Then restart Claude Code. Cortex will auto-initialize the schema."
+    "Cortex could not connect to the PostgreSQL configured for it: {error}\n"
+    "Start that server, or clear the plugin's database URL option to use the "
+    "local SQLite store."
 )
 
 _EXTENSION_GUIDE = (
-    "Cortex requires the pgvector and pg_trgm PostgreSQL extensions.\n\n"
-    "Install them:\n"
-    "  brew install pgvector  # macOS\n"
-    '  psql -d cortex -c "CREATE EXTENSION IF NOT EXISTS vector; '
-    'CREATE EXTENSION IF NOT EXISTS pg_trgm;"\n\n'
-    "Then restart Claude Code."
+    "The PostgreSQL configured for Cortex lacks the pgvector or pg_trgm "
+    "extension: {error}\nCortex needs both (CREATE EXTENSION vector; CREATE "
+    "EXTENSION pg_trgm), or clear the plugin's database URL option to use the "
+    "local SQLite store."
 )
 
 _MISSING_EXTENSION_PHRASES = [
@@ -72,10 +65,10 @@ def _classify_error(exc: Exception) -> tuple[str, str]:
         return "explicit_database_url_unreachable", str(exc)
 
     if any(kw in exc_lower for kw in _MISSING_EXTENSION_PHRASES):
-        return "missing_extension", _EXTENSION_GUIDE
+        return "missing_extension", _EXTENSION_GUIDE.format(error=exc)
 
     if any(kw in exc_lower for kw in _CONNECTION_FAILURE_PHRASES):
-        return "database_not_connected", _DB_SETUP_GUIDE
+        return "database_not_connected", _DB_SETUP_GUIDE.format(error=exc)
 
     return type(exc).__name__, str(exc)
 

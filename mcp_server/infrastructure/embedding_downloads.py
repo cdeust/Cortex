@@ -34,31 +34,6 @@ def _spawn_detached(cmd: list[str], what: str) -> None:
         logger.debug("Background %s failed to start: %s", what, exc)
 
 
-def trigger_background_install() -> None:
-    """Install sentence-transformers in the background (PACKAGE_ABSENT).
-
-    Next session will have the package and a real model. No-op under
-    ``CORTEX_EMBEDDING_ZERO_DOWNLOAD``.
-    """
-    if zero_download_requested():
-        return
-
-    target = os.environ.get("CLAUDE_PLUGIN_DATA", "")
-    if target:
-        target = os.path.join(target, "deps")
-    cmd = [
-        sys.executable,
-        "-m",
-        "pip",
-        "install",
-        "-q",
-        "sentence-transformers>=2.2.0,<4.0.0",
-    ]
-    if target:
-        cmd.extend(["--target", target])
-    _spawn_detached(cmd, "install of sentence-transformers")
-
-
 def trigger_background_model_download(
     model_name: str, revision: str | None, cache_folder: str | None
 ) -> None:

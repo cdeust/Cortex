@@ -713,29 +713,16 @@ def test_pip_install_failure_preserves_tmp_dir_and_returns_false(
     assert ok is False
 
 
-def test_deps_lock_mutual_exclusion(deps_mod, tmp_path):
+def test_deps_lock_is_an_os_lock_released_on_exit(deps_mod, tmp_path):
+    """ADR-1104: the age-stealing directory lock is gone (tests_py/scripts/
+    test_launcher_lock.py holds it from another process)."""
     deps_dir = str(tmp_path / "deps")
     os.makedirs(deps_dir, exist_ok=True)
-    with deps_mod._deps_lock(deps_dir) as acquired_outer:
-        assert acquired_outer is True
-        assert os.path.isdir(f"{deps_dir}.lock")
-    # Released after the context exits.
-    assert not os.path.isdir(f"{deps_dir}.lock")
-
-
-def test_deps_lock_steals_stale_lock(deps_mod, tmp_path, monkeypatch):
-    deps_dir = str(tmp_path / "deps")
-    os.makedirs(deps_dir, exist_ok=True)
-    lock_dir = f"{deps_dir}.lock"
-    os.makedirs(lock_dir)
-    holder = os.path.join(lock_dir, "holder")
-    with open(holder, "w", encoding="utf-8") as fh:
-        fh.write("99999 0")
-    # Force the age computation to look ancient without a real sleep.
-    monkeypatch.setattr(deps_mod.os.path, "getmtime", lambda _p: 0.0)
-    monkeypatch.setattr(deps_mod.time, "time", lambda: 10_000.0)
-    with deps_mod._deps_lock(deps_dir) as acquired:
-        assert acquired is True
+    with deps_mod._deps_lock(deps_dir):
+        with deps_mod._lock.held_if_free(f"{deps_dir}.install.lock") as free:
+            assert free is False
+    with deps_mod._lock.held_if_free(f"{deps_dir}.install.lock") as free:
+        assert free is True
 
 
 def test_entry_dist_key_strips_dist_info_suffix(deps_mod):

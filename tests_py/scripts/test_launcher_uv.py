@@ -22,9 +22,16 @@ def test_bootstrap_command_is_binary_only_and_hash_checked(uv_mod, monkeypatch):
     monkeypatch.setattr(uv_mod._pip, "pip_entry", lambda: ["py", "-m", "pip"])
     assert uv_mod.bootstrap_command(Path("t"), Path("r.txt")) == [
         "py", "-m", "pip", "install", "-q", "--disable-pip-version-check",
-        "--index-url", "https://pypi.org/simple/", "--only-binary=:all:",
+        "--no-cache-dir", "--index-url", "https://pypi.org/simple/",
+        "--only-binary=:all:",
         "--no-deps", "--require-hashes", "--target", "t", "-r", "r.txt",
     ]  # fmt: skip
+
+
+def test_uv_never_writes_a_cache_under_home(uv_mod, monkeypatch):
+    """Issue #740: ``~/.cache`` is read-only on an org-managed Mac."""
+    monkeypatch.setenv("UV_CACHE_DIR", "/home/someone/.cache/uv")
+    assert uv_mod.environment()["UV_NO_CACHE"] == "1"
 
 
 def test_locate_prefers_path_uv_only_at_the_pinned_version(uv_mod, monkeypatch):

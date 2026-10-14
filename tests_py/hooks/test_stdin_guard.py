@@ -13,8 +13,10 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 # Files whose only legitimate stdin use is the binary buffer (the reader
-# itself, and the stdlib-only Codex intake that cannot import mcp_server).
-BUFFER_READERS = {"stdin_event.py", "session_queue.py"}
+# itself, the stdlib-only Codex intake that cannot import mcp_server, and the
+# first-launch MCP stand-in, which reads the JSON-RPC stream, not a hook event:
+# ADR-1104).
+BUFFER_READERS = {"stdin_event.py", "session_queue.py", "launcher_mcp_bootstrap.py"}
 
 
 def _stdin_names(tree: ast.AST) -> set[str]:

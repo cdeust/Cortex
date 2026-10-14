@@ -25,20 +25,39 @@ READY = "Cortex ready"  # source: ADR-1104 (the owner's acceptance string)
 NOT_READY = "Cortex not ready"  # source: ADR-1104
 
 
+ZERO_DOWNLOAD_ENV = "CORTEX_EMBEDDING_ZERO_DOWNLOAD"  # source: ADR-0519
+
+
+def _without_launcher(environ: Mapping[str, str]) -> tuple[str, str]:
+    """The state when no plugin launcher reported one (the Codex entry, a
+    direct ``python -m`` run): the same opt-out rule, else the distribution."""
+    from importlib.metadata import PackageNotFoundError, version  # noqa: PLC0415 — metadata only, never the ML stack
+
+    if environ.get(ZERO_DOWNLOAD_ENV, "").lower() in ("1", "true"):
+        return "off", f"{ZERO_DOWNLOAD_ENV} is set"
+    try:
+        version("sentence-transformers")
+    except PackageNotFoundError:
+        return "off", "sentence-transformers is not in this install"
+    return "ready", ""
+
+
 def semantic_clause(environ: Mapping[str, str]) -> str:
     """How recall ranks right now, as the launcher found it."""
     state = environ.get("CORTEX_SEMANTIC_SEARCH", "")
+    detail = environ.get("CORTEX_SEMANTIC_SEARCH_DETAIL", "")
+    if not state:
+        state, detail = _without_launcher(environ)
     if state == "installing":
         return (
             "semantic search is installing in the background, "
             "keyword recall until it finishes"
         )
     if state == "failed":
-        detail = environ.get("CORTEX_SEMANTIC_SEARCH_DETAIL", "")
         return f"keyword recall only, semantic search install failed: {detail}"
     if state == "ready":
         return "semantic search on"
-    return "semantic search state unknown (not started by the plugin launcher)"
+    return f"keyword recall only, semantic search not installed: {detail}"
 
 
 def ready(store: str, memories: int, environ: Mapping[str, str] = os.environ) -> str:
@@ -75,6 +94,13 @@ def run_and_report(main: Callable[[], str]) -> None:
                         "hookEventName": "SessionStart",
                         "additionalContext": captured.getvalue(),
                     },
-                }
+                },
+                ensure_ascii=False,  # stdout is strict UTF-8 (ADR-1098)
             )
         )
+
+
+def home_relative(path: str) -> str:
+    """``~/...`` for a path under the home directory, else the path."""
+    home = os.path.expanduser("~")
+    return "~" + path[len(home) :] if path.startswith(home + os.sep) else path

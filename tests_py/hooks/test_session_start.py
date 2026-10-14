@@ -563,9 +563,13 @@ def test_emit_banner_receipt_payload_mirrors_banner_order():
 # ── Cold-start message ────────────────────────────────────────────────
 
 
-def test_cold_start_needs_install_shows_postgres_instructions():
-    msg = hook._build_cold_start_message({"status": "needs_install"})
-    assert "brew install postgresql" in msg
+def test_cold_start_needs_install_names_the_configured_server_not_a_recipe():
+    """ADR-1104: the real cause, never an install recipe."""
+    msg = hook._build_cold_start_message(
+        {"status": "needs_install", "message": "connection refused"}
+    )
+    assert "configured for Cortex is not reachable: connection refused" in msg
+    assert "brew" not in msg
 
 
 def test_cold_start_auth_failed_relays_the_message():
@@ -1183,6 +1187,11 @@ def _patched_main(**overrides):
     return [patch.object(hook, name, m) for name, m in defaults.items()]
 
 
+def _emitted(out: str) -> dict:
+    """The hook's one JSON object (ADR-1104): status line and context."""
+    return json.loads(out)
+
+
 def _run_main(*extra_patches, **overrides):
     from contextlib import ExitStack
 
@@ -1194,14 +1203,17 @@ def _run_main(*extra_patches, **overrides):
         hook.main()
 
 
-def test_main_sqlite_backend_dispatches_to_the_sqlite_path():
-    sqlite_ctx = MagicMock()
+def test_main_sqlite_backend_dispatches_to_the_sqlite_path(capsys):
+    sqlite_ctx = MagicMock(return_value="Cortex ready: SQLite memory at ~/m.db")
     _run_main(
         patch.object(hook, "_backend_is_sqlite", return_value=True),
         patch.object(hook, "_sqlite_context", sqlite_ctx),
         patch.object(hook, "_connect_pg"),
     )
     sqlite_ctx.assert_called_once()
+    assert _emitted(capsys.readouterr().out)["systemMessage"] == (
+        "Cortex ready: SQLite memory at ~/m.db"
+    )
 
 
 def test_main_without_pg_and_failed_setup_prints_cold_start(capsys):
@@ -1210,9 +1222,10 @@ def test_main_without_pg_and_failed_setup_prints_cold_start(capsys):
         patch.object(hook, "_connect_pg", return_value=None),
         patch.object(hook, "_try_setup_db", return_value={"status": "needs_install"}),
     )
-    out = capsys.readouterr().out
-    assert "## Cortex — First Run" in out
-    assert "brew install postgresql" in out
+    emitted = _emitted(capsys.readouterr().out)
+    assert "## Cortex — First Run" in emitted["hookSpecificOutput"]["additionalContext"]
+    assert emitted["systemMessage"].startswith("Cortex not ready: ")
+    assert "brew" not in json.dumps(emitted)
 
 
 def test_main_setup_ready_but_still_unreachable_prints_the_ready_message(capsys):
@@ -1261,8 +1274,13 @@ def test_main_normal_flow_prints_banner_receipt_and_closes_conn(capsys):
         patch.object(hook, "_print_external_sources"),
     )
     out, err = capsys.readouterr()
-    assert "## Cortex Memory Context" in out
-    assert hook.receipt_marker(11) in out
+    emitted = _emitted(out)
+    context = emitted["hookSpecificOutput"]["additionalContext"]
+    assert "## Cortex Memory Context" in context
+    assert hook.receipt_marker(11) in context
+    assert emitted["systemMessage"].startswith(
+        "Cortex ready: PostgreSQL memory store, 7 memories; "
+    )
     assert "Injected 1 anchors + 1 hot memories (total: 7)" in err
     conn.close.assert_called_once()
 
@@ -1283,5 +1301,5 @@ def test_main_normal_flow_with_nothing_to_inject_logs_the_absence(capsys):
         patch.object(hook, "_print_external_sources"),
     )
     out, err = capsys.readouterr()
-    assert out == ""
+    assert _emitted(out)["hookSpecificOutput"]["additionalContext"] == ""
     assert "No memories above threshold" in err

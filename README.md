@@ -85,14 +85,21 @@ server and get the same tools. See [launch commands](#every-other-mcp-host).
 WSL, TLS client certificates and corporate proxies are covered in
 [deployment scenarios](docs/deployment-scenarios.md).
 
+The first session installs Cortex's runtime into the plugin's data directory (about a minute
+on a cold machine; a Mac whose `python3` is older than 3.10 also gets a private CPython 3.12),
+then shows `Cortex ready: <store>, <n> memories; <how recall ranks>`, or `Cortex not ready:`
+with the cause. Semantic search installs in the background; until it lands the same line says
+recall is keyword-only.
+
 The first use creates a local SQLite store under `~/.claude/methodology/`. Models are downloaded
 once when needed and then run offline. The embedding and reranking model files are both fetched
 on first use. Optional integrations, remote PostgreSQL, and OTLP telemetry use the network only
 when explicitly configured. [PRIVACY.md](PRIVACY.md) lists the exact scope.
 
-An existing PostgreSQL install is never silently downgraded: the installer detects a
-configured `DATABASE_URL`, a prior backend marker, or a reachable local `cortex` database and
-keeps it across updates.
+An existing PostgreSQL setup is kept: a configured `database_url` option (or `DATABASE_URL`),
+or the backend marker `install-plugin.sh --postgres` writes, always wins over the SQLite
+default. Cortex never connects to a database nothing configured, including a local `cortex`
+database: point `database_url` at it to use it.
 
 <details>
 <summary><strong>Upgrading from an older plugin identity</strong></summary>

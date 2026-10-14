@@ -29,8 +29,10 @@ import launcher_lock
 
 WARMUP_MODULE = "mcp_server.infrastructure.embedding_warmup"  # source: ADR-1104
 # The job writes its outcome here; the launcher hands it to the SessionStart
-# hook. source: ADR-1104
+# hook (source: ADR-1104).
 STATUS_ENV = "CORTEX_SEMANTIC_STATUS_FILE"
+# The operator's opt-out of every embedding download (source: ADR-0519).
+ZERO_DOWNLOAD_ENV = "CORTEX_EMBEDDING_ZERO_DOWNLOAD"
 
 
 def job_lock(deps_dir: str) -> str:
@@ -59,8 +61,11 @@ def state(deps_dir: str) -> tuple[str, str]:
     except (OSError, ValueError):
         outcome = {}
     if outcome.get("status") == "failed":
-        return "failed", f"{outcome.get('error', 'unknown error')} (log: {job_log(deps_dir)})"
-    if outcome.get("status") == "ready" and launcher_deps.ml_ready(deps_dir):
+        return (
+            "failed",
+            f"{outcome.get('error', 'unknown error')} (log: {job_log(deps_dir)})",
+        )
+    if outcome.get("status") == "ready" and launcher_deps.set_ready(deps_dir, "ml"):
         return "ready", ""
     return "installing", ""
 
@@ -81,6 +86,8 @@ def start(deps_dir: str, launcher: str) -> tuple[str, str]:
     current = state(deps_dir)
     if current[0] == "ready":
         return current
+    if os.environ.get(ZERO_DOWNLOAD_ENV, "").lower() in ("1", "true"):
+        return "off", f"{ZERO_DOWNLOAD_ENV} is set"
     with launcher_lock.held_if_free(job_lock(deps_dir)) as free:
         if not free:
             return current  # the job is already running
@@ -112,7 +119,10 @@ def run_job(deps_dir: str, install, run) -> None:
     """
     with launcher_lock.held_if_free(job_lock(deps_dir)) as mine:
         if not mine:
-            print("[cortex-launcher] semantic search install already running", file=sys.stderr)
+            print(
+                "[cortex-launcher] semantic search install already running",
+                file=sys.stderr,
+            )
             return
         _write_status(deps_dir, {"status": "installing", "pid": os.getpid()})
         os.environ[STATUS_ENV] = str(status_file(deps_dir))

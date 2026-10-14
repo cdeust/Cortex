@@ -16,13 +16,21 @@ import subprocess
 import time
 from pathlib import Path
 
-# source: the owner's acceptance, brief step 0 -- strings a zero-ops user must never be told
-FORBIDDEN = re.compile(r"brew|install .* manually|pip install|DATABASE_URL", re.IGNORECASE)
+# Strings a zero-ops user must never be told.
+# source: the owner's acceptance, brief step 0
+FORBIDDEN = re.compile(
+    r"brew|install .* manually|pip install|DATABASE_URL", re.IGNORECASE
+)
 READY = "Cortex ready"  # source: the owner's acceptance, brief step 0
-_FINISHED = re.compile(r"SessionStart:startup \[.*\] \(plugin hypermnesia-mcp@[^)]*\) finished with status (-?\d+) \((\d+)ms\)")
-_TIMED_OUT = re.compile(r"SessionStart:startup \[.*\] \(plugin hypermnesia-mcp@[^)]*\) timed out after \d+ms \((\d+)ms\)")
-_PAYLOAD = re.compile(r'"Hook SessionStart:startup \(SessionStart\) [a-z ]+:\\nstdout:\\n.*"')
-SETTLE_POLL_SECONDS = 2  # source: ps cost is milliseconds; two seconds keeps the loop cheap
+_HOOK = r"SessionStart:startup \[.*\] \(plugin hypermnesia-mcp@[^)]*\) "
+_FINISHED = re.compile(_HOOK + r"finished with status (-?\d+) \((\d+)ms\)")
+_TIMED_OUT = re.compile(_HOOK + r"timed out after \d+ms \((\d+)ms\)")
+_PAYLOAD = re.compile(
+    r'"Hook SessionStart:startup \(SessionStart\) [a-z ]+:\\nstdout:\\n.*"'
+)
+SETTLE_POLL_SECONDS = (
+    2  # source: ps cost is milliseconds; two seconds keeps the loop cheap
+)
 
 
 def session_start_outcome(debug_log: Path) -> dict:
@@ -32,7 +40,11 @@ def session_start_outcome(debug_log: Path) -> dict:
     for line in lines:
         timed_out = _TIMED_OUT.search(line)
         if timed_out:
-            return {"status": None, "ms": int(timed_out.group(1)), "note": "host cancelled the hook at its timeout"}
+            return {
+                "status": None,
+                "ms": int(timed_out.group(1)),
+                "note": "host cancelled the hook at its timeout",
+            }
     for index, line in enumerate(lines):
         finished = _FINISHED.search(line)
         if not finished:
@@ -44,7 +56,13 @@ def session_start_outcome(debug_log: Path) -> dict:
                 outcome.update(_split_payload(json.loads(payload.group(0))))
                 break
         return outcome
-    return {"status": None, "ms": None, "stdout": "", "stderr": "", "note": "hook never finished"}
+    return {
+        "status": None,
+        "ms": None,
+        "stdout": "",
+        "stderr": "",
+        "note": "hook never finished",
+    }
 
 
 def _split_payload(message: str) -> dict:
@@ -65,7 +83,9 @@ def system_message(stdout: str) -> str:
 
 
 def forbidden_lines(*texts: str) -> list:
-    return [line for text in texts for line in text.splitlines() if FORBIDDEN.search(line)]
+    return [
+        line for text in texts for line in text.splitlines() if FORBIDDEN.search(line)
+    ]
 
 
 def _plugin_processes(markers: tuple) -> list:

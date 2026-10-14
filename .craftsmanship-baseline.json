@@ -4173,11 +4173,6 @@
       "detail": "_sqlite_context"
     },
     {
-      "file": "mcp_server/hooks/session_start.py",
-      "kind": "method-size",
-      "detail": "main"
-    },
-    {
       "file": "mcp_server/infrastructure/ap_bridge.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"
@@ -4626,21 +4621,6 @@
       "file": "scripts/groomer.py",
       "kind": "method-size",
       "detail": "main"
-    },
-    {
-      "file": "scripts/launcher.py",
-      "kind": "method-size",
-      "detail": "main"
-    },
-    {
-      "file": "scripts/launcher_deps.py",
-      "kind": "unsourced-constant",
-      "detail": "_LOCK_WAIT_SECONDS"
-    },
-    {
-      "file": "scripts/launcher_deps.py",
-      "kind": "unsourced-constant",
-      "detail": "_STALE_LOCK_SECONDS"
     },
     {
       "file": "scripts/memory_dedup_exact.py",

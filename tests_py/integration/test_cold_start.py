@@ -135,8 +135,8 @@ class TestSessionStartHook:
         assert "set up and ready" in msg
         assert "remember" in msg.lower()
 
-    def test_pg_not_installed_shows_install_guide(self):
-        """When PostgreSQL is not running, shows installation guide."""
+    def test_pg_unreachable_names_the_configured_server(self):
+        """When the configured PostgreSQL is not running, says so: no recipe."""
         from mcp_server.hooks.session_start import _build_cold_start_message
 
         setup_result = {
@@ -145,8 +145,9 @@ class TestSessionStartHook:
         }
         msg = _build_cold_start_message(setup_result)
 
-        assert "brew install" in msg
-        assert "postgresql" in msg.lower()
+        # ADR-1104: the configured server's own error, never an install recipe.
+        assert "brew" not in msg
+        assert "PostgreSQL is not running." in msg
 
     def test_schema_failure_shows_error(self):
         """When schema init fails, shows helpful error."""
@@ -222,7 +223,7 @@ class TestToolErrorHandler:
 
     @pytest.mark.asyncio
     async def test_db_connection_error_returns_setup_guide(self):
-        """Database connection errors should raise with setup instructions."""
+        """Database connection errors raise with the real error and the fix."""
         from mcp.server.mcpserver.exceptions import ToolError
 
         from mcp_server.tool_error_handler import safe_handler
@@ -236,7 +237,9 @@ class TestToolErrorHandler:
         message = str(exc_info.value)
         assert "database_not_connected" in message
         assert "PostgreSQL" in message
-        assert "brew install" in message
+        # ADR-1104: the real error, never an install recipe.
+        assert "Connection refused" in message
+        assert "brew" not in message
 
     @pytest.mark.asyncio
     async def test_missing_extension_error(self):

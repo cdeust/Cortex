@@ -52,6 +52,22 @@ def _uv_python(deps_dir: str, *args: str) -> subprocess.CompletedProcess:
     )
 
 
+def _record(deps_dir: str) -> Path:
+    """Where ``provide`` writes the interpreter path, so a hook need not ask uv."""
+    return managed_dir(deps_dir) / "interpreter"
+
+
+def installed(deps_dir: str) -> str | None:
+    """The pinned CPython ``provide`` installed, read from its record: no
+    subprocess, so a hook on Python 3.9 pays one exec, not a uv call
+    (measured 0.26 s with ``uv python find`` vs 0.10 s direct, 2026-10-14)."""
+    try:
+        path = _record(deps_dir).read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return path if path and os.access(path, os.X_OK) else None
+
+
 def provide(deps_dir: str) -> str:
     """Install the pinned CPython if absent; return its interpreter path.
 
@@ -65,13 +81,19 @@ def provide(deps_dir: str) -> str:
             f"into {managed_dir(deps_dir)}",
             file=sys.stderr,
         )
-        installed = _uv_python(deps_dir, "install")
-        if installed.returncode:
-            raise InterpreterError((installed.stderr or installed.stdout).strip())
+        done = _uv_python(deps_dir, "install")
+        if done.returncode:
+            raise InterpreterError((done.stderr or done.stdout).strip())
         found = _uv_python(deps_dir, "find")
         if found.returncode:
             raise InterpreterError((found.stderr or found.stdout).strip())
-    return found.stdout.strip()
+    path = found.stdout.strip()
+    _record(deps_dir).write_text(path, encoding="utf-8")
+    return path
+
+
+def supported() -> bool:
+    return sys.version_info[:2] >= SUPPORTED
 
 
 def ensure_supported(deps_dir: str, launcher: str) -> None:
@@ -80,10 +102,10 @@ def ensure_supported(deps_dir: str, launcher: str) -> None:
     Postcondition: returns only when ``sys.version_info >= SUPPORTED``. Exits
     1 with the real cause when no supported Python can be provided.
     """
-    if sys.version_info[:2] >= SUPPORTED:
+    if supported():
         return
     try:
-        python = provide(deps_dir)
+        python = installed(deps_dir) or provide(deps_dir)
     except (OSError, _uv.UvUnavailableError, InterpreterError) as exc:
         print(
             f"[cortex-launcher] cannot run on Python {sys.version.split()[0]} "

@@ -77,6 +77,8 @@ app-tauri/src-tauri/target/
 /deps/
 # The pinned uv scripts/launcher_uv.py bootstraps beside deps/ (ADR-1092).
 /deps.uv-*/
+# The launcher's install and semantic-job locks beside deps/ (ADR-1104).
+/deps.*.lock
 
 # Benchmark run logs (raw stdout/stderr) — transient artifacts, not release content
 benchmarks/results/**/*.log

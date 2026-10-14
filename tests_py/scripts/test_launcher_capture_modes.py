@@ -127,7 +127,9 @@ class LauncherCaptureModes(unittest.TestCase):
     def test_other_entries_and_explicit_install_preserve_original_stdin(self):
         cases = (
             ("full", {}, "base"),
-            ("off", {"TARGET_MODULE": "mcp_server"}, "base"),
+            # The server as the stand-in's child runs it (ADR-1104): an
+            # uninstalled runtime gets the stand-in, tested on its own.
+            ("off", {"TARGET_MODULE": "mcp_server", "CORTEX_MCP_DIRECT": "1"}, "base"),
             ("off", {"INSTALL_DEPS": "1"}, "all"),
         )
         raw = '{"tool_name":"Read"}'

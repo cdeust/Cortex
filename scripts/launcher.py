@@ -26,12 +26,15 @@ _SCRIPTS_DIR = str(Path(__file__).resolve().parent)
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 import launcher_deps  # noqa: E402
+import launcher_mcp_bootstrap  # noqa: E402
 import launcher_ml  # noqa: E402
 import launcher_python  # noqa: E402
 import launcher_site  # noqa: E402
 
 _MIN_ARGC = 2  # source: ADR-0742
-_LAUNCHER = str(Path(__file__).resolve())  # source: ADR-1104 (re-exec and background job target)
+_LAUNCHER = str(
+    Path(__file__).resolve()
+)  # source: ADR-1104 (re-exec and background job target)
 
 
 def _resolve_paths() -> tuple[str, str]:
@@ -121,14 +124,15 @@ def _ensure_runtime(module: str, install_deps: bool, deps_dir: str) -> None:
 
     Only the semantic-search job installs the ML set (launcher_ml); the
     SessionStart launch starts that job and tells the hook where it stands.
-    source: ADR-0742, ADR-1104
+    source: ADR-0742
+    source: ADR-1104
     """
     if install_deps:
         launcher_deps.ensure_all_deps(deps_dir)
     else:
         launcher_deps.ensure_deps(deps_dir)
-    # The import system cached deps_dir as it was before this install.
-    # source: ADR-1104
+    # The import system cached deps_dir as it was before this install
+    # (source: ADR-1104).
     importlib.invalidate_caches()
     # The locked set just installed can add a .pth (~0.5 ms). source: issue #621
     launcher_site.isolate_deps(deps_dir)
@@ -158,10 +162,21 @@ def _run(module: str, plugin_root: str) -> None:
         sys.exit(1)
 
 
+def _needs_stand_in(module: str, deps_dir: str) -> bool:
+    """The MCP server's runtime is not installed: the host cannot wait for it.
+
+    source: ADR-1104
+    """
+    if module != "mcp_server" or os.environ.get(launcher_mcp_bootstrap.DIRECT_ENV):
+        return False
+    if not launcher_python.supported():
+        return launcher_python.installed(deps_dir) is None
+    return not launcher_deps.set_ready(deps_dir, "base")
+
+
 def main() -> None:
     # source: ADR-1098 (supersedes the output half of ADR-0742)
     plugin_root, deps_dir = _resolve_paths()
-    launcher_python.ensure_supported(deps_dir, _LAUNCHER)
     _use_utf8_output(plugin_root)
     if len(sys.argv) < _MIN_ARGC:
         print(
@@ -170,6 +185,10 @@ def main() -> None:
         )
         sys.exit(1)
     module = sys.argv[1]
+    if _needs_stand_in(module, deps_dir):
+        launcher_mcp_bootstrap.serve([sys.executable, _LAUNCHER, *sys.argv[1:]])
+        return
+    launcher_python.ensure_supported(deps_dir, _LAUNCHER)
     install_deps = "--install-deps" in sys.argv
     _set_import_paths(plugin_root, deps_dir)
     if (

@@ -22,15 +22,21 @@ from pathlib import Path
 
 PLUGIN_ID = "hypermnesia-mcp@cortex-plugins"  # source: .claude-plugin/marketplace.json
 SERVER_NAME = "plugin:hypermnesia-mcp:cortex"  # source: claude mcp list naming
-SYSTEM_PATH = ("/usr/bin", "/bin", "/usr/sbin", "/sbin")  # source: a clean macOS / Linux PATH
+SYSTEM_PATH = (
+    "/usr/bin",
+    "/bin",
+    "/usr/sbin",
+    "/sbin",
+)  # source: a clean macOS / Linux PATH
 CLI_TIMEOUT_SECONDS = 900  # source: measured first launch upper bound, brief step 0
 
 _KEPT_ENV = ("LANG", "LC_ALL", "TERM", "TMPDIR", "USER", "LOGNAME", "SHELL")
 
 _WRAPPER = """#!/bin/sh
 # Records each plugin process the host starts, then runs the real interpreter.
-if [ -z "${{DATABASE_URL+x}}" ]; then db=unset; elif [ -z "$DATABASE_URL" ]; then db=empty; else db=set; fi
-if [ -z "${{CLAUDE_PLUGIN_OPTION_DATABASE_URL+x}}" ]; then opt=unset; elif [ -z "$CLAUDE_PLUGIN_OPTION_DATABASE_URL" ]; then opt=empty; else opt=set; fi
+state() {{ eval "set=\\${{$1+x}} value=\\${{$1-}}"; if [ -z "$set" ]; then echo unset;
+  elif [ -z "$value" ]; then echo empty; else echo set; fi; }}
+db=$(state DATABASE_URL); opt=$(state CLAUDE_PLUGIN_OPTION_DATABASE_URL)
 printf '%s\\tDATABASE_URL=%s\\tOPTION=%s\\t%s\\n' "$$" "$db" "$opt" "$*" >> "{log}"
 exec {prefix}"{python}" "$@"
 """
@@ -50,6 +56,10 @@ class Machine:
     @property
     def config_dir(self) -> Path:
         return self.home / ".claude"
+
+    @property
+    def server_log(self) -> Path:
+        return self.work / "mcp-server.stderr"
 
     @property
     def plugin_data(self) -> Path:

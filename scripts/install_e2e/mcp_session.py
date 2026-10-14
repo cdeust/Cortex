@@ -50,17 +50,42 @@ def _send(stdin: IO[str], message: dict) -> None:
     stdin.flush()
 
 
-def _reply(stdout: IO[str], request_id: int) -> dict:
+def _next_matching(stdout: IO[str], wanted) -> dict:
     for line in stdout:
         line = line.strip()
         if line.startswith("{"):
             message = json.loads(line)
-            if message.get("id") == request_id:
+            if wanted(message):
                 return message
-    raise RuntimeError(f"server closed stdout before answering request {request_id}")
+    raise RuntimeError("server closed stdout before the awaited message")
 
 
-def _request(proc: subprocess.Popen, request_id: int, method: str, params: dict) -> dict:
+def _reply(stdout: IO[str], request_id: int) -> dict:
+    return _next_matching(stdout, lambda m: m.get("id") == request_id)
+
+
+def _tool_names(proc: subprocess.Popen, request_id: int) -> list:
+    tools = _request(proc, request_id, "tools/list", {})
+    return [t.get("name") for t in (tools.get("result") or {}).get("tools", [])]
+
+
+def _listed_tools(proc: subprocess.Popen) -> tuple[list, bool]:
+    """tools/list; on a first launch the list arrives with ``list_changed``.
+
+    Returns the names and whether they came after a ``list_changed``.
+    """
+    assert proc.stdout is not None
+    names = _tool_names(proc, 2)
+    if all(n in names for n in REQUIRED_TOOLS):
+        return names, False
+    changed = "notifications/tools/list_changed"
+    _next_matching(proc.stdout, lambda m: m.get("method") == changed)
+    return _tool_names(proc, 5), True
+
+
+def _request(
+    proc: subprocess.Popen, request_id: int, method: str, params: dict
+) -> dict:
     assert proc.stdin is not None and proc.stdout is not None
     _send(
         proc.stdin,
@@ -87,22 +112,33 @@ def _converse(proc: subprocess.Popen, token: str, project: Path) -> dict:
     )
     assert proc.stdin is not None
     _send(proc.stdin, {"jsonrpc": "2.0", "method": "notifications/initialized"})
-    tools = _request(proc, 2, "tools/list", {})
-    names = [t.get("name") for t in (tools.get("result") or {}).get("tools", [])]
+    names, after_change = _listed_tools(proc)
     content = f"The zero-ops install check stored the marker {token} on first launch."
     stored = _request(
         proc,
         3,
         "tools/call",
-        {"name": "remember", "arguments": {"content": content, "force": True, "directory": str(project)}},
+        {
+            "name": "remember",
+            "arguments": {"content": content, "force": True, "directory": str(project)},
+        },
     )
     found = _request(
         proc,
         4,
         "tools/call",
-        {"name": "recall", "arguments": {"query": f"zero-ops install marker {token}", "min_heat": 0}},
+        {
+            "name": "recall",
+            "arguments": {"query": f"zero-ops install marker {token}", "min_heat": 0},
+        },
     )
-    return {"init": init, "names": names, "stored": stored, "found": found}
+    return {
+        "init": init,
+        "names": names,
+        "after_change": after_change,
+        "stored": stored,
+        "found": found,
+    }
 
 
 def remember_recall(argv: list, env: dict, project: Path, log: Path) -> dict:
@@ -128,6 +164,7 @@ def remember_recall(argv: list, env: dict, project: Path, log: Path) -> dict:
     return {
         "initialize_ok": "result" in talk["init"],
         "tools_listed": len(talk["names"]),
+        "tools_arrived_by_list_changed": talk["after_change"],
         "required_tools_present": all(n in talk["names"] for n in REQUIRED_TOOLS),
         "remember": _text(talk["stored"])[:400],
         "recall_contains_token": token in recalled,

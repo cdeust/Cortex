@@ -43,10 +43,9 @@ _prune_superseded_dist_info = _fs.prune_superseded_dist_info
 
 LOCK_PATH = Path(_SCRIPTS_DIR).parent / "uv.lock"
 
-# An ML-set install moves about 1 GB; a holder that keeps the lock longer is
-# reported, not waited on forever. source: ADR-1104 (measured 86 s cold, audit
-# 2026-10-10 claim 4, so the bound is twenty times that)
-_LOCK_WAIT_SECONDS = 1800
+# An ML-set install moves about 1 GB (86 s cold, promise audit 2026-10-10);
+# a holder that keeps the lock twenty times longer is reported, not waited on.
+_LOCK_WAIT_SECONDS = 1800  # source: ADR-1104
 
 
 def _importable(import_name: str, deps_dir: str) -> bool:
@@ -71,6 +70,10 @@ def _importable(import_name: str, deps_dir: str) -> bool:
     return False
 
 
+def _lock_path(deps_dir: str) -> str:
+    return f"{deps_dir}.install.lock"
+
+
 def _deps_lock(deps_dir: str):
     """Exclusive hold on ``deps_dir``'s installs, released when the holder dies.
 
@@ -78,7 +81,7 @@ def _deps_lock(deps_dir: str):
     an install never proceeds unlocked beside another one.
 
     source: ADR-1104 (supersedes ADR-0747's age-stealing directory lock)"""
-    return _lock.held(f"{deps_dir}.install.lock", _LOCK_WAIT_SECONDS)
+    return _lock.held(_lock_path(deps_dir), _LOCK_WAIT_SECONDS)
 
 
 def _stamp_path(deps_dir: str, kind: str) -> str:
@@ -157,9 +160,18 @@ def _ensure(
         return
     if _stamp_matches(deps_dir, kind, digest):
         return
+
+    # Waiting for the lock ends early once another holder stamps this set:
+    # the MCP server needs the base set, not the end of an ML install.
+    def stamped() -> bool:
+        return _stamp_matches(deps_dir, kind, digest)
+
     try:
-        with _deps_lock(deps_dir):
-            _install_and_stamp(deps_dir, kind, set_args, imports, digest)
+        with _lock.held_unless(
+            _lock_path(deps_dir), _LOCK_WAIT_SECONDS, stamped
+        ) as held:
+            if held:
+                _install_and_stamp(deps_dir, kind, set_args, imports, digest)
     except _lock.LockTimeoutError as exc:
         print(f"[cortex-launcher] dependency install failed: {exc}", file=sys.stderr)
 
@@ -195,12 +207,12 @@ def _install_and_stamp(
         _write_stamp(deps_dir, kind, digest, set_digest)
 
 
-def ml_ready(deps_dir: str) -> bool:
-    """True iff the ML set is installed for this uv.lock and this Python.
+def set_ready(deps_dir: str, kind: str) -> bool:
+    """True iff set ``kind`` ("base", "ml") is installed for this uv.lock and Python.
 
     source: ADR-1104"""
     digest = lock_digest()
-    return digest is not None and _stamp_matches(deps_dir, "ml", digest)
+    return digest is not None and _stamp_matches(deps_dir, kind, digest)
 
 
 def ensure_deps(deps_dir: str) -> None:

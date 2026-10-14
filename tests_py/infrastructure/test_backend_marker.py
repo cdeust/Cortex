@@ -109,6 +109,29 @@ class TestResolveBackendEnv:
     def test_no_marker_no_config_is_noop(self):
         assert resolve_backend_env({}, None) == {}
 
+    def test_the_plugin_default_applies_when_nothing_is_configured(self):
+        """ADR-1104: the plugin launcher names SQLite; nothing dials PostgreSQL."""
+        assert resolve_backend_env({}, None, "sqlite") == {
+            "CORTEX_MEMORY_STORE_BACKEND": "sqlite"
+        }
+
+    @pytest.mark.parametrize(
+        "env",
+        [
+            {"DATABASE_URL": "postgresql://db.example:5432/cortex"},
+            {"CORTEX_MEMORY_DATABASE_URL": "postgresql://db.example:5432/cortex"},
+            {"CORTEX_MEMORY_STORE_BACKEND": "postgresql"},
+        ],
+    )
+    def test_any_configuration_beats_the_plugin_default(self, env):
+        assert resolve_backend_env(env, None, "sqlite") == {}
+
+    def test_a_postgresql_marker_beats_the_plugin_default(self):
+        """The installer's opt-in (the owner's own machine) keeps PostgreSQL."""
+        assert resolve_backend_env({}, {"backend": "postgresql"}, "sqlite") == {
+            "CORTEX_MEMORY_STORE_BACKEND": "postgresql"
+        }
+
     def test_never_mutates_input(self):
         env = {"CORTEX_BACKEND": "sqlite"}
         resolve_backend_env(env, None)

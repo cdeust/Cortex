@@ -96,6 +96,7 @@ def bootstrap_command(target: Path, requirement: Path) -> list[str]:
         "install",
         "-q",
         "--disable-pip-version-check",
+        "--no-cache-dir",
         "--index-url",
         "https://pypi.org/simple/",
         "--only-binary=:all:",
@@ -151,21 +152,30 @@ def _bootstrap_through(scratch: Path, target: Path) -> Path:
     return binary
 
 
-def locate(deps_dir: str) -> str:
-    """The uv to run: PATH's at exactly ``UV_VERSION``, else the private copy."""
+def located(deps_dir: str) -> str | None:
+    """The pinned uv when one is already here (PATH's, else the private copy)."""
     on_path = shutil.which("uv")
     if on_path and _version_of(on_path) == UV_VERSION:
         return on_path
     private = _binary_in(private_dir(deps_dir))
-    if private is not None:
-        return str(private)
-    return str(_bootstrap(deps_dir))
+    return None if private is None else str(private)
+
+
+def locate(deps_dir: str) -> str:
+    """The uv to run: PATH's at exactly ``UV_VERSION``, else the private copy."""
+    return located(deps_dir) or str(_bootstrap(deps_dir))
 
 
 def environment() -> dict[str, str]:
+    """uv's environment: no inherited weakening, and no cache in ``~/.cache``.
+
+    ``UV_NO_CACHE`` keeps uv's cache in a temporary directory it removes: an
+    org-managed Mac can make ``~/.cache`` read-only (issue #740).
+    """
     env = dict(os.environ)
     for name in _UV_ENV_DROPPED:
         env.pop(name, None)
+    env["UV_NO_CACHE"] = "1"
     return env
 
 

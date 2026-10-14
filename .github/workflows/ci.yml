@@ -1025,6 +1025,53 @@ jobs:
   # scripts/check_ci_gate_complete.py (run by `lint`) refuses a merge if any
   # job here is missing from `needs`, or if a job carrying a job-level `if:`
   # is absent from ALLOWED_SKIPS below.
+  # The owner's install, end to end, with the real Claude Code CLI on a clean
+  # HOME: marketplace add + install from this checkout, first session ->
+  # "Cortex ready", tools, remember -> recall, no process left, second session
+  # with semantic search. macOS runs on /usr/bin/python3 (3.9: the launcher
+  # installs CPython 3.12.13), natively and under Rosetta.
+  # source: ADR-1104
+  install-e2e:
+    needs: [changes, lint]
+    if: github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true'
+    name: Install E2E (${{ matrix.leg }})
+    runs-on: ${{ matrix.os }}
+    # source: ADR-1104 (cold install plus the background ML job, measured locally)
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - leg: linux
+            os: ubuntu-latest
+            arch_flag: ""
+          - leg: macos-arm64
+            os: macos-latest
+            arch_flag: ""
+          - leg: macos-x86_64
+            os: macos-latest
+            arch_flag: "--x86_64"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install the Claude Code CLI (pinned)
+        # source: ADR-1104 (the CLI version the check was measured with)
+        run: npm install -g @anthropic-ai/claude-code@2.1.296 && claude --version
+      - name: Rosetta (x86_64 leg)
+        if: matrix.arch_flag != ''
+        run: softwareupdate --install-rosetta --agree-to-license || arch -x86_64 /usr/bin/true
+      - name: Zero-ops install, first and second session
+        run: >-
+          /usr/bin/python3 scripts/install_e2e/run.py
+          --marketplace "$GITHUB_WORKSPACE"
+          --work "$RUNNER_TEMP/install-e2e"
+          --python /usr/bin/python3
+          --settle-seconds 1500
+          ${{ matrix.arch_flag }}
+          > "$RUNNER_TEMP/install-e2e.json"
+      - name: Report
+        if: always()
+        run: cat "$RUNNER_TEMP/install-e2e.json" || true
+
   ci-green:
     name: CI Green
     if: always()
@@ -1045,6 +1092,7 @@ jobs:
       - docker-runtime-build
       - devcontainer-build
       - docker-smoke
+      - install-e2e
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Require successful jobs or justified skips
@@ -1053,7 +1101,7 @@ jobs:
           # source: ADR-0802
 
 
-          ALLOWED_SKIPS: test,test-sqlite,mcp-host-config,test-windows,release-deps,craftsmanship,typecheck,build,docker-runtime-build,devcontainer-build,docker-smoke
+          ALLOWED_SKIPS: test,test-sqlite,mcp-host-config,test-windows,release-deps,craftsmanship,typecheck,build,docker-runtime-build,devcontainer-build,docker-smoke,install-e2e
         run: python3 scripts/check_ci_gate_results.py
 
   # source: ADR-0802

@@ -124,18 +124,24 @@ def test_fast_path_reads_the_stamp_of_this_kind_and_lock(
     assert seen == [(str(deps_dir), "base", DIGEST)]
 
 
+def _lock_is_held(deps_mod, deps_dir: str) -> bool:
+    """Whether the deps install lock is taken (ADR-1104: an OS file lock)."""
+    with deps_mod._lock.held_if_free(f"{deps_dir}.install.lock") as free:
+        return not free
+
+
 def test_ensure_deps_rechecks_the_stamp_under_the_lock(
     deps_mod, deps_dir, calls, monkeypatch
 ):
     """Another process finished while this one waited: no second install."""
-    real_lock = deps_mod._deps_lock
+    real_lock = deps_mod._lock.held_unless
 
-    def lock_then_peer_stamps(path):
-        assert path == str(deps_dir)
+    def lock_then_peer_stamps(path, wait_seconds, done):
+        assert path == f"{deps_dir}.install.lock"
         deps_mod._write_stamp(str(deps_dir), "base", DIGEST, SET)
-        return real_lock(path)
+        return real_lock(path, wait_seconds, done)
 
-    monkeypatch.setattr(deps_mod, "_deps_lock", lock_then_peer_stamps)
+    monkeypatch.setattr(deps_mod._lock, "held_unless", lock_then_peer_stamps)
     deps_mod.ensure_deps(str(deps_dir))
     assert calls == []
 
@@ -147,7 +153,7 @@ def test_ensure_deps_holds_the_deps_dir_lock_while_installing(
     monkeypatch.setattr(
         deps_mod,
         "_install_locked_set",
-        lambda d, _s: held.append(Path(f"{d}.lock").is_dir()) or True,
+        lambda d, _s: held.append(_lock_is_held(deps_mod, d)) or True,
     )
     deps_mod.ensure_deps(str(deps_dir))
     assert held == [True]
@@ -215,7 +221,7 @@ def test_installer_set_is_installed_under_the_lock(deps_mod, tmp_path, calls):
     deps_dir = tmp_path / "fresh" / "deps"
     assert deps_mod.main([str(deps_dir)]) == 0
     assert calls == [(str(deps_dir), deps_mod._sets.INSTALLER)]
-    assert not Path(f"{deps_dir}.lock").exists()
+    assert not _lock_is_held(deps_mod, str(deps_dir))
 
 
 def test_installer_set_sweeps_and_locks_its_own_deps_dir(
@@ -227,7 +233,7 @@ def test_installer_set_sweeps_and_locks_its_own_deps_dir(
     monkeypatch.setattr(
         deps_mod,
         "_install_locked_set",
-        lambda d, _s: held.append(Path(f"{d}.lock").is_dir()) or True,
+        lambda d, _s: held.append(_lock_is_held(deps_mod, d)) or True,
     )
     assert deps_mod.install_installer_set(str(deps_dir)) is True
     assert held == [True]

@@ -20,6 +20,7 @@ CODE_JOBS = frozenset(
         "craftsmanship",
         "typecheck",
         "build",
+        "install-e2e",
     }
 )
 DOCKER_BUILD_JOBS = frozenset({"docker-runtime-build", "devcontainer-build"})

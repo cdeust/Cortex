@@ -10,7 +10,8 @@
                               download attempt failed).
 
 Behaviour is preserved verbatim from the pre-split ``_ensure_model``:
-``PACKAGE_ABSENT`` degrades to the hash fallback + a background install;
+``PACKAGE_ABSENT`` degrades to the hash fallback (the plugin launcher's
+semantic-search job installs the package, ADR-1104);
 ``MODEL_FILES_ABSENT`` downloads; ``LOAD_RAISED`` propagates. The states are now
 *named*, which is the seam a second (download-free) encoder plugs into later.
 
@@ -24,7 +25,6 @@ import os
 from typing import Any
 
 from mcp_server.infrastructure.embedding_downloads import (
-    trigger_background_install,
     trigger_background_model_download,
 )
 from mcp_server.infrastructure.embedding_prefix import BertPrefix
@@ -200,10 +200,23 @@ class _EmbeddingLifecycleMixin:
             self._load_model(self._resolve_device())
         except ImportError:
             # PACKAGE_ABSENT: sentence-transformers is not installed.
+            # The plugin launcher's semantic-search job installs the locked
+            # ML set (scripts/launcher_ml.py); the server installs nothing
+            # (source: ADR-1104).
             self._engage_fallback(
                 ModelState.PACKAGE_ABSENT, "sentence-transformers not installed"
             )
-            trigger_background_install()
+
+    def download_model(self) -> None:
+        """Fetch the pinned model into the local cache and load it, now.
+
+        The plugin's semantic-search job (ADR-1104) calls this once the ML set
+        is installed, so the next session finds the weights. Raises the real
+        error (network, disk, missing package); nothing degrades here.
+        """
+        device = self._resolve_device()
+        self._model = self._construct_model(device, embedding_cache_dir(), local=False)
+        self._finalize_loaded(device)
 
     def _engage_fallback(self, state: ModelState, reason: str) -> None:
         """Record a non-LOADED lifecycle state and LOUDLY engage the fallback.

@@ -28,9 +28,11 @@ like any other memory (locally) — avoid doing so.
   entities, the knowledge graph, and profiles are stored in a single local
   database file at `~/.claude/methodology/memory.db` (setting
   `CORTEX_CLAUDE_DIR` relocates this root, and everything derived from it, to
-  a directory you choose). If a configured
-  PostgreSQL instance is unreachable, Cortex falls back to this SQLite store
-  with an explicit warning in the logs. Nothing is uploaded.
+  a directory you choose). With no database configured, the Claude Code
+  plugin uses this store and never connects to a PostgreSQL server. A
+  configured PostgreSQL that is unreachable is an error shown at session
+  start ("Cortex not ready"), never a silent switch to SQLite. Nothing is
+  uploaded.
 - **PostgreSQL + pgvector (opt-in — `install-plugin.sh --postgres`, large
   stores, shared team databases):** your data is stored in **your own**
   database, configured via the `DATABASE_URL` environment variable (default
@@ -72,7 +74,16 @@ that every optional retrieval source was available.
 
 The only outbound network activity is:
 
-1. **One-time model download.** On first use, the open-source embedding model
+1. **One-time runtime install (Claude Code plugin).** The first launch
+   downloads, into the plugin's data directory
+   (`~/.claude/plugins/data/hypermnesia-mcp-cortex-plugins/`): the pinned uv
+   and the locked Python packages from PyPI (hash-checked against `uv.lock`),
+   then, in one background job, the machine-learning packages and the
+   embedding model below; and, only when the machine's `python3` is older
+   than 3.10, CPython 3.12.13 from the python-build-standalone releases on
+   GitHub, through uv. These transfers fetch software only; no user content
+   is sent. `CORTEX_EMBEDDING_ZERO_DOWNLOAD=1` skips the background job.
+2. **One-time model download.** On first use, the open-source embedding model
    (`sentence-transformers`, all-MiniLM-L6-v2) and the reranking model
    (`flashrank`, ms-marco-MiniLM) are downloaded from the public Hugging Face
    model hub. These transfers fetch **model files only** — no user content is
@@ -82,10 +93,10 @@ The only outbound network activity is:
    `CORTEX_RERANKER_OFFLINE=1`: Cortex then refuses the download when the model
    is not already cached and degrades to first-stage retrieval scores, logging
    a warning that names the path it expected, rather than reaching out.
-2. **Integrations you explicitly enable.** If you configure optional upstream MCP
+3. **Integrations you explicitly enable.** If you configure optional upstream MCP
    servers or a remote PostgreSQL database, Cortex communicates only with the
    endpoints you provided.
-3. **Optional OTLP telemetry export (opt-in, OFF by default).** If you set the
+4. **Optional OTLP telemetry export (opt-in, OFF by default).** If you set the
    `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable, Cortex additionally
    mirrors the same aggregate, content-free metrics already visible via
    `get_telemetry` (per-tool call counts, latencies, and result counts —

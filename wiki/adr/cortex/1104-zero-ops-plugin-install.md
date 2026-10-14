@@ -1,0 +1,37 @@
+---
+created: 2026-10-14T06:00:00Z
+kind: adr
+number: 1104
+status: accepted
+tags: [install, launcher, plugin, first-launch, sqlite]
+title: Zero-ops plugin install
+---
+# ADR-1104: Zero-ops plugin install
+
+## Status
+
+accepted
+
+## Context
+
+The owner's requirement: `claude plugin marketplace add cdeust/Cortex` then `claude plugin install hypermnesia-mcp@cortex-plugins` gives "Cortex ready" at the first session, with working tools and a working remember then recall, and no other intervention. `scripts/install_e2e/run.py` runs exactly that on an isolated HOME with the real Claude Code CLI (2.1.296): `claude --init-only --debug-file` runs the plugin's SessionStart hook under the host's own timeout while `claude mcp list` connects the plugin's MCP server, then the server is driven over stdio. On main (eb2c2acc), 2026-10-14, it measured:
+
+1. `postInstall` is not a Claude Code manifest field (the host strips it), so `scripts/install-plugin.sh` never runs: no backend marker is written, the launcher sets `DATABASE_URL=postgresql://localhost:5432/cortex` for every process, and the engine's `auto` backend picks PostgreSQL in the CLI runtime. During the measurement a fresh install's MCP server wrote a memory into the PostgreSQL that listened on that port (the owner's own store; the row was deleted).
+2. `python3` on a Mac with only the Command Line Tools is 3.9.6; `requires-python` is `>=3.10`, and uv refuses to install the locked sets ("incompatible with the pylock.toml's Python requirement").
+3. With a supported Python, a cold first launch needs the pinned uv (bootstrapped with pip, 29.3 s) and the base set (28.5 s). The host cancels the SessionStart hook at its 30 s `timeout` and discards its output, and fails the MCP server after 30 s ("connection timed out after 30000ms"). Claude Code never reconnects a stdio server (MCP documentation, "Automatic reconnection").
+4. The SessionStart launch installed the about 1 GB ML set inside that hook, and the server started an unpinned `pip install sentence-transformers>=2.2.0,<4.0.0` in the background.
+5. The deps lock (ADR-0747) let a waiter proceed unlocked after 30 s while the holder still installed.
+6. Nothing told the user Cortex was ready: a SessionStart hook's plain stdout reaches Claude only; the user sees its JSON `systemMessage`.
+
+## Decision
+
+1. **SQLite unless configured.** `scripts/launcher.py` resolves one backend for the server and every hook: the host gives hooks the user's `database_url` only as `CLAUDE_PLUGIN_OPTION_DATABASE_URL`, so the launcher maps it to `DATABASE_URL` when that is empty; then the shared precedence of ADR-0505 (`backend_marker.resolve_backend_env`) runs with a `default` the launcher sets to `sqlite`. A configured URL, `CORTEX_MEMORY_STORE_BACKEND`, `CORTEX_BACKEND` or an installer marker still wins. The local PostgreSQL URL default applies only when a marker chose PostgreSQL. The ignored `postInstall` field is removed from `plugin.json`.
+2. **A supported Python, provided.** Below 3.10 the launcher has the pinned uv install CPython 3.12.13 into `${CLAUDE_PLUGIN_DATA}/python` and re-executes itself on it (`scripts/launcher_python.py`); failure exits 1 with uv's error. 3.12 is the newest CPython with a PyTorch wheel for Intel Macs (`pyproject.toml` platform-bounds).
+3. **The MCP server answers the host at once.** When its runtime is not installed, the launcher runs a stdlib stand-in (`scripts/launcher_mcp_bootstrap.py`, `launcher_mcp_wire.py`) that answers `initialize` with the real server's identity, instructions and capabilities (with `listChanged`), lists no tools, refuses `server/discover` so the host uses the initialize handshake, and starts the real server as a child (`CORTEX_MCP_DIRECT=1`). Once the child has installed what it needs and answered its own `initialize`, the stand-in sends `tools/prompts/resources list_changed` and copies every line both ways.
+4. **The SessionStart hook installs the base set and reports.** Its timeout becomes 300 s, enough for a cold base install (58 s measured). Its output becomes one JSON object: the context it always printed in `additionalContext`, and a `systemMessage` that starts with "Cortex ready:" only when the store answered, with where memories live, the count, and how recall ranks; otherwise "Cortex not ready:" with the real cause (`mcp_server/hooks/session_start_status.py`). Every PostgreSQL install recipe is removed from what the hook prints.
+5. **Semantic search arrives in one background job.** The SessionStart launch starts at most one detached job (`scripts/launcher_ml.py`, a job lock held for its life) that installs the locked ML set and downloads the pinned model (`mcp_server.infrastructure.embedding_warmup`), recording `ready` or `failed` with the error. Until then recall is keyword-only and the status line says so; a failure is shown with its cause and retried next session. The server no longer installs anything. `CORTEX_EMBEDDING_ZERO_DOWNLOAD` (ADR-0519) stops the job and is named in the status line.
+6. **Installs never run unlocked.** The deps lock is an OS file lock (`scripts/launcher_lock.py`) that the kernel releases when its holder dies, waited on up to 1800 s, then a reported error. A waiter stops waiting once another holder has stamped the set it needs, so the server never waits for the ML install. Imports are re-scanned (`importlib.invalidate_caches`) after an install. uv runs with `UV_NO_CACHE=1` and pip with `--no-cache-dir` (from #744).
+
+## Consequences
+
+Positive: the install check passes on the measured paths (see the pull request for the runs), nothing dials a PostgreSQL that was not configured, and the user sees one line that says whether Cortex is usable and how. Negative and known limits: a user who relied on the implicit local PostgreSQL with neither a marker nor `database_url` now gets the SQLite store; the status line names the store at every session, and setting `database_url` restores PostgreSQL. The first SessionStart can delay Claude's first answer by the base install (about a minute on the measured network). A Mac without the Command Line Tools still shows Apple's installer dialog, but at `claude plugin marketplace add` (git), before the plugin exists. `claude plugin install` prints the host's informational "1 userConfig option not yet set" for any plugin that declares an option; nothing waits for an answer. The stand-in adds one process hop for the first session's server only.
