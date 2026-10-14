@@ -47,7 +47,7 @@ _HOOK_DRIVER = textwrap.dedent(
 
     if mode == "start":
         from mcp_server.hooks import session_start
-        session_start._spawn_consolidate_cycle = lambda: groomer_pid
+        session_start._spawn_consolidate_cycle = lambda _options: groomer_pid
         session_start._maybe_background_consolidate()
     else:
         from mcp_server.hooks import session_lifecycle
@@ -196,7 +196,7 @@ def start_hook(monkeypatch, cache):
 
     calls = {"spawn": 0, "legacy": 0, "log": []}
 
-    def spawn():
+    def spawn(_options):
         calls["spawn"] += 1
         return os.getpid()
 

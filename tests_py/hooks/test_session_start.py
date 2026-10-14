@@ -26,8 +26,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from mcp_server.hooks import session_start as hook
-from mcp_server.shared import log_rotation
+from mcp_server.shared import detached_spawn, log_rotation
 from tests_py.hooks.stdin_support import utf8_stdin
+from tests_py._windows_spawn_fake import (
+    as_windows_in_breakaway_job,
+    assert_detached_on_windows,
+)
 
 # ── Event reading ─────────────────────────────────────────────────────
 
@@ -937,8 +941,9 @@ class TestSpawnConsolidateCycleInterpreterResolution:
             return MagicMock(pid=4242)
 
         monkeypatch.setattr(hook.subprocess, "Popen", _fake_popen)
+        as_windows_in_breakaway_job(monkeypatch)
 
-        assert hook._spawn_consolidate_cycle() == 4242
+        assert hook._spawn_consolidate_cycle(detached_spawn.options()) == 4242
         launcher = plugin_root / "scripts" / "launcher.py"
         assert captured["cmd"] == [
             sys.executable,
@@ -948,13 +953,13 @@ class TestSpawnConsolidateCycleInterpreterResolution:
         assert "store-stub" not in captured["cmd"][0]
         assert captured["kwargs"]["stdin"] == hook.subprocess.DEVNULL
         assert captured["kwargs"]["stderr"] == hook.subprocess.STDOUT
-        assert captured["kwargs"]["start_new_session"] is True
+        assert_detached_on_windows(captured["kwargs"])
         log_path = tmp_path / ".claude" / "methodology" / "consolidate.log"
         assert opened == [str(log_path)]
         assert captured["kwargs"]["stdout"].name == str(log_path)
 
         # A second cycle's spawn must also succeed (mkdir exist_ok=True).
-        assert hook._spawn_consolidate_cycle() == 4242
+        assert hook._spawn_consolidate_cycle(detached_spawn.options()) == 4242
         err = capsys.readouterr().err
         assert f"background consolidate spawned → {log_path}" in err
 
@@ -973,7 +978,7 @@ class TestSpawnConsolidateCycleInterpreterResolution:
 
         monkeypatch.setattr(hook.subprocess, "Popen", _fake_popen)
 
-        hook._spawn_consolidate_cycle()
+        hook._spawn_consolidate_cycle(detached_spawn.options())
 
         assert captured["cmd"] == [
             sys.executable,
@@ -995,7 +1000,7 @@ class TestSpawnConsolidateCycleInterpreterResolution:
 
         monkeypatch.setattr(hook.subprocess, "Popen", _fake_popen)
 
-        hook._spawn_consolidate_cycle()
+        hook._spawn_consolidate_cycle(detached_spawn.options())
         expected_launcher = (
             Path(hook.__file__).resolve().parents[2] / "scripts" / "launcher.py"
         )
@@ -1052,6 +1057,7 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
             return MagicMock()
 
         monkeypatch.setattr(hook.subprocess, "Popen", _fake_popen)
+        as_windows_in_breakaway_job(monkeypatch)
 
         hook._maybe_background_reanalyze("/the/project")
 
@@ -1065,7 +1071,7 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
         assert "store-stub" not in captured["cmd"][0]
         assert captured["kwargs"]["stdin"] == hook.subprocess.DEVNULL
         assert captured["kwargs"]["stderr"] == hook.subprocess.STDOUT
-        assert captured["kwargs"]["start_new_session"] is True
+        assert_detached_on_windows(captured["kwargs"])
         log_path = tmp_path / ".claude" / "methodology" / "pipeline_reanalyze.log"
         assert opened == [str(log_path)]
         assert captured["kwargs"]["stdout"].name == str(log_path)

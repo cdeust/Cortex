@@ -12,6 +12,8 @@ title: Spool captures for a detached drainer where the resident worker cannot ru
 
 accepted
 
+The drainer's spawn options (`popen_options` and its Windows `creationflags`) are superseded by ADR-1102; the others stand.
+
 ## Context
 
 Issue #659: since 17370a61 every PostToolUse capture goes through a resident

@@ -136,10 +136,12 @@ def test_codex_plugin_ships_an_mcp_server_and_hooks_and_nothing_else() -> None:
         assert unsupported not in plugin, unsupported
     # postInstall is the sharpest of those: the Claude package runs an
     # installer script, and this one deliberately does not.
-    # source: ADR-1084 (bundled stdlib intake, no installer script).
+    # source: ADR-1084 (bundled stdlib intake, no installer script);
+    # windows_job.py is the stdlib job probe the drain spawns with (ADR-1102).
     assert {p.name for p in (PLUGIN_ROOT / "scripts").glob("*.py")} == {
         "session_queue.py",
         "runtime.py",
+        "windows_job.py",
     }
 
 

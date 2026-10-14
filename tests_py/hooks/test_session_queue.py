@@ -66,9 +66,14 @@ def test_failure_retains_event_and_recovery_reports_it(queue, capsys):
 
 
 def test_spawn_is_detached_and_never_waits(queue):
-    with patch.object(queue.subprocess, "Popen") as popen:
+    detach = {"creationflags": 0x1234}  # source: arbitrary marker (issue #684)
+    with (
+        patch.object(queue.subprocess, "Popen") as popen,
+        patch.object(queue, "detach_options", return_value=detach),
+    ):
         queue.spawn(queue.queue_root())
-    assert popen.call_args.kwargs["start_new_session"] is True
+    assert popen.call_args.kwargs["creationflags"] == 0x1234
+    assert "start_new_session" not in popen.call_args.kwargs
     popen.return_value.wait.assert_not_called()
     popen.return_value.communicate.assert_not_called()
 

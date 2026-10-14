@@ -9,6 +9,8 @@ import os
 import subprocess
 import sys
 
+from mcp_server.shared import detached_spawn
+
 logger = logging.getLogger(__name__)
 
 
@@ -27,7 +29,7 @@ def _spawn_detached(cmd: list[str], what: str) -> None:
             cmd,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            start_new_session=True,
+            **detached_spawn.options(),
         )
         logger.info("Background %s started", what)
     except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues

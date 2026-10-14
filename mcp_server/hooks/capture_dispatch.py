@@ -6,7 +6,6 @@ import logging
 import os
 import socket
 import subprocess
-import sys
 import time
 from pathlib import Path
 from typing import IO, Any
@@ -18,6 +17,7 @@ from mcp_server.infrastructure.capture_client import deliver
 from mcp_server.infrastructure.capture_peer import is_supported
 from mcp_server.infrastructure.capture_transport import CaptureTransportError
 from mcp_server.infrastructure.config import CLAUDE_DIR
+from mcp_server.shared import detached_spawn
 
 logger = logging.getLogger(__name__)
 
@@ -43,41 +43,31 @@ def report_failure(
     )
 
 
-# source: https://learn.microsoft.com/en-us/windows/win32/procthread/process-creation-flags
-# (DETACHED_PROCESS: no console of the parent; CREATE_NEW_PROCESS_GROUP: not
-# signalled with the parent's group). The ``subprocess.*`` names of these flags
-# exist only on Windows, so the documented values are spelled out to keep
-# ``popen_options`` a pure function that macOS and Linux can test.
-_WINDOWS_DETACHED = 0x00000008 | 0x00000200
-
-
-def popen_options(platform: str, stream: IO[Any]) -> dict[str, Any]:
+def popen_options(stream: IO[Any], detach: dict[str, Any]) -> dict[str, Any]:
     """Options that start the drainer fully detached from the hook process.
 
     postcondition: stdin is closed, stdout and stderr go to ``stream``
     (the drainer's one log, so a crash before its logging exists is not lost), and
-    the child does not die with the hook. Windows has no ``start_new_session``
-    (``subprocess`` ignores it there) and no ``pass_fds``; it detaches through
-    ``creationflags``."""
-    options: dict[str, Any] = {
+    the child does not die with the hook: ``detach`` is
+    ``detached_spawn.platform_options`` (a new session on POSIX, creation flags
+    on Windows, where ``start_new_session`` is ignored and ``pass_fds`` absent)."""
+    return {
         "stdin": subprocess.DEVNULL,
         "stdout": stream,
         "stderr": stream,
         "close_fds": True,
         "cwd": Path(__file__).resolve().parents[2],
         "env": dict(os.environ),
+        **detach,
     }
-    if platform == "win32":
-        options["creationflags"] = _WINDOWS_DETACHED
-    else:
-        options["start_new_session"] = True
-    return options
 
 
 def spawn_drainer(stream: IO[Any]) -> subprocess.Popen[Any]:
-    """Start ``capture_drain`` and do not wait for it. source: ADR-1094"""
+    """Start ``capture_drain`` and do not wait for it.
+
+    source: ADR-1094 and ADR-1102"""
     command = child_command("mcp_server.hooks.capture_drain")
-    return subprocess.Popen(command, **popen_options(sys.platform, stream))
+    return subprocess.Popen(command, **popen_options(stream, detached_spawn.options()))
 
 
 def _spool(payload: dict[str, object]) -> None:

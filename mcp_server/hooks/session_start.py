@@ -19,6 +19,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 from mcp_server.hooks.output_streams import use_utf8_output
 from mcp_server.hooks.stdin_event import read_event_text
@@ -33,6 +34,7 @@ from mcp_server.handlers.injection_receipts import (
 from mcp_server.hooks._telemetry import observe_hook
 from mcp_server.hooks import session_start_status as _status
 from mcp_server.hooks.launcher_command import child_command, launcher_child_command
+from mcp_server.shared import detached_spawn
 from mcp_server.shared.freshness import provenance_suffix
 from mcp_server.shared.log_rotation import methodology_log_path, open_rotating_log
 from mcp_server.shared.project_scope import (
@@ -823,10 +825,12 @@ _CONSOLIDATE_TTL_HOURS: float = float(
 )
 
 
-def _spawn_consolidate_cycle() -> int | None:
+def _spawn_consolidate_cycle(spawn_options: dict[str, Any]) -> int | None:
     """Spawn the detached ``consolidate_background`` worker; return its pid.
 
-    precondition: none. postcondition: a fully-detached subprocess (own
+    precondition: ``spawn_options`` came from ``detached_spawn.options()``,
+    decided by the caller before it stamped the period (ADR-1102).
+    postcondition: a fully-detached subprocess (own
     process group, stdio → ``consolidate.log``) is started and its pid
     returned, or None if the spawn itself failed. The worker runs decay,
     compression, CLS, memify, cascade, homeostatic, emergence cycles plus
@@ -842,7 +846,7 @@ def _spawn_consolidate_cycle() -> int | None:
             stdin=subprocess.DEVNULL,
             stdout=log,
             stderr=subprocess.STDOUT,
-            start_new_session=True,
+            **spawn_options,
         )
     _log(f"background consolidate spawned → {log_path}")
     return proc.pid
@@ -878,14 +882,33 @@ def _maybe_background_consolidate() -> None:
         _legacy_background_consolidate()
 
 
+def _consolidate_spawn_options() -> dict[str, Any] | None:
+    """Decide the spawn options once, before the period is stamped.
+
+    postcondition: the options, or None after logging ERROR when the job
+    state cannot be read; the caller then stamps and spawns nothing, the
+    window staying registered (a spawn failure, not a coordinator failure).
+
+    source: ADR-1102"""
+    try:
+        return detached_spawn.options()
+    except OSError as exc:
+        _log(
+            f"ERROR: consolidate spawn options unavailable ({exc}); "
+            "no consolidate cycle started this session"
+        )
+        return None
+
+
 def _ensure_coordinated_cycle(coord) -> str | None:
     """Register this window and ensure the cycle; None on a hard failure.
 
-    postcondition: on an unresolved window identity or an unreadable process
-    table (ADR-1097 points 2, 3) logs ERROR with the cause and returns None
-    with nothing registered, spawned or stamped.
+    postcondition: on an unresolved window identity, an unreadable process
+    table (ADR-1097 points 2, 3) or an unreadable job state (ADR-1102) logs
+    ERROR with the cause and returns None with nothing spawned or stamped;
+    the window stays registered only in the job-state case.
 
-    source: ADR-1097"""
+    source: ADR-1097 and ADR-1102"""
     from mcp_server.infrastructure.groomer_identity import (  # noqa: PLC0415 — hook latency boundary: see _maybe_background_consolidate
         LivenessProbeUnavailableError,
         WindowIdentityUnavailableError,
@@ -900,11 +923,14 @@ def _ensure_coordinated_cycle(coord) -> str | None:
             "no consolidate cycle started this session"
         )
         return None
-    coord.register(session_pid)
+    coord.register(session_pid)  # counted for last-exit stop (ADR-1102)
+    spawn_options = _consolidate_spawn_options()
+    if spawn_options is None:
+        return None
     try:
         return coord.ensure_cycle(
             period_hours=_CONSOLIDATE_TTL_HOURS,
-            spawn_fn=_spawn_consolidate_cycle,
+            spawn_fn=lambda: _spawn_consolidate_cycle(spawn_options),
         )
     except LivenessProbeUnavailableError as exc:
         coord.deregister(session_pid)
@@ -936,6 +962,8 @@ def _legacy_background_consolidate() -> None:
             if age_hours < _CONSOLIDATE_TTL_HOURS:
                 return  # Fresh enough; skip.
 
+        # decided before the in-flight stamp, like the coordinated path
+        spawn_options = detached_spawn.options()
         try:
             STAMP_PATH.parent.mkdir(parents=True, exist_ok=True)
             STAMP_PATH.write_text(
@@ -947,7 +975,7 @@ def _legacy_background_consolidate() -> None:
             )
         except OSError:
             pass
-        _spawn_consolidate_cycle()
+        _spawn_consolidate_cycle(spawn_options)
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"background consolidate skipped: {exc}")
 
@@ -998,7 +1026,7 @@ def _maybe_background_reanalyze(project_root: str | None) -> None:
                 stdin=subprocess.DEVNULL,
                 stdout=log,
                 stderr=subprocess.STDOUT,
-                start_new_session=True,
+                **detached_spawn.options(),
             )
         _log(f"background pipeline reanalysis spawned → {log_path}")
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal

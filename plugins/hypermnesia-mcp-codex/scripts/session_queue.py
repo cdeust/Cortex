@@ -6,7 +6,9 @@ source: ADR-1084
 from __future__ import annotations
 
 import errno
+import functools
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -113,6 +115,28 @@ def enqueue(root, event):
     return key
 
 
+# CPython ignores start_new_session on Windows; there the drain's flags are
+# decided from the measured job by windows_job.py, the stdlib copy of
+# mcp_server.shared.detached_spawn (this script ships without mcp_server).
+# source: ADR-1102 (the Codex drain follows the shared decision).
+_WINDOWS = os.name == "nt"
+
+
+@functools.lru_cache(maxsize=1)
+def _windows_job():
+    path = Path(__file__).with_name("windows_job.py")
+    spec = importlib.util.spec_from_file_location("cortex_codex_windows_job", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def detach_options():
+    if _WINDOWS:
+        return {"creationflags": _windows_job().measured_creationflags()}
+    return {"start_new_session": True}
+
+
 def spawn(root):
     fd = os.open(root / "worker.log", os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
     with os.fdopen(fd, "a", encoding="utf-8") as log:
@@ -121,8 +145,8 @@ def spawn(root):
             stdin=subprocess.DEVNULL,
             stdout=log,
             stderr=log,
-            start_new_session=True,
             close_fds=True,
+            **detach_options(),
             cwd=root,
             env={**os.environ, "CORTEX_CLAUDE_DIR": str(root.parent.parent)},
         )
