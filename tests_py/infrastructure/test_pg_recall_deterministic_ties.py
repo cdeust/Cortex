@@ -32,10 +32,12 @@ pytestmark = pytest.mark.skipif(not _USE_PG, reason="requires isolated PostgreSQ
 # source: recall_memories() v_pool = p_max_results * 10 -> 100 for
 # max_results 10; 130 tied rows put 30 of them past the pool's LIMIT.
 _ROWS = 130
+# source: recall() default top_k (pg_recall.py), as the benchmarks call it.
 _MAX_RESULTS = 10
 # source: test fixture -- 13 distinct created_at values, 10 rows each, so
 # both keys of the tie-break (created_at, then id) decide some position.
 _STAMPS = 13
+# source: pg_schema.py memories.embedding vector(384)
 _DIM = 384
 _DOMAIN = "ties"
 _BASE = datetime(2026, 1, 1, tzinfo=timezone.utc)

@@ -489,6 +489,23 @@ class SqliteSearchMixin:
                 break
         return activated
 
+    def _entity_memory_rows(self, entity_id: int, min_heat: float) -> list:
+        """Memories naming a live entity, the newest 20 when more match.
+
+        source: ADR-1106"""
+        entity = self._conn.execute(
+            "SELECT name FROM entities WHERE id = ? AND heat >= ? AND NOT archived",
+            (entity_id, min_heat),
+        ).fetchone()
+        if not entity:
+            return []
+        return self._conn.execute(
+            "SELECT id, domain, is_global, created_at FROM current_memories "
+            "WHERE content LIKE ? AND heat_base >= ? AND NOT is_stale "
+            "ORDER BY created_at DESC, id DESC LIMIT 20",
+            (f"%{entity['name']}%", min_heat),
+        ).fetchall()
+
     def _map_entities_to_memories(
         self,
         activated: dict[int, float],
@@ -506,21 +523,7 @@ class SqliteSearchMixin:
         memory_acts: dict[int, float] = {}
         created: dict[int, str] = {}
         for eid, act in activated.items():
-            entity = self._conn.execute(
-                "SELECT name FROM entities WHERE id = ? AND heat >= ? AND NOT archived",
-                (eid, min_heat),
-            ).fetchone()
-            if not entity:
-                continue
-            name = entity["name"]
-            mem_rows = self._conn.execute(
-                "SELECT id, domain, is_global, created_at FROM current_memories "
-                "WHERE content LIKE ? AND heat_base >= ? AND NOT is_stale "
-                # source: ADR-1106 -- the newest 20 when more rows match.
-                "ORDER BY created_at DESC, id DESC LIMIT 20",
-                (f"%{name}%", min_heat),
-            ).fetchall()
-            for mr in mem_rows:
+            for mr in self._entity_memory_rows(eid, min_heat):
                 if domain is not None:
                     same_domain = mr["domain"] == domain
                     is_global_row = include_globals and bool(mr["is_global"])

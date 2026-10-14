@@ -24,9 +24,11 @@ from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 # source: SqliteSearchMixin.recall_memories pool = max_results * 10 -> 100;
 # 130 tied rows put 30 of them past each signal's LIMIT.
 _ROWS = 130
+# source: recall() default top_k (pg_recall.py), as the benchmarks call it.
 _MAX_RESULTS = 10
 # source: test fixture -- 13 created_at values, so both tie-break keys act.
 _STAMPS = 13
+# source: sqlite_schema.py memories_vec embedding float[384]
 _DIM = 384
 _DOMAIN = "sqlite-ties"
 _BASE = datetime(2026, 1, 1, tzinfo=timezone.utc)
