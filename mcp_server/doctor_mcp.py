@@ -12,6 +12,7 @@ import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from mcp_server.doctor_pgvector import pgvector_iterative_scan
 from mcp_server.hooks.output_streams import use_utf8_output
 from mcp_server.shared.platform import home_dir, python_executable
 from mcp_server.shared.redaction import redact_url, scrub_secrets
@@ -498,6 +499,18 @@ def _check_pg_extensions() -> McpCheck:
     )
 
 
+def _mcp_check(name: str, ok: bool, detail: str, fix: str = "") -> McpCheck:
+    """``doctor.Check``-shaped constructor for the shared pgvector check."""
+    return McpCheck(name, ok, detail, fix=fix, severity="ok" if ok else "fail")
+
+
+def _check_pg_iterative_scan() -> McpCheck:
+    """The pgvector library scans HNSW iteratively (>= 0.8.0).
+
+    source: ADR-1105 — same check as ``cortex doctor`` and ``check_setup``."""
+    return pgvector_iterative_scan(_mcp_check)
+
+
 # source: ADR-0323
 
 
@@ -603,6 +616,7 @@ def collect_mcp_report() -> McpReport:
     report.checks.append(_check_database_url())
     report.checks.append(_check_pg_reachable())
     report.checks.append(_check_pg_extensions())
+    report.checks.append(_check_pg_iterative_scan())
     report.checks.append(_check_critical_imports())
     report.checks.append(_check_optional_imports())
     report.skipped.append(_skipped_stdio_handshake())

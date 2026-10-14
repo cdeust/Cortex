@@ -47,8 +47,10 @@ adheres to [Semantic Versioning](https://semver.org/).
   ranking for 81 queries instead of 51; vector-pool recall against an exact
   scan 0.578 -> 0.939. **Requires pgvector >= 0.8.0**: the store refuses to
   start on an older loaded library (it would drop the setting with a warning
-  only), and `python -m mcp_server.doctor`, `scripts/setup_db.py` and
-  `scripts/setup.sh` check it. The near-duplicate scan shares the same check.
+  only), and `python -m mcp_server.doctor` (also its `mcp` subcommand and
+  the `check_setup` tool), `scripts/setup_db.py` and `scripts/setup.sh` check
+  it. The near-duplicate scan shares the same check, and the benchmarks'
+  deterministic session sets it again after its `DISCARD ALL`.
 - **The near-duplicate apply pass no longer supersedes memories through a
   chain** (ADR-0370). It grouped pairs at or above the threshold into
   connected components, which is single-linkage: A~B and B~C put A and C

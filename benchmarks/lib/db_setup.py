@@ -14,6 +14,8 @@ import psycopg
 from psycopg.rows import tuple_row
 from urllib.parse import urlparse
 
+from mcp_server.infrastructure.pg_iterative_scan import enable_iterative_scan
+
 
 def _scalar(conn: psycopg.Connection, sql: str) -> str:
     """Execute SHOW/SELECT-of-one-column and return scalar string.
@@ -108,6 +110,10 @@ def apply_deterministic_session(
         conn.commit()  # close any implicit tx so DISCARD ALL is legal
         conn.autocommit = True
     conn.execute("DISCARD ALL")
+    # source: ADR-1105 — DISCARD ALL resets hnsw.iterative_scan, which the
+    # store set when it opened this connection; a run without it measures
+    # the lossy pre-0.8.0 index path instead of the shipped one.
+    enable_iterative_scan(conn)
     if not autocommit:
         conn.autocommit = False  # SET LOCAL requires we're back inside a tx
 
