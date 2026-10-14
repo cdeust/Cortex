@@ -35,7 +35,7 @@ _DIM = 384  # source: memory_config EMBEDDING_DIM (all-MiniLM-L6-v2)
 # 300 superseded rows around the pair hid it on main; identical deleted rows
 # hid new ones only at 3000 (200 did not).
 _SUPERSEDED_ROWS = 300
-_DELETED_ROWS = 3000
+_DELETED_ROWS = 3000  # source: same measurement (200 deleted rows did not hide)
 
 
 def _store():
