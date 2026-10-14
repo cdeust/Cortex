@@ -23,7 +23,7 @@ from mcp_server.hooks.agent_briefing_sqlite import (
     fetch_sqlite_context,
 )
 from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
-from tests_py._tie_layouts import newest_first, stamps
+from tests_py._tie_layouts import inserted_newest_first, newest_first, stamps
 
 _PROJECT = "/p"
 # source: test fixture -- a LIMIT below the 130 tied rows.
@@ -75,19 +75,19 @@ def test_briefing_passes_keep_the_newest_ties(store, values, keywords, source):
         SqliteBriefingConnection(store), "worker", keywords, _PROJECT
     )
     assert [r["source"] for r in rows] == [source] * _MAX_MEMORIES
-    assert [r["id"] for r in rows] == expected[:_MAX_MEMORIES]
+    assert [r["id"] for r in rows] == inserted_newest_first(expected)[:_MAX_MEMORIES]
 
 
 def test_briefing_role_prior_keeps_the_newest_ties(store):
     expected = insert_tied(store)
     rows = _sqlite_role_rows(store._conn, "worker", _PROJECT, _MAX_MEMORIES)
-    assert [r["id"] for r in rows] == expected[:_MAX_MEMORIES]
+    assert [r["id"] for r in rows] == inserted_newest_first(expected)[:_MAX_MEMORIES]
 
 
 def test_hot_memories_keep_the_newest_ties(store):
     expected = insert_tied(store)
     rows = store.get_hot_memories(min_heat=0.4, limit=_LIMIT)
-    assert [r["id"] for r in rows] == expected[:_LIMIT]
+    assert [r["id"] for r in rows] == inserted_newest_first(expected)[:_LIMIT]
 
 
 @pytest.mark.parametrize(
@@ -98,7 +98,7 @@ def test_hot_memories_keep_the_newest_ties(store):
 def test_memories_mentioning_entity_keep_the_newest_ties(store, content, name):
     expected = insert_tied(store, content)
     rows = store.get_memories_mentioning_entity(name, limit=_LIMIT)
-    assert [r["id"] for r in rows] == expected[:_LIMIT]
+    assert [r["id"] for r in rows] == inserted_newest_first(expected)[:_LIMIT]
 
 
 def test_entities_for_memory_are_ordered_newest_first(store):

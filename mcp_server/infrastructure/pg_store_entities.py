@@ -181,14 +181,14 @@ class PgEntityMixin(PgStoreHost):
             f"SELECT * FROM {src} "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
             "WHERE content_tsv @@ phraseto_tsquery('english', %s) "
             # source: ADR-1106 -- exact ties go to the newer memory.
-            "ORDER BY heat_base DESC, created_at DESC, id DESC LIMIT %s",
+            "ORDER BY heat_base DESC, id DESC LIMIT %s",
             (entity_name, limit),
         ).fetchall()
         if not rows:
             rows = self._execute(
                 f"SELECT * FROM {src} WHERE content ILIKE %s "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
                 "AND NOT is_stale "
-                "ORDER BY heat_base DESC, created_at DESC, id DESC LIMIT %s",
+                "ORDER BY heat_base DESC, id DESC LIMIT %s",
                 (
                     "%{}%".format(
                         entity_name.replace("\\", "\\\\")

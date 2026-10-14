@@ -70,7 +70,7 @@ _HOT_SQL = (
     "AND superseded_by_id IS NULL "
     "AND (is_global = TRUE OR directory_context = ANY(%s::TEXT[])) "
     # source: ADR-1106 -- exact ties go to the newer memory.
-    "ORDER BY heat_base DESC, created_at DESC, id DESC LIMIT %s"
+    "ORDER BY heat_base DESC, id DESC LIMIT %s"
 )
 
 

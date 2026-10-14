@@ -20,7 +20,12 @@ import os
 
 import pytest
 
-from tests_py._tie_layouts import newest_first, same_in_every_layout, stamps
+from tests_py._tie_layouts import (
+    inserted_newest_first,
+    newest_first,
+    same_in_every_layout,
+    stamps,
+)
 from tests_py.conftest import _TEST_DB_URL, _USE_PG
 
 psycopg = pytest.importorskip("psycopg")
@@ -82,7 +87,7 @@ def test_hot_memories_keep_the_newest_ties(conn, store):
         "memories",
         lambda: [r["id"] for r in store.get_hot_memories(min_heat=0.4, limit=_LIMIT)],
     )
-    assert got == expected[:_LIMIT]
+    assert got == inserted_newest_first(expected)[:_LIMIT]
 
 
 @pytest.mark.parametrize(
@@ -99,7 +104,7 @@ def test_memories_mentioning_entity_keep_the_newest_ties(conn, store, content, n
             r["id"] for r in store.get_memories_mentioning_entity(name, limit=_LIMIT)
         ],
     )
-    assert got == expected[:_LIMIT]
+    assert got == inserted_newest_first(expected)[:_LIMIT]
 
 
 def test_entities_for_memory_are_ordered_newest_first(conn, store):

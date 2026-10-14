@@ -41,6 +41,12 @@ def newest_first(keys: list[tuple[datetime, int]]) -> list[int]:
     return [i for _, i in sorted(keys, reverse=True)]
 
 
+def inserted_newest_first(ids: list[int]) -> list[int]:
+    """Ids ordered by ``id DESC``: the tie-break of the stored-heat listings,
+    which their ``(heat_base, id)`` index serves (ADR-1106)."""
+    return sorted(ids, reverse=True)
+
+
 def relayout(conn, table: str, layout: str) -> None:
     """Rewrite ``table``'s heap (and its indexes) in ``layout`` order."""
     if layout != "inserted":

@@ -44,7 +44,7 @@ def _sqlite_role_rows(conn, agent, project_root, remaining):
         "AND NOT COALESCE(m.is_benchmark, 0) AND m.superseded_by_id IS NULL "
         + scope
         # source: ADR-1106 -- exact ties go to the newer memory.
-        + "ORDER BY m.heat_base DESC, m.created_at DESC, m.id DESC LIMIT ?",
+        + "ORDER BY m.heat_base DESC, m.id DESC LIMIT ?",
         (agent, _MIN_HEAT, *params, remaining),
     ).fetchall()
 

@@ -78,7 +78,12 @@ def insert_tied(store: SqliteMemoryStore, content: str) -> list[int]:
     ],
 )
 def test_sqlite_recall_cuts_ties_newest_first(store, signal, content, query):
-    expected = insert_tied(store, content)[: _MAX_RESULTS * 3]
+    newest = insert_tied(store, content)
+    # The heat signal ranks stored heat_base, tie-broken by id DESC (the
+    # (heat_base) index serves it); recency and FTS by created_at DESC, id DESC.
+    expected = (sorted(newest, reverse=True) if signal == "heat" else newest)[
+        : _MAX_RESULTS * 3
+    ]
     rows = store.recall_memories(
         query_text=query,
         query_embedding=None,

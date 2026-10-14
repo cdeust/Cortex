@@ -194,7 +194,7 @@ class SqliteSearchMixin:
         rows = self._conn.execute(
             f"SELECT id FROM current_memories WHERE {' AND '.join(conds)} "  # noqa: S608 — conditions are in-code literal fragments from _build_filter; values are bound parameters (docs/ASSURANCE-CASE.md §5)
             # source: ADR-1106 -- exact ties go to the newer memory.
-            f"ORDER BY heat_base DESC, created_at DESC, id DESC LIMIT ?",
+            f"ORDER BY heat_base DESC, id DESC LIMIT ?",
             params,
         ).fetchall()
         for rank, r in enumerate(rows, 1):

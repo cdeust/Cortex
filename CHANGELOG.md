@@ -47,7 +47,11 @@ adheres to [Semantic Versioning](https://semver.org/).
   `f4f1d8a4` (110 rows at heat 0.05) dropped 10 arbitrary rows from the heat
   pool, and two runs of the same commit gave different scores. Exact ties now
   go to the newer memory (`created_at DESC, id DESC`) on PostgreSQL and SQLite;
-  entity name lookups take the oldest row, the one `insert_entity` returns.
+  an ORDER BY on stored `heat_base` uses `id DESC` instead, which its
+  `(heat_base, id)` index serves (with `created_at` in between,
+  `get_hot_memories(limit=10)`, read on every `remember`, took 159.5 ms
+  instead of 0.16 ms on a 68k-memory store); entity name lookups take the
+  oldest row, the one `insert_entity` returns.
   Existing databases get the new function on the next store open (schema
   hash). The HNSW plan is kept (Index Scan + Incremental Sort).
 - **Recall and every vector query reach past `hnsw.ef_search`** (ADR-1105).

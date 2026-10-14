@@ -185,7 +185,7 @@ class SqliteEntityMixin:
                 "JOIN memories_fts f ON f.rowid = m.id "
                 "WHERE memories_fts MATCH ? "
                 # source: ADR-1106 -- exact ties go to the newer memory.
-                "ORDER BY m.heat_base DESC, m.created_at DESC, m.id DESC LIMIT ?",
+                "ORDER BY m.heat_base DESC, m.id DESC LIMIT ?",
                 (match, limit),
             ).fetchall()
             if match
@@ -196,7 +196,7 @@ class SqliteEntityMixin:
             rows = self._conn.execute(
                 f"SELECT * FROM {src} WHERE content LIKE ? "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
                 "AND NOT is_stale "
-                "ORDER BY heat_base DESC, created_at DESC, id DESC LIMIT ?",
+                "ORDER BY heat_base DESC, id DESC LIMIT ?",
                 (f"%{entity_name}%", limit),
             ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]

@@ -31,7 +31,12 @@ from mcp_server.hooks.session_start_fetch import (
     _HOT_SQL,
     _TEAM_DECISIONS_SQL,
 )
-from tests_py._tie_layouts import newest_first, same_in_every_layout, stamps
+from tests_py._tie_layouts import (
+    inserted_newest_first,
+    newest_first,
+    same_in_every_layout,
+    stamps,
+)
 from tests_py.conftest import _USE_PG
 
 psycopg = pytest.importorskip("psycopg")
@@ -109,7 +114,7 @@ def test_banner_hot_memories_keep_the_newest_ties(conn):
         "memories",
         lambda: _ids(conn, _HOT_SQL, (_MIN_HEAT, [_PROJECT], _HOT_LIMIT)),
     )
-    assert got == expected[:_HOT_LIMIT]
+    assert got == inserted_newest_first(expected)[:_HOT_LIMIT]
 
 
 def test_briefing_role_prior_keeps_the_newest_ties(conn):

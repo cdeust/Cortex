@@ -44,7 +44,7 @@ def fetch_sqlite_context(connection, agent, keywords, project_root):
             base + " AND m.agent_context = ? AND m.heat_base >= ? "  # noqa: S608 — fixed SQL and placeholder-only scope; bound values
             "AND m.id IN (SELECT rowid FROM memories_fts WHERE memories_fts MATCH ?) "
             # source: ADR-1106 -- exact ties go to the newer memory.
-            "ORDER BY m.heat_base DESC, m.created_at DESC, m.id DESC LIMIT ?",
+            "ORDER BY m.heat_base DESC, m.id DESC LIMIT ?",
             (*params, agent, _MIN_HEAT, query, _MAX_MEMORIES),
         ).fetchall()
         results.extend(_rows(rows, "agent-prior"))
@@ -54,7 +54,7 @@ def fetch_sqlite_context(connection, agent, keywords, project_root):
             base + " AND m.is_team_decision = 1 "
             "AND (m.agent_context IS NULL OR m.agent_context != ? OR ? = 0) "
             # source: ADR-1106 -- exact ties go to the newer memory.
-            "ORDER BY m.heat_base DESC, m.created_at DESC, m.id DESC LIMIT ?",
+            "ORDER BY m.heat_base DESC, m.id DESC LIMIT ?",
             (*params, agent, len(keywords), remaining),
         ).fetchall()
         results.extend(_rows(rows, "team"))
