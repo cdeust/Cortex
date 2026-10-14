@@ -65,7 +65,11 @@ class SqliteEntityMixin:
         return cur.lastrowid  # type: ignore[return-value]
 
     def get_entity_by_name(self, name: str) -> dict[str, Any] | None:
-        cur = self._conn.execute("SELECT * FROM entities WHERE name = ?", (name,))
+        cur = self._conn.execute(
+            # source: ADR-1106 -- the oldest row when a name repeats.
+            "SELECT * FROM entities WHERE name = ? ORDER BY id LIMIT 1",
+            (name,),
+        )
         row = cur.fetchone()
         return dict(row) if row else None
 

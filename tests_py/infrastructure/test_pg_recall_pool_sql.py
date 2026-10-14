@@ -19,9 +19,24 @@ def test_signature_return_shape_and_fusion_unchanged():
     assert compact(before.split(signature)[1].split("AS $$")[0]) == compact(
         after.split(signature)[1].split("AS $$")[0]
     )
-    assert compact(before.split("vec_max  AS")[1].split("$$ LANGUAGE")[0]) == compact(
-        after.split("vec_max  AS")[1].split("$$ LANGUAGE")[0]
+    # The frozen reference has no tie-break; ADR-1106 appends one to the final
+    # ORDER BY, so the fusion is compared up to it and the order separately.
+    final_order = "ORDER BY (c.superseded_by_id IS NOT NULL)"
+    assert compact(before.split("vec_max  AS")[1].split(final_order)[0]) == compact(
+        after.split("vec_max  AS")[1].split(final_order)[0]
     )
+    assert compact(after.split(final_order)[1].split("$$ LANGUAGE")[0]) == (
+        ", tw.final_score DESC, c.created_at DESC, tw.id DESC "
+        "LIMIT p_max_results * 3; END;"
+    )
+
+
+def test_every_pool_breaks_exact_ties_newest_first():
+    """ADR-1106: no LIMIT in recall_memories() cuts ties in heap order."""
+    function = RECALL_MEMORIES_LAZY_FN
+    for pool in ("vec", "fts", "ngram", "hot", "recency"):
+        query = compact(function.split(f"    {pool} AS (")[1].split("    ),")[0])
+        assert query.endswith("c.created_at DESC, c.id DESC LIMIT v_pool"), pool
 
 
 def test_common_filters_inline_and_union_materializes_only_bounded_ids():

@@ -145,11 +145,13 @@ class PgRelationshipMixin(PgStoreHost):
 
         source: ADR-0563"""
         src = self._execute(
-            "SELECT id FROM entities WHERE LOWER(name) = LOWER(%s) LIMIT 1",
+            "SELECT id FROM entities WHERE LOWER(name) = LOWER(%s) "
+            "ORDER BY id LIMIT 1",  # source: ADR-1106
             (source_name,),
         ).fetchone()
         tgt = self._execute(
-            "SELECT id FROM entities WHERE LOWER(name) = LOWER(%s) LIMIT 1",
+            "SELECT id FROM entities WHERE LOWER(name) = LOWER(%s) "
+            "ORDER BY id LIMIT 1",  # source: ADR-1106
             (target_name,),
         ).fetchone()
         if not src or not tgt:

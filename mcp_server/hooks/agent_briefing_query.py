@@ -75,7 +75,8 @@ def _fetch_agent_context(
                   AND NOT m.is_benchmark
                   AND m.superseded_by_id IS NULL
                   AND m.content_tsv @@ plainto_tsquery('english', %s)
-                ORDER BY effective_heat(m, NOW()) DESC
+                -- source: ADR-1106 -- exact ties go to the newer memory.
+                ORDER BY effective_heat(m, NOW()) DESC, m.created_at DESC, m.id DESC
                 LIMIT %s
                 """
                 ),
@@ -117,7 +118,8 @@ def _fetch_agent_context(
                   AND (m.is_global = TRUE OR m.directory_context = ANY(%s::TEXT[]))
                   AND NOT m.is_benchmark
                   AND m.superseded_by_id IS NULL
-                ORDER BY effective_heat(m, NOW()) DESC
+                -- source: ADR-1106 -- exact ties go to the newer memory.
+                ORDER BY effective_heat(m, NOW()) DESC, m.created_at DESC, m.id DESC
                 LIMIT %s
                 """
                 ),

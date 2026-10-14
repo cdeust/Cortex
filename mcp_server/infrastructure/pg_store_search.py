@@ -159,7 +159,8 @@ class PgSearchMixin(PgStoreHost):
             "FROM current_memories "
             "WHERE content_tsv @@ plainto_tsquery('english', %s) AND NOT is_stale "
             f"{scope_filter}"
-            "ORDER BY score DESC LIMIT %s",
+            # source: ADR-1106 -- exact ties go to the newer memory.
+            "ORDER BY score DESC, created_at DESC, id DESC LIMIT %s",
             (query, query, *scope_params, limit),
         ).fetchall()
         return [(r["id"], r["score"]) for r in rows]

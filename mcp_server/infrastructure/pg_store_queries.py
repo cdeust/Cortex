@@ -183,8 +183,10 @@ class PgQueryMixin(PgStoreHost):
             "WHERE tags @> %s::jsonb AND heat_base >= %s AND NOT is_stale "
             "AND embedding IS NOT NULL "
             "AND ((%s::TEXT IS NULL) OR domain = %s OR is_global = TRUE) "
-            "ORDER BY embedding <=> %s LIMIT %s"
-            ") SELECT * FROM nearest ORDER BY (embedding <=> %s) + 0",
+            # source: ADR-1106 -- exact ties go to the newer memory.
+            "ORDER BY embedding <=> %s, created_at DESC, id DESC LIMIT %s"
+            ") SELECT * FROM nearest "
+            "ORDER BY (embedding <=> %s) + 0, created_at DESC, id DESC",
             (emb, json.dumps([tag]), min_heat, domain, domain, emb, limit, emb),
         ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]
@@ -198,7 +200,8 @@ class PgQueryMixin(PgStoreHost):
             "FROM current_memories "
             "WHERE tags @> %s::jsonb AND heat_base >= %s AND NOT is_stale "
             "AND ((%s::TEXT IS NULL) OR domain = %s OR is_global = TRUE) "
-            "ORDER BY heat_base DESC LIMIT %s",
+            # source: ADR-1106 -- exact ties go to the newer memory.
+            "ORDER BY heat_base DESC, created_at DESC, id DESC LIMIT %s",
             (json.dumps([tag]), min_heat, domain, domain, limit),
         ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]

@@ -98,9 +98,14 @@ class SqliteSearchMixin:
         if vec is None:
             return
         try:
+            # source: ADR-1106 -- vec0 takes no second ORDER BY key inside its
+            # KNN query, so exact distance ties are ordered outside it.
             rows = self._conn.execute(
+                "SELECT v.rowid AS rowid, v.distance AS distance FROM ("
                 "SELECT rowid, distance FROM memories_vec "
-                "WHERE embedding MATCH ? ORDER BY distance LIMIT ?",
+                "WHERE embedding MATCH ? ORDER BY distance LIMIT ?"
+                ") v LEFT JOIN memories m ON m.id = v.rowid "
+                "ORDER BY v.distance, m.created_at DESC, v.rowid DESC",
                 (vec.tobytes(), pool),
             ).fetchall()
             # source: ADR-0616
@@ -129,8 +134,13 @@ class SqliteSearchMixin:
             return
         try:
             rows = self._conn.execute(
-                "SELECT rowid, rank FROM memories_fts "
-                "WHERE memories_fts MATCH ? ORDER BY rank LIMIT ?",
+                "SELECT memories_fts.rowid AS rowid, memories_fts.rank AS rank "
+                "FROM memories_fts "
+                "LEFT JOIN memories m ON m.id = memories_fts.rowid "
+                "WHERE memories_fts MATCH ? "
+                # source: ADR-1106 -- exact ties go to the newer memory.
+                "ORDER BY memories_fts.rank, m.created_at DESC, "
+                "memories_fts.rowid DESC LIMIT ?",
                 (match, pool),
             ).fetchall()
             for rank, r in enumerate(rows, 1):
@@ -183,7 +193,8 @@ class SqliteSearchMixin:
         params.append(pool)
         rows = self._conn.execute(
             f"SELECT id FROM current_memories WHERE {' AND '.join(conds)} "  # noqa: S608 — conditions are in-code literal fragments from _build_filter; values are bound parameters (docs/ASSURANCE-CASE.md §5)
-            f"ORDER BY heat_base DESC LIMIT ?",
+            # source: ADR-1106 -- exact ties go to the newer memory.
+            f"ORDER BY heat_base DESC, created_at DESC, id DESC LIMIT ?",
             params,
         ).fetchall()
         for rank, r in enumerate(rows, 1):
@@ -205,7 +216,8 @@ class SqliteSearchMixin:
         params.append(pool)
         rows = self._conn.execute(
             f"SELECT id FROM current_memories WHERE {' AND '.join(conds)} "  # noqa: S608 — conditions are in-code literal fragments from _build_filter; values are bound parameters (docs/ASSURANCE-CASE.md §5)
-            f"ORDER BY created_at DESC LIMIT ?",
+            # source: ADR-1106 -- exact ties go to the newer memory.
+            f"ORDER BY created_at DESC, id DESC LIMIT ?",
             params,
         ).fetchall()
         for rank, r in enumerate(rows, 1):
@@ -271,6 +283,23 @@ class SqliteSearchMixin:
             if r["capture_origin"] not in trusted:
                 scores[r["id"]] *= untrusted_factor
 
+    def _ranked_ids(self, scores: dict[int, float]) -> list[int]:
+        """Score order; exact ties go to the newer memory.
+
+        source: ADR-1106"""
+        ids = list(scores)
+        placeholders = ",".join("?" * len(ids))
+        created = {
+            r["id"]: r["created_at"] or ""
+            for r in self._conn.execute(
+                f"SELECT id, created_at FROM memories WHERE id IN ({placeholders})",  # noqa: S608 — interpolation is a generated ? placeholder list; every value is a bound parameter (docs/ASSURANCE-CASE.md §5)
+                ids,
+            ).fetchall()
+        }
+        return sorted(
+            ids, key=lambda i: (scores[i], created.get(i, ""), i), reverse=True
+        )
+
     def _fetch_ranked_results(
         self,
         scores: dict[int, float],
@@ -279,7 +308,7 @@ class SqliteSearchMixin:
         domain: str | None,
         directory: str | None,
     ) -> list[dict[str, Any]]:
-        top_ids = sorted(scores, key=scores.get, reverse=True)[: max_results * 3]  # type: ignore[arg-type]
+        top_ids = self._ranked_ids(scores)[: max_results * 3]
         placeholders = ",".join("?" * len(top_ids))
         # source: ADR-0616
         rows = self._conn.execute(
@@ -343,7 +372,8 @@ class SqliteSearchMixin:
                 "JOIN current_memories m ON m.id = memories_fts.rowid "
                 "WHERE memories_fts MATCH ? AND NOT m.is_stale "
                 f"{scope_filter}"
-                "ORDER BY memories_fts.rank LIMIT ?",
+                # source: ADR-1106 -- exact ties go to the newer memory.
+                "ORDER BY memories_fts.rank, m.created_at DESC, m.id DESC LIMIT ?",
                 (query, *scope_params, limit),
             ).fetchall()
             return [(r["rowid"], -r["rank"]) for r in rows]
@@ -474,6 +504,7 @@ class SqliteSearchMixin:
 
         source: ADR-0616"""
         memory_acts: dict[int, float] = {}
+        created: dict[int, str] = {}
         for eid, act in activated.items():
             entity = self._conn.execute(
                 "SELECT name FROM entities WHERE id = ? AND heat >= ? AND NOT archived",
@@ -483,8 +514,10 @@ class SqliteSearchMixin:
                 continue
             name = entity["name"]
             mem_rows = self._conn.execute(
-                "SELECT id, domain, is_global FROM current_memories "
-                "WHERE content LIKE ? AND heat_base >= ? AND NOT is_stale LIMIT 20",
+                "SELECT id, domain, is_global, created_at FROM current_memories "
+                "WHERE content LIKE ? AND heat_base >= ? AND NOT is_stale "
+                # source: ADR-1106 -- the newest 20 when more rows match.
+                "ORDER BY created_at DESC, id DESC LIMIT 20",
                 (f"%{name}%", min_heat),
             ).fetchall()
             for mr in mem_rows:
@@ -494,10 +527,14 @@ class SqliteSearchMixin:
                     if not (same_domain or is_global_row):
                         continue
                 mid = mr["id"]
+                created[mid] = mr["created_at"] or ""
                 if mid not in memory_acts or act > memory_acts[mid]:
                     memory_acts[mid] = act
-        sorted_results = sorted(memory_acts.items(), key=lambda x: x[1], reverse=True)
-        return sorted_results[:max_results]
+        # source: ADR-1106 -- exact ties go to the newer memory.
+        ranked = sorted(
+            memory_acts, key=lambda m: (memory_acts[m], created[m], m), reverse=True
+        )
+        return [(mid, memory_acts[mid]) for mid in ranked[:max_results]]
 
     def get_hot_embeddings(
         self,

@@ -42,7 +42,8 @@ class SqliteAuxiliaryMixin:
 
     def get_active_prospective_memories(self) -> list[dict[str, Any]]:
         rows = self._conn.execute(
-            "SELECT * FROM prospective_memories WHERE is_active"
+            # source: ADR-1106 -- recall injects at most max_results, in id order.
+            "SELECT * FROM prospective_memories WHERE is_active ORDER BY id"
         ).fetchall()
         return [dict(r) for r in rows]
 

@@ -159,7 +159,9 @@ def _recall_memories(conn, query: str, project_root: str | None = None) -> list[
               AND NOT m.is_benchmark
               AND m.superseded_by_id IS NULL
               AND (m.is_global = TRUE OR m.directory_context = ANY(%s::TEXT[]))
-            ORDER BY m.is_protected DESC, rank DESC, effective_heat(m, NOW()) DESC
+            -- source: ADR-1106 -- exact ties go to the newer memory.
+            ORDER BY m.is_protected DESC, rank DESC, effective_heat(m, NOW()) DESC,
+                     m.created_at DESC, m.id DESC
             LIMIT %s
             """
             ),

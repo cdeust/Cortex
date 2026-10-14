@@ -130,11 +130,13 @@ class SqliteRelationshipMixin:
     ) -> None:
         """Hebbian update: co-activation strengthens edges."""
         src = self._conn.execute(
-            "SELECT id FROM entities WHERE LOWER(name) = LOWER(?) LIMIT 1",
+            "SELECT id FROM entities WHERE LOWER(name) = LOWER(?) "
+            "ORDER BY id LIMIT 1",  # source: ADR-1106
             (source_name,),
         ).fetchone()
         tgt = self._conn.execute(
-            "SELECT id FROM entities WHERE LOWER(name) = LOWER(?) LIMIT 1",
+            "SELECT id FROM entities WHERE LOWER(name) = LOWER(?) "
+            "ORDER BY id LIMIT 1",  # source: ADR-1106
             (target_name,),
         ).fetchone()
         if not src or not tgt:

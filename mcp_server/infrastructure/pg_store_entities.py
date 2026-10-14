@@ -53,7 +53,9 @@ class PgEntityMixin(PgStoreHost):
         if origin not in ("ast_symbol", "text_concept"):
             origin = "text_concept"
         existing = self._execute(
-            "SELECT id, origin FROM entities WHERE LOWER(name) = LOWER(%s) LIMIT 1",
+            "SELECT id, origin FROM entities WHERE LOWER(name) = LOWER(%s) "
+            # source: ADR-1106 -- the oldest row, the one every later insert returned.
+            "ORDER BY id LIMIT 1",
             (canonical,),
         ).fetchone()
         if existing:
@@ -86,7 +88,9 @@ class PgEntityMixin(PgStoreHost):
 
         source: ADR-0547"""
         row = self._execute(
-            "SELECT * FROM entities WHERE LOWER(name) = LOWER(%s) LIMIT 1", (name,)
+            # source: ADR-1106 -- the oldest row, the one insert_entity returns.
+            "SELECT * FROM entities WHERE LOWER(name) = LOWER(%s) ORDER BY id LIMIT 1",
+            (name,),
         ).fetchone()
         return dict(row) if row else None
 

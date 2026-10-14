@@ -1026,13 +1026,15 @@ BEGIN
           AND (p_directory IS NULL OR m.directory_context = p_directory)
     ),
     -- source: ADR-0537
+    -- source: ADR-1106 -- every pool orders exact ties by created_at DESC,
+    -- id DESC, so a pool's LIMIT never cuts them in heap order.
     vec AS (
         SELECT c.id,
                (1.0 - (c.embedding <=> p_query_emb))::REAL AS raw_score
         FROM eligible c
         WHERE c.embedding IS NOT NULL
           AND effective_heat(c, NOW(), v_factor) >= p_min_heat
-        ORDER BY c.embedding <=> p_query_emb
+        ORDER BY c.embedding <=> p_query_emb, c.created_at DESC, c.id DESC
         LIMIT v_pool
     ),
     -- source: ADR-0537
@@ -1042,7 +1044,8 @@ BEGIN
         FROM eligible c
         WHERE c.content_tsv @@ v_tsq
           AND effective_heat(c, NOW(), v_factor) >= p_min_heat
-        ORDER BY ts_rank_cd(c.content_tsv, v_tsq) DESC
+        ORDER BY ts_rank_cd(c.content_tsv, v_tsq) DESC, c.created_at DESC,
+                 c.id DESC
         LIMIT v_pool
     ),
     -- source: ADR-0537
@@ -1053,7 +1056,8 @@ BEGIN
         WHERE effective_heat(c, NOW(), v_factor) >= p_min_heat
           AND c.content % p_query_text
           AND similarity(c.content, p_query_text) > 0.1
-        ORDER BY similarity(c.content, p_query_text) DESC
+        ORDER BY similarity(c.content, p_query_text) DESC, c.created_at DESC,
+                 c.id DESC
         LIMIT v_pool
     ),
     -- source: ADR-0537
@@ -1063,7 +1067,8 @@ BEGIN
         FROM eligible c
         WHERE effective_heat(c, NOW(), v_factor) >= p_min_heat
           AND c.source <> 'post_tool_capture'
-        ORDER BY effective_heat(c, NOW(), v_factor) DESC
+        ORDER BY effective_heat(c, NOW(), v_factor) DESC, c.created_at DESC,
+                 c.id DESC
         LIMIT v_pool
     ),
     -- source: ADR-0537
@@ -1074,7 +1079,7 @@ BEGIN
         FROM eligible c
         WHERE effective_heat(c, NOW(), v_factor) >= p_min_heat
           AND c.source <> 'post_tool_capture'
-        ORDER BY c.created_at DESC
+        ORDER BY c.created_at DESC, c.id DESC
         LIMIT v_pool
     ),
     -- source: ADR-0537
@@ -1185,8 +1190,9 @@ BEGIN
            COALESCE(c.capture_origin, 'unknown')::TEXT
     FROM trust_weighted tw
     JOIN candidates c ON c.id = tw.id
-    -- source: ADR-0537
-    ORDER BY (c.superseded_by_id IS NOT NULL), tw.final_score DESC
+    -- source: ADR-0537; exact ties go to the newer memory (ADR-1106)
+    ORDER BY (c.superseded_by_id IS NOT NULL), tw.final_score DESC,
+             c.created_at DESC, tw.id DESC
     LIMIT p_max_results * 3;
 END;
 $$ LANGUAGE plpgsql STABLE
@@ -1233,7 +1239,7 @@ BEGIN
     JOIN entities e ON e.id = s.eid
     WHERE e.heat >= 0.05 AND NOT e.archived
     GROUP BY s.eid
-    ORDER BY MAX(s.act) DESC;
+    ORDER BY MAX(s.act) DESC, s.eid;
 END;
 $$ LANGUAGE plpgsql STABLE;
 """
@@ -1296,7 +1302,7 @@ BEGIN
     ),
     -- source: ADR-0537
     entity_memories AS (
-        SELECT DISTINCT m.id AS mid, ea.act
+        SELECT DISTINCT m.id AS mid, ea.act, m.created_at
         FROM entity_acts ea
         JOIN entities e ON e.id = ea.eid
         JOIN current_memories m
@@ -1306,11 +1312,11 @@ BEGIN
                OR m.domain = p_domain
                OR (p_include_globals AND m.is_global = TRUE))
     )
-    -- source: ADR-0537
+    -- source: ADR-0537; exact ties go to the newer memory (ADR-1106)
     SELECT em.mid, MAX(em.act)::REAL
     FROM entity_memories em
-    GROUP BY em.mid
-    ORDER BY MAX(em.act) DESC
+    GROUP BY em.mid, em.created_at
+    ORDER BY MAX(em.act) DESC, em.created_at DESC, em.mid DESC
     LIMIT p_max_results;
 END;
 $$ LANGUAGE plpgsql STABLE;

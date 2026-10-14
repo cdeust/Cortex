@@ -146,7 +146,8 @@ def compare_rows(before: list[dict], after: list[dict]) -> dict:
         "added": sorted(right.keys() - left.keys()),
         "changed": changed,
         "rows_equal": left == right,
-        # SQL has no tie-breaker: report ordering separately, not as a false
+        # The frozen reference has no tie-breaker (ADR-1106 added one to the
+        # production function): report ordering separately, not as a false
         # semantic failure when every row and score is identical.
         "order_equal": list(left) == list(right),
     }
