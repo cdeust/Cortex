@@ -190,3 +190,28 @@ class TestEffectiveBackend:
 
     def test_unconfigured_is_empty(self, tmp_path):
         assert effective_backend({}, marker_path=tmp_path / "absent.json") == ""
+
+
+class TestAnInvalidMarkerOnlyMattersWhenItWouldApply:
+    """Review of #749: explicit settings never read the marker (ADR-1104)."""
+
+    @pytest.mark.parametrize(
+        "env",
+        [
+            {"DATABASE_URL": "postgresql://db.example:5432/cortex"},
+            {"CORTEX_MEMORY_DATABASE_URL": "postgresql://db.example:5432/cortex"},
+            {"CORTEX_BACKEND": "postgres"},
+            {"CORTEX_MEMORY_STORE_BACKEND": "postgresql"},
+        ],
+    )
+    def test_explicit_settings_ignore_an_invalid_marker(self, tmp_path, env):
+        path = _marker(tmp_path, {"backend": "postgres"})
+        environ = dict(env)
+        apply_backend_resolution(environ, marker_path=path, default="sqlite")
+        assert environ.get("CORTEX_MEMORY_STORE_BACKEND") != "sqlite"
+        assert effective_backend(dict(env), marker_path=path) in ("", "postgresql")
+
+    def test_nothing_configured_still_fails_on_an_invalid_marker(self, tmp_path):
+        path = _marker(tmp_path, {"backend": "postgres"})
+        with pytest.raises(BackendMarkerError):
+            effective_backend({}, marker_path=path)

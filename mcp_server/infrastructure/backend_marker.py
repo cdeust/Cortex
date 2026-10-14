@@ -101,6 +101,24 @@ def resolve_backend_env(
     return {}
 
 
+def _environment_decides(environ: Mapping[str, str]) -> bool:
+    """Steps 1-3 of the precedence: an explicit setting, so no marker is read.
+
+    source: ADR-1104 (an invalid marker must not stop a user it never governs)"""
+    return bool(
+        environ.get("CORTEX_MEMORY_STORE_BACKEND", "").strip()
+        or _BACKEND_ALIASES.get(environ.get("CORTEX_BACKEND", "").strip().lower())
+        or environ.get("DATABASE_URL", "").strip()
+        or environ.get("CORTEX_MEMORY_DATABASE_URL", "").strip()
+    )
+
+
+def _marker_unless_decided(
+    environ: Mapping[str, str], marker_path: Path | None
+) -> dict | None:
+    return None if _environment_decides(environ) else read_backend_marker(marker_path)
+
+
 def apply_backend_resolution(
     environ: MutableMapping[str, str],
     marker_path: Path | None = None,
@@ -122,7 +140,9 @@ def apply_backend_resolution(
     url = environ.get("DATABASE_URL")
     if url is not None and not url.strip():
         del environ["DATABASE_URL"]
-    additions = resolve_backend_env(environ, read_backend_marker(marker_path), default)
+    additions = resolve_backend_env(
+        environ, _marker_unless_decided(environ, marker_path), default
+    )
     environ.update(additions)
     return additions
 
@@ -142,5 +162,7 @@ def effective_backend(
         return explicit
     if explicit:  # "auto" or anything else the engine will interpret
         return ""
-    additions = resolve_backend_env(environ, read_backend_marker(marker_path))
+    additions = resolve_backend_env(
+        environ, _marker_unless_decided(environ, marker_path)
+    )
     return additions.get("CORTEX_MEMORY_STORE_BACKEND", "")

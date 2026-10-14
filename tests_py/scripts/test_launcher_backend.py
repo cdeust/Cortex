@@ -82,3 +82,17 @@ def test_a_postgresql_marker_keeps_the_local_default(tmp_path, url):
         "CORTEX_MEMORY_STORE_BACKEND": "postgresql",
         "DATABASE_URL": "postgresql://localhost:5432/cortex",
     }
+
+
+def test_an_invalid_marker_does_not_stop_a_configured_url(tmp_path):
+    """Review of #749: the marker is not read when the URL decides."""
+    url = "postgresql://db.example:5432/cortex"
+    resolved = _resolve(tmp_path, {"backend": "postgres"}, DATABASE_URL=url)
+    assert resolved["DATABASE_URL"] == url
+    assert resolved["CORTEX_MEMORY_STORE_BACKEND"] != "sqlite"
+
+
+def test_an_invalid_marker_alone_is_cortex_not_ready(tmp_path):
+    with pytest.raises(subprocess.CalledProcessError) as stopped:
+        _resolve(tmp_path, {"backend": "postgres"})
+    assert "Cortex not ready: backend marker" in stopped.value.stderr

@@ -100,7 +100,7 @@ class StandIn:
             self.child_started.set()
         try:
             self._initialize_child()
-        except _wire.HandOverError as exc:
+        except (_wire.HandOverError, OSError, ValueError) as exc:
             self.child.kill()
             self._fail(str(exc))
             return

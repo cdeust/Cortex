@@ -39,21 +39,21 @@ def _assert_noted(component: str, error_text: str) -> None:
 
 
 class TestDoctorBackendResolution:
-    def test_resolution_failure_falls_back_to_pg_checks_and_is_logged(
-        self, caplog, monkeypatch
+    def test_a_corrupt_marker_is_named_not_replaced_by_the_pg_checks(
+        self, monkeypatch
     ):
+        """ADR-1104: the doctor no longer runs the other backend's checks on
+        a marker it cannot read; the error naming the file reaches the user."""
         from mcp_server import doctor
+        from mcp_server.infrastructure.backend_marker import BackendMarkerError
 
         def broken(environ):
-            raise RuntimeError("marker unreadable")
+            raise BackendMarkerError("backend marker /x/backend.json is unreadable")
 
         # Patch the consumer's binding (top-level import, #197 family 4).
         monkeypatch.setattr(doctor, "effective_backend", broken)
-        with caplog.at_level("WARNING", logger=WARN_LOGGER):
-            checks = doctor.active_checks()
-        assert checks is doctor.CHECKS
-        assert any("doctor.backend_resolution" in r.message for r in caplog.records)
-        _assert_noted("doctor.backend_resolution", "marker unreadable")
+        with pytest.raises(BackendMarkerError, match="/x/backend.json"):
+            doctor.active_checks()
 
 
 class TestBackfillConceptLink:

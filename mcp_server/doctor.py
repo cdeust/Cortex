@@ -11,7 +11,6 @@ import time
 from pathlib import Path
 from typing import Callable
 
-from mcp_server.observability import silent_failure
 from mcp_server.shared.platform import home_dir
 from mcp_server.core.reranker import ensure_reranker_loaded
 from mcp_server.hooks.output_streams import use_utf8_output
@@ -531,11 +530,10 @@ def active_checks() -> list[Callable[[], Check]]:
     """Backend-appropriate check list (single point of truth).
 
     source: ADR-0322"""
-    try:
-        if effective_backend(os.environ) == "sqlite":
-            return SQLITE_CHECKS
-    except Exception as exc:  # noqa: BLE001 — source: ADR-0322
-        silent_failure.note("doctor.backend_resolution", exc)
+    # A BackendMarkerError propagates: the doctor names the corrupt marker
+    # instead of running the other backend's checks (source: ADR-1104).
+    if effective_backend(os.environ) == "sqlite":
+        return SQLITE_CHECKS
     return CHECKS
 
 

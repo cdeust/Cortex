@@ -120,8 +120,12 @@ def await_reply(child: subprocess.Popen, request_id: str) -> dict:
                 return message
     finally:
         watchdog.cancel()
+    try:
+        code = child.wait(timeout=CHILD_EXIT_SECONDS)  # reap: poll() can race EOF
+    except subprocess.TimeoutExpired:
+        code = None
     raise HandOverError(
-        f"the server exited (code {child.poll()}) or stayed silent past "
+        f"the server exited (code {code}) or stayed silent past "
         f"{CHILD_START_SECONDS} s before answering initialize; its stderr is above"
     )
 
