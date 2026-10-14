@@ -27,14 +27,16 @@ def pgvector_iterative_scan(check: Callable[..., Any]) -> Any:
     Pre-condition: ``check`` is doctor's ``Check`` constructor.
     Post-condition: ok iff the library behind DATABASE_URL defines
     ``hnsw.iterative_scan``; any other failure is reported, not raised."""
+    # The missing setting is named first: without a URL there is nothing to
+    # connect to, whatever the driver (CI's SQLite job has no psycopg).
+    url = os.environ.get("DATABASE_URL", "")
+    if not url:
+        return check(_NAME, False, "DATABASE_URL not set", "")
     try:
         import psycopg  # noqa: PLC0415 — source: ADR-0322
         from psycopg.rows import DictRow, dict_row  # noqa: PLC0415 — source: ADR-0322
     except ImportError:
         return check(_NAME, False, "psycopg not installed", "")
-    url = os.environ.get("DATABASE_URL", "")
-    if not url:
-        return check(_NAME, False, "DATABASE_URL not set", "")
     try:
         with psycopg.Connection[DictRow].connect(
             url, connect_timeout=5, row_factory=dict_row
