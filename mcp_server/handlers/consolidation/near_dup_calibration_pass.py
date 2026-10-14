@@ -150,8 +150,6 @@ def _group_component(
         else:
             out["unmerged_ids"].append(survivor_id)
     out["unmerged_ids"].extend(m.id for m in pending)
-    # Kept in step with the list, so an error mid-pass reports both alike.
-    out["unmerged_total"] = len(out["unmerged_ids"])
 
 
 async def run_near_dup_apply_pass(
@@ -203,7 +201,6 @@ async def run_near_dup_apply_pass(
                     _group_component(
                         conn, comp, stats, threshold=threshold, apply=apply, out=out
                     )
-                out["unmerged_ids"].sort()
 
             if below:
                 review_ids = sorted({p.id_a for p in below} | {p.id_b for p in below})
@@ -221,6 +218,9 @@ async def run_near_dup_apply_pass(
     except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("near_dup apply pass failed (non-fatal): %s", exc)
         out["status"] = f"error: {type(exc).__name__}: {exc}"
+    # One exit, success or error: the count always describes the list.
+    out["unmerged_ids"].sort()
+    out["unmerged_total"] = len(out["unmerged_ids"])
     return out
 
 

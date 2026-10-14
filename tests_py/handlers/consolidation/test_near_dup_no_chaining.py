@@ -151,3 +151,28 @@ def test_two_dry_runs_give_the_same_journal():
     first, second = _apply(apply=False), _apply(apply=False)
     assert first["journal"]
     assert first["journal"] == second["journal"]
+
+
+def test_an_error_mid_component_still_reports_count_and_ids_alike(monkeypatch):
+    """Review of a1414e5f: an error after a lonely round left the count
+    behind the list. Both are now derived at the pass's single exit."""
+    from mcp_server.handlers.consolidation import near_dup_calibration_pass as nd
+
+    _insert_arc(110, [0.5, 0.9, 0.2])  # hub hottest: one component of three
+    calls = []
+
+    def near_then_fail(conn, survivor_id, others, *, threshold):
+        calls.append(survivor_id)
+        if len(calls) == 1:
+            return []  # the survivor attaches nobody: it is left unmerged
+        raise RuntimeError("store went away")
+
+    monkeypatch.setattr(nd, "ids_near_to", near_then_fail)
+    result = asyncio.run(
+        run_near_dup_apply_pass(
+            _store(), threshold=_THRESHOLD, apply=False, top_k=10, min_similarity=0.75
+        )
+    )
+    assert result["status"].startswith("error: RuntimeError")
+    assert result["unmerged_ids"] == [calls[0]]
+    assert result["unmerged_total"] == len(result["unmerged_ids"])
