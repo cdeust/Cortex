@@ -1001,7 +1001,10 @@ def _maybe_background_reanalyze(project_root: str | None) -> None:
         from mcp_server.infrastructure.pipeline_discovery import (  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
             discover_pipeline_command,
         )
-        from mcp_server.infrastructure.pipeline_graph_ttl import graph_is_stale  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
+        from mcp_server.infrastructure.pipeline_graph_ttl import (  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
+            claim_reanalysis_slot,
+            graph_is_stale,
+        )
 
         if discover_pipeline_command(project_root) is None:
             return  # Pipeline not installed — nothing to do.
@@ -1016,6 +1019,9 @@ def _maybe_background_reanalyze(project_root: str | None) -> None:
             "mcp_server.hooks.ingest_codebase_background", project_root
         )
         if cmd is None:
+            return
+        if not claim_reanalysis_slot(project_root):
+            _log("background reanalysis skipped: one already started within the TTL")
             return
 
         # Rotate before spawn; the inherited fd stays open for the worker.
@@ -1034,49 +1040,19 @@ def _maybe_background_reanalyze(project_root: str | None) -> None:
 
 
 def _lookup_cached_graph_path(project_root: str) -> str | None:
-    """Read the cached ``graph_path=...`` memo for this project, if any."""
-    try:
-        from mcp_server.handlers.ingest_helpers import (  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
-            code_graph_tag,
-        )
-    except ImportError:
-        return None
-    if _backend_is_sqlite():
-        return _sqlite_cached_graph_path(code_graph_tag(project_root))
-    conn = _connect_pg()
-    if conn is None:
-        return None
-    try:
-        tag = code_graph_tag(project_root)
-        rows = conn.execute(
-            "SELECT content FROM current_memories WHERE tags @> %s::jsonb "
-            "AND NOT is_stale ORDER BY heat_base_set_at DESC LIMIT 1",
-            (f'["{tag}"]',),
-        ).fetchall()
-        for row in rows:
-            content = row.get("content") or ""
-            if content.startswith("graph_path="):
-                return content[len("graph_path=") :].strip()
-    except Exception as exc:  # noqa: BLE001 — hook boundary; failure is logged to the hook log, the banner degrades
-        _log(f"cached-graph lookup failed (non-fatal): {exc}")
-        return None
-    finally:
-        try:
-            conn.close()
-        except Exception as exc:  # noqa: BLE001 — teardown must not mask the lookup result
-            _log(f"pg connection close failed: {exc}")
-    return None
+    """The newest materialised graph memoised for this project, or None.
 
+    Reads through the configured store, SQLite or PostgreSQL alike: a
+    psycopg-only read returned None on SQLite, so every SessionStart saw a
+    stale graph and spawned a re-ingest (issue #751). A store failure
+    propagates to ``_maybe_background_reanalyze``, which logs it and spawns
+    nothing: an unknown cache never costs the user a background ingest.
+    """
+    from mcp_server.handlers.ingest_helpers import materialised_graph_paths  # noqa: PLC0415 — hook latency boundary: imported only once a pipeline is discoverable (store import ~0.1 s, measured 2026-10-14)
+    from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: PLC0415 — hook latency boundary: imported only once a pipeline is discoverable (store import ~0.1 s, measured 2026-10-14)
 
-def _sqlite_cached_graph_path(tag: str) -> str | None:
-    """The SQLite twin of the lookup above, through the store (ADR-1104)."""
-    from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: PLC0415 — hook latency boundary (see _sqlite_context)
-
-    for row in get_shared_store().get_memories_by_tag(tag, limit=5):
-        content = row.get("content") or ""
-        if not row.get("is_stale") and content.startswith("graph_path="):
-            return content[len("graph_path=") :].strip()
-    return None
+    paths = materialised_graph_paths(get_shared_store(), project_root)
+    return paths[0] if paths else None
 
 
 def _refresh_session_registry(event: dict) -> None:

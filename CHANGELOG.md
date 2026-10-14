@@ -61,6 +61,18 @@ adheres to [Semantic Versioning](https://semver.org/).
   by the hook are removed. `scripts/install_e2e/run.py` runs in CI on Linux
   and macOS.
 
+- **SessionStart no longer re-ingests the code graph on every session under
+  SQLite, and starts at most one background ingest per project per TTL
+  window** (#751). `_lookup_cached_graph_path` read the `graph_path=` memo
+  through psycopg only, so on the SQLite backend (the plugin default) it
+  returned None, the graph always looked stale, and every SessionStart with
+  a discoverable pipeline spawned a detached ingest. It now reads through the
+  configured store (`ingest_helpers.materialised_graph_paths`, shared with
+  `find_cached_graph`); a store failure spawns nothing. On every backend,
+  `pipeline_graph_ttl.claim_reanalysis_slot` stamps each attempt per project,
+  so a failed, slow or concurrent ingest no longer makes each new session
+  start another one within `CORTEX_PIPELINE_GRAPH_TTL_HOURS` (default 24 h).
+
 - **The background code-graph re-analysis ingests the session's project,
   never the plugin root.** `scripts/launcher.py` `chdir`s to the plugin root
   before it runs a hook, yet `session_start._maybe_background_reanalyze` and

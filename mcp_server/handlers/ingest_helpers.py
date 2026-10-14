@@ -79,27 +79,21 @@ def _memo_recency_key(mem: dict) -> str:
     return ""
 
 
-def find_cached_graph(store, project_path: str) -> str | None:
-    """Return the cached graph_path for a project, or None.
+def materialised_graph_paths(store, project_path: str) -> list[str]:
+    """Graph paths memoised for the project, most recent first, whose graph
+    still exists on disk.
 
-        Returns the path from the MOST-RECENT memo tagged with the project's
-        code-graph tag whose graph **still exists on disk**. A memo whose
-        graph was deleted (path missing or empty) is skipped, never returned
-        — this is the self-heal: a stale memo can no longer make the caller
-        project an empty graph. When no live graph is found, returns None so
-        the caller re-analyses and re-memoises.
+        Reads through the configured store (SQLite or PostgreSQL), so every
+        backend sees the memo ``memoise_graph_path`` wrote. A store failure
+        propagates: the caller decides what an unknown cache means.
 
     source: ADR-0414"""
     tag = code_graph_tag(project_path)
-    try:
-        if hasattr(store, "get_memories_by_tag"):
-            # source: ADR-0414
-            mems = store.get_memories_by_tag(tag, limit=20)
-        else:  # test fakes / stores without the tag query
-            mems = store.get_all_memories_for_decay()
-    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
-        silent_failure.note("ingest_helpers.cached_graph_lookup", exc)
-        return None
+    if hasattr(store, "get_memories_by_tag"):
+        # source: ADR-0414
+        mems = store.get_memories_by_tag(tag, limit=20)
+    else:  # test fakes / stores without the tag query
+        mems = store.get_all_memories_for_decay()
 
     candidates: list[tuple[str, str]] = []  # (recency_key, graph_path)
     for mem in mems:
@@ -111,17 +105,33 @@ def find_cached_graph(store, project_path: str) -> str | None:
         path = content[len("graph_path=") :].strip()
         if path:
             candidates.append((_memo_recency_key(mem), path))
-
-    # Most-recent first; return the first whose graph is materialised AND
-    # still fresh (built after the newest source change). A stale graph is
-    # skipped so the caller re-analyses — "never serve a stale graph".
     candidates.sort(key=lambda c: c[0], reverse=True)
-    for _, path in candidates:
-        if not graph_path_is_materialised(path):
-            continue
-        if not graph_is_fresh(project_path, path):
-            continue
-        return path
+    return [path for _, path in candidates if graph_path_is_materialised(path)]
+
+
+def find_cached_graph(store, project_path: str) -> str | None:
+    """Return the cached graph_path for a project, or None.
+
+        Returns the path from the MOST-RECENT memo tagged with the project's
+        code-graph tag whose graph **still exists on disk**. A memo whose
+        graph was deleted (path missing or empty) is skipped, never returned
+        — this is the self-heal: a stale memo can no longer make the caller
+        project an empty graph. When no live graph is found, returns None so
+        the caller re-analyses and re-memoises.
+
+    source: ADR-0414"""
+    try:
+        paths = materialised_graph_paths(store, project_path)
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+        silent_failure.note("ingest_helpers.cached_graph_lookup", exc)
+        return None
+
+    # Return the first that is still fresh (built after the newest source
+    # change). A stale graph is skipped so the caller re-analyses — "never
+    # serve a stale graph".
+    for path in paths:
+        if graph_is_fresh(project_path, path):
+            return path
     return None
 
 

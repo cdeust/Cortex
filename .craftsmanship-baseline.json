@@ -3603,11 +3603,6 @@
       "detail": "mcp_server.observability"
     },
     {
-      "file": "mcp_server/handlers/ingest_helpers.py",
-      "kind": "method-size",
-      "detail": "find_cached_graph"
-    },
-    {
       "file": "mcp_server/handlers/ingest_prd.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"

@@ -378,20 +378,6 @@ class TestInstallLockRelease:
         lock_mod._release(fd)  # closed fd raises OSError internally — swallowed
 
 
-class TestSessionStartPgClose:
-    def test_close_failure_is_reported_to_stderr(self, capsys, monkeypatch):
-        from mcp_server.hooks import session_start
-
-        conn = MagicMock()
-        conn.execute.side_effect = RuntimeError("query broke")
-        conn.close.side_effect = ValueError("close broke")
-        monkeypatch.setattr(session_start, "_backend_is_sqlite", lambda: False)
-        monkeypatch.setattr(session_start, "_connect_pg", lambda: conn)
-        assert session_start._lookup_cached_graph_path("/some/project") is None
-        err = capsys.readouterr().err
-        assert "pg connection close failed" in err
-
-
 @requires_psycopg
 class TestPgStoreRecoverySignals:
     def test_reconnect_survives_failed_close_and_logs_debug(self, caplog, monkeypatch):

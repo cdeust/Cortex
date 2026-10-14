@@ -73,6 +73,7 @@ class TestWorkerLogRotation(unittest.TestCase):
         discovery.discover_pipeline_command = lambda project_root: ["fixture"]
         ttl = ModuleType("mcp_server.infrastructure.pipeline_graph_ttl")
         ttl.graph_is_stale = lambda path: True
+        ttl.claim_reanalysis_slot = lambda project_root: True
         with patch.dict(
             sys.modules, {discovery.__name__: discovery, ttl.__name__: ttl}
         ):
