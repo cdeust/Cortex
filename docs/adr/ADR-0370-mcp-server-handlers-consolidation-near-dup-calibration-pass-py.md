@@ -133,7 +133,7 @@ Semantics that changed:
 - `component_size` is now the size of the group (survivor plus attached members);
 - `components` counts groups, one per survivor;
 - `skipped_vanished` counts the members without stats in every component; it used to count them only when fewer than two members were left;
-- `unmerged_total` counts the members that joined no group. They stay as they are and are not added to the review queue. A pair between such a member and a survivor is either already in the queue, if the scan found it in that band, or below the scan floor.
+- `unmerged_total` counts the members that joined no group, and `unmerged_ids` lists them (sorted); both are written to the supersession journal. They stay as they are and are not added to the review queue. A pair between such a member and a survivor is either already in the queue, if the scan found it in that band, or below the scan floor.
 
 Measured on the same copy, dry run, threshold 0.90, Apple M4:
 

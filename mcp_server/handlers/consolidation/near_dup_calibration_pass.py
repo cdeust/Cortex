@@ -148,8 +148,8 @@ def _group_component(
         if attached:
             _supersede_group(conn, survivor_id, attached, apply=apply, out=out)
         else:
-            out["unmerged_total"] += 1
-    out["unmerged_total"] += len(pending)
+            out["unmerged_ids"].append(survivor_id)
+    out["unmerged_ids"].extend(m.id for m in pending)
 
 
 async def run_near_dup_apply_pass(
@@ -176,6 +176,7 @@ async def run_near_dup_apply_pass(
         "skipped_race": 0,
         "skipped_vanished": 0,
         "unmerged_total": 0,
+        "unmerged_ids": [],
         "journal": [],
         "review_queue": [],
         "status": "ok",
@@ -200,6 +201,8 @@ async def run_near_dup_apply_pass(
                     _group_component(
                         conn, comp, stats, threshold=threshold, apply=apply, out=out
                     )
+                out["unmerged_ids"].sort()
+                out["unmerged_total"] = len(out["unmerged_ids"])
 
             if below:
                 review_ids = sorted({p.id_a for p in below} | {p.id_b for p in below})

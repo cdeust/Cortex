@@ -220,6 +220,8 @@ async def _cmd_apply(args: argparse.Namespace) -> int:
                 "superseded_total": result["superseded_total"],
                 "skipped_race": result["skipped_race"],
                 "skipped_vanished": result["skipped_vanished"],
+                "unmerged_total": result["unmerged_total"],
+                "unmerged_ids": result["unmerged_ids"],
                 "journal": result["journal"],
             },
             indent=2,

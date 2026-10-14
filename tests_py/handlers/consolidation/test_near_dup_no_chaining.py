@@ -98,6 +98,8 @@ def test_chain_end_is_not_superseded_into_the_far_end():
     assert _groups(result) == {(a, frozenset({b}))}
     assert _superseded_by([a, b, c]) == {a: None, b: a, c: None}
     assert result["unmerged_total"] == 1
+    # Review of #756: the ids left unmerged are reported, not only counted.
+    assert result["unmerged_ids"] == [c]
 
 
 def test_chain_symmetric_case_far_end_hottest():
