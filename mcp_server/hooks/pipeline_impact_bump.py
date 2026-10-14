@@ -32,6 +32,9 @@ _COOLDOWN_FILE = cooldown_path("cortex_pipeline_impact_cooldown.json")
 _FILE_TOOLS = {"Edit", "Write", "MultiEdit"}
 _IMPACT_BOOST = 0.15  # Slightly higher than preemptive — graph precision earns it.
 _MAX_BUMPS = 20  # Don't over-boost on massive impact sets.
+# source: bump_heat_raw clamps heat_base to [0, 1] on both stores; the
+# pre-#750 UPDATE skipped saturated rows with ``heat_base < 1.0``.
+_SATURATED_HEAT = 1.0
 
 
 def _log(msg: str) -> None:
@@ -151,9 +154,13 @@ def _bump_heat_for_symbols(symbol_names: list[str]) -> int:
     store = get_shared_store()
     bumped: set[int] = set()
     for name in symbol_names:
-        for mem in store.get_memories_mentioning_entity(name, limit=_MAX_BUMPS):
+        # Saturated rows are filtered in the query, before its LIMIT: they
+        # would otherwise fill it and starve the rows the bump can raise.
+        for mem in store.get_memories_mentioning_entity(
+            name, limit=_MAX_BUMPS, max_heat=_SATURATED_HEAT
+        ):
             heat = float(mem.get("heat_base") or 0.0)
-            if mem["id"] in bumped or heat >= 1.0:
+            if mem["id"] in bumped:
                 continue
             if mem.get("is_benchmark") or mem.get("is_stale"):
                 continue

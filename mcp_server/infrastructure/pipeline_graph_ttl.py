@@ -52,22 +52,31 @@ def graph_is_stale(graph_path: str | None) -> bool:
 
 def claim_reanalysis_slot(project_root: str) -> bool:
     """True, and records the attempt, when no background re-analysis of
-    ``project_root`` started within the TTL; False otherwise.
+    ``project_root`` was claimed in the current TTL window; False otherwise.
 
-    The stamp lives under ``~/.claude/methodology`` (one per project, keyed
-    by the resolved path), so it holds whether the worker succeeds, fails,
-    or is still running when the next session starts.
+    The claim is one atomic create (``O_CREAT | O_EXCL``) of a stamp under
+    ``~/.claude/methodology`` keyed by the resolved project path and the
+    window (``now // TTL``): of two sessions racing for one window, exactly
+    one wins, and the stamp holds whether the worker succeeds, fails, or is
+    still running when the next session starts. The winner removes the
+    project's stamps from earlier windows, so one file remains per project.
+    A zero TTL bounds nothing, as it makes every graph stale.
 
     source: ADR-0585"""
+    ttl_seconds = graph_ttl_hours() * 3600.0
+    if ttl_seconds <= 0.0:
+        return True
     resolved = str(Path(project_root).expanduser().resolve())
     digest = hashlib.sha256(resolved.encode("utf-8")).hexdigest()[:16]
-    stamp = methodology_log_path(f"pipeline_reanalyze.{digest}.stamp")
-    try:
-        age_hours = (time.time() - stamp.stat().st_mtime) / 3600.0
-    except FileNotFoundError:
-        age_hours = None
-    if age_hours is not None and age_hours < graph_ttl_hours():
-        return False
+    window = int(time.time() // ttl_seconds)
+    stamp = methodology_log_path(f"pipeline_reanalyze.{digest}.{window}.stamp")
     stamp.parent.mkdir(parents=True, exist_ok=True)
-    stamp.touch()
+    try:
+        fd = os.open(stamp, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError:
+        return False
+    os.close(fd)
+    for old in stamp.parent.glob(f"pipeline_reanalyze.{digest}.*.stamp"):
+        if old != stamp:
+            old.unlink(missing_ok=True)
     return True

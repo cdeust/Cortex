@@ -69,16 +69,21 @@ adheres to [Semantic Versioning](https://semver.org/).
   a discoverable pipeline spawned a detached ingest. It now reads through the
   configured store (`ingest_helpers.materialised_graph_paths`, shared with
   `find_cached_graph`); a store failure spawns nothing. On every backend,
-  `pipeline_graph_ttl.claim_reanalysis_slot` stamps each attempt per project,
-  so a failed, slow or concurrent ingest no longer makes each new session
-  start another one within `CORTEX_PIPELINE_GRAPH_TTL_HOURS` (default 24 h).
+  `pipeline_graph_ttl.claim_reanalysis_slot` claims each project's TTL window
+  with one atomic create (`O_CREAT | O_EXCL`) of a window-keyed stamp, so a
+  failed, slow or concurrent ingest, or two sessions starting together, no
+  longer start a second one within `CORTEX_PIPELINE_GRAPH_TTL_HOURS`
+  (default 24 h); the winner removes the project's older stamps.
 
 - **The PostToolUse impact bump raises heat on SQLite too, and targets the
   session's project** (#750). `pipeline_impact_bump` paid for the graph
   lookup and the `detect_changes` call on every edit, then raised heat with a
   psycopg-only `UPDATE` that did nothing on SQLite. It now bumps through the
   configured store (`get_memories_mentioning_entity` + the A3 writer
-  `bump_heat_raw`, at most once per memory, chain heads only). It also
+  `bump_heat_raw`, at most once per memory, chain heads only); saturated
+  memories (heat 1.0) are filtered in the store query before its limit
+  (`max_heat`, both backends), so twenty of them can no longer hide the
+  memories the bump can still raise. It also
   resolved the project as `CLAUDE_PROJECT_ROOT or os.getcwd()`, the plugin
   root under the launcher; it now uses `resolve_project_root(event,
   os.environ)` and does nothing when the project is unresolved.

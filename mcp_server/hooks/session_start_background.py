@@ -62,7 +62,6 @@ def _maybe_background_reanalyze(
             discover_pipeline_command,
         )
         from mcp_server.infrastructure.pipeline_graph_ttl import (  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
-            claim_reanalysis_slot,
             graph_is_stale,
         )
 
@@ -72,15 +71,17 @@ def _maybe_background_reanalyze(
         cached_path = lookup_cached_graph(project_root)
         if not graph_is_stale(cached_path):
             return  # Fresh enough; skip.
-        _spawn_reanalysis(project_root, claim_reanalysis_slot)
+        _spawn_reanalysis(project_root)
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"background pipeline reanalysis skipped: {exc}")
 
 
-def _spawn_reanalysis(
-    project_root: str, claim_reanalysis_slot: Callable[[str], bool]
-) -> None:
+def _spawn_reanalysis(project_root: str) -> None:
     """Start the detached ``ingest_codebase`` worker, once per project per TTL."""
+    from mcp_server.infrastructure.pipeline_graph_ttl import (  # noqa: PLC0415 — hook latency boundary: imported by _maybe_background_reanalyze already, only once a pipeline is discoverable
+        claim_reanalysis_slot,
+    )
+
     # Spawn background ingest. scripts/launcher.py handles PYTHONPATH
     # + deps, then runs the ingest_codebase handler as a one-shot CLI.
     cmd = launcher_child_command(
@@ -89,7 +90,7 @@ def _spawn_reanalysis(
     if cmd is None:
         return
     if not claim_reanalysis_slot(project_root):
-        _log("background reanalysis skipped: one already started within the TTL")
+        _log("background reanalysis skipped: one already claimed this TTL window")
         return
 
     # Rotate before spawn; the inherited fd stays open for the worker.

@@ -48,6 +48,8 @@ attempts at most one pending interval, keeping catch-up work bounded.
     
 ````
 
+Pointer update (2026-10-14): `session_id_from_transcript` now lives in `mcp_server/shared/injection_markers.py`; `handlers/injection_receipts.py` no longer defines it, so hooks import it without the handler stack. The quotation above is kept as recorded.
+
 ### comment, original line 28
 
 ````text

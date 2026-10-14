@@ -162,23 +162,32 @@ class SqliteEntityMixin:
         return [self._normalize_memory_row(r) for r in rows]
 
     def get_memories_mentioning_entity(
-        self, entity_name: str, limit: int = 20, heads_only: bool = True
+        self,
+        entity_name: str,
+        limit: int = 20,
+        heads_only: bool = True,
+        max_heat: float | None = None,
     ) -> list[dict[str, Any]]:
-        """Mirror of PgEntityMixin.get_memories_mentioning_entity — BOTH
-        branches (FTS5 + LIKE fallback) read current_memories by default;
-        heads_only=False requests the physical chain.
+        """Mirror of PgEntityMixin.get_memories_mentioning_entity: FTS5
+        first, the LIKE fallback over non-stale rows only when it matches
+        nothing; BOTH read current_memories by default (heads_only=False
+        requests the physical chain) and both apply ``max_heat``
+        (``heat_base < max_heat``) in the WHERE clause, before the LIMIT.
         """
         src = "current_memories" if heads_only else "memories"
         # source: ADR-0607
+        fts_heat = "" if max_heat is None else "AND m.heat_base < ? "
+        like_heat = "" if max_heat is None else "AND heat_base < ? "
+        heat_params: tuple[float, ...] = () if max_heat is None else (max_heat,)
 
         match = expand_fts_query(entity_name)
         rows = (
             self._conn.execute(
-                f"SELECT m.* FROM {src} m "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
+                f"SELECT m.* FROM {src} m "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; the heat clause is one of two in-code literals; values are bound parameters (docs/ASSURANCE-CASE.md §5)
                 "JOIN memories_fts f ON f.rowid = m.id "
-                "WHERE memories_fts MATCH ? "
+                f"WHERE memories_fts MATCH ? {fts_heat}"
                 "ORDER BY m.heat_base DESC LIMIT ?",
-                (match, limit),
+                (match, *heat_params, limit),
             ).fetchall()
             if match
             else []
@@ -186,8 +195,8 @@ class SqliteEntityMixin:
         if not rows:
             # Fallback to LIKE
             rows = self._conn.execute(
-                f"SELECT * FROM {src} WHERE content LIKE ? "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
-                "AND NOT is_stale ORDER BY heat_base DESC LIMIT ?",
-                (f"%{entity_name}%", limit),
+                f"SELECT * FROM {src} WHERE content LIKE ? "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; the heat clause is one of two in-code literals; values are bound parameters (docs/ASSURANCE-CASE.md §5)
+                f"AND NOT is_stale {like_heat}ORDER BY heat_base DESC LIMIT ?",
+                (f"%{entity_name}%", *heat_params, limit),
             ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]

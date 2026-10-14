@@ -165,32 +165,42 @@ class PgEntityMixin(PgStoreHost):
         return {row["source_entity_id"] for row in rows}
 
     def get_memories_mentioning_entity(
-        self, entity_name: str, limit: int = 20, heads_only: bool = True
+        self,
+        entity_name: str,
+        limit: int = 20,
+        heads_only: bool = True,
+        max_heat: float | None = None,
     ) -> list[dict[str, Any]]:
-        """Fetch memories mentioning the entity. Both the full-text and the
-        fallback query read current chain heads by default; heads_only=False
-        is the maintenance caller's explicit request for the physical chain.
+        """Fetch memories mentioning the entity, hottest first.
+
+        Full-text first (``phraseto_tsquery`` on ``content_tsv``); only when
+        it matches nothing, an escaped substring ``ILIKE`` over non-stale
+        rows. Both read current chain heads by default; heads_only=False is
+        the maintenance caller's explicit request for the physical chain.
+        ``max_heat`` keeps only ``heat_base < max_heat``, in the WHERE clause
+        of both queries, before their LIMIT: rows above the cap can never
+        fill the limit (the impact bump's starvation, #750 review).
 
         source: ADR-0547"""
         src = "current_memories" if heads_only else "memories"
+        heat_sql = "" if max_heat is None else "AND heat_base < %s "
+        heat_params: tuple[float, ...] = () if max_heat is None else (max_heat,)
         rows = self._execute(
-            f"SELECT * FROM {src} "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
+            f"SELECT * FROM {src} "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; heat_sql is one of two in-code literals; values are bound parameters (docs/ASSURANCE-CASE.md §5)
             "WHERE content_tsv @@ phraseto_tsquery('english', %s) "
-            "ORDER BY heat_base DESC LIMIT %s",
-            (entity_name, limit),
+            f"{heat_sql}ORDER BY heat_base DESC LIMIT %s",
+            (entity_name, *heat_params, limit),
         ).fetchall()
         if not rows:
+            pattern = "%{}%".format(
+                entity_name.replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_")
+            )
             rows = self._execute(
-                f"SELECT * FROM {src} WHERE content ILIKE %s "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
-                "AND NOT is_stale ORDER BY heat_base DESC LIMIT %s",
-                (
-                    "%{}%".format(
-                        entity_name.replace("\\", "\\\\")
-                        .replace("%", "\\%")
-                        .replace("_", "\\_")
-                    ),
-                    limit,
-                ),
+                f"SELECT * FROM {src} WHERE content ILIKE %s "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; heat_sql is one of two in-code literals; values are bound parameters (docs/ASSURANCE-CASE.md §5)
+                f"AND NOT is_stale {heat_sql}ORDER BY heat_base DESC LIMIT %s",
+                (pattern, *heat_params, limit),
             ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]
 

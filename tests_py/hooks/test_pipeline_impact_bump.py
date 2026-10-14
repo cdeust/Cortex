@@ -119,6 +119,23 @@ class TestHeatBump:
             0.5 + hook._IMPACT_BOOST
         )
 
+    def test_saturated_memories_do_not_starve_the_bump(self, sqlite_store):
+        """More saturated (heat 1.0) mentions than the query limit must not
+        hide the one memory the bump can still raise: the heat filter runs
+        in the store query, before its LIMIT (the pre-#750 UPDATE filtered
+        ``heat_base < 1.0`` in its WHERE)."""
+        for i in range(hook._MAX_BUMPS + 1):
+            sqlite_store.insert_memory(
+                {"content": f"handle_tool_call saturated note {i}", "heat": 1.0}
+            )
+        cold = sqlite_store.insert_memory(
+            {"content": "handle_tool_call cold note", "heat": 0.3}
+        )
+        assert hook._bump_heat_for_symbols(["handle_tool_call"]) == 1
+        assert sqlite_store.get_memory(cold)["heat_base"] == pytest.approx(
+            0.3 + hook._IMPACT_BOOST
+        )
+
 
 class TestProjectRoot:
     """#750: the project is the event's, never the launcher's plugin-root cwd."""
