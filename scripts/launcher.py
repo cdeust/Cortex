@@ -16,6 +16,7 @@ Examples:
 
 from __future__ import annotations
 
+import importlib
 import os
 import sys
 from pathlib import Path
@@ -25,9 +26,12 @@ _SCRIPTS_DIR = str(Path(__file__).resolve().parent)
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 import launcher_deps  # noqa: E402
+import launcher_ml  # noqa: E402
+import launcher_python  # noqa: E402
 import launcher_site  # noqa: E402
 
 _MIN_ARGC = 2  # source: ADR-0742
+_LAUNCHER = str(Path(__file__).resolve())  # source: ADR-1104 (re-exec and background job target)
 
 
 def _resolve_paths() -> tuple[str, str]:
@@ -69,109 +73,124 @@ def _use_utf8_output(plugin_root: str) -> None:
     use_utf8_output()
 
 
-def main() -> None:
-    # source: ADR-1098 (supersedes the output half of ADR-0742)
-    plugin_root, deps_dir = _resolve_paths()
-    _use_utf8_output(plugin_root)
-
-    if len(sys.argv) < _MIN_ARGC:
-        print(
-            "Usage: python3 scripts/launcher.py <module> [--install-deps]",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-
-    module = sys.argv[1]
-    install_deps = "--install-deps" in sys.argv
-
-    # Set up environment
+def _set_import_paths(plugin_root: str, deps_dir: str) -> None:
+    """PYTHONPATH for children, sys.path for this process; deps isolated."""
     path_sep = ";" if sys.platform == "win32" else ":"
     current_pypath = os.environ.get("PYTHONPATH", "")
     new_paths = [plugin_root, deps_dir]
     if current_pypath:
         new_paths.append(current_pypath)
     os.environ["PYTHONPATH"] = path_sep.join(new_paths)
-
-    # Ensure PYTHONPATH entries are in sys.path for this process.
     if plugin_root not in sys.path:
         sys.path.insert(0, plugin_root)
-
     # deps_dir joins sys.path here and nowhere else: being merely first on
-    # it is not isolation. That neither processes deps/pywin32.pth (the
-    # only route to pywintypes) nor stops an unvendored torchvision or
-    # torchaudio resolving from user site-packages against a torch deps/
-    # did not build.
+    # it is not isolation (pywin32.pth, unvendored torchvision).
     # source: issue #621
     launcher_site.isolate_deps(deps_dir)
 
+
+def _apply_backend() -> None:
+    """One storage backend for the server and every hook.
+
+    The host passes the user's ``database_url`` to the MCP server as
+    ``DATABASE_URL`` and to hooks only as ``CLAUDE_PLUGIN_OPTION_DATABASE_URL``;
+    both mean the same setting. Then the shared precedence (backend_marker)
+    with the plugin's default: nothing configured means the SQLite store.
+    PostgreSQL's local URL default applies only when a marker chose it.
+
+    source: ADR-0505
+    source: ADR-1104
+    """
+    option = os.environ.get("CLAUDE_PLUGIN_OPTION_DATABASE_URL", "").strip()
+    if option and not os.environ.get("DATABASE_URL", "").strip():
+        os.environ["DATABASE_URL"] = option
+    from mcp_server.infrastructure.backend_marker import (  # noqa: PLC0415 — resolvable once plugin_root is on sys.path
+        apply_backend_resolution,
+    )
+
+    apply_backend_resolution(os.environ, default="sqlite")
+    if (
+        "DATABASE_URL" not in os.environ
+        and os.environ.get("CORTEX_MEMORY_STORE_BACKEND", "") == "postgresql"
+    ):
+        os.environ["DATABASE_URL"] = "postgresql://localhost:5432/cortex"
+
+
+def _ensure_runtime(module: str, install_deps: bool, deps_dir: str) -> None:
+    """The dependency sets ``module`` needs, then semantic search in background.
+
+    Only the semantic-search job installs the ML set (launcher_ml); the
+    SessionStart launch starts that job and tells the hook where it stands.
+    source: ADR-0742, ADR-1104
+    """
+    if install_deps:
+        launcher_deps.ensure_all_deps(deps_dir)
+    else:
+        launcher_deps.ensure_deps(deps_dir)
+    # The import system cached deps_dir as it was before this install.
+    # source: ADR-1104
+    importlib.invalidate_caches()
+    # The locked set just installed can add a .pth (~0.5 ms). source: issue #621
+    launcher_site.isolate_deps(deps_dir)
+    if module == "mcp_server.hooks.session_start":
+        semantic, detail = launcher_ml.start(deps_dir, _LAUNCHER)
+        os.environ["CORTEX_SEMANTIC_SEARCH"] = semantic
+        os.environ["CORTEX_SEMANTIC_SEARCH_DETAIL"] = detail
+
+
+def _run(module: str, plugin_root: str) -> None:
+    """Wire the composition root, then run ``module`` as ``__main__``."""
+    os.chdir(plugin_root)
+    # source: issue #560 -- the one composition root shared by the server
+    # and every hook (ADR-0742).
+    from mcp_server.hooks.wiring import wire_composition_root  # noqa: PLC0415
+
+    wire_composition_root()
+    sys.argv = [module] + [a for a in sys.argv[2:] if a != "--install-deps"]
+    try:
+        from runpy import run_module  # noqa: PLC0415 — inside the launch boundary so a corrupt stdlib install is reported, not a crash
+
+        run_module(module, run_name="__main__", alter_sys=True)
+    except SystemExit:
+        raise
+    except Exception as e:  # noqa: BLE001 — failure is reported to stderr with its cause; the exit code carries it
+        print(f"[cortex-launcher] Failed to run {module}: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def main() -> None:
+    # source: ADR-1098 (supersedes the output half of ADR-0742)
+    plugin_root, deps_dir = _resolve_paths()
+    launcher_python.ensure_supported(deps_dir, _LAUNCHER)
+    _use_utf8_output(plugin_root)
+    if len(sys.argv) < _MIN_ARGC:
+        print(
+            "Usage: python3 scripts/launcher.py <module> [--install-deps]",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    module = sys.argv[1]
+    install_deps = "--install-deps" in sys.argv
+    _set_import_paths(plugin_root, deps_dir)
     if (
         module == "mcp_server.hooks.post_tool_capture"
         and not install_deps
         and os.environ.get("CORTEX_CAPTURE_MODE", "full") != "full"
     ):
-        from launcher_capture import skip_capture  # noqa: PLC0415 — only non-full capture needs the stdlib preflight; plugin path is now established
+        from launcher_capture import skip_capture  # noqa: PLC0415 — only non-full capture needs the stdlib preflight
 
         if skip_capture():
             return
-
-    # Persisted-backend resolution: translate the installer's
-    # ~/.claude/methodology/backend.json marker (SQLite zero-config
-    # default vs --postgres opt-in) into CORTEX_MEMORY_STORE_BACKEND.
-    # backend_marker is stdlib-only (json/pathlib), so this import is
-    # safe before ensure_deps has run. Best-effort: a broken marker or
-    # import must never block a hook or the server from starting — the
-    # engine's "auto" default then applies, exactly as before the
-    # marker existed.
-    try:
-        from mcp_server.infrastructure.backend_marker import (  # noqa: PLC0415 — plugin root joins sys.path inside main() a few lines above; this module is only resolvable after that
-            apply_backend_resolution,
+    _apply_backend()
+    if module == launcher_ml.WARMUP_MODULE:
+        launcher_ml.run_job(
+            deps_dir,
+            lambda: _ensure_runtime(module, True, deps_dir),
+            lambda: _run(module, plugin_root),
         )
-
-        apply_backend_resolution(os.environ)
-    except Exception as exc:  # noqa: BLE001 — launch must survive any marker failure
-        print(f"[cortex-launcher] backend resolution skipped: {exc}", file=sys.stderr)
-
-    # Set DATABASE_URL default if not set — PostgreSQL paths only. On
-    # the SQLite backend the URL is unused, and injecting a PG default
-    # would make every hook attempt (and log) a doomed PG connection.
-    if (
-        "DATABASE_URL" not in os.environ
-        and os.environ.get("CORTEX_MEMORY_STORE_BACKEND", "") != "sqlite"
-    ):
-        os.environ["DATABASE_URL"] = "postgresql://localhost:5432/cortex"
-
-    # source: ADR-0742
-    if module == "mcp_server.hooks.session_start" or install_deps:
-        launcher_deps.ensure_all_deps(deps_dir)
-    else:
-        launcher_deps.ensure_deps(deps_dir)
-
-    # Again: the locked set just installed can add a .pth the first call
-    # could not see. ~0.5 ms median on a 600-entry deps_dir.
-    # source: issue #621
-    launcher_site.isolate_deps(deps_dir)
-
-    # Change to plugin root
-    os.chdir(plugin_root)
-
-    # source: issue #560 -- wire every core/ seam before running ANY
-    # target module; this bootstrap is shared by the server and every
-    # hook (ADR-0742), so it is their one common composition root.
-    from mcp_server.hooks.wiring import wire_composition_root  # noqa: PLC0415
-
-    wire_composition_root()
-
-    # Run the target module
-    sys.argv = [module] + [a for a in sys.argv[2:] if a != "--install-deps"]
-    try:
-        from runpy import run_module  # noqa: PLC0415 — runpy is imported at dispatch time inside the launch boundary try so a corrupt stdlib install is reported, not a crash
-
-        run_module(module, run_name="__main__", alter_sys=True)
-    except SystemExit:
-        raise
-    except Exception as e:  # noqa: BLE001 — failure is reported to stderr; execution degrades, never crashes
-        print(f"[cortex-launcher] Failed to run {module}: {e}", file=sys.stderr)
-        sys.exit(1)
+        return
+    _ensure_runtime(module, install_deps, deps_dir)
+    _run(module, plugin_root)
 
 
 def entrypoint() -> None:

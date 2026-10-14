@@ -17,13 +17,11 @@ source: ADR-1092"""
 from __future__ import annotations
 
 import argparse
-import contextlib
 import hashlib
 import json
 import os
 import shutil
 import sys
-import time
 from pathlib import Path
 
 # source: ADR-0747
@@ -31,6 +29,7 @@ _SCRIPTS_DIR = str(Path(__file__).resolve().parent)
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 import launcher_deps_fs as _fs  # noqa: E402
+import launcher_lock as _lock  # noqa: E402
 import launcher_sets as _sets  # noqa: E402
 import importlib  # noqa: E402
 
@@ -44,8 +43,10 @@ _prune_superseded_dist_info = _fs.prune_superseded_dist_info
 
 LOCK_PATH = Path(_SCRIPTS_DIR).parent / "uv.lock"
 
-_STALE_LOCK_SECONDS = 120  # abandon a lock older than this (crashed holder)
-_LOCK_WAIT_SECONDS = 30  # give up waiting and proceed unlocked past this
+# An ML-set install moves about 1 GB; a holder that keeps the lock longer is
+# reported, not waited on forever. source: ADR-1104 (measured 86 s cold, audit
+# 2026-10-10 claim 4, so the bound is twenty times that)
+_LOCK_WAIT_SECONDS = 1800
 
 
 def _importable(import_name: str, deps_dir: str) -> bool:
@@ -70,44 +71,14 @@ def _importable(import_name: str, deps_dir: str) -> bool:
     return False
 
 
-@contextlib.contextmanager
 def _deps_lock(deps_dir: str):
-    """Cross-platform mutual exclusion around install+commit.
+    """Exclusive hold on ``deps_dir``'s installs, released when the holder dies.
 
-    Precondition: none.
-    Postcondition: removes the lock directory on normal exit. If another process holds a
-    live lock beyond ``_LOCK_WAIT_SECONDS``, continues without the lock.
+    Raises ``launcher_lock.LockTimeoutError`` past ``_LOCK_WAIT_SECONDS``:
+    an install never proceeds unlocked beside another one.
 
-    source: ADR-0747"""
-    lock_dir = f"{deps_dir}.lock"
-    stamp_file = os.path.join(lock_dir, "holder")
-    deadline = time.monotonic() + _LOCK_WAIT_SECONDS
-    acquired = False
-    while time.monotonic() < deadline:
-        try:
-            os.mkdir(lock_dir)
-            acquired = True
-            break
-        except FileExistsError:
-            try:
-                age = time.time() - os.path.getmtime(stamp_file)
-            except OSError:
-                age = 0.0
-            if age > _STALE_LOCK_SECONDS:
-                shutil.rmtree(lock_dir, ignore_errors=True)
-                continue
-            time.sleep(0.2)
-    if acquired:
-        try:
-            with open(stamp_file, "w", encoding="utf-8") as fh:
-                fh.write(f"{os.getpid()} {time.time()}")
-        except OSError:
-            pass
-    try:
-        yield acquired
-    finally:
-        if acquired:
-            shutil.rmtree(lock_dir, ignore_errors=True)
+    source: ADR-1104 (supersedes ADR-0747's age-stealing directory lock)"""
+    return _lock.held(f"{deps_dir}.install.lock", _LOCK_WAIT_SECONDS)
 
 
 def _stamp_path(deps_dir: str, kind: str) -> str:
@@ -168,11 +139,12 @@ def _ensure(
         Postcondition: the ``kind`` stamp names the current uv.lock digest
         and the exported set's digest iff that set is installed and every
         name in ``imports`` imports; a lock that changed elsewhere restamps
-        without installing; a failure prints its cause and leaves the
-        caller's import to fail.
+        without installing; a failure (a lock held past its bound included)
+        prints its cause and leaves the caller's import to fail.
 
     source: ADR-0747
-    source: ADR-1092"""
+    source: ADR-1092
+    source: ADR-1104"""
     os.makedirs(deps_dir, exist_ok=True)
     _sweep_stale_backups(deps_dir)
     digest = lock_digest()
@@ -185,21 +157,50 @@ def _ensure(
         return
     if _stamp_matches(deps_dir, kind, digest):
         return
-    with _deps_lock(deps_dir):
-        # Double-checked: another process may have finished installing
-        # while this one waited for the lock.
-        if _stamp_matches(deps_dir, kind, digest):
-            return
-        set_digest = _locked_set_digest(deps_dir, set_args)
-        if set_digest is None:
-            return  # Cause printed; a set uv cannot read is never stamped.
-        present = _stamp(deps_dir, kind).get("set") == set_digest and all(
-            _importable(name, deps_dir) for name in imports
-        )
-        if not present and not _install_locked_set(deps_dir, set_args):
-            return  # A failed install must never receive a success stamp.
-        if all(_importable(name, deps_dir) for name in imports):
-            _write_stamp(deps_dir, kind, digest, set_digest)
+    try:
+        with _deps_lock(deps_dir):
+            _install_and_stamp(deps_dir, kind, set_args, imports, digest)
+    except _lock.LockTimeoutError as exc:
+        print(f"[cortex-launcher] dependency install failed: {exc}", file=sys.stderr)
+
+
+def _install_and_stamp(
+    deps_dir: str,
+    kind: str,
+    set_args: tuple[str, ...],
+    imports: tuple[str, ...],
+    digest: str,
+) -> None:
+    """Under the deps lock: install ``kind`` if needed, stamp it if it imports.
+
+    source: ADR-0747
+    source: ADR-1104"""
+    # Double-checked: another process may have finished installing while
+    # this one waited for the lock.
+    if _stamp_matches(deps_dir, kind, digest):
+        return
+    set_digest = _locked_set_digest(deps_dir, set_args)
+    if set_digest is None:
+        return  # Cause printed; a set uv cannot read is never stamped.
+    present = _stamp(deps_dir, kind).get("set") == set_digest and all(
+        _importable(name, deps_dir) for name in imports
+    )
+    if not present and not _install_locked_set(deps_dir, set_args):
+        return  # A failed install must never receive a success stamp.
+    # The import system cached deps_dir as it was before this install (absent,
+    # or without the packages just added): without this a first install's
+    # imports fail and the set is never stamped. source: ADR-1104
+    importlib.invalidate_caches()
+    if all(_importable(name, deps_dir) for name in imports):
+        _write_stamp(deps_dir, kind, digest, set_digest)
+
+
+def ml_ready(deps_dir: str) -> bool:
+    """True iff the ML set is installed for this uv.lock and this Python.
+
+    source: ADR-1104"""
+    digest = lock_digest()
+    return digest is not None and _stamp_matches(deps_dir, "ml", digest)
 
 
 def ensure_deps(deps_dir: str) -> None:
@@ -210,7 +211,7 @@ def ensure_deps(deps_dir: str) -> None:
 
 
 def ensure_all_deps(deps_dir: str) -> None:
-    """Install base + ML sets (SessionStart hook only).
+    """Install base + ML sets (the background semantic-search job only).
 
     source: ADR-0747"""
     ensure_deps(deps_dir)
@@ -224,8 +225,12 @@ def install_installer_set(deps_dir: str) -> bool:
     source: ADR-1092"""
     os.makedirs(deps_dir, exist_ok=True)
     _sweep_stale_backups(deps_dir)
-    with _deps_lock(deps_dir):
-        return _install_locked_set(deps_dir, _sets.INSTALLER)
+    try:
+        with _deps_lock(deps_dir):
+            return _install_locked_set(deps_dir, _sets.INSTALLER)
+    except _lock.LockTimeoutError as exc:
+        print(f"[cortex-launcher] dependency install failed: {exc}", file=sys.stderr)
+        return False
 
 
 def main(argv: list[str]) -> int:
