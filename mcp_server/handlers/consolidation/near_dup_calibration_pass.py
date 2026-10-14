@@ -38,7 +38,6 @@ async def run_near_dup_sample(
     top_k: int = 30,
     min_similarity: float = 0.75,
     per_stratum: int = DEFAULT_PER_STRATUM,
-    anchor_limit: int = 20000,
 ) -> dict[str, Any]:
     """Scan candidate pairs, stratify, deterministically sample, fetch contents.
 
@@ -56,7 +55,6 @@ async def run_near_dup_sample(
                 conn,
                 top_k=top_k,
                 min_similarity=min_similarity,
-                anchor_limit=anchor_limit,
             )
             out["candidate_total"] = len(pairs)
             buckets = bucket_by_stratum(pairs)
@@ -140,7 +138,6 @@ async def run_near_dup_apply_pass(
     apply: bool = False,
     top_k: int = 30,
     min_similarity: float = 0.75,
-    anchor_limit: int = 20000,
 ) -> dict[str, Any]:
     """Auto-supersede components >= ``threshold``; review-queue the rest.
 
@@ -162,7 +159,6 @@ async def run_near_dup_apply_pass(
                 conn,
                 top_k=top_k,
                 min_similarity=min_similarity,
-                anchor_limit=anchor_limit,
             )
             out["candidate_total"] = len(pairs)
 

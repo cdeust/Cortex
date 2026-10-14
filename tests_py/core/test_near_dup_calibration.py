@@ -10,6 +10,7 @@ from mcp_server.shared.near_dup_calibration import (
     CandidatePair,
     LabeledPair,
     build_components,
+    merge_pair_batches,
     bucket_by_stratum,
     precision_by_threshold,
     select_threshold,
@@ -170,3 +171,28 @@ def test_build_components_sorted_by_min_member():
     pairs = [CandidatePair(50, 51, 0.9), CandidatePair(1, 2, 0.9)]
     components = build_components(pairs)
     assert components == [frozenset({1, 2}), frozenset({50, 51})]
+
+
+# ── merge_pair_batches ───────────────────────────────────────────────────
+
+
+def test_merge_pair_batches_keeps_one_pair_found_from_both_members():
+    first = [CandidatePair(1, 9, 0.80), CandidatePair(2, 3, 0.90)]
+    later = [CandidatePair(1, 9, 0.81), CandidatePair(4, 5, 0.77)]
+    assert merge_pair_batches([first, later]) == [
+        CandidatePair(1, 9, 0.81),
+        CandidatePair(2, 3, 0.90),
+        CandidatePair(4, 5, 0.77),
+    ]
+
+
+def test_merge_pair_batches_reads_a_generator_once():
+    batches = (b for b in [[CandidatePair(7, 8, 0.9)], [], [CandidatePair(1, 2, 0.8)]])
+    assert merge_pair_batches(batches) == [
+        CandidatePair(1, 2, 0.8),
+        CandidatePair(7, 8, 0.9),
+    ]
+
+
+def test_merge_pair_batches_no_batches():
+    assert merge_pair_batches([]) == []

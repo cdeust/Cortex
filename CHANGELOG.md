@@ -35,6 +35,18 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **The near-duplicate scan covers every live memory, the same way on every
+  run** (ADR-0557). Its anchors were `LIMIT 20000` with no `ORDER BY`, so on
+  a larger store each pass scanned an arbitrary subset: on a restored copy
+  of a 66,547-memory store two runs gave 199,400 and 236,626 pairs. The scan
+  now reads every anchor in id order, 5000 per query (keyset pagination,
+  one transaction per batch with the iterative-scan check), and merges the
+  pairs. On the same copy: 686,268 pairs, identical over two runs and for
+  batch sizes 1000, 5000 and 20000, 47 to 88 s, 214 MB peak Python
+  allocation. `anchor_limit` is removed from `list_candidate_pairs`,
+  `run_near_dup_sample` and `run_near_dup_apply_pass`; the scan takes
+  `batch_size`, which bounds one query, not coverage.
+
 - **The near-duplicate scan pairs duplicates that superseded rows used to
   hide** (ADR-0557). Its per-anchor top-K used the HNSW index, which returned
   at most `hnsw.ef_search` (40) candidates before `current_memories`

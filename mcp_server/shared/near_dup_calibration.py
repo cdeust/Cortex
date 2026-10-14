@@ -5,6 +5,7 @@ source: ADR-0659
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import NamedTuple
 
 # source: ADR-0659
@@ -169,6 +170,31 @@ def select_threshold(stats: list[ThresholdStats]) -> float | None:
     return min(qualifying) if qualifying else None
 
 
+# ── Pairs found by several anchor batches ──────────────────────────────
+
+
+def merge_pair_batches(batches: Iterable[list[CandidatePair]]) -> list[CandidatePair]:
+    """Merge the pairs found by successive anchor batches into one pair set.
+
+    A pair can surface from a member's batch and again from its partner's
+    batch. ``batches`` may be a generator: only the merged set and the
+    current batch are held at once.
+
+    Pre-condition: every pair has id_a < id_b. Post-condition: one
+    CandidatePair per (id_a, id_b), with the highest similarity reported for
+    it, ordered by (id_a, id_b).
+
+    source: ADR-0557"""
+    best: dict[tuple[int, int], float] = {}
+    for batch in batches:
+        for pair in batch:
+            key = (pair.id_a, pair.id_b)
+            known = best.get(key)
+            if known is None or pair.similarity > known:
+                best[key] = pair.similarity
+    return [CandidatePair(a, b, sim) for (a, b), sim in sorted(best.items())]
+
+
 # ── Connected components (transitive near-dup families) ────────────────
 
 
@@ -216,4 +242,5 @@ __all__ = [
     "precision_by_threshold",
     "select_threshold",
     "build_components",
+    "merge_pair_batches",
 ]

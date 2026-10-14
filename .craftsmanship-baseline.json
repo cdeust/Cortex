@@ -4193,11 +4193,6 @@
       "detail": "list_deliberate_below_target"
     },
     {
-      "file": "mcp_server/infrastructure/pg_store_near_dup.py",
-      "kind": "method-size",
-      "detail": "list_candidate_pairs"
-    },
-    {
       "file": "mcp_server/infrastructure/pg_store_relationships.py",
       "kind": "method-size",
       "detail": "PgRelationshipMixin.reinforce_or_create_relationship"
