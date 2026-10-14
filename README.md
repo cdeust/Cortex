@@ -99,8 +99,9 @@ when explicitly configured. [PRIVACY.md](PRIVACY.md) lists the exact scope.
 An existing PostgreSQL setup is kept: a configured `database_url` option (or `DATABASE_URL`),
 or the backend marker `install-plugin.sh --postgres` writes, always wins over the SQLite
 default. An install that ran before on the local `cortex` database with nothing configured
-keeps it: on its first launch Cortex checks once that this database still opens, records the
-choice, and prints it. A fresh install never connects to a database nothing configured.
+keeps it: on its first launch Cortex checks once that this database still answers with the
+credentials PostgreSQL's own client would use (`PGUSER`, `PGPASSWORD`, `~/.pgpass`), records
+the choice, and prints it. A fresh install never connects to a database nothing configured.
 
 <details>
 <summary><strong>Upgrading from an older plugin identity</strong></summary>

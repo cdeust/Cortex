@@ -1,0 +1,78 @@
+"""The credentials libpq would have used for the pre-ADR-1104 local URL.
+
+The old default ``postgresql://localhost:5432/cortex`` carried no user and no
+password, so libpq filled them in: the user from ``PGUSER`` or the OS login,
+the password from ``PGPASSWORD`` or the password file. The first-launch probe
+(launcher_backend) must see a user's earlier store the way that URL did.
+
+source: PostgreSQL docs, libpq-envars (PGUSER, PGPASSWORD, PGPASSFILE)
+source: PostgreSQL docs, libpq-pgpass (format, wildcards, escapes, permissions)
+"""
+
+from __future__ import annotations
+
+import getpass
+import os
+import stat
+from pathlib import Path
+
+# source: PostgreSQL docs, libpq-pgpass (group/world access makes libpq ignore it)
+_PRIVATE_MODE_MASK = stat.S_IRWXG | stat.S_IRWXO
+
+
+def login_user(environ: dict) -> str:
+    """``PGUSER``, else the OS login name; raises ``LookupError`` when none."""
+    user = environ.get("PGUSER", "")
+    if user:
+        return user
+    try:
+        return getpass.getuser()
+    except (KeyError, OSError) as exc:  # no passwd entry, no LOGNAME/USER
+        raise LookupError(f"no PostgreSQL user name ({exc})") from exc
+
+
+def _password_file(environ: dict) -> Path:
+    if environ.get("PGPASSFILE"):
+        return Path(environ["PGPASSFILE"])
+    if os.name == "nt":
+        return Path(environ.get("APPDATA", "")) / "postgresql" / "pgpass.conf"
+    return Path.home() / ".pgpass"
+
+
+def _fields(line: str) -> list:
+    """Split one pgpass line on unescaped ':' and undo ``\\:`` / ``\\\\``."""
+    fields, current, escaped = [], "", False
+    for char in line:
+        if escaped:
+            current, escaped = current + char, False
+        elif char == "\\":
+            escaped = True
+        elif char == ":":
+            fields.append(current)
+            current = ""
+        else:
+            current += char
+    return [*fields, current]
+
+
+def _file_has_entry(path: Path, wanted: tuple) -> bool:
+    if not path.is_file():
+        return False
+    if os.name != "nt" and path.stat().st_mode & _PRIVATE_MODE_MASK:
+        return False
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        fields = _fields(line)
+        if len(fields) == len(wanted) + 1 and all(
+            fields[i] in ("*", want) for i, want in enumerate(wanted)
+        ):
+            return bool(fields[-1])
+    return False
+
+
+def has_password(environ: dict, host: str, port: int, database: str, user: str) -> bool:
+    """Whether libpq would send a password for this connection."""
+    if environ.get("PGPASSWORD"):
+        return True
+    return _file_has_entry(_password_file(environ), (host, str(port), database, user))
