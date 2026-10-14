@@ -87,15 +87,50 @@ def test_libpq_settings_keep_postgresql_even_when_refused(
     assert backend == "postgresql" and name in why
 
 
+def _addresses(monkeypatch, *ports: int) -> None:
+    """``localhost`` resolving to one 127.0.0.1 address per port."""
+    found = [
+        (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", port))
+        for port in ports
+    ]
+    monkeypatch.setattr(launcher_backend.socket, "getaddrinfo", lambda *a, **k: found)
+
+
 def test_an_unclear_connect_error_keeps_postgresql(
     tmp_path, monkeypatch, no_libpq_settings
 ):
-    def times_out(*_args, **_kwargs):
+    def times_out(self, _address):
         raise TimeoutError("timed out")
 
-    monkeypatch.setattr(launcher_backend.socket, "create_connection", times_out)
+    _addresses(monkeypatch, _closed_port())
+    monkeypatch.setattr(launcher_backend.socket.socket, "connect", times_out)
     backend, why = launcher_backend.decide(_earlier_state(tmp_path), _MARKER)
     assert backend == "postgresql" and "no clear answer" in why
+
+
+def test_one_listening_address_among_refusals_keeps_postgresql(
+    tmp_path, monkeypatch, no_libpq_settings
+):
+    """Review of 0839d874: create_connection reports only the last address."""
+    with socket.create_server(("127.0.0.1", 0)) as listener:
+        _addresses(monkeypatch, listener.getsockname()[1], _closed_port())
+        backend, why = launcher_backend.decide(_earlier_state(tmp_path), _MARKER)
+    assert backend == "postgresql", why
+
+
+def test_every_address_refusing_is_sqlite(tmp_path, monkeypatch, no_libpq_settings):
+    _addresses(monkeypatch, _closed_port(), _closed_port())
+    backend, why = launcher_backend.decide(_earlier_state(tmp_path), _MARKER)
+    assert backend == "sqlite" and "every address refuses" in why
+
+
+def test_no_address_is_sqlite(tmp_path, monkeypatch, no_libpq_settings):
+    def unresolved(*_args, **_kwargs):
+        raise socket.gaierror(8, "nodename nor servname provided")
+
+    monkeypatch.setattr(launcher_backend.socket, "getaddrinfo", unresolved)
+    backend, why = launcher_backend.decide(_earlier_state(tmp_path), _MARKER)
+    assert backend == "sqlite" and "has no address" in why
 
 
 def test_the_decision_is_recorded_and_printed(tmp_path, monkeypatch, capsys):

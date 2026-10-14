@@ -12,7 +12,7 @@ So, once, when neither the environment nor a marker decides:
   then decided, with paths no probe can replay (TLS retry, GSS, services,
   password files, psycopg's connect timeout). So the decision only runs one
   way: SQLite only when that URL certainly failed, i.e. ``localhost`` has no
-  address or refuses the connection on 5432 and no ``PG*`` variable
+  address or every one of its addresses refuses 5432 and no ``PG*`` variable
   configures libpq otherwise. Anything else keeps PostgreSQL, where libpq
   connects or fails loudly with the real error, as before this decision (the
   SessionStart hook still creates a missing ``cortex`` database, setup_db).
@@ -38,6 +38,7 @@ CONNECT_SECONDS = 3.0
 # source: PostgreSQL docs, libpq-envars (every libpq setting is a PG* variable)
 _LIBPQ_PREFIX = "PG"
 _WRITTEN_BY = "launcher (first launch, ADR-1104)"  # source: ADR-1104
+_REFUSED = "refused"  # sentinel: this address actively refused
 
 
 def has_earlier_state(methodology_dir: Path, marker_name: str) -> bool:
@@ -57,14 +58,33 @@ def legacy_store_answer(environ: dict) -> tuple[bool, str]:
     if configured:
         return False, f"libpq is configured ({', '.join(configured)}); libpq decides"
     try:
-        with socket.create_connection(
-            (LEGACY_HOST, LEGACY_PORT), timeout=CONNECT_SECONDS
-        ):
-            return False, "a server listens there; libpq decides"
-    except (ConnectionRefusedError, socket.gaierror) as exc:
-        return True, f"nothing listens there ({exc})"
+        addresses = socket.getaddrinfo(
+            LEGACY_HOST, LEGACY_PORT, type=socket.SOCK_STREAM
+        )
+    except socket.gaierror as exc:
+        return True, f"{LEGACY_HOST} has no address ({exc})"
+    unclear = [_connect_error(address) for address in addresses]
+    unclear = [error for error in unclear if error is not _REFUSED]
+    if not unclear:
+        return True, "every address refuses the connection; nothing listens there"
+    if None in unclear:
+        return False, "a server listens there; libpq decides"
+    return False, f"no clear answer ({unclear[0]}); libpq decides"
+
+
+def _connect_error(address: tuple):
+    """None when it connects, ``_REFUSED`` when refused, else the error. Each
+    address is tried as libpq tries them (AF_UNSPEC, every result)."""
+    family, kind, proto, _name, sockaddr = address
+    try:
+        with socket.socket(family, kind, proto) as sock:
+            sock.settimeout(CONNECT_SECONDS)
+            sock.connect(sockaddr)
+    except ConnectionRefusedError:
+        return _REFUSED
     except OSError as exc:
-        return False, f"no clear answer ({exc or type(exc).__name__}); libpq decides"
+        return exc or type(exc).__name__
+    return None
 
 
 def decide(methodology_dir: Path, marker_name: str) -> tuple[str, str]:
