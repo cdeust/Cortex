@@ -9,6 +9,7 @@ from mcp_server.infrastructure.sqlite_compat import (
     SqliteConnectionLike,
 )
 from mcp_server.shared.code_tokenize import expand_fts_query
+from mcp_server.infrastructure.entity_mention_filters import mention_filters
 
 
 class SqliteEntityMixin:
@@ -166,37 +167,54 @@ class SqliteEntityMixin:
         entity_name: str,
         limit: int = 20,
         heads_only: bool = True,
+        *,
         max_heat: float | None = None,
+        exclude_stale: bool = False,
+        exclude_benchmark: bool = False,
     ) -> list[dict[str, Any]]:
         """Mirror of PgEntityMixin.get_memories_mentioning_entity: FTS5
         first, the LIKE fallback over non-stale rows only when it matches
         nothing; BOTH read current_memories by default (heads_only=False
-        requests the physical chain) and both apply ``max_heat``
-        (``heat_base < max_heat``) in the WHERE clause, before the LIMIT.
+        requests the physical chain) and both apply the keyword filters
+        (``heat_base < max_heat``, ``NOT is_stale``, ``NOT is_benchmark``)
+        in the WHERE clause, before the LIMIT.
         """
         src = "current_memories" if heads_only else "memories"
         # source: ADR-0607
-        fts_heat = "" if max_heat is None else "AND m.heat_base < ? "
-        like_heat = "" if max_heat is None else "AND heat_base < ? "
-        heat_params: tuple[float, ...] = () if max_heat is None else (max_heat,)
+        fts_sql, params = mention_filters(
+            "?", max_heat, exclude_stale, exclude_benchmark, column_prefix="m."
+        )
 
         match = expand_fts_query(entity_name)
         rows = (
             self._conn.execute(
-                f"SELECT m.* FROM {src} m "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; the heat clause is one of two in-code literals; values are bound parameters (docs/ASSURANCE-CASE.md §5)
+                f"SELECT m.* FROM {src} m "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; the filter clauses are in-code literals; values are bound parameters (docs/ASSURANCE-CASE.md §5)
                 "JOIN memories_fts f ON f.rowid = m.id "
-                f"WHERE memories_fts MATCH ? {fts_heat}"
+                f"WHERE memories_fts MATCH ? {fts_sql}"
                 "ORDER BY m.heat_base DESC LIMIT ?",
-                (match, *heat_params, limit),
+                (match, *params, limit),
             ).fetchall()
             if match
             else []
         )
         if not rows:
-            # Fallback to LIKE
-            rows = self._conn.execute(
-                f"SELECT * FROM {src} WHERE content LIKE ? "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; the heat clause is one of two in-code literals; values are bound parameters (docs/ASSURANCE-CASE.md §5)
-                f"AND NOT is_stale {like_heat}ORDER BY heat_base DESC LIMIT ?",
-                (f"%{entity_name}%", *heat_params, limit),
-            ).fetchall()
+            rows = self._mentions_by_substring(
+                src, entity_name, limit, max_heat, exclude_benchmark
+            )
         return [self._normalize_memory_row(r) for r in rows]
+
+    def _mentions_by_substring(
+        self,
+        src: str,
+        entity_name: str,
+        limit: int,
+        max_heat: float | None,
+        exclude_benchmark: bool,
+    ) -> list:
+        """The ``LIKE`` fallback; it always excludes stale rows."""
+        like_sql, params = mention_filters("?", max_heat, False, exclude_benchmark)
+        return self._conn.execute(
+            f"SELECT * FROM {src} WHERE content LIKE ? "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; the filter clauses are in-code literals; values are bound parameters (docs/ASSURANCE-CASE.md §5)
+            f"AND NOT is_stale {like_sql}ORDER BY heat_base DESC LIMIT ?",
+            (f"%{entity_name}%", *params, limit),
+        ).fetchall()

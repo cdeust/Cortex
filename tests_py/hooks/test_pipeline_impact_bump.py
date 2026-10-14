@@ -136,6 +136,28 @@ class TestHeatBump:
             0.3 + hook._IMPACT_BOOST
         )
 
+    @pytest.mark.parametrize("flag", ["is_stale", "is_benchmark"])
+    def test_excluded_memories_do_not_starve_the_bump(self, sqlite_store, flag):
+        """Stale or benchmark mentions above the query limit must not hide the
+        valid one: the pre-#750 UPDATE excluded both in its WHERE clause."""
+        for i in range(hook._MAX_BUMPS + 1):
+            mid = sqlite_store.insert_memory(
+                {
+                    "content": f"handle_tool_call {flag} note {i}",
+                    "heat": 0.9,
+                    "is_benchmark": flag == "is_benchmark",
+                }
+            )
+            if flag == "is_stale":
+                sqlite_store.mark_memory_stale(mid)
+        valid = sqlite_store.insert_memory(
+            {"content": "handle_tool_call valid note", "heat": 0.3}
+        )
+        assert hook._bump_heat_for_symbols(["handle_tool_call"]) == 1
+        assert sqlite_store.get_memory(valid)["heat_base"] == pytest.approx(
+            0.3 + hook._IMPACT_BOOST
+        )
+
 
 class TestProjectRoot:
     """#750: the project is the event's, never the launcher's plugin-root cwd."""

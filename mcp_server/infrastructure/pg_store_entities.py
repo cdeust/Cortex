@@ -6,6 +6,7 @@ from mcp_server.infrastructure.pg_store_host import PgStoreHost
 
 from typing import TYPE_CHECKING, Any
 from mcp_server.shared.entity_canonical import canonicalize_entity_name
+from mcp_server.infrastructure.entity_mention_filters import mention_filters
 
 if TYPE_CHECKING:
     pass
@@ -169,7 +170,10 @@ class PgEntityMixin(PgStoreHost):
         entity_name: str,
         limit: int = 20,
         heads_only: bool = True,
+        *,
         max_heat: float | None = None,
+        exclude_stale: bool = False,
+        exclude_benchmark: bool = False,
     ) -> list[dict[str, Any]]:
         """Fetch memories mentioning the entity, hottest first.
 
@@ -177,32 +181,46 @@ class PgEntityMixin(PgStoreHost):
         it matches nothing, an escaped substring ``ILIKE`` over non-stale
         rows. Both read current chain heads by default; heads_only=False is
         the maintenance caller's explicit request for the physical chain.
-        ``max_heat`` keeps only ``heat_base < max_heat``, in the WHERE clause
-        of both queries, before their LIMIT: rows above the cap can never
-        fill the limit (the impact bump's starvation, #750 review).
+        The keyword filters (the impact bump's: ``heat_base < max_heat``,
+        ``NOT is_stale``, ``NOT is_benchmark``) go in the WHERE clause of
+        both queries, before their LIMIT, so excluded rows can never fill the
+        limit (#750 review). Without them, every caller gets today's rows.
 
         source: ADR-0547"""
         src = "current_memories" if heads_only else "memories"
-        heat_sql = "" if max_heat is None else "AND heat_base < %s "
-        heat_params: tuple[float, ...] = () if max_heat is None else (max_heat,)
+        fts_sql, params = mention_filters(
+            "%s", max_heat, exclude_stale, exclude_benchmark
+        )
         rows = self._execute(
-            f"SELECT * FROM {src} "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; heat_sql is one of two in-code literals; values are bound parameters (docs/ASSURANCE-CASE.md §5)
+            f"SELECT * FROM {src} "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; the filter clauses are in-code literals; values are bound parameters (docs/ASSURANCE-CASE.md §5)
             "WHERE content_tsv @@ phraseto_tsquery('english', %s) "
-            f"{heat_sql}ORDER BY heat_base DESC LIMIT %s",
-            (entity_name, *heat_params, limit),
+            f"{fts_sql}ORDER BY heat_base DESC LIMIT %s",
+            (entity_name, *params, limit),
         ).fetchall()
         if not rows:
-            pattern = "%{}%".format(
-                entity_name.replace("\\", "\\\\")
-                .replace("%", "\\%")
-                .replace("_", "\\_")
+            rows = self._mentions_by_substring(
+                src, entity_name, limit, max_heat, exclude_benchmark
             )
-            rows = self._execute(
-                f"SELECT * FROM {src} WHERE content ILIKE %s "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; heat_sql is one of two in-code literals; values are bound parameters (docs/ASSURANCE-CASE.md §5)
-                f"AND NOT is_stale {heat_sql}ORDER BY heat_base DESC LIMIT %s",
-                (pattern, *heat_params, limit),
-            ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]
+
+    def _mentions_by_substring(
+        self,
+        src: str,
+        entity_name: str,
+        limit: int,
+        max_heat: float | None,
+        exclude_benchmark: bool,
+    ) -> list:
+        """The escaped ``ILIKE`` fallback; it always excludes stale rows."""
+        pattern = "%{}%".format(
+            entity_name.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        )
+        like_sql, params = mention_filters("%s", max_heat, False, exclude_benchmark)
+        return self._execute(
+            f"SELECT * FROM {src} WHERE content ILIKE %s "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; the filter clauses are in-code literals; values are bound parameters (docs/ASSURANCE-CASE.md §5)
+            f"AND NOT is_stale {like_sql}ORDER BY heat_base DESC LIMIT %s",
+            (pattern, *params, limit),
+        ).fetchall()
 
     def insert_memory_entity(self, memory_id: int, entity_id: int) -> None:
         """Link a memory to an entity. Idempotent via ON CONFLICT."""

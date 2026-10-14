@@ -154,15 +154,18 @@ def _bump_heat_for_symbols(symbol_names: list[str]) -> int:
     store = get_shared_store()
     bumped: set[int] = set()
     for name in symbol_names:
-        # Saturated rows are filtered in the query, before its LIMIT: they
-        # would otherwise fill it and starve the rows the bump can raise.
+        # Saturated, stale and benchmark rows (the pre-#750 UPDATE's WHERE)
+        # are filtered in the query, before its LIMIT: they would otherwise
+        # fill it and starve the rows the bump can raise.
         for mem in store.get_memories_mentioning_entity(
-            name, limit=_MAX_BUMPS, max_heat=_SATURATED_HEAT
+            name,
+            limit=_MAX_BUMPS,
+            max_heat=_SATURATED_HEAT,
+            exclude_stale=True,
+            exclude_benchmark=True,
         ):
             heat = float(mem.get("heat_base") or 0.0)
             if mem["id"] in bumped:
-                continue
-            if mem.get("is_benchmark") or mem.get("is_stale"):
                 continue
             store.bump_heat_raw(mem["id"], heat + _IMPACT_BOOST)
             bumped.add(mem["id"])

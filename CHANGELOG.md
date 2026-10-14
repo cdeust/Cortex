@@ -81,9 +81,10 @@ adheres to [Semantic Versioning](https://semver.org/).
   psycopg-only `UPDATE` that did nothing on SQLite. It now bumps through the
   configured store (`get_memories_mentioning_entity` + the A3 writer
   `bump_heat_raw`, at most once per memory, chain heads only); saturated
-  memories (heat 1.0) are filtered in the store query before its limit
-  (`max_heat`, both backends), so twenty of them can no longer hide the
-  memories the bump can still raise. It also
+  (heat 1.0), stale and benchmark memories, the old `UPDATE`'s three
+  exclusions, are filtered in the store query before its limit (`max_heat`,
+  `exclude_stale`, `exclude_benchmark`, both backends), so twenty of them
+  can no longer hide the memories the bump can still raise. It also
   resolved the project as `CLAUDE_PROJECT_ROOT or os.getcwd()`, the plugin
   root under the launcher; it now uses `resolve_project_root(event,
   os.environ)` and does nothing when the project is unresolved.
