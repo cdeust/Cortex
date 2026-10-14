@@ -47,6 +47,7 @@ from mcp_server.hooks.output_streams import use_utf8_output
 from mcp_server.hooks.launcher_command import launcher_child_command
 from mcp_server.hooks.stdin_event import read_event_text
 from mcp_server.shared.log_rotation import methodology_log_path, open_rotating_log
+from mcp_server.shared.project_scope import resolve_project_root
 
 _LOG_PREFIX = "[post-commit-reindex]"
 _COOLDOWN_FILE = Path("/tmp/cortex_reindex_cooldown.json")
@@ -195,14 +196,15 @@ def _update_cooldown(root: str) -> None:
         pass
 
 
-def _pipeline_available() -> bool:
-    """True when the upstream analyzer is installed (else nothing to do)."""
+def _pipeline_available(root: str) -> bool:
+    """True when the upstream analyzer is installed (else nothing to do);
+    ``root`` anchors the sibling source-checkout scan (ADR-0584)."""
     try:
         from mcp_server.infrastructure.pipeline_discovery import (  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
             discover_pipeline_command,
         )
 
-        return discover_pipeline_command() is not None
+        return discover_pipeline_command(root) is not None
     except ImportError:
         return False
 
@@ -245,8 +247,11 @@ def process_event(event: dict[str, Any]) -> None:
     if _commit_failed(event):
         return
 
-    root = os.environ.get("CLAUDE_PROJECT_ROOT") or os.getcwd()
-    if not _pipeline_available():
+    # Never os.getcwd(): under scripts/launcher.py it is the plugin root.
+    root = resolve_project_root(event, os.environ)
+    if root is None:
+        return  # Project unknown (issue #604): nothing to re-analyse.
+    if not _pipeline_available(root):
         return  # No analyzer installed — re-analyse impossible, skip.
 
     changed = _changed_source_files(root)

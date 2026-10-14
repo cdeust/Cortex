@@ -14,6 +14,7 @@ SessionStart TTL staleness gap.
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -31,7 +32,11 @@ def _clean_cooldown(tmp_path, monkeypatch):
 
 
 def _commit_event(command="git commit -m 'x'"):
-    return {"tool_name": "Bash", "tool_input": {"command": command}}
+    return {
+        "tool_name": "Bash",
+        "tool_input": {"command": command},
+        "cwd": "/the/project",
+    }
 
 
 class TestPureHelpers:
@@ -96,15 +101,28 @@ class TestProcessEventGating:
         spawn.assert_not_called()
 
     def test_happy_path_spawns_and_sets_cooldown(self):
-        with patch.object(hook, "_pipeline_available", return_value=True):
+        with patch.object(hook, "_pipeline_available", return_value=True) as available:
             with patch.object(hook, "_changed_source_files", return_value=["src/x.rs"]):
                 with patch.object(hook, "_spawn_reanalyze", return_value=True) as spawn:
                     hook.process_event(_commit_event())
-                    spawn.assert_called_once()
+                    available.assert_called_once_with("/the/project")
+                    spawn.assert_called_once_with("/the/project")
                     # Second commit within cooldown must NOT spawn again.
                     spawn.reset_mock()
                     hook.process_event(_commit_event())
                     spawn.assert_not_called()
+
+    def test_unresolved_project_root_never_falls_back_to_the_cwd(self):
+        """Under scripts/launcher.py the cwd is the plugin root (issue #604)."""
+        event = _commit_event()
+        del event["cwd"]
+        with patch.dict(os.environ):
+            os.environ.pop("CLAUDE_PROJECT_ROOT", None)
+            with patch.object(hook, "_pipeline_available") as available:
+                with patch.object(hook, "_spawn_reanalyze") as spawn:
+                    hook.process_event(event)
+        available.assert_not_called()
+        spawn.assert_not_called()
 
     def test_spawn_failure_does_not_set_cooldown(self):
         with patch.object(hook, "_pipeline_available", return_value=True):

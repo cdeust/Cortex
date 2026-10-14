@@ -18,6 +18,8 @@ The excerpts below preserve historical claims and citations verbatim; original A
 
 Keep the source implementation linked to this versioned decision record. Operational API documentation remains with the implementation.
 
+Amended 2026-10-14: the `_SOURCE_DIRS` sibling scan is anchored on the session's project root, passed by the caller (`discover_pipeline_command(project_root)`), never on the process cwd. Hooks and the MCP server run under `scripts/launcher.py`, which changes to the plugin root, so the premise of the preserved comment at original line 58 ("the MCP server runs in the user's project root") does not hold; a cwd-relative scan probed the plugin's siblings and spawned a detached ingest of the plugin root. An unknown project root scans no sibling.
+
 ## Preserved decision evidence
 
 ### module, original line 1

@@ -794,7 +794,7 @@ def _build_cold_start_message(setup_result: dict | None) -> str:
 # ── Main ─────────────────────────────────────────────────────────────────
 
 
-def _auto_wire_pipeline() -> None:
+def _auto_wire_pipeline(project_root: str | None) -> None:
     """Best-effort: auto-add the ai-architect-mcp-codebase MCP server to
     mcp-connections.json when detected. Non-blocking; failures go to
     stderr only.
@@ -808,7 +808,7 @@ def _auto_wire_pipeline() -> None:
             ensure_pipeline_connection,
         )
 
-        result = ensure_pipeline_connection()
+        result = ensure_pipeline_connection(project_root)
         action = result.get("action", "unknown")
         if action in {"wrote_config", "added_codebase"}:
             _log(
@@ -952,7 +952,7 @@ def _legacy_background_consolidate() -> None:
         _log(f"background consolidate skipped: {exc}")
 
 
-def _maybe_background_reanalyze(event: dict) -> None:
+def _maybe_background_reanalyze(project_root: str | None) -> None:
     """Spawn background ``ingest_codebase`` when the graph is stale.
 
     Runs detached (``subprocess.Popen`` with its own process group) so
@@ -961,24 +961,23 @@ def _maybe_background_reanalyze(event: dict) -> None:
     pipeline is configured or graph is fresh.
 
     Gated by the TTL check in ``pipeline_graph_ttl.graph_is_stale``.
-    Project root is ``CLAUDE_PROJECT_ROOT`` or the event's ``cwd`` — the
-    project Claude was started in (``resolve_project_root``).
+    ``project_root`` is ``resolve_project_root(event, os.environ)``, never
+    ``os.getcwd()``: under ``scripts/launcher.py`` the cwd is the plugin
+    root, and ingesting it is the leak the #679 guard reported. ``None``
+    (no CLAUDE_PROJECT_ROOT, no event cwd) spawns nothing (issue #604).
     """
+    if project_root is None:
+        _log("background reanalysis skipped: project root unresolved")
+        return
     try:
         from mcp_server.infrastructure.pipeline_discovery import (  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
             discover_pipeline_command,
         )
         from mcp_server.infrastructure.pipeline_graph_ttl import graph_is_stale  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
 
-        if discover_pipeline_command() is None:
+        if discover_pipeline_command(project_root) is None:
             return  # Pipeline not installed — nothing to do.
 
-        # The launcher runs hooks from the plugin root, so cwd() is never the
-        # user's project (issue #604: no cwd() fallback).
-        project_root = resolve_project_root(event, os.environ)
-        if project_root is None:
-            _log("background pipeline reanalysis skipped: project root unresolved")
-            return
         cached_path = _lookup_cached_graph_path(project_root)
         if not graph_is_stale(cached_path):
             return  # Fresh enough; skip.
@@ -1238,10 +1237,11 @@ def _session_start() -> str:
 
     # Auto-discovery runs before the PG path so users see it work even
     # on a fresh machine without a DB set up yet.
-    _auto_wire_pipeline()
+    project_root = resolve_project_root(event, os.environ)
+    _auto_wire_pipeline(project_root)
 
     # source: ADR-0498
-    _maybe_background_reanalyze(event)
+    _maybe_background_reanalyze(project_root)
 
     # source: ADR-0498
     _maybe_background_consolidate()

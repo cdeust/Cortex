@@ -10,6 +10,7 @@ from pathlib import Path
 
 from mcp_server.infrastructure.config import MCP_CONNECTIONS_PATH
 from mcp_server.infrastructure.file_io import read_json
+from mcp_server.shared.project_scope import resolve_project_root
 
 
 def _server_command_runnable(server_name: str) -> bool:
@@ -41,7 +42,9 @@ def codebase_upstream_available() -> bool:
         discover_pipeline_command,
     )
 
-    return discover_pipeline_command() is not None
+    # The server runs under scripts/launcher.py (cwd = plugin root), so the
+    # sibling scan is anchored on CLAUDE_PROJECT_ROOT only (ADR-0584).
+    return discover_pipeline_command(resolve_project_root({}, os.environ)) is not None
 
 
 def prd_upstream_available() -> bool:

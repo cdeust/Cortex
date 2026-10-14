@@ -11,10 +11,13 @@ isolated here through the production contract, never a test-only branch:
   downloading the prebuilt pipeline binary into the temp HOME (the cause of
   the tests_py/hooks/test_entry.py leak: discovery then finds it); the
   scrubbed PATH hides any host install; a temp HOME hides the host's
-  marketplace install (``installed_plugins.json``); the cwd is a temp
-  project, never this repository, so nothing resolves
-  ``../ai-architect-mcp-codebase`` or ingests the repo.
-  ``discover_pipeline_command()`` returns None and the hook returns.
+  marketplace install (``installed_plugins.json``); the sibling
+  source-checkout scan is anchored on the event's ``cwd`` (a temp
+  directory), never on the process cwd, which ``scripts/launcher.py``
+  moves to the plugin root, i.e. this repository, whose
+  ``../ai-architect-mcp-codebase`` exists on a contributor's machine
+  (the 2026-10-14 leak). ``discover_pipeline_command`` returns None and
+  the hook returns.
 * consolidate: the coordinator's public ``ensure_cycle`` records a cycle as
   just run (a ``spawn_fn`` that starts nothing), so the hook sees
   ``skipped_fresh`` for the 6 h period.

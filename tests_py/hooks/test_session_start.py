@@ -823,10 +823,14 @@ def test_auto_wire_pipeline_logs_when_it_wires(capsys, monkeypatch):
     monkeypatch.setattr(
         pipeline_discovery,
         "ensure_pipeline_connection",
-        lambda: {"action": "added_codebase", "binary": "ap", "path": "/cfg"},
+        lambda project_root: {
+            "action": "added_codebase",
+            "binary": "ap",
+            "path": "/cfg",
+        },
     )
 
-    hook._auto_wire_pipeline()
+    hook._auto_wire_pipeline("/the/project")
 
     assert "pipeline auto-wired (ap)" in capsys.readouterr().err
 
@@ -837,10 +841,10 @@ def test_auto_wire_pipeline_noop_actions_stay_quiet(capsys, monkeypatch):
     monkeypatch.setattr(
         pipeline_discovery,
         "ensure_pipeline_connection",
-        lambda: {"action": "already_present"},
+        lambda project_root: {"action": "already_present"},
     )
 
-    hook._auto_wire_pipeline()
+    hook._auto_wire_pipeline("/the/project")
 
     assert capsys.readouterr().err == ""
 
@@ -848,12 +852,12 @@ def test_auto_wire_pipeline_noop_actions_stay_quiet(capsys, monkeypatch):
 def test_auto_wire_pipeline_failure_is_logged_not_raised(capsys, monkeypatch):
     from mcp_server.infrastructure import pipeline_discovery
 
-    def _boom():
+    def _boom(project_root):
         raise RuntimeError("discovery broke")
 
     monkeypatch.setattr(pipeline_discovery, "ensure_pipeline_connection", _boom)
 
-    hook._auto_wire_pipeline()
+    hook._auto_wire_pipeline("/the/project")
 
     assert "pipeline auto-wire skipped" in capsys.readouterr().err
 
@@ -1012,9 +1016,11 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
         """
         from mcp_server.infrastructure import pipeline_discovery, pipeline_graph_ttl
 
+        discover_mock = MagicMock(return_value=["ap"])
         monkeypatch.setattr(
-            pipeline_discovery, "discover_pipeline_command", lambda: ["ap"]
+            pipeline_discovery, "discover_pipeline_command", discover_mock
         )
+        self.discover_mock = discover_mock
         stale_mock = MagicMock(return_value=stale)
         monkeypatch.setattr(pipeline_graph_ttl, "graph_is_stale", stale_mock)
         lookup_mock = MagicMock(return_value=cached)
@@ -1047,7 +1053,7 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
 
         monkeypatch.setattr(hook.subprocess, "Popen", _fake_popen)
 
-        hook._maybe_background_reanalyze({"cwd": "/the/project"})
+        hook._maybe_background_reanalyze("/the/project")
 
         launcher = plugin_root / "scripts" / "launcher.py"
         assert captured["cmd"] == [
@@ -1066,6 +1072,7 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
         # The cached-graph lookup result must actually flow into the
         # staleness check — not a look-alike constant.
         lookup_mock.assert_called_once_with("/the/project")
+        self.discover_mock.assert_called_once_with("/the/project")
         stale_mock.assert_called_once_with("the-cached-path")
         assert "background pipeline reanalysis spawned" in capsys.readouterr().err
 
@@ -1073,7 +1080,7 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
         # exists on this call, exercising mkdir's exist_ok=True — a mutant
         # that drops/flips exist_ok raises FileExistsError, which the
         # broad except swallows into a "skipped" log instead of "spawned".
-        hook._maybe_background_reanalyze({"cwd": "/the/project"})
+        hook._maybe_background_reanalyze("/the/project")
         err = capsys.readouterr().err
         assert "background pipeline reanalysis spawned" in err
         assert "skipped" not in err
@@ -1094,19 +1101,19 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
 
         monkeypatch.setattr(hook.subprocess, "Popen", _fake_popen)
 
-        hook._maybe_background_reanalyze({"cwd": "/the/project"})
+        hook._maybe_background_reanalyze("/the/project")
 
         expected_launcher = (
             Path(hook.__file__).resolve().parents[2] / "scripts" / "launcher.py"
         )
         assert captured["cmd"][1] == str(expected_launcher)
 
-    def test_uses_the_event_cwd_never_the_process_cwd(self, tmp_path, monkeypatch):
-        """The launcher chdirs to the plugin root: cwd() is the plugin, not
-        the project (found by the install e2e, ADR-1104)."""
+    def test_ingests_the_given_root_never_the_cwd(self, tmp_path, monkeypatch):
+        """Under scripts/launcher.py the cwd is the plugin root; ingesting
+        it was the detached-worker leak the #679 guard reported."""
         self._write_launcher(tmp_path, monkeypatch)
         monkeypatch.delenv("CLAUDE_PROJECT_ROOT", raising=False)
-        monkeypatch.setattr(hook.os, "getcwd", lambda: "/the/plugin/root")
+        monkeypatch.setattr(hook.os, "getcwd", lambda: "/the/plugin-root")
         self._mock_pipeline(monkeypatch)
         captured = {}
 
@@ -1116,26 +1123,26 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
 
         monkeypatch.setattr(hook.subprocess, "Popen", _fake_popen)
 
-        hook._maybe_background_reanalyze({"cwd": "/the/user/project"})
+        hook._maybe_background_reanalyze("/the/event-cwd")
 
-        assert captured["cmd"][-1] == "/the/user/project"
+        assert captured["cmd"][-1] == "/the/event-cwd"
+        self.discover_mock.assert_called_once_with("/the/event-cwd")
 
-    def test_an_unresolved_project_spawns_nothing(self, tmp_path, monkeypatch, capsys):
-        self._write_launcher(tmp_path, monkeypatch)
-        monkeypatch.delenv("CLAUDE_PROJECT_ROOT", raising=False)
+    def test_unresolved_project_root_spawns_nothing(self, monkeypatch, capsys):
         self._mock_pipeline(monkeypatch)
 
         with patch.object(hook.subprocess, "Popen") as popen:
-            hook._maybe_background_reanalyze({})
+            hook._maybe_background_reanalyze(None)
 
         popen.assert_not_called()
+        self.discover_mock.assert_not_called()
         assert "project root unresolved" in capsys.readouterr().err
 
     def test_skips_when_graph_fresh(self, tmp_path, monkeypatch):
         self._mock_pipeline(monkeypatch, stale=False)
 
         with patch.object(hook.subprocess, "Popen") as popen:
-            hook._maybe_background_reanalyze({"cwd": "/the/project"})
+            hook._maybe_background_reanalyze("/the/project")
 
         popen.assert_not_called()
 
@@ -1144,7 +1151,7 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
         self._mock_pipeline(monkeypatch)
 
         with patch.object(hook.subprocess, "Popen") as popen:
-            hook._maybe_background_reanalyze({"cwd": "/the/project"})
+            hook._maybe_background_reanalyze("/the/project")
 
         popen.assert_not_called()
 
@@ -1157,7 +1164,7 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
 
         monkeypatch.setattr(hook.subprocess, "Popen", _boom)
 
-        hook._maybe_background_reanalyze({"cwd": "/the/project"})  # must not raise
+        hook._maybe_background_reanalyze("/the/project")  # must not raise
 
         err = capsys.readouterr().err
         assert "background pipeline reanalysis skipped" in err
@@ -1168,7 +1175,7 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
         self._mock_pipeline(monkeypatch)
         monkeypatch.setattr(hook.subprocess, "Popen", lambda *a, **k: MagicMock())
 
-        hook._maybe_background_reanalyze({"cwd": "/the/project"})
+        hook._maybe_background_reanalyze("/the/project")
 
         err = capsys.readouterr().err
         assert "background pipeline reanalysis spawned" in err

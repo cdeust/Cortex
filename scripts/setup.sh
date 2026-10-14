@@ -338,8 +338,12 @@ if [ "$PIPELINE_FRESH" = "1" ]; then
     fi
 fi
 
-PYTHONPATH="${PROJECT_DIR}:${PYTHONPATH:-}" \
+# setup.sh installs this checkout and has no user project, so the ADR-0584
+# sibling scan is anchored on PROJECT_DIR, never on the cwd (the pgvector
+# source build above leaves the shell in PROJECT_DIR, a caller may not).
+CORTEX_SETUP_CHECKOUT="${PROJECT_DIR}" PYTHONPATH="${PROJECT_DIR}:${PYTHONPATH:-}" \
   python3 -c "
+import os
 from mcp_server.infrastructure.pipeline_installer import install_pipeline
 from mcp_server.infrastructure.pipeline_discovery import ensure_pipeline_connection
 r = install_pipeline()
@@ -382,7 +386,7 @@ elif action == 'home_readonly':
 else:
     print(f'[!!] pipeline install failed ({action}); ingest_codebase will be unavailable')
 
-cfg = ensure_pipeline_connection()
+cfg = ensure_pipeline_connection(os.environ['CORTEX_SETUP_CHECKOUT'])
 cfg_action = cfg.get('action', 'unknown')
 if cfg_action == 'no_pipeline_found':
     print('[!!] mcp-connections.json not written — ingest_codebase will fail until you')
