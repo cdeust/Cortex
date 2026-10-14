@@ -35,6 +35,17 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **A recall pool no longer chooses which tied rows a signal credits**
+  (ADR-1109). Each `recall_memories()` pool (vector, FTS, trigram, heat,
+  recency) kept its best `max_results * 10` rows; when more rows shared the
+  score at the cut, ADR-1106's newest-first tie-break decided which of them
+  got the signal (LoCoMo conv-41: 122 rows at heat 0.05, the oldest 22
+  lost the heat contribution). Every pool now keeps its whole boundary tie
+  group (`FETCH FIRST ... ROWS WITH TIES`). On SQLite, whose fusion is
+  rank-based, the signals keep the same membership (sqlite-vec's KNN cut
+  included) and tied rows share the mean `w / (k + rank)` of the positions
+  their group occupies instead of ranks assigned by age. Existing databases
+  get the new function on the next store open (schema hash).
 - **Recall returns the same memories whatever the table's physical layout**
   (ADR-1106). Every `ORDER BY ... LIMIT` on the recall path cut exact score
   ties in heap order, which VACUUM, CLUSTER and free-space reuse change: the

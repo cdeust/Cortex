@@ -10,7 +10,7 @@ title: Recall breaks exact score ties newest first
 
 ## Status
 
-accepted
+accepted. Rule 1 amended by ADR-1109 for the five `recall_memories()` pools and the SQLite recall signals: a pool keeps its whole boundary tie group instead of cutting it newest first.
 
 ## Context
 

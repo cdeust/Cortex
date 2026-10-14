@@ -3587,6 +3587,10 @@
     "ADR-1106": {
       "mirror": "ADR-1106-recall-breaks-exact-score-ties-newest-first.md",
       "path": "adr/cortex/1106-recall-breaks-exact-score-ties-newest-first.md"
+    },
+    "ADR-1109": {
+      "mirror": "ADR-1109-recall-pools-keep-their-whole-boundary-tie-group.md",
+      "path": "adr/cortex/1109-recall-pools-keep-their-whole-boundary-tie-group.md"
     }
   },
   "project": "cortex",
