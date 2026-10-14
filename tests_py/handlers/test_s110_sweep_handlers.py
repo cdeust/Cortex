@@ -39,9 +39,7 @@ def _assert_noted(component: str, error_text: str) -> None:
 
 
 class TestDoctorBackendResolution:
-    def test_a_corrupt_marker_is_named_not_replaced_by_the_pg_checks(
-        self, monkeypatch
-    ):
+    def test_a_corrupt_marker_is_named_not_replaced_by_the_pg_checks(self, monkeypatch):
         """ADR-1104: the doctor no longer runs the other backend's checks on
         a marker it cannot read; the error naming the file reaches the user."""
         from mcp_server import doctor
