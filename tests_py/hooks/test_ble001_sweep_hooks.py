@@ -60,6 +60,7 @@ class TestSessionStartBannerFetches:
     def test_cached_graph_lookup_failure_degrades_to_none_and_logs(
         self, capsys, monkeypatch
     ):
+        monkeypatch.setattr(session_start, "_backend_is_sqlite", lambda: False)
         monkeypatch.setattr(session_start, "_connect_pg", lambda: _broken_conn())
         assert session_start._lookup_cached_graph_path("/proj") is None
         assert (

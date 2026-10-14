@@ -21,8 +21,8 @@ HANDSHAKE_VERSIONS = ("2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25")
 # The real server's identity. source: mcp_server/__main__.py MCPServer(...)
 SERVER_INFO = {"name": "methodology-agent", "version": "1.0.0"}
 # How long the child may take to install and answer initialize: a cold
-# install measured 58 s, thirty times that is a broken install (source: ADR-1104).
-CHILD_START_SECONDS = 1800
+# install measured 58 s, thirty times that is a broken install.
+CHILD_START_SECONDS = 1800  # source: ADR-1104
 CHILD_EXIT_SECONDS = 10  # source: ADR-1104 (an idle server exits on EOF in < 1 s)
 NOT_READY_CODE = -32002  # source: JSON-RPC 2.0 server-error range (-32000..-32099)
 METHOD_NOT_FOUND = -32601  # source: JSON-RPC 2.0 section 5.1

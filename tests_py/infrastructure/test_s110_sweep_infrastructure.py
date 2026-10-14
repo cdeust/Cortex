@@ -385,6 +385,7 @@ class TestSessionStartPgClose:
         conn = MagicMock()
         conn.execute.side_effect = RuntimeError("query broke")
         conn.close.side_effect = ValueError("close broke")
+        monkeypatch.setattr(session_start, "_backend_is_sqlite", lambda: False)
         monkeypatch.setattr(session_start, "_connect_pg", lambda: conn)
         assert session_start._lookup_cached_graph_path("/some/project") is None
         err = capsys.readouterr().err

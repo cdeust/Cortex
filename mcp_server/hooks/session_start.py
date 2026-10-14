@@ -1245,56 +1245,55 @@ def _session_start() -> str:
     # abstraction — no psycopg connection to attempt.
     if _backend_is_sqlite():
         return _sqlite_context(event)
-
-    # Try connecting to PostgreSQL directly first
-    conn = _connect_pg()
-
-    if conn is None:
-        # Can't connect — try auto-setup
-        _log("No PostgreSQL connection, attempting setup...")
-        setup_result = _try_setup_db()
-
-        if setup_result and setup_result.get("status") == "ready":
-            # Setup succeeded, try connecting again
-            conn = _connect_pg()
-            if conn is None:
-                _log("Setup reported ready but still can't connect")
-                msg = _build_cold_start_message(setup_result)
-                if msg:
-                    print(msg)
-                return _status.not_ready(
-                    "PostgreSQL setup reported ready, but no connection opened"
-                )
-        else:
-            # Setup failed or PostgreSQL not available
-            msg = _build_cold_start_message(setup_result)
-            if msg:
-                print(msg)
-            cause = (setup_result or {}).get("message", "setup_db.py gave no result")
-            return _status.not_ready(
-                f"the configured PostgreSQL store is unavailable: {cause}"
-            )
-
-    # Connected — check memory count
+    conn, failure = _pg_connection()
+    if failure is not None:
+        return failure
     memory_count = _count_memories(conn)
-
     if memory_count == 0:
-        # Empty database — first run with working DB
-        session_files = _count_session_files()
-        _log(f"Empty database, {session_files} session files found")
-        conn.close()
+        return _pg_empty_store(conn)
+    return _pg_banner(event, conn, memory_count)
 
-        setup_result = {
-            "status": "ready",
-            "memories": 0,
-            "session_files": session_files,
-        }
-        msg = _build_cold_start_message(setup_result)
-        if msg:
-            print(msg)
-        return _status.ready("PostgreSQL memory store", 0)
 
-    # Normal flow — fetch and inject context
+def _pg_connection():
+    """``(conn, None)``, or ``(None, status)`` after printing the first-run text."""
+    conn = _connect_pg()
+    if conn is not None:
+        return conn, None
+    # Can't connect — try auto-setup
+    _log("No PostgreSQL connection, attempting setup...")
+    setup_result = _try_setup_db()
+    if setup_result and setup_result.get("status") == "ready":
+        # Setup succeeded, try connecting again
+        conn = _connect_pg()
+        if conn is not None:
+            return conn, None
+        _log("Setup reported ready but still can't connect")
+        cause = "PostgreSQL setup reported ready, but no connection opened"
+    else:
+        cause = "the configured PostgreSQL store is unavailable: " + (
+            (setup_result or {}).get("message", "setup_db.py gave no result")
+        )
+    msg = _build_cold_start_message(setup_result)
+    if msg:
+        print(msg)
+    return None, _status.not_ready(cause)
+
+
+def _pg_empty_store(conn) -> str:
+    """Empty database — first run with a working PostgreSQL."""
+    session_files = _count_session_files()
+    _log(f"Empty database, {session_files} session files found")
+    conn.close()
+    msg = _build_cold_start_message(
+        {"status": "ready", "memories": 0, "session_files": session_files}
+    )
+    if msg:
+        print(msg)
+    return _status.ready("PostgreSQL memory store", 0)
+
+
+def _pg_banner(event: dict, conn, memory_count: int) -> str:
+    """Normal flow — fetch and inject context."""
     project_root = resolve_project_root(event, os.environ)
     if project_root is None:
         _log(
@@ -1305,25 +1304,19 @@ def _session_start() -> str:
     anchor_ids = {a["id"] for a in anchors}
     hot = _fetch_hot_memories(conn, anchor_ids, project_root)
     team_decisions = _fetch_team_decisions(conn, anchor_ids, project_root)
-    checkpoint = _fetch_checkpoint(conn)
-    pending_curations = _count_pending_curations(conn)
-    stale_grooming = _fetch_grooming_staleness(conn)
     # Receipt BEFORE rendering: the banner header carries the ⟦rcpt:id⟧
     # marker, so the id must exist when the context is built. A failed
     # write degrades to a marker-less banner (read path intact).
-    receipt_id = _emit_banner_receipt(conn, event, anchors, team_decisions, hot)
-    conn.close()
-
     context = _build_context(
         anchors,
         hot,
-        checkpoint,
+        _fetch_checkpoint(conn),
         team_decisions,
-        pending_curations=pending_curations,
-        stale_grooming=stale_grooming,
-        receipt_id=receipt_id,
+        pending_curations=_count_pending_curations(conn),
+        stale_grooming=_fetch_grooming_staleness(conn),
+        receipt_id=_emit_banner_receipt(conn, event, anchors, team_decisions, hot),
     )
-
+    conn.close()
     if context:
         print(context)
         _log(
@@ -1332,7 +1325,6 @@ def _session_start() -> str:
         )
     else:
         _log("No memories above threshold")
-
     # Always check for external memory sources that can be imported
     _print_external_sources()
     return _status.ready("PostgreSQL memory store", memory_count)

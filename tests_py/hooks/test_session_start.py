@@ -23,6 +23,8 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from mcp_server.hooks import session_start as hook
 from mcp_server.shared import log_rotation
 from tests_py.hooks.stdin_support import utf8_stdin
@@ -727,6 +729,28 @@ def test_sqlite_context_unavailable_store_logs_and_returns(capsys, monkeypatch):
 # ── Cached graph path ─────────────────────────────────────────────────
 
 
+@pytest.fixture
+def pg_backend(monkeypatch):
+    """The PostgreSQL arm of the lookup, whatever backend the job runs on."""
+    monkeypatch.setattr(hook, "_backend_is_sqlite", lambda: False)
+
+
+def test_lookup_cached_graph_path_on_sqlite_reads_the_store(monkeypatch):
+    """ADR-1104: on SQLite the memo comes from the store, no PostgreSQL dial."""
+    store = MagicMock()
+    store.get_memories_by_tag.return_value = [
+        {"content": "graph_path=/old.db", "is_stale": True},
+        {"content": "graph_path=/tmp/graph.db  "},
+    ]
+    from mcp_server.infrastructure import memory_store
+
+    monkeypatch.setattr(hook, "_backend_is_sqlite", lambda: True)
+    monkeypatch.setattr(memory_store, "get_shared_store", lambda: store)
+    monkeypatch.setattr(hook, "_connect_pg", lambda: pytest.fail("dialed PostgreSQL"))
+    assert hook._lookup_cached_graph_path("/repo") == "/tmp/graph.db"
+
+
+@pytest.mark.usefixtures("pg_backend")
 def test_lookup_cached_graph_path_reads_the_memo():
     conn = MagicMock()
     conn.execute.return_value.fetchall.return_value = [
@@ -737,11 +761,13 @@ def test_lookup_cached_graph_path_reads_the_memo():
     conn.close.assert_called_once()
 
 
+@pytest.mark.usefixtures("pg_backend")
 def test_lookup_cached_graph_path_without_pg_returns_none():
     with patch.object(hook, "_connect_pg", return_value=None):
         assert hook._lookup_cached_graph_path("/repo") is None
 
 
+@pytest.mark.usefixtures("pg_backend")
 def test_lookup_cached_graph_path_ignores_non_memo_rows():
     conn = MagicMock()
     conn.execute.return_value.fetchall.return_value = [{"content": "unrelated"}]
