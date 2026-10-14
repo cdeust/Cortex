@@ -111,10 +111,33 @@ def test_an_unclear_connect_error_keeps_postgresql(
 def test_one_listening_address_among_refusals_keeps_postgresql(
     tmp_path, monkeypatch, no_libpq_settings
 ):
-    """Review of 0839d874: create_connection reports only the last address."""
+    """A refusal reported last must not hide a listener on another address."""
     with socket.create_server(("127.0.0.1", 0)) as listener:
-        _addresses(monkeypatch, listener.getsockname()[1], _closed_port())
+        _addresses(monkeypatch, _closed_port(), listener.getsockname()[1])
         backend, why = launcher_backend.decide(_earlier_state(tmp_path), _MARKER)
+    assert backend == "postgresql", why
+
+
+def test_a_timeout_before_a_refusal_keeps_postgresql(
+    tmp_path, monkeypatch, no_libpq_settings
+):
+    """Review of 0839d874 (B1): create_connection raised only the last
+    address's error, so ::1 timing out then 127.0.0.1 refusing chose SQLite."""
+    closed = _closed_port()
+    found = [
+        (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.2", closed)),
+        (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", closed)),
+    ]
+    monkeypatch.setattr(launcher_backend.socket, "getaddrinfo", lambda *a, **k: found)
+    real = socket.socket.connect
+
+    def connect(self, address):
+        if address[0] == "127.0.0.2":
+            raise socket.timeout("timed out")
+        return real(self, address)
+
+    monkeypatch.setattr(launcher_backend.socket.socket, "connect", connect)
+    backend, why = launcher_backend.decide(_earlier_state(tmp_path), _MARKER)
     assert backend == "postgresql", why
 
 
