@@ -7,9 +7,9 @@ psycopg-only UPDATE, moved here so SQLite runs it too (issue #750).
 
 Both send one UPDATE through the store's connection adapter: a row matching
 several cues receives one increment. Matching is a case-insensitive literal
-substring test, ``LOWER(content) LIKE LOWER(cue) ESCAPE '!'``. PostgreSQL's
-``LOWER`` folds Unicode case, as ``ILIKE`` does; SQLite's ``LOWER`` and
-``LIKE`` fold ASCII letters only.
+substring test the backend can index: ``ILIKE`` on PostgreSQL (served by
+the trigram index; folds Unicode case), ``LIKE`` on SQLite (folds ASCII
+letters only).
 
 source: ADR-1086
 source: ADR-0493
@@ -35,6 +35,23 @@ def _literal_pattern(value: str) -> str:
     return "%" + value.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%"
 
 
+def _contains_clause(store: MemoryStore) -> str:
+    """Case-insensitive literal substring test the backend can index.
+
+    PostgreSQL: ``ILIKE``, which ``idx_memories_content_trgm`` (gin_trgm_ops)
+    serves; ``LOWER(content) LIKE`` cannot use it and scans the table.
+    SQLite: ``LIKE``, which already folds ASCII case (its ``LOWER`` folds
+    ASCII only too).
+
+    source: PostgreSQL docs, pgtrgm (index support for LIKE and ILIKE)
+    source: SQLite docs, lang_expr (LIKE is case-insensitive for ASCII)"""
+    from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore  # noqa: PLC0415 — the SQLite store module imports the infrastructure stack; resolve at call time
+
+    if isinstance(store, SqliteMemoryStore):
+        return "content LIKE %s ESCAPE '!'"
+    return "content ILIKE %s ESCAPE '!'"
+
+
 def _boost_matching(
     store: MemoryStore,
     cues: Iterable[str],
@@ -47,7 +64,7 @@ def _boost_matching(
     patterns = tuple(_literal_pattern(cue) for cue in dict.fromkeys(cues) if cue)
     if not patterns:
         return 0
-    matches = " OR ".join("LOWER(content) LIKE LOWER(%s) ESCAPE '!'" for _ in patterns)
+    matches = " OR ".join(_contains_clause(store) for _ in patterns)
     sql = (
         "UPDATE memories SET heat_base = CASE WHEN heat_base + %s > 1.0 "  # noqa: S608 — static predicates/placeholders; all cues and project values are bound
         "THEN 1.0 ELSE heat_base + %s END, "

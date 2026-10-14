@@ -101,10 +101,13 @@ def test_postgres_receives_one_unlimited_update():
     ):
         assert clause in sql
     assert "LIMIT" not in sql.upper() and "?" not in sql
+    # ILIKE, not LOWER(content) LIKE: the trigram index serves only the former
+    # (review of de3816f9 measured a full scan for the LOWER form).
     assert (
-        re.findall(r"LOWER\(content\) LIKE LOWER\(%s\) ESCAPE '!'", sql)
-        == ["LOWER(content) LIKE LOWER(%s) ESCAPE '!'"] * 2
+        re.findall(r"content ILIKE %s ESCAPE '!'", sql)
+        == ["content ILIKE %s ESCAPE '!'"] * 2
     )
+    assert "LOWER(" not in sql
     assert sql.count("%s") == len(params)
     assert params == (_BOOST, _BOOST, "%a!_b%", "%c!%d%")
 

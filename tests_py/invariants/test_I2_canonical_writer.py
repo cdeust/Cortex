@@ -57,7 +57,7 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     # Atomic cue boost: the project-scoped file cues moved from the hook in
     # ADR-1086, and the pipeline impact bump moved from its hook (ADR-0493,
     # issue #750) so SQLite runs it too. One UPDATE serves both.
-    ("infrastructure/file_memory_priming.py", 52),
+    ("infrastructure/file_memory_priming.py", 69),
     # CAS-guarded deliberate reheat.
     ("infrastructure/pg_store_memory_reheat.py", 104),
 }
