@@ -10,6 +10,7 @@ function body. The assertion reads the body itself, not the hash:
 Live PG (throwaway test database via conftest); skipped on SQLite.
 
 source: ADR-1106
+source: ADR-1109
 """
 
 from __future__ import annotations
@@ -68,6 +69,38 @@ def test_opening_a_store_replaces_the_old_recall_function():
         PgMemoryStore(database_url=url).close()
         with psycopg.connect(url, autocommit=True) as conn:
             assert _TIE_BREAK in function_body(conn)
+            recorded = conn.execute("SELECT ddl_hash FROM schema_meta").fetchone()[0]
+            assert recorded == compute_ddl_hash()
+    finally:
+        with psycopg.connect(url, autocommit=True) as conn:
+            install(conn, RECALL_MEMORIES_LAZY_FN)
+
+
+def b2e63876_body() -> str:
+    """recall_memories() as on origin/main b2e63876: every pool cut by LIMIT."""
+    body = RECALL_MEMORIES_LAZY_FN.replace(
+        "FETCH FIRST (v_pool) ROWS WITH TIES", "LIMIT v_pool"
+    )
+    assert "ROWS WITH TIES" not in body
+    return body
+
+
+def test_opening_a_store_installs_the_tie_keeping_pools():
+    """ADR-1109: the pools' WITH TIES reaches databases created before it."""
+    from mcp_server.infrastructure.pg_store import (  # noqa: PLC0415 — PG-only import
+        PgMemoryStore,
+        compute_ddl_hash,
+    )
+
+    url = os.environ["DATABASE_URL"]
+    with psycopg.connect(url, autocommit=True) as conn:
+        install(conn, b2e63876_body())
+        conn.execute("UPDATE schema_meta SET ddl_hash = 'origin/main b2e63876'")
+        assert "ROWS WITH TIES" not in function_body(conn)
+    try:
+        PgMemoryStore(database_url=url).close()
+        with psycopg.connect(url, autocommit=True) as conn:
+            assert function_body(conn).count("ROWS WITH TIES") == 5
             recorded = conn.execute("SELECT ddl_hash FROM schema_meta").fetchone()[0]
             assert recorded == compute_ddl_hash()
     finally:

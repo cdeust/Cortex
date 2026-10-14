@@ -17,6 +17,7 @@ from mcp_server.observability import silent_failure
 from mcp_server.shared.code_tokenize import expand_fts_query as _expand_fts_query
 from mcp_server.infrastructure.embedding_engine import current_embedding_mode
 from mcp_server.infrastructure.sqlite_scope_clause import directory_scope_clause
+from mcp_server.shared.tie_groups import fetch_with_ties, tied_rrf
 
 
 def _decode_tags(raw: Any) -> list:
@@ -29,6 +30,14 @@ def _decode_tags(raw: Any) -> list:
         except (json.JSONDecodeError, TypeError):
             return []
     return raw or []
+
+
+def _add(scores: dict[int, float], credit: dict[int, float]) -> None:
+    """Add one signal's credit into the fused scores.
+
+    source: ADR-0616"""
+    for mid, c in credit.items():
+        scores[mid] = scores.get(mid, 0) + c
 
 
 class SqliteSearchMixin:
@@ -98,24 +107,21 @@ class SqliteSearchMixin:
         if vec is None:
             return
         try:
-            # source: ADR-1106 -- vec0 takes no second ORDER BY key inside its
-            # KNN query, so exact distance ties are ordered outside it.
-            rows = self._conn.execute(
-                "SELECT v.rowid AS rowid, v.distance AS distance FROM ("
-                "SELECT rowid, distance FROM memories_vec "
-                "WHERE embedding MATCH ? ORDER BY distance LIMIT ?"
-                ") v LEFT JOIN memories m ON m.id = v.rowid "
-                "ORDER BY v.distance, m.created_at DESC, v.rowid DESC",
-                (vec.tobytes(), pool),
-            ).fetchall()
+            # source: ADR-1109 -- vec0's KNN cut cannot keep ties, so the cut
+            # is widened until the boundary distance group is whole.
+            rows = fetch_with_ties(
+                lambda n: self._conn.execute(
+                    "SELECT rowid, distance FROM memories_vec "
+                    "WHERE embedding MATCH ? ORDER BY distance LIMIT ?",
+                    (vec.tobytes(), n),
+                ).fetchall(),
+                pool,
+                lambda r: r["distance"],
+            )
             # source: ADR-0616
             keep = self._vec_rows_in_query_space([r["rowid"] for r in rows])
-            rank = 0
-            for r in rows:
-                if r["rowid"] not in keep:
-                    continue
-                rank += 1
-                scores[r["rowid"]] = scores.get(r["rowid"], 0) + weight / (k + rank)
+            ranked = [(r["rowid"], r["distance"]) for r in rows if r["rowid"] in keep]
+            _add(scores, tied_rrf(ranked, weight, k))
         except Exception as exc:  # noqa: BLE001 — search degrades to the remaining signals
             silent_failure.note("sqlite_store.rrf_vector_signal", exc)
 
@@ -133,18 +139,19 @@ class SqliteSearchMixin:
         if not match:
             return
         try:
-            rows = self._conn.execute(
-                "SELECT memories_fts.rowid AS rowid, memories_fts.rank AS rank "
-                "FROM memories_fts "
-                "LEFT JOIN memories m ON m.id = memories_fts.rowid "
-                "WHERE memories_fts MATCH ? "
-                # source: ADR-1106 -- exact ties go to the newer memory.
-                "ORDER BY memories_fts.rank, m.created_at DESC, "
-                "memories_fts.rowid DESC LIMIT ?",
-                (match, pool),
-            ).fetchall()
-            for rank, r in enumerate(rows, 1):
-                scores[r["rowid"]] = scores.get(r["rowid"], 0) + weight / (k + rank)
+            # source: ADR-1109 -- the boundary rank group is kept whole and
+            # tied rows share their positions' credit.
+            rows = fetch_with_ties(
+                lambda n: self._conn.execute(
+                    "SELECT rowid, rank FROM memories_fts "
+                    "WHERE memories_fts MATCH ? ORDER BY rank LIMIT ?",
+                    (match, n),
+                ).fetchall(),
+                pool,
+                lambda r: r["rank"],
+            )
+            ranked = [(r["rowid"], r["rank"]) for r in rows]
+            _add(scores, tied_rrf(ranked, weight, k))
         except Exception as exc:  # noqa: BLE001 — search degrades to the remaining signals
             silent_failure.note("sqlite_store.rrf_fts_signal", exc)
 
@@ -189,16 +196,16 @@ class SqliteSearchMixin:
     ) -> None:
         if weight <= 0:
             return
-        conds, params = self._build_filter(min_heat, domain, directory)
-        params.append(pool)
-        rows = self._conn.execute(
-            f"SELECT id FROM current_memories WHERE {' AND '.join(conds)} "  # noqa: S608 — conditions are in-code literal fragments from _build_filter; values are bound parameters (docs/ASSURANCE-CASE.md §5)
-            # source: ADR-1106 -- exact ties go to the newer memory.
-            f"ORDER BY heat_base DESC, id DESC LIMIT ?",
-            params,
-        ).fetchall()
-        for rank, r in enumerate(rows, 1):
-            scores[r["id"]] = scores.get(r["id"], 0) + weight / (k + rank)
+        # source: ADR-1106 -- (heat_base DESC, id DESC) keeps the index plan.
+        self._signal_column(
+            scores,
+            "heat_base",
+            "heat_base DESC, id DESC",
+            weight,
+            k,
+            pool,
+            self._build_filter(min_heat, domain, directory),
+        )
 
     def _signal_recency(
         self,
@@ -212,16 +219,41 @@ class SqliteSearchMixin:
     ) -> None:
         if weight <= 0:
             return
-        conds, params = self._build_filter(min_heat, domain, directory)
-        params.append(pool)
-        rows = self._conn.execute(
-            f"SELECT id FROM current_memories WHERE {' AND '.join(conds)} "  # noqa: S608 — conditions are in-code literal fragments from _build_filter; values are bound parameters (docs/ASSURANCE-CASE.md §5)
-            # source: ADR-1106 -- exact ties go to the newer memory.
-            f"ORDER BY created_at DESC, id DESC LIMIT ?",
-            params,
-        ).fetchall()
-        for rank, r in enumerate(rows, 1):
-            scores[r["id"]] = scores.get(r["id"], 0) + weight / (k + rank)
+        self._signal_column(
+            scores,
+            "created_at",
+            "created_at DESC, id DESC",
+            weight,
+            k,
+            pool,
+            self._build_filter(min_heat, domain, directory),
+        )
+
+    def _signal_column(
+        self,
+        scores: dict[int, float],
+        column: str,
+        order: str,
+        weight: float,
+        k: int,
+        pool: int,
+        where: tuple[list[str], list[Any]],
+    ) -> None:
+        """Rank-fuse one stored column; its boundary tie group is kept whole
+        and tied rows share their positions' credit.
+
+        source: ADR-1109"""
+        conds, params = where
+        sql = (
+            f"SELECT id, {column} AS score FROM current_memories "  # noqa: S608 — column, order and conditions are in-code literals; values are bound parameters (docs/ASSURANCE-CASE.md §5)
+            f"WHERE {' AND '.join(conds)} ORDER BY {order} LIMIT ?"
+        )
+        rows = fetch_with_ties(
+            lambda n: self._conn.execute(sql, [*params, n]).fetchall(),
+            pool,
+            lambda r: r["score"],
+        )
+        _add(scores, tied_rrf([(r["id"], r["score"]) for r in rows], weight, k))
 
     @staticmethod
     def _build_filter(

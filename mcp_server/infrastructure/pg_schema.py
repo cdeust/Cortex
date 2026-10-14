@@ -1026,16 +1026,18 @@ BEGIN
           AND (p_directory IS NULL OR m.directory_context = p_directory)
     ),
     -- source: ADR-0537
-    -- source: ADR-1106 -- every pool orders exact ties by created_at DESC,
-    -- id DESC, so a pool's LIMIT never cuts them in heap order.
+    -- source: ADR-1109 -- every pool keeps its whole boundary tie group
+    -- (FETCH FIRST ... WITH TIES on the score alone): a row is in a pool iff
+    -- fewer than v_pool rows score strictly higher, so no tie-break, heap
+    -- order or created_at, chooses which of the tied rows a signal credits.
     vec AS (
         SELECT c.id,
                (1.0 - (c.embedding <=> p_query_emb))::REAL AS raw_score
         FROM eligible c
         WHERE c.embedding IS NOT NULL
           AND effective_heat(c, NOW(), v_factor) >= p_min_heat
-        ORDER BY c.embedding <=> p_query_emb, c.created_at DESC, c.id DESC
-        LIMIT v_pool
+        ORDER BY c.embedding <=> p_query_emb
+        FETCH FIRST (v_pool) ROWS WITH TIES
     ),
     -- source: ADR-0537
     fts AS (
@@ -1044,9 +1046,8 @@ BEGIN
         FROM eligible c
         WHERE c.content_tsv @@ v_tsq
           AND effective_heat(c, NOW(), v_factor) >= p_min_heat
-        ORDER BY ts_rank_cd(c.content_tsv, v_tsq) DESC, c.created_at DESC,
-                 c.id DESC
-        LIMIT v_pool
+        ORDER BY ts_rank_cd(c.content_tsv, v_tsq) DESC
+        FETCH FIRST (v_pool) ROWS WITH TIES
     ),
     -- source: ADR-0537
     ngram AS (
@@ -1056,9 +1057,8 @@ BEGIN
         WHERE effective_heat(c, NOW(), v_factor) >= p_min_heat
           AND c.content % p_query_text
           AND similarity(c.content, p_query_text) > 0.1
-        ORDER BY similarity(c.content, p_query_text) DESC, c.created_at DESC,
-                 c.id DESC
-        LIMIT v_pool
+        ORDER BY similarity(c.content, p_query_text) DESC
+        FETCH FIRST (v_pool) ROWS WITH TIES
     ),
     -- source: ADR-0537
     hot AS (
@@ -1067,9 +1067,8 @@ BEGIN
         FROM eligible c
         WHERE effective_heat(c, NOW(), v_factor) >= p_min_heat
           AND c.source <> 'post_tool_capture'
-        ORDER BY effective_heat(c, NOW(), v_factor) DESC, c.created_at DESC,
-                 c.id DESC
-        LIMIT v_pool
+        ORDER BY effective_heat(c, NOW(), v_factor) DESC
+        FETCH FIRST (v_pool) ROWS WITH TIES
     ),
     -- source: ADR-0537
     recency AS (
@@ -1079,8 +1078,8 @@ BEGIN
         FROM eligible c
         WHERE effective_heat(c, NOW(), v_factor) >= p_min_heat
           AND c.source <> 'post_tool_capture'
-        ORDER BY c.created_at DESC, c.id DESC
-        LIMIT v_pool
+        ORDER BY c.created_at DESC
+        FETCH FIRST (v_pool) ROWS WITH TIES
     ),
     -- source: ADR-0537
     candidates AS MATERIALIZED (
