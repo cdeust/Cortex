@@ -14,7 +14,7 @@ from types import ModuleType
 
 import pytest
 
-from mcp_server.hooks import entry, session_start
+from mcp_server.hooks import entry, session_start_common
 from mcp_server.hooks.stdin_event import (
     HookStdinDecodeError,
     install_event_stdin,
@@ -47,7 +47,7 @@ def test_session_start_does_not_swallow_a_decode_failure(monkeypatch) -> None:
     damage but lost data, so the failure must reach the launcher's report."""
     monkeypatch.setattr(sys, "stdin", _cp1252_pipe(b"\xff\xfe"))
     with pytest.raises(HookStdinDecodeError):
-        session_start._read_event()
+        session_start_common._read_event()
 
 
 def test_install_event_stdin_round_trips_under_any_locale(monkeypatch) -> None:

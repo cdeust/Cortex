@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import pytest
 
-from mcp_server.hooks import auto_recall, session_start
+from mcp_server.hooks import auto_recall, session_start_sqlite
 from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 
 
@@ -67,7 +67,7 @@ class TestPartitionBannerRowsScope:
                 "directory_context": "",
             },
         ]
-        _, hot = session_start._partition_banner_rows(rows, "/repo/subdir")
+        _, hot = session_start_sqlite._partition_banner_rows(rows, "/repo/subdir")
         assert [m["id"] for m in hot] == [2, 3]
 
 
@@ -148,7 +148,7 @@ def test_process_event_sqlite_without_project_root_restricts_to_globals(
 
 # ── Starvation: the project's own row must survive a foreign-heavy pool ──
 
-# source: auto_recall._MAX_MEMORIES + 2 and session_start._HOT_LIMIT +
+# source: auto_recall._MAX_MEMORIES + 2 and session_start_sqlite._HOT_LIMIT +
 # _ANCHOR_LIMIT -- comfortably above both hooks' LIMIT windows.
 _FOREIGN_ROW_COUNT = 25
 
@@ -193,10 +193,10 @@ def test_sqlite_context_survives_a_foreign_heavy_pool(store, monkeypatch, capsys
     monkeypatch.setattr(
         "mcp_server.infrastructure.memory_store.get_shared_store", lambda: store
     )
-    monkeypatch.setattr(session_start, "_print_external_sources", lambda: None)
+    monkeypatch.setattr(session_start_sqlite, "_print_external_sources", lambda: None)
     _seed_starvation_store(store)
 
-    session_start._sqlite_context(
+    session_start_sqlite._sqlite_context(
         {"transcript_path": "/tmp/session-starve.jsonl", "cwd": "/repo/subdir"}
     )
 

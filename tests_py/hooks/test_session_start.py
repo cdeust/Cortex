@@ -18,14 +18,23 @@ from __future__ import annotations
 
 import datetime
 import json
+import os
 import sqlite3
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from mcp_server.hooks import session_start as hook
+from mcp_server.hooks import session_start_background as ss_background
+from mcp_server.hooks import session_start_common as ss_common
+from mcp_server.hooks import session_start_consolidate as ss_consolidate
+from mcp_server.hooks import session_start_context as ss_context
+from mcp_server.hooks import session_start_curation as ss_curation
+from mcp_server.hooks import session_start_db as ss_db
+from mcp_server.hooks import session_start_fetch as ss_fetch
+from mcp_server.hooks import session_start_sources as ss_sources
+from mcp_server.hooks import session_start_sqlite as ss_sqlite
 from mcp_server.shared import detached_spawn, log_rotation
 from tests_py.hooks.stdin_support import utf8_stdin
 from tests_py._windows_spawn_fake import (
@@ -38,45 +47,45 @@ from tests_py._windows_spawn_fake import (
 
 def test_read_event_returns_empty_on_tty(monkeypatch):
     monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
-    assert hook._read_event() == {}
+    assert ss_common._read_event() == {}
 
 
 def test_read_event_returns_empty_on_blank_stdin(monkeypatch):
     monkeypatch.setattr(sys, "stdin", utf8_stdin("  \n"))
-    assert hook._read_event() == {}
+    assert ss_common._read_event() == {}
 
 
 def test_read_event_returns_empty_on_malformed_json(monkeypatch):
     monkeypatch.setattr(sys, "stdin", utf8_stdin("{nope"))
-    assert hook._read_event() == {}
+    assert ss_common._read_event() == {}
 
 
 def test_read_event_parses_a_valid_event(monkeypatch):
     monkeypatch.setattr(sys, "stdin", utf8_stdin(json.dumps({"session_id": "s"})))
-    assert hook._read_event() == {"session_id": "s"}
+    assert ss_common._read_event() == {"session_id": "s"}
 
 
 # ── Small helpers ─────────────────────────────────────────────────────
 
 
 def test_short_collapses_newlines_and_truncates():
-    assert hook._short("a\nb") == "a b"
+    assert ss_context._short("a\nb") == "a b"
     long = "x" * 200
-    out = hook._short(long)
+    out = ss_context._short(long)
     assert out == "x" * 119 + "...", "keeps max_len-1 chars, appends ellipsis"
 
 
 def test_parse_json_list_tolerates_every_input_shape():
-    assert hook._parse_json_list(None) == []
-    assert hook._parse_json_list(["a"]) == ["a"]
-    assert hook._parse_json_list('["a", "b"]') == ["a", "b"]
-    assert hook._parse_json_list("not json") == ["not json"]
-    assert hook._parse_json_list("   ") == []
+    assert ss_db._parse_json_list(None) == []
+    assert ss_db._parse_json_list(["a"]) == ["a"]
+    assert ss_db._parse_json_list('["a", "b"]') == ["a", "b"]
+    assert ss_db._parse_json_list("not json") == ["not json"]
+    assert ss_db._parse_json_list("   ") == []
 
 
 def test_checkpoint_from_row_maps_columns_and_none_passes_through():
-    assert hook._checkpoint_from_row(None) is None
-    cp = hook._checkpoint_from_row(
+    assert ss_db._checkpoint_from_row(None) is None
+    cp = ss_db._checkpoint_from_row(
         {
             "current_task": "t",
             "next_steps": '["s1"]',
@@ -145,13 +154,13 @@ def test_fetch_anchors_keeps_only_anchor_tagged_rows():
             "directory_context": "/repo",
         },
     ]
-    anchors = hook._fetch_anchors(_conn_returning(rows), "/repo")
+    anchors = ss_fetch._fetch_anchors(_conn_returning(rows), "/repo")
     assert [a["id"] for a in anchors] == [1, 2]
     assert anchors[0]["is_global"] is True
 
 
 def test_fetch_anchors_query_failure_degrades_to_empty():
-    assert hook._fetch_anchors(_failing_conn(), "/repo") == []
+    assert ss_fetch._fetch_anchors(_failing_conn(), "/repo") == []
 
 
 # ── Project scoping (issue #604) ───────────────────────────────────────
@@ -192,7 +201,7 @@ def test_fetch_anchors_drops_other_project_keeps_global_and_ancestor():
             "directory_context": "",
         },
     ]
-    anchors = hook._fetch_anchors(_conn_returning(rows), "/repo/subdir")
+    anchors = ss_fetch._fetch_anchors(_conn_returning(rows), "/repo/subdir")
     assert [a["id"] for a in anchors] == [2, 3]
 
 
@@ -201,13 +210,13 @@ def test_fetch_team_decisions_excludes_ids_and_caps_at_three():
         {"id": i, "content": f"c{i}", "domain": "", "agent_context": "dba", "heat": 0.5}
         for i in range(1, 7)
     ]
-    out = hook._fetch_team_decisions(_conn_returning(rows), exclude_ids={1})
+    out = ss_fetch._fetch_team_decisions(_conn_returning(rows), exclude_ids={1})
     assert [d["id"] for d in out] == [2, 3, 4]
     assert out[0]["agent"] == "dba"
 
 
 def test_fetch_team_decisions_query_failure_degrades_to_empty():
-    assert hook._fetch_team_decisions(_failing_conn(), set()) == []
+    assert ss_fetch._fetch_team_decisions(_failing_conn(), set()) == []
 
 
 def test_fetch_hot_memories_excludes_ids_and_caps_at_limit():
@@ -223,13 +232,13 @@ def test_fetch_hot_memories_excludes_ids_and_caps_at_limit():
         }
         for i in range(20)
     ]
-    out = hook._fetch_hot_memories(_conn_returning(rows), {0, 1}, "/repo")
-    assert len(out) == hook._HOT_LIMIT
+    out = ss_fetch._fetch_hot_memories(_conn_returning(rows), {0, 1}, "/repo")
+    assert len(out) == ss_sqlite._HOT_LIMIT
     assert out[0]["id"] == 2
 
 
 def test_fetch_hot_memories_query_failure_degrades_to_empty():
-    assert hook._fetch_hot_memories(_failing_conn(), set(), "/repo") == []
+    assert ss_fetch._fetch_hot_memories(_failing_conn(), set(), "/repo") == []
 
 
 def test_fetch_hot_memories_drops_other_project_keeps_global_and_ancestor():
@@ -271,7 +280,7 @@ def test_fetch_hot_memories_drops_other_project_keeps_global_and_ancestor():
             "directory_context": "",
         },
     ]
-    out = hook._fetch_hot_memories(_conn_returning(rows), set(), "/repo/subdir")
+    out = ss_fetch._fetch_hot_memories(_conn_returning(rows), set(), "/repo/subdir")
     assert [m["id"] for m in out] == [2, 3]
 
 
@@ -285,18 +294,18 @@ def test_fetch_checkpoint_maps_the_row():
         "key_decisions": [],
         "directory_context": "",
     }
-    assert hook._fetch_checkpoint(conn)["current_task"] == "t"
+    assert ss_db._fetch_checkpoint(conn)["current_task"] == "t"
 
 
 def test_fetch_checkpoint_failure_degrades_to_none():
-    assert hook._fetch_checkpoint(_failing_conn()) is None
+    assert ss_db._fetch_checkpoint(_failing_conn()) is None
 
 
 def test_count_memories_reads_the_count_and_degrades_to_zero():
     conn = MagicMock()
     conn.execute.return_value.fetchone.return_value = {"c": 42}
-    assert hook._count_memories(conn) == 42
-    assert hook._count_memories(_failing_conn()) == 0
+    assert ss_db._count_memories(conn) == 42
+    assert ss_db._count_memories(_failing_conn()) == 0
 
 
 def test_grooming_staleness_never_run_reports_all_kinds_stale():
@@ -306,7 +315,11 @@ def test_grooming_staleness_never_run_reports_all_kinds_stale():
         "distill_last": None,
         "promo_last": None,
     }
-    assert hook._fetch_grooming_staleness(conn) == ["wiki", "distillation", "promotion"]
+    assert ss_curation._fetch_grooming_staleness(conn) == [
+        "wiki",
+        "distillation",
+        "promotion",
+    ]
 
 
 def test_grooming_staleness_recent_runs_report_nothing():
@@ -317,11 +330,11 @@ def test_grooming_staleness_recent_runs_report_nothing():
         "distill_last": now,
         "promo_last": now,
     }
-    assert hook._fetch_grooming_staleness(conn) == []
+    assert ss_curation._fetch_grooming_staleness(conn) == []
 
 
 def test_grooming_staleness_query_failure_degrades_to_empty():
-    assert hook._fetch_grooming_staleness(_failing_conn()) == []
+    assert ss_curation._fetch_grooming_staleness(_failing_conn()) == []
 
 
 def test_count_pending_curations_feeds_normalized_rows_to_the_curator(monkeypatch):
@@ -345,7 +358,7 @@ def test_count_pending_curations_feeds_normalized_rows_to_the_curator(monkeypatc
             "domain": None,
         }
     ]
-    assert hook._count_pending_curations(_conn_returning(rows)) == 4
+    assert ss_curation._count_pending_curations(_conn_returning(rows)) == 4
     assert seen["memories"] == [
         {
             "id": 1,
@@ -359,7 +372,7 @@ def test_count_pending_curations_feeds_normalized_rows_to_the_curator(monkeypatc
 
 
 def test_count_pending_curations_failure_degrades_to_zero():
-    assert hook._count_pending_curations(_failing_conn()) == 0
+    assert ss_curation._count_pending_curations(_failing_conn()) == 0
 
 
 def test_count_pending_curations_empty_sample_short_circuits(monkeypatch):
@@ -369,7 +382,7 @@ def test_count_pending_curations_empty_sample_short_circuits(monkeypatch):
         raise AssertionError("curator must not run on an empty sample")
 
     monkeypatch.setattr(auto_curator, "count_pending_clusters", _never)
-    assert hook._count_pending_curations(_conn_returning([])) == 0
+    assert ss_curation._count_pending_curations(_conn_returning([])) == 0
 
 
 # ── Filesystem probes ─────────────────────────────────────────────────
@@ -377,18 +390,18 @@ def test_count_pending_curations_empty_sample_short_circuits(monkeypatch):
 
 def test_count_session_files_counts_jsonl_per_project(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    assert hook._count_session_files() == 0
+    assert ss_db._count_session_files() == 0
     proj = tmp_path / ".claude" / "projects" / "p1"
     proj.mkdir(parents=True)
     (proj / "a.jsonl").write_text("{}")
     (proj / "b.jsonl").write_text("{}")
     (proj / "ignored.txt").write_text("")
-    assert hook._count_session_files() == 2
+    assert ss_db._count_session_files() == 2
 
 
 def test_detect_external_sources_empty_home_finds_nothing(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    assert hook._detect_external_sources() == []
+    assert ss_sources._detect_external_sources() == []
 
 
 def test_detect_external_sources_finds_claude_mem_cursor_and_chatgpt(
@@ -409,7 +422,7 @@ def test_detect_external_sources_finds_claude_mem_cursor_and_chatgpt(
     downloads.mkdir(parents=True)
     (downloads / "conversations.json").write_text("[]")
 
-    names = {s["name"]: s["count"] for s in hook._detect_external_sources()}
+    names = {s["name"]: s["count"] for s in ss_sources._detect_external_sources()}
 
     assert names == {"claude-mem": 1, "Cursor": 1, "ChatGPT": 1}
 
@@ -422,7 +435,7 @@ def test_detect_external_sources_unreadable_claude_mem_reports_zero(
     mem_dir.mkdir()
     (mem_dir / "claude-mem.db").write_text("not a database")
 
-    sources = hook._detect_external_sources()
+    sources = ss_sources._detect_external_sources()
 
     assert sources == [
         {"name": "claude-mem", "count": 0, "path": str(mem_dir / "claude-mem.db")}
@@ -442,7 +455,7 @@ _CP = {
 
 
 def test_checkpoint_section_caps_each_list():
-    lines = hook._format_checkpoint_section(_CP)
+    lines = ss_context._format_checkpoint_section(_CP)
     text = "\n".join(lines)
     assert "**Task:** finish #196" in text
     assert "`/repo`" in text
@@ -450,7 +463,7 @@ def test_checkpoint_section_caps_each_list():
 
 
 def test_build_context_empty_inputs_yield_empty_banner():
-    assert hook._build_context([], [], None) == ""
+    assert ss_context._build_context([], [], None) == ""
 
 
 def test_checkpoint_section_truncates_long_fields_like_every_other_section():
@@ -466,7 +479,7 @@ def test_checkpoint_section_truncates_long_fields_like_every_other_section():
         "key_decisions": [],
         "directory": "",
     }
-    lines = hook._format_checkpoint_section(cp)
+    lines = ss_context._format_checkpoint_section(cp)
     text = "\n".join(lines)
     assert long_task not in text
     assert "y" * 500 not in text
@@ -480,7 +493,7 @@ def test_build_context_renders_all_sections_and_receipt_marker():
         {"id": 3, "content": "team fact", "domain": "", "agent": "dba", "heat": 0.5}
     ]
 
-    out = hook._build_context(
+    out = ss_context._build_context(
         anchors,
         hot,
         _CP,
@@ -491,7 +504,7 @@ def test_build_context_renders_all_sections_and_receipt_marker():
     )
 
     assert out.startswith("## Cortex Memory Context")
-    assert hook.receipt_marker(9) in out
+    assert ss_context.receipt_marker(9) in out
     assert "### Last Session State" in out
     assert "### Anchored Memories (critical)" in out
     assert "### Team Decisions" in out and "[dba] team fact" in out
@@ -504,9 +517,9 @@ def test_build_context_renders_all_sections_and_receipt_marker():
 def test_short_line_carries_no_fetch_key():
     """An untruncated line needs no key — the whole memory is already there."""
     hot = [{"id": 42, "content": "short", "domain": "", "heat": 0.1}]
-    out = hook._build_context([], hot, None)
+    out = ss_context._build_context([], hot, None)
     assert "short" in out
-    assert hook.MEMORY_MARKER_PREFIX not in out
+    assert ss_context.MEMORY_MARKER_PREFIX not in out
     assert "are truncated" not in out, "legend must not appear without a key"
 
 
@@ -522,31 +535,31 @@ def test_truncated_line_carries_its_memory_id_as_a_fetch_key():
     hot = [{"id": 8, "content": long_content, "domain": "cortex", "heat": 0.9}]
     team = [{"id": 9, "content": long_content, "domain": "", "agent": "dba"}]
 
-    out = hook._build_context([], hot, None, team_decisions=team)
-    out += hook._build_context(anchors, [], None)
+    out = ss_context._build_context([], hot, None, team_decisions=team)
+    out += ss_context._build_context(anchors, [], None)
 
     for memory_id in (7, 8, 9):
-        assert hook.memory_marker(memory_id) in out, f"id {memory_id} lost"
+        assert ss_context.memory_marker(memory_id) in out, f"id {memory_id} lost"
     assert "..." in out, "still truncated — the key is added, not a bypass"
     assert long_content not in out, "the key must not smuggle in full content"
 
 
 def test_fetch_key_legend_appears_only_when_a_key_was_emitted():
     truncated = [{"id": 3, "content": "y" * 500, "domain": "", "heat": 0.5}]
-    assert "are truncated" in hook._build_context([], truncated, None)
+    assert "are truncated" in ss_context._build_context([], truncated, None)
 
 
 def test_truncation_boundary_is_unchanged_by_the_fetch_key():
     """The key changes what a cut line CARRIES, never where it is cut."""
     content = "z" * 500
-    body = hook._body({"id": 1, "content": content})
-    assert body.startswith(hook._short(content))
-    assert body == f"{hook._short(content)} {hook.memory_marker(1)}"
+    body = ss_context._body({"id": 1, "content": content})
+    assert body.startswith(ss_context._short(content))
+    assert body == f"{ss_context._short(content)} {ss_context.memory_marker(1)}"
 
 
 def test_build_context_without_receipt_has_no_marker():
     hot = [{"id": 2, "content": "hot", "domain": "", "heat": 0.1}]
-    out = hook._build_context([], hot, None)
+    out = ss_context._build_context([], hot, None)
     assert "⟦rcpt:" not in out
 
 
@@ -555,8 +568,8 @@ def test_emit_banner_receipt_payload_mirrors_banner_order():
     anchors = [{"id": 1}]
     team = [{"id": 2}]
     hot = [{"id": 3}]
-    with patch.object(hook, "emit_hook_receipt", return_value=5) as emit:
-        rid = hook._emit_banner_receipt(conn, {}, anchors, team, hot)
+    with patch.object(ss_context, "emit_hook_receipt", return_value=5) as emit:
+        rid = ss_context._emit_banner_receipt(conn, {}, anchors, team, hot)
     assert rid == 5
     assert emit.call_args.args[1] == [
         {"memory_id": 1},
@@ -571,7 +584,7 @@ def test_emit_banner_receipt_payload_mirrors_banner_order():
 
 def test_cold_start_needs_install_names_the_configured_server_not_a_recipe():
     """ADR-1104: the real cause, never an install recipe."""
-    msg = hook._build_cold_start_message(
+    msg = ss_context._build_cold_start_message(
         {"status": "needs_install", "message": "connection refused"}
     )
     assert "configured for Cortex is not reachable: connection refused" in msg
@@ -579,38 +592,42 @@ def test_cold_start_needs_install_names_the_configured_server_not_a_recipe():
 
 
 def test_cold_start_auth_failed_relays_the_message():
-    msg = hook._build_cold_start_message({"status": "auth_failed", "message": "bad pw"})
+    msg = ss_context._build_cold_start_message(
+        {"status": "auth_failed", "message": "bad pw"}
+    )
     assert msg == "## Cortex — Database Authentication\n\nbad pw"
 
 
 def test_cold_start_other_error_points_at_the_readme():
-    msg = hook._build_cold_start_message({"status": "broken", "message": "boom"})
+    msg = ss_context._build_cold_start_message({"status": "broken", "message": "boom"})
     assert "Setup issue: boom" in msg and "README" in msg
 
 
 def test_cold_start_empty_db_with_history_reports_the_backfill_count():
-    with patch.object(hook, "_auto_backfill", return_value=7):
-        msg = hook._build_cold_start_message(
+    with patch.object(ss_context, "_auto_backfill", return_value=7):
+        msg = ss_context._build_cold_start_message(
             {"status": "ready", "memories": 0, "session_files": 3}
         )
     assert "auto-imported **7 memories**" in msg
 
 
 def test_cold_start_empty_db_with_history_and_no_import_says_ready():
-    with patch.object(hook, "_auto_backfill", return_value=0):
-        msg = hook._build_cold_start_message(
+    with patch.object(ss_context, "_auto_backfill", return_value=0):
+        msg = ss_context._build_cold_start_message(
             {"status": "ready", "memories": 0, "session_files": 3}
         )
     assert "no memorable items" in msg
 
 
 def test_cold_start_empty_db_without_history_says_ready():
-    msg = hook._build_cold_start_message({"status": "ready", "memories": 0})
+    msg = ss_context._build_cold_start_message({"status": "ready", "memories": 0})
     assert "No previous sessions found" in msg
 
 
 def test_cold_start_populated_db_yields_no_message():
-    assert hook._build_cold_start_message({"status": "ready", "memories": 10}) == ""
+    assert (
+        ss_context._build_cold_start_message({"status": "ready", "memories": 10}) == ""
+    )
 
 
 # ── SQLite banner path ────────────────────────────────────────────────
@@ -639,7 +656,7 @@ def test_partition_drops_noise_and_splits_anchors_from_hot():
         _row(4, tags=["_anchor"]),  # anchor tag WITHOUT protection -> hot
         _row(5),
     ]
-    anchors, hot = hook._partition_banner_rows(rows)
+    anchors, hot = ss_sqlite._partition_banner_rows(rows)
     assert [a["id"] for a in anchors] == [3]
     assert [h["id"] for h in hot] == [4, 5]
 
@@ -647,9 +664,9 @@ def test_partition_drops_noise_and_splits_anchors_from_hot():
 def test_partition_caps_both_pools():
     rows = [_row(i, tags=["_anchor"], protected=True) for i in range(10)]
     rows += [_row(100 + i) for i in range(20)]
-    anchors, hot = hook._partition_banner_rows(rows)
-    assert len(anchors) == hook._ANCHOR_LIMIT
-    assert len(hot) == hook._HOT_LIMIT
+    anchors, hot = ss_sqlite._partition_banner_rows(rows)
+    assert len(anchors) == ss_sqlite._ANCHOR_LIMIT
+    assert len(hot) == ss_sqlite._HOT_LIMIT
 
 
 def test_partition_drops_other_project_keeps_global_and_ancestor():
@@ -664,7 +681,7 @@ def test_partition_drops_other_project_keeps_global_and_ancestor():
         _scoped_row(3, "/repo"),
         _scoped_row(4, ""),
     ]
-    _, hot = hook._partition_banner_rows(rows, "/repo/subdir")
+    _, hot = ss_sqlite._partition_banner_rows(rows, "/repo/subdir")
     assert [h["id"] for h in hot] == [2, 3]
 
 
@@ -673,7 +690,7 @@ def test_sqlite_banner_rows_fetch_failure_is_logged_and_degrades(capsys):
     store.get_hot_memories.side_effect = RuntimeError("no such table")
     store.get_active_checkpoint.side_effect = RuntimeError("no such table")
 
-    anchors, hot, checkpoint = hook._sqlite_banner_rows(store)
+    anchors, hot, checkpoint = ss_sqlite._sqlite_banner_rows(store)
 
     assert (anchors, hot, checkpoint) == ([], [], None)
     assert "SQLite hot-memory fetch failed" in capsys.readouterr().err
@@ -689,14 +706,14 @@ def test_sqlite_context_prints_banner_and_emits_receipt(capsys, monkeypatch):
     monkeypatch.setattr(memory_store, "get_shared_store", lambda: store)
 
     with (
-        patch.object(hook, "emit_injection_receipt", return_value=3) as emit,
-        patch.object(hook, "_print_external_sources"),
+        patch.object(ss_sqlite, "emit_injection_receipt", return_value=3) as emit,
+        patch.object(ss_sqlite, "_print_external_sources"),
     ):
-        hook._sqlite_context({})
+        ss_sqlite._sqlite_context({})
 
     out, err = capsys.readouterr()
     assert "## Cortex Memory Context" in out
-    assert hook.receipt_marker(3) in out
+    assert ss_context.receipt_marker(3) in out
     assert "backend: sqlite" in err
     emit.assert_called_once()
 
@@ -709,7 +726,7 @@ def test_sqlite_context_empty_store_prints_cold_start(capsys, monkeypatch, tmp_p
     monkeypatch.setattr(memory_store, "get_shared_store", lambda: store)
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
-    hook._sqlite_context({})
+    ss_sqlite._sqlite_context({})
 
     out = capsys.readouterr().out
     assert "## Cortex — First Run" in out
@@ -723,7 +740,7 @@ def test_sqlite_context_unavailable_store_logs_and_returns(capsys, monkeypatch):
 
     monkeypatch.setattr(memory_store, "get_shared_store", _boom)
 
-    hook._sqlite_context({})
+    ss_sqlite._sqlite_context({})
 
     out, err = capsys.readouterr()
     assert out == "", "no banner when the store is unavailable"
@@ -742,8 +759,8 @@ def test_sqlite_context_unavailable_store_logs_and_returns(capsys, monkeypatch):
 
 def test_connect_pg_unreachable_server_logs_and_returns_none(capsys, monkeypatch):
     # Point at a closed port — never the developer's real server.
-    monkeypatch.setattr(hook, "_DATABASE_URL", "postgresql://127.0.0.1:1/none")
-    assert hook._connect_pg() is None
+    monkeypatch.setattr(ss_db, "_DATABASE_URL", "postgresql://127.0.0.1:1/none")
+    assert ss_db._connect_pg() is None
     assert "PostgreSQL connect failed" in capsys.readouterr().err
 
 
@@ -761,7 +778,7 @@ def test_refresh_session_registry_writes_and_purges(monkeypatch):
         session_registry, "purge_dead_entries", lambda: calls.append("purge")
     )
 
-    hook._refresh_session_registry({})
+    ss_background._refresh_session_registry({})
 
     assert calls == ["w:None", "purge"]
 
@@ -774,7 +791,7 @@ def test_refresh_session_registry_failure_is_logged_not_raised(capsys, monkeypat
 
     monkeypatch.setattr(session_registry, "write_session", _boom)
 
-    hook._refresh_session_registry({})
+    ss_background._refresh_session_registry({})
 
     assert "session registry refresh skipped" in capsys.readouterr().err
 
@@ -792,7 +809,7 @@ def test_auto_wire_pipeline_logs_when_it_wires(capsys, monkeypatch):
         },
     )
 
-    hook._auto_wire_pipeline("/the/project")
+    ss_background._auto_wire_pipeline("/the/project")
 
     assert "pipeline auto-wired (ap)" in capsys.readouterr().err
 
@@ -806,7 +823,7 @@ def test_auto_wire_pipeline_noop_actions_stay_quiet(capsys, monkeypatch):
         lambda project_root: {"action": "already_present"},
     )
 
-    hook._auto_wire_pipeline("/the/project")
+    ss_background._auto_wire_pipeline("/the/project")
 
     assert capsys.readouterr().err == ""
 
@@ -819,7 +836,7 @@ def test_auto_wire_pipeline_failure_is_logged_not_raised(capsys, monkeypatch):
 
     monkeypatch.setattr(pipeline_discovery, "ensure_pipeline_connection", _boom)
 
-    hook._auto_wire_pipeline("/the/project")
+    ss_background._auto_wire_pipeline("/the/project")
 
     assert "pipeline auto-wire skipped" in capsys.readouterr().err
 
@@ -833,7 +850,7 @@ def test_auto_backfill_reports_the_imported_count(capsys, monkeypatch):
 
     monkeypatch.setattr(backfill_memories, "handler", _fake_handler)
 
-    assert hook._auto_backfill() == 5
+    assert ss_sources._auto_backfill() == 5
     assert "Auto-backfill: 5 imported, 2 cascaded" in capsys.readouterr().err
 
 
@@ -845,7 +862,7 @@ def test_auto_backfill_failure_is_logged_and_returns_zero(capsys, monkeypatch):
 
     monkeypatch.setattr(backfill_memories, "handler", _boom)
 
-    assert hook._auto_backfill() == 0
+    assert ss_sources._auto_backfill() == 0
     assert "Auto-backfill failed (non-fatal)" in capsys.readouterr().err
 
 
@@ -898,10 +915,10 @@ class TestSpawnConsolidateCycleInterpreterResolution:
             captured["kwargs"] = kwargs
             return MagicMock(pid=4242)
 
-        monkeypatch.setattr(hook.subprocess, "Popen", _fake_popen)
+        monkeypatch.setattr(ss_consolidate.subprocess, "Popen", _fake_popen)
         as_windows_in_breakaway_job(monkeypatch)
 
-        assert hook._spawn_consolidate_cycle(detached_spawn.options()) == 4242
+        assert ss_consolidate._spawn_consolidate_cycle(detached_spawn.options()) == 4242
         launcher = plugin_root / "scripts" / "launcher.py"
         assert captured["cmd"] == [
             sys.executable,
@@ -909,15 +926,15 @@ class TestSpawnConsolidateCycleInterpreterResolution:
             "mcp_server.hooks.consolidate_background",
         ]
         assert "store-stub" not in captured["cmd"][0]
-        assert captured["kwargs"]["stdin"] == hook.subprocess.DEVNULL
-        assert captured["kwargs"]["stderr"] == hook.subprocess.STDOUT
+        assert captured["kwargs"]["stdin"] == ss_consolidate.subprocess.DEVNULL
+        assert captured["kwargs"]["stderr"] == ss_consolidate.subprocess.STDOUT
         assert_detached_on_windows(captured["kwargs"])
         log_path = tmp_path / ".claude" / "methodology" / "consolidate.log"
         assert opened == [str(log_path)]
         assert captured["kwargs"]["stdout"].name == str(log_path)
 
         # A second cycle's spawn must also succeed (mkdir exist_ok=True).
-        assert hook._spawn_consolidate_cycle(detached_spawn.options()) == 4242
+        assert ss_consolidate._spawn_consolidate_cycle(detached_spawn.options()) == 4242
         err = capsys.readouterr().err
         assert f"background consolidate spawned → {log_path}" in err
 
@@ -934,9 +951,9 @@ class TestSpawnConsolidateCycleInterpreterResolution:
             captured["cmd"] = cmd
             return MagicMock(pid=99)
 
-        monkeypatch.setattr(hook.subprocess, "Popen", _fake_popen)
+        monkeypatch.setattr(ss_consolidate.subprocess, "Popen", _fake_popen)
 
-        hook._spawn_consolidate_cycle(detached_spawn.options())
+        ss_consolidate._spawn_consolidate_cycle(detached_spawn.options())
 
         assert captured["cmd"] == [
             sys.executable,
@@ -956,11 +973,13 @@ class TestSpawnConsolidateCycleInterpreterResolution:
             captured["cmd"] = cmd
             return MagicMock(pid=1)
 
-        monkeypatch.setattr(hook.subprocess, "Popen", _fake_popen)
+        monkeypatch.setattr(ss_consolidate.subprocess, "Popen", _fake_popen)
 
-        hook._spawn_consolidate_cycle(detached_spawn.options())
+        ss_consolidate._spawn_consolidate_cycle(detached_spawn.options())
         expected_launcher = (
-            Path(hook.__file__).resolve().parents[2] / "scripts" / "launcher.py"
+            Path(ss_consolidate.__file__).resolve().parents[2]
+            / "scripts"
+            / "launcher.py"
         )
         assert captured["cmd"][1] == str(expected_launcher)
 
@@ -987,7 +1006,7 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
         stale_mock = MagicMock(return_value=stale)
         monkeypatch.setattr(pipeline_graph_ttl, "graph_is_stale", stale_mock)
         lookup_mock = MagicMock(return_value=cached)
-        monkeypatch.setattr(hook, "_lookup_cached_graph_path", lookup_mock)
+        monkeypatch.setattr(ss_background, "_lookup_cached_graph_path", lookup_mock)
         return stale_mock, lookup_mock
 
     def _write_launcher(self, tmp_path, monkeypatch):
@@ -1014,10 +1033,10 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
             captured["kwargs"] = kwargs
             return MagicMock()
 
-        monkeypatch.setattr(hook.subprocess, "Popen", _fake_popen)
+        monkeypatch.setattr(ss_background.subprocess, "Popen", _fake_popen)
         as_windows_in_breakaway_job(monkeypatch)
 
-        hook._maybe_background_reanalyze("/the/project")
+        ss_background._maybe_background_reanalyze("/the/project")
 
         launcher = plugin_root / "scripts" / "launcher.py"
         assert captured["cmd"] == [
@@ -1027,8 +1046,8 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
             "/the/project",
         ]
         assert "store-stub" not in captured["cmd"][0]
-        assert captured["kwargs"]["stdin"] == hook.subprocess.DEVNULL
-        assert captured["kwargs"]["stderr"] == hook.subprocess.STDOUT
+        assert captured["kwargs"]["stdin"] == ss_background.subprocess.DEVNULL
+        assert captured["kwargs"]["stderr"] == ss_background.subprocess.STDOUT
         assert_detached_on_windows(captured["kwargs"])
         log_path = tmp_path / ".claude" / "methodology" / "pipeline_reanalyze.log"
         assert opened == [str(log_path)]
@@ -1046,7 +1065,7 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
         # broad except swallows into a "skipped" log instead of "spawned".
         # A zero TTL reopens the one-attempt-per-window slot (#751).
         monkeypatch.setenv("CORTEX_PIPELINE_GRAPH_TTL_HOURS", "0")
-        hook._maybe_background_reanalyze("/the/project")
+        ss_background._maybe_background_reanalyze("/the/project")
         err = capsys.readouterr().err
         assert "background pipeline reanalysis spawned" in err
         assert "skipped" not in err
@@ -1065,12 +1084,14 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
             captured["cmd"] = cmd
             return MagicMock()
 
-        monkeypatch.setattr(hook.subprocess, "Popen", _fake_popen)
+        monkeypatch.setattr(ss_background.subprocess, "Popen", _fake_popen)
 
-        hook._maybe_background_reanalyze("/the/project")
+        ss_background._maybe_background_reanalyze("/the/project")
 
         expected_launcher = (
-            Path(hook.__file__).resolve().parents[2] / "scripts" / "launcher.py"
+            Path(ss_background.__file__).resolve().parents[2]
+            / "scripts"
+            / "launcher.py"
         )
         assert captured["cmd"][1] == str(expected_launcher)
 
@@ -1079,7 +1100,7 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
         it was the detached-worker leak the #679 guard reported."""
         self._write_launcher(tmp_path, monkeypatch)
         monkeypatch.delenv("CLAUDE_PROJECT_ROOT", raising=False)
-        monkeypatch.setattr(hook.os, "getcwd", lambda: "/the/plugin-root")
+        monkeypatch.setattr(os, "getcwd", lambda: "/the/plugin-root")
         self._mock_pipeline(monkeypatch)
         captured = {}
 
@@ -1087,9 +1108,9 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
             captured["cmd"] = cmd
             return MagicMock()
 
-        monkeypatch.setattr(hook.subprocess, "Popen", _fake_popen)
+        monkeypatch.setattr(ss_background.subprocess, "Popen", _fake_popen)
 
-        hook._maybe_background_reanalyze("/the/event-cwd")
+        ss_background._maybe_background_reanalyze("/the/event-cwd")
 
         assert captured["cmd"][-1] == "/the/event-cwd"
         self.discover_mock.assert_called_once_with("/the/event-cwd")
@@ -1097,8 +1118,8 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
     def test_unresolved_project_root_spawns_nothing(self, monkeypatch, capsys):
         self._mock_pipeline(monkeypatch)
 
-        with patch.object(hook.subprocess, "Popen") as popen:
-            hook._maybe_background_reanalyze(None)
+        with patch.object(ss_background.subprocess, "Popen") as popen:
+            ss_background._maybe_background_reanalyze(None)
 
         popen.assert_not_called()
         self.discover_mock.assert_not_called()
@@ -1107,8 +1128,8 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
     def test_skips_when_graph_fresh(self, tmp_path, monkeypatch):
         self._mock_pipeline(monkeypatch, stale=False)
 
-        with patch.object(hook.subprocess, "Popen") as popen:
-            hook._maybe_background_reanalyze("/the/project")
+        with patch.object(ss_background.subprocess, "Popen") as popen:
+            ss_background._maybe_background_reanalyze("/the/project")
 
         popen.assert_not_called()
 
@@ -1116,8 +1137,8 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
         monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(tmp_path / "no-scripts-dir"))
         self._mock_pipeline(monkeypatch)
 
-        with patch.object(hook.subprocess, "Popen") as popen:
-            hook._maybe_background_reanalyze("/the/project")
+        with patch.object(ss_background.subprocess, "Popen") as popen:
+            ss_background._maybe_background_reanalyze("/the/project")
 
         popen.assert_not_called()
 
@@ -1128,9 +1149,9 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
         def _boom(cmd, **kwargs):
             raise OSError("no such interpreter")
 
-        monkeypatch.setattr(hook.subprocess, "Popen", _boom)
+        monkeypatch.setattr(ss_background.subprocess, "Popen", _boom)
 
-        hook._maybe_background_reanalyze("/the/project")  # must not raise
+        ss_background._maybe_background_reanalyze("/the/project")  # must not raise
 
         err = capsys.readouterr().err
         assert "background pipeline reanalysis skipped" in err
@@ -1139,9 +1160,11 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
     def test_success_logs_the_log_path(self, tmp_path, monkeypatch, capsys):
         self._write_launcher(tmp_path, monkeypatch)
         self._mock_pipeline(monkeypatch)
-        monkeypatch.setattr(hook.subprocess, "Popen", lambda *a, **k: MagicMock())
+        monkeypatch.setattr(
+            ss_background.subprocess, "Popen", lambda *a, **k: MagicMock()
+        )
 
-        hook._maybe_background_reanalyze("/the/project")
+        ss_background._maybe_background_reanalyze("/the/project")
 
         err = capsys.readouterr().err
         assert "background pipeline reanalysis spawned" in err
@@ -1158,8 +1181,8 @@ def test_print_external_sources_lists_each_source(capsys):
         {"name": "claude-mem", "count": 3, "path": "/db"},
         {"name": "Cursor", "count": 0, "path": "/c"},
     ]
-    with patch.object(hook, "_detect_external_sources", return_value=sources):
-        hook._print_external_sources()
+    with patch.object(ss_sources, "_detect_external_sources", return_value=sources):
+        ss_sources._print_external_sources()
 
     out = capsys.readouterr().out
     assert "### External Memory Sources Detected" in out
@@ -1169,16 +1192,16 @@ def test_print_external_sources_lists_each_source(capsys):
 
 
 def test_print_external_sources_stays_silent_when_none_found(capsys):
-    with patch.object(hook, "_detect_external_sources", return_value=[]):
-        hook._print_external_sources()
+    with patch.object(ss_sources, "_detect_external_sources", return_value=[]):
+        ss_sources._print_external_sources()
     assert capsys.readouterr().out == ""
 
 
 def test_print_external_sources_failure_is_logged_not_raised(capsys):
     with patch.object(
-        hook, "_detect_external_sources", side_effect=RuntimeError("scan died")
+        ss_sources, "_detect_external_sources", side_effect=RuntimeError("scan died")
     ):
-        hook._print_external_sources()
+        ss_sources._print_external_sources()
     err = capsys.readouterr().err
     assert "External source detection failed (non-fatal)" in err
 
@@ -1289,7 +1312,7 @@ def test_main_normal_flow_prints_banner_receipt_and_closes_conn(capsys):
     emitted = _emitted(out)
     context = emitted["hookSpecificOutput"]["additionalContext"]
     assert "## Cortex Memory Context" in context
-    assert hook.receipt_marker(11) in context
+    assert ss_context.receipt_marker(11) in context
     assert emitted["systemMessage"].startswith(
         "Cortex ready: PostgreSQL memory store, 7 memories; "
     )

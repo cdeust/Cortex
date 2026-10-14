@@ -13,7 +13,8 @@ import pytest
 from mcp_server.core import auto_curator
 from mcp_server.handlers.ingest_helpers import code_graph_tag
 from mcp_server.handlers.forget import _get_store
-from mcp_server.hooks import session_start as hook
+from mcp_server.hooks import session_start_background as background
+from mcp_server.hooks import session_start_curation as curation
 
 _DOMAIN = "session-start-chain-heads"
 _PROJECT = "/fixture/session-start-chain-heads"
@@ -55,7 +56,7 @@ def test_pending_curation_count_is_fed_heads_only(pg_store, monkeypatch):
         lambda memories, **_kw: seen.extend(m["id"] for m in memories) or 0,
     )
 
-    hook._count_pending_curations(pg_store._conn)
+    curation._count_pending_curations(pg_store._conn)
 
     assert new_id in seen
     assert old_id not in seen
@@ -68,4 +69,4 @@ def test_cached_graph_path_is_not_served_from_a_retracted_row(pg_store):
     # matches it: a head-blind lookup would still serve "/stale/graph.json"
     pg_store.supersede_atomic(_record("graph_path moved, see the new run"), old_id)
 
-    assert hook._lookup_cached_graph_path(_PROJECT) is None
+    assert background._lookup_cached_graph_path(_PROJECT) is None

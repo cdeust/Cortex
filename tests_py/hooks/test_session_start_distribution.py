@@ -12,7 +12,7 @@ from __future__ import annotations
 import builtins
 from unittest.mock import patch
 
-from mcp_server.hooks import session_start as hook
+from mcp_server.hooks import session_start_context as hook
 
 
 def test_banner_builds_without_the_ml_stack_or_its_metadata():

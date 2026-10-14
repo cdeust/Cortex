@@ -18,7 +18,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from mcp_server.handlers.ingest_helpers import memoise_graph_path
-from mcp_server.hooks import session_start as hook
+from mcp_server.hooks import session_start_background as hook
 from mcp_server.infrastructure import memory_store, pipeline_discovery
 from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 

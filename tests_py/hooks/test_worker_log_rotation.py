@@ -34,7 +34,12 @@ class TestWorkerLogRotation(unittest.TestCase):
         home = patch.object(Path, "home", return_value=self.root)
         home.start()
         self.addCleanup(home.stop)
-        self.session = importlib.import_module("mcp_server.hooks.session_start")
+        self.consolidate = importlib.import_module(
+            "mcp_server.hooks.session_start_consolidate"
+        )
+        self.background = importlib.import_module(
+            "mcp_server.hooks.session_start_background"
+        )
         self.commit = importlib.import_module("mcp_server.hooks.post_commit_reindex")
 
     def assert_spawn_rotates(self, filename: str, spawn) -> None:
@@ -60,7 +65,7 @@ class TestWorkerLogRotation(unittest.TestCase):
     def test_consolidate_spawn_rotates_and_closes_parent_descriptor(self) -> None:
         self.assert_spawn_rotates(
             "consolidate.log",
-            lambda: self.session._spawn_consolidate_cycle(detached_spawn.options()),
+            lambda: self.consolidate._spawn_consolidate_cycle(detached_spawn.options()),
         )
 
     def test_post_commit_spawn_rotates_and_closes_parent_descriptor(self) -> None:
@@ -78,11 +83,11 @@ class TestWorkerLogRotation(unittest.TestCase):
             sys.modules, {discovery.__name__: discovery, ttl.__name__: ttl}
         ):
             with patch.object(
-                self.session, "_lookup_cached_graph_path", return_value="fixture"
+                self.background, "_lookup_cached_graph_path", return_value="fixture"
             ):
                 self.assert_spawn_rotates(
                     "pipeline_reanalyze.log",
-                    lambda: self.session._maybe_background_reanalyze("fixture"),
+                    lambda: self.background._maybe_background_reanalyze("fixture"),
                 )
 
 

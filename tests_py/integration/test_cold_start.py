@@ -68,7 +68,7 @@ class TestSessionStartHook:
         an empty directory_context would not be injected -- this test
         exercises the banner-renders-a-memory contract, not scoping.
         """
-        from mcp_server.hooks import session_start
+        from mcp_server.hooks import session_start_sqlite
         from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 
         monkeypatch.setenv("CORTEX_MEMORY_STORE_BACKEND", "sqlite")
@@ -87,9 +87,11 @@ class TestSessionStartHook:
                 "mcp_server.infrastructure.memory_store.get_shared_store",
                 lambda: store,
             )
-            monkeypatch.setattr(session_start, "_print_external_sources", lambda: None)
+            monkeypatch.setattr(
+                session_start_sqlite, "_print_external_sources", lambda: None
+            )
 
-            session_start._sqlite_context(
+            session_start_sqlite._sqlite_context(
                 {"transcript_path": str(tmp_path / "session.jsonl")}
             )
         finally:
@@ -107,7 +109,7 @@ class TestSessionStartHook:
         reports result."""
         from unittest.mock import patch
 
-        from mcp_server.hooks.session_start import _build_cold_start_message
+        from mcp_server.hooks.session_start_context import _build_cold_start_message
 
         setup_result = {
             "status": "ready",
@@ -115,7 +117,9 @@ class TestSessionStartHook:
             "session_files": 150,
         }
         # Mock _auto_backfill to avoid actual DB operations
-        with patch("mcp_server.hooks.session_start._auto_backfill", return_value=42):
+        with patch(
+            "mcp_server.hooks.session_start_context._auto_backfill", return_value=42
+        ):
             msg = _build_cold_start_message(setup_result)
 
         assert "auto-imported" in msg.lower() or "42 memories" in msg
@@ -123,7 +127,7 @@ class TestSessionStartHook:
 
     def test_empty_db_no_sessions_shows_getting_started(self):
         """Brand new user with no history gets a friendly start guide."""
-        from mcp_server.hooks.session_start import _build_cold_start_message
+        from mcp_server.hooks.session_start_context import _build_cold_start_message
 
         setup_result = {
             "status": "ready",
@@ -137,7 +141,7 @@ class TestSessionStartHook:
 
     def test_pg_unreachable_names_the_configured_server(self):
         """When the configured PostgreSQL is not running, says so: no recipe."""
-        from mcp_server.hooks.session_start import _build_cold_start_message
+        from mcp_server.hooks.session_start_context import _build_cold_start_message
 
         setup_result = {
             "status": "needs_install",
@@ -151,7 +155,7 @@ class TestSessionStartHook:
 
     def test_schema_failure_shows_error(self):
         """When schema init fails, shows helpful error."""
-        from mcp_server.hooks.session_start import _build_cold_start_message
+        from mcp_server.hooks.session_start_context import _build_cold_start_message
 
         setup_result = {
             "status": "schema_failed",
@@ -164,7 +168,7 @@ class TestSessionStartHook:
 
     def test_context_building_with_anchors_and_hot(self):
         """Memory context block includes anchored + hot memories."""
-        from mcp_server.hooks.session_start import _build_context
+        from mcp_server.hooks.session_start_context import _build_context
 
         anchors = [
             {"id": 1, "content": "Always use UTC timestamps", "domain": "backend"},
@@ -198,7 +202,7 @@ class TestSessionStartHook:
 
     def test_context_empty_when_no_data(self):
         """Returns empty string when there's nothing to inject."""
-        from mcp_server.hooks.session_start import _build_context
+        from mcp_server.hooks.session_start_context import _build_context
 
         assert _build_context([], [], None) == ""
 
@@ -410,9 +414,9 @@ class TestBackfillConsent:
     def test_session_start_auto_backfills(self):
         """Session start hook auto-backfills when DB is empty with session files."""
         import inspect
-        from mcp_server.hooks import session_start
+        from mcp_server.hooks import session_start_context
 
-        source = inspect.getsource(session_start)
+        source = inspect.getsource(session_start_context)
         # Must contain auto-backfill logic
         assert "_auto_backfill" in source
         assert "backfill" in source.lower()
@@ -421,9 +425,11 @@ class TestBackfillConsent:
         """Cold start with sessions auto-imports and reports the count."""
         from unittest.mock import patch
 
-        from mcp_server.hooks.session_start import _build_cold_start_message
+        from mcp_server.hooks.session_start_context import _build_cold_start_message
 
-        with patch("mcp_server.hooks.session_start._auto_backfill", return_value=42):
+        with patch(
+            "mcp_server.hooks.session_start_context._auto_backfill", return_value=42
+        ):
             msg = _build_cold_start_message(
                 {
                     "status": "ready",

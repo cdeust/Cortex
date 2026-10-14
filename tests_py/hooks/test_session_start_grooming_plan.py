@@ -18,7 +18,10 @@ import pytest
 
 
 def _grooming_sql() -> str:
-    source = Path(__file__).resolve().parents[2] / "mcp_server/hooks/session_start.py"
+    source = (
+        Path(__file__).resolve().parents[2]
+        / "mcp_server/hooks/session_start_curation.py"
+    )
     tree = ast.parse(source.read_text())
     for function in tree.body:
         if (
@@ -106,7 +109,9 @@ def test_grooming_prefilter_preserves_timestamp_semantics(rows, distill_day, pro
 
 
 def test_session_start_disables_jit_on_its_connection_without_environment_changes():
-    source = Path(__file__).resolve().parents[2] / "mcp_server/hooks/session_start.py"
+    source = (
+        Path(__file__).resolve().parents[2] / "mcp_server/hooks/session_start_db.py"
+    )
     function = next(
         node
         for node in ast.parse(source.read_text()).body

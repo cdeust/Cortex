@@ -12,7 +12,12 @@ import pytest
 
 from mcp_server.core import telemetry
 from mcp_server.handlers import query_methodology
-from mcp_server.hooks import _telemetry, auto_recall, session_start
+from mcp_server.hooks import (
+    _telemetry,
+    auto_recall,
+    session_start,
+    session_start_sources,
+)
 from mcp_server.shared.telemetry_context import (
     count_reranked,
     operation_metrics,
@@ -194,10 +199,10 @@ def _patch_session_main(monkeypatch):
         "_count_pending_curations": 0,
         "_fetch_grooming_staleness": [],
         "_emit_banner_receipt": 7,
-        "_detect_external_sources": [],
     }
     for name, value in values.items():
         monkeypatch.setattr(session_start, name, lambda *args, value=value: value)
+    monkeypatch.setattr(session_start_sources, "_detect_external_sources", lambda: [])
 
 
 def test_session_main_counts_banner_receipt_and_external_sources(
@@ -205,7 +210,7 @@ def test_session_main_counts_banner_receipt_and_external_sources(
 ):
     _patch_session_main(monkeypatch)
     monkeypatch.setattr(
-        session_start,
+        session_start_sources,
         "_detect_external_sources",
         lambda: [{"name": "Mémoire externe", "path": "/fixture/été", "count": 1}],
     )

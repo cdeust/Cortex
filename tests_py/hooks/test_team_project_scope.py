@@ -13,7 +13,7 @@ import pytest
 from mcp_server.handlers.forget import _get_store
 from mcp_server.handlers.remember import handler
 from mcp_server.hooks.agent_briefing_query import _fetch_agent_context
-from mcp_server.hooks.session_start import _fetch_team_decisions
+from mcp_server.hooks.session_start_fetch import _fetch_team_decisions
 from tests_py._hermetic_hook_env import hermetic_hook_env
 
 

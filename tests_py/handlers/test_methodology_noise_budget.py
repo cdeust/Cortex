@@ -21,7 +21,9 @@ def memory(mid, tags, content="useful"):
 class NoiseParity(unittest.TestCase):
     def test_tags_match_the_existing_sqlite_banner_contract(self):
         root = Path(__file__).resolve().parents[2]
-        tree = ast.parse((root / "mcp_server/hooks/session_start.py").read_text())
+        tree = ast.parse(
+            (root / "mcp_server/hooks/session_start_sqlite.py").read_text()
+        )
         assignment = next(
             node
             for node in tree.body

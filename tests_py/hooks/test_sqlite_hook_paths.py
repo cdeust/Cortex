@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from mcp_server.hooks import auto_recall, session_start
+from mcp_server.hooks import auto_recall, session_start_sqlite
 from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 
 
@@ -27,7 +27,7 @@ def store(tmp_path):
 # ── backend gate ─────────────────────────────────────────────────────────
 
 
-@pytest.mark.parametrize("module", [session_start, auto_recall])
+@pytest.mark.parametrize("module", [session_start_sqlite, auto_recall])
 def test_backend_gate_follows_env(module, monkeypatch):
     monkeypatch.setenv("CORTEX_MEMORY_STORE_BACKEND", "sqlite")
     assert module._backend_is_sqlite() is True
@@ -61,7 +61,7 @@ class TestPartitionBannerRows:
             },
             {"id": 3, "content": "real", "tags": [], "heat": 0.8, "is_global": True},
         ]
-        anchors, hot = session_start._partition_banner_rows(rows)
+        anchors, hot = session_start_sqlite._partition_banner_rows(rows)
         assert anchors == []
         assert [m["id"] for m in hot] == [3]
 
@@ -92,7 +92,7 @@ class TestPartitionBannerRows:
                 "is_global": True,
             },
         ]
-        anchors, hot = session_start._partition_banner_rows(rows)
+        anchors, hot = session_start_sqlite._partition_banner_rows(rows)
         assert [m["id"] for m in anchors] == [1, 3]
         assert [m["id"] for m in hot] == [2]
 
@@ -105,10 +105,10 @@ class TestPartitionBannerRows:
                 "heat": 0.9,
                 "is_global": True,
             }
-            for i in range(session_start._HOT_LIMIT + 10)
+            for i in range(session_start_sqlite._HOT_LIMIT + 10)
         ]
-        _, hot = session_start._partition_banner_rows(rows)
-        assert len(hot) == session_start._HOT_LIMIT
+        _, hot = session_start_sqlite._partition_banner_rows(rows)
+        assert len(hot) == session_start_sqlite._HOT_LIMIT
 
 
 # ── session_start: full banner over a seeded store ───────────────────────
@@ -131,9 +131,9 @@ def test_sqlite_context_prints_banner_and_receipt(store, tmp_path, monkeypatch, 
     monkeypatch.setattr(
         "mcp_server.infrastructure.memory_store.get_shared_store", lambda: store
     )
-    monkeypatch.setattr(session_start, "_print_external_sources", lambda: None)
+    monkeypatch.setattr(session_start_sqlite, "_print_external_sources", lambda: None)
 
-    session_start._sqlite_context(
+    session_start_sqlite._sqlite_context(
         {"transcript_path": "/tmp/session-abc.jsonl", "cwd": "/repo"}
     )
 
@@ -152,9 +152,9 @@ def test_sqlite_context_empty_store_prints_cold_start(store, monkeypatch, capsys
     monkeypatch.setattr(
         "mcp_server.infrastructure.memory_store.get_shared_store", lambda: store
     )
-    monkeypatch.setattr(session_start, "_count_session_files", lambda: 0)
+    monkeypatch.setattr(session_start_sqlite, "_count_session_files", lambda: 0)
 
-    session_start._sqlite_context({})
+    session_start_sqlite._sqlite_context({})
 
     out = capsys.readouterr().out
     # Cold-start message, and NEVER the PostgreSQL install instructions.

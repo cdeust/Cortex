@@ -11,7 +11,13 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import MagicMock
 
-from mcp_server.hooks import pipeline_impact_bump, session_start
+from mcp_server.hooks import (
+    pipeline_impact_bump,
+    session_start_curation,
+    session_start_db,
+    session_start_fetch,
+    session_start_sqlite,
+)
 
 
 def _broken_conn(message: str = "pg down"):
@@ -22,46 +28,46 @@ def _broken_conn(message: str = "pg down"):
 
 class TestSessionStartBannerFetches:
     def test_anchor_fetch_failure_degrades_to_empty_and_logs(self, capsys):
-        assert session_start._fetch_anchors(_broken_conn()) == []
+        assert session_start_fetch._fetch_anchors(_broken_conn()) == []
         assert "anchor fetch failed (non-fatal): pg down" in capsys.readouterr().err
 
     def test_team_decision_fetch_failure_degrades_to_empty_and_logs(self, capsys):
-        assert session_start._fetch_team_decisions(_broken_conn(), set()) == []
+        assert session_start_fetch._fetch_team_decisions(_broken_conn(), set()) == []
         assert (
             "team-decision fetch failed (non-fatal): pg down" in capsys.readouterr().err
         )
 
     def test_hot_memory_fetch_failure_degrades_to_empty_and_logs(self, capsys):
-        assert session_start._fetch_hot_memories(_broken_conn(), set()) == []
+        assert session_start_fetch._fetch_hot_memories(_broken_conn(), set()) == []
         assert "hot-memory fetch failed (non-fatal): pg down" in capsys.readouterr().err
 
     def test_pending_cluster_count_failure_degrades_to_zero_and_logs(self, capsys):
-        assert session_start._count_pending_curations(_broken_conn()) == 0
+        assert session_start_curation._count_pending_curations(_broken_conn()) == 0
         assert (
             "pending-cluster count failed (non-fatal): pg down"
             in capsys.readouterr().err
         )
 
     def test_grooming_staleness_failure_degrades_to_empty_and_logs(self, capsys):
-        assert session_start._fetch_grooming_staleness(_broken_conn()) == []
+        assert session_start_curation._fetch_grooming_staleness(_broken_conn()) == []
         assert (
             "grooming-staleness fetch failed (non-fatal): pg down"
             in capsys.readouterr().err
         )
 
     def test_checkpoint_fetch_failure_degrades_to_none_and_logs(self, capsys):
-        assert session_start._fetch_checkpoint(_broken_conn()) is None
+        assert session_start_db._fetch_checkpoint(_broken_conn()) is None
         assert "checkpoint fetch failed (non-fatal): pg down" in capsys.readouterr().err
 
     def test_memory_count_failure_degrades_to_zero_and_logs(self, capsys):
-        assert session_start._count_memories(_broken_conn()) == 0
+        assert session_start_db._count_memories(_broken_conn()) == 0
         assert "memory count failed (non-fatal): pg down" in capsys.readouterr().err
 
     def test_sqlite_checkpoint_failure_degrades_to_none_and_logs(self, capsys):
         store = MagicMock()
         store.get_hot_memories.return_value = []
         store.get_active_checkpoint.side_effect = RuntimeError("sqlite locked")
-        anchors, hot, checkpoint = session_start._sqlite_banner_rows(store)
+        anchors, hot, checkpoint = session_start_sqlite._sqlite_banner_rows(store)
         assert anchors == [] and hot == []
         assert checkpoint is None
         assert (

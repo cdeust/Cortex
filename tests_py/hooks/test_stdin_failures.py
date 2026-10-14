@@ -29,7 +29,7 @@ from mcp_server.hooks import (
     post_tool_capture,
     preemptive_context,
     session_lifecycle,
-    session_start,
+    session_start_common,
 )
 from mcp_server.hooks.stdin_event import HookStdinDecodeError
 
@@ -90,7 +90,7 @@ _LOGGING_HOOKS: list[tuple[ModuleType, Callable[[pytest.MonkeyPatch], Any]]] = [
     (post_tool_capture, lambda mp: post_tool_capture.main()),
     (preemptive_context, lambda mp: preemptive_context.main()),
     (session_lifecycle, _session_lifecycle_main),
-    (session_start, lambda mp: session_start._read_event()),
+    (session_start_common, lambda mp: session_start_common._read_event()),
 ]
 
 

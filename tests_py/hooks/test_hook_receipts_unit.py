@@ -19,7 +19,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from mcp_server.hooks.auto_recall import _MAX_INJECTION_CHARS, _format_injection
-from mcp_server.hooks.session_start import _build_context
+from mcp_server.hooks.session_start_context import _build_context
 
 
 def _mem(mid: int, *, agent: str = "", content_len: int = 250) -> dict:

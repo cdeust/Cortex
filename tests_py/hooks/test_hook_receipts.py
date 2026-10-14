@@ -159,7 +159,7 @@ def _run_hook(
 
 
 def test_session_start_banner_receipt_roundtrip(_db) -> None:
-    from mcp_server.hooks import session_start as ss
+    from mcp_server.hooks import session_start_context, session_start_fetch
 
     # is_global=True on every seeded row: this test exercises receipt
     # emission, not the project-scoping predicate (issue #604) -- with no
@@ -180,10 +180,10 @@ def test_session_start_banner_receipt_roundtrip(_db) -> None:
         is_global=True,
     )
 
-    anchors = ss._fetch_anchors(_db)
+    anchors = session_start_fetch._fetch_anchors(_db)
     anchor_ids = {a["id"] for a in anchors}
-    hot = ss._fetch_hot_memories(_db, anchor_ids)
-    team = ss._fetch_team_decisions(_db, anchor_ids)
+    hot = session_start_fetch._fetch_hot_memories(_db, anchor_ids)
+    team = session_start_fetch._fetch_team_decisions(_db, anchor_ids)
 
     assert anchor_id in anchor_ids
     hot_ids = [m["id"] for m in hot]
@@ -197,11 +197,15 @@ def test_session_start_banner_receipt_roundtrip(_db) -> None:
         "transcript_path": _TRANSCRIPT,
         "session_id": _DIVERGENT_EVENT_SESSION,
     }
-    receipt_id = ss._emit_banner_receipt(_db, event, anchors, team, hot)
+    receipt_id = session_start_context._emit_banner_receipt(
+        _db, event, anchors, team, hot
+    )
     assert receipt_id is not None
 
     # Correction 2: the banner header carries the in-context marker.
-    context = ss._build_context(anchors, hot, None, team, receipt_id=receipt_id)
+    context = session_start_context._build_context(
+        anchors, hot, None, team, receipt_id=receipt_id
+    )
     assert f"⟦rcpt:{receipt_id}⟧" in context.splitlines()[0]
 
     header, items = _receipt(_db, receipt_id)
@@ -228,20 +232,20 @@ def test_session_start_banner_receipt_roundtrip(_db) -> None:
 
 
 def test_session_start_read_event_tolerates_garbage(monkeypatch) -> None:
-    from mcp_server.hooks import session_start as ss
+    from mcp_server.hooks import session_start_common
     from tests_py.hooks.stdin_support import utf8_stdin
 
     monkeypatch.setattr("sys.stdin", utf8_stdin("not json at all"))
-    assert ss._read_event() == {}
+    assert session_start_common._read_event() == {}
     monkeypatch.setattr("sys.stdin", utf8_stdin(""))
-    assert ss._read_event() == {}
+    assert session_start_common._read_event() == {}
 
 
 def test_session_start_empty_banner_emits_no_receipt(_db) -> None:
-    from mcp_server.hooks import session_start as ss
+    from mcp_server.hooks import session_start_context
 
     before = _db.execute("SELECT COUNT(*) AS c FROM injection_receipts").fetchone()["c"]
-    assert ss._emit_banner_receipt(_db, {}, [], [], []) is None
+    assert session_start_context._emit_banner_receipt(_db, {}, [], [], []) is None
     after = _db.execute("SELECT COUNT(*) AS c FROM injection_receipts").fetchone()["c"]
     assert after == before
 

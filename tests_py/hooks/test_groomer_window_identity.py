@@ -46,9 +46,9 @@ _HOOK_DRIVER = textwrap.dedent(
     session_registry.find_claude_ancestor = lambda *a, **k: claude_pid
 
     if mode == "start":
-        from mcp_server.hooks import session_start
-        session_start._spawn_consolidate_cycle = lambda _options: groomer_pid
-        session_start._maybe_background_consolidate()
+        from mcp_server.hooks import session_start_consolidate as consolidate
+        consolidate._spawn_consolidate_cycle = lambda _options: groomer_pid
+        consolidate._maybe_background_consolidate()
     else:
         from mcp_server.hooks import session_lifecycle
         session_lifecycle._deregister_groomer_coordinator()
@@ -191,8 +191,8 @@ def _unreadable_table():
 
 @pytest.fixture
 def start_hook(monkeypatch, cache):
-    """session_start with the spawn and the legacy path recorded."""
-    from mcp_server.hooks import session_start
+    """session_start_consolidate with the spawn and the legacy path recorded."""
+    from mcp_server.hooks import session_start_consolidate as consolidate
 
     calls = {"spawn": 0, "legacy": 0, "log": []}
 
@@ -203,18 +203,18 @@ def start_hook(monkeypatch, cache):
     def legacy():
         calls["legacy"] += 1
 
-    monkeypatch.setattr(session_start, "_spawn_consolidate_cycle", spawn)
-    monkeypatch.setattr(session_start, "_legacy_background_consolidate", legacy)
-    monkeypatch.setattr(session_start, "_log", calls["log"].append)
-    return session_start, calls
+    monkeypatch.setattr(consolidate, "_spawn_consolidate_cycle", spawn)
+    monkeypatch.setattr(consolidate, "_legacy_background_consolidate", legacy)
+    monkeypatch.setattr(consolidate, "_log", calls["log"].append)
+    return consolidate, calls
 
 
 def test_session_start_without_ancestor_registers_and_spawns_nothing(
     windows_walk, start_hook, cache
 ):
-    session_start, calls = start_hook
-    session_start._maybe_background_consolidate()
-    session_start._maybe_background_consolidate()  # an overlapping second window
+    consolidate, calls = start_hook
+    consolidate._maybe_background_consolidate()
+    consolidate._maybe_background_consolidate()  # an overlapping second window
 
     coord = _coord(cache)
     assert calls["spawn"] == 0
@@ -228,9 +228,9 @@ def test_session_start_without_ancestor_registers_and_spawns_nothing(
 def test_session_start_with_unreadable_process_table_fails_hard(
     windows_walk, start_hook, cache
 ):
-    session_start, calls = start_hook
+    consolidate, calls = start_hook
     windows_walk["table"].snapshot = _unreadable_table
-    session_start._maybe_background_consolidate()
+    consolidate._maybe_background_consolidate()
 
     coord = _coord(cache)
     assert calls["spawn"] == 0
@@ -266,7 +266,7 @@ def test_session_start_with_unreadable_liveness_probe_fails_hard(
     from mcp_server.infrastructure import groomer_coordinator
 
     win_a, _win_b, groomer = live_pids
-    session_start, calls = start_hook
+    consolidate, calls = start_hook
     coord = _coord(cache)
     coord.base_dir.mkdir(parents=True)
     coord.pid_path.write_text(str(groomer), encoding="utf-8")
@@ -276,7 +276,7 @@ def test_session_start_with_unreadable_liveness_probe_fails_hard(
         raise OSError("process table unreadable")
 
     monkeypatch.setattr(groomer_coordinator, "pid_alive", unreadable)
-    session_start._maybe_background_consolidate()
+    consolidate._maybe_background_consolidate()
 
     assert calls["spawn"] == 0
     assert calls["legacy"] == 0, "no legacy bypass of the coordinator"

@@ -32,7 +32,7 @@ from mcp_server.hooks import (
     post_tool_capture,
     preemptive_context,
     session_lifecycle,
-    session_start,
+    session_start_common,
 )
 
 # Non-ASCII the issue reproduced: é, —, →, an emoji (0x8D continuation byte
@@ -82,7 +82,7 @@ def _run_session_lifecycle(monkeypatch: pytest.MonkeyPatch, seen: list[Any]) -> 
 
 
 def _run_session_start(seen: list[Any]) -> None:
-    seen.append(session_start._read_event())
+    seen.append(session_start_common._read_event())
 
 
 _PROCESS_EVENT_HOOKS: list[tuple[ModuleType, Callable[[], None]]] = [
