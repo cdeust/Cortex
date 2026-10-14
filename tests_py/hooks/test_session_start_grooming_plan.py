@@ -18,24 +18,9 @@ import pytest
 
 
 def _grooming_sql() -> str:
-    source = (
-        Path(__file__).resolve().parents[2]
-        / "mcp_server/hooks/session_start_curation.py"
-    )
-    tree = ast.parse(source.read_text())
-    for function in tree.body:
-        if (
-            isinstance(function, ast.FunctionDef)
-            and function.name == "_fetch_grooming_staleness"
-        ):
-            for call in ast.walk(function):
-                if (
-                    isinstance(call, ast.Call)
-                    and isinstance(call.func, ast.Attribute)
-                    and call.func.attr == "execute"
-                ):
-                    return ast.literal_eval(call.args[0])
-    raise AssertionError("grooming query absent")
+    from mcp_server.hooks.session_start_curation import _GROOMING_AGES_SQL
+
+    return _GROOMING_AGES_SQL
 
 
 @pytest.mark.skipif(

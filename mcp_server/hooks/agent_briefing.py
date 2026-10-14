@@ -23,6 +23,8 @@ from mcp_server.hooks.stdin_event import read_event_text
 from mcp_server.handlers.injection_receipts import (
     emit_hook_receipt,
     emit_injection_receipt,
+)
+from mcp_server.shared.injection_markers import (
     receipt_marker,
     session_id_from_transcript,
 )

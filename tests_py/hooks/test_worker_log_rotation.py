@@ -82,13 +82,12 @@ class TestWorkerLogRotation(unittest.TestCase):
         with patch.dict(
             sys.modules, {discovery.__name__: discovery, ttl.__name__: ttl}
         ):
-            with patch.object(
-                self.background, "_lookup_cached_graph_path", return_value="fixture"
-            ):
-                self.assert_spawn_rotates(
-                    "pipeline_reanalyze.log",
-                    lambda: self.background._maybe_background_reanalyze("fixture"),
-                )
+            self.assert_spawn_rotates(
+                "pipeline_reanalyze.log",
+                lambda: self.background._maybe_background_reanalyze(
+                    "fixture", lambda project_root: "fixture"
+                ),
+            )
 
 
 if __name__ == "__main__":

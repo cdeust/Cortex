@@ -57,7 +57,7 @@ try:
     from mcp_server.infrastructure.hook_counter_lock import counter_lock
     from mcp_server.core.profile_builder import apply_session_update
     from mcp_server.hooks.launcher_command import child_command
-    from mcp_server.handlers.injection_receipts import (
+    from mcp_server.shared.injection_markers import (
         session_id_from_transcript,
     )
     from mcp_server.infrastructure.profile_store import (

@@ -5,11 +5,8 @@ source: ADR-0498"""
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 
-from mcp_server.handlers.injection_receipts import (
-    emit_injection_receipt,
-    session_id_from_transcript,
-)
 from mcp_server.hooks import session_start_status as _status
 from mcp_server.hooks.session_start_common import (
     _ANCHOR_LIMIT,
@@ -115,14 +112,9 @@ def _sqlite_banner_rows(
     return anchors, hot, checkpoint
 
 
-def _sqlite_context(event: dict) -> str:
-    """Print the SessionStart banner on the SQLite backend; return the status line."""
-    project_root = resolve_project_root(event, os.environ)
-    if project_root is None:
-        _log(
-            "project root unresolved (no CLAUDE_PROJECT_ROOT, no event cwd), "
-            "restricting to global memories"
-        )
+def _open_sqlite_store() -> tuple[object, int, str] | str:
+    """``(store, memory count, "Cortex ready" status)``, or the "not ready"
+    status naming the cause when the store does not open (ADR-1104)."""
     try:
         from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
 
@@ -134,29 +126,48 @@ def _sqlite_context(event: dict) -> str:
     except Exception as exc:  # noqa: BLE001 — hook boundary: the cause reaches the user as "not ready"
         _log(f"SQLite store unavailable: {exc}")
         return _status.not_ready(f"the SQLite memory store did not open: {exc}")
-    ready = _status.ready(f"SQLite memory at {where}", total)
+    return store, total, _status.ready(f"SQLite memory at {where}", total)
 
-    if total == 0:
-        session_files = _count_session_files()
-        _log(f"Empty SQLite store, {session_files} session files found")
-        msg = _build_cold_start_message(
-            {"status": "ready", "memories": 0, "session_files": session_files}
+
+def _print_sqlite_cold_start(backfill: Callable[[], int]) -> None:
+    """Print the first-run banner for an empty SQLite store."""
+    session_files = _count_session_files()
+    _log(f"Empty SQLite store, {session_files} session files found")
+    msg = _build_cold_start_message(
+        {"status": "ready", "memories": 0, "session_files": session_files},
+        backfill,
+    )
+    if msg:
+        print(msg)
+
+
+def _sqlite_context(
+    event: dict,
+    backfill: Callable[[], int],
+    emit_receipt: Callable[[object, list[dict], dict], int | None],
+) -> str:
+    """Print the SessionStart banner on the SQLite backend; return the status line.
+
+    ``backfill`` fills an empty store (see ``_build_cold_start_message``);
+    ``emit_receipt(store, memories, event)`` records the injected memories
+    and returns the receipt id the banner header carries.
+    """
+    project_root = resolve_project_root(event, os.environ)
+    if project_root is None:
+        _log(
+            "project root unresolved (no CLAUDE_PROJECT_ROOT, no event cwd), "
+            "restricting to global memories"
         )
-        if msg:
-            print(msg)
+    opened = _open_sqlite_store()
+    if isinstance(opened, str):
+        return opened
+    store, total, ready = opened
+    if total == 0:
+        _print_sqlite_cold_start(backfill)
         return ready
 
     anchors, hot, checkpoint = _sqlite_banner_rows(store, project_root)
-    receipt_id = None
-    payload = [{"memory_id": m["id"]} for m in (*anchors, *hot)]
-    if payload:
-        receipt_id = emit_injection_receipt(
-            store,
-            payload,
-            channel="session_start",
-            session_id=session_id_from_transcript(event.get("transcript_path")),
-        )
-
+    receipt_id = emit_receipt(store, [*anchors, *hot], event)
     context = _build_context(anchors, hot, checkpoint, receipt_id=receipt_id)
     if context:
         print(context)

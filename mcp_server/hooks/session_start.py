@@ -9,8 +9,11 @@ This module is the entry point (``main``) and the composition of the
 ``session_start_*`` sibling modules, each owning one responsibility:
 ``_common`` (config, logging, event), ``_db`` / ``_fetch`` / ``_curation``
 (PostgreSQL), ``_sqlite`` (SQLite banner), ``_context`` (rendering),
-``_sources`` (external sources, backfill), ``_consolidate`` and
-``_background`` (detached work, session registry).
+``_sources`` (external sources), ``_consolidate`` and ``_background``
+(detached work, session registry). The ``handlers`` dependencies (receipt
+emission, first-run backfill, the graph memo read) are composed here and
+passed to the siblings, which import only ``infrastructure``/``core``/
+``shared`` (docs/module-inventory.md § Dependency Rules).
 
 Output format
 -------------
@@ -21,8 +24,13 @@ source: ADR-0498"""
 
 from __future__ import annotations
 
+import asyncio
 import os
 
+from mcp_server.handlers.injection_receipts import (
+    emit_hook_receipt,
+    emit_injection_receipt,
+)
 from mcp_server.hooks import session_start_status as _status
 from mcp_server.hooks._telemetry import observe_hook
 from mcp_server.hooks.output_streams import use_utf8_output
@@ -36,7 +44,6 @@ from mcp_server.hooks.session_start_consolidate import _maybe_background_consoli
 from mcp_server.hooks.session_start_context import (
     _build_cold_start_message,
     _build_context,
-    _emit_banner_receipt,
 )
 from mcp_server.hooks.session_start_curation import (
     _count_pending_curations,
@@ -56,7 +63,75 @@ from mcp_server.hooks.session_start_fetch import (
 )
 from mcp_server.hooks.session_start_sources import _print_external_sources
 from mcp_server.hooks.session_start_sqlite import _backend_is_sqlite, _sqlite_context
+from mcp_server.shared.injection_markers import session_id_from_transcript
 from mcp_server.shared.project_scope import resolve_project_root
+
+
+def _auto_backfill() -> int:
+    """Run backfill + cascade automatically on first install.
+
+    Returns number of memories imported.
+    """
+    try:
+        from mcp_server.handlers.backfill_memories import handler as backfill_handler  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
+
+        result = asyncio.run(
+            backfill_handler(
+                {
+                    "max_files": 100,
+                    "min_importance": 0.35,
+                    "force_reprocess": False,
+                }
+            )
+        )
+        imported = result.get("backfilled", 0)
+        cascade_advanced = result.get("cascade_advanced", 0)
+        _log(f"Auto-backfill: {imported} imported, {cascade_advanced} cascaded")
+        return imported
+    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
+        _log(f"Auto-backfill failed (non-fatal): {exc}")
+        return 0
+
+
+def _lookup_cached_graph_path(project_root: str) -> str | None:
+    """The newest materialised graph memoised for this project, or None.
+
+    Reads through the configured store, SQLite or PostgreSQL alike: a
+    psycopg-only read returned None on SQLite, so every SessionStart saw a
+    stale graph and spawned a re-ingest (issue #751). A store failure
+    propagates to ``_maybe_background_reanalyze``, which logs it and spawns
+    nothing: an unknown cache never costs the user a background ingest.
+    """
+    from mcp_server.handlers.ingest_helpers import materialised_graph_paths  # noqa: PLC0415 — hook latency boundary: imported only once a pipeline is discoverable (store import ~0.1 s, measured 2026-10-14)
+    from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: PLC0415 — hook latency boundary: imported only once a pipeline is discoverable (store import ~0.1 s, measured 2026-10-14)
+
+    paths = materialised_graph_paths(get_shared_store(), project_root)
+    return paths[0] if paths else None
+
+
+def _emit_banner_receipt(
+    conn, event: dict, anchors: list[dict], team_decisions: list[dict], hot: list[dict]
+) -> int | None:
+    """Emit the session_start injection receipt for the banner (T2).
+
+    source: ADR-0498"""
+    payload = [{"memory_id": m["id"]} for m in (*anchors, *team_decisions, *hot)]
+    return emit_hook_receipt(
+        conn,
+        payload,
+        channel="session_start",
+        session_id=session_id_from_transcript(event.get("transcript_path")),
+    )
+
+
+def _emit_store_receipt(store, memories: list[dict], event: dict) -> int | None:
+    """Emit the session_start receipt through the store (SQLite banner, T2)."""
+    return emit_injection_receipt(
+        store,
+        [{"memory_id": m["id"]} for m in memories],
+        channel="session_start",
+        session_id=session_id_from_transcript(event.get("transcript_path")),
+    )
 
 
 @observe_hook("session_start")
@@ -81,7 +156,7 @@ def _session_start() -> str:
     _auto_wire_pipeline(project_root)
 
     # source: ADR-0498
-    _maybe_background_reanalyze(project_root)
+    _maybe_background_reanalyze(project_root, _lookup_cached_graph_path)
 
     # source: ADR-0498
     _maybe_background_consolidate()
@@ -89,7 +164,7 @@ def _session_start() -> str:
     # SQLite backend (zero-config plugin default): banner via the store
     # abstraction — no psycopg connection to attempt.
     if _backend_is_sqlite():
-        return _sqlite_context(event)
+        return _sqlite_context(event, _auto_backfill, _emit_store_receipt)
     conn, failure = _pg_connection()
     if failure is not None:
         return failure
@@ -118,7 +193,7 @@ def _pg_connection():
         cause = "the configured PostgreSQL store is unavailable: " + (
             (setup_result or {}).get("message", "setup_db.py gave no result")
         )
-    msg = _build_cold_start_message(setup_result)
+    msg = _build_cold_start_message(setup_result, _auto_backfill)
     if msg:
         print(msg)
     return None, _status.not_ready(cause)
@@ -130,7 +205,8 @@ def _pg_empty_store(conn) -> str:
     _log(f"Empty database, {session_files} session files found")
     conn.close()
     msg = _build_cold_start_message(
-        {"status": "ready", "memories": 0, "session_files": session_files}
+        {"status": "ready", "memories": 0, "session_files": session_files},
+        _auto_backfill,
     )
     if msg:
         print(msg)

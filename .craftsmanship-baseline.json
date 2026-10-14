@@ -4009,11 +4009,6 @@
     },
     {
       "file": "mcp_server/hooks/compaction_checkpoint.py",
-      "kind": "layer-violation",
-      "detail": "mcp_server.handlers.injection_receipts"
-    },
-    {
-      "file": "mcp_server/hooks/compaction_checkpoint.py",
       "kind": "method-size",
       "detail": "process_event"
     },
@@ -4093,89 +4088,19 @@
       "detail": "mcp_server.handlers.consolidate"
     },
     {
-      "file": "mcp_server/hooks/session_lifecycle.py",
-      "kind": "layer-violation",
-      "detail": "mcp_server.handlers.injection_receipts"
-    },
-    {
       "file": "mcp_server/hooks/session_start.py",
-      "kind": "method-size",
-      "detail": "main"
-    },
-    {
-      "file": "mcp_server/hooks/session_start_background.py",
-      "kind": "layer-violation",
-      "detail": "mcp_server.handlers.ingest_helpers"
-    },
-    {
-      "file": "mcp_server/hooks/session_start_background.py",
-      "kind": "layer-violation",
-      "detail": "mcp_server.handlers.injection_receipts"
-    },
-    {
-      "file": "mcp_server/hooks/session_start_background.py",
-      "kind": "method-size",
-      "detail": "_maybe_background_reanalyze"
-    },
-    {
-      "file": "mcp_server/hooks/session_start_context.py",
-      "kind": "layer-violation",
-      "detail": "mcp_server.handlers.injection_receipts"
-    },
-    {
-      "file": "mcp_server/hooks/session_start_context.py",
-      "kind": "method-size",
-      "detail": "_build_cold_start_message"
-    },
-    {
-      "file": "mcp_server/hooks/session_start_context.py",
-      "kind": "method-size",
-      "detail": "_build_context"
-    },
-    {
-      "file": "mcp_server/hooks/session_start_curation.py",
-      "kind": "method-size",
-      "detail": "_count_pending_curations"
-    },
-    {
-      "file": "mcp_server/hooks/session_start_curation.py",
-      "kind": "method-size",
-      "detail": "_fetch_grooming_staleness"
-    },
-    {
-      "file": "mcp_server/hooks/session_start_fetch.py",
-      "kind": "method-size",
-      "detail": "_fetch_anchors"
-    },
-    {
-      "file": "mcp_server/hooks/session_start_fetch.py",
-      "kind": "method-size",
-      "detail": "_fetch_hot_memories"
-    },
-    {
-      "file": "mcp_server/hooks/session_start_fetch.py",
-      "kind": "method-size",
-      "detail": "_fetch_team_decisions"
-    },
-    {
-      "file": "mcp_server/hooks/session_start_sources.py",
       "kind": "layer-violation",
       "detail": "mcp_server.handlers.backfill_memories"
     },
     {
-      "file": "mcp_server/hooks/session_start_sources.py",
-      "kind": "method-size",
-      "detail": "_detect_external_sources"
+      "file": "mcp_server/hooks/session_start.py",
+      "kind": "layer-violation",
+      "detail": "mcp_server.handlers.ingest_helpers"
     },
     {
-      "file": "mcp_server/hooks/session_start_sqlite.py",
+      "file": "mcp_server/hooks/session_start.py",
       "kind": "layer-violation",
       "detail": "mcp_server.handlers.injection_receipts"
-    },
-    {
-      "file": "mcp_server/hooks/session_start_sqlite.py",
-      "kind": "method-size",
-      "detail": "_sqlite_context"
     },
     {
       "file": "mcp_server/infrastructure/ap_bridge.py",

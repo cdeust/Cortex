@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from mcp_server.hooks import auto_recall, session_start_sqlite
+from mcp_server.hooks import auto_recall, session_start, session_start_sqlite
 from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 
 
@@ -134,7 +134,9 @@ def test_sqlite_context_prints_banner_and_receipt(store, tmp_path, monkeypatch, 
     monkeypatch.setattr(session_start_sqlite, "_print_external_sources", lambda: None)
 
     session_start_sqlite._sqlite_context(
-        {"transcript_path": "/tmp/session-abc.jsonl", "cwd": "/repo"}
+        {"transcript_path": "/tmp/session-abc.jsonl", "cwd": "/repo"},
+        session_start._auto_backfill,
+        session_start._emit_store_receipt,
     )
 
     out = capsys.readouterr().out
@@ -154,7 +156,9 @@ def test_sqlite_context_empty_store_prints_cold_start(store, monkeypatch, capsys
     )
     monkeypatch.setattr(session_start_sqlite, "_count_session_files", lambda: 0)
 
-    session_start_sqlite._sqlite_context({})
+    session_start_sqlite._sqlite_context(
+        {}, session_start._auto_backfill, session_start._emit_store_receipt
+    )
 
     out = capsys.readouterr().out
     # Cold-start message, and NEVER the PostgreSQL install instructions.

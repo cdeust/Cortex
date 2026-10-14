@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import pytest
 
-from mcp_server.hooks import auto_recall, session_start_sqlite
+from mcp_server.hooks import auto_recall, session_start, session_start_sqlite
 from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 
 
@@ -197,7 +197,9 @@ def test_sqlite_context_survives_a_foreign_heavy_pool(store, monkeypatch, capsys
     _seed_starvation_store(store)
 
     session_start_sqlite._sqlite_context(
-        {"transcript_path": "/tmp/session-starve.jsonl", "cwd": "/repo/subdir"}
+        {"transcript_path": "/tmp/session-starve.jsonl", "cwd": "/repo/subdir"},
+        session_start._auto_backfill,
+        session_start._emit_store_receipt,
     )
 
     out = capsys.readouterr().out

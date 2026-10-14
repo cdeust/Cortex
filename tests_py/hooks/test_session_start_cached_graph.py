@@ -18,7 +18,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from mcp_server.handlers.ingest_helpers import memoise_graph_path
-from mcp_server.hooks import session_start_background as hook
+from mcp_server.hooks import session_start, session_start_background as background
 from mcp_server.infrastructure import memory_store, pipeline_discovery
 from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 
@@ -42,11 +42,18 @@ def project(tmp_path, monkeypatch):
     monkeypatch.delenv("CORTEX_CLAUDE_DIR", raising=False)
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     spawned = MagicMock(return_value=MagicMock())
-    monkeypatch.setattr(hook.subprocess, "Popen", spawned)
+    monkeypatch.setattr(background.subprocess, "Popen", spawned)
     root = tmp_path / "app"
     root.mkdir()
     yield str(root), store, spawned
     store.close()
+
+
+def _reanalyze(root: str) -> None:
+    """The reanalysis SessionStart runs: the real store-backed memo lookup."""
+    background._maybe_background_reanalyze(
+        root, session_start._lookup_cached_graph_path
+    )
 
 
 def _memoised_graph(tmp_path: Path, store, root: str, age_seconds: float) -> Path:
@@ -62,7 +69,7 @@ def _memoised_graph(tmp_path: Path, store, root: str, age_seconds: float) -> Pat
 def test_lookup_reads_the_memo_from_the_sqlite_store(project, tmp_path):
     root, store, _spawned = project
     graph = _memoised_graph(tmp_path, store, root, age_seconds=0)
-    assert hook._lookup_cached_graph_path(root) == str(graph)
+    assert session_start._lookup_cached_graph_path(root) == str(graph)
 
 
 def test_a_memo_flagged_stale_is_not_served(project, tmp_path):
@@ -74,26 +81,26 @@ def test_a_memo_flagged_stale_is_not_served(project, tmp_path):
     assert rows, "the memo was written"
     for row in rows:
         store.mark_memory_stale(row["id"])
-    assert hook._lookup_cached_graph_path(root) is None
+    assert session_start._lookup_cached_graph_path(root) is None
 
 
 def test_a_fresh_graph_spawns_no_ingest(project, tmp_path):
     root, store, spawned = project
     _memoised_graph(tmp_path, store, root, age_seconds=0)
-    hook._maybe_background_reanalyze(root)
+    _reanalyze(root)
     spawned.assert_not_called()
 
 
 def test_a_graph_older_than_the_ttl_spawns_one_ingest(project, tmp_path):
     root, store, spawned = project
     _memoised_graph(tmp_path, store, root, age_seconds=_TWO_DAYS)
-    hook._maybe_background_reanalyze(root)
+    _reanalyze(root)
     spawned.assert_called_once()
 
 
 def test_no_memo_spawns_the_first_ingest(project):
     root, _store, spawned = project
-    hook._maybe_background_reanalyze(root)
+    _reanalyze(root)
     spawned.assert_called_once()
 
 
@@ -104,7 +111,7 @@ def test_an_unreadable_store_spawns_nothing(project, monkeypatch, capsys):
         raise OSError("store unreachable")
 
     monkeypatch.setattr(memory_store, "get_shared_store", _unreachable)
-    hook._maybe_background_reanalyze(root)
+    _reanalyze(root)
     spawned.assert_not_called()
     err = capsys.readouterr().err
     assert "background pipeline reanalysis skipped" in err
@@ -115,14 +122,14 @@ def test_a_failed_or_running_ingest_is_not_restarted_within_the_ttl(project):
     """No memo yet (the first ingest failed, or is still running): the next
     SessionStart inside the TTL window starts no second ingest."""
     root, _store, spawned = project
-    hook._maybe_background_reanalyze(root)
-    hook._maybe_background_reanalyze(root)
+    _reanalyze(root)
+    _reanalyze(root)
     spawned.assert_called_once()
 
 
 def test_the_ttl_window_reopens_the_slot(project, monkeypatch):
     root, _store, spawned = project
-    hook._maybe_background_reanalyze(root)
+    _reanalyze(root)
     monkeypatch.setenv("CORTEX_PIPELINE_GRAPH_TTL_HOURS", "0")
-    hook._maybe_background_reanalyze(root)
+    _reanalyze(root)
     assert spawned.call_count == 2

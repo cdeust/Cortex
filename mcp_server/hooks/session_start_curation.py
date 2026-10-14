@@ -6,6 +6,73 @@ from __future__ import annotations
 
 from mcp_server.hooks.session_start_common import _log
 
+# `effective_heat` is a PL/pgSQL function, not a column — mirror the form
+# used in _fetch_hot_memories. Without the (m, NOW()) call form, Postgres
+# rejects with `column "effective_heat" does not exist` and the schema
+# integrity test catches it.
+# source: ADR-0498
+_CURATION_SAMPLE_SQL = (
+    "SELECT m.id, m.content, m.tags, "
+    "effective_heat(m, NOW()) AS effective_heat, "
+    "m.created_at, m.domain "
+    "FROM memories m JOIN current_memories cm ON cm.id = m.id "
+    "WHERE NOT m.is_stale "
+    "ORDER BY m.last_accessed DESC NULLS LAST, m.created_at DESC "
+    "LIMIT 500"
+)
+
+# Materialize the indexed lesson subset before MAX: otherwise the
+# planner scans the created_at index backwards for absent prefixes.
+# source: docs/verification/codex-session-start-query-20261002.md
+_GROOMING_AGES_SQL = (
+    "WITH lessons AS MATERIALIZED ("
+    "  SELECT created_at, tags FROM memories "
+    "  WHERE tags @> '[\"lesson\"]'::jsonb) "
+    "SELECT "
+    "  (SELECT MAX(tended) FROM wiki.pages) AS wiki_last, "
+    "  (SELECT MAX(created_at) FROM lessons m "
+    "     WHERE EXISTS (SELECT 1 FROM jsonb_array_elements_text(m.tags) tg "
+    "                   WHERE tg LIKE 'distill-of:%')) AS distill_last, "
+    "  (SELECT MAX(created_at) FROM lessons m "
+    "     WHERE EXISTS (SELECT 1 FROM jsonb_array_elements_text(m.tags) tg "
+    "                   WHERE tg LIKE 'promoted:%')) AS promo_last"
+)
+
+# source: ADR-0498
+_GROOMING_COLUMNS = (
+    ("wiki", "wiki_last"),
+    ("distillation", "distill_last"),
+    ("promotion", "promo_last"),
+)
+
+
+def _curator_memory(r) -> dict:
+    """One sampled row in the shape ``count_pending_clusters`` reads."""
+    d = dict(r) if not isinstance(r, dict) else r
+    return {
+        "id": d.get("id"),
+        "content": d.get("content") or "",
+        "tags": list(d.get("tags") or []),
+        "effective_heat": float(d.get("effective_heat") or 0.0),
+        "created_at": str(d.get("created_at") or ""),
+        "domain": d.get("domain") or "",
+    }
+
+
+def _wiki_page_port():
+    """The wiki page port the curator checks pages against, or None.
+
+    source: ADR-0498"""
+    try:
+        from mcp_server.infrastructure.config import WIKI_ROOT  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
+        from mcp_server.infrastructure.wiki_page_fs import (  # noqa: PLC0415 — same optional-feature probe boundary
+            build_wiki_page_port,
+        )
+
+        return build_wiki_page_port(str(WIKI_ROOT))
+    except ImportError:
+        return None
+
 
 def _count_pending_curations(conn) -> int:
     """Count topic clusters of PG memories that warrant a wiki page
@@ -21,46 +88,11 @@ def _count_pending_curations(conn) -> int:
     try:
         from mcp_server.core.auto_curator import count_pending_clusters  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
 
-        # `effective_heat` is a PL/pgSQL function, not a column —
-        # mirror the form used in _fetch_hot_memories above. Without
-        # the (m, NOW()) call form, Postgres rejects with
-        # `column "effective_heat" does not exist` and the schema
-        # integrity test catches it.
-        rows = conn.execute(
-            "SELECT m.id, m.content, m.tags, "
-            "effective_heat(m, NOW()) AS effective_heat, "
-            "m.created_at, m.domain "
-            "FROM memories m JOIN current_memories cm ON cm.id = m.id "
-            "WHERE NOT m.is_stale "
-            "ORDER BY m.last_accessed DESC NULLS LAST, m.created_at DESC "
-            "LIMIT 500"
-        ).fetchall()
-        memories: list[dict] = []
-        for r in rows:
-            d = dict(r) if not isinstance(r, dict) else r
-            memories.append(
-                {
-                    "id": d.get("id"),
-                    "content": d.get("content") or "",
-                    "tags": list(d.get("tags") or []),
-                    "effective_heat": float(d.get("effective_heat") or 0.0),
-                    "created_at": str(d.get("created_at") or ""),
-                    "domain": d.get("domain") or "",
-                }
-            )
+        rows = conn.execute(_CURATION_SAMPLE_SQL).fetchall()
+        memories = [_curator_memory(r) for r in rows]
         if not memories:
             return 0
-        # source: ADR-0498
-        try:
-            from mcp_server.infrastructure.config import WIKI_ROOT  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
-            from mcp_server.infrastructure.wiki_page_fs import (  # noqa: PLC0415 — same optional-feature probe boundary
-                build_wiki_page_port,
-            )
-
-            wiki_page_port = build_wiki_page_port(str(WIKI_ROOT))
-        except ImportError:
-            wiki_page_port = None
-        return count_pending_clusters(memories, wiki_root=wiki_page_port)
+        return count_pending_clusters(memories, wiki_root=_wiki_page_port())
     except Exception as exc:  # noqa: BLE001 — hook boundary; failure is logged to the hook log, the banner degrades
         _log(f"pending-cluster count failed (non-fatal): {exc}")
         return 0
@@ -88,36 +120,15 @@ def _fetch_grooming_staleness(conn) -> list[str]:
     try:
         from mcp_server.core.grooming_health import is_stale  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
 
-        row = conn.execute(
-            # source: docs/verification/codex-session-start-query-20261002.md
-            # Materialize the indexed lesson subset before MAX: otherwise the
-            # planner scans the created_at index backwards for absent prefixes.
-            "WITH lessons AS MATERIALIZED ("
-            "  SELECT created_at, tags FROM memories "
-            "  WHERE tags @> '[\"lesson\"]'::jsonb) "
-            "SELECT "
-            "  (SELECT MAX(tended) FROM wiki.pages) AS wiki_last, "
-            "  (SELECT MAX(created_at) FROM lessons m "
-            "     WHERE EXISTS (SELECT 1 FROM jsonb_array_elements_text(m.tags) tg "
-            "                   WHERE tg LIKE 'distill-of:%')) AS distill_last, "
-            "  (SELECT MAX(created_at) FROM lessons m "
-            "     WHERE EXISTS (SELECT 1 FROM jsonb_array_elements_text(m.tags) tg "
-            "                   WHERE tg LIKE 'promoted:%')) AS promo_last"
-        ).fetchone()
+        row = conn.execute(_GROOMING_AGES_SQL).fetchone()
         if not row:
             return []
         d = dict(row) if not isinstance(row, dict) else row
-        stale = []
-        for kind, col in (
-            ("wiki", "wiki_last"),
-            ("distillation", "distill_last"),
-            ("promotion", "promo_last"),
-        ):
-            ts = d.get(col)
-            last_iso = ts.isoformat() if ts else None
-            if is_stale(last_iso):
-                stale.append(kind)
-        return stale
+        return [
+            kind
+            for kind, col in _GROOMING_COLUMNS
+            if is_stale(d[col].isoformat() if d.get(col) else None)
+        ]
     except Exception as exc:  # noqa: BLE001 — hook boundary; failure is logged to the hook log, the banner degrades
         _log(f"grooming-staleness fetch failed (non-fatal): {exc}")
         return []

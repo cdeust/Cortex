@@ -5,11 +5,12 @@ source: ADR-0498"""
 from __future__ import annotations
 
 import subprocess
+from collections.abc import Callable
 
-from mcp_server.handlers.injection_receipts import session_id_from_transcript
 from mcp_server.hooks.launcher_command import launcher_child_command
 from mcp_server.hooks.session_start_common import _log
 from mcp_server.shared import detached_spawn
+from mcp_server.shared.injection_markers import session_id_from_transcript
 from mcp_server.shared.log_rotation import methodology_log_path, open_rotating_log
 
 
@@ -37,7 +38,9 @@ def _auto_wire_pipeline(project_root: str | None) -> None:
         _log(f"pipeline auto-wire skipped: {exc}")
 
 
-def _maybe_background_reanalyze(project_root: str | None) -> None:
+def _maybe_background_reanalyze(
+    project_root: str | None, lookup_cached_graph: Callable[[str], str | None]
+) -> None:
     """Spawn background ``ingest_codebase`` when the graph is stale.
 
     Runs detached (``subprocess.Popen`` with its own process group) so
@@ -66,50 +69,40 @@ def _maybe_background_reanalyze(project_root: str | None) -> None:
         if discover_pipeline_command(project_root) is None:
             return  # Pipeline not installed — nothing to do.
 
-        cached_path = _lookup_cached_graph_path(project_root)
+        cached_path = lookup_cached_graph(project_root)
         if not graph_is_stale(cached_path):
             return  # Fresh enough; skip.
-
-        # Spawn background ingest. scripts/launcher.py handles PYTHONPATH
-        # + deps, then runs the ingest_codebase handler as a one-shot CLI.
-        cmd = launcher_child_command(
-            "mcp_server.hooks.ingest_codebase_background", project_root
-        )
-        if cmd is None:
-            return
-        if not claim_reanalysis_slot(project_root):
-            _log("background reanalysis skipped: one already started within the TTL")
-            return
-
-        # Rotate before spawn; the inherited fd stays open for the worker.
-        log_path = methodology_log_path("pipeline_reanalyze.log")
-        with open_rotating_log(log_path) as log:
-            subprocess.Popen(  # noqa: S603 — cmd built from trusted sources
-                cmd,
-                stdin=subprocess.DEVNULL,
-                stdout=log,
-                stderr=subprocess.STDOUT,
-                **detached_spawn.options(),
-            )
-        _log(f"background pipeline reanalysis spawned → {log_path}")
+        _spawn_reanalysis(project_root, claim_reanalysis_slot)
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"background pipeline reanalysis skipped: {exc}")
 
 
-def _lookup_cached_graph_path(project_root: str) -> str | None:
-    """The newest materialised graph memoised for this project, or None.
+def _spawn_reanalysis(
+    project_root: str, claim_reanalysis_slot: Callable[[str], bool]
+) -> None:
+    """Start the detached ``ingest_codebase`` worker, once per project per TTL."""
+    # Spawn background ingest. scripts/launcher.py handles PYTHONPATH
+    # + deps, then runs the ingest_codebase handler as a one-shot CLI.
+    cmd = launcher_child_command(
+        "mcp_server.hooks.ingest_codebase_background", project_root
+    )
+    if cmd is None:
+        return
+    if not claim_reanalysis_slot(project_root):
+        _log("background reanalysis skipped: one already started within the TTL")
+        return
 
-    Reads through the configured store, SQLite or PostgreSQL alike: a
-    psycopg-only read returned None on SQLite, so every SessionStart saw a
-    stale graph and spawned a re-ingest (issue #751). A store failure
-    propagates to ``_maybe_background_reanalyze``, which logs it and spawns
-    nothing: an unknown cache never costs the user a background ingest.
-    """
-    from mcp_server.handlers.ingest_helpers import materialised_graph_paths  # noqa: PLC0415 — hook latency boundary: imported only once a pipeline is discoverable (store import ~0.1 s, measured 2026-10-14)
-    from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: PLC0415 — hook latency boundary: imported only once a pipeline is discoverable (store import ~0.1 s, measured 2026-10-14)
-
-    paths = materialised_graph_paths(get_shared_store(), project_root)
-    return paths[0] if paths else None
+    # Rotate before spawn; the inherited fd stays open for the worker.
+    log_path = methodology_log_path("pipeline_reanalyze.log")
+    with open_rotating_log(log_path) as log:
+        subprocess.Popen(  # noqa: S603 — cmd built from trusted sources
+            cmd,
+            stdin=subprocess.DEVNULL,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            **detached_spawn.options(),
+        )
+    _log(f"background pipeline reanalysis spawned → {log_path}")
 
 
 def _refresh_session_registry(event: dict) -> None:

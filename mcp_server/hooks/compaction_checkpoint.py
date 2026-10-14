@@ -38,6 +38,7 @@ import asyncio
 
 from mcp_server.hooks.output_streams import use_utf8_output
 from mcp_server.hooks.stdin_event import read_event_text
+from mcp_server.shared.injection_markers import session_id_from_transcript
 
 _LOG_PREFIX = "[methodology-compaction-hook]"
 
@@ -54,9 +55,6 @@ def process_event(event: dict[str, Any] | None) -> None:
     """
     try:
         from mcp_server.handlers.checkpoint import handler as checkpoint_handler  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
-        from mcp_server.handlers.injection_receipts import (  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
-            session_id_from_transcript,
-        )
         from mcp_server.infrastructure.memory_config import get_memory_settings  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
         from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
 

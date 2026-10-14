@@ -568,8 +568,8 @@ def test_emit_banner_receipt_payload_mirrors_banner_order():
     anchors = [{"id": 1}]
     team = [{"id": 2}]
     hot = [{"id": 3}]
-    with patch.object(ss_context, "emit_hook_receipt", return_value=5) as emit:
-        rid = ss_context._emit_banner_receipt(conn, {}, anchors, team, hot)
+    with patch.object(hook, "emit_hook_receipt", return_value=5) as emit:
+        rid = hook._emit_banner_receipt(conn, {}, anchors, team, hot)
     assert rid == 5
     assert emit.call_args.args[1] == [
         {"memory_id": 1},
@@ -582,10 +582,15 @@ def test_emit_banner_receipt_payload_mirrors_banner_order():
 # ── Cold-start message ────────────────────────────────────────────────
 
 
+def _unexpected_backfill() -> int:
+    raise AssertionError("the backfill must not run for this setup result")
+
+
 def test_cold_start_needs_install_names_the_configured_server_not_a_recipe():
     """ADR-1104: the real cause, never an install recipe."""
     msg = ss_context._build_cold_start_message(
-        {"status": "needs_install", "message": "connection refused"}
+        {"status": "needs_install", "message": "connection refused"},
+        _unexpected_backfill,
     )
     assert "configured for Cortex is not reachable: connection refused" in msg
     assert "brew" not in msg
@@ -593,40 +598,45 @@ def test_cold_start_needs_install_names_the_configured_server_not_a_recipe():
 
 def test_cold_start_auth_failed_relays_the_message():
     msg = ss_context._build_cold_start_message(
-        {"status": "auth_failed", "message": "bad pw"}
+        {"status": "auth_failed", "message": "bad pw"}, _unexpected_backfill
     )
     assert msg == "## Cortex — Database Authentication\n\nbad pw"
 
 
 def test_cold_start_other_error_points_at_the_readme():
-    msg = ss_context._build_cold_start_message({"status": "broken", "message": "boom"})
+    msg = ss_context._build_cold_start_message(
+        {"status": "broken", "message": "boom"}, _unexpected_backfill
+    )
     assert "Setup issue: boom" in msg and "README" in msg
 
 
 def test_cold_start_empty_db_with_history_reports_the_backfill_count():
-    with patch.object(ss_context, "_auto_backfill", return_value=7):
-        msg = ss_context._build_cold_start_message(
-            {"status": "ready", "memories": 0, "session_files": 3}
-        )
+    msg = ss_context._build_cold_start_message(
+        {"status": "ready", "memories": 0, "session_files": 3}, lambda: 7
+    )
     assert "auto-imported **7 memories**" in msg
 
 
 def test_cold_start_empty_db_with_history_and_no_import_says_ready():
-    with patch.object(ss_context, "_auto_backfill", return_value=0):
-        msg = ss_context._build_cold_start_message(
-            {"status": "ready", "memories": 0, "session_files": 3}
-        )
+    msg = ss_context._build_cold_start_message(
+        {"status": "ready", "memories": 0, "session_files": 3}, lambda: 0
+    )
     assert "no memorable items" in msg
 
 
 def test_cold_start_empty_db_without_history_says_ready():
-    msg = ss_context._build_cold_start_message({"status": "ready", "memories": 0})
+    msg = ss_context._build_cold_start_message(
+        {"status": "ready", "memories": 0}, _unexpected_backfill
+    )
     assert "No previous sessions found" in msg
 
 
 def test_cold_start_populated_db_yields_no_message():
     assert (
-        ss_context._build_cold_start_message({"status": "ready", "memories": 10}) == ""
+        ss_context._build_cold_start_message(
+            {"status": "ready", "memories": 10}, _unexpected_backfill
+        )
+        == ""
     )
 
 
@@ -705,17 +715,17 @@ def test_sqlite_context_prints_banner_and_emits_receipt(capsys, monkeypatch):
     store.get_active_checkpoint.return_value = None
     monkeypatch.setattr(memory_store, "get_shared_store", lambda: store)
 
-    with (
-        patch.object(ss_sqlite, "emit_injection_receipt", return_value=3) as emit,
-        patch.object(ss_sqlite, "_print_external_sources"),
-    ):
-        ss_sqlite._sqlite_context({})
+    emit = MagicMock(return_value=3)
+    with patch.object(ss_sqlite, "_print_external_sources"):
+        ss_sqlite._sqlite_context({}, _unexpected_backfill, emit)
 
     out, err = capsys.readouterr()
     assert "## Cortex Memory Context" in out
     assert ss_context.receipt_marker(3) in out
     assert "backend: sqlite" in err
     emit.assert_called_once()
+    assert emit.call_args.args[0] is store
+    assert [m["id"] for m in emit.call_args.args[1]] == [1, 2]
 
 
 def test_sqlite_context_empty_store_prints_cold_start(capsys, monkeypatch, tmp_path):
@@ -726,7 +736,7 @@ def test_sqlite_context_empty_store_prints_cold_start(capsys, monkeypatch, tmp_p
     monkeypatch.setattr(memory_store, "get_shared_store", lambda: store)
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
-    ss_sqlite._sqlite_context({})
+    ss_sqlite._sqlite_context({}, _unexpected_backfill, MagicMock())
 
     out = capsys.readouterr().out
     assert "## Cortex — First Run" in out
@@ -740,7 +750,7 @@ def test_sqlite_context_unavailable_store_logs_and_returns(capsys, monkeypatch):
 
     monkeypatch.setattr(memory_store, "get_shared_store", _boom)
 
-    ss_sqlite._sqlite_context({})
+    ss_sqlite._sqlite_context({}, _unexpected_backfill, MagicMock())
 
     out, err = capsys.readouterr()
     assert out == "", "no banner when the store is unavailable"
@@ -850,7 +860,7 @@ def test_auto_backfill_reports_the_imported_count(capsys, monkeypatch):
 
     monkeypatch.setattr(backfill_memories, "handler", _fake_handler)
 
-    assert ss_sources._auto_backfill() == 5
+    assert hook._auto_backfill() == 5
     assert "Auto-backfill: 5 imported, 2 cascaded" in capsys.readouterr().err
 
 
@@ -862,7 +872,7 @@ def test_auto_backfill_failure_is_logged_and_returns_zero(capsys, monkeypatch):
 
     monkeypatch.setattr(backfill_memories, "handler", _boom)
 
-    assert ss_sources._auto_backfill() == 0
+    assert hook._auto_backfill() == 0
     assert "Auto-backfill failed (non-fatal)" in capsys.readouterr().err
 
 
@@ -1006,7 +1016,7 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
         stale_mock = MagicMock(return_value=stale)
         monkeypatch.setattr(pipeline_graph_ttl, "graph_is_stale", stale_mock)
         lookup_mock = MagicMock(return_value=cached)
-        monkeypatch.setattr(ss_background, "_lookup_cached_graph_path", lookup_mock)
+        self.lookup_mock = lookup_mock
         return stale_mock, lookup_mock
 
     def _write_launcher(self, tmp_path, monkeypatch):
@@ -1036,7 +1046,7 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
         monkeypatch.setattr(ss_background.subprocess, "Popen", _fake_popen)
         as_windows_in_breakaway_job(monkeypatch)
 
-        ss_background._maybe_background_reanalyze("/the/project")
+        ss_background._maybe_background_reanalyze("/the/project", self.lookup_mock)
 
         launcher = plugin_root / "scripts" / "launcher.py"
         assert captured["cmd"] == [
@@ -1065,7 +1075,7 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
         # broad except swallows into a "skipped" log instead of "spawned".
         # A zero TTL reopens the one-attempt-per-window slot (#751).
         monkeypatch.setenv("CORTEX_PIPELINE_GRAPH_TTL_HOURS", "0")
-        ss_background._maybe_background_reanalyze("/the/project")
+        ss_background._maybe_background_reanalyze("/the/project", self.lookup_mock)
         err = capsys.readouterr().err
         assert "background pipeline reanalysis spawned" in err
         assert "skipped" not in err
@@ -1086,7 +1096,7 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
 
         monkeypatch.setattr(ss_background.subprocess, "Popen", _fake_popen)
 
-        ss_background._maybe_background_reanalyze("/the/project")
+        ss_background._maybe_background_reanalyze("/the/project", self.lookup_mock)
 
         expected_launcher = (
             Path(ss_background.__file__).resolve().parents[2]
@@ -1110,7 +1120,7 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
 
         monkeypatch.setattr(ss_background.subprocess, "Popen", _fake_popen)
 
-        ss_background._maybe_background_reanalyze("/the/event-cwd")
+        ss_background._maybe_background_reanalyze("/the/event-cwd", self.lookup_mock)
 
         assert captured["cmd"][-1] == "/the/event-cwd"
         self.discover_mock.assert_called_once_with("/the/event-cwd")
@@ -1119,7 +1129,7 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
         self._mock_pipeline(monkeypatch)
 
         with patch.object(ss_background.subprocess, "Popen") as popen:
-            ss_background._maybe_background_reanalyze(None)
+            ss_background._maybe_background_reanalyze(None, self.lookup_mock)
 
         popen.assert_not_called()
         self.discover_mock.assert_not_called()
@@ -1129,7 +1139,7 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
         self._mock_pipeline(monkeypatch, stale=False)
 
         with patch.object(ss_background.subprocess, "Popen") as popen:
-            ss_background._maybe_background_reanalyze("/the/project")
+            ss_background._maybe_background_reanalyze("/the/project", self.lookup_mock)
 
         popen.assert_not_called()
 
@@ -1138,7 +1148,7 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
         self._mock_pipeline(monkeypatch)
 
         with patch.object(ss_background.subprocess, "Popen") as popen:
-            ss_background._maybe_background_reanalyze("/the/project")
+            ss_background._maybe_background_reanalyze("/the/project", self.lookup_mock)
 
         popen.assert_not_called()
 
@@ -1151,7 +1161,9 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
 
         monkeypatch.setattr(ss_background.subprocess, "Popen", _boom)
 
-        ss_background._maybe_background_reanalyze("/the/project")  # must not raise
+        ss_background._maybe_background_reanalyze(
+            "/the/project", self.lookup_mock
+        )  # must not raise
 
         err = capsys.readouterr().err
         assert "background pipeline reanalysis skipped" in err
@@ -1164,7 +1176,7 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
             ss_background.subprocess, "Popen", lambda *a, **k: MagicMock()
         )
 
-        ss_background._maybe_background_reanalyze("/the/project")
+        ss_background._maybe_background_reanalyze("/the/project", self.lookup_mock)
 
         err = capsys.readouterr().err
         assert "background pipeline reanalysis spawned" in err

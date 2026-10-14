@@ -165,7 +165,7 @@ def write_session(session_id: str | None, *, claude_pid: int | None = None) -> b
 
     precondition: ``session_id`` is the transcript-stem identity the caller
     already computed (``session_id_from_transcript`` in
-    ``handlers/injection_receipts.py`` — this module does not derive it, T2-D1);
+    ``shared/injection_markers.py`` — this module does not derive it, T2-D1);
     ``claude_pid``, if given, is a pre-resolved ancestor pid, else resolved here
     via ``find_claude_ancestor()``. postcondition: on success,
     ``registry_path(claude_pid)`` exists, holds valid JSON ``{v, session_id,

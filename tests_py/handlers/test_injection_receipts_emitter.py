@@ -15,6 +15,8 @@ from mcp_server.handlers.injection_receipts import (
     INJECTION_CHANNELS,
     emit_hook_receipt,
     emit_injection_receipt,
+)
+from mcp_server.shared.injection_markers import (
     receipt_marker,
     session_id_from_transcript,
 )

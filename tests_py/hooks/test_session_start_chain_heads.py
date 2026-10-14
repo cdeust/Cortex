@@ -13,7 +13,7 @@ import pytest
 from mcp_server.core import auto_curator
 from mcp_server.handlers.ingest_helpers import code_graph_tag
 from mcp_server.handlers.forget import _get_store
-from mcp_server.hooks import session_start_background as background
+from mcp_server.hooks import session_start
 from mcp_server.hooks import session_start_curation as curation
 
 _DOMAIN = "session-start-chain-heads"
@@ -69,4 +69,4 @@ def test_cached_graph_path_is_not_served_from_a_retracted_row(pg_store):
     # matches it: a head-blind lookup would still serve "/stale/graph.json"
     pg_store.supersede_atomic(_record("graph_path moved, see the new run"), old_id)
 
-    assert background._lookup_cached_graph_path(_PROJECT) is None
+    assert session_start._lookup_cached_graph_path(_PROJECT) is None

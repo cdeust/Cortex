@@ -159,7 +159,11 @@ def _run_hook(
 
 
 def test_session_start_banner_receipt_roundtrip(_db) -> None:
-    from mcp_server.hooks import session_start_context, session_start_fetch
+    from mcp_server.hooks import (
+        session_start,
+        session_start_context,
+        session_start_fetch,
+    )
 
     # is_global=True on every seeded row: this test exercises receipt
     # emission, not the project-scoping predicate (issue #604) -- with no
@@ -197,9 +201,7 @@ def test_session_start_banner_receipt_roundtrip(_db) -> None:
         "transcript_path": _TRANSCRIPT,
         "session_id": _DIVERGENT_EVENT_SESSION,
     }
-    receipt_id = session_start_context._emit_banner_receipt(
-        _db, event, anchors, team, hot
-    )
+    receipt_id = session_start._emit_banner_receipt(_db, event, anchors, team, hot)
     assert receipt_id is not None
 
     # Correction 2: the banner header carries the in-context marker.
@@ -242,10 +244,10 @@ def test_session_start_read_event_tolerates_garbage(monkeypatch) -> None:
 
 
 def test_session_start_empty_banner_emits_no_receipt(_db) -> None:
-    from mcp_server.hooks import session_start_context
+    from mcp_server.hooks import session_start
 
     before = _db.execute("SELECT COUNT(*) AS c FROM injection_receipts").fetchone()["c"]
-    assert session_start_context._emit_banner_receipt(_db, {}, [], [], []) is None
+    assert session_start._emit_banner_receipt(_db, {}, [], [], []) is None
     after = _db.execute("SELECT COUNT(*) AS c FROM injection_receipts").fetchone()["c"]
     assert after == before
 
