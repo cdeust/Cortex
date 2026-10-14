@@ -25,7 +25,7 @@ from tests_py._pg_hnsw import empty_memories_index
 
 _DIM = 384  # source: memory_config EMBEDDING_DIM (all-MiniLM-L6-v2)
 _STEP = math.radians(23)  # source: cos(23 deg) = 0.921 >= 0.90 > 0.75 > cos(46 deg)
-_THRESHOLD = 0.90  # source: ADR-0370, the threshold measured on the owner's store
+_THRESHOLD = 0.90  # source: ADR-0370 (threshold measured on the owner store)
 
 
 def _store():
