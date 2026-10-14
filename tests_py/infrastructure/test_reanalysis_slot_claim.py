@@ -74,9 +74,15 @@ def test_two_sessions_racing_for_one_window_start_one_ingest(
     the create. Only an atomic create lets exactly one through."""
     barrier = threading.Barrier(2, timeout=5)
     real_mkdir = Path.mkdir
+    waited = threading.local()
 
     def mkdir_in_lockstep(self, *args, **kwargs):
-        if self == methodology:
+        # Once per thread: mkdir(parents=True) calls itself again for this
+        # path after creating the parent, and only the racer that found the
+        # parent missing does, so a second wait would leave it alone at the
+        # barrier (BrokenBarrierError, seen on CI Python 3.11).
+        if self == methodology and not getattr(waited, "done", False):
+            waited.done = True
             barrier.wait()
         return real_mkdir(self, *args, **kwargs)
 
