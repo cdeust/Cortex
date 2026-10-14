@@ -96,11 +96,13 @@ def _auto_backfill() -> int:
 def _lookup_cached_graph_path(project_root: str) -> str | None:
     """The newest materialised graph memoised for this project, or None.
 
-    Reads through the configured store, SQLite or PostgreSQL alike: a
-    psycopg-only read returned None on SQLite, so every SessionStart saw a
-    stale graph and spawned a re-ingest (issue #751). A store failure
-    propagates to ``_maybe_background_reanalyze``, which logs it and spawns
-    nothing: an unknown cache never costs the user a background ingest.
+    Reads through the configured store, SQLite or PostgreSQL alike (#749
+    had moved only the SQLite read to the store; PostgreSQL opened its own
+    psycopg connection and turned a failure into None, a stale graph and a
+    re-ingest; issue #751). Only a memo whose graph file still exists counts.
+    A store failure propagates to ``_maybe_background_reanalyze``, which logs
+    it and spawns nothing: an unknown cache never costs the user a
+    background ingest.
     """
     from mcp_server.handlers.ingest_helpers import materialised_graph_paths  # noqa: PLC0415 — hook latency boundary: imported only once a pipeline is discoverable (store import ~0.1 s, measured 2026-10-14)
     from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: PLC0415 — hook latency boundary: imported only once a pipeline is discoverable (store import ~0.1 s, measured 2026-10-14)

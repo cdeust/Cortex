@@ -105,3 +105,22 @@ def test_the_claim_is_an_exclusive_create(methodology, tmp_path, monkeypatch):
     monkeypatch.setattr(ttl.os, "open", recording_open)
     assert ttl.claim_reanalysis_slot(str(tmp_path)) is True
     assert flags_seen and all(f & os.O_CREAT and f & os.O_EXCL for f in flags_seen)
+
+
+def test_a_delayed_claimer_never_prunes_a_later_window(
+    methodology, tmp_path, monkeypatch
+):
+    """A claimer that computed window N after another session already claimed
+    N+1 (the boundary passed between them) must leave N+1's stamp, or a third
+    session would win N+1 again. Only strictly older windows are pruned."""
+    now = 1_000 * 24 * _HOUR
+    monkeypatch.setattr(ttl.time, "time", lambda: now + 24 * _HOUR)
+    assert ttl.claim_reanalysis_slot(str(tmp_path)) is True
+    monkeypatch.setattr(ttl.time, "time", lambda: now - 24 * _HOUR)
+    assert ttl.claim_reanalysis_slot(str(tmp_path)) is True
+    monkeypatch.setattr(ttl.time, "time", lambda: now)
+    assert ttl.claim_reanalysis_slot(str(tmp_path)) is True
+    windows = sorted(int(name.split(".")[2]) for name in _stamps(methodology))
+    assert windows == [1_000, 1_001]
+    monkeypatch.setattr(ttl.time, "time", lambda: now + 24 * _HOUR)
+    assert ttl.claim_reanalysis_slot(str(tmp_path)) is False

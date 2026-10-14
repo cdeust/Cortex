@@ -17,7 +17,8 @@ Allow-list (post-A3 single-canonical-path):
     - homeostatic_apply.py _apply_fold        (rare amortized fold UPDATE,
                                                per write class since M-D3)
     - anchor.py    anchor handler              (heat_base=1.0, no_decay=TRUE)
-    - file_memory_priming.py prime_file_memories (scoped file-cue boost, ADR-1086)
+    - file_memory_priming.py _boost_matching (scoped file-cue boost, ADR-1086,
+                                              and the impact bump, ADR-0493)
 
 Any new writer outside this list fails this test.
 """
@@ -53,8 +54,10 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     ("handlers/consolidation/homeostatic_apply.py", 184),
     # Anchor pin.
     ("handlers/anchor.py", 145),
-    # Atomic project-scoped file-cue boost, moved from the hook in ADR-1086.
-    ("infrastructure/file_memory_priming.py", 37),
+    # Atomic cue boost: the project-scoped file cues moved from the hook in
+    # ADR-1086, and the pipeline impact bump moved from its hook (ADR-0493,
+    # issue #750) so SQLite runs it too. One UPDATE serves both.
+    ("infrastructure/file_memory_priming.py", 52),
     # CAS-guarded deliberate reheat.
     ("infrastructure/pg_store_memory_reheat.py", 104),
 }

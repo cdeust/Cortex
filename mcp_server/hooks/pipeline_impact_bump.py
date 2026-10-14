@@ -32,9 +32,6 @@ _COOLDOWN_FILE = cooldown_path("cortex_pipeline_impact_cooldown.json")
 _FILE_TOOLS = {"Edit", "Write", "MultiEdit"}
 _IMPACT_BOOST = 0.15  # Slightly higher than preemptive — graph precision earns it.
 _MAX_BUMPS = 20  # Don't over-boost on massive impact sets.
-# source: bump_heat_raw clamps heat_base to [0, 1] on both stores; the
-# pre-#750 UPDATE skipped saturated rows with ``heat_base < 1.0``.
-_SATURATED_HEAT = 1.0
 
 
 def _log(msg: str) -> None:
@@ -144,32 +141,16 @@ def _bump_heat_for_symbols(symbol_names: list[str]) -> int:
 
     A psycopg-only UPDATE did nothing on SQLite, the plugin default, after
     the hook had already paid for the graph lookup and the ``detect_changes``
-    call (issue #750). Uses the canonical A3 writer (``bump_heat_raw``).
-    Returns the number of memories bumped.
+    call (issue #750). ``bump_memories_mentioning`` sends that UPDATE through
+    the store's connection on both backends. Returns the number of memories
+    bumped.
     """
     if not symbol_names:
         return 0
+    from mcp_server.infrastructure.file_memory_priming import bump_memories_mentioning  # noqa: PLC0415 — hook latency boundary: rejected events never import the store
     from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: PLC0415 — hook latency boundary: rejected events never import the store
 
-    store = get_shared_store()
-    bumped: set[int] = set()
-    for name in symbol_names:
-        # Saturated, stale and benchmark rows (the pre-#750 UPDATE's WHERE)
-        # are filtered in the query, before its LIMIT: they would otherwise
-        # fill it and starve the rows the bump can raise.
-        for mem in store.get_memories_mentioning_entity(
-            name,
-            limit=_MAX_BUMPS,
-            max_heat=_SATURATED_HEAT,
-            exclude_stale=True,
-            exclude_benchmark=True,
-        ):
-            heat = float(mem.get("heat_base") or 0.0)
-            if mem["id"] in bumped:
-                continue
-            store.bump_heat_raw(mem["id"], heat + _IMPACT_BOOST)
-            bumped.add(mem["id"])
-    return len(bumped)
+    return bump_memories_mentioning(get_shared_store(), symbol_names, _IMPACT_BOOST)
 
 
 def process_event(event: dict[str, Any]) -> None:

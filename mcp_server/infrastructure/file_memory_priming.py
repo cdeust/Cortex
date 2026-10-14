@@ -1,7 +1,18 @@
-"""Atomic, project-scoped file-cue activation for both storage backends.
+"""Atomic cue-driven heat boosts for both storage backends.
+
+``prime_file_memories`` is the project-scoped file-cue activation (ADR-1086,
+which preserves the heat increment defined by ADR-0496).
+``bump_memories_mentioning`` is the pipeline impact bump (ADR-0493): main's
+psycopg-only UPDATE, moved here so SQLite runs it too (issue #750).
+
+Both send one UPDATE through the store's connection adapter: a row matching
+several cues receives one increment. Matching is a case-insensitive literal
+substring test, ``LOWER(content) LIKE LOWER(cue) ESCAPE '!'``. PostgreSQL's
+``LOWER`` folds Unicode case, as ``ILIKE`` does; SQLite's ``LOWER`` and
+``LIKE`` fold ASCII letters only.
 
 source: ADR-1086
-preserves the heat increment defined by ADR-0496.
+source: ADR-0493
 """
 
 from __future__ import annotations
@@ -13,6 +24,8 @@ from mcp_server.infrastructure.pg_scope_clause import directory_scope_clause
 from mcp_server.shared.project_scope import project_ancestors
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from typing_extensions import LiteralString
 
     from mcp_server.infrastructure.memory_store import MemoryStore
@@ -22,17 +35,19 @@ def _literal_pattern(value: str) -> str:
     return "%" + value.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%"
 
 
-def prime_file_memories(
-    store: MemoryStore, paths: list[str], project: str | None, boost: float
+def _boost_matching(
+    store: MemoryStore,
+    cues: Iterable[str],
+    boost: float,
+    scope: str = "",
+    scope_params: tuple = (),
 ) -> int:
-    """Boost each matching current row once, regardless of matching cue count."""
-    cues = dict.fromkeys(
-        cue for path in paths for cue in (path, Path(path).name) if cue
-    )
-    if not cues:
+    """One UPDATE: every current, nonstale, nonbenchmark row below the heat
+    cap whose content contains a cue, within ``scope``; heat capped at 1.0."""
+    patterns = tuple(_literal_pattern(cue) for cue in dict.fromkeys(cues) if cue)
+    if not patterns:
         return 0
-    matches = " OR ".join("LOWER(content) LIKE LOWER(%s) ESCAPE '!'" for _ in cues)
-    scope, scope_params = directory_scope_clause(project_ancestors(project))
+    matches = " OR ".join("LOWER(content) LIKE LOWER(%s) ESCAPE '!'" for _ in patterns)
     sql = (
         "UPDATE memories SET heat_base = CASE WHEN heat_base + %s > 1.0 "  # noqa: S608 — static predicates/placeholders; all cues and project values are bound
         "THEN 1.0 ELSE heat_base + %s END, "
@@ -41,14 +56,35 @@ def prime_file_memories(
         "AND NOT COALESCE(is_stale, FALSE) AND heat_base < 1.0 "
         f"{scope} AND ({matches})"
     )
-    params = (boost, boost, *scope_params, *(_literal_pattern(cue) for cue in cues))
     with store.acquire_interactive() as conn:
         try:
             # Query fragments contain only fixed SQL and generated placeholders;
             # project paths and content cues are exclusively bound parameters.
-            result = conn.execute(cast("LiteralString", sql), params)
+            result = conn.execute(
+                cast("LiteralString", sql), (boost, boost, *scope_params, *patterns)
+            )
             conn.commit()
             return result.rowcount
         except Exception:
             conn.rollback()
             raise
+
+
+def prime_file_memories(
+    store: MemoryStore, paths: list[str], project: str | None, boost: float
+) -> int:
+    """Boost each matching current row once, regardless of matching cue count."""
+    cues = [cue for path in paths for cue in (path, Path(path).name)]
+    scope, scope_params = directory_scope_clause(project_ancestors(project))
+    return _boost_matching(store, cues, boost, scope, tuple(scope_params))
+
+
+def bump_memories_mentioning(
+    store: MemoryStore, symbol_names: list[str], boost: float
+) -> int:
+    """Boost every current row that mentions any of ``symbol_names``, once.
+
+    No project scope and no row limit, as main's impact-bump UPDATE.
+
+    source: ADR-0493"""
+    return _boost_matching(store, symbol_names, boost)

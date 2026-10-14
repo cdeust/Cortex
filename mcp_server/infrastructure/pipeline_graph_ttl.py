@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import re
 import time
 from pathlib import Path
 
@@ -59,7 +60,8 @@ def claim_reanalysis_slot(project_root: str) -> bool:
     window (``now // TTL``): of two sessions racing for one window, exactly
     one wins, and the stamp holds whether the worker succeeds, fails, or is
     still running when the next session starts. The winner removes the
-    project's stamps from earlier windows, so one file remains per project.
+    project's stamps from strictly earlier windows, so one file remains per
+    project once windows are claimed in order.
     A zero TTL bounds nothing, as it makes every graph stale.
 
     source: ADR-0585"""
@@ -76,7 +78,19 @@ def claim_reanalysis_slot(project_root: str) -> bool:
     except FileExistsError:
         return False
     os.close(fd)
-    for old in stamp.parent.glob(f"pipeline_reanalyze.{digest}.*.stamp"):
-        if old != stamp:
-            old.unlink(missing_ok=True)
+    _prune_older_windows(stamp.parent, digest, window)
     return True
+
+
+def _prune_older_windows(directory: Path, digest: str, window: int) -> None:
+    """Remove the project's stamps of windows strictly older than ``window``.
+
+    A claimer delayed across a window boundary claims window N after another
+    session claimed N+1; pruning N+1 would let a third session win it again.
+
+    source: ADR-0585"""
+    pattern = re.compile(rf"pipeline_reanalyze\.{digest}\.(\d+)\.stamp")
+    for path in directory.iterdir():
+        match = pattern.fullmatch(path.name)
+        if match is not None and int(match.group(1)) < window:
+            path.unlink(missing_ok=True)

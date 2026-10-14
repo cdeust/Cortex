@@ -158,6 +158,37 @@ class TestHeatBump:
             0.3 + hook._IMPACT_BOOST
         )
 
+    def test_every_matching_memory_is_bumped(self, sqlite_store):
+        """``_MAX_BUMPS`` caps the impacted symbols, never the memories one
+        symbol matches: main's UPDATE had no row limit."""
+        ids = [
+            sqlite_store.insert_memory(
+                {"content": f"handle_tool_call note {i}", "heat": 0.5}
+            )
+            for i in range(hook._MAX_BUMPS + 5)
+        ]
+        assert hook._bump_heat_for_symbols(["handle_tool_call"]) == len(ids)
+        for mid in ids:
+            assert sqlite_store.get_memory(mid)["heat_base"] == pytest.approx(
+                0.5 + hook._IMPACT_BOOST
+            )
+
+    def test_substring_matches_full_text_misses_are_bumped(self, sqlite_store):
+        """Main matched ``content ILIKE '%name%'``: a memory containing the
+        symbol inside a longer word is bumped even when full text matches
+        other rows (FTS5 finds ``render`` but not ``prerendered``)."""
+        word = sqlite_store.insert_memory(
+            {"content": "render draws the frame", "heat": 0.5}
+        )
+        inner = sqlite_store.insert_memory(
+            {"content": "the PRErendered cache", "heat": 0.5}
+        )
+        assert hook._bump_heat_for_symbols(["render"]) == 2
+        for mid in (word, inner):
+            assert sqlite_store.get_memory(mid)["heat_base"] == pytest.approx(
+                0.5 + hook._IMPACT_BOOST
+            )
+
 
 class TestProjectRoot:
     """#750: the project is the event's, never the launcher's plugin-root cwd."""

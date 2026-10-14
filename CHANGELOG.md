@@ -61,33 +61,48 @@ adheres to [Semantic Versioning](https://semver.org/).
   by the hook are removed. `scripts/install_e2e/run.py` runs in CI on Linux
   and macOS.
 
-- **SessionStart no longer re-ingests the code graph on every session under
-  SQLite, and starts at most one background ingest per project per TTL
-  window** (#751). `_lookup_cached_graph_path` read the `graph_path=` memo
-  through psycopg only, so on the SQLite backend (the plugin default) it
-  returned None, the graph always looked stale, and every SessionStart with
-  a discoverable pipeline spawned a detached ingest. It now reads through the
-  configured store (`ingest_helpers.materialised_graph_paths`, shared with
-  `find_cached_graph`); a store failure spawns nothing. On every backend,
+- **SessionStart starts at most one background code-graph ingest per project
+  per TTL window, and an unreadable memo starts none** (#751). The issue
+  reported a psycopg-only memo lookup that returned None on SQLite; #749
+  (ADR-1104) had already routed the SQLite read through the store on main.
+  What this changes relative to main: the PostgreSQL read also goes through
+  the configured store (`ingest_helpers.materialised_graph_paths`, shared
+  with `find_cached_graph`), where it opened its own psycopg connection; a
+  store failure on either backend now spawns nothing, where a PostgreSQL
+  failure returned None, so the graph looked stale and an ingest started;
+  only a memo whose graph file still exists counts as cached; and
   `pipeline_graph_ttl.claim_reanalysis_slot` claims each project's TTL window
   with one atomic create (`O_CREAT | O_EXCL`) of a window-keyed stamp, so a
   failed, slow or concurrent ingest, or two sessions starting together, no
   longer start a second one within `CORTEX_PIPELINE_GRAPH_TTL_HOURS`
-  (default 24 h); the winner removes the project's older stamps.
+  (default 24 h). The winner removes the project's stamps of strictly
+  earlier windows only, so a claimer delayed across a window boundary never
+  removes the next window's stamp.
 
 - **The PostToolUse impact bump raises heat on SQLite too, and targets the
   session's project** (#750). `pipeline_impact_bump` paid for the graph
   lookup and the `detect_changes` call on every edit, then raised heat with a
-  psycopg-only `UPDATE` that did nothing on SQLite. It now bumps through the
-  configured store (`get_memories_mentioning_entity` + the A3 writer
-  `bump_heat_raw`, at most once per memory, chain heads only); saturated
-  (heat 1.0), stale and benchmark memories, the old `UPDATE`'s three
-  exclusions, are filtered in the store query before its limit (`max_heat`,
-  `exclude_stale`, `exclude_benchmark`, both backends), so twenty of them
-  can no longer hide the memories the bump can still raise. It also
-  resolved the project as `CLAUDE_PROJECT_ROOT or os.getcwd()`, the plugin
-  root under the launcher; it now uses `resolve_project_root(event,
-  os.environ)` and does nothing when the project is unresolved.
+  psycopg-only `UPDATE` that did nothing on SQLite. The same single `UPDATE`
+  now runs through the configured store's connection on both backends
+  (`file_memory_priming.bump_memories_mentioning`, sharing the I2-allowed
+  writer of the file-cue boost): every memory whose content contains any
+  impacted symbol, case-insensitively, with no row limit (`_MAX_BUMPS` still
+  caps the symbols, as on main), except stale, benchmark and saturated
+  (heat 1.0) ones; heat is capped at 1.0 and `heat_base_set_at` and
+  `last_accessed` are refreshed. It also resolved the project as
+  `CLAUDE_PROJECT_ROOT or os.getcwd()`, the plugin root under the launcher;
+  it now uses `resolve_project_root(event, os.environ)` and does nothing when
+  the project is unresolved.
+
+  Behaviour change: reanalysis windows are fixed and aligned to TTL
+  multiples (they were sliding), so two ingests can start just either side
+  of a boundary. The impact bump differs from main's `UPDATE` in three
+  ways: superseded memories are no longer bumped (`get_hot_embeddings` ranks
+  every row by `heat_base` under a LIMIT, so a bumped superseded row took a
+  current row's slot; ADR-1086 already excludes them from the file-cue
+  boost);
+  `_` and `%` in a symbol match literally, where `ILIKE` read them as
+  wildcards; and on SQLite case folding covers ASCII letters only.
 
 - **The background code-graph re-analysis ingests the session's project,
   never the plugin root.** `scripts/launcher.py` `chdir`s to the plugin root
