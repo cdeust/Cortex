@@ -3300,11 +3300,6 @@
     {
       "file": "mcp_server/handlers/consolidation/near_dup_calibration_pass.py",
       "kind": "method-size",
-      "detail": "_elect_and_journal_component"
-    },
-    {
-      "file": "mcp_server/handlers/consolidation/near_dup_calibration_pass.py",
-      "kind": "method-size",
       "detail": "run_near_dup_apply_pass"
     },
     {

@@ -37,6 +37,14 @@ class ElectionResult(NamedTuple):
     superseded_ids: tuple[int, ...]
 
 
+def election_key(member: DuplicateMember) -> tuple[float, object]:
+    """The election order: highest ``effective_heat`` first, then earliest
+    ``created_at``. The survivor is the member with the smallest key.
+
+    source: ADR-0198"""
+    return (-member.effective_heat, member.created_at)
+
+
 def elect_survivor(members: list[DuplicateMember]) -> ElectionResult:
     """Elect the group's survivor: highest ``effective_heat``, tie-broken
     by earliest ``created_at``.
@@ -50,9 +58,9 @@ def elect_survivor(members: list[DuplicateMember]) -> ElectionResult:
 
     # source: ADR-0198
 
-    survivor = min(members, key=lambda m: (-m.effective_heat, m.created_at))
+    survivor = min(members, key=election_key)
     superseded = tuple(m.id for m in members if m.id != survivor.id)
     return ElectionResult(survivor_id=survivor.id, superseded_ids=superseded)
 
 
-__all__ = ["DuplicateMember", "ElectionResult", "elect_survivor"]
+__all__ = ["DuplicateMember", "ElectionResult", "elect_survivor", "election_key"]

@@ -103,3 +103,52 @@ One-shot campaign passes, not wired into ``consolidate`` — mirrors
     """
 ````
 
+
+## Update 2026-10-14: survivor-anchored groups, no supersession through a chain
+
+Supersession now requires that each superseded memory is a near-duplicate of its own survivor. The connected components of pairs at or above the threshold are single-linkage. A~B and B~C put A and C in one component whatever sim(A, C) is, and the pass superseded every member into the component's one survivor. On a restored copy of the owner's store (66,707 live memories, threshold 0.90, dry run), the largest component had 15,812 members. 20,264 of the 26,534 rows to supersede had a similarity to their survivor below 0.90, and the lowest was 0.33.
+
+Decision: survivor-anchored grouping. A component is now only the unit of work. Within it, each round does three things:
+- it elects the survivor of the pending members with the unchanged rule (highest effective heat, then earliest `created_at`; `core.memory_dedup_exact.election_key`; the id breaks a full tie, which used to depend on set iteration order);
+- it measures in SQL the cosine similarity of every other pending member to that survivor, from the two embeddings, with the same expression and `REAL` cast as the pair scan (`pg_store_near_dup.ids_near_to`);
+- it attaches the members at or above the threshold. The rest stay pending for the next round.
+
+The top-K pair list is not consulted for membership, because it can lack a direct edge. Every round removes its survivor, so the loop terminates. Members are in election order and ties are broken by id, so two runs on the same data give the same journal. Pure logic: `core.near_dup_grouping` (`election_order`, `settle_round`).
+
+Why this option and not complete linkage (every pair within a group at or above the threshold):
+- "supersede into the survivor" is a statement about each member and its survivor, and this checks exactly that;
+- it reuses the existing election unchanged;
+- its cost is one similarity query per round, over the pending members only.
+
+Complete linkage is a stricter property between the superseded members themselves. The supersession never relates them to each other, and finding complete-linkage groups is a clique cover with no unique deterministic answer.
+
+Unchanged:
+- the race guard (`supersede_to_existing`);
+- the journal entry keys (`survivor_id`, `superseded_ids`, `component_size`);
+- the review queue, which stays the candidate pairs in `[min_similarity, threshold)`.
+
+Semantics that changed:
+- `component_size` is now the size of the group (survivor plus attached members);
+- `components` counts groups, one per survivor;
+- `skipped_vanished` counts the members without stats in every component; it used to count them only when fewer than two members were left;
+- `unmerged_total` counts the members that joined no group. They stay as they are and are not added to the review queue. A pair between such a member and a survivor is either already in the queue, if the scan found it in that band, or below the scan floor.
+
+Measured on the same copy, dry run, threshold 0.90, Apple M4:
+
+| | main (e6b15f57) | survivor-anchored |
+|---|---|---|
+| groups | 3,232 | 4,492 |
+| rows superseded | 26,534 | 24,110 |
+| largest group | 15,812 | 6,000 |
+| min similarity member to survivor | 0.332 | 0.900005 |
+| superseded rows below 0.90 | 20,264 | 0 |
+| left unmerged | — | 1,164 |
+| pass time | 68.6 s | 100.3 s (150.3 s on a second run under load) |
+| process max RSS | 642 MB | 602 MB |
+| peak Python allocation (tracemalloc) | 236.5 MB | 236.7 MB |
+
+Determinism on the copy: two passes in one process with the member stats frozen gave identical journals (4,492 groups). Two separate passes a few minutes apart differed in 5 groups. The cause is the election input, not the grouping: `effective_heat` is computed at `NOW()` and returned as `REAL`, and survivors such as 4339545 and 4340722 tie at that precision (0.09687187 each) while decay moves them. Main has the same dependency. The election rule is kept unchanged on purpose.
+
+The 6,000-member group is templated auto-captured tool records with mean similarity 0.971 to their survivor. Whether 0.90 is the right threshold for such records is the calibration's question (ADR-0659), not this one's.
+
+Tests: `tests_py/handlers/consolidation/test_near_dup_no_chaining.py` (PostgreSQL) and `tests_py/core/test_near_dup_grouping.py`.

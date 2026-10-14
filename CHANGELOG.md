@@ -35,6 +35,26 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **The near-duplicate apply pass no longer supersedes memories through a
+  chain** (ADR-0370). It grouped pairs at or above the threshold into
+  connected components, which is single-linkage: A~B and B~C put A and C
+  together whatever sim(A, C) was, and every member was superseded into the
+  component's one survivor. On a restored copy of a 66,707-memory store at
+  0.90 (dry run), the largest component had 15,812 members, and 20,264 of
+  the 26,534 rows to supersede were below 0.90 to their survivor (lowest:
+  0.33). Each component is now split into survivor-anchored groups. The
+  survivor is elected by the unchanged rule (heat, then `created_at`, then
+  id). A member joins it only if their own similarity, computed in SQL from
+  the two embeddings (`ids_near_to`), is at or above the threshold. The
+  remaining members form their own groups in later rounds. On the same
+  copy: 4,492 groups, 24,110 rows, largest group 6,000, minimum similarity
+  to the survivor 0.900005, 1,164 members left unmerged, 100 to 150 s
+  against 69 s. Two passes over the same member stats give identical journals;
+  two passes a few minutes apart differed in 5 of 4,492 groups, because
+  decay moved effective heats that tie at `REAL` precision. The journal keys are unchanged.
+  `component_size` is now the group's size, and the result gains
+  `unmerged_total`.
+
 - **The near-duplicate scan covers every live memory, the same way on every
   run** (ADR-0557). Its anchors were `LIMIT 20000` with no `ORDER BY`, so on
   a larger store each pass scanned an arbitrary subset: on a restored copy

@@ -192,10 +192,11 @@ async def _cmd_apply(args: argparse.Namespace) -> int:
     print("=========================================================", file=sys.stderr)
     print(f"  Status:              {result['status']}", file=sys.stderr)
     print(f"  Candidate total:     {result['candidate_total']}", file=sys.stderr)
-    print(f"  Components >= S:     {result['components']}", file=sys.stderr)
+    print(f"  Groups >= S:         {result['components']}", file=sys.stderr)
     print(f"  Superseded edges:    {result['superseded_total']}", file=sys.stderr)
     print(f"  Skipped (race):      {result['skipped_race']}", file=sys.stderr)
     print(f"  Skipped (vanished):  {result['skipped_vanished']}", file=sys.stderr)
+    print(f"  Left unmerged:       {result['unmerged_total']}", file=sys.stderr)
     print(f"  Review queue size:   {len(result['review_queue'])}", file=sys.stderr)
 
     timestamp = _timestamp()

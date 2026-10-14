@@ -10,7 +10,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from mcp_server.core.memory_dedup_exact import DuplicateMember, elect_survivor
+from mcp_server.core.memory_dedup_exact import DuplicateMember
+from mcp_server.core.near_dup_grouping import election_order, settle_round
 from mcp_server.shared.near_dup_calibration import (
     CandidatePair,
     build_components,
@@ -19,6 +20,7 @@ from mcp_server.shared.near_dup_calibration import (
 from mcp_server.shared.near_dup_calibration import bucket_by_stratum
 from mcp_server.infrastructure.pg_store_near_dup import (
     fetch_contents,
+    ids_near_to,
     list_candidate_pairs,
     fetch_member_stats,
 )
@@ -85,50 +87,69 @@ async def run_near_dup_sample(
     return out
 
 
-def _elect_and_journal_component(
+def _supersede_group(
     conn: Any,
-    member_ids: frozenset[int],
-    stats: dict[int, dict],
+    survivor_id: int,
+    attached: tuple[int, ...],
     *,
     apply: bool,
     out: dict[str, Any],
 ) -> None:
-    """Elect one component's survivor and supersede the rest, journaling both."""
+    """Supersede one group's members into its survivor, journaling it."""
+    written: list[int] = []
+    for duplicate_id in attached:
+        ok = apply and supersede_to_existing(conn, duplicate_id, survivor_id)
+        if apply and not ok:
+            out["skipped_race"] += 1
+        else:
+            written.append(duplicate_id)
+    out["components"] += 1
+    out["superseded_total"] += len(written)
+    out["journal"].append(
+        {
+            "survivor_id": survivor_id,
+            "superseded_ids": written,
+            "component_size": 1 + len(attached),
+        }
+    )
 
-    # source: ADR-0370
+
+def _group_component(
+    conn: Any,
+    member_ids: frozenset[int],
+    stats: dict[int, dict],
+    *,
+    threshold: float,
+    apply: bool,
+    out: dict[str, Any],
+) -> None:
+    """Split one component into survivor-anchored groups (ADR-0370).
+
+    Each round elects the survivor of the pending members and attaches the
+    members whose own similarity to it is >= ``threshold``; the others stay
+    pending for the next round. A member reached only through a chain is
+    never superseded into a survivor it does not duplicate."""
     members = [
         DuplicateMember(
             id=mid,
             effective_heat=stats[mid]["effective_heat"],
             created_at=stats[mid]["created_at"],
         )
-        for mid in member_ids
+        for mid in sorted(member_ids)
         if mid in stats
     ]
-    if len(members) < _MIN_COMPONENT_MEMBERS:
-        out["skipped_vanished"] += len(member_ids) - len(members)
-        return
-
-    election = elect_survivor(members)
-    superseded_written: list[int] = []
-    for duplicate_id in election.superseded_ids:
-        written = False
-        if apply:
-            written = supersede_to_existing(conn, duplicate_id, election.survivor_id)
-        if apply and not written:
-            out["skipped_race"] += 1
+    out["skipped_vanished"] += len(member_ids) - len(members)
+    pending = election_order(members)
+    while len(pending) >= _MIN_COMPONENT_MEMBERS:
+        survivor_id = pending[0].id
+        others = [m.id for m in pending[1:]]
+        near = ids_near_to(conn, survivor_id, others, threshold=threshold)
+        attached, pending = settle_round(pending, near)
+        if attached:
+            _supersede_group(conn, survivor_id, attached, apply=apply, out=out)
         else:
-            superseded_written.append(duplicate_id)
-
-    out["components"] += 1
-    out["superseded_total"] += len(superseded_written)
-    out["journal"].append(
-        {
-            "survivor_id": election.survivor_id,
-            "superseded_ids": superseded_written,
-            "component_size": len(members),
-        }
-    )
+            out["unmerged_total"] += 1
+    out["unmerged_total"] += len(pending)
 
 
 async def run_near_dup_apply_pass(
@@ -139,7 +160,12 @@ async def run_near_dup_apply_pass(
     top_k: int = 30,
     min_similarity: float = 0.75,
 ) -> dict[str, Any]:
-    """Auto-supersede components >= ``threshold``; review-queue the rest.
+    """Auto-supersede near-duplicates of a survivor; review-queue the rest.
+
+    Pairs >= ``threshold`` are grouped into components, and each component
+    into survivor-anchored groups: a member is superseded only into a
+    survivor whose own similarity to it is >= ``threshold``. Members left
+    alone are counted in ``unmerged_total`` and stay as they are.
 
     source: ADR-0370"""
 
@@ -149,6 +175,7 @@ async def run_near_dup_apply_pass(
         "superseded_total": 0,
         "skipped_race": 0,
         "skipped_vanished": 0,
+        "unmerged_total": 0,
         "journal": [],
         "review_queue": [],
         "status": "ok",
@@ -170,8 +197,8 @@ async def run_near_dup_apply_pass(
                 all_ids = sorted({mid for comp in components for mid in comp})
                 stats = fetch_member_stats(conn, all_ids)
                 for comp in components:
-                    _elect_and_journal_component(
-                        conn, comp, stats, apply=apply, out=out
+                    _group_component(
+                        conn, comp, stats, threshold=threshold, apply=apply, out=out
                     )
 
             if below:

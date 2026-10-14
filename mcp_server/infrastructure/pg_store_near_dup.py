@@ -182,6 +182,39 @@ def list_candidate_pairs(
     return merge_pair_batches(_anchor_batches(conn, params))
 
 
+# Same expression and REAL cast as _BATCH_PAIRS_SQL's similarity, so a pair
+# the scan put at or above the threshold passes this test too.
+_NEAR_TO_SQL = """
+    SELECT m.id
+      FROM current_memories s
+      JOIN current_memories m ON m.id = ANY(%(ids)s)
+     WHERE s.id = %(anchor_id)s
+       AND NOT s.is_stale AND s.embedding IS NOT NULL
+       AND NOT m.is_stale AND m.embedding IS NOT NULL
+       AND (1 - (s.embedding <=> m.embedding))::REAL >= %(threshold)s
+"""
+
+
+def ids_near_to(
+    conn: StoreConnection, anchor_id: int, ids: list[int], *, threshold: float
+) -> set[int]:
+    """Ids of ``ids`` whose own cosine similarity to ``anchor_id`` is at or
+    above ``threshold``, computed from the two embeddings.
+
+    Post-condition: a subset of ``ids``; both rows are non-stale chain heads
+    with embeddings (a row superseded since the scan is absent, and so is
+    every id when the anchor itself is). Does not read the candidate pairs:
+    a near-duplicate the top-K scan never paired with the anchor is found.
+
+    source: ADR-0557"""
+    if not ids:
+        return set()
+    params = {"anchor_id": anchor_id, "ids": ids, "threshold": threshold}
+    with conn.cursor(row_factory=DICT_ROW) as cur:
+        cur.execute(_NEAR_TO_SQL, params)
+        return {row["id"] for row in cur.fetchall()}
+
+
 def fetch_contents(conn: StoreConnection, ids: list[int]) -> dict[int, str]:
     """Fetch content text for the supplied memory IDs.
 
@@ -239,6 +272,7 @@ __all__ = [
     "DEFAULT_ANCHOR_BATCH",
     "DEFAULT_TOP_K",
     "list_candidate_pairs",
+    "ids_near_to",
     "fetch_contents",
     "fetch_member_stats",
 ]
