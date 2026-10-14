@@ -952,7 +952,7 @@ def _legacy_background_consolidate() -> None:
         _log(f"background consolidate skipped: {exc}")
 
 
-def _maybe_background_reanalyze() -> None:
+def _maybe_background_reanalyze(event: dict) -> None:
     """Spawn background ``ingest_codebase`` when the graph is stale.
 
     Runs detached (``subprocess.Popen`` with its own process group) so
@@ -961,8 +961,8 @@ def _maybe_background_reanalyze() -> None:
     pipeline is configured or graph is fresh.
 
     Gated by the TTL check in ``pipeline_graph_ttl.graph_is_stale``.
-    Project root is the user's CWD — Claude Code sets this to the
-    project Claude was started in.
+    Project root is ``CLAUDE_PROJECT_ROOT`` or the event's ``cwd`` — the
+    project Claude was started in (``resolve_project_root``).
     """
     try:
         from mcp_server.infrastructure.pipeline_discovery import (  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
@@ -973,7 +973,12 @@ def _maybe_background_reanalyze() -> None:
         if discover_pipeline_command() is None:
             return  # Pipeline not installed — nothing to do.
 
-        project_root = os.environ.get("CLAUDE_PROJECT_ROOT") or os.getcwd()
+        # The launcher runs hooks from the plugin root, so cwd() is never the
+        # user's project (issue #604: no cwd() fallback).
+        project_root = resolve_project_root(event, os.environ)
+        if project_root is None:
+            _log("background pipeline reanalysis skipped: project root unresolved")
+            return
         cached_path = _lookup_cached_graph_path(project_root)
         if not graph_is_stale(cached_path):
             return  # Fresh enough; skip.
@@ -1236,7 +1241,7 @@ def _session_start() -> str:
     _auto_wire_pipeline()
 
     # source: ADR-0498
-    _maybe_background_reanalyze()
+    _maybe_background_reanalyze(event)
 
     # source: ADR-0498
     _maybe_background_consolidate()

@@ -139,7 +139,10 @@ def _checks(report: dict, expect_semantic: bool) -> dict:
         "tools_listed": stdio.get("required_tools_present", False),
         "tools_arrived_in_session_1": stdio.get("seconds", 10**9) < STDIO_BOUND_SECONDS,
         "remember_recall": stdio.get("recall_contains_token", False),
-        "no_process_left": not report.get("settle", {}).get("remaining", ["not run"]),
+        "no_process_left": not any(
+            report.get(key, {}).get("remaining", ["not run"])
+            for key in ("settle", "settle_2")
+        ),
         "ready_shown_session_2": message_starts_ready(hook_2),
         "semantic_outcome_session_2": (SEMANTIC_ON in message_2) == expect_semantic
         and ("failed: " in message_2 or expect_semantic),
@@ -176,6 +179,9 @@ def run(args: argparse.Namespace) -> dict:
     markers = (str(machine.work),) + ((root,) if root else ())
     report["settle"] = evidence.wait_for_no_processes(markers, args.settle_seconds)
     report["session_2"] = _session(machine, sandbox, "session-2", root, drive=False)
+    # Session 2 starts its own detached workers (pipeline reanalysis):
+    # "nothing left behind" covers both sessions.
+    report["settle_2"] = evidence.wait_for_no_processes(markers, args.settle_seconds)
     report["spawns"] = (
         machine.spawn_log.read_text().splitlines() if machine.spawn_log.exists() else []
     )
