@@ -150,6 +150,8 @@ def _group_component(
         else:
             out["unmerged_ids"].append(survivor_id)
     out["unmerged_ids"].extend(m.id for m in pending)
+    # Kept in step with the list, so an error mid-pass reports both alike.
+    out["unmerged_total"] = len(out["unmerged_ids"])
 
 
 async def run_near_dup_apply_pass(
@@ -202,7 +204,6 @@ async def run_near_dup_apply_pass(
                         conn, comp, stats, threshold=threshold, apply=apply, out=out
                     )
                 out["unmerged_ids"].sort()
-                out["unmerged_total"] = len(out["unmerged_ids"])
 
             if below:
                 review_ids = sorted({p.id_a for p in below} | {p.id_b for p in below})
