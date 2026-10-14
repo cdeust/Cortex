@@ -1,8 +1,9 @@
 """The consolidate cycle decides its spawn options before it stamps a period.
 
 An unreadable Windows job state is a spawn failure. On the coordinated path
-(ADR-1097) it must leave no period stamp, no registration and no legacy retry
-of the probe; on the legacy path, no in-flight marker. Both paths spawn with
+(ADR-1097) it must leave no period stamp and no legacy retry of the probe, but
+the window stays registered so another window's last-exit stop still counts
+it; on the legacy path, no in-flight marker. Both paths spawn with
 the options decided for this job (issue #684).
 
 source: ADR-1102"""
@@ -68,7 +69,7 @@ def legacy(monkeypatch, tmp_path):
     return session_start, calls, stamp
 
 
-def test_unreadable_job_state_stamps_registers_and_retries_nothing(
+def test_unreadable_job_state_stamps_and_retries_nothing_but_registers(
     coordinated, monkeypatch
 ):
     session_start, calls, coord = coordinated
@@ -80,7 +81,7 @@ def test_unreadable_job_state_stamps_registers_and_retries_nothing(
     assert calls["options"] == []
     assert calls["legacy"] == 0, "a spawn failure never takes the legacy path"
     assert not coord.stamp_path.exists(), "no period stamped for no cycle"
-    assert list(coord._iter_session_files()) == []
+    assert coord.live_session_count() == 1, "the open window is still counted"
     errors = [m for m in calls["log"] if "ERROR" in m]
     assert len(errors) == 1 and "job state unreadable" in errors[0]
 
@@ -96,6 +97,21 @@ def test_coordinated_cycle_spawns_with_the_options_decided_for_this_job(
     assert coord.stamp_path.exists()
     assert len(calls["options"]) == 1
     assert_detached_on_windows(calls["options"][0])
+
+
+def test_another_windows_exit_does_not_stop_while_a_probe_failed_window_is_open(
+    coordinated, monkeypatch
+):
+    session_start, calls, coord = coordinated
+    monkeypatch.setattr(detached_spawn, "sys", SimpleNamespace(platform="win32"))
+    monkeypatch.setattr(win32_job, "job_limit_flags", _unreadable_job)
+    other_window = os.getppid()
+    coord.register(other_window)
+    session_start._maybe_background_consolidate()
+    stopped = []
+
+    assert coord.stop_if_last(other_window, stop_fn=lambda: stopped.append(1)) is False
+    assert stopped == []
 
 
 def test_legacy_path_with_unreadable_job_state_stamps_nothing(legacy, monkeypatch):

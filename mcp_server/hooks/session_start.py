@@ -909,8 +909,8 @@ def _consolidate_spawn_options() -> dict[str, Any] | None:
     """Decide the spawn options once, before the period is stamped.
 
     postcondition: the options, or None after logging ERROR when the job
-    state cannot be read; the caller then registers, stamps and spawns
-    nothing (a spawn failure, not a coordinator failure).
+    state cannot be read; the caller then stamps and spawns nothing, the
+    window staying registered (a spawn failure, not a coordinator failure).
 
     source: ADR-1102"""
     try:
@@ -928,8 +928,8 @@ def _ensure_coordinated_cycle(coord) -> str | None:
 
     postcondition: on an unresolved window identity, an unreadable process
     table (ADR-1097 points 2, 3) or an unreadable job state (ADR-1102) logs
-    ERROR with the cause and returns None with nothing registered, spawned or
-    stamped.
+    ERROR with the cause and returns None with nothing spawned or stamped;
+    the window stays registered only in the job-state case.
 
     source: ADR-1097 and ADR-1102"""
     from mcp_server.infrastructure.groomer_identity import (  # noqa: PLC0415 — hook latency boundary: see _maybe_background_consolidate
@@ -946,10 +946,10 @@ def _ensure_coordinated_cycle(coord) -> str | None:
             "no consolidate cycle started this session"
         )
         return None
+    coord.register(session_pid)  # counted for last-exit stop (ADR-1102)
     spawn_options = _consolidate_spawn_options()
     if spawn_options is None:
         return None
-    coord.register(session_pid)
     try:
         return coord.ensure_cycle(
             period_hours=_CONSOLIDATE_TTL_HOURS,
