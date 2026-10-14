@@ -8,12 +8,17 @@ neither the environment nor a marker decides:
 
 - a methodology directory with nothing of Cortex in it is a fresh install:
   the SQLite store, without dialing anything;
-- earlier Cortex state there means a pre-ADR-1104 launch ran on this HOME: the
-  ``install-plugin.sh`` detection (ADR-0740) decides, i.e. whether the local
-  ``cortex`` database answers the way libpq connected that URL: user from
-  ``PGUSER`` or the login, TLS when the server offers it (``sslmode=prefer``),
-  and, when the server asks for a password, one from ``PGPASSWORD`` or the
-  password file (launcher_pgpass).
+- earlier Cortex state there means a pre-ADR-1104 launch ran on this HOME:
+  ``install-plugin.sh`` (ADR-0740) kept PostgreSQL when the local ``cortex``
+  database was there. Main reached it through libpq, which retries without
+  TLS, honours PGSSLMODE, client certificates and Kerberos: a probe cannot
+  replay all of it. So the error only runs one way. SQLite is chosen only when
+  main certainly failed: nothing answers on the port (or within the bound;
+  libpq would have waited forever), the server says the
+  ``cortex`` database does not exist, or it asks a plaintext client for a
+  password libpq would not have (PGPASSWORD, password file; launcher_pgpass).
+  Any other answer keeps PostgreSQL, where libpq connects or fails loudly
+  with the real error, as on main.
 
 The decision is written as the marker and printed, so it is made once, the
 same for the server and every hook, and never silently.
@@ -26,7 +31,6 @@ from __future__ import annotations
 
 import os
 import socket
-import ssl
 import struct
 import sys
 import time
@@ -46,11 +50,13 @@ _SSL_REQUEST = struct.pack("!ii", 8, 80877103)
 # source: PostgreSQL docs, protocol-message-formats (the Int32 length counts itself)
 _LENGTH_FIELD = 4
 _AUTH_OK = 0  # source: PostgreSQL docs, protocol-message-formats, AuthenticationOk
+# source: PostgreSQL docs, protocol-message-formats: CleartextPassword (3),
+# MD5Password (5), SASL (10) are the requests a password answers
+_SECRET_REQUESTS = frozenset({3, 5, 10})
+# source: PostgreSQL docs, errcodes-appendix (invalid_catalog_name)
+_NO_DATABASE = "3D000"
 _TERMINATE = b"X\x00\x00\x00\x04"  # source: PostgreSQL docs, protocol-message-formats
 _WRITTEN_BY = "launcher (first launch, ADR-1104)"  # source: ADR-1104
-_CREDENTIALS_ASKED = (
-    "credentials"  # sentinel: the server asks the client to authenticate
-)
 
 
 def has_earlier_state(methodology_dir: Path, marker_name: str) -> bool:
@@ -99,75 +105,76 @@ def _read_exactly(sock: socket.socket, size: int, deadline: _Deadline) -> bytes:
     return data
 
 
-def _negotiate_ssl(sock: socket.socket, deadline: _Deadline) -> socket.socket:
-    """libpq's default ``sslmode=prefer``: TLS when offered, unverified."""
-    deadline.arm(sock)
-    sock.sendall(_SSL_REQUEST)
-    if _read_exactly(sock, 1, deadline) != b"S":
-        return sock
-    context = ssl.create_default_context()
-    context.check_hostname = False
-    # source: PostgreSQL docs, runtime-config-connection, ssl_min_protocol_version
-    # (default TLSv1.2 since PostgreSQL 13)
-    context.minimum_version = ssl.TLSVersion.TLSv1_2
-    context.verify_mode = ssl.CERT_NONE
-    deadline.arm(sock)
-    return context.wrap_socket(sock, server_hostname=LEGACY_HOST)
-
-
-def _session_opens(sock: socket.socket, deadline: _Deadline) -> str:
-    """'' once the server is ready for queries, else why it is not."""
+def _messages(sock: socket.socket, deadline: _Deadline):
     while True:
         kind, length = struct.unpack("!ci", _read_exactly(sock, 5, deadline))
         if length < _LENGTH_FIELD:
             raise ValueError(f"malformed server message (length {length})")
-        payload = _read_exactly(sock, length - _LENGTH_FIELD, deadline)
-        if kind == b"Z":
-            return ""
-        if kind == b"E":
-            fields = [f for f in payload.split(b"\x00") if f[:1] == b"M"]
-            return fields[0][1:].decode(errors="replace") if fields else "error"
-        if kind == b"R" and struct.unpack("!i", payload[:4])[0] != _AUTH_OK:
-            return _CREDENTIALS_ASKED
+        yield kind, _read_exactly(sock, length - _LENGTH_FIELD, deadline)
 
 
-def local_database_answer(user: str) -> str:
-    """'' when the local ``cortex`` database opens a session, ``"credentials"``
-    when it asks for credentials, else the reason it does not answer."""
-    deadline = _Deadline(PROBE_SECONDS)
-    try:
-        with socket.create_connection(
-            (LEGACY_HOST, LEGACY_PORT), timeout=PROBE_SECONDS
-        ) as raw:
-            sock = _negotiate_ssl(raw, deadline)
-            try:
-                deadline.arm(sock)
-                sock.sendall(_startup_message(user))
-                reason = _session_opens(sock, deadline)
-                if not reason:
-                    sock.sendall(_TERMINATE)
-                return reason
-            finally:
-                if sock is not raw:
-                    sock.close()
-    except (OSError, struct.error, ValueError) as exc:
-        return str(exc) or type(exc).__name__
+def _error_fields(payload: bytes) -> dict:
+    return {f[:1]: f[1:].decode(errors="replace") for f in payload.split(b"\x00") if f}
 
 
-def _legacy_store(environ: dict) -> str:
-    """'' when the old URL would reach the local store, else why not."""
-    try:
-        user = launcher_pgpass.login_user(environ)
-    except LookupError as exc:
-        return str(exc)
-    reason = local_database_answer(user)
-    if reason != _CREDENTIALS_ASKED:
-        return reason
+def _verdict(kind: bytes, payload: bytes, environ: dict, user: str):
+    """(main certainly failed, why) for one server message, or None to read on."""
+    if kind == b"Z":
+        return False, "the database answers"
+    if kind == b"E":
+        fields = _error_fields(payload)
+        message = fields.get(b"M", "error")
+        return fields.get(b"C") == _NO_DATABASE, f"the server answered: {message}"
+    if kind != b"R":
+        return None
+    code = struct.unpack("!i", payload[:4])[0]
+    if code == _AUTH_OK:
+        return None
+    if code not in _SECRET_REQUESTS:
+        return False, f"the server asks for authentication libpq handles (code {code})"
     if launcher_pgpass.has_credentials(
         environ, LEGACY_HOST, LEGACY_PORT, LEGACY_DATABASE, user
     ):
-        return ""
-    return "the server asks for a password and none is set (PGPASSWORD, pgpass)"
+        return False, "the server asks for a password libpq has"
+    return True, "the server asks for a password and none is set (PGPASSWORD, pgpass)"
+
+
+def _conversation(sock, deadline: _Deadline, environ: dict, user: str):
+    deadline.arm(sock)
+    sock.sendall(_SSL_REQUEST)
+    if _read_exactly(sock, 1, deadline) != b"N":
+        return False, "the server answers the TLS request; libpq decides"
+    deadline.arm(sock)
+    sock.sendall(_startup_message(user))
+    for kind, payload in _messages(sock, deadline):
+        verdict = _verdict(kind, payload, environ, user)
+        if verdict is not None:
+            if kind == b"Z":
+                sock.sendall(_TERMINATE)
+            return verdict
+    raise ConnectionError("the server stopped answering")  # _messages never ends
+
+
+def legacy_store_answer(environ: dict) -> tuple:
+    """(main certainly failed, why) for the old local URL."""
+    try:
+        user = launcher_pgpass.login_user(environ)
+    except LookupError as exc:
+        return True, str(exc)
+    try:
+        sock = socket.create_connection(
+            (LEGACY_HOST, LEGACY_PORT), timeout=PROBE_SECONDS
+        )
+    except OSError as exc:
+        return True, f"nothing answered ({exc})"
+    with sock:
+        try:
+            return _conversation(sock, _Deadline(PROBE_SECONDS), environ, user)
+        except (TimeoutError, socket.timeout) as exc:
+            # libpq sets no timeout: main would have hung on this listener.
+            return True, f"no answer ({exc or 'timed out'})"
+        except (OSError, struct.error, ValueError) as exc:
+            return False, f"unclear answer ({exc or type(exc).__name__}); libpq decides"
 
 
 def decide(methodology_dir: Path, marker_name: str) -> tuple[str, str]:
@@ -175,14 +182,11 @@ def decide(methodology_dir: Path, marker_name: str) -> tuple[str, str]:
     if not has_earlier_state(methodology_dir, marker_name):
         return "sqlite", "fresh install"
     target = f"{LEGACY_HOST}:{LEGACY_PORT}/{LEGACY_DATABASE}"
-    reason = _legacy_store(dict(os.environ))
-    if not reason:
-        return (
-            "postgresql",
-            f"earlier Cortex state and the database at {target} answers",
-        )
+    failed, why = legacy_store_answer(dict(os.environ))
+    if not failed:
+        return "postgresql", f"earlier Cortex state; {target}: {why}"
     return "sqlite", (
-        f"earlier Cortex state, but no database answered at {target} ({reason});"
+        f"earlier Cortex state, but the old store at {target} cannot open ({why});"
         " set database_url to use PostgreSQL"
     )
 

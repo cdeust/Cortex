@@ -1,4 +1,5 @@
-"""scripts/launcher_pgpass.py: the credentials libpq would have sent.
+"""scripts/launcher_pgpass.py: the credentials libpq would have sent
+(``passwordFromFile`` / ``pwdfMatchesString`` rules).
 
 source: PostgreSQL docs, libpq-envars and libpq-pgpass
 """
@@ -48,7 +49,21 @@ def test_a_line_for_another_connection_does_not(tmp_path, line):
 def test_escaped_colons_are_part_of_a_field(tmp_path):
     env = _pgpass(tmp_path, "localhost:5432:cortex:me:p\\:w\n")
     assert launcher_pgpass.has_credentials(env, *_TARGET)
-    assert launcher_pgpass._fields("a\\:b:c\\\\d") == ["a:b", "c\\d"]
+    assert launcher_pgpass._password("p\\:w:ignored") == "p:w"
+    env = _pgpass(tmp_path, "localhost:5432:cortex:m\\:e:pw\n")
+    assert launcher_pgpass.has_credentials(env, "localhost", 5432, "cortex", "m:e")
+
+
+def test_an_escaped_star_is_a_literal_not_a_wildcard(tmp_path):
+    env = _pgpass(tmp_path, "localhost:5432:\\*:me:pw\n")
+    assert not launcher_pgpass.has_credentials(env, *_TARGET)
+
+
+def test_only_a_leading_hash_is_a_comment(tmp_path):
+    env = _pgpass(tmp_path, " #:*:*:*:pw\n")  # host " #" — a line, not a comment
+    assert not launcher_pgpass.has_credentials(env, *_TARGET)
+    env = _pgpass(tmp_path, "#localhost:5432:cortex:me:pw\n")
+    assert not launcher_pgpass.has_credentials(env, *_TARGET)
 
 
 def test_the_first_match_decides(tmp_path):

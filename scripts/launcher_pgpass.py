@@ -39,35 +39,52 @@ def _password_file(environ: dict) -> Path:
     return Path.home() / ".pgpass"
 
 
-def _fields(line: str) -> list:
-    """Split one pgpass line on unescaped ':' and undo ``\\:`` / ``\\\\``."""
-    fields, current, escaped = [], "", False
-    for char in line:
+def _field_matches(line: str, at: int, want: str):
+    """Index past ``want`` and its ':' when the field at ``at`` matches it, else
+    None. ``*`` alone is a wildcard; a backslash takes the next character
+    literally (libpq ``pwdfMatchesString``)."""
+    if line[at : at + 2] == "*:":
+        return at + 2
+    got = ""
+    while at < len(line) and line[at] != ":":
+        if line[at] == "\\" and at + 1 < len(line):
+            at += 1
+        got += line[at]
+        at += 1
+    return at + 1 if at < len(line) and got == want else None
+
+
+def _password(rest: str) -> str:
+    """The password: backslash escapes undone, cut at an unescaped ':'."""
+    out, escaped = "", False
+    for char in rest:
         if escaped:
-            current, escaped = current + char, False
+            out, escaped = out + char, False
         elif char == "\\":
             escaped = True
         elif char == ":":
-            fields.append(current)
-            current = ""
+            break
         else:
-            current += char
-    return [*fields, current]
+            out += char
+    return out
 
 
 def _file_has_entry(path: Path, wanted: tuple) -> bool:
+    """libpq ``passwordFromFile``: the first line whose four fields match wins."""
     if not path.is_file():
         return False
     if os.name != "nt" and path.stat().st_mode & _PRIVATE_MODE_MASK:
         return False
     for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
-        if not line.strip() or line.lstrip().startswith("#"):
+        if not line or line.startswith("#"):
             continue
-        fields = _fields(line)
-        if len(fields) == len(wanted) + 1 and all(
-            fields[i] in ("*", want) for i, want in enumerate(wanted)
-        ):
-            return bool(fields[-1])
+        at = 0
+        for want in wanted:
+            at = _field_matches(line, at, want)
+            if at is None:
+                break
+        if at is not None:
+            return bool(_password(line[at:]))
     return False
 
 

@@ -4,9 +4,9 @@ Before ADR-1104 a marketplace install had no marker and ran on
 ``postgresql://localhost:5432/cortex`` through libpq. The review of #749 found
 that such a user would have been moved to an empty SQLite store, and then that
 a probe narrower than libpq (no PGUSER, no password file, no TLS) would still
-move some of them. The decision now follows ``install-plugin.sh`` (ADR-0740)
-the way libpq connected, against a fake server on a free port: these tests
-never dial the real 5432.
+move some of them. SQLite is now chosen only when main certainly failed;
+any other answer leaves the decision to libpq. A fake server on a free port
+stands in: these tests never dial the real 5432.
 
 source: ADR-1104
 """
@@ -14,9 +14,7 @@ source: ADR-1104
 from __future__ import annotations
 
 import socket
-import ssl
 import struct
-import subprocess
 import sys
 import threading
 from pathlib import Path
@@ -60,16 +58,17 @@ def fake_server(monkeypatch, credentials_unset):
     """Serve one canned reply on a free port; record what the client sent."""
     servers = []
 
-    def start(reply: bytes, tls: ssl.SSLContext | None = None) -> dict:
+    def start(reply: bytes, tls_offered: bool = False) -> dict:
         listener = socket.create_server(("127.0.0.1", 0))
         seen: dict = {}
 
         def serve():
             conn, _ = listener.accept()
             seen["ssl_request"] = _recv(conn, 8)
-            conn.sendall(b"S" if tls else b"N")
-            if tls:
-                conn = tls.wrap_socket(conn, server_side=True)
+            conn.sendall(b"S" if tls_offered else b"N")
+            if tls_offered:
+                conn.close()
+                return
             with conn:
                 length = struct.unpack("!i", _recv(conn, 4))[0]
                 seen["startup"] = _recv(conn, length - 4)
@@ -98,10 +97,10 @@ def _earlier_state(tmp_path: Path) -> Path:
 
 
 def test_a_fresh_install_is_sqlite_without_dialing(tmp_path, monkeypatch):
-    def dial(_user):
+    def dial(_environ):
         raise AssertionError("a fresh install must not dial PostgreSQL")
 
-    monkeypatch.setattr(launcher_backend, "local_database_answer", dial)
+    monkeypatch.setattr(launcher_backend, "legacy_store_answer", dial)
     methodology = tmp_path / "methodology"
     methodology.mkdir()
     (methodology / "backend.json.tmp1").write_text("")
@@ -127,19 +126,25 @@ def test_pguser_names_the_user_as_libpq_did(tmp_path, fake_server, monkeypatch):
     assert b"user\x00cortex_owner\x00" in seen["startup"]
 
 
-def test_a_server_that_offers_tls_is_reached_over_tls(tmp_path, fake_server):
-    cert, key = tmp_path / "cert.pem", tmp_path / "key.pem"
-    subprocess.run(
-        ["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
-         "-subj", "/CN=localhost", "-keyout", str(key), "-out", str(cert)],
-        check=True, capture_output=True,
-    )  # fmt: skip
-    tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-    tls.load_cert_chain(cert, key)
-    seen = fake_server(_READY, tls)
+def test_a_server_that_offers_tls_keeps_postgresql(tmp_path, fake_server):
+    """libpq would negotiate TLS, retry plaintext, use certificates: it decides."""
+    fake_server(b"", tls_offered=True)
     backend, why = launcher_backend.decide(_earlier_state(tmp_path), _MARKER)
     assert backend == "postgresql", why
-    assert b"database\x00cortex\x00" in seen["startup"]
+    assert "libpq decides" in why
+
+
+@pytest.mark.parametrize("code", [7, 9, 12])  # GSSAPI, SSPI, unknown
+def test_an_authentication_libpq_handles_keeps_postgresql(tmp_path, fake_server, code):
+    fake_server(_message(b"R", struct.pack("!i", code)))
+    backend, why = launcher_backend.decide(_earlier_state(tmp_path), _MARKER)
+    assert backend == "postgresql", why
+
+
+def test_another_server_error_keeps_postgresql(tmp_path, fake_server):
+    fake_server(_message(b"E", b"SFATAL\x00C28000\x00Mno pg_hba.conf entry\x00\x00"))
+    backend, why = launcher_backend.decide(_earlier_state(tmp_path), _MARKER)
+    assert backend == "postgresql" and "no pg_hba.conf entry" in why
 
 
 def test_a_password_libpq_would_send_keeps_postgresql(
@@ -167,10 +172,10 @@ def test_a_database_that_does_not_open_is_sqlite_with_the_reason(
     assert reason in why and "set database_url" in why
 
 
-def test_a_malformed_reply_is_a_reason_not_a_traceback(tmp_path, fake_server):
+def test_a_malformed_reply_keeps_postgresql_with_the_reason(tmp_path, fake_server):
     fake_server(b"Z\x00\x00\x00\x02")  # length shorter than its own field
     backend, why = launcher_backend.decide(_earlier_state(tmp_path), _MARKER)
-    assert backend == "sqlite" and "no database answered" in why
+    assert backend == "postgresql" and "unclear answer" in why
 
 
 def test_nothing_listening_is_sqlite_with_the_reason(
@@ -182,7 +187,7 @@ def test_nothing_listening_is_sqlite_with_the_reason(
     monkeypatch.setattr(launcher_backend, "LEGACY_PORT", port)
     backend, why = launcher_backend.decide(_earlier_state(tmp_path), _MARKER)
     assert backend == "sqlite"
-    assert "no database answered" in why
+    assert "nothing answered" in why
 
 
 def test_a_silent_server_is_bounded_as_a_whole(
@@ -195,7 +200,7 @@ def test_a_silent_server_is_bounded_as_a_whole(
     with listener:
         backend, why = launcher_backend.decide(_earlier_state(tmp_path), _MARKER)
     assert backend == "sqlite"
-    assert "timed out" in why or "no answer" in why
+    assert "no answer" in why
 
 
 def test_the_decision_is_recorded_and_printed(tmp_path, monkeypatch, capsys):
