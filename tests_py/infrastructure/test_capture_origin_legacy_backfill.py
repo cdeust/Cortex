@@ -20,10 +20,14 @@ from mcp_server.core.capture_origin import (
     may_bypass_write_gate_on_content,
     trust_factor,
 )
-from mcp_server.infrastructure.sqlite_schema import COLUMN_BACKFILLS
+from mcp_server.infrastructure.sqlite_schema import (
+    COLUMN_BACKFILLS,
+    POST_MIGRATION_INDEXES_DDL,
+)
 from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 
 _DIM = 384
+_POST_MIGRATION_INDEXES = [ddl.split()[5] for ddl in POST_MIGRATION_INDEXES_DDL]
 # Any value strictly inside (0, 1) exercises the demotion branch. The MEASURED
 # value of W is not this test's business — it comes from the committed ablation
 # sweep, and hard-coding the real one here would silently pin the algorithm to
@@ -49,6 +53,15 @@ def _insert(store: SqliteMemoryStore, content: str, origin: str | None) -> int:
     if origin is not None:
         payload["capture_origin"] = origin
     return store.insert_memory(payload)
+
+
+def _drop_capture_origin(store: SqliteMemoryStore) -> None:
+    """Reconstruct the pre-#365 shape: the column did not exist, nor did the
+    ADR-1109 covering indexes that include it (SQLite refuses to drop a
+    column an index uses)."""
+    for name in _POST_MIGRATION_INDEXES:
+        store._conn.execute(f"DROP INDEX IF EXISTS {name}")
+    store._conn.execute("ALTER TABLE memories DROP COLUMN capture_origin")
 
 
 def _origin_of(store: SqliteMemoryStore, content: str) -> str:
@@ -102,7 +115,7 @@ class TestLegacyBackfillOnUpgrade:
             _insert(store, "also written before", ORIGIN_DELIBERATE)
 
             # Reconstruct the pre-#365 shape: the column simply did not exist.
-            store._conn.execute("ALTER TABLE memories DROP COLUMN capture_origin")
+            _drop_capture_origin(store)
             store._conn.commit()
 
             store._run_migrations()
@@ -124,7 +137,7 @@ class TestLegacyBackfillOnUpgrade:
         """
         store = SqliteMemoryStore()
         try:
-            store._conn.execute("ALTER TABLE memories DROP COLUMN capture_origin")
+            _drop_capture_origin(store)
             store._conn.commit()
             store._run_migrations()
             store._conn.commit()
