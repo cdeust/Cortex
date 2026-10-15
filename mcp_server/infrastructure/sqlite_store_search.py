@@ -6,6 +6,7 @@ and spread activation — replacing PL/pgSQL stored procedures.
 
 from __future__ import annotations
 
+import heapq
 import json
 import sqlite3
 from mcp_server.infrastructure.sqlite_compat import PsycopgCompatConnection
@@ -244,15 +245,24 @@ class SqliteSearchMixin:
 
         source: ADR-1109"""
         conds, params = where
-        sql = (
-            f"SELECT id, {column} AS score FROM current_memories "  # noqa: S608 — column, order and conditions are in-code literals; values are bound parameters (docs/ASSURANCE-CASE.md §5)
-            f"WHERE {' AND '.join(conds)} ORDER BY {order} LIMIT ?"
+        select = (
+            f"SELECT id, {column} AS score FROM current_memories "  # noqa: S608 — column and conditions are in-code literals; values are bound parameters (docs/ASSURANCE-CASE.md §5)
+            f"WHERE {' AND '.join(conds)}"
         )
-        rows = fetch_with_ties(
-            lambda n: self._conn.execute(sql, [*params, n]).fetchall(),
-            pool,
-            lambda r: r["score"],
-        )
+        rows = self._conn.execute(
+            f"{select} ORDER BY {order} LIMIT ?", [*params, pool]
+        ).fetchall()
+        if len(rows) == pool:
+            # The whole boundary group in one more query: rows equal to the
+            # pool's last score, read back from the same column.
+            boundary = rows[-1]["score"]
+            head = [r for r in rows if r["score"] != boundary]
+            rows = (
+                head
+                + self._conn.execute(
+                    f"{select} AND {column} = ? ORDER BY {order}", [*params, boundary]
+                ).fetchall()
+            )
         _add(scores, tied_rrf([(r["id"], r["score"]) for r in rows], weight, k))
 
     @staticmethod
@@ -315,11 +325,18 @@ class SqliteSearchMixin:
             if r["capture_origin"] not in trusted:
                 scores[r["id"]] *= untrusted_factor
 
-    def _ranked_ids(self, scores: dict[int, float]) -> list[int]:
-        """Score order; exact ties go to the newer memory.
+    def _ranked_ids(self, scores: dict[int, float], top: int) -> list[int]:
+        """The ``top`` best ids in score order; exact ties go to the newer memory.
+
+        Only ids scoring at least the ``top``-th score can be kept, so only
+        their ``created_at`` is read (ADR-1109: a tie group can make every
+        memory a scored id).
 
         source: ADR-1106"""
         ids = list(scores)
+        if len(ids) > top:
+            cut = heapq.nlargest(top, scores.values())[-1]
+            ids = [i for i in ids if scores[i] >= cut]
         placeholders = ",".join("?" * len(ids))
         created = {
             r["id"]: r["created_at"]
@@ -328,7 +345,7 @@ class SqliteSearchMixin:
                 ids,
             ).fetchall()
         }
-        return sorted(ids, key=lambda i: (scores[i], created[i], i), reverse=True)
+        return sorted(ids, key=lambda i: (scores[i], created[i], i), reverse=True)[:top]
 
     def _fetch_ranked_results(
         self,
@@ -338,7 +355,7 @@ class SqliteSearchMixin:
         domain: str | None,
         directory: str | None,
     ) -> list[dict[str, Any]]:
-        top_ids = self._ranked_ids(scores)[: max_results * 3]
+        top_ids = self._ranked_ids(scores, max_results * 3)
         placeholders = ",".join("?" * len(top_ids))
         # source: ADR-0616
         rows = self._conn.execute(
