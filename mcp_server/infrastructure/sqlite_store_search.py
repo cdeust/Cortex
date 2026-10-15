@@ -1,13 +1,14 @@
-"""Search and retrieval mixin for SqliteMemoryStore.
+"""Search mixin for SqliteMemoryStore: FTS5 and sqlite-vec listings, and the
+FTS5 recall signal.
 
-Implements client-side WRRF fusion, FTS5 search, vector search,
-and spread activation — replacing PL/pgSQL stored procedures.
+The recall fusion lives in ``sqlite_store_recall.py`` and the vector, heat and
+recency signals in ``sqlite_store_recall_signals.py`` (ADR-1109 split).
+
+source: ADR-0616
 """
 
 from __future__ import annotations
 
-import heapq
-import json
 import sqlite3
 from mcp_server.infrastructure.sqlite_compat import PsycopgCompatConnection
 from typing import Any
@@ -16,33 +17,12 @@ import numpy as np
 
 from mcp_server.observability import silent_failure
 from mcp_server.shared.code_tokenize import expand_fts_query as _expand_fts_query
-from mcp_server.infrastructure.embedding_engine import current_embedding_mode
 from mcp_server.infrastructure.sqlite_scope_clause import directory_scope_clause
-from mcp_server.shared.tie_groups import fetch_with_ties, tied_rrf
-
-
-def _decode_tags(raw: Any) -> list:
-    """Deserialize a SQLite ``tags`` TEXT column into a list.
-
-    source: ADR-0616"""
-    if isinstance(raw, str):
-        try:
-            return json.loads(raw)
-        except (json.JSONDecodeError, TypeError):
-            return []
-    return raw or []
-
-
-def _add(scores: dict[int, float], credit: dict[int, float]) -> None:
-    """Add one signal's credit into the fused scores.
-
-    source: ADR-0616"""
-    for mid, c in credit.items():
-        scores[mid] = scores.get(mid, 0) + c
+from mcp_server.shared.tie_groups import add_credit, fetch_with_ties, tied_rrf
 
 
 class SqliteSearchMixin:
-    """Search operations on SQLite with client-side WRRF fusion."""
+    """FTS5 and sqlite-vec search operations on SQLite."""
 
     _conn: PsycopgCompatConnection
     _has_vec: bool
@@ -51,80 +31,6 @@ class SqliteSearchMixin:
     def _bytes_to_vector(emb: bytes | None) -> np.ndarray | None:
         """Provided by SqliteMemoryStore."""
         ...
-
-    def recall_memories(
-        self,
-        query_text: str,
-        query_embedding: bytes | None,
-        intent: str = "general",
-        domain: str | None = None,
-        directory: str | None = None,
-        agent_topic: str | None = None,
-        min_heat: float = 0.05,
-        max_results: int = 10,
-        wrrf_k: int = 60,
-        weights: dict[str, float] | None = None,
-        include_globals: bool = True,
-        trusted_origins: tuple[str, ...] = (),
-        untrusted_factor: float = 1.0,
-    ) -> list[dict[str, Any]]:
-        """Client-side WRRF fusion: vector + FTS5 + heat + recency.
-
-        source: ADR-0616"""
-        w = weights or {}
-        w_vector = w.get("vector", 1.0)
-        w_fts = w.get("fts", 0.5)
-        w_heat = w.get("heat", 0.3)
-        w_recency = w.get("recency", 0.0)
-        pool = max_results * 10
-        scores: dict[int, float] = {}
-
-        self._signal_vector(scores, query_embedding, w_vector, wrrf_k, pool)
-        self._signal_fts(scores, query_text, w_fts, wrrf_k, pool)
-        self._signal_heat(scores, w_heat, wrrf_k, pool, min_heat, domain, directory)
-        self._signal_recency(
-            scores, w_recency, wrrf_k, pool, min_heat, domain, directory
-        )
-        self._apply_agent_boost(scores, agent_topic, w_vector, wrrf_k)
-        self._apply_trust_factor(scores, trusted_origins, untrusted_factor)
-
-        if not scores:
-            return []
-        return self._fetch_ranked_results(
-            scores, max_results, min_heat, domain, directory
-        )
-
-    def _signal_vector(
-        self,
-        scores: dict[int, float],
-        query_embedding: bytes | None,
-        weight: float,
-        k: int,
-        pool: int,
-    ) -> None:
-        if not self._has_vec or query_embedding is None or weight <= 0:
-            return
-        vec = self._bytes_to_vector(query_embedding)
-        if vec is None:
-            return
-        try:
-            # source: ADR-1109 -- vec0's KNN cut cannot keep ties, so the cut
-            # is widened until the boundary distance group is whole.
-            rows = fetch_with_ties(
-                lambda n: self._conn.execute(
-                    "SELECT rowid, distance FROM memories_vec "
-                    "WHERE embedding MATCH ? ORDER BY distance LIMIT ?",
-                    (vec.tobytes(), n),
-                ).fetchall(),
-                pool,
-                lambda r: r["distance"],
-            )
-            # source: ADR-0616
-            keep = self._vec_rows_in_query_space([r["rowid"] for r in rows])
-            ranked = [(r["rowid"], r["distance"]) for r in rows if r["rowid"] in keep]
-            _add(scores, tied_rrf(ranked, weight, k))
-        except Exception as exc:  # noqa: BLE001 — search degrades to the remaining signals
-            silent_failure.note("sqlite_store.rrf_vector_signal", exc)
 
     def _signal_fts(
         self,
@@ -152,247 +58,9 @@ class SqliteSearchMixin:
                 lambda r: r["rank"],
             )
             ranked = [(r["rowid"], r["rank"]) for r in rows]
-            _add(scores, tied_rrf(ranked, weight, k))
+            add_credit(scores, tied_rrf(ranked, weight, k))
         except Exception as exc:  # noqa: BLE001 — search degrades to the remaining signals
             silent_failure.note("sqlite_store.rrf_fts_signal", exc)
-
-    def _vec_rows_in_query_space(self, rowids: list[int]) -> set[int]:
-        """Subset of ``rowids`` whose embedding space matches the query's.
-
-        precondition: ``rowids`` are memory ids returned by the vec KNN.
-                postcondition: returns the ids whose ``memories.embedding_model`` is
-                compatible with the current process embedding mode :
-                a neural query keeps 'neural' and legacy '' rows; a fallback query keeps
-                only 'fallback' rows; an 'unknown' mode (no engine constructed — e.g. a
-                raw-vector unit test) keeps everything. Fail-open on a missing column.
-
-        source: ADR-0616"""
-        if not rowids:
-            return set()
-
-        mode = current_embedding_mode()
-        if mode == "unknown":
-            return set(rowids)
-        compatible = {"neural", ""} if mode == "neural" else {"fallback"}
-        placeholders = ",".join("?" * len(rowids))
-        try:
-            rows = self._conn.execute(
-                f"SELECT id, embedding_model FROM memories "  # noqa: S608 — interpolation is a generated ?/%s placeholder list; every value is a bound parameter (docs/ASSURANCE-CASE.md §5)
-                f"WHERE id IN ({placeholders})",
-                rowids,
-            ).fetchall()
-        except sqlite3.OperationalError:
-            return set(rowids)
-        return {r["id"] for r in rows if (r["embedding_model"] or "") in compatible}
-
-    def _signal_heat(
-        self,
-        scores: dict[int, float],
-        weight: float,
-        k: int,
-        pool: int,
-        min_heat: float,
-        domain: str | None,
-        directory: str | None,
-    ) -> None:
-        if weight <= 0:
-            return
-        # source: ADR-1106 -- (heat_base DESC, id DESC) keeps the index plan.
-        self._signal_column(
-            scores,
-            "heat_base",
-            "heat_base DESC, id DESC",
-            weight,
-            k,
-            pool,
-            self._build_filter(min_heat, domain, directory),
-        )
-
-    def _signal_recency(
-        self,
-        scores: dict[int, float],
-        weight: float,
-        k: int,
-        pool: int,
-        min_heat: float,
-        domain: str | None,
-        directory: str | None,
-    ) -> None:
-        if weight <= 0:
-            return
-        self._signal_column(
-            scores,
-            "created_at",
-            "created_at DESC, id DESC",
-            weight,
-            k,
-            pool,
-            self._build_filter(min_heat, domain, directory),
-        )
-
-    def _signal_column(
-        self,
-        scores: dict[int, float],
-        column: str,
-        order: str,
-        weight: float,
-        k: int,
-        pool: int,
-        where: tuple[list[str], list[Any]],
-    ) -> None:
-        """Rank-fuse one stored column; its boundary tie group is kept whole
-        and tied rows share their positions' credit.
-
-        source: ADR-1109"""
-        conds, params = where
-        select = (
-            f"SELECT id, {column} AS score FROM current_memories "  # noqa: S608 — column and conditions are in-code literals; values are bound parameters (docs/ASSURANCE-CASE.md §5)
-            f"WHERE {' AND '.join(conds)}"
-        )
-        rows = self._conn.execute(
-            f"{select} ORDER BY {order} LIMIT ?", [*params, pool]
-        ).fetchall()
-        if len(rows) == pool:
-            # The whole boundary group in one more query: rows equal to the
-            # pool's last score, read back from the same column.
-            boundary = rows[-1]["score"]
-            head = [r for r in rows if r["score"] != boundary]
-            rows = (
-                head
-                + self._conn.execute(
-                    f"{select} AND {column} = ? ORDER BY {order}", [*params, boundary]
-                ).fetchall()
-            )
-        _add(scores, tied_rrf([(r["id"], r["score"]) for r in rows], weight, k))
-
-    @staticmethod
-    def _build_filter(
-        min_heat: float,
-        domain: str | None,
-        directory: str | None,
-    ) -> tuple[list[str], list[Any]]:
-        conds = ["heat_base >= ?", "NOT is_stale"]
-        params: list[Any] = [min_heat]
-        if domain:
-            conds.append("(domain = ? OR is_global = 1)")
-            params.append(domain)
-        if directory:
-            conds.append("(directory_context = ? OR is_global = 1)")
-            params.append(directory)
-        return conds, params
-
-    def _apply_agent_boost(
-        self,
-        scores: dict[int, float],
-        agent_topic: str | None,
-        w_vector: float,
-        wrrf_k: int,
-    ) -> None:
-        if not agent_topic or not scores:
-            return
-        boost = 0.3 * (w_vector / wrrf_k)
-        ids = list(scores.keys())
-        placeholders = ",".join("?" * len(ids))
-        rows = self._conn.execute(
-            f"SELECT id FROM memories WHERE id IN ({placeholders}) "  # noqa: S608 — interpolation is a generated ?/%s placeholder list; every value is a bound parameter (docs/ASSURANCE-CASE.md §5)
-            f"AND agent_context = ?",
-            [*ids, agent_topic],
-        ).fetchall()
-        for r in rows:
-            scores[r["id"]] += boost
-
-    def _apply_trust_factor(
-        self,
-        scores: dict[int, float],
-        trusted_origins: tuple[str, ...],
-        untrusted_factor: float,
-    ) -> None:
-        """Multiplicative, not additive: an additive penalty cannot demote a
-                passage that wins on similarity.
-
-        source: ADR-0616"""
-        if not scores or untrusted_factor == 1.0:
-            return
-        ids = list(scores.keys())
-        placeholders = ",".join("?" * len(ids))
-        rows = self._conn.execute(
-            f"SELECT id, capture_origin FROM memories WHERE id IN ({placeholders})",  # noqa: S608 — interpolation is a generated ? placeholder list; every value is a bound parameter (docs/ASSURANCE-CASE.md §5)
-            ids,
-        ).fetchall()
-        trusted = set(trusted_origins)
-        for r in rows:
-            # source: ADR-0616
-            if r["capture_origin"] not in trusted:
-                scores[r["id"]] *= untrusted_factor
-
-    def _ranked_ids(self, scores: dict[int, float], top: int) -> list[int]:
-        """The ``top`` best ids in score order; exact ties go to the newer memory.
-
-        Only ids scoring at least the ``top``-th score can be kept, so only
-        their ``created_at`` is read (ADR-1109: a tie group can make every
-        memory a scored id).
-
-        source: ADR-1106"""
-        ids = list(scores)
-        if len(ids) > top:
-            cut = heapq.nlargest(top, scores.values())[-1]
-            ids = [i for i in ids if scores[i] >= cut]
-        placeholders = ",".join("?" * len(ids))
-        created = {
-            r["id"]: r["created_at"]
-            for r in self._conn.execute(
-                f"SELECT id, created_at FROM memories WHERE id IN ({placeholders})",  # noqa: S608 — interpolation is a generated ? placeholder list; every value is a bound parameter (docs/ASSURANCE-CASE.md §5)
-                ids,
-            ).fetchall()
-        }
-        return sorted(ids, key=lambda i: (scores[i], created[i], i), reverse=True)[:top]
-
-    def _fetch_ranked_results(
-        self,
-        scores: dict[int, float],
-        max_results: int,
-        min_heat: float,
-        domain: str | None,
-        directory: str | None,
-    ) -> list[dict[str, Any]]:
-        top_ids = self._ranked_ids(scores, max_results * 3)
-        placeholders = ",".join("?" * len(top_ids))
-        # source: ADR-0616
-        rows = self._conn.execute(
-            f"SELECT * FROM current_memories WHERE id IN ({placeholders})",  # noqa: S608 — interpolation is a generated ?/%s placeholder list; every value is a bound parameter (docs/ASSURANCE-CASE.md §5)
-            top_ids,
-        ).fetchall()
-        row_map = {r["id"]: r for r in rows}
-
-        results = []
-        for mid in top_ids:
-            row = row_map.get(mid)
-            if row is None:
-                continue
-            if row["heat_base"] < min_heat or row["is_stale"]:
-                continue
-            is_global = bool(row.get("is_global", 0))
-            if domain and row["domain"] != domain and not is_global:
-                continue
-            if directory and row["directory_context"] != directory and not is_global:
-                continue
-            results.append(
-                {
-                    "memory_id": mid,
-                    "content": row["content"],
-                    "score": scores[mid],
-                    "heat": row["heat_base"],
-                    "domain": row["domain"],
-                    "created_at": row["created_at"],
-                    "store_type": row["store_type"],
-                    "tags": _decode_tags(row["tags"]),
-                    "importance": row["importance"],
-                    "surprise_score": row["surprise_score"],
-                    # source: ADR-0616
-                    "capture_origin": row["capture_origin"],
-                }
-            )
-        return results
 
     def search_fts(
         self,

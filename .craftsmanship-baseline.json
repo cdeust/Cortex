@@ -4319,18 +4319,8 @@
     },
     {
       "file": "mcp_server/infrastructure/sqlite_store_search.py",
-      "kind": "file-size",
-      "detail": "exceeds 300-line cap"
-    },
-    {
-      "file": "mcp_server/infrastructure/sqlite_store_search.py",
       "kind": "layer-violation",
       "detail": "mcp_server.observability"
-    },
-    {
-      "file": "mcp_server/infrastructure/sqlite_store_search.py",
-      "kind": "method-size",
-      "detail": "SqliteSearchMixin._fetch_ranked_results"
     },
     {
       "file": "mcp_server/infrastructure/sqlite_store_search.py",

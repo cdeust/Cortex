@@ -48,8 +48,11 @@ adheres to [Semantic Versioning](https://semver.org/).
   get the new function on the next store open (schema hash). Measured:
   LoCoMo R@10 0.8860, MRR 0.7768 (ADR-1106: 0.8870 / 0.7780), identical
   across two runs; LongMemEval-S 0.9820 / 0.9059. On SQLite a store whose
-  memories share one heat puts every memory in the heat signal (108 ms per
-  recall at 40,000 rows, against 1.2 ms).
+  memories share one heat puts every memory in the heat signal (91 ms per
+  recall at 40,000 rows, against 1.2 ms). A tie group of any size stays
+  within SQLite's limits: sqlite-vec's KNN k never grows past `pool + 1`
+  (4096 is its cap) and id sets bind as one JSON array; a vector-signal
+  failure now raises instead of silently dropping the vector signal.
 - **Recall returns the same memories whatever the table's physical layout**
   (ADR-1106). Every `ORDER BY ... LIMIT` on the recall path cut exact score
   ties in heap order, which VACUUM, CLUSTER and free-space reuse change: the

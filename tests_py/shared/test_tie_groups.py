@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from mcp_server.shared.tie_groups import fetch_with_ties, tied_rrf
+from mcp_server.shared.tie_groups import add_credit, fetch_with_ties, tied_rrf
 
 
 def fetcher(scores: list[int], calls: list[int]):
@@ -41,3 +41,9 @@ def test_tied_rrf_shares_the_groups_positions():
     assert credit[2] == credit[3] == pytest.approx((1 / 62 + 1 / 63) / 2)
     assert credit[4] == pytest.approx(1 / 64)
     assert sum(credit.values()) == pytest.approx(sum(1 / (60 + r) for r in range(1, 5)))
+
+
+def test_add_credit_sums_into_existing_and_new_ids():
+    scores = {1: 0.5}
+    add_credit(scores, {1: 0.25, 2: 0.125})
+    assert scores == {1: 0.75, 2: 0.125}

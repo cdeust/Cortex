@@ -109,20 +109,17 @@ class TestSqliteVecIndexSignals:
         assert any("sqlite_store.rrf_fts_signal" in r.message for r in caplog.records)
         _assert_noted("sqlite_store.rrf_fts_signal", "poisoned: memories_fts")
 
-    def test_rrf_vector_signal_failure_degrades_and_is_logged(
-        self, caplog, sqlite_store
-    ):
+    def test_rrf_vector_signal_failure_raises(self, sqlite_store):
+        """ADR-1109: a vector-signal failure raises instead of silently
+        dropping the vector signal from every ranking."""
         scores: dict[int, float] = {}
         sqlite_store._has_vec = True
         sqlite_store._conn = _VecPoisonConn(sqlite_store._conn, "memories_vec")
         emb = np.zeros(4, dtype=np.float32).tobytes()
-        with caplog.at_level("WARNING", logger=WARN_LOGGER):
+        with pytest.raises(RuntimeError, match="poisoned: memories_vec"):
             sqlite_store._signal_vector(scores, emb, 1.0, 60, 10)
         assert scores == {}
-        assert any(
-            "sqlite_store.rrf_vector_signal" in r.message for r in caplog.records
-        )
-        _assert_noted("sqlite_store.rrf_vector_signal", "poisoned: memories_vec")
+        assert "sqlite_store.rrf_vector_signal" not in silent_failure.status()
 
     def test_pre_migration_value_write_is_still_a_noop(self, sqlite_store):
         import sqlite3

@@ -72,3 +72,13 @@ def tied_rrf(
             credit[mid] = share / (end - start + 1)
         start = end + 1
     return credit
+
+
+def add_credit(scores: dict[int, float], credit: dict[int, float]) -> None:
+    """Add one signal's credit into the fused scores.
+
+    postcondition: ``scores[i]`` grows by ``credit[i]`` for every id in
+    ``credit``; ids absent from ``scores`` start at 0.
+    """
+    for mid, c in credit.items():
+        scores[mid] = scores.get(mid, 0) + c

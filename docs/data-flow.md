@@ -81,7 +81,7 @@ flowchart TD
 On PostgreSQL, `recall_memories()` combines the five signals as a weighted
 sum of max-normalised scores (`infrastructure/pg_schema.py`). On SQLite, the
 fusion is rank-based, w/(k + rank), over vector, FTS5, heat and recency, with
-no trigram signal (`infrastructure/sqlite_store_search.py`).
+no trigram signal (`infrastructure/sqlite_store_recall.py`).
 
 ### Retrieval Signals
 
