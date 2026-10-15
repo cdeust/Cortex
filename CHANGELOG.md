@@ -49,11 +49,12 @@ adheres to [Semantic Versioning](https://semver.org/).
   LoCoMo R@10 0.8860, MRR 0.7768 (ADR-1106: 0.8870 / 0.7780), identical
   across two runs; LongMemEval-S 0.9820 / 0.9059. On SQLite a tie group past
   the pool is kept as a predicate with one shared credit and filled newest
-  first, never read row by row: a store whose memories share one heat
-  recalls in 4.5 ms at 40,000 rows and 12.9 ms at 250,000 (before: 0.8 and
-  1.6 ms), through a new `(heat_base, created_at, id, ...)` index built once
-  on the first open. sqlite-vec's KNN serves k up to its cap of 4096 and a
-  larger pool reads the same distance through `vec_distance_l2`, so any
+  first, never read row by row, through covering indexes built once on
+  the first open. On the production arguments (trust factor 0.7) a store
+  whose memories share one heat recalls in up to 77 ms at 250,000 memories
+  (before: about 3 ms), 3.6 to 11.4 ms with a realistic heat spread.
+  sqlite-vec's KNN serves k up to its cap of 4096 and a larger pool reads
+  the same distance through `vec_distance_l2`, so any
   `max_results` works; id sets bind as one JSON array; a vector-signal
   failure now raises instead of silently dropping the vector signal.
 - **Recall returns the same memories whatever the table's physical layout**

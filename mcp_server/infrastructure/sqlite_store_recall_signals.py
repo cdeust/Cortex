@@ -30,14 +30,14 @@ VEC0_K_MAX = 4096
 # Fusion order of the signals: scores add up in this order (ADR-1109).
 VEC, HEAT, RECENCY = 0, 2, 3  # FTS = 1 (sqlite_store_search.py)
 
-# source: ADR-1109 -- the index serving each column group's equality in
-# created_at DESC, id DESC order (sqlite_schema.py INDEXES_DDL); named with
-# INDEXED BY, because without ANALYZE statistics the planner prefers the
-# narrower (heat_base) index and sorts the whole group (measured 2026-10-16:
-# count 7.6 ms, fill 11.6 ms with a temp B-tree, 40,000 rows at one heat).
+# source: ADR-1109 -- the covering index serving each column group's count
+# and its newest-first fill (POST_MIGRATION_INDEXES_DDL, sqlite_schema.py);
+# named with INDEXED BY, because without ANALYZE statistics the planner
+# prefers the narrower (heat_base) index and sorts the whole group (measured
+# 2026-10-16: count 7.6 ms, fill 11.6 ms with a temp B-tree, 40,000 rows).
 _GROUP_INDEX = {
     "heat_base": "idx_memories_heat_base_created_at",
-    "created_at": "idx_memories_created_at",
+    "created_at": "idx_memories_created_at_fill",
 }
 
 # One bound parameter, a JSON array of ids.

@@ -336,15 +336,17 @@ INDEXES_DDL: list[str] = [
 # Indexes over columns that MIGRATIONS adds (is_global, superseded_by_id):
 # created after the migrations, without a catch, so a failure is loud.
 POST_MIGRATION_INDEXES_DDL: list[str] = [
-    # source: ADR-1109 -- a heat tie group past the recall pool is counted
-    # (covering: the filter columns are in the index) and filled newest first
-    # (heat_base = ? ORDER BY created_at DESC, id DESC LIMIT n, no sort) from
-    # this index; 40,000 rows at one heat and one created_at, 2026-10-16:
-    # count 8.6 -> 1.8 ms, fill 0.03 ms (EXPLAIN QUERY PLAN: covering, no
-    # temp B-tree).
+    # source: ADR-1109 -- a tie group past the recall pool is counted and
+    # filled newest first (column = ? ORDER BY created_at DESC, id DESC) from
+    # these covering indexes: every column the count and the fill filter on
+    # (current_memories, the recall filter, the agent and trust partitions)
+    # is in the index, so neither reads a table row; measured in ADR-1109.
     "CREATE INDEX IF NOT EXISTS idx_memories_heat_base_created_at "
     "ON memories (heat_base, created_at, id, is_stale, superseded_by_id, "
-    "is_global, domain, directory_context)",
+    "is_global, domain, directory_context, capture_origin, agent_context)",
+    "CREATE INDEX IF NOT EXISTS idx_memories_created_at_fill "
+    "ON memories (created_at, id, heat_base, is_stale, superseded_by_id, "
+    "is_global, domain, directory_context, capture_origin, agent_context)",
 ]
 
 

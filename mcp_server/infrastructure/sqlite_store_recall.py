@@ -106,18 +106,18 @@ class SqliteRecallMixin(SqliteRecallSignalsMixin):
         source: ADR-0616"""
         w = weights or {}
         filters = (min_heat, domain, directory)
-        contribs, groups = self._contributions(
-            query_text, query_embedding, w, (wrrf_k, max_results * 10), filters
-        )
-        if not contribs and not groups:
-            return []
-        scores = self._materialized_scores(contribs, groups)
         adj = Adjustments(
             agent_topic,
             0.3 * (w.get("vector", 1.0) / wrrf_k),
             json.dumps(list(trusted_origins)),
             untrusted_factor,
         )
+        contribs, groups = self._contributions(
+            query_text, query_embedding, w, (wrrf_k, max_results * 10), filters
+        )
+        if not contribs and not groups:
+            return []
+        scores = self._materialized_scores(contribs, groups)
         self._apply_agent_boost(scores, adj)
         self._apply_trust_factor(scores, trusted_origins, untrusted_factor)
         best = self._ranked(scores, groups, adj, max_results * 3)
@@ -141,7 +141,10 @@ class SqliteRecallMixin(SqliteRecallSignalsMixin):
         signals = [
             (VEC, (vec, None)),
             (FTS, self._signal_fts(query_text, w.get("fts", 0.5), k, pool)),
-            (HEAT, self._signal_column(HEAT, "heat_base", _HEAT_ORDER, heat, filters)),
+            (
+                HEAT,
+                self._signal_column(HEAT, "heat_base", _HEAT_ORDER, heat, filters),
+            ),
             (
                 RECENCY,
                 self._signal_column(

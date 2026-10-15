@@ -46,6 +46,10 @@ def build_store(rnd: random.Random) -> SqliteMemoryStore:
     """Rows with 2-3 distinct values per signal, so ties run past the pool."""
     store = SqliteMemoryStore()
     heats = rnd.sample([0.2, 0.5, 0.9], rnd.choice([2, 3]))
+    # Skewed stores too: no trusted row, only trusted rows, no or only agent
+    # matches, so whole agent and trust partitions are empty.
+    agents = rnd.choice([["t", "u", None], ["u", None], ["t"], ["t", None, None, None]])
+    origins = rnd.choice([["user", "auto", "hook"], ["auto", "hook"], ["user"]])
     n = rnd.randint(20, 160)
     for _ in range(n):
         words = rnd.choice([1, 2])
@@ -62,11 +66,12 @@ def build_store(rnd: random.Random) -> SqliteMemoryStore:
         )
         store._conn.execute(
             "UPDATE memories SET heat_base = ?, created_at = ?, agent_context = ?,"
-            " capture_origin = ?, domain = ?, is_global = ?, is_stale = ? WHERE id = ?",
+            " capture_origin = ?, domain = ?, is_global = ?, is_stale = ?,"
+            " directory_context = ? WHERE id = ?",
             (rnd.choice(heats), rnd.choice(_STAMPS[: rnd.choice([1, 2, 3])]),
-             "t" if rnd.random() < 0.33 else None, rnd.choice(["user", "auto", "hook"]),
+             rnd.choice(agents), rnd.choice(origins),
              rnd.choice(["a", "b"]), int(rnd.random() < 0.1),
-             int(rnd.random() < 0.05), mid),
+             int(rnd.random() < 0.05), rnd.choice(["/p", "/q"]), mid),
         )  # fmt: skip
     ids = [r["id"] for r in store._conn.execute("SELECT id FROM memories").fetchall()]
     for mid in rnd.sample(ids, max(1, n // 15)):
@@ -91,6 +96,9 @@ def _signal_rows(store, args: dict, pool: int) -> list[list]:
     cond, params = "heat_base >= ? AND NOT is_stale", [min_heat]
     if domain:
         cond, params = cond + " AND (domain = ? OR is_global = 1)", [*params, domain]
+    if args["directory"]:
+        cond += " AND (directory_context = ? OR is_global = 1)"
+        params = [*params, args["directory"]]
     out = [[], [], [], []]
     if w["vector"] > 0 and args["emb"] is not None:
         out[0] = [
@@ -155,9 +163,9 @@ def reference(store: SqliteMemoryStore, args: dict) -> list[tuple[int, float]]:
             and r["heat_base"] >= args["min_heat"]
             and not r["is_stale"]
         )
-        if visible and (
-            not args["domain"] or r["domain"] == args["domain"] or r["is_global"]
-        ):
+        in_dir = not args["directory"] or r["directory_context"] == args["directory"]
+        in_domain = not args["domain"] or r["domain"] == args["domain"]
+        if visible and (r["is_global"] or (in_domain and in_dir)):
             out.append((mid, s))
     return out
 
@@ -174,6 +182,7 @@ def random_args(rnd: random.Random) -> dict:
         "max_results": rnd.choice([1, 2, 3]),
         "min_heat": rnd.choice([0.0, 0.4]),
         "domain": rnd.choice([None, "a"]),
+        "directory": rnd.choice([None, "/p"]),
         "agent_topic": rnd.choice([None, "t"]),
         "untrusted_factor": untrusted,
     }
@@ -190,6 +199,7 @@ def test_recall_equals_the_naive_reference(seed):
                 query_text=args["text"],
                 query_embedding=args["emb"],
                 domain=args["domain"],
+                directory=args["directory"],
                 agent_topic=args["agent_topic"],
                 min_heat=args["min_heat"],
                 max_results=args["max_results"],
