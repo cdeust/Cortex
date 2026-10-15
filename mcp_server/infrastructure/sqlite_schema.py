@@ -333,6 +333,20 @@ INDEXES_DDL: list[str] = [
     "CREATE INDEX IF NOT EXISTS idx_memories_agent_context ON memories (agent_context)",
 ]
 
+# Indexes over columns that MIGRATIONS adds (is_global, superseded_by_id):
+# created after the migrations, without a catch, so a failure is loud.
+POST_MIGRATION_INDEXES_DDL: list[str] = [
+    # source: ADR-1109 -- a heat tie group past the recall pool is counted
+    # (covering: the filter columns are in the index) and filled newest first
+    # (heat_base = ? ORDER BY created_at DESC, id DESC LIMIT n, no sort) from
+    # this index; 40,000 rows at one heat and one created_at, 2026-10-16:
+    # count 8.6 -> 1.8 ms, fill 0.03 ms (EXPLAIN QUERY PLAN: covering, no
+    # temp B-tree).
+    "CREATE INDEX IF NOT EXISTS idx_memories_heat_base_created_at "
+    "ON memories (heat_base, created_at, id, is_stale, superseded_by_id, "
+    "is_global, domain, directory_context)",
+]
+
 
 def get_all_ddl() -> list[str]:
     """Return all DDL statements in execution order.

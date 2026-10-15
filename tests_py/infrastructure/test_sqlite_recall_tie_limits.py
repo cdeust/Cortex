@@ -1,21 +1,22 @@
 """SQLite recall keeps a tie group of any size within SQLite's hard limits.
 
 ADR-1109 keeps a signal's whole boundary tie group, so a group can hold every
-memory. Two engine limits stood in the way at 7293672d (review of #760):
+memory. Engine limits met by earlier heads of #760:
 
-- sqlite-vec refuses a KNN k above 4096 (``SQLITE_VEC_VEC0_K_MAX``); growing
-  k to read a boundary group failed, and the vector signal was dropped
-  silently. The KNN now asks for ``pool + 1`` rows only and reads the rest of
-  the group with an exact distance query.
-- a statement binding one parameter per id fails past the build's
-  ``SQLITE_MAX_VARIABLE_NUMBER`` (``too many SQL variables``). Id sets are now
-  one JSON array (``json_each``); here the limit is lowered to 999.
+- sqlite-vec refuses a KNN k above 4096 (``SQLITE_VEC_VEC0_K_MAX``). The KNN
+  serves k up to the cap; a pool needing more (``max_results`` >= 410, reached
+  through ``unified_search(max_results=69)``) or a boundary group still open
+  at the cap is read with the scalar ``vec_distance_l2``.
+- one bind parameter per id fails past the build's ``SQLITE_MAX_VARIABLE_NUMBER``.
+  Id sets are one JSON array (``json_each``); the test counts the placeholders
+  of every statement and requires the maximum not to grow with the group.
 
 source: ADR-1109
 """
 
 from __future__ import annotations
 
+import asyncio
 import sqlite3
 
 import numpy as np
@@ -28,14 +29,23 @@ from mcp_server.infrastructure.sqlite_store_recall_signals import VEC0_K_MAX
 _DIM = 384
 _DOMAIN = "tie-limits"
 _VECTOR_ONLY = {"vector": 1.0, "fts": 0.0, "heat": 0.0, "recency": 0.0}
+_HEAT_ONLY = {"vector": 0.0, "fts": 0.0, "heat": 1.0, "recency": 0.0}
 # source: handlers/recall.py schema maximum max_results 100 -> top_k 300 ->
-# store pool 300 * 10 = 3000 (review of #760, B1).
+# store pool 300 * 10 = 3000 (review 1 of #760, B1).
 _LARGE_POOL = 3000
-# source: review of #760, B1 -- 3,300 identical vectors pass the old doubling
-# (101 -> ... -> 3232 -> 6464 > 4096) at the default pool of 100.
+# source: review 1 of #760, B1 -- 3,300 identical vectors pass the old
+# doubling (101 -> ... -> 3232 -> 6464 > 4096) at the default pool of 100.
 _IDENTICAL = 3300
-# source: review of #760, B2 -- 1,200 tied rows against a limit of 999.
-_TIED, _VARIABLE_LIMIT = 1200, 999
+# source: review 2 of #760, N1 -- pool = max_results * 10 needs k = 4101.
+_ABOVE_CAP_RESULTS = 410
+# source: review 2 of #760, N1 -- unified_search max 69 -> recall 138 ->
+# fetch_k 414 -> pool 4140.
+_UNIFIED_MAX = 69
+# source: test fixture -- a 50-row store; two tie groups both past the pool
+# of 100 (so both take the tie-group path), 1,200 > 999, the variable limit
+# review 1 used.
+_SMALL = 50
+_GROUP_SMALL, _GROUP_LARGE = 150, 1200
 
 
 @pytest.fixture
@@ -62,8 +72,19 @@ def _insert(store: SqliteMemoryStore, embedding: bytes | None, n: int = 1) -> No
                 "domain": _DOMAIN,
                 "source": "lesson",
                 "heat": 0.5,
+                "agent_context": "t",
             }
         )
+
+
+def _recall(store: SqliteMemoryStore, weights: dict, **kw) -> list[dict]:
+    return store.recall_memories(
+        query_text="nothingmatches",
+        domain=_DOMAIN,
+        min_heat=0.0,
+        weights=weights,
+        **{"query_embedding": None, "max_results": 10, **kw},
+    )
 
 
 def test_vector_boundary_group_past_k_max_is_kept(store):
@@ -72,40 +93,66 @@ def test_vector_boundary_group_past_k_max_is_kept(store):
     for i in range(_LARGE_POOL - 1):
         _insert(store, _scaled_axis(1.0 + 0.001 * i))
     _insert(store, _scaled_axis(1.0 + 0.001 * _LARGE_POOL), n=2)
-    scores: dict[int, float] = {}
-    store._signal_vector(scores, _scaled_axis(1.0), 1.0, 60, _LARGE_POOL)
-    assert len(scores) == _LARGE_POOL + 1
-    tied = sorted(scores.values())[:2]
+    credits = store._signal_vector(_scaled_axis(1.0), 1.0, 60, _LARGE_POOL)
+    assert len(credits) == _LARGE_POOL + 1
+    tied = sorted(c for _, c in credits)[:2]
     assert tied[0] == tied[1]
 
 
 def test_identical_embeddings_beyond_k_max_all_score(store):
     _insert(store, _scaled_axis(1.0), n=_IDENTICAL)
-    scores: dict[int, float] = {}
-    store._signal_vector(scores, _scaled_axis(2.0), 1.0, 60, 100)
-    assert len(scores) == _IDENTICAL
-    assert len(set(scores.values())) == 1
-    rows = store.recall_memories(
-        query_text="nothingmatches",
-        query_embedding=_scaled_axis(2.0),
-        domain=_DOMAIN,
-        min_heat=0.0,
-        max_results=10,
-        weights=_VECTOR_ONLY,
-    )
+    credits = store._signal_vector(_scaled_axis(2.0), 1.0, 60, 100)
+    assert len(credits) == _IDENTICAL
+    assert len({c for _, c in credits}) == 1
+    rows = _recall(store, _VECTOR_ONLY, query_embedding=_scaled_axis(2.0))
     assert len(rows) == 30
 
 
-def test_vector_pool_above_k_max_raises(store):
-    _insert(store, _scaled_axis(1.0))
-    with pytest.raises(ValueError, match="KNN limit 4096"):
-        store._signal_vector({}, _scaled_axis(1.0), 1.0, 60, VEC0_K_MAX)
+def test_vector_pool_above_k_max_reads_the_scalar_distance(store):
+    """A 50-row store at max_results 410 (pool 4100 > 4096 - 1): every row
+    is scored, in the same order as the KNN ranks them."""
+    for i in range(_SMALL):
+        _insert(store, _scaled_axis(1.0 + 0.01 * i))
+    above = store._signal_vector(_scaled_axis(1.0), 1.0, 60, VEC0_K_MAX)
+    below = store._signal_vector(_scaled_axis(1.0), 1.0, 60, 100)
+    assert above == below and len(above) == _SMALL
+    rows = _recall(
+        store, _VECTOR_ONLY, query_embedding=_scaled_axis(1.0), max_results=410
+    )
+    assert len(rows) == _SMALL
 
 
 def test_vector_signal_failure_is_not_swallowed(store):
     _insert(store, _scaled_axis(1.0))
     with pytest.raises(sqlite3.Error):
-        store._signal_vector({}, np.zeros(_DIM + 1, np.float32).tobytes(), 1.0, 60, 10)
+        store._signal_vector(np.zeros(_DIM + 1, np.float32).tobytes(), 1.0, 60, 10)
+
+
+class _PlaceholderCounter:
+    """Delegating connection that records each statement's ``?`` count."""
+
+    def __init__(self, real) -> None:
+        self._real = real
+        self.counts: list[int] = []
+
+    def execute(self, sql, *args, **kwargs):
+        self.counts.append(sql.count("?"))
+        return self._real.execute(sql, *args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
+
+def _max_placeholders(store: SqliteMemoryStore, n: int, extra: dict) -> int:
+    _insert(store, None, n=n)
+    counter = _PlaceholderCounter(store._conn)
+    store._conn = counter
+    try:
+        rows = _recall(store, _HEAT_ONLY, **extra)
+    finally:
+        store._conn = counter._real
+    assert len(rows) == 30
+    return max(counter.counts)
 
 
 @pytest.mark.parametrize(
@@ -113,18 +160,47 @@ def test_vector_signal_failure_is_not_swallowed(store):
     [{}, {"agent_topic": "t"}, {"untrusted_factor": 0.5}],
     ids=["plain", "agent-boost", "trust-factor"],
 )
-def test_tie_group_above_the_variable_limit(store, extra):
-    _insert(store, None, n=_TIED)
-    store._connection_registry.connection().setlimit(
-        sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER, _VARIABLE_LIMIT
+def test_no_statement_binds_one_variable_per_tied_row(extra):
+    """The most placeholders any statement binds is the same for a 150-row
+    and a 1,200-row tie group: no statement depends on the group's size,
+    so none can reach the build's bind-variable limit."""
+    small, large = SqliteMemoryStore(), SqliteMemoryStore()
+    try:
+        assert _max_placeholders(small, _GROUP_SMALL, extra) == _max_placeholders(
+            large, _GROUP_LARGE, extra
+        )
+    finally:
+        small.close()
+        large.close()
+
+
+def test_unified_search_above_the_k_cap_returns_results(monkeypatch, store):
+    """unified_search(max_results=69) asks the store for a pool of 4140."""
+    from mcp_server.handlers import recall, unified_search
+    from mcp_server.infrastructure.embedding_engine import get_embedding_engine
+
+    engine = get_embedding_engine()
+    for i in range(_SMALL):
+        text = f"ledger entry number {i} about the zq harbour"
+        store.insert_memory(
+            {
+                "content": text,
+                "embedding": engine.encode(text),
+                "domain": _DOMAIN,
+                "source": "lesson",
+                "heat": 0.5,
+            }
+        )
+    monkeypatch.setattr(recall, "_store", store)
+    monkeypatch.setattr(unified_search, "is_enabled", lambda: False)
+    resp = asyncio.new_event_loop().run_until_complete(
+        unified_search.handler(
+            {
+                "query": "zq harbour ledger",
+                "max_results": _UNIFIED_MAX,
+                "domain": _DOMAIN,
+            }
+        )
     )
-    rows = store.recall_memories(
-        query_text="nothingmatches",
-        query_embedding=None,
-        domain=_DOMAIN,
-        min_heat=0.0,
-        max_results=10,
-        weights={"vector": 0.0, "fts": 0.0, "heat": 1.0, "recency": 0.0},
-        **extra,
-    )
-    assert len(rows) == 30
+    assert "error" not in resp
+    assert resp["counts"]["cortex"] > 0

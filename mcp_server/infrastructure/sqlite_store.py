@@ -33,6 +33,7 @@ from mcp_server.infrastructure.sqlite_schema import (
     MEMORIES_FTS_DDL,
     MEMORIES_VEC_DDL,
     MIGRATIONS,
+    POST_MIGRATION_INDEXES_DDL,
     get_all_ddl,
 )
 from mcp_server.infrastructure.sqlite_store_auxiliary import SqliteAuxiliaryMixin
@@ -141,6 +142,9 @@ class SqliteMemoryStore(
                 # sqlite-vec extension); the remaining DDL still runs.
                 logger.debug("DDL statement skipped: %s", exc)
         self._run_migrations()
+        # Indexes over migrated columns (ADR-1109).
+        for ddl in POST_MIGRATION_INDEXES_DDL:
+            self._conn.execute(ddl)
         # source: ADR-0605
         self._conn.execute(CURRENT_MEMORIES_VIEW_DDL)
         self._conn.commit()

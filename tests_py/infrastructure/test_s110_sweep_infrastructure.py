@@ -101,24 +101,21 @@ class TestSqliteVecIndexSignals:
         _assert_noted("sqlite_store.vec_index_delete", "poisoned: memories_vec")
 
     def test_rrf_fts_signal_failure_degrades_and_is_logged(self, caplog, sqlite_store):
-        scores: dict[int, float] = {}
         sqlite_store._conn = _VecPoisonConn(sqlite_store._conn, "memories_fts")
         with caplog.at_level("WARNING", logger=WARN_LOGGER):
-            sqlite_store._signal_fts(scores, "hello world", 1.0, 60, 10)
-        assert scores == {}
+            credits, group = sqlite_store._signal_fts("hello world", 1.0, 60, 10)
+        assert credits == [] and group is None
         assert any("sqlite_store.rrf_fts_signal" in r.message for r in caplog.records)
         _assert_noted("sqlite_store.rrf_fts_signal", "poisoned: memories_fts")
 
     def test_rrf_vector_signal_failure_raises(self, sqlite_store):
         """ADR-1109: a vector-signal failure raises instead of silently
         dropping the vector signal from every ranking."""
-        scores: dict[int, float] = {}
         sqlite_store._has_vec = True
         sqlite_store._conn = _VecPoisonConn(sqlite_store._conn, "memories_vec")
         emb = np.zeros(4, dtype=np.float32).tobytes()
         with pytest.raises(RuntimeError, match="poisoned: memories_vec"):
-            sqlite_store._signal_vector(scores, emb, 1.0, 60, 10)
-        assert scores == {}
+            sqlite_store._signal_vector(emb, 1.0, 60, 10)
         assert "sqlite_store.rrf_vector_signal" not in silent_failure.status()
 
     def test_pre_migration_value_write_is_still_a_noop(self, sqlite_store):

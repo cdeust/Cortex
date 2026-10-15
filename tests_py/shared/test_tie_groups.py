@@ -1,4 +1,5 @@
-"""fetch_with_ties keeps a boundary tie group whole; tied_rrf shares credit.
+"""tied_rrf shares a tie group's credit; group_credit and ordered_sum keep
+the fusion's exact arithmetic.
 
 source: ADR-1109
 """
@@ -7,32 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from mcp_server.shared.tie_groups import add_credit, fetch_with_ties, tied_rrf
-
-
-def fetcher(scores: list[int], calls: list[int]):
-    def fetch(n: int) -> list[int]:
-        calls.append(n)
-        return scores[:n]
-
-    return fetch
-
-
-@pytest.mark.parametrize(
-    ("scores", "pool", "kept"),
-    [
-        ([9, 8, 7, 6], 2, 2),  # no tie at the cut
-        ([9, 8, 8, 8, 8, 8, 7], 2, 6),  # the group runs past the first widening
-        ([9, 9, 9], 2, 3),  # the group ends at the last row
-        ([9], 3, 1),  # fewer rows than the pool
-        ([9, 9, 8, 8], 2, 2),  # a tie that ends exactly at the cut
-    ],
-)
-def test_fetch_with_ties_keeps_rank_le_pool(scores, pool, kept):
-    calls: list[int] = []
-    got = fetch_with_ties(fetcher(scores, calls), pool, lambda s: s)
-    assert got == scores[:kept]
-    assert calls[0] == pool + 1
+from mcp_server.shared.tie_groups import group_credit, ordered_sum, tied_rrf
 
 
 def test_tied_rrf_shares_the_groups_positions():
@@ -43,7 +19,15 @@ def test_tied_rrf_shares_the_groups_positions():
     assert sum(credit.values()) == pytest.approx(sum(1 / (60 + r) for r in range(1, 5)))
 
 
-def test_add_credit_sums_into_existing_and_new_ids():
-    scores = {1: 0.5}
-    add_credit(scores, {1: 0.25, 2: 0.125})
-    assert scores == {1: 0.75, 2: 0.125}
+def test_group_credit_is_tied_rrfs_credit_bit_for_bit():
+    ranked = [(i, 0) for i in range(7)]
+    assert tied_rrf(ranked, 0.3, 60)[0] == group_credit(0, 7, 0.3, 60)
+    head = [(9, 1), (8, 1), (7, 0.5)]
+    full = head + [(i, 0) for i in range(20)]
+    assert tied_rrf(full, 0.5, 60)[0] == group_credit(len(head), 20, 0.5, 60)
+
+
+def test_ordered_sum_adds_in_signal_order_from_zero():
+    a, b, c = 0.1, 0.2, 0.3
+    expected = ((0 + a) + b) + c
+    assert ordered_sum([(2, c), (0, a), (1, b)]) == expected

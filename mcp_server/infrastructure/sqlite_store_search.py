@@ -18,7 +18,11 @@ import numpy as np
 from mcp_server.observability import silent_failure
 from mcp_server.shared.code_tokenize import expand_fts_query as _expand_fts_query
 from mcp_server.infrastructure.sqlite_scope_clause import directory_scope_clause
-from mcp_server.shared.tie_groups import add_credit, fetch_with_ties, tied_rrf
+from mcp_server.shared.tie_groups import TieGroup, group_credit, ranked_credits
+
+# source: ADR-1109 -- fusion position of the FTS5 signal (vector 0, FTS5 1,
+# heat 2, recency 3; sqlite_store_recall_signals.py).
+FTS = 1
 
 
 class SqliteSearchMixin:
@@ -33,34 +37,47 @@ class SqliteSearchMixin:
         ...
 
     def _signal_fts(
-        self,
-        scores: dict[int, float],
-        query_text: str,
-        weight: float,
-        k: int,
-        pool: int,
-    ) -> None:
+        self, query_text: str, weight: float, k: int, pool: int
+    ) -> tuple[list[tuple[int, float]], TieGroup | None]:
+        """Rank-fuse the FTS5 pool by ``bm25``; a boundary group past the
+        pool comes back as a ``TieGroup`` (ADR-1109).
+
+        source: ADR-1109"""
         if not query_text or weight <= 0:
-            return
+            return [], None
         match = _expand_fts_query(query_text)
         if not match:
-            return
+            return [], None
         try:
-            # source: ADR-1109 -- the boundary rank group is kept whole and
-            # tied rows share their positions' credit.
-            rows = fetch_with_ties(
-                lambda n: self._conn.execute(
-                    "SELECT rowid, rank FROM memories_fts "
-                    "WHERE memories_fts MATCH ? ORDER BY rank LIMIT ?",
-                    (match, n),
-                ).fetchall(),
-                pool,
-                lambda r: r["rank"],
-            )
-            ranked = [(r["rowid"], r["rank"]) for r in rows]
-            add_credit(scores, tied_rrf(ranked, weight, k))
+            return self._fts_pool(match, weight, k, pool)
         except Exception as exc:  # noqa: BLE001 — search degrades to the remaining signals
             silent_failure.note("sqlite_store.rrf_fts_signal", exc)
+            return [], None
+
+    def _fts_pool(
+        self, match: str, weight: float, k: int, pool: int
+    ) -> tuple[list[tuple[int, float]], TieGroup | None]:
+        """source: ADR-1109"""
+        rows = self._conn.execute(
+            "SELECT rowid, bm25(memories_fts) AS score FROM memories_fts "
+            "WHERE memories_fts MATCH ? ORDER BY score LIMIT ?",
+            (match, pool + 1),
+        ).fetchall()
+        if len(rows) <= pool or rows[pool]["score"] != rows[pool - 1]["score"]:
+            ranked = [(r["rowid"], r["score"]) for r in rows[:pool]]
+            return ranked_credits(ranked, weight, k), None
+        boundary = rows[pool - 1]["score"]
+        head = [(r["rowid"], r["score"]) for r in rows[:pool] if r["score"] != boundary]
+        tied = "FROM memories_fts WHERE memories_fts MATCH ? AND bm25(memories_fts) = ?"
+        size = self._conn.execute(
+            f"SELECT count(*) AS n {tied}",
+            (match, boundary),  # noqa: S608 — tied is an in-code literal; values are bound parameters (docs/ASSURANCE-CASE.md §5)
+        ).fetchall()[0]["n"]
+        credit = group_credit(len(head), size, weight, k)
+        where = f"m.id IN (SELECT rowid {tied})"
+        return ranked_credits(head, weight, k), TieGroup(
+            FTS, credit, where, (match, boundary)
+        )
 
     def search_fts(
         self,

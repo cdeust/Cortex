@@ -12,15 +12,28 @@ source: ADR-1109
 
 from __future__ import annotations
 
-import heapq
 import json
 from typing import Any
 
+from mcp_server.infrastructure.sqlite_store_recall_fill import (
+    Adjustments,
+    group_candidates,
+)
 from mcp_server.infrastructure.sqlite_store_recall_signals import (
+    HEAT,
     IDS_IN,
+    RECENCY,
+    VEC,
     SqliteRecallSignalsMixin,
     json_ids,
 )
+from mcp_server.infrastructure.sqlite_store_search import FTS
+from mcp_server.shared.tie_groups import TieGroup, ordered_sum
+
+# source: ADR-1106 -- (heat_base DESC, id DESC) keeps the (heat_base) index
+# plan; recency breaks ties newest first.
+_HEAT_ORDER = "heat_base DESC, id DESC"
+_AGE_ORDER = "created_at DESC, id DESC"
 
 
 def _decode_tags(raw: Any) -> list:
@@ -92,39 +105,89 @@ class SqliteRecallMixin(SqliteRecallSignalsMixin):
 
         source: ADR-0616"""
         w = weights or {}
-        w_vector = w.get("vector", 1.0)
-        pool = max_results * 10
-        where = self._build_filter(min_heat, domain, directory)
-        scores: dict[int, float] = {}
-        self._signal_vector(scores, query_embedding, w_vector, wrrf_k, pool)
-        self._signal_fts(scores, query_text, w.get("fts", 0.5), wrrf_k, pool)
-        self._signal_heat(scores, w.get("heat", 0.3), wrrf_k, pool, where)
-        self._signal_recency(scores, w.get("recency", 0.0), wrrf_k, pool, where)
-        self._apply_agent_boost(scores, agent_topic, w_vector, wrrf_k)
-        self._apply_trust_factor(scores, trusted_origins, untrusted_factor)
-        if not scores:
-            return []
-        return self._fetch_ranked_results(
-            scores, max_results, min_heat, domain, directory
+        filters = (min_heat, domain, directory)
+        contribs, groups = self._contributions(
+            query_text, query_embedding, w, (wrrf_k, max_results * 10), filters
         )
+        if not contribs and not groups:
+            return []
+        scores = self._materialized_scores(contribs, groups)
+        adj = Adjustments(
+            agent_topic,
+            0.3 * (w.get("vector", 1.0) / wrrf_k),
+            json.dumps(list(trusted_origins)),
+            untrusted_factor,
+        )
+        self._apply_agent_boost(scores, adj)
+        self._apply_trust_factor(scores, trusted_origins, untrusted_factor)
+        best = self._ranked(scores, groups, adj, max_results * 3)
+        return self._fetch_ranked_results(best, filters)
 
-    def _apply_agent_boost(
+    def _contributions(
         self,
-        scores: dict[int, float],
-        agent_topic: str | None,
-        w_vector: float,
-        wrrf_k: int,
-    ) -> None:
+        query_text: str,
+        query_embedding: bytes | None,
+        w: dict[str, float],
+        fusion: tuple[int, int],
+        filters: tuple[float, str | None, str | None],
+    ) -> tuple[dict[int, list[tuple[int, float]]], list[TieGroup]]:
+        """Each signal's row-by-row credits per id, and its predicate groups.
+
+        source: ADR-1109"""
+        k, pool = fusion
+        vec = self._signal_vector(query_embedding, w.get("vector", 1.0), k, pool)
+        heat = (w.get("heat", 0.3), k, pool)
+        recency = (w.get("recency", 0.0), k, pool)
+        signals = [
+            (VEC, (vec, None)),
+            (FTS, self._signal_fts(query_text, w.get("fts", 0.5), k, pool)),
+            (HEAT, self._signal_column(HEAT, "heat_base", _HEAT_ORDER, heat, filters)),
+            (
+                RECENCY,
+                self._signal_column(
+                    RECENCY, "created_at", _AGE_ORDER, recency, filters
+                ),
+            ),
+        ]
+        contribs: dict[int, list[tuple[int, float]]] = {}
+        groups: list[TieGroup] = []
+        for signal, (credits, group) in signals:
+            for mid, credit in credits:
+                contribs.setdefault(mid, []).append((signal, credit))
+            if group is not None:
+                groups.append(group)
+        return contribs, groups
+
+    def _materialized_scores(
+        self,
+        contribs: dict[int, list[tuple[int, float]]],
+        groups: list[TieGroup],
+    ) -> dict[int, float]:
+        """Fused score of every id scored row by row, including the credit of
+        each predicate group it belongs to, summed in signal order.
+
+        source: ADR-1109"""
+        if contribs:
+            ids = json_ids(contribs)
+            for g in groups:
+                for r in self._conn.execute(
+                    "SELECT m.id AS id FROM memories m "  # noqa: S608 — IDS_IN and the group predicate are in-code literals; values are bound parameters (docs/ASSURANCE-CASE.md §5)
+                    f"WHERE m.id {IDS_IN} AND ({g.where})",  # noqa: S608 — IDS_IN and the group predicate are in-code literals; values are bound parameters (docs/ASSURANCE-CASE.md §5)
+                    (ids, *g.params),
+                ).fetchall():
+                    contribs[r["id"]].append((g.signal, g.credit))
+        return {mid: ordered_sum(cs) for mid, cs in contribs.items()}
+
+    def _apply_agent_boost(self, scores: dict[int, float], adj: Adjustments) -> None:
         """source: ADR-0616"""
-        if not agent_topic or not scores:
+        if not adj.agent_topic or not scores:
             return
-        boost = 0.3 * (w_vector / wrrf_k)
         rows = self._conn.execute(
             f"SELECT id FROM memories WHERE id {IDS_IN} AND agent_context = ?",  # noqa: S608 — IDS_IN is an in-code literal; values are bound parameters (docs/ASSURANCE-CASE.md §5)
-            (json_ids(scores), agent_topic),
+            (json_ids(scores), adj.agent_topic),
         ).fetchall()
         for r in rows:
-            scores[r["id"]] += boost
+            scores[r["id"]] += adj.boost
 
     def _apply_trust_factor(
         self,
@@ -148,72 +211,45 @@ class SqliteRecallMixin(SqliteRecallSignalsMixin):
             if r["capture_origin"] not in trusted:
                 scores[r["id"]] *= untrusted_factor
 
-    def _ranked_ids(self, scores: dict[int, float], top: int) -> list[int]:
-        """The ``top`` best ids in score order; exact ties go to the newer memory.
-
-        Ids above the ``top``-th score are sorted here; the group tied at that
-        score fills the remaining places newest first in SQL, so a tie group
-        holding every memory is never read back whole (ADR-1109).
-
-        source: ADR-1106"""
-        ids = list(scores)
-        if len(ids) <= top:
-            return self._newest_first_by_score(ids, scores)
-        cut = heapq.nlargest(top, scores.values())[-1]
-        above = [i for i in ids if scores[i] > cut]
-        tied = [i for i in ids if scores[i] == cut]
-        return self._newest_first_by_score(above, scores) + self._newest_first(
-            tied, top - len(above)
-        )
-
-    def _newest_first_by_score(
-        self, ids: list[int], scores: dict[int, float]
-    ) -> list[int]:
-        """``ids`` by score, then ``created_at``, then id, all descending.
+    def _ranked(
+        self,
+        scores: dict[int, float],
+        groups: list[TieGroup],
+        adj: Adjustments,
+        top: int,
+    ) -> list[tuple[float, str, int]]:
+        """The ``top`` best (score, created_at, id), all descending; exact
+        ties go to the newer memory. Rows reached only through predicate
+        groups come from ``group_candidates`` (ADR-1109).
 
         source: ADR-1106"""
-        created = {
-            r["id"]: r["created_at"]
+        cands = [
+            (scores[r["id"]], r["created_at"], r["id"])
             for r in self._conn.execute(
                 f"SELECT id, created_at FROM memories WHERE id {IDS_IN}",  # noqa: S608 — IDS_IN is an in-code literal; the ids are one bound parameter (docs/ASSURANCE-CASE.md §5)
-                (json_ids(ids),),
-            ).fetchall()
-        }
-        return sorted(ids, key=lambda i: (scores[i], created[i], i), reverse=True)
-
-    def _newest_first(self, ids: list[int], limit: int) -> list[int]:
-        """The ``limit`` newest of ``ids`` (``created_at DESC, id DESC``).
-
-        source: ADR-1106"""
-        return [
-            r["id"]
-            for r in self._conn.execute(
-                f"SELECT id FROM memories WHERE id {IDS_IN} "  # noqa: S608 — IDS_IN is an in-code literal; values are bound parameters (docs/ASSURANCE-CASE.md §5)
-                "ORDER BY created_at DESC, id DESC LIMIT ?",
-                (json_ids(ids), limit),
+                (json_ids(scores),),
             ).fetchall()
         ]
+        if groups:
+            cands += group_candidates(self._conn, groups, json_ids(scores), adj, top)
+        return sorted(cands, reverse=True)[:top]
 
     def _fetch_ranked_results(
         self,
-        scores: dict[int, float],
-        max_results: int,
-        min_heat: float,
-        domain: str | None,
-        directory: str | None,
+        best: list[tuple[float, str, int]],
+        filters: tuple[float, str | None, str | None],
     ) -> list[dict[str, Any]]:
         """source: ADR-0616"""
-        top_ids = self._ranked_ids(scores, max_results * 3)
         # source: ADR-0616
         row_map = {
             r["id"]: r
             for r in self._conn.execute(
                 f"SELECT * FROM current_memories WHERE id {IDS_IN}",  # noqa: S608 — IDS_IN is an in-code literal; the ids are one bound parameter (docs/ASSURANCE-CASE.md §5)
-                (json_ids(top_ids),),
+                (json_ids(mid for _, _, mid in best),),
             ).fetchall()
         }
         return [
-            _result(mid, row_map[mid], scores[mid])
-            for mid in top_ids
-            if mid in row_map and _visible(row_map[mid], min_heat, domain, directory)
+            _result(mid, row_map[mid], score)
+            for score, _, mid in best
+            if mid in row_map and _visible(row_map[mid], *filters)
         ]

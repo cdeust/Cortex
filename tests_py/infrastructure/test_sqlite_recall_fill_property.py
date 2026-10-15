@@ -1,0 +1,204 @@
+"""SQLite recall equals a naive reference on random stores full of ties.
+
+``recall_memories`` reads a boundary tie group past the pool as a predicate
+and fills from it newest first (ADR-1109). The reference below reads every
+signal in full with no LIMIT, cuts it WITH TIES in Python, fuses every row,
+boosts, applies trust, ranks all of it by (score, created_at, id) and keeps
+the top ``max_results * 3`` visible rows. Random stores use few distinct
+values on every signal so groups regularly run past the pool; the two must
+return the same ids, in the same order, with bit-identical scores.
+
+source: ADR-1109
+"""
+
+from __future__ import annotations
+
+import random
+
+import numpy as np
+import pytest
+
+from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
+from mcp_server.shared.code_tokenize import expand_fts_query
+from mcp_server.shared.tie_groups import ordered_sum, tied_rrf
+
+# source: sqlite_schema.py memories_vec embedding float[384]
+_DIM = 384
+# source: test fixture -- seeds of the random stores.
+_SEEDS = range(60)
+# source: SqliteRecallMixin.recall_memories wrrf_k default.
+_K = 60
+_WORDS = ("ledger", "harbour", "zq")
+_STAMPS = (
+    "2026-01-01T00:00:00+00:00",
+    "2026-01-02T00:00:00+00:00",
+    "2026-01-03T00:00:00+00:00",
+)
+
+
+def _vector(i: int) -> bytes:
+    v = np.zeros(_DIM, dtype=np.float32)
+    v[i % 3] = 1.0 + 0.5 * (i // 3)
+    return v.tobytes()
+
+
+def build_store(rnd: random.Random) -> SqliteMemoryStore:
+    """Rows with 2-3 distinct values per signal, so ties run past the pool."""
+    store = SqliteMemoryStore()
+    heats = rnd.sample([0.2, 0.5, 0.9], rnd.choice([2, 3]))
+    n = rnd.randint(20, 160)
+    for _ in range(n):
+        words = rnd.choice([1, 2])
+        content = " ".join(rnd.choice(_WORDS) for _ in range(words))
+        emb = _vector(rnd.randrange(4)) if rnd.random() < 0.8 else None
+        mid = store.insert_memory(
+            {
+                "content": content,
+                "embedding": emb,
+                "domain": "a",
+                "source": "lesson",
+                "heat": 0.5,
+            }
+        )
+        store._conn.execute(
+            "UPDATE memories SET heat_base = ?, created_at = ?, agent_context = ?,"
+            " capture_origin = ?, domain = ?, is_global = ?, is_stale = ? WHERE id = ?",
+            (rnd.choice(heats), rnd.choice(_STAMPS[: rnd.choice([1, 2, 3])]),
+             "t" if rnd.random() < 0.33 else None, rnd.choice(["user", "auto", "hook"]),
+             rnd.choice(["a", "b"]), int(rnd.random() < 0.1),
+             int(rnd.random() < 0.05), mid),
+        )  # fmt: skip
+    ids = [r["id"] for r in store._conn.execute("SELECT id FROM memories").fetchall()]
+    for mid in rnd.sample(ids, max(1, n // 15)):
+        store._conn.execute(
+            "UPDATE memories SET superseded_by_id = ? WHERE id = ?",
+            (rnd.choice(ids), mid),
+        )
+    return store
+
+
+def _with_ties(rows: list, pool: int) -> list:
+    """WITH TIES on rows ordered best first by ``r[1]``."""
+    if len(rows) <= pool:
+        return rows
+    boundary = rows[pool - 1][1]
+    return [r for i, r in enumerate(rows) if i < pool or r[1] == boundary]
+
+
+def _signal_rows(store, args: dict, pool: int) -> list[list]:
+    c, (min_heat, domain) = store._conn, (args["min_heat"], args["domain"])
+    w = args["weights"]
+    cond, params = "heat_base >= ? AND NOT is_stale", [min_heat]
+    if domain:
+        cond, params = cond + " AND (domain = ? OR is_global = 1)", [*params, domain]
+    out = [[], [], [], []]
+    if w["vector"] > 0 and args["emb"] is not None:
+        out[0] = [
+            (r["rowid"], r["d"])
+            for r in c.execute(
+                "SELECT rowid, vec_distance_l2(embedding, ?) AS d"
+                " FROM memories_vec ORDER BY d",
+                (args["emb"],),
+            ).fetchall()
+        ]
+    match = expand_fts_query(args["text"])
+    if w["fts"] > 0 and match:
+        out[1] = [
+            (r["rowid"], r["s"])
+            for r in c.execute(
+                "SELECT rowid, bm25(memories_fts) AS s FROM memories_fts"
+                " WHERE memories_fts MATCH ? ORDER BY s",
+                (match,),
+            ).fetchall()
+        ]
+    for i, col in ((2, "heat_base"), (3, "created_at")):
+        if w[("heat", "recency")[i - 2]] > 0:
+            out[i] = [
+                (r["id"], r["v"])
+                for r in c.execute(
+                    f"SELECT id, {col} AS v FROM current_memories"  # noqa: S608 — test fixture literals
+                    f" WHERE {cond} ORDER BY {col} DESC",
+                    params,
+                ).fetchall()
+            ]
+    return [_with_ties(rows, pool) for rows in out]  # fmt: skip
+
+
+def reference(store: SqliteMemoryStore, args: dict) -> list[tuple[int, float]]:
+    """The fusion with every signal read in full: the naive definition."""
+    pool, w = args["max_results"] * 10, args["weights"]
+    contribs: dict[int, list] = {}
+    keys = ("vector", "fts", "heat", "recency")
+    for sig, rows in enumerate(_signal_rows(store, args, pool)):
+        for mid, credit in tied_rrf(rows, w[keys[sig]], _K).items():
+            contribs.setdefault(mid, []).append((sig, credit))
+    scores = {mid: ordered_sum(cs) for mid, cs in contribs.items()}
+    meta = {
+        r["id"]: r for r in store._conn.execute("SELECT * FROM memories").fetchall()
+    }
+    for mid in scores:
+        if args["agent_topic"] and meta[mid]["agent_context"] == args["agent_topic"]:
+            scores[mid] += 0.3 * (w["vector"] / _K)
+    for mid in scores:
+        if args["untrusted_factor"] != 1.0 and meta[mid]["capture_origin"] not in (
+            "user",
+        ):
+            scores[mid] *= args["untrusted_factor"]
+    best = sorted(
+        ((s, meta[m]["created_at"], m) for m, s in scores.items()), reverse=True
+    )
+    out = []
+    for s, _, mid in best[: args["max_results"] * 3]:
+        r = meta[mid]
+        visible = (
+            r["superseded_by_id"] is None
+            and r["heat_base"] >= args["min_heat"]
+            and not r["is_stale"]
+        )
+        if visible and (
+            not args["domain"] or r["domain"] == args["domain"] or r["is_global"]
+        ):
+            out.append((mid, s))
+    return out
+
+
+def random_args(rnd: random.Random) -> dict:
+    weights = {
+        k: rnd.choice([0.0, 0.3, 1.0]) for k in ("vector", "fts", "heat", "recency")
+    }
+    untrusted = rnd.choice([1.0, 0.5])
+    return {
+        "text": " ".join(rnd.sample(_WORDS, rnd.choice([1, 2]))),
+        "emb": _vector(rnd.randrange(4)) if rnd.random() < 0.8 else None,
+        "weights": weights,
+        "max_results": rnd.choice([1, 2, 3]),
+        "min_heat": rnd.choice([0.0, 0.4]),
+        "domain": rnd.choice([None, "a"]),
+        "agent_topic": rnd.choice([None, "t"]),
+        "untrusted_factor": untrusted,
+    }
+
+
+@pytest.mark.parametrize("seed", _SEEDS)
+def test_recall_equals_the_naive_reference(seed):
+    rnd = random.Random(seed)
+    store = build_store(rnd)
+    try:
+        for _ in range(5):
+            args = random_args(rnd)
+            got = store.recall_memories(
+                query_text=args["text"],
+                query_embedding=args["emb"],
+                domain=args["domain"],
+                agent_topic=args["agent_topic"],
+                min_heat=args["min_heat"],
+                max_results=args["max_results"],
+                weights=args["weights"],
+                trusted_origins=("user",),
+                untrusted_factor=args["untrusted_factor"],
+            )
+            assert [(r["memory_id"], r["score"]) for r in got] == reference(
+                store, args
+            ), args
+    finally:
+        store.close()
