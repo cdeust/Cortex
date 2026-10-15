@@ -1,0 +1,19 @@
+{
+  "captured_at_utc": "2026-10-14T23:23:22.095153+00:00",
+  "machine_load": {
+    "load_average_1m": 3.982421875,
+    "load_average_5m": 5.29736328125,
+    "load_average_15m": 6.18115234375,
+    "cpu_count": 10,
+    "concurrent_pytest_processes": 0,
+    "concurrent_docker_containers": 0
+  },
+  "disk_space": {
+    "repo_root": {
+      "path": "/Users/cdeust/Developments/anthropic-partnership/Cortex/.claude/worktrees/recall-tie-cut",
+      "free_bytes": 29977530368,
+      "total_bytes": 494384795648
+    },
+    "docker_root": null
+  }
+}

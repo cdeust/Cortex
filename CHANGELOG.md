@@ -45,7 +45,11 @@ adheres to [Semantic Versioning](https://semver.org/).
   rank-based, the signals keep the same membership (sqlite-vec's KNN cut
   included) and tied rows share the mean `w / (k + rank)` of the positions
   their group occupies instead of ranks assigned by age. Existing databases
-  get the new function on the next store open (schema hash).
+  get the new function on the next store open (schema hash). Measured:
+  LoCoMo R@10 0.8860, MRR 0.7768 (ADR-1106: 0.8870 / 0.7780), identical
+  across two runs; LongMemEval-S 0.9820 / 0.9059. On SQLite a store whose
+  memories share one heat puts every memory in the heat signal (108 ms per
+  recall at 40,000 rows, against 1.2 ms).
 - **Recall returns the same memories whatever the table's physical layout**
   (ADR-1106). Every `ORDER BY ... LIMIT` on the recall path cut exact score
   ties in heap order, which VACUUM, CLUSTER and free-space reuse change: the
