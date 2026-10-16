@@ -101,8 +101,7 @@ class TieGroup:
     recall, and ``pairs`` one (capture_origin, agent_context, counts) entry
     per pair present in the group, where ``counts[mask]`` is the number of
     the pair's rows that also lie in every other group whose bit is set in
-    ``mask`` (``counts[0]`` is the pair's size). ``counts`` is None when the
-    recall has no other group: the pair is in the index range, not counted."""
+    ``mask`` (``counts[0]`` is the pair's size)."""
 
     signal: int
     credit: float
@@ -111,7 +110,7 @@ class TieGroup:
     index: str | None = None
     size: int = 0
     others: tuple[int, ...] = ()
-    pairs: tuple[tuple[str, str | None, tuple[int, ...] | None], ...] = ()
+    pairs: tuple[tuple[str, str | None, tuple[int, ...]], ...] = ()
 
 
 def ordered_sum(contributions: Sequence[tuple[int, float]]) -> float:

@@ -28,6 +28,7 @@ TESTS = [
     "tests_py/infrastructure/test_sqlite_recall_tie_cut.py",
 ]
 FILL = INFRA + "sqlite_store_recall_fill.py"
+GROUPS = INFRA + "sqlite_store_recall_groups.py"
 # Each entry: name, file, the exact text replaced, its replacement, and the
 # reason a mutant cannot change any result (empty when it can).
 MUTANTS = [
@@ -84,7 +85,7 @@ MUTANTS = [
     ),
     (
         "inclusion-exclusion sign flipped",
-        INFRA + "sqlite_store_recall_groups.py",
+        GROUPS,
         "mask, sign = mask | ob, -sign",
         "mask, sign = mask | ob, sign",
         "",
@@ -104,24 +105,52 @@ MUTANTS = [
         "",
     ),
     (
-        "loose scan stops after the first origin",
-        INFRA + "sqlite_store_recall_groups.py",
-        'later = " AND m.capture_origin > ?"',
-        'later = " AND m.capture_origin > ? AND 0"',
+        "pair agent match inverted",
+        FILL,
+        "None if not self.agent_topic else agent == self.agent_topic,",
+        "None if not self.agent_topic else agent != self.agent_topic,",
         "",
     ),
     (
-        "loose scan skips the non-NULL agents after a NULL one",
-        INFRA + "sqlite_store_recall_groups.py",
-        'same = " AND m.capture_origin = ? AND m.agent_context IS NOT NULL"',
-        'same = " AND m.capture_origin = ? AND 0"',
+        "second group's pass keeps the rows shared with the first",
+        GROUPS,
+        'where.append(f"NOT COALESCE({test}, 0)")',
+        'where.append(f"NOT COALESCE({test}, 0) OR 1")',
+        "",
+    ),
+    (
+        "shared rows dropped from totals without the earlier group",
+        GROUPS,
+        "counts[inside] = shared + mine",
+        "counts[inside] = mine if earlier not in inside else shared",
+        "",
+    ),
+    (
+        "shared rows read without the group itself",
+        GROUPS,
+        "shared = theirs.get(pair, {}).get(rest | me, 0)",
+        "shared = theirs.get(pair, {}).get(rest, 0)",
+        "",
+    ),
+    (
+        "pairs only in an earlier group dropped",
+        GROUPS,
+        "{p for p, c in theirs.items() if c.get(me, 0)}",
+        "{p for p, c in theirs.items() if 0}",
+        "",
+    ),
+    (
+        "member test on the counted group's own column",
+        GROUPS,
+        'return f"m.{h.column} = ?", (h.params[0],)',
+        'return f"m.{g.column} = ?", (h.params[0],)',
         "",
     ),
     (
         "empty pairs seeked too",
         FILL,
-        "if counts is None or class_count(anchor, counts, inside, outside) > 0:",
-        "if counts is None or class_count(anchor, counts, inside, outside) >= 0:",
+        "if class_count(anchor, counts, inside, outside) > 0:",
+        "if class_count(anchor, counts, inside, outside) >= 0:",
         "a pair without class rows returns no row from its seek",
     ),
 ]

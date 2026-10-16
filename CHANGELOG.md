@@ -50,11 +50,15 @@ adheres to [Semantic Versioning](https://semver.org/).
   across two runs; LongMemEval-S 0.9820 / 0.9059. On SQLite a tie group past
   the pool is kept as a predicate with one shared credit and filled newest
   first, never read row by row: it is counted once over a covering index
-  built on the first open, and its rows are read with one ordered seek per
-  (capture origin, agent) pair. On the production arguments (trust factor
-  0.7) a store whose memories share one heat recalls in 11.6 to 20.4 ms at
-  250,000 memories (before: about 3 ms), the cost of counting the group,
-  kept by owner decision; with a realistic heat spread recall is at the
+  built on the first open (a grouped count that also lists the group's
+  capture origin and agent pairs), and its rows are read with one ordered
+  seek per pair. On the production arguments (trust factor 0.7) and the
+  owner's agent vocabulary (421 pairs), a store whose memories share one
+  heat recalls in 21.9 to 25.1 ms at 250,000 memories and 5.5 to 8.3 ms at
+  40,000 (before: 2 to 4 ms): the grouped count, 1.2 to 2.7 times a plain
+  count and kept by owner decision, plus a fill that grows with the number
+  of pairs; where memories also share one `created_at`, 24.4 to 44.3 ms at
+  250,000. With a realistic heat spread recall is within 3 ms of the
   previous level.
   sqlite-vec's KNN serves k up to its cap of 4096 and a larger pool reads
   the same distance through `vec_distance_l2`, so any

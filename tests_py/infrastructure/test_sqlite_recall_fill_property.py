@@ -237,9 +237,14 @@ def _check_pair_counts(store, g, members) -> None:
     meta = store._conn.execute(
         "SELECT id, capture_origin, agent_context FROM memories"
     ).fetchall()
+    listed = {(origin, agent) for origin, agent, _ in g.pairs}
+    present = {
+        (r["capture_origin"], r["agent_context"])
+        for r in meta
+        if r["id"] in members[g.signal]
+    }
+    assert listed == present
     for origin, agent, counts in g.pairs:
-        if counts is None:  # single group: pairs listed, not counted
-            continue
         rows = [
             r["id"]
             for r in meta

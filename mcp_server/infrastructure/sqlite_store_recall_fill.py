@@ -155,7 +155,7 @@ def _class_pairs(
     source: ADR-1109"""
     by_part: dict[Partition, list[list[Any]]] = {}
     for origin, agent, counts in anchor.pairs:
-        if counts is None or class_count(anchor, counts, inside, outside) > 0:
+        if class_count(anchor, counts, inside, outside) > 0:
             part = adj.partition_of(origin, agent)
             by_part.setdefault(part, []).append([origin, agent])
     return by_part

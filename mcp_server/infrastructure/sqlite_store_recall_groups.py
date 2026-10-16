@@ -5,7 +5,8 @@ signal has produced its group, over the group's covering index
 ``(column, capture_origin, agent_context, created_at, id, filter columns)``.
 The count is grouped by (capture_origin, agent_context), which follows the
 index order (no sort), and per pair it also totals the rows lying in each
-combination of the recall's other groups. One pass therefore gives:
+combination of the recall's other groups (a recall with no other group gets
+a plain grouped count). One pass therefore gives:
 
 - the group's size, hence the exact shared credit of its rows;
 - every (origin, agent) pair present, which the fill reads with one ordered
@@ -13,9 +14,16 @@ combination of the recall's other groups. One pass therefore gives:
 - per pair, how many rows each class (set of groups) holds, so classes and
   partitions without a row cost no seek.
 
+When heat and recency are both past the pool, the second group's pass
+counts only its rows outside the first group (one exclusion test per row,
+no class total); the rows the two share, per pair and per class, are read
+from the first group's pass. Inside a group, membership of the other
+column group is tested on its column alone: both carry the recall's same
+filters.
+
 The pairs are bounded by the store's vocabulary, not by the group: five
 capture origins (``core/capture_origin.ALL_ORIGINS``) times the agent
-contexts present (owner's store, 2026-10-16: 419 pairs in all, at most 231
+contexts present (owner's store, 2026-10-16: 426 pairs in all, at most 240
 in one domain).
 
 source: ADR-1109
@@ -28,6 +36,8 @@ from typing import Any
 
 from mcp_server.infrastructure.sqlite_compat import PsycopgCompatConnection
 from mcp_server.shared.tie_groups import TieGroup, group_credit
+
+Pair = tuple[str, str | None]
 
 
 @dataclass(frozen=True)
@@ -47,6 +57,9 @@ class PendingGroup:
     k: int
 
 
+Counts = dict[frozenset[int], int]
+
+
 def finalize_groups(
     conn: PsycopgCompatConnection, items: list[TieGroup | PendingGroup]
 ) -> list[TieGroup]:
@@ -57,108 +70,126 @@ def finalize_groups(
 
     source: ADR-1109"""
     out: list[TieGroup] = []
+    done: dict[int, dict[Pair, Counts]] = {}
     for i, g in enumerate(items):
         if isinstance(g, TieGroup):
             out.append(g)
             continue
         others = [h for j, h in enumerate(items) if j != i]
-        if others:
-            pairs = _pair_counts(conn, g, others)
-            size = sum(counts[0] for _, _, counts in pairs if counts)
-        else:
-            size, pairs = _count(conn, g), _pairs_present(conn, g)
+        known = [h for h in others if h.signal in done]
+        fresh = [h for h in others if h.signal not in done]
+        outside = _pair_counts(conn, g, fresh, known)
+        by_pair = _with_known(outside, g.signal, others, known, done)
+        done[g.signal] = by_pair
+        masks = range(2 ** len(others))
+        pairs = tuple(
+            (o, a, tuple(c[_members(others, m)] for m in masks))
+            for (o, a), c in by_pair.items()
+        )
+        size = sum(c[frozenset()] for c in by_pair.values())
         credit = group_credit(g.head_len, size, g.weight, g.k)
+        signals = tuple(h.signal for h in others)
         out.append(
-            TieGroup(
-                g.signal,
-                credit,
-                g.where,
-                g.params,
-                g.index,
-                size,
-                tuple(h.signal for h in others),
-                pairs,
-            )
+            TieGroup(g.signal, credit, g.where, g.params, g.index, size, signals, pairs)
         )
     return out
+
+
+def _members(others: list[TieGroup | PendingGroup], mask: int) -> frozenset[int]:
+    """The signals whose bit is set in ``mask``.
+
+    source: ADR-1109"""
+    return frozenset(h.signal for b, h in enumerate(others) if mask >> b & 1)
+
+
+def _with_known(
+    outside: dict[Pair, Counts],
+    signal: int,
+    others: list[TieGroup | PendingGroup],
+    known: list[TieGroup | PendingGroup],
+    done: dict[int, dict[Pair, Counts]],
+) -> dict[Pair, Counts]:
+    """Every total of ``signal``'s group per pair, from its own pass over the
+    rows outside the group counted earlier (``outside``) and from that
+    group's pass: per pair, the rows two groups share are the same rows
+    whichever index counted them. A total over a set holding the earlier
+    group is read from its pass; any other total is the outside part plus
+    the shared part.
+
+    precondition: at most one group counted earlier (only heat and recency
+    are column groups).
+
+    source: ADR-1109"""
+    if not known:
+        return outside
+    if len(known) > 1:
+        raise ValueError("more than two column tie groups in one recall")
+    earlier, me = known[0].signal, frozenset({signal})
+    theirs = done[earlier]
+    pairs = set(outside) | {p for p, c in theirs.items() if c.get(me, 0)}
+    result: dict[Pair, Counts] = {}
+    for pair in sorted(pairs, key=lambda p: (p[0], p[1] is not None, p[1] or "")):
+        counts: Counts = {}
+        for mask in range(2 ** len(others)):
+            inside = _members(others, mask)
+            rest = inside - {earlier}
+            shared = theirs.get(pair, {}).get(rest | me, 0)
+            mine = 0 if earlier in inside else outside.get(pair, {}).get(rest, 0)
+            counts[inside] = shared + mine
+        result[pair] = counts
+    return result
+
+
+def _member_test(h: TieGroup | PendingGroup, g: PendingGroup) -> tuple[str, tuple]:
+    """SQL true exactly for the rows of ``g`` that lie in ``h``. Two column
+    groups of one recall share their filters (``_pending``), so inside ``g``
+    the test is ``h``'s column equality alone; anything else is tested whole.
+
+    source: ADR-1109"""
+    if isinstance(h, PendingGroup):
+        head_h, head_g = f"m.{h.column} = ? AND ", f"m.{g.column} = ? AND "
+        same = h.where.removeprefix(head_h) == g.where.removeprefix(head_g)
+        if same and h.where.startswith(head_h) and h.params[1:] == g.params[1:]:
+            return f"m.{h.column} = ?", (h.params[0],)
+    return f"({h.where})", h.params
 
 
 def _pair_counts(
     conn: PsycopgCompatConnection,
     g: PendingGroup,
-    others: list[TieGroup | PendingGroup],
-) -> tuple[tuple[str, str | None, tuple[int, ...]], ...]:
-    """(origin, agent, counts) per pair of ``g``; ``counts[mask]`` = rows also
-    in every other group whose bit is set in ``mask``.
+    fresh: list[TieGroup | PendingGroup],
+    known: list[TieGroup | PendingGroup],
+) -> dict[Pair, Counts]:
+    """Per (origin, agent) pair, over the rows of ``g`` in none of ``known``:
+    their count (key ``frozenset()``) and the count also in every group of
+    each non-empty subset of ``fresh``. One index-only pass grouped in index
+    order (no sort, no temp B-tree), over ``g.where``: the pairs listed are
+    those of the recall's filters, never of other domains.
 
     source: ADR-1109"""
     cols = ["m.capture_origin AS o", "m.agent_context AS a", "count(*) AS t0"]
     params: list[Any] = []
-    for mask in range(1, 2 ** len(others)):
-        inside = [h for b, h in enumerate(others) if mask >> b & 1]
-        test = " AND ".join(f"({h.where})" for h in inside)
-        cols.append(f"total(CASE WHEN {test} THEN 1 ELSE 0 END) AS t{mask}")
-        params.extend(p for h in inside for p in h.params)
+    tests = [_member_test(h, g) for h in fresh]
+    for mask in range(1, 2 ** len(fresh)):
+        inside = [t for b, t in enumerate(tests) if mask >> b & 1]
+        cols.append(
+            f"count(*) FILTER (WHERE {' AND '.join(t for t, _ in inside)}) AS t{mask}"
+        )
+        params.extend(p for _, ps in inside for p in ps)
+    where, wparams = [g.where], list(g.params)
+    for test, ps in (_member_test(h, g) for h in known):
+        where.append(f"NOT COALESCE({test}, 0)")
+        wparams.extend(ps)
     rows = conn.execute(
         f"SELECT {', '.join(cols)} FROM memories m INDEXED BY {g.index} "  # noqa: S608 — columns, index and predicates are in-code literals; values are bound parameters (docs/ASSURANCE-CASE.md §5)
-        f"WHERE {g.where} GROUP BY m.capture_origin, m.agent_context",
-        (*params, *g.params),
+        f"WHERE {' AND '.join(where)} GROUP BY m.capture_origin, m.agent_context",
+        (*params, *wparams),
     ).fetchall()
-    masks = range(2 ** len(others))
-    return tuple((r["o"], r["a"], tuple(int(r[f"t{m}"]) for m in masks)) for r in rows)
-
-
-def _count(conn: PsycopgCompatConnection, g: PendingGroup) -> int:
-    """The group's size: one index-only range count.
-
-    source: ADR-1109"""
-    return int(
-        conn.execute(
-            f"SELECT count(*) AS n FROM memories m INDEXED BY {g.index} "  # noqa: S608 — index and predicate are in-code literals; values are bound parameters (docs/ASSURANCE-CASE.md §5)
-            f"WHERE {g.where}",
-            g.params,
-        ).fetchall()[0]["n"]
-    )
-
-
-def _pairs_present(
-    conn: PsycopgCompatConnection, g: PendingGroup
-) -> tuple[tuple[str, str | None, None], ...]:
-    """The (origin, agent) pairs in the group's index range, by a loose index
-    scan: one seek per pair, never a pass over the group. Used when the
-    recall has no other group, so no class count is needed (counts None:
-    every pair is sought; a pair whose rows all fail the filters yields no
-    row). The plain count plus this costs 15.9 ms at 250,000 tied rows where
-    the grouped pass costs 23.5 ms (2026-10-16).
-
-    source: ADR-1109"""
-    head = (
-        "SELECT m.capture_origin AS o, m.agent_context AS a "  # noqa: S608 — index and column are in-code literals; values are bound parameters (docs/ASSURANCE-CASE.md §5)
-        f"FROM memories m INDEXED BY {g.index} WHERE m.{g.column} = ?"
-    )
-    order = " ORDER BY m.capture_origin, m.agent_context LIMIT 1"
-    boundary = g.params[0]
-    pairs: list[tuple[str, str | None, None]] = []
-    row = _first(conn, head + order, (boundary,))
-    while row is not None:
-        origin, agent = row["o"], row["a"]
-        pairs.append((origin, agent, None))
-        if agent is None:
-            same = " AND m.capture_origin = ? AND m.agent_context IS NOT NULL"
-            row = _first(conn, head + same + order, (boundary, origin))
-        else:
-            same = " AND m.capture_origin = ? AND m.agent_context > ?"
-            row = _first(conn, head + same + order, (boundary, origin, agent))
-        if row is None:
-            later = " AND m.capture_origin > ?"
-            row = _first(conn, head + later + order, (boundary, origin))
-    return tuple(pairs)
-
-
-def _first(conn: PsycopgCompatConnection, sql: str, params: tuple) -> Any:
-    """source: ADR-1109"""
-    rows = conn.execute(sql, params).fetchall()
-    return rows[0] if rows else None
+    masks = range(2 ** len(fresh))
+    return {
+        (r["o"], r["a"]): {_members(fresh, m): int(r[f"t{m}"]) for m in masks}
+        for r in rows
+    }
 
 
 def class_count(
