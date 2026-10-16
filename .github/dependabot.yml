@@ -15,9 +15,15 @@
 version: 2
 updates:
   # Keeps the SHA pins in .github/workflows fresh. Dependabot rewrites the SHA
-  # and updates the trailing `# vX.Y.Z` comment in the same edit.
+  # and updates the trailing `# vX.Y.Z` comment in the same edit. The "/" entry
+  # scans .github/workflows (plus a root action.yml); composite actions live in
+  # .github/actions/<name>/action.yml, which "/" never reaches, so the glob
+  # lists them. `directories` supports globbing and `*`; `directory` does not.
+  # https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference
   - package-ecosystem: "github-actions"
-    directory: "/"
+    directories:
+      - "/"
+      - "/.github/actions/*"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
