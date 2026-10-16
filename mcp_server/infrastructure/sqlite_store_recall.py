@@ -19,6 +19,10 @@ from mcp_server.infrastructure.sqlite_store_recall_fill import (
     Adjustments,
     group_candidates,
 )
+from mcp_server.infrastructure.sqlite_store_recall_groups import (
+    PendingGroup,
+    finalize_groups,
+)
 from mcp_server.infrastructure.sqlite_store_recall_signals import (
     HEAT,
     IDS_IN,
@@ -109,14 +113,15 @@ class SqliteRecallMixin(SqliteRecallSignalsMixin):
         adj = Adjustments(
             agent_topic,
             0.3 * (w.get("vector", 1.0) / wrrf_k),
-            json.dumps(list(trusted_origins)),
+            tuple(trusted_origins),
             untrusted_factor,
         )
-        contribs, groups = self._contributions(
+        contribs, pending = self._contributions(
             query_text, query_embedding, w, (wrrf_k, max_results * 10), filters
         )
-        if not contribs and not groups:
+        if not contribs and not pending:
             return []
+        groups = finalize_groups(self._conn, pending)
         scores = self._materialized_scores(contribs, groups)
         self._apply_agent_boost(scores, adj)
         self._apply_trust_factor(scores, trusted_origins, untrusted_factor)
@@ -130,8 +135,9 @@ class SqliteRecallMixin(SqliteRecallSignalsMixin):
         w: dict[str, float],
         fusion: tuple[int, int],
         filters: tuple[float, str | None, str | None],
-    ) -> tuple[dict[int, list[tuple[int, float]]], list[TieGroup]]:
-        """Each signal's row-by-row credits per id, and its predicate groups.
+    ) -> tuple[dict[int, list[tuple[int, float]]], list[TieGroup | PendingGroup]]:
+        """Each signal's row-by-row credits per id, and its predicate groups
+        (column groups still to be counted).
 
         source: ADR-1109"""
         k, pool = fusion
@@ -153,7 +159,7 @@ class SqliteRecallMixin(SqliteRecallSignalsMixin):
             ),
         ]
         contribs: dict[int, list[tuple[int, float]]] = {}
-        groups: list[TieGroup] = []
+        groups: list[TieGroup | PendingGroup] = []
         for signal, (credits, group) in signals:
             for mid, credit in credits:
                 contribs.setdefault(mid, []).append((signal, credit))
@@ -174,7 +180,10 @@ class SqliteRecallMixin(SqliteRecallSignalsMixin):
             ids = json_ids(contribs)
             for g in groups:
                 for r in self._conn.execute(
-                    "SELECT m.id AS id FROM memories m "  # noqa: S608 — IDS_IN and the group predicate are in-code literals; values are bound parameters (docs/ASSURANCE-CASE.md §5)
+                    # NOT INDEXED: look the few scored ids up by rowid; the
+                    # planner otherwise scans the group's index (8.9 ms at
+                    # 250,000 tied rows, 2026-10-16).
+                    "SELECT m.id AS id FROM memories m NOT INDEXED "  # noqa: S608 — IDS_IN and the group predicate are in-code literals; values are bound parameters (docs/ASSURANCE-CASE.md §5)
                     f"WHERE m.id {IDS_IN} AND ({g.where})",  # noqa: S608 — IDS_IN and the group predicate are in-code literals; values are bound parameters (docs/ASSURANCE-CASE.md §5)
                     (ids, *g.params),
                 ).fetchall():

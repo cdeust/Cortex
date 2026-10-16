@@ -24,6 +24,8 @@ from __future__ import annotations
 from collections.abc import Hashable, Sequence
 from dataclasses import dataclass
 from functools import lru_cache
+from itertools import repeat
+from operator import truediv
 from typing import Any
 
 # source: ADR-1109 -- one entry per (start, size, weight, k) a recall asks for;
@@ -39,7 +41,12 @@ def group_credit(start: int, size: int, weight: float, k: int) -> float:
     postcondition: ``sum(weight / (k + r)) / size`` over those positions,
     summed in position order (the exact arithmetic ``tied_rrf`` uses).
     """
-    share = sum(weight / (k + r) for r in range(start + 1, start + size + 1))
+    # The same terms in the same order as summing weight / (k + r) over the
+    # positions, so the same float; map() runs the loop in C (250,000
+    # positions: 8.8 -> 4.3 ms, bit-identical on 20,000 random cases,
+    # 2026-10-16).
+    first = k + start + 1
+    share = sum(map(truediv, repeat(weight, size), range(first, first + size)))
     return share / size
 
 
@@ -61,7 +68,15 @@ def tied_rrf(
         end = start
         while end + 1 < len(ranked) and ranked[end + 1][1] == ranked[start][1]:
             end += 1
-        share = group_credit(start, end - start + 1, weight, k)
+        size = end - start + 1
+        # A one-row group's credit is its own term (bit-identical); computed
+        # inline so the ~300 singletons of a recall do not evict a large
+        # group's credit from group_credit's cache.
+        share = (
+            weight / (k + start + 1)
+            if size == 1
+            else group_credit(start, size, weight, k)
+        )
         for mid, _ in ranked[start : end + 1]:
             credit[mid] = share
         start = end + 1
@@ -80,13 +95,23 @@ class TieGroup:
     """A boundary tie group past the pool: every row satisfying ``where``
     (SQL over ``memories m``, bound with ``params``) gets ``credit`` from the
     signal at fusion position ``signal``. ``index``, when set, is the index
-    that serves ``where``'s equality in ``created_at DESC, id DESC`` order."""
+    that serves ``where``'s equality, then (capture_origin, agent_context),
+    then ``created_at DESC, id DESC`` order. For an indexed group, ``size``
+    is its row count, ``others`` the signals of the other groups of the
+    recall, and ``pairs`` one (capture_origin, agent_context, counts) entry
+    per pair present in the group, where ``counts[mask]`` is the number of
+    the pair's rows that also lie in every other group whose bit is set in
+    ``mask`` (``counts[0]`` is the pair's size). ``counts`` is None when the
+    recall has no other group: the pair is in the index range, not counted."""
 
     signal: int
     credit: float
     where: str
     params: tuple[Any, ...]
     index: str | None = None
+    size: int = 0
+    others: tuple[int, ...] = ()
+    pairs: tuple[tuple[str, str | None, tuple[int, ...] | None], ...] = ()
 
 
 def ordered_sum(contributions: Sequence[tuple[int, float]]) -> float:

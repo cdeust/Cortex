@@ -21,7 +21,8 @@ from typing import Any
 
 from mcp_server.infrastructure.embedding_engine import current_embedding_mode
 from mcp_server.infrastructure.sqlite_store_search import SqliteSearchMixin
-from mcp_server.shared.tie_groups import TieGroup, group_credit, ranked_credits
+from mcp_server.infrastructure.sqlite_store_recall_groups import PendingGroup
+from mcp_server.shared.tie_groups import ranked_credits
 
 # source: sqlite-vec v0.1.9, sqlite-vec.c: `#define SQLITE_VEC_VEC0_K_MAX 4096`,
 # checked in vec0Filter_knn ("k value in knn query too large").
@@ -36,8 +37,8 @@ VEC, HEAT, RECENCY = 0, 2, 3  # FTS = 1 (sqlite_store_search.py)
 # prefers the narrower (heat_base) index and sorts the whole group (measured
 # 2026-10-16: count 7.6 ms, fill 11.6 ms with a temp B-tree, 40,000 rows).
 _GROUP_INDEX = {
-    "heat_base": "idx_memories_heat_base_created_at",
-    "created_at": "idx_memories_created_at_fill",
+    "heat_base": "idx_memories_heat_tie",
+    "created_at": "idx_memories_created_tie",
 }
 
 # One bound parameter, a JSON array of ids.
@@ -152,9 +153,10 @@ class SqliteRecallSignalsMixin(SqliteSearchMixin):
         order: str,
         fusion: tuple[float, int, int],
         filters: tuple[float, str | None, str | None],
-    ) -> tuple[Credits, TieGroup | None]:
+    ) -> tuple[Credits, PendingGroup | None]:
         """Rank-fuse one stored column (``fusion`` = weight, k, pool). A
-        boundary group past the pool comes back as a ``TieGroup``.
+        boundary group past the pool comes back as a ``PendingGroup``, counted
+        once every signal has run (``finalize_groups``).
 
         source: ADR-1109"""
         weight, k, pool = fusion
@@ -172,18 +174,31 @@ class SqliteRecallSignalsMixin(SqliteSearchMixin):
             ), None
         boundary = rows[pool - 1]["score"]
         head = [(r["id"], r["score"]) for r in rows[:pool] if r["score"] != boundary]
-        m_conds, _ = self._build_filter(*filters, alias="m.")
+        group = self._pending(signal, column, (boundary, len(head)), fusion, filters)
+        return ranked_credits(head, weight, k), group
+
+    def _pending(
+        self,
+        signal: int,
+        column: str,
+        cut: tuple[Any, int],
+        fusion: tuple[float, int, int],
+        filters: tuple[float, str | None, str | None],
+    ) -> PendingGroup:
+        """The group of rows at ``column = boundary`` under the recall filters
+        (``cut`` = boundary, rows ranked ahead of it).
+
+        source: ADR-1109"""
+        boundary, head_len = cut
+        weight, k, _ = fusion
+        m_conds, params = self._build_filter(*filters, alias="m.")
         where = " AND ".join(
             [f"m.{column} = ?", "m.superseded_by_id IS NULL", *m_conds]
         )
         index = _GROUP_INDEX[column]
-        size = self._conn.execute(
-            f"SELECT count(*) AS n FROM memories m INDEXED BY {index} WHERE {where}",  # noqa: S608 — index and predicate are in-code literals; values are bound parameters (docs/ASSURANCE-CASE.md §5)
-            [boundary, *params],
-        ).fetchall()[0]["n"]
-        credit = group_credit(len(head), size, weight, k)
-        group = TieGroup(signal, credit, where, (boundary, *params), index)
-        return ranked_credits(head, weight, k), group
+        return PendingGroup(
+            signal, where, (boundary, *params), index, column, head_len, weight, k
+        )
 
     @staticmethod
     def _build_filter(

@@ -28,6 +28,7 @@ _DIM = 384
 _SEEDS = range(60)
 # source: SqliteRecallMixin.recall_memories wrrf_k default.
 _K = 60
+_KEYS = ("vector", "fts", "heat", "recency")
 _WORDS = ("ledger", "harbour", "zq")
 _STAMPS = (
     "2026-01-01T00:00:00+00:00",
@@ -210,5 +211,69 @@ def test_recall_equals_the_naive_reference(seed):
             assert [(r["memory_id"], r["score"]) for r in got] == reference(
                 store, args
             ), args
+    finally:
+        store.close()
+
+
+def _members(store: SqliteMemoryStore, groups: list) -> dict[int, set[int]]:
+    """Ids of each group, by its own predicate."""
+    return {
+        g.signal: {
+            r["id"]
+            for r in store._conn.execute(
+                f"SELECT m.id AS id FROM memories m WHERE {g.where}", g.params
+            ).fetchall()
+        }
+        for g in groups
+    }
+
+
+def _check_pair_counts(store, g, members) -> None:
+    """Every class count of every counted pair of ``g`` against a naive count."""
+    from itertools import product
+
+    from mcp_server.infrastructure.sqlite_store_recall_groups import class_count
+
+    meta = store._conn.execute(
+        "SELECT id, capture_origin, agent_context FROM memories"
+    ).fetchall()
+    for origin, agent, counts in g.pairs:
+        if counts is None:  # single group: pairs listed, not counted
+            continue
+        rows = [
+            r["id"]
+            for r in meta
+            if r["id"] in members[g.signal]
+            and (r["capture_origin"], r["agent_context"]) == (origin, agent)
+        ]
+        for flags in product((False, True), repeat=len(g.others)):
+            inside = {s for s, f in zip(g.others, flags, strict=True) if f}
+            outside = set(g.others) - inside
+            naive = sum(
+                all(mid in members[s] for s in inside)
+                and not any(mid in members[s] for s in outside)
+                for mid in rows
+            )
+            assert class_count(g, counts, inside, outside) == naive
+
+
+@pytest.mark.parametrize("seed", _SEEDS)
+def test_pair_class_counts_match_a_naive_count(seed):
+    """Every class count the fill derives from a group's count pass (by
+    inclusion-exclusion) equals counting that class's rows of the pair."""
+    from mcp_server.infrastructure.sqlite_store_recall_groups import finalize_groups
+
+    rnd = random.Random(seed)
+    store = build_store(rnd)
+    try:
+        args = random_args(rnd) | {"weights": dict.fromkeys(_KEYS, 1.0)}
+        filters = (args["min_heat"], args["domain"], args["directory"])
+        _, pending = store._contributions(
+            args["text"], args["emb"], args["weights"], (_K, 10), filters
+        )
+        groups = finalize_groups(store._conn, pending)
+        members = _members(store, groups)
+        for g in (g for g in groups if g.index):
+            _check_pair_counts(store, g, members)
     finally:
         store.close()

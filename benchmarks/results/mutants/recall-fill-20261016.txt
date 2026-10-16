@@ -1,0 +1,13 @@
+killed     | boost after the trust factor | 3 failed, 125 passed in 9.27s
+killed     | seek misses NULL agents (= instead of IS) | 15 failed, 113 passed in 8.15s
+killed     | group credit starts one position late | 8 failed, 120 passed in 8.50s
+killed     | one-row credit one position late | 8 failed, 120 passed in 8.43s
+killed     | superseded rows kept in a column group | 55 failed, 73 passed in 8.40s
+killed     | rows scored row by row not excluded | 2 failed, 126 passed in 9.05s
+killed     | fill oldest first | 11 failed, 117 passed in 8.81s
+killed     | inclusion-exclusion sign flipped | 53 failed, 75 passed in 8.74s
+killed     | seek keeps one row fewer | 3 failed, 125 passed in 8.03s
+killed     | pair trust inverted | 32 failed, 96 passed in 8.02s
+killed     | loose scan stops after the first origin | 5 failed, 123 passed in 8.00s
+killed     | loose scan skips the non-NULL agents after a NULL one | 4 failed, 124 passed in 7.94s
+equivalent | empty pairs seeked too | 128 passed in 8.13s | a pair without class rows returns no row from its seek

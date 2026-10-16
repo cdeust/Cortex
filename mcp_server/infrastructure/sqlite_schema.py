@@ -336,17 +336,17 @@ INDEXES_DDL: list[str] = [
 # Indexes over columns that MIGRATIONS adds (is_global, superseded_by_id):
 # created after the migrations, without a catch, so a failure is loud.
 POST_MIGRATION_INDEXES_DDL: list[str] = [
-    # source: ADR-1109 -- a tie group past the recall pool is counted and
-    # filled newest first (column = ? ORDER BY created_at DESC, id DESC) from
-    # these covering indexes: every column the count and the fill filter on
-    # (current_memories, the recall filter, the agent and trust partitions)
-    # is in the index, so neither reads a table row; measured in ADR-1109.
-    "CREATE INDEX IF NOT EXISTS idx_memories_heat_base_created_at "
-    "ON memories (heat_base, created_at, id, is_stale, superseded_by_id, "
-    "is_global, domain, directory_context, capture_origin, agent_context)",
-    "CREATE INDEX IF NOT EXISTS idx_memories_created_at_fill "
-    "ON memories (created_at, id, heat_base, is_stale, superseded_by_id, "
-    "is_global, domain, directory_context, capture_origin, agent_context)",
+    # source: ADR-1109 -- a tie group past the recall pool is counted per
+    # (capture_origin, agent_context) pair and filled with one ordered seek
+    # per pair from these covering indexes: the group's equality column,
+    # then the pair, then created_at DESC, id DESC order, then every column
+    # the count and the fill test, so neither reads a table row nor sorts.
+    "CREATE INDEX IF NOT EXISTS idx_memories_heat_tie ON memories "
+    "(heat_base, capture_origin, agent_context, created_at, id, is_stale, "
+    "superseded_by_id, is_global, domain, directory_context)",
+    "CREATE INDEX IF NOT EXISTS idx_memories_created_tie ON memories "
+    "(created_at, capture_origin, agent_context, id, heat_base, is_stale, "
+    "superseded_by_id, is_global, domain, directory_context)",
 ]
 
 
