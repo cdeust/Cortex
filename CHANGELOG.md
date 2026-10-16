@@ -55,7 +55,7 @@ adheres to [Semantic Versioning](https://semver.org/).
   seek per pair. On the production arguments (trust factor 0.7) and the
   owner's agent vocabulary (421 pairs), a store whose memories share one
   heat recalls in 21.9 to 25.1 ms at 250,000 memories and 5.5 to 8.3 ms at
-  40,000 (before: 2 to 4 ms): the grouped count, 1.2 to 2.7 times a plain
+  40,000 (before: 2 to 4 ms): the grouped count, 0.9 to 2.7 times a plain
   count and kept by owner decision, plus a fill that grows with the number
   of pairs; where memories also share one `created_at`, 24.4 to 44.3 ms at
   250,000. With a realistic heat spread recall is within 3 ms of the

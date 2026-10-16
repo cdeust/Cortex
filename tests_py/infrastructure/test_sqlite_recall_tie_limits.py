@@ -10,6 +10,8 @@ memory. Engine limits met by earlier heads of #760:
 - one bind parameter per id fails past the build's ``SQLITE_MAX_VARIABLE_NUMBER``.
   Id sets are one JSON array (``json_each``); the test counts the placeholders
   of every statement and requires the maximum not to grow with the group.
+- ``count(*) FILTER (WHERE ...)`` needs SQLite >= 3.30 (review 6 of #760, N2);
+  b2e63876 ran on any version. No recall statement may use it.
 
 source: ADR-1109
 """
@@ -17,6 +19,7 @@ source: ADR-1109
 from __future__ import annotations
 
 import asyncio
+import re
 import sqlite3
 
 import numpy as np
@@ -129,14 +132,16 @@ def test_vector_signal_failure_is_not_swallowed(store):
 
 
 class _PlaceholderCounter:
-    """Delegating connection that records each statement's ``?`` count."""
+    """Delegating connection that records each statement and its ``?`` count."""
 
     def __init__(self, real) -> None:
         self._real = real
         self.counts: list[int] = []
+        self.sql: list[str] = []
 
     def execute(self, sql, *args, **kwargs):
         self.counts.append(sql.count("?"))
+        self.sql.append(sql)
         return self._real.execute(sql, *args, **kwargs)
 
     def __getattr__(self, name):
@@ -204,3 +209,29 @@ def test_unified_search_above_the_k_cap_returns_results(monkeypatch, store):
     )
     assert "error" not in resp
     assert resp["counts"]["cortex"] > 0
+
+
+def test_no_statement_needs_aggregate_filter(store):
+    """Heat and recency both tie past the pool: the grouped count runs with a
+    class column, and no statement uses ``FILTER (``, so a recall runs on
+    a SQLite older than 3.30, as b2e63876 did."""
+    for _ in range(_GROUP_SMALL):
+        store.insert_memory(
+            {
+                "content": "zq row",
+                "domain": _DOMAIN,
+                "source": "lesson",
+                "heat": 0.5,
+                "created_at": "2026-01-01T00:00:00+00:00",
+            }
+        )
+    counter = _PlaceholderCounter(store._conn)
+    store._conn = counter
+    try:
+        rows = _recall(store, {**_HEAT_ONLY, "recency": 1.0})
+    finally:
+        store._conn = counter._real
+    assert len(rows) == 30
+    grouped = [q for q in counter.sql if "GROUP BY m.capture_origin" in q]
+    assert len(grouped) == 2 and "CASE WHEN" in grouped[0]
+    assert not [q for q in counter.sql if re.search(r"\bFILTER\s*\(", q, re.I)]

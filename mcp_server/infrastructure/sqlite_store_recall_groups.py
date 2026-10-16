@@ -164,7 +164,8 @@ def _pair_counts(
     their count (key ``frozenset()``) and the count also in every group of
     each non-empty subset of ``fresh``. One index-only pass grouped in index
     order (no sort, no temp B-tree), over ``g.where``: the pairs listed are
-    those of the recall's filters, never of other domains.
+    those of the recall's filters, never of other domains. Class counts use
+    ``sum(CASE ...)``, not ``count(*) FILTER``, which needs SQLite >= 3.30.
 
     source: ADR-1109"""
     cols = ["m.capture_origin AS o", "m.agent_context AS a", "count(*) AS t0"]
@@ -173,7 +174,8 @@ def _pair_counts(
     for mask in range(1, 2 ** len(fresh)):
         inside = [t for b, t in enumerate(tests) if mask >> b & 1]
         cols.append(
-            f"count(*) FILTER (WHERE {' AND '.join(t for t, _ in inside)}) AS t{mask}"
+            f"sum(CASE WHEN {' AND '.join(t for t, _ in inside)} THEN 1 ELSE 0 END)"
+            f" AS t{mask}"
         )
         params.extend(p for _, ps in inside for p in ps)
     where, wparams = [g.where], list(g.params)
