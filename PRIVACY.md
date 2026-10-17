@@ -33,13 +33,26 @@ like any other memory (locally) — avoid doing so.
   configured PostgreSQL that is unreachable is an error shown at session
   start ("Cortex not ready"), never a silent switch to SQLite. Nothing is
   uploaded.
+- **The plugin's own PostgreSQL (Claude Code plugin, macOS and Linux GNU,
+  fresh installs that ran `claude --init-only`):** the same data, in a
+  PostgreSQL server the plugin runs, listening on 127.0.0.1 only, with a
+  random password kept in a file only you can read. Its data (the cluster,
+  the password, its state) lives in `~/.claude/methodology/managed-pg/`, next
+  to the backend marker; only its binaries live in the plugin's data
+  directory. It is selected only after it started and its schema was created;
+  otherwise, and on Windows, the SQLite store above is used, and the cause is
+  shown at session start ("SQLite fallback: ..."). An existing SQLite store is
+  not moved. Uninstalling the plugin removes the binaries, never the
+  memories: delete `~/.claude/methodology/managed-pg/` to remove them. The
+  Codex plugin and direct `hypermnesia-mcp` launches on the same account use
+  this same server and store.
 - **PostgreSQL + pgvector (opt-in — `install-plugin.sh --postgres`, large
   stores, shared team databases):** your data is stored in **your own**
   database, configured via the `DATABASE_URL` environment variable (default
   `postgresql://127.0.0.1:5432/cortex`); the opt-in setup script installs
   PostgreSQL locally on your machine, and an existing PostgreSQL install is
-  detected and kept across plugin updates. Cortex never provisions or
-  connects to any database you did not configure.
+  detected and kept across plugin updates. Apart from its own server above,
+  Cortex never provisions or connects to any database you did not configure.
 
 You own this data. Deleting the database file (or the relevant rows) permanently
 removes it. The `forget` tool deletes individual memories: a hard delete
@@ -91,7 +104,14 @@ The only outbound network activity is:
    with the machine-learning set). Nothing asks a git remote
    whether a release is out. These transfers fetch software only; no user
    content is sent. `CORTEX_EMBEDDING_ZERO_DOWNLOAD=1` skips the
-   machine-learning packages and the model.
+   machine-learning packages and the model. When the plugin runs its own
+   PostgreSQL server (below), Setup also downloads, once per pinned version,
+   the PostgreSQL 18.6.0 archive of theseus-rs/postgresql-binaries and a
+   pgvector 0.8.7 archive from this repository's own GitHub releases (about
+   13 MB, each checked against a pinned sha256). The pgvector archives are
+   compiled by Cortex's CI from the pinned upstream source commit against that
+   same PostgreSQL, with a build-provenance attestation you can check with
+   `gh attestation verify <archive> --repo cdeust/Cortex`.
 2. **One-time model download.** On first use, the open-source embedding model
    (`sentence-transformers`, all-MiniLM-L6-v2) and the reranking model
    (`flashrank`, ms-marco-MiniLM) are downloaded from the public Hugging Face

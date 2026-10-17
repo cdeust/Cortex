@@ -1,0 +1,93 @@
+name: pgvector
+
+# Compiles the pgvector archive Setup installs (scripts/launcher_pg_assets.py)
+# from the pinned upstream tag, against the pinned theseus PostgreSQL tree, on
+# a runner of each target triple; attests each archive's build provenance and
+# publishes the four archives once as assets of one prerelease of this
+# repository. An existing release is never modified: a rebuild cannot replace
+# the bytes the sha256 pins name.
+# source: ADR-1110
+
+on:
+  push:
+    paths:
+      - .github/workflows/pgvector.yml
+      - scripts/pgvector_build.py
+      - scripts/launcher_pg_assets.py  # the pins: a version bump rebuilds
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: pgvector (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            os: macos-15
+          - target: x86_64-apple-darwin
+            os: macos-15-intel
+          # glibc 2.35 runners: the library's symbol versions stay under the
+          # tree's GLIBC_2.34 floor (checked by the build script).
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-22.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build, prove it loads, package
+        run: python3 -I scripts/pgvector_build.py "${{ matrix.target }}" "$RUNNER_TEMP/pgvector"
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ runner.temp }}/pgvector/out/pgvector-*.tar.gz
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: pgvector-${{ matrix.target }}
+          path: ${{ runner.temp }}/pgvector/out/pgvector-*.tar.gz
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    if: github.repository == 'cdeust/Cortex'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: pgvector-*
+          merge-multiple: true
+          path: dist
+
+      - name: Publish once, never replace
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="$(python3 -I -c 'import sys; sys.path.insert(0, "scripts"); import launcher_pg_assets as a; print(a.PGVECTOR_RELEASE)')"
+          sha256sum dist/*.tar.gz | tee -a "$GITHUB_STEP_SUMMARY"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name'; then
+            echo "release $tag exists: nothing replaced" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          gh release create "$tag" dist/*.tar.gz --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" --prerelease --title "$tag" \
+            --notes "pgvector built by .github/workflows/pgvector.yml (run $GITHUB_RUN_ID) from the pinned upstream tag against the pinned theseus PostgreSQL. Verify: gh attestation verify <archive> --repo $GITHUB_REPOSITORY"

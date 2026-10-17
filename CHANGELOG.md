@@ -8,6 +8,32 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **The Claude Code plugin runs its own PostgreSQL server (#744, #740;
+  ADR-1110).** On macOS (arm64, x86_64) and Linux glibc (x86_64, aarch64),
+  Setup (`claude --init-only`) on a fresh install downloads the pinned
+  theseus-rs PostgreSQL 18.6.0 and a pgvector 0.8.7 archive (sha256-checked,
+  about 13 MB), runs `initdb --pwfile`, starts the server on 127.0.0.1 with
+  its cluster in `~/.claude/methodology/managed-pg` (uninstalling the plugin
+  never deletes memories), creates `vector`, `pg_trgm` and the schema, and
+  only then selects it. No Homebrew or system PostgreSQL is needed: the macOS
+  binaries carry their own OpenSSL (pg0, used by the earlier draft of this
+  change, loaded Homebrew's and failed in dyld on a Mac without it). The
+  pgvector archives are compiled by Cortex's CI (`pgvector.yml`: pinned
+  upstream commit, built and load-tested against the pinned PostgreSQL on each
+  platform, build provenance attested) and published as a release of this
+  repository. The server is started and stopped on kernel events (ready in
+  `postmaster.pid`, process exit), never on a timer, and a postmaster is
+  adopted or signalled only when its PID and kernel start time are the ones
+  recorded at spawn and it authenticates with the cluster's password. The
+  Codex plugin, `hypermnesia-mcp` and `cortex-doctor` attach to the same
+  server, so Claude and Codex on one account share one store. A configured
+  `database_url` (`CLAUDE_PLUGIN_OPTION_DATABASE_URL` for hooks and Setup)
+  always wins, in Setup too; a server that cannot start leaves the SQLite
+  store selected, recorded as `sqlite_fallback` in the Setup outcome and shown
+  at session start as `SQLite fallback: <cause>`; Windows, musl and Linux
+  hosts missing `libxml2.so.2` or OpenSSL 3 keep SQLite. Existing SQLite
+  stores are not migrated. `setup_db.py` now fails when a schema statement
+  fails instead of reporting ready with warnings.
 - **Benchmark refresh preparation: pinned datasets, a per-query journal,
   offline token counting and energy per scored query.** Scores and retrieval
   are unchanged; nothing here runs a scored benchmark.

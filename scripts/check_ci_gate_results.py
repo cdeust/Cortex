@@ -14,6 +14,7 @@ CODE_JOBS = frozenset(
     {
         "test",
         "test-sqlite",
+        "managed-pg",
         "mcp-host-config",
         "test-windows",
         "release-deps",

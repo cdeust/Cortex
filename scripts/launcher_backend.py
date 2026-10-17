@@ -37,17 +37,20 @@ LEGACY_PORT = 5432  # source: pre-ADR-1104 scripts/launcher.py default URL
 CONNECT_SECONDS = 3.0
 # source: PostgreSQL docs, libpq-envars (every libpq setting is a PG* variable)
 _LIBPQ_PREFIX = "PG"
-_WRITTEN_BY = "launcher (first launch, ADR-1104)"  # source: ADR-1104
+WRITTEN_BY = "launcher (first launch, ADR-1104)"  # source: ADR-1104
 _REFUSED = "refused"  # sentinel: this address actively refused
 
 
 def has_earlier_state(methodology_dir: Path, marker_name: str) -> bool:
-    """Whether Cortex wrote anything there: not the marker, its temp file, or
-    a hidden file such as Finder's ``.DS_Store``."""
+    """Whether Cortex wrote anything there: not the marker, its temp file, a
+    hidden file such as Finder's ``.DS_Store``, or the managed server's root
+    (Setup creates it before it may select the store, ADR-1110)."""
+    from mcp_server.infrastructure.managed_pg import ROOT_NAME  # noqa: PLC0415 — resolvable once plugin_root is on sys.path
+
     if not methodology_dir.is_dir():
         return False
     return any(
-        not entry.name.startswith((marker_name, "."))
+        not entry.name.startswith((marker_name, ".")) and entry.name != ROOT_NAME
         for entry in methodology_dir.iterdir()
     )
 
@@ -108,11 +111,33 @@ def persist_first_decision() -> None:
     )
 
     backend, why = decide(BACKEND_MARKER_PATH.parent, BACKEND_MARKER_PATH.name)
-    path = write_backend_marker(backend, _WRITTEN_BY, BACKEND_MARKER_PATH)
+    path = write_backend_marker(backend, WRITTEN_BY, BACKEND_MARKER_PATH)
     print(
         f"[cortex-launcher] storage: {backend} ({why}); recorded in {path}",
         file=sys.stderr,
     )
+
+
+def map_database_option(environ) -> None:
+    """``CLAUDE_PLUGIN_OPTION_DATABASE_URL`` (how hooks, Setup included, receive
+    the user's ``database_url``) onto an empty ``DATABASE_URL`` (how the MCP
+    server receives it): one setting, one meaning. source: ADR-1104"""
+    option = environ.get("CLAUDE_PLUGIN_OPTION_DATABASE_URL", "").strip()
+    if option and not environ.get("DATABASE_URL", "").strip():
+        environ["DATABASE_URL"] = option
+
+
+def _resolve() -> None:
+    """ADR-1104's chain; a ``managed`` marker attaches to that server."""
+    from mcp_server.infrastructure.backend_marker import (  # noqa: PLC0415 — resolvable once plugin_root is on sys.path
+        apply_backend_resolution,
+        environment_decides,
+        read_backend_marker,
+    )
+
+    if not environment_decides(os.environ) and read_backend_marker() is None:
+        persist_first_decision()
+    apply_backend_resolution(os.environ, default="sqlite")
 
 
 def apply() -> None:
@@ -120,30 +145,27 @@ def apply() -> None:
 
     The host passes the user's ``database_url`` to the MCP server as
     ``DATABASE_URL`` and to hooks only as ``CLAUDE_PLUGIN_OPTION_DATABASE_URL``;
-    both mean the same setting. Then the shared precedence (backend_marker)
-    with the plugin's default. A HOME nothing decides gets its marker once
-    (launcher_backend): SQLite when fresh, the earlier local PostgreSQL when
-    it still answers. PostgreSQL's local URL default applies only when a
-    marker chose it.
+    both mean the same setting, mapped before anything else, so a configured
+    database always wins over the managed server (ADR-1110). Then a
+    ``managed`` marker attaches this launch to the plugin's own server;
+    otherwise the shared precedence (backend_marker) with the plugin's
+    default. A HOME nothing decides gets its marker once (launcher_backend):
+    SQLite when fresh, the earlier local PostgreSQL when it still answers.
+    PostgreSQL's local URL default applies only when a marker chose it.
 
     source: ADR-0505
     source: ADR-1104
+    source: ADR-1110
     """
-    option = os.environ.get("CLAUDE_PLUGIN_OPTION_DATABASE_URL", "").strip()
-    if option and not os.environ.get("DATABASE_URL", "").strip():
-        os.environ["DATABASE_URL"] = option
+    map_database_option(os.environ)
     from mcp_server.infrastructure.backend_marker import (  # noqa: PLC0415 — resolvable once plugin_root is on sys.path
         BackendMarkerError,
-        apply_backend_resolution,
-        environment_decides,
-        read_backend_marker,
     )
+    from mcp_server.infrastructure.managed_pg import ManagedPgError  # noqa: PLC0415 — same path as above
 
     try:
-        if not environment_decides(os.environ) and read_backend_marker() is None:
-            persist_first_decision()
-        apply_backend_resolution(os.environ, default="sqlite")
-    except (BackendMarkerError, OSError) as exc:
+        _resolve()
+    except (BackendMarkerError, ManagedPgError, OSError) as exc:
         print(f"[cortex-launcher] Cortex not ready: {exc}", file=sys.stderr)
         sys.exit(1)
     if (

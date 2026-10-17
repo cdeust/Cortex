@@ -20,6 +20,7 @@ from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 from mcp_server.infrastructure.backend_marker import effective_backend
 from mcp_server.doctor_capture import capture_verdict
+from mcp_server.doctor_managed import managed_server, selected as managed_selected
 from mcp_server.doctor_mcp import run_mcp
 from mcp_server.doctor_pgvector import pgvector_iterative_scan
 from mcp_server.infrastructure.config import CLAUDE_DIR
@@ -533,14 +534,22 @@ SQLITE_CHECKS: list[Callable[[], Check]] = [
 ]
 
 
+def _managed_server() -> Check:
+    """source: ADR-1110 — attaches first, so the checks after it use the server."""
+    return managed_server(Check)
+
+
 def active_checks() -> list[Callable[[], Check]]:
     """Backend-appropriate check list (single point of truth).
 
-    source: ADR-0322"""
+    source: ADR-0322
+    source: ADR-1110 (a managed marker: the server check first)"""
     # A BackendMarkerError propagates: the doctor names the corrupt marker
     # instead of running the other backend's checks (source: ADR-1104).
     if effective_backend(os.environ) == "sqlite":
         return SQLITE_CHECKS
+    if managed_selected(os.environ):
+        return [_managed_server, *CHECKS]
     return CHECKS
 
 

@@ -255,6 +255,57 @@ jobs:
           CORTEX_RERANKER_OFFLINE: "1"
         run: python scripts/verify_mcp_hosts.py -- hypermnesia-mcp
 
+  # The plugin's own PostgreSQL server for real: pinned theseus + pgvector
+  # archives, initdb, start, vector + pg_trgm, schema, stop. macOS runs under
+  # sandbox-exec with nothing under /opt/homebrew or /usr/local readable (the
+  # pg0 dyld failure of PR #748's review); Linux loads the runner's libraries.
+  # source: ADR-1110
+  managed-pg:
+    needs: [changes, lint]
+    if: github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true')
+    name: Managed PostgreSQL (${{ matrix.leg }})
+    runs-on: ${{ matrix.os }}
+    # No timeout-minutes: the server's start and stop wait on kernel events,
+    # never a clock (ADR-1110 D2); a hang is a defect to fix, not a verdict.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - leg: linux-x86_64
+            os: ubuntu-latest
+          - leg: linux-aarch64
+            os: ubuntu-24.04-arm
+          - leg: macos-arm64
+            os: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install the launcher base set (locked)
+        uses: ./.github/actions/uv-locked-install
+        with:
+          set: --only-group launcher-base
+          environment: ${{ env.pythonLocation }}
+
+      # The same invocation as tests_py/scripts/test_launcher_pg_e2e.py: an
+      # empty environment, and on macOS no readable Homebrew.
+      - name: Setup, a launch, vector and pg_trgm, stop
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/managed-pg"
+          mkdir -p "$work/home"
+          locked=()
+          if [ "$RUNNER_OS" = macOS ]; then
+            locked=(sandbox-exec -f scripts/locked_mac_env/no_homebrew.sb)
+          fi
+          ${locked[@]+"${locked[@]}"} env -i HOME="$work/home" PATH=/usr/bin:/bin:/usr/sbin:/sbin \
+            TMPDIR="$work" LANG=en_US.UTF-8 "$(command -v python)" -I \
+            scripts/locked_mac_env/managed_pg_e2e.py "$GITHUB_WORKSPACE" "$work"
+
   mcp-host-config:
     needs: [changes, lint]
     if: github.event_name != 'schedule' && ((github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true') && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork == false))
@@ -1092,6 +1143,7 @@ jobs:
       - changes
       - test
       - test-sqlite
+      - managed-pg
       - mcp-host-config
       - test-windows
       - release-deps
@@ -1111,7 +1163,7 @@ jobs:
           # source: ADR-0802
 
 
-          ALLOWED_SKIPS: test,test-sqlite,mcp-host-config,test-windows,release-deps,craftsmanship,typecheck,build,docker-runtime-build,devcontainer-build,docker-smoke,install-e2e
+          ALLOWED_SKIPS: test,test-sqlite,managed-pg,mcp-host-config,test-windows,release-deps,craftsmanship,typecheck,build,docker-runtime-build,devcontainer-build,docker-smoke,install-e2e
         run: python3 scripts/check_ci_gate_results.py
 
   # source: ADR-0802

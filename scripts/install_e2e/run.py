@@ -48,6 +48,8 @@ import init_plugin  # noqa: E402 — scripts/ is a sibling of this package
 
 # source: mcp_server/hooks/session_start_status.py semantic_clause
 SEMANTIC_ON = "semantic search on"
+# source: mcp_server/hooks/session_start.py (the store the status line names)
+MANAGED_STORE = "PostgreSQL memory store"
 _SERVER_LINE = re.compile(r"plugin:hypermnesia-mcp:cortex: .* - (.*)")
 # A first session's server installs before its tools exist (ADR-1104).
 STDIO_BOUND_SECONDS = 1500  # source: ADR-1104 (cold install measured 117 s)
@@ -159,6 +161,9 @@ def _checks(report: dict, expect_semantic: bool) -> dict:
         "hook_within_timeout": (hook.get("ms") or 10**9) < timeout_ms,
         "init_exit_0": report["init"]["returncode"] == 0,
         "hook_ready_session_1": hook.get("status") == 0 and message_starts_ready(hook),
+        # Every leg (Linux glibc, macOS arm64 and x86_64) is a host where
+        # Setup gives a fresh install the plugin's own server (ADR-1110).
+        "managed_postgresql_session_1": MANAGED_STORE in hook.get("system_message", ""),
         "hook_installed_nothing": not any(
             "installing" in text
             for text in (hook.get("stderr", ""), hook.get("stdout", ""))

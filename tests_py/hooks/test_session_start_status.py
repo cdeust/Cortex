@@ -89,3 +89,14 @@ def test_home_relative(monkeypatch, tmp_path):
     monkeypatch.setenv("HOME", str(tmp_path))
     assert status.home_relative(str(tmp_path / ".claude" / "m.db")) == "~/.claude/m.db"
     assert status.home_relative("/elsewhere/m.db") == "/elsewhere/m.db"
+
+
+def test_a_sqlite_fallback_is_one_more_line_of_the_status():
+    # ADR-1110 D3: an eligible store Setup left on SQLite says why, at start.
+    env = {"CORTEX_SEMANTIC_SEARCH": "ready", status.FALLBACK_ENV: "no archive"}
+    assert status.sqlite_ready("SQLite memory at ~/m.db", 2, env) == (
+        "Cortex ready: SQLite memory at ~/m.db, 2 memories; semantic search on."
+        "\nSQLite fallback: no archive"
+    )
+    env.pop(status.FALLBACK_ENV)
+    assert "fallback" not in status.sqlite_ready("SQLite memory at ~/m.db", 2, env)

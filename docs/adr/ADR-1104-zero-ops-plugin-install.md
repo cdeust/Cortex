@@ -14,7 +14,7 @@ title: Zero-ops plugin install
 
 accepted
 
-Decision 4 below (the SessionStart hook installs the base set, 300 s) is superseded by ADR-1108: Setup installs, no hook does, and sets live per lock. The other decisions stand.
+Decision 4 below (the SessionStart hook installs the base set, 300 s) is superseded by ADR-1108: Setup installs, no hook does, and sets live per lock. Decision 1 (selection order) is amended by ADR-1110: a configured database still wins, then a `managed` marker (written by Setup only after the plugin's own PostgreSQL started with pgvector and pg_trgm) selects that server, then this decision's chain unchanged. The other decisions stand.
 
 ## Context
 
