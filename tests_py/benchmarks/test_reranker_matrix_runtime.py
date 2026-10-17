@@ -12,7 +12,10 @@ from benchmarks.reranker_matrix.entry import resolve_script
 from benchmarks.reranker_matrix.handler_probe import probe
 from benchmarks.reranker_matrix.matrix import CELLS, commands, execute
 from benchmarks.reranker_matrix.runtime import fetched, reranked
+from mcp_server.shared.platform import resolve_bash
 from mcp_server.shared.telemetry_context import count_reranked
+
+BASH = resolve_bash()
 
 
 def test_prefix_changes_only_candidate_count_not_sql_parameters():
@@ -67,7 +70,7 @@ def test_matrix_commands_differ_only_by_cell_and_output(tmp_path):
     assert [argv[4] for argv in planned] == list(CELLS)
     assert all(
         argv[:4]
-        == ["bash", "benchmarks/reproduce.sh", "--no-ablation", "--reranker-cell"]
+        == [BASH, "benchmarks/reproduce.sh", "--no-ablation", "--reranker-cell"]
         for argv in planned
     )
     assert all("--quick" not in argv and "--limit" not in argv for argv in planned)

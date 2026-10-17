@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-import shutil
 import subprocess
 
 import pytest
+from mcp_server.shared.platform import resolve_bash
 
 LIBRARY = Path(__file__).resolve().parents[2] / "benchmarks/lib/bench_regression.sh"
 # Every distinct bash a user can have: the system one (3.2.57 on macOS, which
@@ -16,7 +16,7 @@ LIBRARY = Path(__file__).resolve().parents[2] / "benchmarks/lib/bench_regression
 BASHES = sorted(
     {
         path
-        for path in ("/bin/bash", shutil.which("bash"))
+        for path in ("/bin/bash", resolve_bash())
         if path and os.access(path, os.X_OK)
     }
 )
