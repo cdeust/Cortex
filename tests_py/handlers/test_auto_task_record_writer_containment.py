@@ -61,3 +61,34 @@ def test_resolve_domain_sanitizes_explicit_domain():
 
     assert "/" not in resolved and ".." not in resolved
     assert _resolve_domain("my-project", None, None, {}) == "my-project"
+
+
+def test_writer_refuses_symlinked_domain_dir_outside_wiki_root(wiki, tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (wiki / "adr").mkdir()
+    (wiki / "adr" / "linked").symlink_to(outside, target_is_directory=True)
+
+    result = _write("linked")
+
+    assert result["status"] == "error"
+    assert not list(outside.iterdir())
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "/etc/escaped-domain",
+        "..\\..\\..\\escaped-domain",
+        "..%2f..%2f..%2fescaped-domain",
+        "./../escaped-domain",
+        "escaped\x00domain",
+    ],
+    ids=["absolute", "backslash", "percent-encoded", "dot-slash", "nul-byte"],
+)
+def test_resolve_domain_sanitizes_path_like_variants(raw):
+    resolved = _resolve_domain(raw, None, None, {})
+
+    assert resolved
+    assert not any(ch in resolved for ch in ("/", "\\", "\x00", "%"))
+    assert ".." not in resolved
