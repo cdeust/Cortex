@@ -219,7 +219,9 @@ def maybe_write_task_record(
     try:
         adr_num = _next_adr_number(wiki_root, domain)
         record = build_task_record(inputs, adr_number=adr_num)
-        page_path = wiki_root / record.suggested_path
+        page_path = (wiki_root / record.suggested_path).resolve()
+        if not page_path.is_relative_to(wiki_root.resolve()):
+            raise ValueError("task record path escapes wiki root")
         page_path.parent.mkdir(parents=True, exist_ok=True)
         page_path.write_text(record.body, encoding="utf-8")
         return {
