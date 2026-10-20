@@ -35,6 +35,16 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **An unconfigured HOME never dials PostgreSQL, from any entry point
+  (#703, #704, ADR-1110).** The wheel's hook entry (`hypermnesia-mcp-hook`)
+  and server (`hypermnesia-mcp`, `python -m mcp_server`) now resolve the
+  backend with the launcher's one function (`settle_backend`): a fresh HOME
+  gets SQLite and a marker, and `remember` works. Measured on main df3a447
+  with a listener on `127.0.0.1:5432`: one connection from each of the three
+  wheel entry points before, none after; `remember` failed before ("Cortex
+  requires PostgreSQL in CLI mode"). The hooks have no default
+  `DATABASE_URL`; `hooks/entry.resolve_auto_backend` is removed.
+
 - **No hook installs dependencies any more; run `claude --init-only` after
   `claude plugin install` and after `claude plugin update`** (ADR-1108,
   replacing ADR-1104 decision 4). Every hook used to install whenever its

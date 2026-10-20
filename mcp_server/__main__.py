@@ -15,11 +15,16 @@ import os
 import signal
 import sys
 
-from mcp_server.infrastructure.backend_marker import apply_backend_resolution
+from mcp_server.infrastructure.backend_marker import BackendMarkerError
+from mcp_server.infrastructure.backend_resolution import settle_backend
 
-# source: ADR-0505 — direct console/module launches must resolve the saved
-# backend before registry imports instantiate MemorySettings, just as launcher.py.
-apply_backend_resolution(os.environ)
+# source: ADR-1110 — direct console/module launches resolve the backend with the
+# launcher's function before registry imports instantiate MemorySettings.
+try:
+    settle_backend(os.environ)
+except (BackendMarkerError, OSError) as _backend_exc:
+    print(f"[cortex] Cortex not ready: {_backend_exc}", file=sys.stderr)
+    sys.exit(1)
 
 
 try:  # pragma: no cover — defensive; sentence-transformers is mandatory

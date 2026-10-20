@@ -15,6 +15,8 @@ from mcp_server.hooks.session_start_common import _DATABASE_URL, _PLUGIN_ROOT, _
 
 def _try_setup_db() -> dict | None:
     """Run setup_db.py and return its result, or None on failure."""
+    if not _DATABASE_URL:
+        return None
     setup_script = (
         Path(__file__).resolve().parent.parent.parent / "scripts" / "setup_db.py"
     )
@@ -43,6 +45,9 @@ def _try_setup_db() -> dict | None:
 
 def _connect_pg():
     """Try to connect to PostgreSQL. Returns connection or None."""
+    if not _DATABASE_URL:
+        _log("PostgreSQL not configured (no DATABASE_URL); nothing to connect")
+        return None
     try:
         import psycopg  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
         from psycopg.rows import DictRow, dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working

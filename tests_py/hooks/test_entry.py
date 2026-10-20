@@ -160,7 +160,7 @@ def test_prepare_environment_no_marker_postgresql_sets_default_database_url(
 
 @pytest.fixture
 def codex_auto_store(tmp_path: Path, monkeypatch):
-    from mcp_server.hooks.entry import prepare_environment, resolve_auto_backend
+    from mcp_server.hooks.entry import prepare_environment
     from mcp_server.infrastructure.backend_marker import effective_backend
     from mcp_server.infrastructure.memory_config import get_memory_settings
     from mcp_server.infrastructure import memory_store
@@ -187,7 +187,6 @@ def codex_auto_store(tmp_path: Path, monkeypatch):
         # monkeypatch.delenv established, including on PostgreSQL-backed CI.
         with patch.dict(os.environ):
             prepare_environment(os.environ, root / "methodology" / "backend.json")
-            resolve_auto_backend(os.environ)
             store = get_shared_store()
             assert isinstance(store, SqliteMemoryStore)
             assert (
@@ -229,24 +228,27 @@ def test_codex_auto_hook_uses_actual_sqlite_store_without_marker(
     assert "shared Codex decision" in capsys.readouterr().out
 
 
-def test_codex_auto_hook_keeps_postgres_when_store_selects_it(
+def test_codex_fresh_home_never_selects_postgres_by_probing(
     tmp_path: Path, monkeypatch
 ) -> None:
-    from mcp_server.hooks.entry import prepare_environment, resolve_auto_backend
+    """A HOME nothing configures is SQLite without consulting any store (ADR-1110)."""
+    from mcp_server.hooks.entry import prepare_environment
     from mcp_server.infrastructure import memory_store
 
-    monkeypatch.setattr(memory_store, "get_shared_store", lambda: object())
+    def unexpected_store():
+        pytest.fail("an unconfigured HOME must not run store auto-selection")
+
+    monkeypatch.setattr(memory_store, "get_shared_store", unexpected_store)
     environ = {"CORTEX_RUNTIME": "cowork"}
-    prepare_environment(environ, tmp_path / "absent.json")
-    resolve_auto_backend(environ)
-    assert environ["CORTEX_MEMORY_STORE_BACKEND"] == "postgresql"
-    assert environ["DATABASE_URL"] == "postgresql://127.0.0.1:5432/cortex"
+    prepare_environment(environ, tmp_path / "methodology" / "backend.json")
+    assert environ["CORTEX_MEMORY_STORE_BACKEND"] == "sqlite"
+    assert "DATABASE_URL" not in environ
 
 
 def test_codex_explicit_database_url_stays_explicit(
     tmp_path: Path, monkeypatch
 ) -> None:
-    from mcp_server.hooks.entry import prepare_environment, resolve_auto_backend
+    from mcp_server.hooks.entry import prepare_environment
     from mcp_server.infrastructure import memory_store
 
     def unexpected_store():
@@ -258,7 +260,6 @@ def test_codex_explicit_database_url_stays_explicit(
         "DATABASE_URL": "postgresql:///operator_db",
     }
     prepare_environment(environ, tmp_path / "absent.json")
-    resolve_auto_backend(environ)
     assert environ["DATABASE_URL"] == "postgresql:///operator_db"
     assert "CORTEX_MEMORY_STORE_BACKEND" not in environ
 
@@ -271,17 +272,11 @@ def test_packaged_codex_entry_selects_sqlite_before_hook_wiring(
     env.pop("CORTEX_RUNTIME", None)
     env.pop("CORTEX_MEMORY_STORE_BACKEND", None)
     env.pop("CORTEX_MEMORY_DATABASE_URL", None)
-    db = tmp_path / "codex-memory.db"
-    env["CORTEX_MEMORY_SQLITE_FALLBACK_PATH"] = str(db)
     result = subprocess.run(
         [
             sys.executable,
             "-c",
-            (
-                "import mcp_server.infrastructure.memory_store as store; "
-                "store._try_pg_verbose = lambda _url: (None, 'offline'); "
-                "from mcp_server.hooks.entry import main; main()"
-            ),
+            ("from mcp_server.hooks.entry import main; main()"),
             "decision_gate",
         ],
         input=json.dumps({"hook_event_name": "PreToolUse", "tool_name": "Read"}),
@@ -291,7 +286,9 @@ def test_packaged_codex_entry_selects_sqlite_before_hook_wiring(
         cwd=REPO_ROOT,
     )
     assert result.returncode == 0, result.stderr
-    assert db.is_file()
+    # source: ADR-1110 — the backend is settled (and recorded) before any store opens
+    marker = tmp_path / "claude-dir" / "methodology" / "backend.json"
+    assert json.loads(marker.read_text(encoding="utf-8"))["backend"] == "sqlite"
 
 
 def test_pyproject_declares_the_console_script() -> None:

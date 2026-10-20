@@ -1,4 +1,4 @@
-"""scripts/launcher_backend.py: the first launch keeps an earlier local PostgreSQL.
+"""backend_resolution: the first launch keeps an earlier local PostgreSQL.
 
 Before ADR-1104 a marketplace install had no marker and ran on
 ``postgresql://localhost:5432/cortex`` through libpq. Reviews of #749 showed
@@ -7,19 +7,18 @@ that URL certainly failed: the port refuses and no PG* variable configures
 libpq. These tests use free local ports and never dial the real 5432.
 
 source: ADR-1104
+source: ADR-1110
 """
 
 from __future__ import annotations
 
 import os
 import socket
-import sys
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
-import launcher_backend  # noqa: E402
+from mcp_server.infrastructure import backend_resolution
 
 _MARKER = "backend.json"
 
@@ -38,8 +37,8 @@ def _earlier_state(tmp_path: Path) -> Path:
 
 
 def _point_at(monkeypatch, port: int) -> None:
-    monkeypatch.setattr(launcher_backend, "LEGACY_HOST", "127.0.0.1")
-    monkeypatch.setattr(launcher_backend, "LEGACY_PORT", port)
+    monkeypatch.setattr(backend_resolution, "LEGACY_HOST", "127.0.0.1")
+    monkeypatch.setattr(backend_resolution, "LEGACY_PORT", port)
 
 
 def _closed_port() -> int:
@@ -51,19 +50,22 @@ def test_a_fresh_install_is_sqlite_without_dialing(tmp_path, monkeypatch):
     def dial(_environ):
         raise AssertionError("a fresh install must not dial PostgreSQL")
 
-    monkeypatch.setattr(launcher_backend, "legacy_store_answer", dial)
+    monkeypatch.setattr(backend_resolution, "legacy_store_answer", dial)
     methodology = tmp_path / "methodology"
     methodology.mkdir()
     (methodology / "backend.json.tmp1").write_text("")
     (methodology / ".DS_Store").write_text("")
-    assert launcher_backend.decide(methodology, _MARKER) == ("sqlite", "fresh install")
-    assert launcher_backend.decide(tmp_path / "absent", _MARKER)[0] == "sqlite"
+    assert backend_resolution.decide(methodology, _MARKER) == (
+        "sqlite",
+        "fresh install",
+    )
+    assert backend_resolution.decide(tmp_path / "absent", _MARKER)[0] == "sqlite"
 
 
 def test_a_listening_server_keeps_postgresql(tmp_path, monkeypatch, no_libpq_settings):
     with socket.create_server(("127.0.0.1", 0)) as listener:
         _point_at(monkeypatch, listener.getsockname()[1])
-        backend, why = launcher_backend.decide(_earlier_state(tmp_path), _MARKER)
+        backend, why = backend_resolution.decide(_earlier_state(tmp_path), _MARKER)
     assert backend == "postgresql", why
     assert "libpq decides" in why
 
@@ -72,7 +74,7 @@ def test_a_refused_port_is_sqlite_with_the_reason(
     tmp_path, monkeypatch, no_libpq_settings
 ):
     _point_at(monkeypatch, _closed_port())
-    backend, why = launcher_backend.decide(_earlier_state(tmp_path), _MARKER)
+    backend, why = backend_resolution.decide(_earlier_state(tmp_path), _MARKER)
     assert backend == "sqlite"
     assert "nothing listens there" in why and "set database_url" in why
 
@@ -83,7 +85,7 @@ def test_libpq_settings_keep_postgresql_even_when_refused(
 ):
     monkeypatch.setenv(name, "x")
     _point_at(monkeypatch, _closed_port())
-    backend, why = launcher_backend.decide(_earlier_state(tmp_path), _MARKER)
+    backend, why = backend_resolution.decide(_earlier_state(tmp_path), _MARKER)
     assert backend == "postgresql" and name in why
 
 
@@ -93,7 +95,7 @@ def _addresses(monkeypatch, *ports: int) -> None:
         (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", port))
         for port in ports
     ]
-    monkeypatch.setattr(launcher_backend.socket, "getaddrinfo", lambda *a, **k: found)
+    monkeypatch.setattr(backend_resolution.socket, "getaddrinfo", lambda *a, **k: found)
 
 
 def test_an_unclear_connect_error_keeps_postgresql(
@@ -103,8 +105,8 @@ def test_an_unclear_connect_error_keeps_postgresql(
         raise TimeoutError("timed out")
 
     _addresses(monkeypatch, _closed_port())
-    monkeypatch.setattr(launcher_backend.socket.socket, "connect", times_out)
-    backend, why = launcher_backend.decide(_earlier_state(tmp_path), _MARKER)
+    monkeypatch.setattr(backend_resolution.socket.socket, "connect", times_out)
+    backend, why = backend_resolution.decide(_earlier_state(tmp_path), _MARKER)
     assert backend == "postgresql" and "no clear answer" in why
 
 
@@ -114,7 +116,7 @@ def test_one_listening_address_among_refusals_keeps_postgresql(
     """A refusal reported last must not hide a listener on another address."""
     with socket.create_server(("127.0.0.1", 0)) as listener:
         _addresses(monkeypatch, _closed_port(), listener.getsockname()[1])
-        backend, why = launcher_backend.decide(_earlier_state(tmp_path), _MARKER)
+        backend, why = backend_resolution.decide(_earlier_state(tmp_path), _MARKER)
     assert backend == "postgresql", why
 
 
@@ -128,7 +130,7 @@ def test_a_timeout_before_a_refusal_keeps_postgresql(
         (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.2", closed)),
         (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", closed)),
     ]
-    monkeypatch.setattr(launcher_backend.socket, "getaddrinfo", lambda *a, **k: found)
+    monkeypatch.setattr(backend_resolution.socket, "getaddrinfo", lambda *a, **k: found)
     real = socket.socket.connect
 
     def connect(self, address):
@@ -136,14 +138,14 @@ def test_a_timeout_before_a_refusal_keeps_postgresql(
             raise socket.timeout("timed out")
         return real(self, address)
 
-    monkeypatch.setattr(launcher_backend.socket.socket, "connect", connect)
-    backend, why = launcher_backend.decide(_earlier_state(tmp_path), _MARKER)
+    monkeypatch.setattr(backend_resolution.socket.socket, "connect", connect)
+    backend, why = backend_resolution.decide(_earlier_state(tmp_path), _MARKER)
     assert backend == "postgresql", why
 
 
 def test_every_address_refusing_is_sqlite(tmp_path, monkeypatch, no_libpq_settings):
     _addresses(monkeypatch, _closed_port(), _closed_port())
-    backend, why = launcher_backend.decide(_earlier_state(tmp_path), _MARKER)
+    backend, why = backend_resolution.decide(_earlier_state(tmp_path), _MARKER)
     assert backend == "sqlite" and "every address refuses" in why
 
 
@@ -151,8 +153,8 @@ def test_no_address_is_sqlite(tmp_path, monkeypatch, no_libpq_settings):
     def unresolved(*_args, **_kwargs):
         raise socket.gaierror(8, "nodename nor servname provided")
 
-    monkeypatch.setattr(launcher_backend.socket, "getaddrinfo", unresolved)
-    backend, why = launcher_backend.decide(_earlier_state(tmp_path), _MARKER)
+    monkeypatch.setattr(backend_resolution.socket, "getaddrinfo", unresolved)
+    backend, why = backend_resolution.decide(_earlier_state(tmp_path), _MARKER)
     assert backend == "sqlite" and "has no address" in why
 
 
@@ -161,7 +163,7 @@ def test_the_decision_is_recorded_and_printed(tmp_path, monkeypatch, capsys):
 
     marker = tmp_path / "methodology" / "backend.json"
     monkeypatch.setattr(backend_marker, "BACKEND_MARKER_PATH", marker)
-    launcher_backend.persist_first_decision()
+    backend_resolution.persist_first_decision()
     assert backend_marker.read_backend_marker(marker)["backend"] == "sqlite"
     assert "storage: sqlite (fresh install)" in capsys.readouterr().err
     assert [p.name for p in marker.parent.iterdir()] == ["backend.json"]

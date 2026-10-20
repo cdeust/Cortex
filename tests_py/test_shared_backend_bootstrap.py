@@ -98,8 +98,12 @@ def test_explicit_backend_takes_precedence_over_marker(tmp_path, overrides):
     )
 
 
-def test_no_marker_keeps_existing_auto_behavior(tmp_path):
-    assert probe(tmp_path, None)["backend"] == "auto"
+def test_no_marker_records_sqlite_on_first_launch(tmp_path):
+    """ADR-1110: a HOME nothing configures gets SQLite and its marker, never
+    the engine's ``auto`` (which dialed 127.0.0.1:5432, issue #704)."""
+    assert probe(tmp_path, None)["backend"] == "sqlite"
+    marker = tmp_path / "claude" / "methodology" / "backend.json"
+    assert json.loads(marker.read_text())["backend"] == "sqlite"
 
 
 def test_an_invalid_marker_stops_the_server_and_names_the_file(tmp_path):
@@ -124,7 +128,8 @@ def test_an_invalid_marker_stops_the_server_and_names_the_file(tmp_path):
         timeout=PROCESS_TIMEOUT,
     )
     assert result.returncode != 0
-    assert "BackendMarkerError" in result.stderr and str(marker) in result.stderr
+    # source: ADR-1110 — the server stops with "Cortex not ready", not a traceback
+    assert "Cortex not ready" in result.stderr and str(marker) in result.stderr
 
 
 def test_blank_manifest_dsn_does_not_override_marker(tmp_path):

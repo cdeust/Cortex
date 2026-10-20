@@ -11,7 +11,8 @@ import sys
 from mcp_server.hooks.stdin_event import read_event_text
 
 
-_DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://127.0.0.1:5432/cortex")
+# source: ADR-1110 — no default URL; settle_backend sets it only for PostgreSQL
+_DATABASE_URL = os.environ.get("DATABASE_URL", "")
 _HOT_LIMIT = int(os.environ.get("CORTEX_SESSION_START_LIMIT", "8"))
 _MIN_HEAT = float(os.environ.get("CORTEX_SESSION_START_MIN_HEAT", "0.4"))
 _ANCHOR_LIMIT = int(os.environ.get("CORTEX_SESSION_START_ANCHOR_LIMIT", "5"))
