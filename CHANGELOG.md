@@ -54,6 +54,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `.github/workflows/claude.yml`: every push to a PR runs a Claude Code review (`/code-review` then `/security-review`, one cycle), applies the findings and arms squash auto-merge; `@claude` in a comment or issue runs Claude on that request. Action pinned by SHA (anthropics/claude-code-action v1.0.256).
 - **Per-project export and import of memories (ADR-1113, GDPR art. 20).**
   `python -m mcp_server.portability export <project-root> <file>` writes the
   current memories of a project and its subdirectories (never a sibling or the
