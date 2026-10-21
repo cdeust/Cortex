@@ -6,12 +6,11 @@ from __future__ import annotations
 
 from typing import Any, Iterator
 
-from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.pg_store_host import PgStoreHost
 
 
 class PgQueryStreamMixin(PgStoreHost):
-    """Keyset-paginated / server-side-cursor streaming memory reads."""
+    """Keyset-paginated streaming memory reads (no transaction spans a yield)."""
 
     def _fetch_hot_page(
         self,
@@ -80,38 +79,44 @@ class PgQueryStreamMixin(PgStoreHost):
         remaining = cap - yielded
         return min(page, remaining) if remaining > 0 else None
 
-    def _stream_decay_cursor_chunks(
-        self, chunk_size: int
-    ) -> "Iterator[list[dict[str, Any]]]":
-        """Server-side-cursor half of ``iter_memories_for_decay`` (pool
-                enabled path).
+    def _fetch_decay_page(self, page: int, last_id: int | None) -> list[dict[str, Any]]:
+        """One keyset page of active memories, on a batch-pool connection
+        borrowed for this one statement (autocommit: no transaction).
 
-        source: ADR-0561"""
-        with (
-            self.batch_pool.connection() as conn,
-            conn.transaction(),
-            conn.cursor(name="decay_stream") as cur,
-        ):
-            cur.itersize = chunk_size
-            cur.execute("SELECT * FROM memories WHERE NOT is_stale")
-            chunk: list[dict[str, Any]] = []
-            for row in cur:
-                chunk.append(self._normalize_memory_row(dict(row)))
-                if len(chunk) >= chunk_size:
-                    yield chunk
-                    chunk = []
-            if chunk:
-                yield chunk
+        source: ADR-1112"""
+        after = "" if last_id is None else "AND id > %s "
+        params: tuple[Any, ...] = (page,) if last_id is None else (last_id, page)
+        sql = (
+            f"SELECT * FROM memories WHERE NOT is_stale {after}"  # noqa: S608 — `after` is one of two literals; values are bound parameters
+            "ORDER BY id LIMIT %s"
+        )
+        with self.acquire_batch() as conn:
+            rows = self._execute_on_conn(conn, sql, params).fetchall()
+        return [self._normalize_memory_row(dict(r)) for r in rows]
 
     def iter_memories_for_decay(
         self,
         chunk_size: int = 1000,
     ) -> "Iterator[list[dict[str, Any]]]":
-        """Stream active memories in chunks via server-side cursor.
+        """Stream active memories in id order, ``chunk_size`` rows per chunk.
 
-        source: ADR-0561"""
-        if get_memory_settings().POOL_DISABLED:
-            # Kill-switch path: materialize in one call for compat.
-            yield self.get_all_memories_for_decay()
-            return
-        yield from self._stream_decay_cursor_chunks(chunk_size)
+        Keyset pagination: each chunk is one autocommit statement and the
+        connection goes back to the pool before the chunk is yielded, so no
+        transaction stays open while the consumer works (compression encodes,
+        forgetting searches neighbours). The named cursor inside
+        ``conn.transaction()`` this replaces left the backend ``idle in
+        transaction`` for a whole consolidation pass, holding its lock on
+        ``memories`` (incident 2026-10-20). Each row is read once: ``id`` is
+        stable and only grows, so rows the consumer rewrites are not read
+        again, and rows it deletes before their page are not read at all.
+
+        source: ADR-1112"""
+        page, last_id = int(chunk_size), None
+        while True:
+            rows = self._fetch_decay_page(page, last_id)
+            if not rows:
+                return
+            yield rows
+            if len(rows) < page:
+                return
+            last_id = rows[-1]["id"]

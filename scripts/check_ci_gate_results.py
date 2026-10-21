@@ -21,6 +21,12 @@ CODE_JOBS = frozenset(
         "typecheck",
         "build",
         "install-e2e",
+        # source: ADR-1112 (broker and versioned schema)
+        "broker-measurements",
+        # source: ADR-1112 increment 5 (the suite through the store broker)
+        "test-broker-mode",
+        # source: ADR-1112 increment 6 (the suite as a non-superuser role)
+        "test-pg-least-privilege",
     }
 )
 DOCKER_BUILD_JOBS = frozenset({"docker-runtime-build", "devcontainer-build"})

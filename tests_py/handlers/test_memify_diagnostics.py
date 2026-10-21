@@ -18,18 +18,20 @@ from contextlib import contextmanager
 from typing import Any
 
 from mcp_server.handlers.consolidation.memify import run_memify_cycle
+from mcp_server.infrastructure.store_operations import StoreOperationsMixin
 
 
 # ─── Fake store ──────────────────────────────────────────────────────────
 
 
-class _FakeStore:
+class _FakeStore(StoreOperationsMixin):
     """Minimal MemoryStore stand-in driven by injected fixtures.
 
-    Phase 5: the reweight path uses ``acquire_batch()`` — a context
-    manager yielding a mock connection. Reweight is the only path that
-    needs a connection; everything else runs through public methods we
-    stub directly.
+    The reweight path reads relationships through the store-operation
+    funnel (``call_batch(relationship_weights)``, ADR-1112 increment 2) on
+    the fake connection, then writes through
+    ``update_relationships_weight_batch``; everything else runs through
+    public methods we stub directly.
     """
 
     def __init__(
@@ -56,6 +58,10 @@ class _FakeStore:
 
     def update_memory_importance(self, mid: int, new_importance: float) -> None:
         self.updated_importance.append((mid, new_importance))
+
+    def update_relationships_weight_batch(self, updates: list) -> int:
+        self._conn.updates.extend((int(r), float(w)) for r, w in updates)
+        return len(updates)
 
     @contextmanager
     def acquire_batch(self):
@@ -88,6 +94,9 @@ class _FakeConn:
         return None
 
     def commit(self) -> None:
+        pass
+
+    def rollback(self) -> None:
         pass
 
 

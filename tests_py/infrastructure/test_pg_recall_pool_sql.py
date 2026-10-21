@@ -25,9 +25,11 @@ def test_signature_return_shape_and_fusion_unchanged():
     assert compact(before.split("vec_max  AS")[1].split(final_order)[0]) == compact(
         after.split("vec_max  AS")[1].split(final_order)[0]
     )
+    # ADR-1112 increment 6: the caller's trigram threshold is restored last
     assert compact(after.split(final_order)[1].split("$$ LANGUAGE")[0]) == (
         ", tw.final_score DESC, c.created_at DESC, tw.id DESC "
-        "LIMIT p_max_results * 3; END;"
+        "LIMIT p_max_results * 3; PERFORM set_config( "
+        "'pg_trgm.similarity_threshold', COALESCE(v_caller_trgm, '0.3'), true ); END;"
     )
 
 
@@ -87,7 +89,9 @@ def test_each_pool_filters_exact_heat_before_limit_and_exposes_index_operator():
     assert "c.content_tsv @@ v_tsq" in function
     assert "c.content % p_query_text" in function
     assert "similarity(c.content, p_query_text) > 0.1" in function
-    assert "SET pg_trgm.similarity_threshold = '0.1'" in function
+    # set in the body and restored, not a SET clause (audit E14, ADR-1112)
+    assert "set_config('pg_trgm.similarity_threshold', '0.1', true)" in function
+    assert "SET pg_trgm.similarity_threshold" not in function
     assert "ORDER BY effective_heat(c, NOW(), v_factor) DESC" in function
 
 

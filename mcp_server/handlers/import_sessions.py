@@ -30,6 +30,7 @@ from mcp_server.infrastructure.scanner import read_head_tail
 from mcp_server.handlers._tool_meta import NON_IDEMPOTENT_WRITE
 from mcp_server.handlers.backfill_helpers import gist_oversized_content
 from mcp_server.handlers.remember import handler as remember_handler
+from mcp_server.infrastructure.store_operations import background_work
 
 # ── Schema ────────────────────────────────────────────────────────────────
 
@@ -293,6 +294,7 @@ async def _process_single_file(
     return imported, gated, 0, True
 
 
+@background_work  # source: ADR-1112 decision 4 (background class)
 async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Import conversation sessions into the memory store."""
     args = args or {}

@@ -260,3 +260,29 @@ test proves neither native event delivery nor successful memory persistence.
 The 2 October failure occurred before hook code loaded: unqualified uvx selected
 Intel CPython on an ARM host and attempted cryptography compilation, then exceeded
 5/10-second hook deadlines. See `docs/verification/codex-hooks-20261002.md`.
+
+## Rebuild the Codex install from the plugin's commit (ADR-1112)
+
+`runtime.py setup` checks only the version label of the installed wheel. Two
+wheels with the same label can carry different database schemas: on
+2026-10-21 the Codex install (4.23.5, built 2026-10-02) and the Claude Code
+plugin (4.23.5, built 2026-10-16) re-applied their own DDL on the shared
+PostgreSQL store at every start of the other
+(`docs/verification/connection-broker/experiment-log.md`, entries 2 and 7).
+Since ADR-1112 a versioned Cortex refuses a store that an unversioned install
+rewrote, with `SchemaTamperedError` and this procedure in the message.
+
+From a clean checkout of the commit the Claude Code plugin runs:
+
+```sh
+python3 scripts/rebuild_codex_install.py            # prints the plan, changes nothing
+python3 scripts/rebuild_codex_install.py --yes      # builds, installs, verifies
+python -m mcp_server.migrate                        # records the schema version once
+```
+
+`--yes` refuses a dirty tree, builds the wheel with `uv build`, installs it with
+`uv tool install --force --no-build` and the `postgresql` and `sqlite` extras,
+then checks that the installed tree reports the same schema fingerprint as the
+checkout. `UV_TOOL_DIR` and `UV_TOOL_BIN_DIR` select another tool directory, as
+for any `uv tool` command.
+

@@ -9,11 +9,13 @@ from __future__ import annotations
 from mcp_server.infrastructure.row_factory import DICT_ROW
 
 from typing import TYPE_CHECKING, Any
+from mcp_server.infrastructure.store_operations import store_operation
 
 if TYPE_CHECKING:
     from mcp_server.infrastructure.db_types import StoreConnection
 
 
+@store_operation
 def list_pages_for_decay(
     conn: StoreConnection,
     *,
@@ -37,6 +39,7 @@ def list_pages_for_decay(
         return list(cur.fetchall())
 
 
+@store_operation
 def apply_thermo_decisions(conn: StoreConnection, decisions: list[Any]) -> int:
     """Bulk apply HeatDecision rows. Returns count of pages written.
 
@@ -76,6 +79,7 @@ def apply_thermo_decisions(conn: StoreConnection, decisions: list[Any]) -> int:
     return written
 
 
+@store_operation
 def apply_staleness_decisions(conn: StoreConnection, decisions: list[Any]) -> int:
     """Bulk apply StalenessDecision rows. Returns transitions written."""
     if not decisions:
@@ -93,6 +97,7 @@ def apply_staleness_decisions(conn: StoreConnection, decisions: list[Any]) -> in
     return written
 
 
+@store_operation
 def get_claim_file_refs_for_pages(
     conn: StoreConnection, page_ids: list[int]
 ) -> dict[int, list[str]]:

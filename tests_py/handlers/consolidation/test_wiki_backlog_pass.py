@@ -11,10 +11,20 @@ from __future__ import annotations
 import pytest
 
 from mcp_server.handlers.consolidation import wiki_backlog_pass
+from mcp_server.infrastructure.store_operations import StoreOperationsMixin
+from tests_py._store_call import mark_test_operation
 
 
 class _FakeConn:
-    pass
+    def __init__(self):
+        self.commits = 0
+        self.rollbacks = 0
+
+    def commit(self):
+        self.commits += 1
+
+    def rollback(self):
+        self.rollbacks += 1
 
 
 class _FakeCtx:
@@ -36,9 +46,12 @@ class _FakeBatchPool:
         return _FakeCtx(self._conn)
 
 
-class _StoreWithPool:
+class _StoreWithPool(StoreOperationsMixin):
     def __init__(self):
         self.batch_pool = _FakeBatchPool(_FakeConn())
+
+    def acquire_batch(self):
+        return self.batch_pool.connection()
 
 
 class _StoreWithoutPool:
@@ -49,7 +62,9 @@ class TestLessonPromotionBacklog:
     def test_returns_count_on_success(self, monkeypatch) -> None:
         # Patch the consumer's binding (top-level import, #197 family 4).
         monkeypatch.setattr(
-            wiki_backlog_pass, "count_lesson_promotion_candidates", lambda conn: 133
+            wiki_backlog_pass,
+            "count_lesson_promotion_candidates",
+            mark_test_operation(lambda conn: 133),
         )
 
         result = wiki_backlog_pass._lesson_promotion_backlog(_StoreWithPool())
@@ -69,6 +84,7 @@ class TestLessonPromotionBacklog:
         being swallowed here -- the same shape as the other three
         PostgreSQL-only passes."""
 
+        @mark_test_operation
         def _boom(conn):
             raise RuntimeError("PG connection reset")
 
@@ -82,7 +98,9 @@ class TestLessonPromotionBacklog:
     def test_zero_is_a_valid_result(self, monkeypatch) -> None:
         """The queue being genuinely empty is a normal 0, not an error."""
         monkeypatch.setattr(
-            wiki_backlog_pass, "count_lesson_promotion_candidates", lambda conn: 0
+            wiki_backlog_pass,
+            "count_lesson_promotion_candidates",
+            mark_test_operation(lambda conn: 0),
         )
 
         result = wiki_backlog_pass._lesson_promotion_backlog(_StoreWithPool())

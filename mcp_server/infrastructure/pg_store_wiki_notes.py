@@ -17,8 +17,10 @@ import json
 
 
 from mcp_server.infrastructure.pg_store_wiki_common import _returning_id
+from mcp_server.infrastructure.store_operations import store_operation
 
 
+@store_operation
 def insert_citation(
     conn: StoreConnection,
     page_id: int,
@@ -55,6 +57,7 @@ def insert_citation(
         return _returning_id(row) if row is not None else None
 
 
+@store_operation
 def insert_memo(
     conn: StoreConnection,
     subject_type: str,
@@ -91,6 +94,7 @@ def insert_memo(
         return _returning_id(cur.fetchone())
 
 
+@store_operation
 def list_uncited_deliberate_memories(
     conn: StoreConnection, limit: int = 20
 ) -> list[dict]:

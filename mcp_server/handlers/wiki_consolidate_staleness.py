@@ -44,7 +44,7 @@ def _check_existence(refs: set[str], repo_root: Path) -> dict[str, bool]:
 
 
 def _persist_reference_links(
-    conn: Any, pages: list[dict], per_page_typed_refs: dict[int, dict[str, str]]
+    store: Any, pages: list[dict], per_page_typed_refs: dict[int, dict[str, str]]
 ) -> int:
     """Persist harvested file refs as ``link_kind='references'`` rows.
 
@@ -55,17 +55,21 @@ def _persist_reference_links(
     for p in pages:
         normalized = normalize_typed_refs(per_page_typed_refs[p["id"]])
         entries = sorted(normalized.items())
-        written += upsert_page_sources(conn, p["id"], entries, link_kind="references")
+        written += store.call(
+            upsert_page_sources, p["id"], entries, link_kind="references"
+        )
     return written
 
 
 def _harvest_all_pages(
-    conn: Any, pages: list[dict]
+    store: Any, pages: list[dict]
 ) -> tuple[dict[int, dict[str, str]], dict[int, list[str]], set[str]]:
     """Harvest typed refs for every page; return (typed, plain, all-refs-union).
 
     source: ADR-0456"""
-    claim_refs_by_page = get_claim_file_refs_for_pages(conn, [p["id"] for p in pages])
+    claim_refs_by_page = store.call(
+        get_claim_file_refs_for_pages, [p["id"] for p in pages]
+    )
     per_page_typed: dict[int, dict[str, str]] = {}
     per_page_plain: dict[int, list[str]] = {}
     all_refs: set[str] = set()
@@ -79,14 +83,14 @@ def _harvest_all_pages(
 
 
 def _memo_staleness_transitions(
-    conn: Any, stale_decisions: list[StalenessDecision]
+    store: Any, stale_decisions: list[StalenessDecision]
 ) -> None:
     """Audit-trail memo for each staleness transition (set or cleared)."""
     for d in stale_decisions:
         if not d.transitioned:
             continue
-        insert_memo(
-            conn,
+        store.call(
+            insert_memo,
             subject_type="page",
             subject_id=d.page_id,
             decision="staleness_set" if d.is_stale_now else "staleness_cleared",
@@ -98,7 +102,7 @@ def _memo_staleness_transitions(
 
 
 def run_staleness_pass(
-    conn: Any,
+    store: Any,
     pages: list[dict],
     *,
     repo_root: Path,
@@ -109,7 +113,7 @@ def run_staleness_pass(
         Returns the ``staleness`` summary dict for the handler's response.
 
     source: ADR-0456"""
-    per_page_typed_refs, per_page_refs, all_refs = _harvest_all_pages(conn, pages)
+    per_page_typed_refs, per_page_refs, all_refs = _harvest_all_pages(store, pages)
     existence = _check_existence(all_refs, repo_root)
 
     stale_decisions: list[StalenessDecision] = [
@@ -125,9 +129,9 @@ def run_staleness_pass(
     stale_written = 0
     references_written = 0
     if not dry_run:
-        stale_written = apply_staleness_decisions(conn, stale_decisions)
-        _memo_staleness_transitions(conn, stale_decisions)
-        references_written = _persist_reference_links(conn, pages, per_page_typed_refs)
+        stale_written = store.call(apply_staleness_decisions, stale_decisions)
+        _memo_staleness_transitions(store, stale_decisions)
+        references_written = _persist_reference_links(store, pages, per_page_typed_refs)
 
     return {
         "pages_with_refs": sum(1 for d in stale_decisions if d.file_refs),

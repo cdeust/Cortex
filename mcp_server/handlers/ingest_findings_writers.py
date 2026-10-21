@@ -18,6 +18,7 @@ from typing import Any
 
 from mcp_server.shared.wiki_layout import slugify
 from mcp_server.handlers.ingest_findings_artifacts import FindingRecord
+from mcp_server.infrastructure.wiki_handler_queries import receipt_memo_exists
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.infrastructure.pg_store_wiki import insert_memo, upsert_page
@@ -143,7 +144,7 @@ def _render_finding_page(finding: FindingRecord) -> str:
     return "\n".join(lines) + "\n"
 
 
-def write_finding_page(conn: Any, finding: FindingRecord, memory_id: int) -> int:
+def write_finding_page(store: Any, finding: FindingRecord, memory_id: int) -> int:
     """Write the wiki page for a VERIFIED finding: filesystem + wiki.pages
     + wiki.page_sources(link_kind='finding') + wiki.page_sources
     (link_kind='extracted_from', when source_path is present). Returns
@@ -186,9 +187,9 @@ def write_finding_page(conn: Any, finding: FindingRecord, memory_id: int) -> int
         "lead": (finding.description or "")[:280],
         "body": markdown,
     }
-    page_id, _was_modified = upsert_page(conn, page_row)
-    upsert_page_sources(
-        conn,
+    page_id, _was_modified = store.call(upsert_page, page_row)
+    store.call(
+        upsert_page_sources,
         page_id,
         finding.file_paths,
         link_kind=_FINDING_LINK_KIND,
@@ -196,8 +197,8 @@ def write_finding_page(conn: Any, finding: FindingRecord, memory_id: int) -> int
         confidence=1.0,
     )
     if finding.source_path is not None:
-        upsert_page_sources(
-            conn,
+        store.call(
+            upsert_page_sources,
             page_id,
             [finding.source_path],
             link_kind=_SOURCE_DOCUMENT_LINK_KIND,
@@ -207,18 +208,7 @@ def write_finding_page(conn: Any, finding: FindingRecord, memory_id: int) -> int
     return page_id
 
 
-def _memo_exists(conn: Any, run_id: str, finding_id: str, stage: str) -> bool:
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT 1 FROM wiki.memos WHERE author = %s "
-            "AND inputs->>'run_id' = %s AND inputs->>'finding_id' = %s "
-            "AND inputs->>'stage' = %s LIMIT 1",
-            (_MEMO_AUTHOR, run_id, finding_id, stage),
-        )
-        return cur.fetchone() is not None
-
-
-def write_receipt_memos(conn: Any, finding: FindingRecord, page_id: int) -> int:
+def write_receipt_memos(store: Any, finding: FindingRecord, page_id: int) -> int:
     """Insert one wiki.memos row per receipt not already recorded.
 
     Postcondition: for every Receipt in finding.receipts, exactly one
@@ -233,7 +223,13 @@ def write_receipt_memos(conn: Any, finding: FindingRecord, page_id: int) -> int:
     """
     inserted = 0
     for receipt in finding.receipts:
-        if _memo_exists(conn, finding.run_id, finding.finding_id, receipt.stage):
+        if store.call(
+            receipt_memo_exists,
+            _MEMO_AUTHOR,
+            finding.run_id,
+            finding.finding_id,
+            receipt.stage,
+        ):
             continue
         inputs: dict[str, Any] = {
             "run_id": finding.run_id,
@@ -245,8 +241,8 @@ def write_receipt_memos(conn: Any, finding: FindingRecord, page_id: int) -> int:
         }
         if receipt.transcript_digest is not None:
             inputs["transcript_digest"] = receipt.transcript_digest
-        insert_memo(
-            conn,
+        store.call(
+            insert_memo,
             subject_type="page",
             subject_id=page_id,
             decision=receipt.verdict,
@@ -262,9 +258,7 @@ def write_receipt_memos(conn: Any, finding: FindingRecord, page_id: int) -> int:
     return inserted
 
 
-def write_finding(
-    store: MemoryStore, conn: Any, finding: FindingRecord
-) -> dict[str, Any]:
+def write_finding(store: MemoryStore, finding: FindingRecord) -> dict[str, Any]:
     """Full write for one finding: memory, and (if verified) page + memos.
 
     This is the per-finding orchestration step; ingest_findings.handler()
@@ -282,7 +276,7 @@ def write_finding(
     if not finding.verified:
         return result
 
-    page_id = write_finding_page(conn, finding, memory_id)
+    page_id = write_finding_page(store, finding, memory_id)
     result["page_id"] = page_id
-    result["memos_written"] = write_receipt_memos(conn, finding, page_id)
+    result["memos_written"] = write_receipt_memos(store, finding, page_id)
     return result

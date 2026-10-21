@@ -9,6 +9,7 @@ from typing import Any, Callable
 from mcp_server.core.wiki_drift import _file_exists_under
 from mcp_server.core.wiki_coverage import _project_source_root
 from mcp_server.core.wiki_source_backfill import derive_primary_source
+from mcp_server.infrastructure.pg_store_wiki_sources import set_documents_primary
 from mcp_server.infrastructure.pg_store_wiki_sources import (
     upsert_page_sources,
     list_pages_missing_source_link,
@@ -32,7 +33,7 @@ def _resolve_source_root(domain: str) -> str | None:
 
 
 def _process_one_page(
-    conn: Any,
+    store: Any,
     page: dict[str, Any],
     claim_files: list[str],
     *,
@@ -50,12 +51,10 @@ def _process_one_page(
     out["primaries_written"] += 1
     if not apply:
         return
-    upsert_page_sources(conn, page["id"], [path], link_kind="documents", source=tag)
-    with conn.cursor() as cur:
-        cur.execute(
-            "UPDATE wiki.pages SET documents_primary = %s WHERE id = %s",
-            (path, page["id"]),
-        )
+    store.call_batch(
+        upsert_page_sources, page["id"], [path], link_kind="documents", source=tag
+    )
+    store.call_batch(set_documents_primary, page["id"], path)
 
 
 async def run_source_backfill_pass(
@@ -63,7 +62,7 @@ async def run_source_backfill_pass(
 ) -> dict[str, Any]:
     """Derive and persist ``documents_primary`` for pages that lack one.
 
-    Pre-condition:  ``store`` exposes ``batch_pool``
+    Pre-condition:  ``store`` is PostgreSQL-backed (``store.backend``)
                     (``psycopg_pool.ConnectionPool``), enforced by the
                     sole caller ``run_wiki_maintenance`` once at wiring
                     time (issue #636) — called without it, this raises
@@ -84,14 +83,15 @@ async def run_source_backfill_pass(
         "by_source": {},
         "status": "ok",
     }
-    with store.batch_pool.connection() as conn:
-        pages = list_pages_missing_source_link(conn, limit=limit)
-        out["pages_scanned"] = len(pages)
-        if not pages:
-            return out
-        claim_refs = get_claim_file_refs_for_pages(conn, [p["id"] for p in pages])
-        for page in pages:
-            _process_one_page(
-                conn, page, claim_refs.get(page["id"], []), apply=apply, out=out
-            )
+    pages = store.call_batch(list_pages_missing_source_link, limit=limit)
+    out["pages_scanned"] = len(pages)
+    if not pages:
+        return out
+    claim_refs = store.call_batch(
+        get_claim_file_refs_for_pages, [p["id"] for p in pages]
+    )
+    for page in pages:
+        _process_one_page(
+            store, page, claim_refs.get(page["id"], []), apply=apply, out=out
+        )
     return out

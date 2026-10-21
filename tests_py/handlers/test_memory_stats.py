@@ -5,6 +5,7 @@ import asyncio
 from mcp_server.handlers import memory_stats
 from mcp_server.handlers.memory_stats import handler, _get_store
 from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
+from tests_py._db_peek import store_connection
 
 
 class TestMemoryStatsHandler:
@@ -24,7 +25,7 @@ class TestMemoryStatsHandler:
 
         store.insert_memory({"content": "a", "store_type": "episodic", "heat": 0.8})
         store.insert_memory({"content": "b", "store_type": "semantic", "heat": 0.4})
-        store._conn.commit()
+        store_connection(store).commit()
 
         after = asyncio.run(handler())
         assert after["total_memories"] == initial + 2

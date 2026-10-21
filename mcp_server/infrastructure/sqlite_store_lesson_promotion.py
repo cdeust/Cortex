@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Any
 
 from mcp_server.infrastructure.sqlite_compat import PsycopgCompatConnection
+from mcp_server.infrastructure.store_operations import store_operation
 
 # source: ADR-0610
 _ELIGIBLE_WHERE = """
@@ -23,6 +24,7 @@ _ELIGIBLE_WHERE = """
 """
 
 
+@store_operation
 def list_lesson_promotion_candidates(
     conn: PsycopgCompatConnection, limit: int = 20
 ) -> list[dict[str, Any]]:
@@ -47,6 +49,7 @@ def list_lesson_promotion_candidates(
     return [dict(row) for row in rows]
 
 
+@store_operation
 def count_lesson_promotion_candidates(conn: PsycopgCompatConnection) -> int:
     """Total count of lesson-promotion candidates on the SQLite backend.
 

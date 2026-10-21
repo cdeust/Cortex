@@ -148,24 +148,24 @@ class TestFailurePath:
     def test_store_construction_failure_reported_distinctly_from_connect_failure(
         self, monkeypatch, capsys
     ):
-        """The DB is reachable (probe succeeds) but PgMemoryStore(...)
-        itself raises — e.g. auth rejected mid-construction, a driver
-        error, or (per the softened docstring contract) any exception
-        that escapes _init_schema rather than being logged+skipped
-        per-statement. This is a distinct error path from "cannot
-        connect" and must report its own, different stderr prefix.
+        """The DB is reachable (probe succeeds) but the migration step
+        (``pg_migrations.apply_schema``, ADR-1112) itself raises — e.g. auth
+        rejected mid-migration, a driver error, or any exception that
+        escapes rather than being logged+skipped per-statement. This is a
+        distinct error path from "cannot connect" and must report its own,
+        different stderr prefix.
         """
         import mcp_server.migrate as migrate_module
 
         monkeypatch.setenv("DATABASE_URL", _TEST_DB_URL)
         monkeypatch.setattr(migrate_module, "_probe_was_current", lambda url, h: True)
 
-        def _raise_on_construct(*args, **kwargs):
+        def _raise_on_apply(*args, **kwargs):
             raise RuntimeError("simulated PgMemoryStore construction failure")
 
         monkeypatch.setattr(
-            "mcp_server.infrastructure.pg_store.PgMemoryStore",
-            _raise_on_construct,
+            "mcp_server.infrastructure.pg_migrations.apply_schema",
+            _raise_on_apply,
         )
 
         rc = _run()

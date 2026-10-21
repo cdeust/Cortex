@@ -23,6 +23,10 @@ from mcp_server.core.concept_emerger import (
     emerge,
 )
 from mcp_server.infrastructure.memory_config import get_memory_settings
+from mcp_server.infrastructure.wiki_handler_queries import (
+    count_resolved_claims,
+    resolved_claims,
+)
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.pg_store_wiki import (
     get_concepts_by_entity_overlap,
@@ -82,45 +86,14 @@ def _get_store() -> MemoryStore:
     return get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
 
 
-def _fetch_resolved_claims(conn, limit: int) -> list[dict]:
-    """Pull claim_events that have at least one entity_id."""
-    sql = """
-    SELECT id, memory_id, text, claim_type, entity_ids, extracted_at
-      FROM wiki.claim_events
-     WHERE entity_ids IS NOT NULL
-       AND array_length(entity_ids, 1) > 0
-     ORDER BY id
-     LIMIT %s
-    """
-    with conn.cursor() as cur:
-        cur.execute(sql, (limit,))
-        rows = cur.fetchall()
-    out: list[dict] = []
-    for r in rows:
-        if isinstance(r, dict):
-            out.append(r)
-        else:
-            out.append(
-                {
-                    "id": r[0],
-                    "memory_id": r[1],
-                    "text": r[2],
-                    "claim_type": r[3],
-                    "entity_ids": r[4] or [],
-                    "extracted_at": r[5],
-                }
-            )
-    return out
-
-
-def _existing_concepts_index(conn, entity_ids: list[int]) -> dict[int, dict]:
+def _existing_concepts_index(store, entity_ids: list[int]) -> dict[int, dict]:
     """Build a mapping center_entity_id → existing concept row.
 
     The emerger uses entity overlap to match its clusters to existing
     concepts. Indexing by every entity_id present in the existing
     concepts gives O(1) overlap probing.
     """
-    rows = get_concepts_by_entity_overlap(conn, entity_ids)
+    rows = store.call(get_concepts_by_entity_overlap, entity_ids)
     out: dict[int, dict] = {}
     for r in rows:
         for eid in r.get("entity_ids") or []:
@@ -129,14 +102,14 @@ def _existing_concepts_index(conn, entity_ids: list[int]) -> dict[int, dict]:
     return out
 
 
-def _persist_plan(conn, plan, dry_run: bool) -> tuple[int, str]:
+def _persist_plan(store, plan, dry_run: bool) -> tuple[int, str]:
     """Persist one ConceptPlan. Returns (concept_id, action)."""
     if dry_run:
         return (plan.concept_id or -1, "dry_run")
 
     if plan.concept_id is None:
-        new_id = insert_concept(
-            conn,
+        new_id = store.call(
+            insert_concept,
             {
                 "label": plan.label,
                 "status": plan.status,
@@ -149,8 +122,8 @@ def _persist_plan(conn, plan, dry_run: bool) -> tuple[int, str]:
                 "saturation_streak": plan.saturation_streak,
             },
         )
-        insert_memo(
-            conn,
+        store.call(
+            insert_memo,
             subject_type="concept",
             subject_id=new_id,
             decision="emerged",
@@ -165,8 +138,8 @@ def _persist_plan(conn, plan, dry_run: bool) -> tuple[int, str]:
         )
         return (new_id, "inserted")
 
-    update_concept(
-        conn,
+    store.call(
+        update_concept,
         plan.concept_id,
         {
             "label": plan.label,
@@ -181,8 +154,8 @@ def _persist_plan(conn, plan, dry_run: bool) -> tuple[int, str]:
             "last_property_at": True,  # special key triggers NOW()
         },
     )
-    insert_memo(
-        conn,
+    store.call(
+        insert_memo,
         subject_type="concept",
         subject_id=plan.concept_id,
         decision="updated",
@@ -204,9 +177,8 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     dry_run = bool(args.get("dry_run", False))
 
     store = _get_store()
-    conn = store._conn
 
-    claims = _fetch_resolved_claims(conn, limit)
+    claims = store.call(resolved_claims, limit)
     if not claims:
         return {
             "claims_loaded": 0,
@@ -219,24 +191,10 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     candidate_entities = sorted(
         {eid for c in claims for eid in (c.get("entity_ids") or [])}
     )
-    existing_index = _existing_concepts_index(conn, candidate_entities)
+    existing_index = _existing_concepts_index(store, candidate_entities)
 
     # source: ADR-0458
-    with conn.cursor() as cur:
-        cur.execute(
-            # Aliased explicitly: psycopg names a bare COUNT(*) column
-            # "count", SQLite names it "COUNT(*)", and the row is read by
-            # key below. Naming it pins the contract on both backends.
-            "SELECT COUNT(*) AS count FROM wiki.claim_events "
-            "WHERE entity_ids IS NOT NULL "
-            "AND array_length(entity_ids, 1) > 0"
-        )
-        row = cur.fetchone()
-        # source: ADR-0458
-        if row is None:
-            total_claims = 0
-        else:
-            total_claims = row["count"] if isinstance(row, dict) else row[0]
+    total_claims = store.call(count_resolved_claims)
     cold_start = total_claims < COLD_START_MEMORY_THRESHOLD
     thresholds = cold_start_thresholds() if cold_start else None
 
@@ -252,7 +210,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     saturating_ids: list[int] = []
 
     for plan in plans:
-        cid, action = _persist_plan(conn, plan, dry_run)
+        cid, action = _persist_plan(store, plan, dry_run)
         if action == "inserted":
             inserted += 1
         elif action == "updated":
@@ -261,9 +219,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
             promoted_ids.append(cid)
         elif plan.status == "saturating":
             saturating_ids.append(cid)
-
-    if not dry_run:
-        conn.commit()
 
     return {
         "claims_loaded": len(claims),

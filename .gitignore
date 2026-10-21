@@ -79,6 +79,11 @@ app-tauri/src-tauri/target/
 /deps.uv-*/
 # The launcher's install and semantic-job locks beside deps/ (ADR-1104).
 /deps.*.lock
+# The launcher's per-set installs, their locks and its install log
+# (scripts/launcher_layout.py SETS, launcher_base_job.py), created in a
+# checkout when a hook or the store broker starts through the launcher.
+/sets/
+/deps-install.log
 
 # Benchmark run logs (raw stdout/stderr) — transient artifacts, not release content
 benchmarks/results/**/*.log

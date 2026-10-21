@@ -17,12 +17,12 @@ from typing import Any
 
 from mcp_server.core.claim_extractor import extract_claims
 from mcp_server.infrastructure.memory_config import get_memory_settings
+from mcp_server.infrastructure.wiki_handler_queries import extraction_candidates
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.pg_store_wiki import (
     delete_claims_for_memory,
     insert_claim_events,
 )
-from mcp_server.shared.wiki_pointer import is_pointer_source, not_a_pointer_sql
 
 
 schema = {
@@ -83,69 +83,6 @@ def _get_store() -> MemoryStore:
     return get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
 
 
-# A wiki-page pointer memory is a copy of a page that already exists;
-# claims mined from one feed wiki_synthesize/wiki_compile and rebuild
-# that page as a corrupted derivative (issue #622). The exclusion sits
-# on every branch — an explicit memory_id included — because this is the
-# pass that first admits a memory into the drafting chain.
-#
-# Chain heads only (current_memories): claims mined from a superseded memory
-# would feed wiki drafts with content its author retracted.
-_SELECT_CANDIDATE = (
-    "SELECT m.id, m.content, m.tags, m.source FROM current_memories m WHERE "
-)
-
-_NO_CLAIMS_YET = (
-    "NOT EXISTS (SELECT 1 FROM wiki.claim_events c WHERE c.memory_id = m.id)"
-)
-
-
-def _candidate_query(
-    memory_id: int | None, limit: int, force: bool
-) -> tuple[str, tuple]:
-    """(sql, params) for the three selection modes, pointers pre-filtered.
-
-    The pointer clause here narrows the result set; it does not decide.
-    ``_memory_rows`` applies ``is_pointer_source`` to whatever comes
-    back, so a padded ``source`` value LIKE cannot see is still turned
-    away — the two enforcement points cannot disagree on an outcome
-    because only one of them is the authority.
-
-    source: ADR-0459"""
-    not_pointer, pointer_params = not_a_pointer_sql("m.source")
-    if memory_id is not None:
-        sql = f"{_SELECT_CANDIDATE} m.id = %s AND {not_pointer}"  # noqa: S608 — module-literal fragments built by not_a_pointer_sql, not input
-        return sql, (memory_id, *pointer_params)
-    predicate = not_pointer if force else f"{_NO_CLAIMS_YET} AND {not_pointer}"
-    sql = f"{_SELECT_CANDIDATE}{predicate} ORDER BY m.id LIMIT %s"  # noqa: S608 — module-literal fragments built by not_a_pointer_sql, not input
-    return sql, (*pointer_params, limit)
-
-
-def _row_fields(row) -> tuple:
-    """(id, content, tags, source) from a dict-shaped or tuple-shaped row."""
-    if isinstance(row, dict):
-        return row["id"], row["content"], row.get("tags") or [], row.get("source")
-    return row[0], row[1], row[2] or [], row[3]
-
-
-def _memory_rows(conn, memory_id: int | None, limit: int, force: bool) -> list[dict]:
-    """Fetch the candidate memory rows for extraction, pointers excluded.
-
-    ``is_pointer_source`` is the authority — see ``_candidate_query``.
-    """
-    sql, params = _candidate_query(memory_id, limit, force)
-    with conn.cursor() as cur:
-        cur.execute(sql, params)
-        rows = cur.fetchall()
-    out: list[dict] = []
-    for r in rows:
-        mid, content, tags, origin = _row_fields(r)
-        if is_pointer_source(origin):
-            continue
-        out.append({"id": mid, "content": content, "tags": tags})
-    return out
-
-
 def _claim_to_dict(claim) -> dict:
     """Pydantic ClaimEvent → dict suitable for insert_claim_events."""
     return {
@@ -170,7 +107,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     limit = int(args.get("limit", 200))
 
     store = _get_store()
-    rows = _memory_rows(store._conn, memory_id, limit, force)
+    rows = store.call(extraction_candidates, memory_id, limit, force)
     if not rows:
         return {
             "memories_processed": 0,
@@ -193,18 +130,17 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
             )
             if force or memory_id is not None:
                 # source: ADR-0459
-                delete_claims_for_memory(store._conn, row["id"])
+                store.call(delete_claims_for_memory, row["id"])
             if not claims:
                 continue
             payload = [_claim_to_dict(c) for c in claims]
-            insert_claim_events(store._conn, payload)
+            store.call(insert_claim_events, payload)
             total_claims += len(claims)
             for c in claims:
                 claims_per_type[c.claim_type] = claims_per_type.get(c.claim_type, 0) + 1
         except Exception as e:  # noqa: BLE001 — per-memory batch isolation — failure is reported in the returned errors list
             errors.append(f"memory {row['id']}: {e}")
 
-    store._conn.commit()
     return {
         "memories_processed": len(rows),
         "claims_inserted": total_claims,

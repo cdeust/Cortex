@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import pytest
 
-from mcp_server.hooks.session_start_curation import _CURATION_SAMPLE_SQL
+from mcp_server.infrastructure.hook_queries import _CURATION_SAMPLE_SQL
 from tests_py.conftest import _TEST_DB_URL, _USE_PG
 
 pytestmark = pytest.mark.skipif(not _USE_PG, reason="PostgreSQL test database required")

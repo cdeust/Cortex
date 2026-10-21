@@ -36,6 +36,9 @@ from mcp_server.shared.write_class import DELIBERATE, classify_write_class
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import get_shared_store
 
+# source: ADR-1112 (tests of the store itself run on the in-process store)
+pytestmark = pytest.mark.in_process_store
+
 # Vocabulary shared with the I6/M-D2 audit's own "auto-capturées /
 # backfill / mécaniques" description. Any real source containing one of
 # these substrings must NOT classify as DELIBERATE.

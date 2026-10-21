@@ -190,7 +190,7 @@ def _patch_session_main(monkeypatch):
     values = {
         "_read_event": {},
         "_backend_is_sqlite": False,
-        "_connect_pg": SimpleNamespace(close=lambda: None),
+        "_pg_store": SimpleNamespace(),
         "_count_memories": 1,
         "_fetch_anchors": [{"id": 1, "content": "Décision 🧠"}],
         "_fetch_hot_memories": [],
@@ -231,15 +231,15 @@ def _patch_auto_main(monkeypatch):
     monkeypatch.setattr(sys, "stdin", utf8_stdin('{"prompt":"remember this decision"}'))
     monkeypatch.setattr(auto_recall, "_refresh_session_registry", lambda event: None)
     monkeypatch.setattr(auto_recall, "_backend_is_sqlite", lambda: False)
-    monkeypatch.setattr(
-        auto_recall, "_connect", lambda: SimpleNamespace(close=lambda: None)
-    )
+    monkeypatch.setattr(auto_recall, "_store", lambda: SimpleNamespace())
     monkeypatch.setattr(
         auto_recall,
         "_recall_memories",
-        lambda conn, query, project_root=None: [{"id": 1, "content": "Décision 🧠"}],
+        lambda store, query, project_root=None: [{"id": 1, "content": "Décision 🧠"}],
     )
-    monkeypatch.setattr(auto_recall, "emit_hook_receipt", lambda *args, **kwargs: 9)
+    monkeypatch.setattr(
+        auto_recall, "emit_injection_receipt", lambda *args, **kwargs: 9
+    )
 
 
 def test_isolated_session_records_all_context_operations(

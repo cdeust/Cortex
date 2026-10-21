@@ -132,9 +132,7 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
     # source: ADR-0392
     artifact_deleted = (
-        delete_artifact_if_unreferenced(store._conn, artifact_path)
-        if deleted
-        else False
+        store.call(delete_artifact_if_unreferenced, artifact_path) if deleted else False
     )
 
     return {
@@ -152,7 +150,7 @@ def _delete_derived_claims(store: MemoryStore, memory_id: int) -> int:
 
     source: ADR-0392"""
     try:
-        return int(delete_claims_for_memory(store._conn, memory_id))
+        return int(store.call(delete_claims_for_memory, memory_id))
     except Exception as exc:  # noqa: BLE001 — mechanism boundary, see docstring
         logger.warning(
             "wiki claims for memory %s could not be removed: %s", memory_id, exc

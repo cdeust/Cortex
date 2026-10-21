@@ -1,0 +1,35 @@
+name: "PostgreSQL binaries with pgvector on PATH"
+description: >-
+  Install pgvector for the runner's PostgreSQL major version from the PGDG
+  apt repository and put that version's initdb/pg_ctl on PATH, so tests and
+  scripts can start private throwaway clusters (tests_py/_pg_private_cluster.py).
+  No server role or database is created: nothing here talks to a shared server.
+
+# source: ADR-1112; apt bounds and retries as in .github/actions/test-suite
+# (ADR-0800, issue #681).
+
+runs:
+  using: composite
+  steps:
+    - name: Install pgvector and expose the PostgreSQL binaries
+      shell: bash
+      run: |
+        set -euxo pipefail
+        PG_VER="$(pg_lsclusters -h | awk 'NR==1 {print $1}')"
+        sudo install -d /usr/share/postgresql-common/pgdg
+        sudo curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+          -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+        echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+          | sudo tee /etc/apt/sources.list.d/pgdg.list
+        # source: issue #681 (120-second per-attempt bound, three attempts)
+        APT_TIMEOUT=120
+        for step in "update" "install -y postgresql-${PG_VER}-pgvector"; do
+          ok=""
+          for attempt in 1 2 3; do
+            if sudo timeout "${APT_TIMEOUT}s" apt-get $step; then ok=1; break; fi
+            echo "apt-get ${step} attempt ${attempt}/3 failed; retrying in 5s" >&2
+            sleep 5
+          done
+          [ -n "$ok" ] || { echo "apt-get ${step} failed after 3 attempts" >&2; exit 1; }
+        done
+        echo "/usr/lib/postgresql/${PG_VER}/bin" >> "$GITHUB_PATH"

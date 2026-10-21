@@ -109,7 +109,7 @@ def _get_store() -> MemoryStore:
 
 
 def _run_decay_pass(
-    conn: Any, pages: list[dict], now: datetime, *, dry_run: bool
+    store: Any, pages: list[dict], now: datetime, *, dry_run: bool
 ) -> tuple[Any, int]:
     """Pass 1: heat decay + lifecycle transitions.
 
@@ -121,12 +121,12 @@ def _run_decay_pass(
 
     pages_updated = 0
     if not dry_run:
-        pages_updated = apply_thermo_decisions(conn, decisions)
+        pages_updated = store.call(apply_thermo_decisions, decisions)
         # Memo only the transitions, not every pure decay
         for d in decisions:
             if d.transitioned:
-                insert_memo(
-                    conn,
+                store.call(
+                    insert_memo,
                     subject_type="page",
                     subject_id=d.page_id,
                     decision=f"transition_{d.new_lifecycle}",
@@ -148,27 +148,24 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     repo_root = Path(repo_root_arg) if repo_root_arg else Path.cwd()
 
     store = _get_store()
-    conn = store._conn
     now = datetime.now(tz=timezone.utc)
 
-    pages = list_pages_for_decay(conn, limit=limit, include_archived=include_archived)
+    pages = store.call(
+        list_pages_for_decay, limit=limit, include_archived=include_archived
+    )
     if not pages:
         return {
             "pages_evaluated": 0,
             "note": "no eligible pages (no active/area pages exist)",
         }
 
-    stats, pages_updated = _run_decay_pass(conn, pages, now, dry_run=dry_run)
+    stats, pages_updated = _run_decay_pass(store, pages, now, dry_run=dry_run)
 
     stale_summary: dict[str, Any] = {"skipped": True}
     if not skip_staleness:
         stale_summary = run_staleness_pass(
-            conn, pages, repo_root=repo_root, dry_run=dry_run
+            store, pages, repo_root=repo_root, dry_run=dry_run
         )
-
-    if not dry_run:
-        conn.commit()
-
     return {
         "pages_evaluated": stats.pages_evaluated,
         "pages_decayed": stats.pages_decayed,

@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 
 import pytest
+from tests_py._db_peek import store_connection
 
 
 class TestSchemaDeclaresCaptureOrigin:
@@ -83,7 +84,7 @@ class TestCaptureOriginRoundTrip:
 
     @staticmethod
     def _origin_of(store, memory_id: int) -> str:
-        with store._conn.cursor() as cur:
+        with store_connection(store).cursor() as cur:
             cur.execute(
                 "SELECT capture_origin AS c FROM memories WHERE id = %s",
                 (memory_id,),

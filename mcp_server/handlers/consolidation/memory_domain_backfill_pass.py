@@ -47,7 +47,7 @@ def _default_resolve_project_tag() -> ResolveProjectTagFn:
 
 
 def _process_memory(
-    conn: Any,
+    store: Any,
     row: dict[str, Any],
     resolve_directory: ResolveDirectoryFn,
     resolve_project_tag: ResolveProjectTagFn,
@@ -77,12 +77,12 @@ def _process_memory(
             }
         )
         if apply:
-            update_memory_domain(conn, memory_id, derivation.domain)
+            store.call_batch(update_memory_domain, memory_id, derivation.domain)
     else:
         out["orphaned"] += 1
         out["journal"].append({"id": memory_id, "evidence": "", "domain": ""})
         if apply:
-            tag_memory_orphan(conn, memory_id)
+            store.call_batch(tag_memory_orphan, memory_id)
 
 
 async def run_memory_domain_backfill_pass(
@@ -110,20 +110,19 @@ async def run_memory_domain_backfill_pass(
         "status": "ok",
     }
     try:
-        with store.batch_pool.connection() as conn:
-            rows = list_domainless_memories(
-                conn, limit, include_orphans=include_orphans
+        rows = store.call_batch(
+            list_domainless_memories, limit, include_orphans=include_orphans
+        )
+        out["scanned"] = len(rows)
+        for row in rows:
+            _process_memory(
+                store,
+                row,
+                resolve_directory,
+                resolve_project_tag,
+                apply=apply,
+                out=out,
             )
-            out["scanned"] = len(rows)
-            for row in rows:
-                _process_memory(
-                    conn,
-                    row,
-                    resolve_directory,
-                    resolve_project_tag,
-                    apply=apply,
-                    out=out,
-                )
         out["filled"] = sum(out["by_evidence"].values())
     except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("memory_domain_backfill_pass failed (non-fatal): %s", exc)

@@ -6,8 +6,15 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 import threading
 from typing import TYPE_CHECKING
+from mcp_server.infrastructure.broker_endpoint import broker_store, store_in_process
+from mcp_server.infrastructure.broker_errors import (
+    BrokerLaunchError,
+    BrokerUnavailableError,
+)
+from mcp_server.infrastructure.config import CLAUDE_DIR
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 
@@ -25,16 +32,40 @@ _shared_lock = threading.Lock()
 _shared_stores: dict[tuple[str, str, int], "MemoryStore"] = {}
 
 
+def _open_pg(database_url: str) -> "MemoryStore":
+    """The PostgreSQL store of this process: the broker's client, or (in the
+    broker itself and under the test harness) the store in process.
+
+    source: ADR-1112 decision 1"""
+    if store_in_process():
+        from mcp_server.infrastructure.pg_store import PgMemoryStore  # noqa: PLC0415 — see _try_pg_verbose
+
+        return PgMemoryStore(database_url=database_url)
+    kind = os.path.basename(sys.argv[0] or "python") or "python"
+    return broker_store(database_url, CLAUDE_DIR, kind)  # type: ignore[return-value]
+
+
 def _try_pg_verbose(
     database_url: str,
-) -> tuple[PgMemoryStore | None, str | None]:
-    """Try connecting to PostgreSQL. Returns (store, error_message)."""
+) -> tuple["MemoryStore | None", str | None]:
+    """Try connecting to PostgreSQL. Returns (store, error_message).
+
+    A schema this code cannot use (``SchemaError``: newer, behind, or rewritten
+    by another install) propagates: it is not "PostgreSQL unavailable" and must
+    never turn into a silent SQLite fallback (ADR-1112)."""
     try:
         import psycopg  # noqa: PLC0415, F401 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
-        from mcp_server.infrastructure.pg_store import PgMemoryStore  # noqa: PLC0415 — deferred: module hard-imports pgvector/psycopg/psycopg_pool at top level; hoisting would break installs without it
-
-        return PgMemoryStore(database_url=database_url), None
+        from mcp_server.infrastructure.schema_versions import SchemaError  # noqa: PLC0415 — same optional dependency
+        from mcp_server.infrastructure.pg_store import PgMemoryStore  # noqa: PLC0415, F401 — deferred: module hard-imports pgvector/psycopg/psycopg_pool at top level; hoisting would break installs without it
+    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
+        msg = f"{type(exc).__name__}: {exc}"
+        logger.warning("PostgreSQL unavailable (%s), falling back to SQLite", msg)
+        return None, msg
+    try:
+        return _open_pg(database_url), None
+    except (SchemaError, BrokerLaunchError, BrokerUnavailableError):
+        raise
     except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         msg = f"{type(exc).__name__}: {exc}"
         logger.warning("PostgreSQL unavailable (%s), falling back to SQLite", msg)

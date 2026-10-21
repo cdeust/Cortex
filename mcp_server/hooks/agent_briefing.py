@@ -20,10 +20,7 @@ from typing import Any
 
 from mcp_server.hooks.output_streams import use_utf8_output
 from mcp_server.hooks.stdin_event import read_event_text
-from mcp_server.handlers.injection_receipts import (
-    emit_hook_receipt,
-    emit_injection_receipt,
-)
+from mcp_server.handlers.injection_receipts import emit_injection_receipt
 from mcp_server.shared.injection_markers import (
     receipt_marker,
     session_id_from_transcript,
@@ -34,12 +31,11 @@ from mcp_server.hooks.agent_briefing_native import emit_native, native_request
 from mcp_server.hooks.agent_briefing_role import (
     fetch_role_context as _fetch_role_context,
 )
-from mcp_server.hooks.agent_briefing_sqlite import SqliteBriefingConnection
 from mcp_server.hooks.agent_briefing_query import (
     _MAX_MEMORIES,
     _MIN_HEAT,
-    _connect,
     _fetch_agent_context,
+    _store,
 )
 from mcp_server.infrastructure.config import CLAUDE_DIR
 from mcp_server.shared.project_scope import resolve_project_root
@@ -47,7 +43,7 @@ from mcp_server.shared.project_scope import resolve_project_root
 __all__ = [
     "_MAX_MEMORIES",
     "_MIN_HEAT",
-    "_connect",
+    "_store",
     "_fetch_agent_context",
     "_extract_task_keywords",
     "_log",
@@ -157,31 +153,22 @@ def _request(event: dict) -> tuple[str, list[str] | None, bool] | None:
 def _briefing(event, agent, keywords):
     """Fetch bounded context and record exactly those injected memories."""
     try:
-        conn = _connect()
+        store = _store()
     except Exception as exc:  # noqa: BLE001 — hook boundary; visible degradation
         _log(f"skip: briefing store unavailable: {exc}")
-        return ""
-    if conn is None:
-        _log("skip: PostgreSQL unavailable")
         return ""
     try:
         project_root = resolve_project_root(event, os.environ)
         memories = (
-            _fetch_role_context(conn, agent, project_root)
+            _fetch_role_context(store, agent, project_root)
             if keywords is None
-            else _fetch_agent_context(conn, agent, keywords, project_root)
+            else _fetch_agent_context(store, agent, keywords, project_root)
         )
         if not memories:
             _log(f"skip: no relevant memories for {agent}")
             return ""
-        emitter = (
-            emit_injection_receipt
-            if isinstance(conn, SqliteBriefingConnection)
-            else emit_hook_receipt
-        )
-        target = conn.store if isinstance(conn, SqliteBriefingConnection) else conn
-        receipt_id = emitter(
-            target,
+        receipt_id = emit_injection_receipt(
+            store,
             [{"memory_id": m["id"]} for m in memories],
             channel="agent_briefing",
             session_id=session_id_from_transcript(event.get("transcript_path"))
@@ -190,8 +177,6 @@ def _briefing(event, agent, keywords):
     except Exception as exc:  # noqa: BLE001 — hook boundary; visible degradation
         _log(f"skip: briefing query failed: {exc}")
         return ""
-    finally:
-        conn.close()
     _log(f"briefed {agent} with {len(memories)} memories")
     return _render_briefing(agent, memories, receipt_id, keywords is None)
 
@@ -258,4 +243,9 @@ if __name__ == "__main__":
     from mcp_server.hooks.wiring import wire_composition_root  # noqa: PLC0415 — source: issue #560
 
     wire_composition_root()
-    main()
+    # The store's pool must close before exit: an open pool stalls
+    # interpreter shutdown ~5 s per worker thread (ADR-0479, ADR-1112).
+    from mcp_server.hooks._store_lifecycle import close_shared_store_on_exit  # noqa: PLC0415 — entry-only teardown helper
+
+    with close_shared_store_on_exit():
+        main()

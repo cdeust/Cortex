@@ -19,10 +19,19 @@ from mcp_server.handlers.ingest_findings_writers import (
 
 
 class _FakeStore:
-    def __init__(self, existing_by_tag: dict[str, list[dict]] | None = None):
+    def __init__(
+        self,
+        existing_by_tag: dict[str, list[dict]] | None = None,
+        conn: MagicMock | None = None,
+    ):
         self.memories: list[dict] = []
         self._next = 9000
         self._existing_by_tag = existing_by_tag or {}
+        self.conn = conn if conn is not None else MagicMock()
+
+    def call(self, fn, *args, pool="interactive", **kwargs):
+        """``store.call`` as the in-process store runs it (ADR-1112)."""
+        return fn(self.conn, *args, **kwargs)
 
     def insert_memory(self, data: dict) -> int:
         mid = self._next
@@ -67,6 +76,7 @@ def _mock_conn(*, memo_exists: bool = False, page_id: int = 42) -> MagicMock:
     cur = MagicMock()
     conn.cursor.return_value.__enter__.return_value = cur
     cur.fetchone.return_value = (1,) if memo_exists else None
+    cur.fetchall.return_value = [(1,)] if memo_exists else []
     return conn
 
 
@@ -132,7 +142,7 @@ class TestWriteReceiptMemos:
         conn = _mock_conn(memo_exists=False)
         finding = _verified_finding()
 
-        count = write_receipt_memos(conn, finding, page_id=42)
+        count = write_receipt_memos(_FakeStore(conn=conn), finding, page_id=42)
 
         assert count == 1
         assert inserted[0]["inputs"]["run_id"] == "run1"
@@ -163,7 +173,7 @@ class TestWriteReceiptMemos:
             ]
         )
 
-        write_receipt_memos(conn, finding, page_id=42)
+        write_receipt_memos(_FakeStore(conn=conn), finding, page_id=42)
 
         assert "transcript_digest" not in inserted[0]["inputs"]
 
@@ -175,7 +185,7 @@ class TestWriteReceiptMemos:
         conn = _mock_conn(memo_exists=True)
         finding = _verified_finding()
 
-        count = write_receipt_memos(conn, finding, page_id=42)
+        count = write_receipt_memos(_FakeStore(conn=conn), finding, page_id=42)
 
         assert count == 0
         assert called == []
@@ -203,7 +213,7 @@ class TestWriteFindingPageSourceAnchoring:
             file_paths=["src/foo.rs"], source_path="/abs/report.json"
         )
 
-        write_finding_page(_mock_conn(), finding, memory_id=1)
+        write_finding_page(_FakeStore(conn=_mock_conn()), finding, memory_id=1)
 
         kinds = {kw["link_kind"]: (pid, entries) for pid, entries, kw in calls}
         assert kinds["finding"] == (42, ("src/foo.rs",))
@@ -215,7 +225,7 @@ class TestWriteFindingPageSourceAnchoring:
         calls = self._patch_infra(monkeypatch)
         finding = _verified_finding(file_paths=["src/foo.rs"], source_path=None)
 
-        write_finding_page(_mock_conn(), finding, memory_id=1)
+        write_finding_page(_FakeStore(conn=_mock_conn()), finding, memory_id=1)
 
         kinds = [kw["link_kind"] for _pid, _entries, kw in calls]
         assert kinds == ["finding"]
@@ -228,8 +238,8 @@ class TestWriteFindingPageSourceAnchoring:
             file_paths=["src/foo.rs"], source_path="/abs/report.json"
         )
 
-        write_finding_page(_mock_conn(), finding, memory_id=1)
-        write_finding_page(_mock_conn(), finding, memory_id=1)
+        write_finding_page(_FakeStore(conn=_mock_conn()), finding, memory_id=1)
+        write_finding_page(_FakeStore(conn=_mock_conn()), finding, memory_id=1)
 
         # Same two (link_kind, entries) pairs both times -- delete+insert
         # semantics in the real upsert_page_sources make a second call
@@ -249,11 +259,10 @@ class TestWriteFinding:
         monkeypatch.setattr(
             w, "write_finding_page", lambda *a, **k: page_calls.append(a) or 1
         )
-        store = _FakeStore()
-        conn = _mock_conn()
+        store = _FakeStore(conn=_mock_conn())
         finding = _verified_finding(verified=False, receipts=[])
 
-        result = write_finding(store, conn, finding)
+        result = write_finding(store, finding)
 
         assert result["verified"] is False
         assert result["page_id"] is None
@@ -263,13 +272,12 @@ class TestWriteFinding:
     def test_verified_finding_writes_memory_page_and_memos(self, monkeypatch):
         import mcp_server.handlers.ingest_findings_writers as w
 
-        monkeypatch.setattr(w, "write_finding_page", lambda conn, finding, mem_id: 42)
-        monkeypatch.setattr(w, "write_receipt_memos", lambda conn, finding, page_id: 1)
-        store = _FakeStore()
-        conn = _mock_conn()
+        monkeypatch.setattr(w, "write_finding_page", lambda store, finding, mem_id: 42)
+        monkeypatch.setattr(w, "write_receipt_memos", lambda store, finding, page_id: 1)
+        store = _FakeStore(conn=_mock_conn())
         finding = _verified_finding()
 
-        result = write_finding(store, conn, finding)
+        result = write_finding(store, finding)
 
         assert result["verified"] is True
         assert result["page_id"] == 42

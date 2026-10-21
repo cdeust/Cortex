@@ -40,7 +40,7 @@ async def run_wiki_citation_seed_pass(
 ) -> dict[str, Any]:
     """Seed ``wiki.citations`` from ``wiki.pages.memory_id`` (HIGH tier only).
 
-    Callable only when ``store.batch_pool`` exists: ``run_wiki_maintenance``
+    Callable only on a PostgreSQL-backed store: ``run_wiki_maintenance``
     is this pass's sole caller and gates it on that capability once, at
     wiring time (issue #636). Calling this on a store without it is a
     wiring bug, not a runtime condition, and raises ``AttributeError``
@@ -56,43 +56,42 @@ async def run_wiki_citation_seed_pass(
         "journal": [],
         "status": "ok",
     }
-    with store.batch_pool.connection() as conn:
-        rows = list_page_memory_seed_candidates(conn, limit)
-        out["scanned_rows"] = len(rows)
-        candidates = _to_candidates(rows)
-        page_ids = [c.page_id for c in candidates]
-        existing_pairs = list_existing_page_memory_citations(conn, page_ids)
-        decisions = classify_seed_candidates(candidates, existing_pairs)
+    rows = store.call_batch(list_page_memory_seed_candidates, limit)
+    out["scanned_rows"] = len(rows)
+    candidates = _to_candidates(rows)
+    page_ids = [c.page_id for c in candidates]
+    existing_pairs = store.call_batch(list_existing_page_memory_citations, page_ids)
+    decisions = classify_seed_candidates(candidates, existing_pairs)
 
-        for decision in decisions:
-            c = decision.candidate
-            if decision.action == "skip_existing":
-                out["already_cited"] += 1
+    for decision in decisions:
+        c = decision.candidate
+        if decision.action == "skip_existing":
+            out["already_cited"] += 1
+            continue
+
+        new_id = None
+        if apply:
+            new_id = store.call_batch(
+                insert_citation,
+                page_id=c.page_id,
+                session_id="",
+                domain=c.domain,
+                memory_id=c.memory_id,
+            )
+            if new_id is None:
+                out["skipped_race"] += 1
                 continue
 
-            new_id = None
-            if apply:
-                new_id = insert_citation(
-                    conn,
-                    page_id=c.page_id,
-                    session_id="",
-                    domain=c.domain,
-                    memory_id=c.memory_id,
-                )
-                if new_id is None:
-                    out["skipped_race"] += 1
-                    continue
-
-            out["seeded"] += 1
-            out["journal"].append(
-                {
-                    "page_id": c.page_id,
-                    "memory_id": c.memory_id,
-                    "domain": c.domain,
-                    "reliability": c.reliability.value,
-                    "outcome": "seeded" if apply else "would_seed",
-                }
-            )
+        out["seeded"] += 1
+        out["journal"].append(
+            {
+                "page_id": c.page_id,
+                "memory_id": c.memory_id,
+                "domain": c.domain,
+                "reliability": c.reliability.value,
+                "outcome": "seeded" if apply else "would_seed",
+            }
+        )
     return out
 
 

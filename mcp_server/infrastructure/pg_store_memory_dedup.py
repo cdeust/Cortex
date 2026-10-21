@@ -7,6 +7,7 @@ from __future__ import annotations
 from mcp_server.infrastructure.row_factory import DICT_ROW
 
 from typing import TYPE_CHECKING, cast
+from mcp_server.infrastructure.store_operations import store_operation
 
 if TYPE_CHECKING:
     from typing_extensions import LiteralString
@@ -24,6 +25,7 @@ def _dup_key_expr(column: str) -> str:
     return f"md5(lower(regexp_replace({column}, '\\s+', ' ', 'g')))"
 
 
+@store_operation
 def list_exact_duplicate_groups(conn: StoreConnection, limit: int) -> list[dict]:
     """List members of active exact-duplicate groups.
 
@@ -69,6 +71,7 @@ def list_exact_duplicate_groups(conn: StoreConnection, limit: int) -> list[dict]
         return list(cur.fetchall())
 
 
+@store_operation
 def supersede_to_existing(
     conn: StoreConnection, duplicate_id: int, survivor_id: int
 ) -> bool:

@@ -141,6 +141,8 @@ def drop_isolated_database(maint_url: str, db_name: str) -> None:
                 "WHERE datname = %s AND pid <> pg_backend_pid()",
                 (db_name,),
             )
-            conn.execute(f'DROP DATABASE IF EXISTS "{db_name}"')
+            # WITH (FORCE): a store broker of this run may still hold its
+            # pool on the database until it idles out (ADR-1112)
+            conn.execute(f'DROP DATABASE IF EXISTS "{db_name}" WITH (FORCE)')
     except Exception:
         pass

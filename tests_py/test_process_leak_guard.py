@@ -98,6 +98,11 @@ def test_own_pids_and_other_tokens_are_excluded() -> None:
 
 
 @posix_only
+@pytest.mark.skipif(
+    os.environ.get("CORTEX_TEST_BROKER_MODE") == "1",
+    reason="broker mode: the session's store broker is alive mid-session by design "
+    "(ADR-1112); it is stopped before the session-end guard",
+)
 def test_a_leaked_child_makes_the_teardown_fail() -> None:
     child = _spawn(dict(os.environ))
     try:

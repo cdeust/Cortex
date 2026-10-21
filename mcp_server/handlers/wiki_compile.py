@@ -25,6 +25,7 @@ from mcp_server.core.draft_compiler import compile_draft
 from mcp_server.shared.wiki_layout import slugify
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.memory_config import get_memory_settings
+from mcp_server.infrastructure.wiki_handler_queries import memory_domain
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.pg_store_wiki import (
     body_hash,
@@ -98,28 +99,15 @@ def _get_store() -> MemoryStore:
     return get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
 
 
-def _domain_for_memory(conn, memory_id: int | None) -> str:
-    """Look up the domain of a source memory; default to '_general'."""
-    if memory_id is None:
-        return "_general"
-    with conn.cursor() as cur:
-        cur.execute("SELECT domain FROM memories WHERE id = %s", (memory_id,))
-        row = cur.fetchone()
-    if not row:
-        return "_general"
-    domain = row["domain"] if isinstance(row, dict) else row[0]
-    return domain or "_general"
-
-
-def _approved_drafts(conn, draft_id: int | None, limit: int) -> list[dict]:
+def _approved_drafts(store, draft_id: int | None, limit: int) -> list[dict]:
     if draft_id is not None:
-        d = get_draft(conn, draft_id)
+        d = store.call(get_draft, draft_id)
         return [d] if d else []
-    return list_drafts(conn, status="approved", limit=limit)
+    return store.call(list_drafts, status="approved", limit=limit)
 
 
-def _publish_one(conn, draft: dict, *, dry_run: bool) -> dict:
-    domain = _domain_for_memory(conn, draft.get("memory_id"))
+def _publish_one(store, draft: dict, *, dry_run: bool) -> dict:
+    domain = store.call(memory_domain, draft.get("memory_id"))
     rel_path, markdown, frontmatter = compile_draft(draft, domain=domain)
 
     if dry_run:
@@ -161,16 +149,16 @@ def _publish_one(conn, draft: dict, *, dry_run: bool) -> dict:
         "documents": documents,
         "documents_primary": documents[0] if documents else None,
     }
-    page_id, was_modified = upsert_page(conn, page_row)
+    page_id, was_modified = store.call(upsert_page, page_row)
 
     # 3. Transition the draft → published, link the page
-    update_draft_status(
-        conn, draft["id"], status="published", published_page_id=page_id
+    store.call(
+        update_draft_status, draft["id"], status="published", published_page_id=page_id
     )
 
     # 4. Memo
-    insert_memo(
-        conn,
+    store.call(
+        insert_memo,
         subject_type="page",
         subject_id=page_id,
         decision="published_from_draft",
@@ -195,9 +183,8 @@ def _publish_one(conn, draft: dict, *, dry_run: bool) -> dict:
 async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     args = args or {}
     store = _get_store()
-    conn = store._conn
 
-    drafts = _approved_drafts(conn, args.get("draft_id"), int(args.get("limit", 100)))
+    drafts = _approved_drafts(store, args.get("draft_id"), int(args.get("limit", 100)))
     if not drafts:
         return {
             "drafts_published": 0,
@@ -211,13 +198,10 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
     for d in drafts:
         try:
-            result = _publish_one(conn, d, dry_run=dry_run)
+            result = _publish_one(store, d, dry_run=dry_run)
             published.append(result)
         except Exception as e:  # noqa: BLE001 — per-draft batch isolation — failure is reported in the returned errors list
             errors.append(f"draft {d.get('id')}: {e}")
-
-    if not dry_run:
-        conn.commit()
 
     return {
         "drafts_published": len(published),

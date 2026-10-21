@@ -12,19 +12,38 @@ Covers:
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from mcp_server.handlers.wiki_consolidate_staleness import run_staleness_pass
+from tests_py._store_call import FakeConnStore, mark_test_operation
+
+
+def _operation_mock() -> MagicMock:
+    """A mock standing in for a marked store operation (ADR-1112
+    increment 2): ``store.call`` passes it the borrowed connection first."""
+    return mark_test_operation(MagicMock())
 
 
 def _page(page_id: int, *, lead: str = "", is_stale: bool = False) -> dict:
     return {"id": page_id, "lead": lead, "sections": {}, "is_stale": is_stale}
 
 
-@patch("mcp_server.handlers.wiki_consolidate_staleness.upsert_page_sources")
-@patch("mcp_server.handlers.wiki_consolidate_staleness.insert_memo")
-@patch("mcp_server.handlers.wiki_consolidate_staleness.apply_staleness_decisions")
-@patch("mcp_server.handlers.wiki_consolidate_staleness.get_claim_file_refs_for_pages")
+@patch(
+    "mcp_server.handlers.wiki_consolidate_staleness.upsert_page_sources",
+    new_callable=_operation_mock,
+)
+@patch(
+    "mcp_server.handlers.wiki_consolidate_staleness.insert_memo",
+    new_callable=_operation_mock,
+)
+@patch(
+    "mcp_server.handlers.wiki_consolidate_staleness.apply_staleness_decisions",
+    new_callable=_operation_mock,
+)
+@patch(
+    "mcp_server.handlers.wiki_consolidate_staleness.get_claim_file_refs_for_pages",
+    new_callable=_operation_mock,
+)
 def test_dry_run_performs_zero_writes(
     mock_claims, mock_apply, mock_memo, mock_upsert
 ) -> None:
@@ -32,7 +51,7 @@ def test_dry_run_performs_zero_writes(
     pages = [_page(1, lead="mcp_server/core/a.py cited")]
 
     summary = run_staleness_pass(
-        conn=object(), pages=pages, repo_root=Path("/tmp/nonexistent"), dry_run=True
+        FakeConnStore(), pages=pages, repo_root=Path("/tmp/nonexistent"), dry_run=True
     )
 
     mock_apply.assert_not_called()
@@ -43,10 +62,22 @@ def test_dry_run_performs_zero_writes(
     assert summary["skipped"] is False
 
 
-@patch("mcp_server.handlers.wiki_consolidate_staleness.upsert_page_sources")
-@patch("mcp_server.handlers.wiki_consolidate_staleness.insert_memo")
-@patch("mcp_server.handlers.wiki_consolidate_staleness.apply_staleness_decisions")
-@patch("mcp_server.handlers.wiki_consolidate_staleness.get_claim_file_refs_for_pages")
+@patch(
+    "mcp_server.handlers.wiki_consolidate_staleness.upsert_page_sources",
+    new_callable=_operation_mock,
+)
+@patch(
+    "mcp_server.handlers.wiki_consolidate_staleness.insert_memo",
+    new_callable=_operation_mock,
+)
+@patch(
+    "mcp_server.handlers.wiki_consolidate_staleness.apply_staleness_decisions",
+    new_callable=_operation_mock,
+)
+@patch(
+    "mcp_server.handlers.wiki_consolidate_staleness.get_claim_file_refs_for_pages",
+    new_callable=_operation_mock,
+)
 def test_not_dry_run_persists_references_per_page(
     mock_claims, mock_apply, mock_memo, mock_upsert
 ) -> None:
@@ -56,7 +87,7 @@ def test_not_dry_run_persists_references_per_page(
     pages = [_page(1, lead="mcp_server/core/a.py and mcp_server/core/b.py cited")]
 
     summary = run_staleness_pass(
-        conn=object(), pages=pages, repo_root=Path("/tmp/nonexistent"), dry_run=False
+        FakeConnStore(), pages=pages, repo_root=Path("/tmp/nonexistent"), dry_run=False
     )
 
     mock_apply.assert_called_once()

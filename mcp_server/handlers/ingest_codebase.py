@@ -51,6 +51,7 @@ from mcp_server.infrastructure.staging_resolve_sink import (
     build_entity_sink,
 )
 from mcp_server.shared.progress import NullProgress, ProgressReporter
+from mcp_server.infrastructure.store_operations import background_work
 import shutil
 
 logger = logging.getLogger(__name__)
@@ -223,7 +224,7 @@ async def _build_symbol_ctx(
     emits a running-count text line on every dispatch.
     """
     run_id = f"ingest-symbols:{domain}"
-    sink = build_entity_sink(lambda: store.batch_pool.connection())
+    sink = build_entity_sink(store)
     writer = AdaptiveBatchWriter(sink, make_entity_controller())
     offset, count = _checkpoint_read(store, run_id)
     symbol_total: int | None = (
@@ -358,7 +359,7 @@ async def _ingest_edges(
 
     result = await adaptive_drain(
         _edge_pages(),
-        lambda: build_edge_sink(lambda: store.batch_pool.connection()),
+        lambda: build_edge_sink(store),
         make_edge_controller,
         concurrency=2,
         queue_cap=edge_queue_cap(),
@@ -437,6 +438,7 @@ def _process_node_count(proc: dict[str, Any]) -> int:
         return 0
 
 
+@background_work  # source: ADR-1112 decision 4 (background class)
 async def handler(
     args: dict[str, Any] | None = None,
     *,

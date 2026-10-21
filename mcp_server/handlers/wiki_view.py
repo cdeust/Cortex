@@ -11,34 +11,20 @@ Modes:
   list views:       wiki_view({"list": true})
 
 Composition root only — infrastructure.wiki_schema_reader supplies the
-views dict; wiki_view_executor compiles; pg_store executes.
+views dict; the store operation ``execute_view`` compiles with the safe DSL
+(``shared/wiki_view_dsl.py``) and executes (ADR-1112).
 """
 
 from __future__ import annotations
 
-from mcp_server.infrastructure.row_factory import DICT_ROW
-
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, TypeGuard, cast
+from typing import TYPE_CHECKING, Any, TypeGuard
 
 if TYPE_CHECKING:
-    from typing_extensions import LiteralString
-
     from mcp_server.infrastructure.pg_store import PgMemoryStore
 
-# psycopg.rows is imported lazily inside _execute_view() — only reached on
-# the PG path. Under the SQLite fallback psycopg may not be installed, so an
-# eager top-level import would crash module load for all users on that backend.
-# // Engineering choice: lazy import is the standard guard for optional
-# // PG-only dependencies in composition-root handlers (see memory_store.py
-# // which also defers `import psycopg` to _try_pg_verbose).
-
 from mcp_server.infrastructure.wiki_schema_reader import load_registry
-from mcp_server.core.wiki_view_executor import (
-    CompiledView,
-    compile_view,
-    compiled_view_ok,
-)
+from mcp_server.infrastructure.wiki_handler_queries import execute_view
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
@@ -121,46 +107,12 @@ def _is_pg(store: object) -> TypeGuard[PgMemoryStore]:
     """Return True iff the store is the PostgreSQL backend.
 
     precondition: store is a MemoryStore produced by get_shared_store()
-    postcondition: True iff type name is 'PgMemoryStore' (PG path is safe to
-    use psycopg cursor API); False for SQLite fallback.
-    // Engineering choice: name-based check avoids importing PgMemoryStore
-    // into this module, which would force psycopg resolution at import time —
-    // defeating the lazy-import goal. The class name is a stable interface
-    // contract (see infrastructure/pg_store.py:107).
+    postcondition: True iff the store reports ``backend == "postgresql"``
+    (the in-process PgMemoryStore and the broker client both do, ADR-1112);
+    False for the SQLite fallback. No import of PgMemoryStore here: that
+    would force psycopg resolution at import time.
     """
-    return type(store).__name__ == "PgMemoryStore"
-
-
-def _execute_view(
-    store: PgMemoryStore, compiled: CompiledView, view_meta: dict
-) -> dict:
-    """Run a compiled view against the PG store and return the result dict.
-
-    precondition: _is_pg(store) is True; compiled.ok is True
-    postcondition: returns {view, table, row_count, rows, sql} on success,
-                   or {view, error, sql} on execution failure
-    """
-    with store._conn.cursor(row_factory=DICT_ROW) as cur:
-        try:
-            # compiled.sql comes from the safe view compiler: table/column
-            # whitelists, values as bound params (wiki_view_executor) — the
-            # LiteralString discipline is re-asserted at this one boundary.
-            cur.execute(cast("LiteralString", compiled.sql), compiled.params)
-            rows = list(cur.fetchall())
-        except Exception as e:  # noqa: BLE001 — view execution boundary — any SQL failure is returned as the view's error report
-            return {
-                "view": view_meta,
-                "error": f"execution failed: {e}",
-                "sql": compiled.sql,
-            }
-
-    return {
-        "view": view_meta,
-        "table": compiled.table,
-        "row_count": len(rows),
-        "rows": rows,
-        "sql": compiled.sql,
-    }
+    return getattr(store, "backend", "") == "postgresql"
 
 
 def _list_views() -> dict:
@@ -227,13 +179,13 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
             "backend": type(store).__name__,
         }
 
-    compiled = compile_view(query_text)
-    if not compiled_view_ok(compiled):
-        return {
-            "view": view_meta,
-            "error": "compile failed",
-            "errors": compiled.errors,
-            "sql": compiled.sql,
-        }
-
-    return _execute_view(store, compiled, view_meta)
+    result = store.call(execute_view, query_text)
+    if "error" in result:
+        return {"view": view_meta, **result}
+    return {
+        "view": view_meta,
+        "table": result["table"],
+        "row_count": len(result["rows"]),
+        "rows": result["rows"],
+        "sql": result["sql"],
+    }

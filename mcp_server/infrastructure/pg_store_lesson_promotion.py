@@ -7,6 +7,7 @@ from __future__ import annotations
 from mcp_server.infrastructure.row_factory import DICT_ROW
 
 from typing import TYPE_CHECKING, Any
+from mcp_server.infrastructure.store_operations import store_operation
 
 if TYPE_CHECKING:
     from mcp_server.infrastructure.db_types import StoreConnection
@@ -27,6 +28,7 @@ _ELIGIBLE_WHERE = """
 """
 
 
+@store_operation
 def list_lesson_promotion_candidates(
     conn: StoreConnection, limit: int = 20
 ) -> list[dict[str, Any]]:
@@ -54,6 +56,7 @@ def list_lesson_promotion_candidates(
         return list(cur.fetchall())
 
 
+@store_operation
 def count_lesson_promotion_candidates(conn: StoreConnection) -> int:
     """Total count of lesson-promotion candidates, unbounded by any limit.
 

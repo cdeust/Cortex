@@ -2808,36 +2808,6 @@
       "detail": "derive_title"
     },
     {
-      "file": "mcp_server/core/wiki_view_executor.py",
-      "kind": "file-size",
-      "detail": "exceeds 300-line cap"
-    },
-    {
-      "file": "mcp_server/core/wiki_view_executor.py",
-      "kind": "method-size",
-      "detail": "_parse_yamlish"
-    },
-    {
-      "file": "mcp_server/core/wiki_view_executor.py",
-      "kind": "method-size",
-      "detail": "compile_view"
-    },
-    {
-      "file": "mcp_server/core/wiki_view_executor.py",
-      "kind": "unsourced-constant",
-      "detail": "_DEFAULT_LIMIT"
-    },
-    {
-      "file": "mcp_server/core/wiki_view_executor.py",
-      "kind": "unsourced-constant",
-      "detail": "_MAX_LIMIT"
-    },
-    {
-      "file": "mcp_server/core/wiki_view_executor.py",
-      "kind": "unsourced-constant",
-      "detail": "_MAX_LINE_LEN"
-    },
-    {
       "file": "mcp_server/core/write_gate.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"
@@ -3091,11 +3061,6 @@
       "file": "mcp_server/handlers/consolidate.py",
       "kind": "method-size",
       "detail": "_run_cycles"
-    },
-    {
-      "file": "mcp_server/handlers/consolidate.py",
-      "kind": "method-size",
-      "detail": "handler"
     },
     {
       "file": "mcp_server/handlers/consolidation/authoring_prompts.py",
@@ -3818,11 +3783,6 @@
       "detail": "_publish_one"
     },
     {
-      "file": "mcp_server/handlers/wiki_consolidate.py",
-      "kind": "method-size",
-      "detail": "handler"
-    },
-    {
       "file": "mcp_server/handlers/wiki_curate.py",
       "kind": "method-size",
       "detail": "handler"
@@ -3856,11 +3816,6 @@
       "file": "mcp_server/handlers/wiki_migrate.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"
-    },
-    {
-      "file": "mcp_server/handlers/wiki_migrate.py",
-      "kind": "method-size",
-      "detail": "migrate_wiki"
     },
     {
       "file": "mcp_server/handlers/wiki_migrate.py",
@@ -3900,22 +3855,12 @@
     {
       "file": "mcp_server/handlers/wiki_resolve.py",
       "kind": "method-size",
-      "detail": "_fetch_claims"
-    },
-    {
-      "file": "mcp_server/handlers/wiki_resolve.py",
-      "kind": "method-size",
       "detail": "handler"
     },
     {
       "file": "mcp_server/handlers/wiki_seed_codebase.py",
       "kind": "method-size",
       "detail": "handler"
-    },
-    {
-      "file": "mcp_server/handlers/wiki_synthesize.py",
-      "kind": "file-size",
-      "detail": "exceeds 300-line cap"
     },
     {
       "file": "mcp_server/handlers/wiki_synthesize.py",
@@ -3943,11 +3888,6 @@
       "detail": "mcp_server.handlers.injection_receipts"
     },
     {
-      "file": "mcp_server/hooks/agent_briefing_query.py",
-      "kind": "method-size",
-      "detail": "_fetch_agent_context"
-    },
-    {
       "file": "mcp_server/hooks/auto_recall.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"
@@ -3956,11 +3896,6 @@
       "file": "mcp_server/hooks/auto_recall.py",
       "kind": "layer-violation",
       "detail": "mcp_server.handlers.injection_receipts"
-    },
-    {
-      "file": "mcp_server/hooks/auto_recall.py",
-      "kind": "method-size",
-      "detail": "_recall_memories"
     },
     {
       "file": "mcp_server/hooks/auto_recall.py",
@@ -4346,11 +4281,6 @@
       "file": "mcp_server/infrastructure/wiki_schema_reader.py",
       "kind": "layer-violation",
       "detail": "mcp_server.observability"
-    },
-    {
-      "file": "mcp_server/migrate.py",
-      "kind": "method-size",
-      "detail": "_run"
     },
     {
       "file": "mcp_server/observability/metrics.py",

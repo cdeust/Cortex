@@ -14,6 +14,7 @@ from mcp_server.shared.write_class import (
     NON_DELIBERATE_EXACT_SOURCES,
     NON_DELIBERATE_SOURCE_PREFIXES,
 )
+from mcp_server.infrastructure.store_operations import store_operation
 
 # source: ADR-0555
 _NON_DELIBERATE_SOURCE_LIKE_PATTERNS = tuple(
@@ -24,6 +25,7 @@ _NON_DELIBERATE_SOURCE_LIKE_PATTERNS = tuple(
 DEFAULT_REHEAT_SCAN_LIMIT = 5000
 
 
+@store_operation
 def list_deliberate_below_target(
     conn: StoreConnection, target: float, limit: int
 ) -> list[dict]:
@@ -84,6 +86,7 @@ def list_deliberate_below_target(
         return list(cur.fetchall())
 
 
+@store_operation
 def apply_reheat(
     conn: StoreConnection, memory_id: int, old_heat_base: float, new_heat_base: float
 ) -> bool:

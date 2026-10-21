@@ -27,6 +27,7 @@ import pytest
 
 from mcp_server.core.wiki_identity import generate_page_id
 from mcp_server.handlers import wiki_read
+from tests_py._store_call import FakeConnStore, mark_test_operation
 
 
 def _run(coro):
@@ -54,10 +55,13 @@ class _FakeConn:
     def commit(self) -> None:
         self.committed = True
 
+    def rollback(self) -> None:
+        self.committed = False
 
-class _FakeStore:
-    def __init__(self, conn: _FakeConn) -> None:
-        self._conn = conn
+
+class _FakeStore(FakeConnStore):
+    """PostgreSQL-shaped store lending ``conn``; the page and citation
+    operations are monkeypatched with marked doubles (ADR-1112 increment 2)."""
 
 
 class _FakeCitations:
@@ -95,9 +99,13 @@ def wired_pg(monkeypatch):
 
     monkeypatch.setattr(wiki_read, "_get_store", lambda: store)
     monkeypatch.setattr(
-        wiki_read, "get_page_by_rel_path", lambda _conn, rel_path: pages.get(rel_path)
+        wiki_read,
+        "get_page_by_rel_path",
+        mark_test_operation(lambda _conn, rel_path: pages.get(rel_path)),
     )
-    monkeypatch.setattr(wiki_read, "insert_citation", citations.insert)
+    monkeypatch.setattr(
+        wiki_read, "insert_citation", mark_test_operation(citations.insert)
+    )
     return citations, pages
 
 

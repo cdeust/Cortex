@@ -18,8 +18,10 @@ import json
 
 from mcp_server.infrastructure.pg_store_wiki_common import body_hash
 from mcp_server.infrastructure.pg_store_wiki_sources import upsert_page_sources
+from mcp_server.infrastructure.store_operations import store_operation
 
 
+@store_operation
 def upsert_page(conn: StoreConnection, page: dict[str, Any]) -> tuple[int, bool]:
     """Upsert a page row by rel_path.
 
@@ -164,6 +166,7 @@ def get_page_by_slug(conn: StoreConnection, slug: str) -> dict | None:
         return cur.fetchone()
 
 
+@store_operation
 def get_page_by_rel_path(conn: StoreConnection, rel_path: str) -> dict | None:
     """Return a page row by rel_path, or None."""
     with conn.cursor(row_factory=DICT_ROW) as cur:

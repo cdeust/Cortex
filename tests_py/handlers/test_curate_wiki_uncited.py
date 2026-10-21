@@ -8,15 +8,15 @@ from __future__ import annotations
 import asyncio
 
 from mcp_server.handlers import curate_wiki, curate_wiki_uncited
+from tests_py._store_call import FakeConnStore, mark_test_operation
 
 
 def _run(coro):
     return asyncio.new_event_loop().run_until_complete(coro)
 
 
-class _FakeStore:
-    def __init__(self) -> None:
-        self._conn = object()
+class _FakeStore(FakeConnStore):
+    """PostgreSQL-shaped store; the listing operation is monkeypatched."""
 
 
 def test_report_mode_returns_candidates_without_generating_jobs(monkeypatch) -> None:
@@ -25,7 +25,7 @@ def test_report_mode_returns_candidates_without_generating_jobs(monkeypatch) -> 
     monkeypatch.setattr(
         curate_wiki_uncited,
         "list_uncited_deliberate_memories",
-        lambda conn, limit: rows,
+        mark_test_operation(lambda conn, limit: rows),
     )
 
     result = _run(

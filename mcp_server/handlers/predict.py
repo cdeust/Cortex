@@ -101,8 +101,8 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         return {"error": "confidence must be a number between 0 and 1"}
 
     store = _get_store()
-    prediction_id = insert_prediction(
-        store._conn,
+    prediction_id = store.call(
+        insert_prediction,
         {
             "claim": args["claim"].strip(),
             "prediction": args["prediction"].strip(),

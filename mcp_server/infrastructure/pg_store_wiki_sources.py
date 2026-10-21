@@ -4,16 +4,20 @@ source: ADR-0581"""
 
 from __future__ import annotations
 
+from typing import Any
+
 from mcp_server.infrastructure.row_factory import DICT_ROW
 
 from collections.abc import Sequence
 
 from typing import TYPE_CHECKING
+from mcp_server.infrastructure.store_operations import store_operation
 
 if TYPE_CHECKING:
     from mcp_server.infrastructure.db_types import StoreConnection
 
 
+@store_operation
 def list_pages_missing_source_link(conn: StoreConnection, *, limit: int) -> list[dict]:
     """List pages without any primary documents source link.
 
@@ -62,6 +66,7 @@ def _entry_row(
             return page_id, entry, link_kind, default_confidence, default_source
 
 
+@store_operation
 def upsert_page_sources(
     conn: StoreConnection,
     page_id: int,
@@ -111,3 +116,14 @@ def upsert_page_sources(
             rows,
         )
         return len(rows)
+
+
+@store_operation
+def set_documents_primary(conn: Any, page_id: int, path: str) -> None:
+    """Record a page's primary source document (moved from
+    ``wiki_source_backfill_pass``, ADR-1112)."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE wiki.pages SET documents_primary = %s WHERE id = %s",
+            (path, page_id),
+        )

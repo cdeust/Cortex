@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from mcp_server.infrastructure.handler_operations import anchor_memory
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
@@ -140,13 +141,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     is_global = args.get("is_global", False)
 
     # source: ADR-0330
-    with store.acquire_interactive() as conn:
-        conn.execute(
-            "UPDATE memories SET heat_base = 1.0, heat_base_set_at = NOW(), "
-            "no_decay = TRUE, is_protected = TRUE, importance = 1.0, "
-            "tags = %s::jsonb, content = %s, is_global = %s WHERE id = %s",
-            (_json.dumps(tags), content, is_global, memory_id),
-        )
+    store.call(anchor_memory, memory_id, _json.dumps(tags), content, is_global)
 
     return {
         "anchored": True,

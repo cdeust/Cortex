@@ -18,8 +18,10 @@ import json
 
 
 from mcp_server.infrastructure.pg_store_wiki_common import _returning_id
+from mcp_server.infrastructure.store_operations import store_operation
 
 
+@store_operation
 def insert_draft(conn: StoreConnection, draft: dict[str, Any]) -> int:
     """Insert a draft row. Returns the new wiki.drafts.id.
 
@@ -55,12 +57,14 @@ def insert_draft(conn: StoreConnection, draft: dict[str, Any]) -> int:
         return _returning_id(cur.fetchone())
 
 
+@store_operation
 def get_draft(conn: StoreConnection, draft_id: int) -> dict | None:
     with conn.cursor(row_factory=DICT_ROW) as cur:
         cur.execute("SELECT * FROM wiki.drafts WHERE id = %s", (draft_id,))
         return cur.fetchone()
 
 
+@store_operation
 def list_drafts(
     conn: StoreConnection,
     *,
@@ -87,6 +91,7 @@ def list_drafts(
         return list(cur.fetchall())
 
 
+@store_operation
 def update_draft(
     conn: StoreConnection,
     draft_id: int,
@@ -137,6 +142,7 @@ def update_draft(
         return cur.rowcount > 0
 
 
+@store_operation
 def update_draft_status(
     conn: StoreConnection,
     draft_id: int,
@@ -161,6 +167,7 @@ def update_draft_status(
         return cur.rowcount > 0
 
 
+@store_operation
 def find_draft_for_source(
     conn: StoreConnection,
     *,

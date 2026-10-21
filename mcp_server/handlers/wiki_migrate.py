@@ -16,15 +16,8 @@ from typing import Any
 from mcp_server.shared.wiki_pages import parse_page
 from mcp_server.core.wiki_templates import STATUS_VALUES
 from mcp_server.handlers._tool_meta import DESTRUCTIVE
-from mcp_server.infrastructure.pg_store_wiki import (
-    body_hash,
-    delete_links_from,
-    delete_pages_by_rel_path,
-    list_all_rel_paths,
-    resolve_unresolved_links,
-    upsert_link,
-    upsert_page,
-)
+from mcp_server.infrastructure.pg_store_wiki import body_hash
+from mcp_server.infrastructure.wiki_mirror_apply import apply_wiki_mirror
 from mcp_server.infrastructure.wiki_pages_listing import list_pages
 from mcp_server.infrastructure.wiki_store import read_page
 from mcp_server.shared.wiki_source_paths import extract_document_paths
@@ -226,91 +219,13 @@ def _memory_id_from_rel_path(rel_path: str) -> int | None:
         return None
 
 
-def _existing_memory_ids(conn, ids: set[int]) -> set[int]:
-    """Return the subset of ``ids`` that actually exist in the memories table.
-
-    source: ADR-0463"""
-    if not ids:
-        return set()
-    with conn.cursor() as cur:
-        cur.execute("SELECT id FROM memories WHERE id = ANY(%s)", (list(ids),))
-        rows = cur.fetchall()
-    # Connection may have dict_row factory set globally; access defensively.
-    out: set[int] = set()
-    for r in rows:
-        if isinstance(r, dict):
-            out.add(r["id"])
-        else:
-            out.add(r[0])
-    return out
-
-
-def find_ghost_rel_paths(fs_rel_paths: list[str], pg_rel_paths: list[str]) -> list[str]:
-    """Return the rel_paths present in PG but absent from the current FS scan.
-
-    Pure set difference — no I/O. Precondition: both lists use the same
-    rel_path convention (POSIX, relative to the wiki root, as produced by
-    ``list_pages``). Postcondition: result is sorted and contains exactly
-    the pg_rel_paths not present in fs_rel_paths — a page in fs_rel_paths
-    but not yet in PG is not a ghost, it's simply not-yet-migrated.
-    """
-    fs_set = set(fs_rel_paths)
-    return sorted(rp for rp in pg_rel_paths if rp not in fs_set)
-
-
-def purge_ghost_pages(conn, fs_rel_paths: list[str], *, dry_run: bool = True) -> dict:
-    """Reconcile wiki.pages against the filesystem: delete rows with no
-    backing file.
-
-    Precondition: fs_rel_paths is the result of the SAME list_pages() scan
-    used by the upsert pass in this run — using a stale or differently
-    scoped scan would misclassify pages as ghosts.
-    Postcondition (dry_run=False): every wiki.pages row whose rel_path is
-    not in fs_rel_paths is deleted (cascading to wiki.links/page_sources/
-    citations per FK ON DELETE CASCADE); rows whose rel_path IS in
-    fs_rel_paths are untouched. (dry_run=True): no row is deleted; the
-    same ghost set is still computed and returned for review.
-
-    Deletion goes through the store (delete_pages_by_rel_path) — no SQL
-    inline here (Move 5: this handler orchestrates, the store executes).
-    """
-    pg_rel_paths = list_all_rel_paths(conn)
-    ghosts = find_ghost_rel_paths(fs_rel_paths, pg_rel_paths)
-    if dry_run or not ghosts:
-        return {
-            "dry_run": dry_run,
-            "ghost_count": len(ghosts),
-            "ghost_paths": ghosts,
-            "purged": [],
-        }
-    deleted = delete_pages_by_rel_path(conn, ghosts)
-    return {
-        "dry_run": dry_run,
-        "ghost_count": len(ghosts),
-        "ghost_paths": ghosts,
-        "purged": sorted(r["rel_path"] for r in deleted),
-    }
-
-
-def _upsert_all_pages(
-    root: Path, rel_paths: list[str], conn
-) -> tuple[dict[str, int], int, int, list[str], list[str]]:
-    """Pass 1 — upsert every page.
-
-    Returns (id_by_rel, written, unchanged, errors, warnings). ``warnings``
-    collects non-blocking status-normalization notices (see
-    ``_normalize_status``) — an unrecognized frontmatter status never fails
-    the page, it falls back to 'seedling' and is reported here instead of
-    silently.
-    """
-    candidate_ids = {
-        mid for rp in rel_paths if (mid := _memory_id_from_rel_path(rp)) is not None
-    }
-    valid_ids = _existing_memory_ids(conn, candidate_ids)
-
-    id_by_rel: dict[str, int] = {}
-    written = 0
-    unchanged = 0
+def _parse_pages(
+    root: Path, rel_paths: list[str]
+) -> tuple[list[dict], dict[str, list[str]], list[str], list[str]]:
+    """Read and parse every page (no connection held): the upsert payloads,
+    each page's [[slug]] targets, read errors and status warnings."""
+    pages: list[dict] = []
+    links: dict[str, list[str]] = {}
     errors: list[str] = []
     warnings: list[str] = []
     for rp in rel_paths:
@@ -319,92 +234,40 @@ def _upsert_all_pages(
             if content is None:
                 continue
             mid = _memory_id_from_rel_path(rp)
-            mid = mid if mid in valid_ids else None
             row = page_row_from_md(rp, content, memory_id=mid)
             status_warning = row.pop("status_warning", None)
             if status_warning:
                 warnings.append(status_warning)
-            page_id, was_modified = upsert_page(conn, row)
-            id_by_rel[rp] = page_id
-            if was_modified:
-                written += 1
-            else:
-                unchanged += 1
+            pages.append({"rel_path": rp, "row": row, "memory_id": mid})
+            targets = _extract_wikilinks(parse_page(content).body or "")
+            if targets:
+                links[rp] = sorted(set(targets))
         except Exception as e:  # noqa: BLE001 — per-page batch isolation — failure is reported in the returned errors list
             errors.append(f"{rp}: {e}")
-    return id_by_rel, written, unchanged, errors, warnings
+    return pages, links, errors, warnings
 
 
-def _upsert_all_links(
-    root: Path, id_by_rel: dict[str, int], conn
-) -> tuple[int, list[str]]:
-    """Pass 2 — re-scan bodies for [[slug]] refs, upsert into wiki.links."""
-    written = 0
-    errors: list[str] = []
-    for rp, page_id in id_by_rel.items():
-        try:
-            content = read_page(root, rp)
-            if content is None:
-                continue
-            body = parse_page(content).body or ""
-            targets = _extract_wikilinks(body)
-            if not targets:
-                continue
-            delete_links_from(conn, page_id)  # idempotent refresh
-            for slug in set(targets):
-                upsert_link(conn, page_id, slug, link_kind="inline")
-                written += 1
-        except Exception as e:  # noqa: BLE001 — per-page batch isolation — failure is reported in the returned errors list
-            errors.append(f"{rp} links: {e}")
-    return written, errors
+def migrate_wiki(wiki_root: Path | str, store: Any, *, dry_run: bool = True) -> dict:
+    """Mirror every wiki .md into wiki.pages + wiki.links, then reconcile
+    ghosts: pages are read and parsed here, then one store operation runs
+    the four passes (``wiki_mirror_apply.apply_wiki_mirror``) and rolls a
+    dry run back. Stale memory ids from filenames are dropped there.
 
-
-def migrate_wiki(wiki_root: Path | str, conn, *, dry_run: bool = True) -> dict:
-    """Walk the wiki folder and mirror every .md into wiki.pages + wiki.links,
-    then reconcile ghosts.
-
-    Four passes:
-      1. Upsert all pages (records each slug → id) — ``_upsert_all_pages``.
-      2. Re-scan bodies for [[slug]] refs → upsert into wiki.links —
-         ``_upsert_all_links``.
-      3. Call resolve_unresolved_links to catch stragglers.
-      4. Purge wiki.pages rows whose rel_path no longer exists on disk
-         (see purge_ghost_pages). Gated by ``dry_run`` — report-only by
-         default.
-
-    Stale memory_ids (from filenames) that no longer exist in the memories
-    table are silently dropped — the wiki page survives orphaned.
-
-    Returns a summary dict.
-    """
+    source: ADR-0463"""
     root = Path(wiki_root)
     rel_paths = list_pages(root)
-
-    id_by_rel, pages_written, pages_unchanged, errors1, warnings = _upsert_all_pages(
-        root, rel_paths, conn
+    pages, links, read_errors, warnings = _parse_pages(root, rel_paths)
+    applied = store.call(
+        apply_wiki_mirror, pages, links, rel_paths, dry_run, pool="batch"
     )
-    links_written, errors2 = _upsert_all_links(root, id_by_rel, conn)
-    resolved = resolve_unresolved_links(conn)
-
-    # Pass 4 — reconcile: purge wiki.pages rows with no backing FS file.
-    # Uses the SAME rel_paths scan as Pass 1 so "ghost" is computed against
-    # this run's view of the filesystem, not a stale one.
-    purge_summary = purge_ghost_pages(conn, rel_paths, dry_run=dry_run)
-
-    # source: ADR-0463
-    if dry_run:
-        conn.rollback()
-    else:
-        conn.commit()
-
-    errors = errors1 + errors2
+    errors = read_errors + applied["errors"]
     return {
         "pages_processed": len(rel_paths),
-        "pages_written": pages_written,
-        "pages_unchanged": pages_unchanged,
-        "links_written": links_written,
-        "links_resolved_pass3": resolved,
-        "purge": purge_summary,
+        "pages_written": applied["pages_written"],
+        "pages_unchanged": applied["pages_unchanged"],
+        "links_written": applied["links_written"],
+        "links_resolved_pass3": applied["links_resolved_pass3"],
+        "purge": applied["purge"],
         "errors": errors[:10],
         "error_count": len(errors),
         "warnings": warnings[:10],
@@ -419,15 +282,13 @@ async def handler(args: dict | None = None) -> dict:
     dry_run = bool(args.get("dry_run", True))
     settings = get_memory_settings()
     store = get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
-    return migrate_wiki(WIKI_ROOT, store._conn, dry_run=dry_run)
+    return migrate_wiki(WIKI_ROOT, store, dry_run=dry_run)
 
 
 __all__ = [
     "handler",
     "schema",
     "migrate_wiki",
-    "find_ghost_rel_paths",
-    "purge_ghost_pages",
 ]
 
 

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from mcp_server.infrastructure.row_factory import DICT_ROW
+from mcp_server.infrastructure.store_operations import store_operation
 
 if TYPE_CHECKING:
     from mcp_server.infrastructure.db_types import StoreConnection
@@ -30,6 +31,7 @@ def count_artifact_references(conn: StoreConnection, artifact_path: str) -> int:
     return int(row["c"]) if row else 0
 
 
+@store_operation
 def delete_artifact_if_unreferenced(
     conn: StoreConnection, artifact_path: str | None
 ) -> bool:

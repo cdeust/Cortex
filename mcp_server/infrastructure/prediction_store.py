@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from mcp_server.infrastructure.pg_store_wiki_common import _returning_id
 from mcp_server.infrastructure.row_factory import DICT_ROW
+from mcp_server.infrastructure.store_operations import store_operation
 
 if TYPE_CHECKING:
     from typing_extensions import LiteralString
@@ -26,6 +27,7 @@ VERDICTS: tuple[str, ...] = ("confirmed", "refuted", "abandoned")
 SOURCE_KINDS: tuple[str, ...] = ("review", "ci", "test", "manual")
 
 
+@store_operation
 def insert_prediction(conn: StoreConnection, record: dict[str, Any]) -> int:
     """Write an open prediction. Returns its id."""
     sql = """
@@ -52,6 +54,7 @@ def insert_prediction(conn: StoreConnection, record: dict[str, Any]) -> int:
     return new_id
 
 
+@store_operation
 def get_prediction(conn: StoreConnection, prediction_id: int) -> dict | None:
     with conn.cursor(row_factory=DICT_ROW) as cur:
         cur.execute("SELECT * FROM predictions WHERE id = %s", (prediction_id,))
@@ -59,6 +62,7 @@ def get_prediction(conn: StoreConnection, prediction_id: int) -> dict | None:
     return dict(row) if row else None
 
 
+@store_operation
 def resolve_prediction(
     conn: StoreConnection,
     prediction_id: int,
@@ -98,6 +102,7 @@ def resolve_prediction(
     return bool(changed)
 
 
+@store_operation
 def list_predictions(
     conn: StoreConnection,
     *,

@@ -39,6 +39,20 @@ _SCAN_DIRS = [
     _REPO_ROOT / "mcp_server" / "hooks",
     _REPO_ROOT / "mcp_server" / "handlers",
 ]
+# ADR-1112 increment 2 moved the SQL hooks and handlers used to send
+# themselves into these store-operation modules; they are audited as if
+# they still lived in hooks/ and handlers/.
+_OPERATION_MODULES = [
+    _REPO_ROOT / "mcp_server" / "infrastructure" / name
+    for name in (
+        "consolidation_queries.py",
+        "handler_operations.py",
+        "hook_queries.py",
+        "hook_recall_queries.py",
+        "wiki_handler_queries.py",
+        "wiki_mirror_apply.py",
+    )
+]
 
 
 # Triple-quoted Python strings are the SQL home; single-quoted
@@ -69,6 +83,9 @@ def _gather_python_files() -> list[Path]:
     files: list[Path] = []
     for d in _SCAN_DIRS:
         files.extend(d.rglob("*.py"))
+    missing = [p for p in _OPERATION_MODULES if not p.is_file()]
+    assert not missing, f"operation modules moved; update the audit: {missing}"
+    files.extend(_OPERATION_MODULES)
     return files
 
 

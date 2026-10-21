@@ -116,7 +116,7 @@ decoratively:
 
 | Weakness (CWE) | Counter | Evidence |
 |---|---|---|
-| SQL injection (CWE-89) | Values are bound parameters; interpolated identifiers come from allowlists — `_TABLE_WHITELIST` / `_COLUMN_WHITELIST` gate table, projection and `WHERE` columns, and an unknown name is refused rather than escaped | `mcp_server/core/wiki_view_executor.py`, `mcp_server/infrastructure/pg_store*.py` |
+| SQL injection (CWE-89) | Values are bound parameters; interpolated identifiers come from allowlists — `_TABLE_WHITELIST` / `_COLUMN_WHITELIST` gate table, projection and `WHERE` columns, and an unknown name is refused rather than escaped | `mcp_server/shared/wiki_view_dsl.py`, `mcp_server/infrastructure/pg_store*.py` |
 | OS command injection (CWE-78) | Cortex builds no shell command from ingested or recalled content | CodeQL default suite, 0 open alerts |
 | Code injection / unsafe deserialization (CWE-94, CWE-502) | No `eval`, no `exec`, no `pickle` of untrusted data; documents are parsed with stdlib `zipfile`/`xml.etree` into a typed model | `core/docx_parser.py`, `core/confluence_parser.py` |
 | Path traversal (CWE-22) | Store and artifact paths are derived from configuration and content hashes, not from ingested text | `infrastructure/config.py`, `infrastructure/artifact_store.py` |

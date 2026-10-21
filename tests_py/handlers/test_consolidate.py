@@ -3,6 +3,7 @@
 import pytest
 
 from mcp_server.infrastructure.memory_config import get_memory_settings
+from tests_py._db_peek import store_connection
 
 
 class TestConsolidateHandler:
@@ -72,8 +73,10 @@ class TestConsolidateHandler:
         )
 
         # Manually set last_accessed to old time to trigger decay
-        store._conn.execute("UPDATE memories SET last_accessed = %s", (old_time,))
-        store._conn.commit()
+        store_connection(store).execute(
+            "UPDATE memories SET last_accessed = %s", (old_time,)
+        )
+        store_connection(store).commit()
 
         result = await handler({"decay": True, "compress": True})
         assert result["decay"]["total_memories"] >= 1

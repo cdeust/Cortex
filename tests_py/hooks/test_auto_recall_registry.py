@@ -48,7 +48,7 @@ class TestProcessEventCallsRegistryRefresh:
             patch(
                 "mcp_server.hooks.auto_recall._refresh_session_registry"
             ) as mock_refresh,
-            patch("mcp_server.hooks.auto_recall._connect") as mock_connect,
+            patch("mcp_server.hooks.auto_recall._store") as mock_connect,
         ):
             try:
                 process_event(event)

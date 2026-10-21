@@ -15,6 +15,7 @@ from mcp_server.infrastructure.scanner import (
 )
 from mcp_server.handlers._tool_meta import DESTRUCTIVE
 from mcp_server.observability import silent_failure
+from mcp_server.infrastructure.store_operations import background_work
 
 schema = {
     "title": "Rebuild profiles",
@@ -113,6 +114,7 @@ def _check_skip(force: bool) -> dict | None:
     return None
 
 
+@background_work  # source: ADR-1112 decision 4 (background class)
 async def handler(args: dict | None = None) -> dict:
     args = args or {}
     domain = args.get("domain")

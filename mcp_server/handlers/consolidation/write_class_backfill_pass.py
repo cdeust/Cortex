@@ -27,7 +27,7 @@ DEFAULT_WRITE_CLASS_BACKFILL_LIMIT = 5000
 
 
 def _process_source_group(
-    conn: Any,
+    store: Any,
     row: dict[str, Any],
     *,
     apply: bool,
@@ -46,7 +46,7 @@ def _process_source_group(
 
     changed = row_count
     if apply:
-        changed = bulk_reclassify_source(conn, source, target)
+        changed = store.call_batch(bulk_reclassify_source, source, target)
 
     out["reclassified_groups"] += 1
     out["reclassified_rows"] += changed
@@ -81,11 +81,10 @@ async def run_write_class_backfill_pass(
         "status": "ok",
     }
     try:
-        with store.batch_pool.connection() as conn:
-            rows = list_source_groups_at_default(conn, limit)
-            out["scanned_groups"] = len(rows)
-            for row in rows:
-                _process_source_group(conn, row, apply=apply, out=out)
+        rows = store.call_batch(list_source_groups_at_default, limit)
+        out["scanned_groups"] = len(rows)
+        for row in rows:
+            _process_source_group(store, row, apply=apply, out=out)
     except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("write_class_backfill_pass failed (non-fatal): %s", exc)
         out["status"] = f"error: {type(exc).__name__}: {exc}"

@@ -11,6 +11,10 @@ import os
 from pathlib import Path
 
 from mcp_server.hooks.session_start_common import _DATABASE_URL, _PLUGIN_ROOT, _log
+from mcp_server.infrastructure.hook_queries import (
+    session_active_checkpoint,
+    session_memory_count,
+)
 
 
 def _try_setup_db() -> dict | None:
@@ -41,22 +45,17 @@ def _try_setup_db() -> dict | None:
         return None
 
 
-def _connect_pg():
-    """Try to connect to PostgreSQL. Returns connection or None."""
-    try:
-        import psycopg  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
-        from psycopg.rows import DictRow, dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
+def _pg_store():
+    """The shared PostgreSQL store, or None when it cannot be opened.
 
-        # source: docs/verification/codex-session-start-query-20261002.md
-        # The short-lived hook cannot amortize JIT compilation for banner SQL.
-        return psycopg.Connection[DictRow].connect(
-            _DATABASE_URL,
-            row_factory=dict_row,
-            autocommit=True,
-            options="-c jit=off",
-        )
+    The hook holds no database connection of its own (ADR-1112); its
+    queries are store operations (``infrastructure/hook_queries.py``)."""
+    try:
+        from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: PLC0415 — hook latency boundary
+
+        return get_shared_store()
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
-        _log(f"PostgreSQL connect failed: {exc}")
+        _log(f"PostgreSQL store unavailable: {exc}")
         return None
 
 
@@ -87,15 +86,10 @@ def _checkpoint_from_row(row: dict | None) -> dict | None:
     }
 
 
-def _fetch_checkpoint(conn) -> dict | None:
+def _fetch_checkpoint(store) -> dict | None:
     """Fetch the latest active checkpoint."""
     try:
-        row = conn.execute(
-            "SELECT current_task, next_steps, open_questions, active_errors, "
-            "key_decisions, directory_context "
-            "FROM checkpoints WHERE is_active = TRUE "
-            "ORDER BY created_at DESC LIMIT 1"
-        ).fetchone()
+        row = store.call(session_active_checkpoint)
     except Exception as exc:  # noqa: BLE001 — hook boundary; failure is logged to the hook log, the banner degrades
         _log(f"checkpoint fetch failed (non-fatal): {exc}")
         return None
@@ -103,11 +97,10 @@ def _fetch_checkpoint(conn) -> dict | None:
     return _checkpoint_from_row(row)
 
 
-def _count_memories(conn) -> int:
+def _count_memories(store) -> int:
     """Count total memories."""
     try:
-        row = conn.execute("SELECT COUNT(*) as c FROM memories").fetchone()
-        return row["c"] if row else 0
+        return store.call(session_memory_count)
     except Exception as exc:  # noqa: BLE001 — hook boundary; failure is logged to the hook log, the banner degrades
         _log(f"memory count failed (non-fatal): {exc}")
         return 0

@@ -132,6 +132,11 @@ def main() -> None:
     result = _run_cycle(handler, _build_args(deep))
 
     status = result.get("status", "unknown")
+    if status == "skipped":
+        # Another process holds the consolidation lock (ADR-1112): no cycle
+        # ran, so the stamp must not move and defer the next periodic cycle.
+        print(f"[bg-consolidate] skipped: {result.get('reason')}", file=sys.stderr)
+        sys.exit(0)
     print(
         f"[bg-consolidate] finished status={status} "
         f"duration_ms={result.get('duration_ms')}",

@@ -6,6 +6,9 @@ from mcp_server.hooks import preemptive_context as hook
 from mcp_server.infrastructure.memory_store import get_shared_store
 from tests_py.infrastructure.test_file_memory_priming import _insert, _rows
 
+# source: ADR-1112 (tests of the store itself run on the in-process store)
+pytestmark = pytest.mark.in_process_store
+
 
 @pytest.mark.parametrize("reverse", [False, True])
 @pytest.mark.parametrize("first_matches", [False, True])

@@ -4,6 +4,9 @@ import pytest
 
 from mcp_server.infrastructure.memory_store import MemoryStore
 
+# source: ADR-1112 (tests of the store itself run on the in-process store)
+pytestmark = pytest.mark.in_process_store
+
 
 @pytest.fixture()
 def store():

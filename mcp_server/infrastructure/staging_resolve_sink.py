@@ -10,7 +10,8 @@ of total entity count.
 Atomicity under ``autocommit=True`` comes from the explicit
 ``with conn.transaction()`` — the only construct that issues BEGIN/COMMIT and
 rolls the whole batch back on failure (Dijkstra D1). The temp table is declared
-``ON COMMIT DELETE ROWS`` so it self-clears after each batch commits.
+``ON COMMIT DELETE ROWS`` so it self-clears after each batch commits. Each
+batch is one store operation (ADR-1112): the sink holds no connection.
 
 Pure infrastructure — no core imports.
 
@@ -18,66 +19,59 @@ source: ADR-0618"""
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from mcp_server.infrastructure.pooled_sink import (
-    ConnectAcquire,
-    PooledConnectionSink,
-    RowAdapter,
-)
+from mcp_server.infrastructure.store_operations import store_operation
 
 if TYPE_CHECKING:
     from typing_extensions import LiteralString
     import psycopg
 
 
-class StagingResolveSink(PooledConnectionSink):
-    """A ``BatchSink`` that stages names and resolves ids server-side.
+def _write_staged(
+    conn: psycopg.Connection,
+    stage_ddl: LiteralString,
+    copy_sql: LiteralString,
+    resolve_sql: LiteralString,
+    rows: list[list[Any]],
+) -> int:
+    """COPY ``rows`` into the session-temp stage, resolve in SQL; return the
+    rows inserted (after ``ON CONFLICT`` dedup and, for edges, dropping
+    dangling endpoints, so it may be < ``len(rows)``).
 
-    source: ADR-0618"""
-
-    def __init__(
-        self,
-        acquire: ConnectAcquire,
-        *,
-        stage_ddl: LiteralString,
-        copy_sql: LiteralString,
-        resolve_sql: LiteralString,
-        row_adapter: RowAdapter | None = None,
-    ) -> None:
-        super().__init__(acquire, row_adapter)
-        self._stage_ddl: LiteralString = stage_ddl
-        self._copy_sql: LiteralString = copy_sql
-        self._resolve_sql: LiteralString = resolve_sql
-
-    def _on_connect(self, conn: psycopg.Connection) -> None:
-        """Declare the session-temp staging table once per borrowed connection.
-
-        The temp table lives for the connection's session; ``ON COMMIT DELETE
-        ROWS`` (in ``stage_ddl``) empties it after every batch transaction, so
-        creating it once here is correct for the worker's whole lifetime.
-        """
+    The stage is declared on first use of each connection (``IF NOT EXISTS``,
+    session-local, no lock on any shared table) and empties itself at commit
+    (``ON COMMIT DELETE ROWS``)."""
+    if not rows:
+        return 0
+    with conn.cursor() as cur:
+        cur.execute(stage_ddl)
+    with conn.transaction():  # source: ADR-0618
         with conn.cursor() as cur:
-            cur.execute(self._stage_ddl)
+            with cur.copy(copy_sql) as cp:
+                for row in rows:
+                    cp.write_row(row)
+            cur.execute(resolve_sql)
+            return cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
+
+
+class OperationBatchSink:
+    """A ``BatchSink`` whose every batch is one store operation (ADR-1112):
+    no connection is held between batches, and through the broker the rows
+    cross the process boundary, never SQL."""
+
+    def __init__(self, store: Any, operation: Callable[..., int]) -> None:
+        self._store = store
+        self._operation = operation
 
     def write_batch(self, batch: list[Any]) -> int:
-        """COPY ``batch`` into the stage, resolve in SQL; return rows inserted.
-
-        After dedup (``ON CONFLICT``) and, for edges, dangling-endpoint
-        filtering (the ``JOIN``), the returned count may be < ``len(batch)``.
-        The pipeline's ``rows_in - rows_written`` is therefore the
-        dropped-edge count the conservation test asserts on.
-        """
         if not batch:
             return 0
-        conn = self._ensure_conn()
-        with conn.transaction():  # source: ADR-0618
-            with conn.cursor() as cur:
-                with cur.copy(self._copy_sql) as cp:
-                    for item in batch:
-                        cp.write_row(self._row_adapter(item))
-                cur.execute(self._resolve_sql)
-                return cur.rowcount if cur.rowcount and cur.rowcount > 0 else 0
+        return self._store.call_batch(self._operation, [list(r) for r in batch])
+
+    def close(self) -> None:
+        """Nothing to release: no connection is held between batches."""
 
 
 # ── Concrete keyed-path configurations (OCP: new keyed sinks = new config) ──
@@ -125,22 +119,26 @@ _EDGE_RESOLVE_SQL = (
 )
 
 
-def build_entity_sink(acquire: ConnectAcquire) -> StagingResolveSink:
-    """Sink for entity rows ``(name, type, domain, heat)`` — names canonical."""
-    return StagingResolveSink(
-        acquire,
-        stage_ddl=_ENTITY_STAGE_DDL,
-        copy_sql=_ENTITY_COPY_SQL,
-        resolve_sql=_ENTITY_RESOLVE_SQL,
+@store_operation
+def write_staged_entities(conn: psycopg.Connection, rows: list[list[Any]]) -> int:
+    """Entity rows ``(name, type, domain, heat)``, names canonical."""
+    return _write_staged(
+        conn, _ENTITY_STAGE_DDL, _ENTITY_COPY_SQL, _ENTITY_RESOLVE_SQL, rows
     )
 
 
-def build_edge_sink(acquire: ConnectAcquire) -> StagingResolveSink:
-    """Sink for edge rows ``(src_name, dst_name, rel_type, weight, domain)``
-    — names canonical, endpoints resolved within ``domain``."""
-    return StagingResolveSink(
-        acquire,
-        stage_ddl=_EDGE_STAGE_DDL,
-        copy_sql=_EDGE_COPY_SQL,
-        resolve_sql=_EDGE_RESOLVE_SQL,
-    )
+@store_operation
+def write_staged_edges(conn: psycopg.Connection, rows: list[list[Any]]) -> int:
+    """Edge rows ``(src_name, dst_name, rel_type, weight, domain)``, names
+    canonical, endpoints resolved within ``domain``."""
+    return _write_staged(conn, _EDGE_STAGE_DDL, _EDGE_COPY_SQL, _EDGE_RESOLVE_SQL, rows)
+
+
+def build_entity_sink(store: Any) -> OperationBatchSink:
+    """Sink for entity rows ``(name, type, domain, heat)``."""
+    return OperationBatchSink(store, write_staged_entities)
+
+
+def build_edge_sink(store: Any) -> OperationBatchSink:
+    """Sink for edge rows ``(src_name, dst_name, rel_type, weight, domain)``."""
+    return OperationBatchSink(store, write_staged_edges)

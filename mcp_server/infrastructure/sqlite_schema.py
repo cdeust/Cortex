@@ -173,6 +173,17 @@ CREATE TABLE IF NOT EXISTS injection_receipts (
 );
 """
 
+# source: ADR-1112 (created at runtime by backfill_memories before; now schema)
+BACKFILL_LOG_DDL = """
+CREATE TABLE IF NOT EXISTS backfill_log (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    file_path         TEXT NOT NULL UNIQUE,
+    file_hash         TEXT NOT NULL,
+    memories_imported INTEGER DEFAULT 0,
+    processed_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+"""
+
 INJECTION_RECEIPT_ITEMS_DDL = """
 CREATE TABLE IF NOT EXISTS injection_receipt_items (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -369,6 +380,7 @@ def get_all_ddl() -> list[str]:
         STAGE_TRANSITIONS_DDL,
         INJECTION_RECEIPTS_DDL,
         INJECTION_RECEIPT_ITEMS_DDL,
+        BACKFILL_LOG_DDL,
         PROSPECTIVE_MEMORIES_DDL,
         CHECKPOINTS_DDL,
         MEMORY_ARCHIVES_DDL,

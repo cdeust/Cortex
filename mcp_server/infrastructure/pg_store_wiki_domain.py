@@ -9,11 +9,13 @@ from __future__ import annotations
 from mcp_server.infrastructure.row_factory import DICT_ROW
 
 from typing import TYPE_CHECKING
+from mcp_server.infrastructure.store_operations import store_operation
 
 if TYPE_CHECKING:
     from mcp_server.infrastructure.db_types import StoreConnection
 
 
+@store_operation
 def list_catchall_pages_with_sources(
     conn: StoreConnection, known_domains: list[str], limit: int
 ) -> list[dict]:
@@ -42,6 +44,7 @@ def list_catchall_pages_with_sources(
         return list(cur.fetchall())
 
 
+@store_operation
 def update_page_domain(conn: StoreConnection, page_id: int, domain: str) -> None:
     """Set one wiki page’s domain.
 

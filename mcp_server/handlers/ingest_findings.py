@@ -135,7 +135,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     except MalformedArtifactError as exc:
         return {"ingested": False, "reason": "index_unreadable", "error": str(exc)}
 
-    conn = store._conn
     results: list[dict[str, Any]] = []
     errors: list[str] = []
     for finding_id in sorted(index.get("findings", {})):
@@ -145,14 +144,12 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
             errors.append(f"{finding_id}: {exc}")
             continue
         try:
-            results.append(write_finding(store, conn, finding))
+            results.append(write_finding(store, finding))
         except Exception as exc:  # noqa: BLE001 — per-finding isolation; failure is logged and reported in errors
             logger.warning(
                 "ingest_findings: finding %s write failed: %s", finding_id, exc
             )
             errors.append(f"{finding_id}: {exc}")
-
-    conn.commit()
 
     verified_count = sum(1 for r in results if r["verified"])
     return {

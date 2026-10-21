@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 
 from mcp_server.handlers.remember import handler
+from tests_py._db_peek import store_connection
 
 
 def _remember(**kwargs):
@@ -19,7 +20,7 @@ def _remember(**kwargs):
 def _row(memory_id: int) -> dict:
     from mcp_server.handlers.forget import _get_store
 
-    with _get_store()._conn.cursor() as cur:
+    with store_connection(_get_store()).cursor() as cur:
         cur.execute(
             "SELECT is_team_decision, is_global, is_protected, agent_context "
             "FROM memories WHERE id = %s",

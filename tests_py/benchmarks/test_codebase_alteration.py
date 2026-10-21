@@ -22,6 +22,7 @@ import pytest
 from mcp_server.handlers.codebase_analyze import handler as analyze_handler
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
+from tests_py._db_peek import store_connection
 
 DOMAIN = "codebase-alteration-bench"
 
@@ -177,11 +178,11 @@ def _get_store() -> MemoryStore:
 def clean_benchmark():
     """Clean benchmark memories before and after."""
     store = _get_store()
-    store._conn.execute("DELETE FROM memories WHERE domain = %s", (DOMAIN,))
-    store._conn.commit()
+    store_connection(store).execute("DELETE FROM memories WHERE domain = %s", (DOMAIN,))
+    store_connection(store).commit()
     yield
-    store._conn.execute("DELETE FROM memories WHERE domain = %s", (DOMAIN,))
-    store._conn.commit()
+    store_connection(store).execute("DELETE FROM memories WHERE domain = %s", (DOMAIN,))
+    store_connection(store).commit()
 
 
 def _write_codebase(tmpdir: Path, files: dict[str, str]) -> None:
@@ -194,10 +195,14 @@ def _write_codebase(tmpdir: Path, files: dict[str, str]) -> None:
 
 def _query_content(store: MemoryStore, substring: str) -> list[dict]:
     """Direct store query for memories containing a substring."""
-    rows = store._conn.execute(
-        "SELECT id, content FROM memories WHERE domain = %s AND content LIKE %s",
-        (DOMAIN, f"%{substring}%"),
-    ).fetchall()
+    rows = (
+        store_connection(store)
+        .execute(
+            "SELECT id, content FROM memories WHERE domain = %s AND content LIKE %s",
+            (DOMAIN, f"%{substring}%"),
+        )
+        .fetchall()
+    )
     return [dict(r) for r in rows]
 
 
@@ -340,11 +345,15 @@ class TestCodebaseAlteration:
                 assert len(health_rows) >= 1, "health_check not found"
 
                 # Total file count preserved
-                count = store._conn.execute(
-                    "SELECT COUNT(*) as c FROM memories "
-                    "WHERE domain = %s AND agent_context = 'codebase'",
-                    (DOMAIN,),
-                ).fetchone()
+                count = (
+                    store_connection(store)
+                    .execute(
+                        "SELECT COUNT(*) as c FROM memories "
+                        "WHERE domain = %s AND agent_context = 'codebase'",
+                        (DOMAIN,),
+                    )
+                    .fetchone()
+                )
                 assert count["c"] == len(ORIGINAL_FILES)
 
         self._run(_test())

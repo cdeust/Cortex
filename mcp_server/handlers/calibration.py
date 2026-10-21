@@ -56,14 +56,14 @@ def _get_store() -> MemoryStore:
 async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     args = args or {}
     domain = args.get("domain") or None
-    conn = _get_store()._conn
+    store = _get_store()
 
-    resolved = list_predictions(
-        conn, status="resolved", domain=domain, limit=_MAX_SCORED
+    resolved = store.call(
+        list_predictions, status="resolved", domain=domain, limit=_MAX_SCORED
     )
     report = calibration_report(resolved)
     report["open"] = len(
-        list_predictions(conn, status="open", domain=domain, limit=_MAX_SCORED)
+        store.call(list_predictions, status="open", domain=domain, limit=_MAX_SCORED)
     )
     report["domain"] = domain or "all"
     if report["brier"] is None:

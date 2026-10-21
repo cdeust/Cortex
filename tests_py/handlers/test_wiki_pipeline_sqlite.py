@@ -612,7 +612,7 @@ async def test_migrate_reconciles_against_an_empty_tree(tmp_path, sqlite_store):
 
     root = tmp_path / "wiki"
     root.mkdir()
-    out = migrate_wiki(root, sqlite_store._conn, dry_run=True)
+    out = migrate_wiki(root, sqlite_store, dry_run=True)
     assert out["pages_processed"] == 0
 
 

@@ -205,6 +205,9 @@ def _run_consolidation_cycle(mode: str) -> None:
         from mcp_server.handlers.consolidate import handler as consolidate_handler  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
 
         result = asyncio.run(consolidate_handler(args))
+        if result.get("status") == "skipped":  # single flight (ADR-1112)
+            _log(f"Dream ({mode}) skipped: {result.get('reason')}")
+            return
         decayed = result.get("decay", {}).get("memories_decayed", 0)
         compressed = result.get("compression", {}).get(
             "compressed_to_gist", 0

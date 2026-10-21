@@ -109,6 +109,42 @@ jobs:
 
           run-extended-checks: ${{ matrix.python-version == '3.12' }}
 
+  # The same PostgreSQL suite with every store reached through a real store
+  # broker process (ADR-1112 increment 5): proves the broker serves every
+  # surface the tests exercise, not only the in-process store it runs.
+  test-broker-mode:
+    needs: [changes, lint]
+    if: github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true')
+    name: Test through the store broker (Python 3.12)
+    runs-on: ubuntu-latest
+    # source: ADR-1112 the 3.12 suite leg's bound (ADR-0802)
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ./.github/actions/test-suite
+        with:
+          python-version: "3.12"
+          broker-mode: "true"
+
+  # The same PostgreSQL suite as a role without SUPERUSER (LOGIN CREATEDB),
+  # vector and pg_trgm created in template1 by the administrator: the
+  # three-pillar audit's Track 0.3 (CI otherwise runs as SUPERUSER).
+  test-pg-least-privilege:
+    needs: [changes, lint]
+    if: github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true')
+    name: Test as a non-superuser role (Python 3.12)
+    runs-on: ubuntu-latest
+    # source: ADR-1112 the 3.12 suite leg's bound (ADR-0802)
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ./.github/actions/test-suite
+        with:
+          python-version: "3.12"
+          least-privilege: "true"
+
   test-sqlite:
     needs: [changes, lint]
     # source: ADR-0802
@@ -507,6 +543,9 @@ jobs:
       # the job of the runner is read from the real kernel32 (by mcp_server and
       # by the Codex copy) and a child starts with the creation flags decided
       # from it. source: ADR-1102
+      # The store broker's pipe transport joins per ADR-1112 (owner decision
+      # 2): only here does a pipe carry the owner-only DACL read back from
+      # the kernel, refuse a second broker on its name, and serve a request.
       - name: Run portability + backend tests
         env:
           HF_HUB_OFFLINE: "1"
@@ -536,6 +575,7 @@ jobs:
           tests_py/shared/test_detached_spawn.py
           tests_py/shared/test_win32_job.py
           tests_py/hooks/test_codex_windows_job.py
+          tests_py/infrastructure/test_broker_pipe.py
 
   # source: ADR-0802
 
@@ -1082,6 +1122,83 @@ jobs:
         if: always()
         run: cat "$RUNNER_TEMP/install-e2e.json" || true
 
+  broker-measurements:
+    needs: [changes, lint]
+    if: github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflows == 'true')
+    name: Broker measurements (private PostgreSQL clusters)
+    runs-on: ubuntu-latest
+    # source: ADR-1112 the lock-chain run takes about 40 s and the saturation
+    # run about 30 s locally (experiment log); 20 minutes leaves room for apt.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - uses: ./.github/actions/pg-binaries
+
+      - name: Install the locked dev+postgresql set
+        uses: ./.github/actions/uv-locked-install
+        with:
+          set: --extra dev --extra postgresql
+          environment: ${{ env.pythonLocation }}
+
+      - name: Install the project
+        run: pip install --no-deps -e .
+
+      # Every measurement runs against throwaway clusters started from the
+      # runner's binaries; the suite's own server is not involved.
+      - name: Saturation, role probes and migration probes
+        env:
+          CORTEX_TEST_DATABASE_URL: postgresql://127.0.0.1:1/unused
+        run: >-
+          pytest -q -s -p no:cacheprovider
+          tests_py/infrastructure/test_pg_connection_saturation_repro.py
+          tests_py/infrastructure/test_pg_role_probes.py
+          tests_py/infrastructure/test_pg_least_privilege_probe_b.py
+
+      - name: Interactive capacity under a full background queue (A5)
+        env:
+          CORTEX_TEST_DATABASE_URL: postgresql://127.0.0.1:1/unused
+          CORTEX_BROKER_MEASUREMENTS: "1"
+        run: python scripts/repro_connection_broker.py priority
+
+      - name: One broker holds every connection, no idle transaction (A2, A4)
+        env:
+          CORTEX_TEST_DATABASE_URL: postgresql://127.0.0.1:1/unused
+          CORTEX_BROKER_MEASUREMENTS: "1"
+        run: python scripts/repro_connection_broker.py census
+
+      - name: Saturation scenario through the broker, 8 and 64 clients (A1)
+        env:
+          CORTEX_TEST_DATABASE_URL: postgresql://127.0.0.1:1/unused
+          CORTEX_BROKER_MEASUREMENTS: "1"
+        run: python scripts/repro_connection_broker.py saturation
+
+      - name: Recall through the broker against in-process (A6)
+        env:
+          CORTEX_TEST_DATABASE_URL: postgresql://127.0.0.1:1/unused
+          CORTEX_BROKER_MEASUREMENTS: "1"
+        run: python scripts/repro_connection_broker.py latency
+
+      - name: Lock-chain reproduction (pre-fix main against this tree)
+        run: python scripts/repro_lock_chain.py --base-ref origin/main --other-tree ""
+
+      - name: DDL census (failing schema statements, before and after)
+        run: python scripts/repro_ddl_census.py
+
+      - name: Keep the evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: broker-measurements
+          path: docs/verification/connection-broker/
+
   ci-green:
     name: CI Green
     if: always()
@@ -1094,6 +1211,8 @@ jobs:
       - test-sqlite
       - mcp-host-config
       - test-windows
+      - test-broker-mode
+      - test-pg-least-privilege
       - release-deps
       - craftsmanship
       - lint
@@ -1103,6 +1222,7 @@ jobs:
       - devcontainer-build
       - docker-smoke
       - install-e2e
+      - broker-measurements
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Require successful jobs or justified skips
@@ -1111,7 +1231,7 @@ jobs:
           # source: ADR-0802
 
 
-          ALLOWED_SKIPS: test,test-sqlite,mcp-host-config,test-windows,release-deps,craftsmanship,typecheck,build,docker-runtime-build,devcontainer-build,docker-smoke,install-e2e
+          ALLOWED_SKIPS: test,test-broker-mode,test-pg-least-privilege,test-sqlite,mcp-host-config,test-windows,release-deps,craftsmanship,typecheck,build,docker-runtime-build,devcontainer-build,docker-smoke,install-e2e,broker-measurements
         run: python3 scripts/check_ci_gate_results.py
 
   # source: ADR-0802

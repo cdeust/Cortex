@@ -5,19 +5,18 @@ from unittest.mock import patch
 import pytest
 
 from mcp_server.hooks import agent_briefing as hook
-from mcp_server.hooks.agent_briefing_sqlite import SqliteBriefingConnection
 from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 
 
 @pytest.fixture
 def connection(tmp_path):
     store = SqliteMemoryStore(db_path=str(tmp_path / "memory.db"))
-    yield SqliteBriefingConnection(store)
+    yield store
     store.close()
 
 
 def insert(connection, content="alpha task context", **values):
-    return connection.store.insert_memory(
+    return connection.insert_memory(
         {
             "content": content,
             "agent_context": "worker",
@@ -47,7 +46,7 @@ def test_task_pass_and_promptless_team_pass_are_scoped(connection):
     ]:
         row = insert(connection, **values)
         if "superseded_by_id" in values:
-            connection.store._conn.execute(
+            connection._conn.execute(
                 "UPDATE memories SET superseded_by_id = ? WHERE id = ?", (prior, row)
             )
     task = hook._fetch_agent_context(connection, "worker", ["alpha"], "/project")
@@ -63,7 +62,7 @@ def test_task_pass_and_promptless_team_pass_are_scoped(connection):
 def test_native_start_records_exact_receipt(connection, capsys, transcript):
     memory = insert(connection, "shared decision", is_team_decision=True)
     with (
-        patch.object(hook, "_connect", return_value=connection),
+        patch.object(hook, "_store", return_value=connection),
         pytest.raises(SystemExit),
     ):
         hook.process_event(
@@ -76,13 +75,9 @@ def test_native_start_records_exact_receipt(connection, capsys, transcript):
             }
         )
     assert "shared decision" in capsys.readouterr().out
-    rows = connection.store._conn.execute(
-        "SELECT * FROM injection_receipt_items"
-    ).fetchall()
+    rows = connection._conn.execute("SELECT * FROM injection_receipt_items").fetchall()
     assert [r["memory_id"] for r in rows] == [memory]
-    receipt = connection.store._conn.execute(
-        "SELECT * FROM injection_receipts"
-    ).fetchone()
+    receipt = connection._conn.execute("SELECT * FROM injection_receipts").fetchone()
     assert receipt["session_id"] == ("child-transcript" if transcript else "child-test")
 
 
@@ -90,10 +85,10 @@ def test_sqlite_selection_does_not_probe_postgres(connection, monkeypatch):
     monkeypatch.setenv("CORTEX_MEMORY_STORE_BACKEND", "sqlite")
     with patch(
         "mcp_server.infrastructure.memory_store.get_shared_store",
-        return_value=connection.store,
+        return_value=connection,
     ):
-        result = hook._connect()
-    assert isinstance(result, SqliteBriefingConnection)
+        result = hook._store()
+    assert result is connection
 
 
 def test_fts_operators_are_data(connection):
@@ -107,7 +102,7 @@ def test_fts_operators_are_data(connection):
 def test_promptless_start_includes_scoped_role_prior(connection, capsys):
     memory = insert(connection, "native role context")
     with (
-        patch.object(hook, "_connect", return_value=connection),
+        patch.object(hook, "_store", return_value=connection),
         pytest.raises(SystemExit),
     ):
         hook.process_event(
@@ -120,7 +115,7 @@ def test_promptless_start_includes_scoped_role_prior(connection, capsys):
     output = capsys.readouterr().out
     assert "native role context" in output
     assert "role-prior" in output
-    rows = connection.store._conn.execute(
+    rows = connection._conn.execute(
         "SELECT memory_id FROM injection_receipt_items"
     ).fetchall()
     assert [r["memory_id"] for r in rows] == [memory]
@@ -138,7 +133,7 @@ def test_role_context_keeps_team_first_and_excludes_invalid_rows(connection):
     ]:
         insert(connection, "excluded role", **values)
     old = insert(connection, "superseded")
-    connection.store._conn.execute(
+    connection._conn.execute(
         "UPDATE memories SET superseded_by_id = ? WHERE id = ?", (own, old)
     )
     team = insert(

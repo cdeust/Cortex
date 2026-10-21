@@ -5,6 +5,7 @@ from __future__ import annotations
 from mcp_server.infrastructure.row_factory import DICT_ROW
 
 from typing import TYPE_CHECKING
+from mcp_server.infrastructure.store_operations import store_operation
 
 if TYPE_CHECKING:
     from mcp_server.infrastructure.db_types import StoreConnection
@@ -13,6 +14,7 @@ if TYPE_CHECKING:
 _DEFAULT_SENTINEL = "deliberate"
 
 
+@store_operation
 def list_source_groups_at_default(conn: StoreConnection, limit: int) -> list[dict]:
     """Count active source groups still classified as deliberate.
 
@@ -37,6 +39,7 @@ def list_source_groups_at_default(conn: StoreConnection, limit: int) -> list[dic
         return list(cur.fetchall())
 
 
+@store_operation
 def bulk_reclassify_source(
     conn: StoreConnection, source: str, target_class: str
 ) -> int:

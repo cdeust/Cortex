@@ -35,6 +35,116 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Least privilege in PostgreSQL; one pool per store kind; schema
+  version 3 (ADR-1112 increment 6).** `scripts/setup_least_privilege.py`
+  creates a migration role that owns the database and a runtime role with
+  CONNECT only; with `CORTEX_MIGRATION_DATABASE_URL` the broker migrates as
+  the first and grants the second (`DATABASE_URL`) data access only, no DDL.
+  `recall_memories()` sets its trigram threshold in its body and restores
+  the caller's value, instead of a `SET` clause a non-superuser cannot create
+  (audit E14); the whole suite passes as a role without SUPERUSER
+  (`python scripts/repro_least_privilege_suite.py`, CI job
+  `test-pg-least-privilege`). The store's pools are created once under a
+  lock (concurrent first use opened one pool per thread: 12 to 16
+  interactive connections from a pool of 8), and the broker runs at most as
+  many requests per class as that class's pool has connections. Measured:
+  the saturation scenario with 64 clients now holds 9 connections, refuses
+  none and fails none (`python scripts/repro_connection_broker.py
+  saturation`); recall through the broker p95 276 ms against 262 ms in
+  process (`latency`). The broker's migration and grant connections are
+  named `cortex-migrate-<pid>`; the session census waits for the session's
+  detached jobs, and its A4 check now requires every transaction seen idle
+  to be the broker's and younger than 1 s (the first wording, no idle sample
+  at all, also counted transactions caught between two statements of one
+  request; experiment log entry 22).
+
+- **Every Cortex process talks to one store broker per store (ADR-1112
+  increment 5).** With PostgreSQL, MCP servers, hooks, background jobs, the
+  capture worker and doctor's store checks no longer open connections: the
+  store factory returns a client of the store's broker, which the first
+  client starts (through the plugin launcher, detached) and which exits
+  after `CORTEX_BROKER_IDLE_SECONDS` without clients. The broker migrates
+  the schema at start; a schema it cannot use reaches every client as the
+  same `SchemaTooNewError` / `SchemaBehindError` an in-process store raised,
+  and a broker that dies before answering is reported with its start-up
+  output, never as a silent SQLite fallback. Built-in exception types raised
+  in the broker are raised again as themselves in the client. Socket paths
+  too long for `sun_path` (a long `CORTEX_CLAUDE_DIR`) move to an owner-only
+  `$XDG_RUNTIME_DIR/cortex-<uid>` or `/tmp/cortex-<uid>`. Doctor reports
+  whether the broker runs, without starting it. Measured on a scripted
+  session (`python scripts/repro_connection_broker.py census`): every Cortex
+  backend belongs to the broker's PID, no other client backend, no
+  `idle in transaction` sample in 284; first hook 1.1 s (broker start),
+  next hooks 0.4 to 0.5 s.
+
+- **Background work stays on its own connections; every store connection
+  is named and bounded (ADR-1112 increment 4).** Tool handlers that run
+  batch work (consolidate, backfill, ingest, import, seed, rebuild profiles)
+  run their store statements on the batch pool, so interactive work keeps
+  `POOL_INTERACTIVE_MAX` connections during consolidation. Store connections
+  are named `cortex-store-<pool>` and carry `statement_timeout` and
+  `lock_timeout` of their class deadline (30 s interactive, 30 min batch)
+  and `idle_in_transaction_session_timeout` of 30 s, as backstops (the fix
+  is that no transaction spans a request). Measured on a real broker
+  (`python scripts/repro_connection_broker.py priority`): point reads p95
+  108 ms while 32 clients saturate the background queue, against 9.2 s when
+  the same load shares one queue.
+
+- **The store broker process (ADR-1112 increment 3), not yet used by
+  clients.** `mcp_server/hooks/store_broker.py` is one resident process per
+  store that will own every PostgreSQL connection: started on demand through
+  the plugin launcher, migrations at start, idle exit after
+  `CORTEX_BROKER_IDLE_SECONDS`. Unix: the capture worker's private socket,
+  lease and peer-UID checks, one directory per store under
+  `.store-broker/`. Windows: a named pipe whose DACL grants the current
+  user's SID only, exercised by the `test-windows` CI job. Requests name an
+  allowlisted store method or a marked operation; values travel as JSON with
+  a closed set of tags (no pickle, no SQL). `python
+  scripts/repro_broker_frame_fuzz.py` and `fuzz/fuzz_broker_frame.py` fuzz
+  the decoder (0 escapes in 2.2 million mutated frames).
+
+- **Every database access goes through the store (ADR-1112 increment 2).**
+  Outside `mcp_server/infrastructure/` no module reaches a store's connection
+  or pools or imports the PostgreSQL driver (besides `doctor*` and the
+  migrate probe): hooks, handlers and consolidation passes call named store
+  operations (`store.call(fn, ...)` / `store.call_batch`), functions marked
+  `@store_operation` in `mcp_server/infrastructure/`, each one unit of work
+  committed after it or rolled back on error. These names are the only ones
+  the broker will resolve. `backfill_log` is now part of the schema
+  (`SCHEMA_VERSION = 2`): a version-1 database is refused at runtime and
+  brought to version 2 by `python -m mcp_server.migrate`.
+  `python scripts/repro_store_funnel.py` measures it (on `main`: 59 lines in
+  42 files reach a connection, 3 hooks import the driver; here: 0 and 0);
+  `tests_py/architecture/test_store_funnel.py` keeps it at zero.
+
+- **PostgreSQL schema versions; a store this code cannot use is refused, never
+  migrated by a runtime (ADR-1112 increment 1).** `schema_version` records an
+  integer version and `SCHEMA_HASHES` the DDL fingerprint of each. Opening a
+  store reads the state with one catalog query whose errors propagate and
+  refuses a newer schema (`SchemaTooNewError`, upgrade Cortex), an older or
+  unknown one (`SchemaBehindError`, run `python -m mcp_server.migrate`) and one
+  rewritten by an install that does not version (`SchemaTamperedError`, rebuild
+  it with `scripts/rebuild_codex_install.py`). A migration records its version
+  only when every statement succeeded. Consolidation cycles are single-flight
+  across processes (`consolidate_lock`, idea from commit 4dc9f66e): a second
+  caller returns `status: skipped`.
+
+- **A consolidation pass no longer holds a transaction, and opening a store
+  no longer runs DDL (incident 2026-10-20, ADR-1112 increment 0).**
+  `iter_memories_for_decay` read the corpus through a named cursor inside a
+  transaction and yielded between fetches, so every consolidation stage ran
+  `idle in transaction`; `PgMemoryStore.__init__` re-applied the whole DDL set
+  whenever the recorded revision differed from its own, and two installs of
+  different revisions on one store flipped it on every alternate start. A
+  no-op `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` then queued for its
+  AccessExclusive lock behind the stream, every reader queued behind it, and
+  the consumer's own write closed a cycle the server cannot detect
+  (reproduced: `python scripts/repro_lock_chain.py`). The stream now pages by
+  `id`, one autocommit statement per chunk; a store opening on a database
+  recorded at another revision runs no DDL and warns, and
+  `python -m mcp_server.migrate` (`pg_store_ddl.apply_schema`) is the only
+  migration path. `scripts/setup_db.py` records the revision it applies.
+
 - **No hook installs dependencies any more; run `claude --init-only` after
   `claude plugin install` and after `claude plugin update`** (ADR-1108,
   replacing ADR-1104 decision 4). Every hook used to install whenever its

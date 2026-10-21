@@ -305,7 +305,7 @@ def allocate_engram_slot(
         )
         store.assign_memory_slot(mem_id, best_slot)
         new_exc = engram.compute_boost(best_exc, settings.EXCITABILITY_BOOST)
-        now_iso = store._now_iso()
+        now_iso = datetime.now(timezone.utc).isoformat()  # the stores' _now_iso
         store.update_engram_slot(best_slot, new_exc, now_iso)
         _update_slot_cache(best_slot, new_exc, now_iso)
         linked_count = store.count_memories_in_slot(

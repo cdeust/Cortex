@@ -45,6 +45,7 @@ import logging
 from typing import Any
 
 from mcp_server.core.curation import identify_derivable_facts
+from mcp_server.infrastructure.consolidation_queries import strong_relationships
 from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.observability import silent_failure
 from mcp_server.handlers.remember import handler as remember_handler
@@ -180,14 +181,7 @@ def _fetch_candidate_relationships(
 ) -> list[dict[str, Any]]:
     """High-weight relationships, highest weight first. Same acquire_batch +
     raw-SQL pattern as memify.py's `_reweight_relationships`."""
-    with store.acquire_batch() as conn:
-        rows = conn.execute(
-            "SELECT id, source_entity_id, target_entity_id, relationship_type, "
-            "weight FROM relationships WHERE weight >= %s "
-            "ORDER BY weight DESC LIMIT %s",
-            (threshold, limit),
-        ).fetchall()
-        return [dict(r) for r in rows]
+    return store.call_batch(strong_relationships, threshold, limit)
 
 
 def _provenance_memory_ids(store: MemoryStore, rel: dict[str, Any]) -> list[int]:

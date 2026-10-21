@@ -41,6 +41,10 @@ from mcp_server.handlers.remember_preflight import (
     modulate_score,
 )
 from mcp_server.handlers.remember_response import build_response
+from mcp_server.infrastructure.handler_operations import (
+    refresh_replica_memory,
+    replica_memory_for_vpath,
+)
 from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
@@ -381,22 +385,14 @@ def try_block_replica_upsert(
     # Build JSONB containment predicate for vpath.
     try:
         vpath_json = _json.dumps([vpath_tag])
-        rows = store._execute(
-            "SELECT id FROM memories "
-            "WHERE tags @> %s::jsonb "
-            "AND tags @> '[\"memory-replica\"]'::jsonb "
-            "LIMIT 1",
-            (vpath_json,),
-        ).fetchall()
+        existing_id = store.call(replica_memory_for_vpath, vpath_json)
     except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("remember_helpers.block_supersede_select")
         # source: ADR-0438
         silent_failure.note("remember_helpers.block_supersede_select", exc)
         return False, None
 
-    if not rows:
+    if existing_id is None:
         return False, None
-
-    existing_id = rows[0]["id"]
 
     # Refresh content, embedding, tags, source; preserve heat and is_protected.
 
@@ -408,24 +404,14 @@ def try_block_replica_upsert(
             emb_bytes = None
 
     try:
-        if emb_bytes is not None:
-            store._execute(
-                "UPDATE memories "
-                "SET content = %s, embedding = %s::vector, "
-                "    tags = %s::jsonb, source = %s, "
-                "    last_accessed = NOW() "
-                "WHERE id = %s",
-                (content, emb_bytes, _json.dumps(tags), source, existing_id),
-            )
-        else:
-            store._execute(
-                "UPDATE memories "
-                "SET content = %s, "
-                "    tags = %s::jsonb, source = %s, "
-                "    last_accessed = NOW() "
-                "WHERE id = %s",
-                (content, _json.dumps(tags), source, existing_id),
-            )
+        store.call(
+            refresh_replica_memory,
+            existing_id,
+            content,
+            emb_bytes,
+            _json.dumps(tags),
+            source,
+        )
     except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("remember_helpers.block_supersede_update")
         silent_failure.note("remember_helpers.block_supersede_update", exc)
         return False, None

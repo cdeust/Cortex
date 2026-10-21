@@ -112,11 +112,11 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
     store = _get_store()
     prediction_id = int(args["prediction_id"])
-    if get_prediction(store._conn, prediction_id) is None:
+    if store.call(get_prediction, prediction_id) is None:
         return {"error": f"prediction {prediction_id} not found", "resolved": False}
 
-    settled = resolve_prediction(
-        store._conn,
+    settled = store.call(
+        resolve_prediction,
         prediction_id,
         verdict=args["verdict"],
         observed=args["observed"].strip(),

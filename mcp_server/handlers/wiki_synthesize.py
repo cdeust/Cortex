@@ -27,6 +27,10 @@ from mcp_server.shared.wiki_schema_loader import wiki_registry_known_kind_names
 from mcp_server.infrastructure.wiki_schema_reader import load_registry
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.memory_config import get_memory_settings
+from mcp_server.infrastructure.wiki_handler_queries import (
+    claims_for_memory,
+    memories_needing_synthesis,
+)
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.pg_store_wiki import (
     find_draft_for_source,
@@ -145,64 +149,6 @@ def _infer_kind(claims: list[dict], available_kinds: set[str]) -> str:
 # ── Source enumeration ────────────────────────────────────────────────
 
 
-def _candidate_memories(conn, memory_id, force, limit) -> list[int]:
-    """Return memory_ids that have claims and need a draft."""
-    if memory_id is not None:
-        return [memory_id]
-    if force:
-        sql = """
-        SELECT DISTINCT memory_id FROM wiki.claim_events
-         WHERE memory_id IS NOT NULL ORDER BY memory_id LIMIT %s
-        """
-    else:
-        sql = """
-        SELECT DISTINCT c.memory_id
-          FROM wiki.claim_events c
-         WHERE c.memory_id IS NOT NULL
-           AND NOT EXISTS (
-             SELECT 1 FROM wiki.drafts d
-              WHERE d.memory_id = c.memory_id
-                AND d.synth_model = 'template_v1'
-           )
-         ORDER BY c.memory_id LIMIT %s
-        """
-    with conn.cursor() as cur:
-        cur.execute(sql, (limit,))
-        rows = cur.fetchall()
-    return [r["memory_id"] if isinstance(r, dict) else r[0] for r in rows]
-
-
-def _claims_for_memory(conn, memory_id: int) -> list[dict]:
-    sql = """
-    SELECT id, memory_id, text, claim_type, entity_ids, evidence_refs,
-           confidence, supersedes
-      FROM wiki.claim_events
-     WHERE memory_id = %s
-     ORDER BY id
-    """
-    with conn.cursor() as cur:
-        cur.execute(sql, (memory_id,))
-        rows = cur.fetchall()
-    out: list[dict] = []
-    for r in rows:
-        if isinstance(r, dict):
-            out.append(r)
-        else:
-            out.append(
-                {
-                    "id": r[0],
-                    "memory_id": r[1],
-                    "text": r[2],
-                    "claim_type": r[3],
-                    "entity_ids": r[4] or [],
-                    "evidence_refs": r[5] or [],
-                    "confidence": r[6],
-                    "supersedes": r[7],
-                }
-            )
-    return out
-
-
 # ── Handler entry ─────────────────────────────────────────────────────
 
 
@@ -239,13 +185,16 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     kind_hint = args.get("kind_hint")
 
     store = _get_store()
-    conn = store._conn
 
     # Load kind registry once per call
     registry = load_registry(Path(WIKI_ROOT))
     available_kinds = wiki_registry_known_kind_names(registry)
 
-    memory_ids = _candidate_memories(conn, memory_id, force, limit)
+    memory_ids = (
+        [memory_id]
+        if memory_id is not None
+        else store.call(memories_needing_synthesis, force, limit)
+    )
     if not memory_ids:
         return {
             "drafts_created": 0,
@@ -262,7 +211,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
     for mid in memory_ids:
         try:
-            claims = _claims_for_memory(conn, mid)
+            claims = store.call(claims_for_memory, mid)
             if not claims:
                 continue
             kind = kind_hint or _infer_kind(claims, available_kinds)
@@ -275,11 +224,11 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
             )
             payload = _draft_to_payload(draft)
 
-            existing = find_draft_for_source(conn, memory_id=mid)
+            existing = store.call(find_draft_for_source, memory_id=mid)
             if existing and not force:
                 # source: ADR-0472
-                update_draft(
-                    conn,
+                store.call(
+                    update_draft,
                     existing["id"],
                     title=payload["title"],
                     lead=payload["lead"],
@@ -291,13 +240,13 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
                 drafts_updated += 1
                 draft_id = existing["id"]
             else:
-                draft_id = insert_draft(conn, payload)
+                draft_id = store.call(insert_draft, payload)
                 drafts_created += 1
 
             by_kind[kind] = by_kind.get(kind, 0) + 1
 
-            insert_memo(
-                conn,
+            store.call(
+                insert_memo,
                 subject_type="draft",
                 subject_id=draft_id,
                 decision="synthesized_template_v1",
@@ -316,8 +265,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
             )
         except Exception as e:  # noqa: BLE001 — per-memory batch isolation; failure is reported in the returned errors list
             errors.append(f"memory {mid}: {e}")
-
-    conn.commit()
 
     return {
         "drafts_created": drafts_created,

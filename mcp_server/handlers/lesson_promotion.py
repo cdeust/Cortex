@@ -16,7 +16,6 @@ from mcp_server.infrastructure.memory_store import get_shared_store
 from mcp_server.infrastructure.pg_store_lesson_promotion import (
     list_lesson_promotion_candidates,
 )
-from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 from mcp_server.infrastructure.sqlite_store_lesson_promotion import (
     list_lesson_promotion_candidates as list_candidates_sqlite,
 )
@@ -29,9 +28,9 @@ def _list_candidates(store: Any, limit: int) -> list[dict[str, Any]]:
     """Backend dispatch for the candidate query.
 
     source: ADR-0419"""
-    if isinstance(store, SqliteMemoryStore):
-        return list_candidates_sqlite(store._conn, limit=limit)
-    return list_lesson_promotion_candidates(store._conn, limit=limit)
+    if getattr(store, "backend", "") == "sqlite":
+        return store.call(list_candidates_sqlite, limit=limit)
+    return store.call(list_lesson_promotion_candidates, limit=limit)
 
 
 schema = {

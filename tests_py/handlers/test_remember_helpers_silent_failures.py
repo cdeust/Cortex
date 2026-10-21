@@ -10,6 +10,7 @@ import pytest
 
 from mcp_server.handlers.remember_helpers import try_block_replica_upsert
 from mcp_server.observability import silent_failure
+from tests_py._store_call import FakeConnStore
 
 
 @pytest.fixture(autouse=True)
@@ -20,8 +21,8 @@ def _reset():
 
 
 def test_select_failure_is_logged_and_falls_back_to_insert_path(caplog):
-    store = MagicMock()
-    store._execute.side_effect = RuntimeError("relation does not exist")
+    store = FakeConnStore(MagicMock())
+    store.conn.execute.side_effect = RuntimeError("relation does not exist")
 
     with caplog.at_level("WARNING", logger="mcp_server.observability.silent_failure"):
         updated, existing_id = try_block_replica_upsert(
@@ -40,12 +41,15 @@ def test_select_failure_is_logged_and_falls_back_to_insert_path(caplog):
 
 
 def test_update_failure_is_logged(caplog):
-    store = MagicMock()
+    store = FakeConnStore(MagicMock())
     # SELECT succeeds and finds an existing row...
     select_result = MagicMock()
     select_result.fetchall.return_value = [{"id": 7}]
     # ...but the subsequent UPDATE raises.
-    store._execute.side_effect = [select_result, RuntimeError("deadlock detected")]
+    store.conn.execute.side_effect = [
+        select_result,
+        RuntimeError("deadlock detected"),
+    ]
 
     with caplog.at_level("WARNING", logger="mcp_server.observability.silent_failure"):
         updated, existing_id = try_block_replica_upsert(

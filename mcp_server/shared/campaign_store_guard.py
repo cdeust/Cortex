@@ -9,7 +9,7 @@ import sys
 
 
 def require_postgres_store(store: object) -> None:
-    """Exit the process if `store` has no `batch_pool` (SQLite-backed).
+    """Exit the process unless `store` is PostgreSQL-backed (``backend``).
 
     memory_dedup_exact, memory_domain_backfill, memory_reheat,
     near_dup_calibrate, and backfill_write_class each drive their
@@ -17,9 +17,9 @@ def require_postgres_store(store: object) -> None:
     equivalent, and letting the campaign run anyway would silently no-op
     rather than report that it never ran.
     """
-    if not hasattr(store, "batch_pool"):
+    if getattr(store, "backend", "") != "postgresql":
         print(
-            "This campaign requires a PostgreSQL-backed store (batch_pool); "
+            "This campaign requires a PostgreSQL-backed store; "
             "the SQLite backend has no equivalent table for it.",
             file=sys.stderr,
         )

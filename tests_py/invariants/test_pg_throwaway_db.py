@@ -279,4 +279,4 @@ class TestCreateAndDropIsolatedDatabase:
             "WHERE datname = %s AND pid <> pg_backend_pid()"
         )
         assert terminate_call.args[1] == ("db1",)
-        assert drop_call.args[0] == 'DROP DATABASE IF EXISTS "db1"'
+        assert drop_call.args[0] == 'DROP DATABASE IF EXISTS "db1" WITH (FORCE)'

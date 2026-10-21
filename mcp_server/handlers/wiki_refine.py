@@ -27,6 +27,7 @@ from mcp_server.shared.wiki_sections import (
 from mcp_server.infrastructure.wiki_schema_reader import load_registry
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.memory_config import get_memory_settings
+from mcp_server.infrastructure.wiki_handler_queries import claims_for_memory
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.pg_store_wiki import (
     get_draft,
@@ -72,32 +73,6 @@ def _get_store() -> MemoryStore:
     return get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
 
 
-def _claims_for_memory(conn, memory_id: int) -> list[dict]:
-    sql = """
-    SELECT id, text, claim_type, entity_ids, evidence_refs, confidence
-      FROM wiki.claim_events WHERE memory_id = %s ORDER BY id
-    """
-    with conn.cursor() as cur:
-        cur.execute(sql, (memory_id,))
-        rows = cur.fetchall()
-    out: list[dict] = []
-    for r in rows:
-        if isinstance(r, dict):
-            out.append(r)
-        else:
-            out.append(
-                {
-                    "id": r[0],
-                    "text": r[1],
-                    "claim_type": r[2],
-                    "entity_ids": r[3] or [],
-                    "evidence_refs": r[4] or [],
-                    "confidence": r[5],
-                }
-            )
-    return out
-
-
 def _kind_contract(registry, kind: str) -> dict:
     """Return the structural contract for a kind: required + optional
     sections plus the autofill prompt string the LLM should follow.
@@ -123,12 +98,11 @@ def _kind_contract(registry, kind: str) -> dict:
 async def handler_get(args: dict[str, Any] | None = None) -> dict[str, Any]:
     args = args or {}
     store = _get_store()
-    conn = store._conn
     registry = load_registry(Path(WIKI_ROOT))
 
     if args.get("list_pending"):
-        drafts = list_drafts(
-            conn,
+        drafts = store.call(
+            list_drafts,
             status="pending",
             kind=args.get("kind"),
             limit=int(args.get("limit", 20)),
@@ -155,14 +129,14 @@ async def handler_get(args: dict[str, Any] | None = None) -> dict[str, Any]:
     if draft_id is None:
         return {"error": "draft_id required (or list_pending=true)"}
 
-    draft = get_draft(conn, int(draft_id))
+    draft = store.call(get_draft, int(draft_id))
     if draft is None:
         return {"error": f"draft {draft_id} not found"}
 
     # Source claims (only when memory-backed)
     claims: list[dict] = []
     if draft.get("memory_id"):
-        claims = _claims_for_memory(conn, draft["memory_id"])
+        claims = store.call(claims_for_memory, draft["memory_id"])
 
     return {
         "draft": {
@@ -325,9 +299,8 @@ async def handler_refine(args: dict[str, Any] | None = None) -> dict[str, Any]:
         return {"error": "draft_id required"}
 
     store = _get_store()
-    conn = store._conn
 
-    draft = get_draft(conn, int(draft_id))
+    draft = store.call(get_draft, int(draft_id))
     if draft is None:
         return {"error": f"draft {draft_id} not found"}
 
@@ -357,8 +330,8 @@ async def handler_refine(args: dict[str, Any] | None = None) -> dict[str, Any]:
         else None
     )
 
-    updated = update_draft(
-        conn,
+    updated = store.call(
+        update_draft,
         int(draft_id),
         title=args.get("title"),
         lead=args.get("lead"),
@@ -373,8 +346,8 @@ async def handler_refine(args: dict[str, Any] | None = None) -> dict[str, Any]:
             f"LLM-refined draft. Model: {synth_model}. "
             f"Prompt hash: {prompt_hash or 'n/a'}."
         )
-        insert_memo(
-            conn,
+        store.call(
+            insert_memo,
             subject_type="draft",
             subject_id=int(draft_id),
             decision="refined_llm",
@@ -383,7 +356,6 @@ async def handler_refine(args: dict[str, Any] | None = None) -> dict[str, Any]:
             confidence=float(draft["confidence"]),
             author="claude_refine",
         )
-        conn.commit()
 
     return {
         "draft_id": int(draft_id),

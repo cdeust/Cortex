@@ -14,6 +14,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from mcp_server.observability import silent_failure
+from tests_py._store_call import bind_store_calls
 
 WARN_LOGGER = "mcp_server.observability.silent_failure"
 
@@ -128,7 +129,7 @@ class TestCodebaseAnalyzeSites:
     def test_semantic_promotion_failure_is_logged(self, caplog):
         from mcp_server.handlers.codebase_analyze import _set_memory_metadata
 
-        store = MagicMock()
+        store = bind_store_calls(MagicMock())
         store.acquire_batch.side_effect = RuntimeError("pool closed")
         with caplog.at_level("WARNING", logger=WARN_LOGGER):
             _set_memory_metadata(store, 1)
@@ -171,7 +172,7 @@ class TestCodebaseAnalyzeSites:
         conn = MagicMock()
         conn.execute.side_effect = RuntimeError("sql broke")
         store.acquire_batch.return_value.__enter__.return_value = conn
-        return store
+        return bind_store_calls(store)
 
     def test_god_node_tag_failure_is_logged(self, caplog):
         from mcp_server.handlers.codebase_analyze_helpers import persist_god_node_tags
@@ -196,7 +197,7 @@ class TestConsolidationSites:
     def test_stage_timestamp_failure_is_logged(self, caplog):
         from mcp_server.handlers.consolidation.cascade import _update_stage_entered
 
-        store = MagicMock()
+        store = bind_store_calls(MagicMock())
         store.acquire_batch.side_effect = RuntimeError("pool closed")
         with caplog.at_level("WARNING", logger=WARN_LOGGER):
             _update_stage_entered(store, 1, datetime.now(timezone.utc))
@@ -316,6 +317,7 @@ class TestUpdateStageEnteredHappyPath:
         store = MagicMock()
         conn = MagicMock()
         store.acquire_batch.return_value.__enter__.return_value = conn
+        bind_store_calls(store)
         now = datetime(2026, 7, 28, tzinfo=timezone.utc)
         _update_stage_entered(store, 42, now)
         conn.execute.assert_called_once_with(

@@ -10,12 +10,11 @@ CI accidentally ends up ready, without depending on which test happens to
 run first.
 
 Reuses the production migration path — never a hand-copied schema.
-Constructing `PgMemoryStore(database_url=...)` under the hood runs
-`_init_schema()`, which applies `pg_schema.get_all_ddl()` idempotently
-(hash-gated: a DB already at the code's revision costs one indexed
-SELECT). This is the exact same call `mcp_server/migrate.py` makes to
-migrate a live install — "constructing PgMemoryStore IS the migration"
-(that module's own docstring) — so a test session and a real deployment
+`pg_migrations.apply_schema(url)` applies `pg_schema.get_all_ddl()`
+idempotently (hash-gated: a DB already at the code's revision costs one
+indexed SELECT). This is the exact same call `mcp_server/migrate.py`
+makes to migrate a live install (ADR-1112 opening a store no longer
+migrates an existing schema), so a test session and a real deployment
 can never drift onto two different schemas.
 
 Genuinely-absent PostgreSQL (driver not installed, or the server itself
@@ -131,22 +130,20 @@ def _create_database(url: str) -> None:
 
 
 def _provision_schema(url: str) -> None:
-    """Apply Cortex's production DDL to `url` via the exact path every
-    real construction already uses — never a second, hand-copied
+    """Apply Cortex's production DDL to `url` via the explicit migration
+    step, `pg_migrations.apply_schema` — never a second, hand-copied
     definition of the schema (issue #312's explicit requirement; see
-    `mcp_server/migrate.py`, which does the identical thing to migrate a
-    live install: "constructing PgMemoryStore IS the migration").
+    `mcp_server/migrate.py`, which makes the identical call to migrate a
+    live install, ADR-1112).
 
-    Idempotent: `PgMemoryStore._init_schema` hash-gates its DDL apply, so
-    a database already at the code's revision costs one indexed SELECT
-    — this is cheap to call on every session, not just the first.
+    Idempotent: `apply_schema` hash-gates its DDL apply, so a database
+    already at the code's revision costs one indexed SELECT — this is
+    cheap to call on every session, not just the first.
     """
-    from mcp_server.infrastructure.pg_store import (  # noqa: PLC0415 — deferred: hard-imports pgvector/psycopg/psycopg_pool, absent on SQLite-only installs
-        PgMemoryStore,
-    )
+    from mcp_server.infrastructure import pg_migrations  # noqa: PLC0415 — deferred: hard-imports psycopg, absent on SQLite-only installs
 
     try:
-        store = PgMemoryStore(database_url=url)
+        pg_migrations.apply_schema(url)
     except Exception as exc:  # noqa: BLE001 — last-resort boundary: reported via pytest.exit below, never swallowed
         pytest.exit(
             f"REFUSING to run: PostgreSQL database {url!r} is reachable "
@@ -156,8 +153,6 @@ def _provision_schema(url: str) -> None:
             "PostgreSQL's own logs, then re-run (issue #312).",
             returncode=2,
         )
-        return
-    store.close()
 
 
 def ensure_pg_ready(url: str) -> bool:

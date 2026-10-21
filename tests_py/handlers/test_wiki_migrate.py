@@ -30,8 +30,10 @@ import pytest
 from mcp_server.handlers.wiki_migrate import (
     _normalize_status,
     page_row_from_md,
-    find_ghost_rel_paths,
     migrate_wiki,
+)
+from mcp_server.infrastructure.wiki_mirror_apply import (
+    find_ghost_rel_paths,
     purge_ghost_pages,
 )
 from mcp_server.infrastructure.pg_store_wiki_pages import (
@@ -181,12 +183,12 @@ def test_delete_pages_by_rel_path_issues_delete_returning() -> None:
 def test_purge_ghost_pages_dry_run_reports_without_deleting(monkeypatch) -> None:
     conn = object()  # unused by the monkeypatched store calls below
     monkeypatch.setattr(
-        "mcp_server.handlers.wiki_migrate.list_all_rel_paths",
+        "mcp_server.infrastructure.wiki_mirror_apply.list_all_rel_paths",
         lambda _conn: ["notes/alive.md", "notes/ghost.md"],
     )
     delete_calls: list[list[str]] = []
     monkeypatch.setattr(
-        "mcp_server.handlers.wiki_migrate.delete_pages_by_rel_path",
+        "mcp_server.infrastructure.wiki_mirror_apply.delete_pages_by_rel_path",
         lambda _conn, rel_paths: delete_calls.append(list(rel_paths)) or [],
     )
 
@@ -204,11 +206,11 @@ def test_purge_ghost_pages_dry_run_reports_without_deleting(monkeypatch) -> None
 def test_purge_ghost_pages_real_run_deletes_and_reports(monkeypatch) -> None:
     conn = object()
     monkeypatch.setattr(
-        "mcp_server.handlers.wiki_migrate.list_all_rel_paths",
+        "mcp_server.infrastructure.wiki_mirror_apply.list_all_rel_paths",
         lambda _conn: ["notes/alive.md", "notes/ghost.md"],
     )
     monkeypatch.setattr(
-        "mcp_server.handlers.wiki_migrate.delete_pages_by_rel_path",
+        "mcp_server.infrastructure.wiki_mirror_apply.delete_pages_by_rel_path",
         lambda _conn, rel_paths: [{"id": 1, "rel_path": rp} for rp in rel_paths],
     )
 
@@ -225,12 +227,12 @@ def test_purge_ghost_pages_real_run_deletes_and_reports(monkeypatch) -> None:
 def test_purge_ghost_pages_no_ghosts_never_calls_delete(monkeypatch) -> None:
     conn = object()
     monkeypatch.setattr(
-        "mcp_server.handlers.wiki_migrate.list_all_rel_paths",
+        "mcp_server.infrastructure.wiki_mirror_apply.list_all_rel_paths",
         lambda _conn: ["notes/alive.md"],
     )
     delete_called = []
     monkeypatch.setattr(
-        "mcp_server.handlers.wiki_migrate.delete_pages_by_rel_path",
+        "mcp_server.infrastructure.wiki_mirror_apply.delete_pages_by_rel_path",
         lambda _conn, rel_paths: delete_called.append(rel_paths) or [],
     )
 
@@ -285,34 +287,45 @@ class _FakePagesStore:
 def fake_store(monkeypatch):
     store = _FakePagesStore()
     monkeypatch.setattr(
-        "mcp_server.handlers.wiki_migrate.upsert_page",
+        "mcp_server.infrastructure.wiki_mirror_apply.upsert_page",
         lambda _conn, row: store.upsert(row),
     )
     monkeypatch.setattr(
-        "mcp_server.handlers.wiki_migrate.list_all_rel_paths",
+        "mcp_server.infrastructure.wiki_mirror_apply.list_all_rel_paths",
         lambda _conn: store.list_all_rel_paths(),
     )
     monkeypatch.setattr(
-        "mcp_server.handlers.wiki_migrate.delete_pages_by_rel_path",
+        "mcp_server.infrastructure.wiki_mirror_apply.delete_pages_by_rel_path",
         lambda _conn, rel_paths: store.delete_by_rel_path(rel_paths),
     )
     monkeypatch.setattr(
-        "mcp_server.handlers.wiki_migrate.delete_links_from",
+        "mcp_server.infrastructure.wiki_mirror_apply.delete_links_from",
         lambda _conn, _page_id: 0,
     )
     monkeypatch.setattr(
-        "mcp_server.handlers.wiki_migrate.upsert_link",
+        "mcp_server.infrastructure.wiki_mirror_apply.upsert_link",
         lambda *_a, **_k: None,
     )
     monkeypatch.setattr(
-        "mcp_server.handlers.wiki_migrate.resolve_unresolved_links",
+        "mcp_server.infrastructure.wiki_mirror_apply.resolve_unresolved_links",
         lambda _conn: 0,
     )
     monkeypatch.setattr(
-        "mcp_server.handlers.wiki_migrate._existing_memory_ids",
-        lambda _conn, ids: set(),
+        "mcp_server.infrastructure.wiki_mirror_apply.existing_memory_ids",
+        lambda _conn, ids: [],
     )
     return store
+
+
+class _InlineStore:
+    """``store.call`` running the operation on a given connection, as the
+    in-process store does (ADR-1112)."""
+
+    def __init__(self, conn) -> None:
+        self.conn = conn
+
+    def call(self, fn, *args, pool="interactive", **kwargs):
+        return fn(self.conn, *args, **kwargs)
 
 
 def _write_page(tmp_path, rel_path: str, title: str) -> None:
@@ -334,7 +347,7 @@ def test_migrate_wiki_parity_after_purge(tmp_path, fake_store) -> None:
     _write_page(tmp_path, "notes/second-alive.md", "Second Alive")
     fake_store.rows["notes/deleted-page.md"] = 999  # pre-existing ghost
 
-    summary = migrate_wiki(tmp_path, conn=MagicMock(), dry_run=False)
+    summary = migrate_wiki(tmp_path, _InlineStore(MagicMock()), dry_run=False)
 
     assert summary["pages_processed"] == 2
     assert summary["purge"]["ghost_count"] == 1
@@ -358,7 +371,7 @@ def test_migrate_wiki_reports_status_warning_without_failing_the_page(
         "status: garbage\n---\n\nBody.\n"
     )
 
-    summary = migrate_wiki(tmp_path, conn=MagicMock(), dry_run=True)
+    summary = migrate_wiki(tmp_path, _InlineStore(MagicMock()), dry_run=True)
 
     assert summary["error_count"] == 0
     assert summary["warning_count"] == 1
@@ -375,7 +388,9 @@ def test_migrate_wiki_dry_run_default_leaves_ghost_in_place(
     _write_page(tmp_path, "notes/alive-page.md", "Alive Page")
     fake_store.rows["notes/deleted-page.md"] = 999
 
-    summary = migrate_wiki(tmp_path, conn=MagicMock())  # dry_run defaults to True
+    summary = migrate_wiki(
+        tmp_path, _InlineStore(MagicMock())
+    )  # dry_run defaults to True
 
     assert summary["purge"]["dry_run"] is True
     assert summary["purge"]["ghost_count"] == 1
@@ -405,7 +420,7 @@ def test_migrate_wiki_dry_run_rolls_back_never_commits(tmp_path, fake_store) -> 
     _write_page(tmp_path, "notes/alive-page.md", "Alive Page")
     conn = MagicMock()
 
-    migrate_wiki(tmp_path, conn=conn, dry_run=True)
+    migrate_wiki(tmp_path, _InlineStore(conn), dry_run=True)
 
     conn.rollback.assert_called_once()
     conn.commit.assert_not_called()
@@ -416,7 +431,7 @@ def test_migrate_wiki_real_run_commits_never_rolls_back(tmp_path, fake_store) ->
     _write_page(tmp_path, "notes/alive-page.md", "Alive Page")
     conn = MagicMock()
 
-    migrate_wiki(tmp_path, conn=conn, dry_run=False)
+    migrate_wiki(tmp_path, _InlineStore(conn), dry_run=False)
 
     conn.commit.assert_called_once()
     conn.rollback.assert_not_called()

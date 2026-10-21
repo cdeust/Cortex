@@ -619,6 +619,7 @@ filterwarnings = [
 ]
 markers = [
     "invariants: Phase 0.3+ testable invariant predicates (I1/I2/I3/I4 and parity tests)",
+    "in_process_store: tests of the store itself (its connections, its class); they run on the in-process store even in broker mode (ADR-1112)",
 ]
 
 [tool.coverage.run]

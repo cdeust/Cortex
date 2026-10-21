@@ -40,7 +40,9 @@ def _check_directory(path: Path, private: bool = False) -> None:
         raise PermissionError(f"capture runtime directory must be owner-only: {path}")
 
 
-def runtime_directory(root: Path) -> Path:
+def runtime_directory(root: Path, name: str = ".capture-worker") -> Path:
+    """The owner-only directory ``root/name`` for a resident worker's socket
+    and locks (the capture worker; the store broker passes its own name)."""
     supported()
     root = root.expanduser().absolute()
     for parent in reversed(root.parents):
@@ -49,7 +51,7 @@ def runtime_directory(root: Path) -> Path:
     _check_directory(root)
     if root.lstat().st_uid != os.geteuid():
         raise PermissionError("capture root must belong to the current user")
-    runtime = root / ".capture-worker"
+    runtime = root / name
     runtime.mkdir(mode=PRIVATE_DIR, exist_ok=True)
     _check_directory(runtime, private=True)
     return runtime

@@ -33,6 +33,9 @@ from mcp_server.handlers.consolidation.wiki_citation_seed_pass import (  # noqa:
 from mcp_server.infrastructure.memory_config import get_memory_settings  # noqa: E402
 from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: E402
 
+# source: ADR-1112 (tests of the store itself run on the in-process store)
+pytestmark = pytest.mark.in_process_store
+
 
 def _store():
     s = get_memory_settings()

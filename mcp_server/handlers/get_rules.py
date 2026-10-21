@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from mcp_server.infrastructure.handler_operations import all_rules_including_inactive
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.handlers._tool_meta import READ_ONLY
@@ -96,11 +97,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
     # Include inactive if requested
     if include_inactive and not scope_filter:
-        with store.acquire_interactive() as conn:
-            rows = conn.execute(
-                "SELECT * FROM memory_rules ORDER BY scope, priority DESC"
-            ).fetchall()
-        rules = [dict(r) for r in rows]
+        rules = store.call(all_rules_including_inactive)
 
     # Filter by rule_type if requested
     if type_filter:

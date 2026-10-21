@@ -16,12 +16,16 @@ import uuid
 
 import pytest
 
+from tests_py._store_call import mark_test_operation
 from mcp_server.handlers.consolidation.near_dup_calibration_pass import (
     run_near_dup_apply_pass,
 )
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import get_shared_store
 from tests_py._pg_hnsw import empty_memories_index
+
+# source: ADR-1112 (tests of the store itself run on the in-process store)
+pytestmark = pytest.mark.in_process_store
 
 _DIM = 384  # source: memory_config EMBEDDING_DIM (all-MiniLM-L6-v2)
 _STEP = math.radians(23)  # source: cos(23 deg) = 0.921 >= 0.90 > 0.75 > cos(46 deg)
@@ -161,6 +165,7 @@ def test_an_error_mid_component_still_reports_count_and_ids_alike(monkeypatch):
     _insert_arc(110, [0.5, 0.9, 0.2])  # hub hottest: one component of three
     calls = []
 
+    @mark_test_operation
     def near_then_fail(conn, survivor_id, others, *, threshold):
         calls.append(survivor_id)
         if len(calls) == 1:

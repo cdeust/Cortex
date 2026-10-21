@@ -657,6 +657,17 @@ CREATE TABLE IF NOT EXISTS predictions (
 """
 
 
+# source: ADR-1112 (created at runtime by backfill_memories before; now schema)
+BACKFILL_LOG_DDL = """
+CREATE TABLE IF NOT EXISTS backfill_log (
+    id                SERIAL PRIMARY KEY,
+    file_path         TEXT NOT NULL UNIQUE,
+    file_hash         TEXT NOT NULL,
+    memories_imported INTEGER DEFAULT 0,
+    processed_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+"""
+
 # ── Indexes ───────────────────────────────────────────────────────────────
 
 INDEXES_DDL = """
@@ -1003,7 +1014,14 @@ DECLARE
                             THEN plainto_tsquery('english', p_query_text)
                             ELSE to_tsquery('english', v_or_expr) END;
     v_min_heat_base REAL;
+    -- the caller's trigram threshold, restored before returning
+    v_caller_trgm TEXT := current_setting('pg_trgm.similarity_threshold', true);
 BEGIN
+    -- source: ADR-0537 (the trigram threshold of the % pool below). Set in
+    -- the body and restored at the end, not as a function SET clause: a
+    -- non-superuser cannot create a SET clause of a placeholder parameter
+    -- before pg_trgm is loaded (audit E14; ADR-1112 increment 6).
+    PERFORM set_config('pg_trgm.similarity_threshold', '0.1', true);
     -- source: ADR-0537
     SELECT COALESCE(MAX(hs.factor), 1.0) INTO v_factor
     FROM homeostatic_state hs
@@ -1193,12 +1211,14 @@ BEGIN
     ORDER BY (c.superseded_by_id IS NOT NULL), tw.final_score DESC,
              c.created_at DESC, tw.id DESC
     LIMIT p_max_results * 3;
+    -- source: pg_trgm's default threshold when the caller had none set
+    PERFORM set_config(
+        'pg_trgm.similarity_threshold', COALESCE(v_caller_trgm, '0.3'), true
+    );
 END;
 $$ LANGUAGE plpgsql STABLE
 -- source: ADR-0537
-SET plan_cache_mode = 'force_custom_plan'
--- source: ADR-0537
-SET pg_trgm.similarity_threshold = '0.1';
+SET plan_cache_mode = 'force_custom_plan';
 """
 
 # ── PL/pgSQL: spread_activation ──────────────────────────────────────────
@@ -1948,44 +1968,48 @@ def _split_statements(ddl: str) -> list[str]:
     return statements
 
 
+# source: ADR-0537 (statement order: extensions, tables, views, indexes, functions)
+_DDL_BLOCKS: tuple[str, ...] = (
+    EXTENSIONS_DDL,
+    MEMORIES_DDL,
+    HOMEOSTATIC_STATE_DDL,
+    ENTITIES_DDL,
+    RELATIONSHIPS_DDL,
+    MEMORY_ENTITIES_DDL,
+    WIKI_SCHEMA_DDL,
+    WIKI_TRIGGERS_DDL,
+    WIKI_LINK_TRIGGER_DDL,
+    SUPPORT_TABLES_DDL,
+    PROCEDURAL_SKILLS_DDL,
+    PREDICTIONS_DDL,
+    BACKFILL_LOG_DDL,
+    # source: ADR-0537
+    MIGRATIONS_DDL,
+    TEAM_DECISION_BACKFILL_PG,
+    MEMORIES_STORAGE_OPTIONS_DDL,
+    # source: ADR-0537
+    CURRENT_MEMORIES_VIEW_DDL,
+    INDEXES_DDL,
+    # source: ADR-0537
+    EFFECTIVE_STAGE_FN,
+    ALPHA_INTEGRAL_FN,
+    EFFECTIVE_HEAT_FN,
+    EFFECTIVE_HEAT_FROZEN_FN,
+    # source: ADR-0537
+    RECALL_MEMORIES_LAZY_FN,
+    SPREAD_ACTIVATION_FN,
+    SPREAD_ACTIVATION_MEMORIES_FN,
+    GET_HOT_EMBEDDINGS_FN,
+    GET_TEMPORAL_CO_ACCESS_FN,
+)
+
+
 def get_all_ddl() -> list[LiteralString]:
     """Return all DDL as individual statements for safe per-statement execution.
 
     source: ADR-0537"""
-    blocks = [
-        EXTENSIONS_DDL,
-        MEMORIES_DDL,
-        HOMEOSTATIC_STATE_DDL,
-        ENTITIES_DDL,
-        RELATIONSHIPS_DDL,
-        MEMORY_ENTITIES_DDL,
-        WIKI_SCHEMA_DDL,
-        WIKI_TRIGGERS_DDL,
-        WIKI_LINK_TRIGGER_DDL,
-        SUPPORT_TABLES_DDL,
-        PROCEDURAL_SKILLS_DDL,
-        PREDICTIONS_DDL,
-        # source: ADR-0537
-        MIGRATIONS_DDL,
-        TEAM_DECISION_BACKFILL_PG,
-        MEMORIES_STORAGE_OPTIONS_DDL,
-        # source: ADR-0537
-        CURRENT_MEMORIES_VIEW_DDL,
-        INDEXES_DDL,
-        # source: ADR-0537
-        EFFECTIVE_STAGE_FN,
-        ALPHA_INTEGRAL_FN,
-        EFFECTIVE_HEAT_FN,
-        EFFECTIVE_HEAT_FROZEN_FN,
-        # source: ADR-0537
-        RECALL_MEMORIES_LAZY_FN,
-        SPREAD_ACTIVATION_FN,
-        SPREAD_ACTIVATION_MEMORIES_FN,
-        GET_HOT_EMBEDDINGS_FN,
-        GET_TEMPORAL_CO_ACCESS_FN,
-    ]
     result: list[str] = []
-    for block in blocks:
+    for block in _DDL_BLOCKS:
         result.extend(_split_statements(block))
     # source: ADR-0537
     return cast("list[LiteralString]", result)

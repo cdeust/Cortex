@@ -31,19 +31,18 @@ logger = logging.getLogger(__name__)
 def _lesson_promotion_backlog(store: Any) -> int:
     """Lesson-promotion candidate count.
 
-    Callable only when ``store.batch_pool`` exists: ``run_wiki_maintenance``
+    Callable only on a PostgreSQL-backed store: ``run_wiki_maintenance``
     is this function's sole caller and gates it on that capability once,
     at wiring time (issue #636) — this is a PostgreSQL-only table, and the
     SQLite backend never reaches this function at all.
-    Precondition: ``store`` exposes ``batch_pool``.
+    Precondition: ``store`` is PostgreSQL-backed (``store.backend``).
     Postcondition: returns the exact eligible-candidate count. Raises on
     a query failure — the caller's own error boundary handles it, the
     same as the other three PostgreSQL-only passes ``run_wiki_maintenance``
     gates identically; this function does not catch its own failures.
     """
 
-    with store.batch_pool.connection() as conn:
-        return count_lesson_promotion_candidates(conn)
+    return store.call_batch(count_lesson_promotion_candidates)
 
 
 async def run_backlog_pass(store: Any) -> dict[str, Any]:

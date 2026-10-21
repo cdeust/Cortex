@@ -37,6 +37,7 @@ from mcp_server.handlers.codebase_analyze_batch import (
     FileOperations,
     prepare_file_jobs,
 )
+from mcp_server.infrastructure.handler_operations import promote_to_semantic
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
@@ -56,6 +57,7 @@ from mcp_server.handlers.codebase_analyze_helpers import (
     persist_god_node_tags,
     persist_inheritance_edge,
 )
+from mcp_server.infrastructure.store_operations import background_work
 
 # ── Schema ────────────────────────────────────────────────────────────────
 
@@ -229,13 +231,7 @@ def _set_memory_metadata(store: MemoryStore, memory_id: int) -> None:
     Phase 5: batch pool. A3: writes heat_base + refreshes heat_base_set_at.
     """
     try:
-        with store.acquire_batch() as conn:
-            conn.execute(
-                "UPDATE memories SET store_type = 'semantic', "
-                "heat_base = 0.7, heat_base_set_at = NOW(), "
-                "importance = 0.5 WHERE id = %s",
-                (memory_id,),
-            )
+        store.call_batch(promote_to_semantic, memory_id)
     except Exception as exc:  # noqa: BLE001 — promotion is best-effort post-processing
         silent_failure.note("codebase_analyze.semantic_promotion", exc)
 
@@ -350,6 +346,7 @@ def _selected_file_jobs(source_files: list[Path], context: dict):
     return prepare_file_jobs(source_files, context, operations)
 
 
+@background_work  # source: ADR-1112 decision 4 (background class)
 async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Analyze a codebase and store its structure as Cortex memories."""
     root, languages, max_files, max_bytes, incremental, dry_run, domain = _parse_args(

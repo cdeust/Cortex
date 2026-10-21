@@ -12,66 +12,12 @@ from mcp_server.hooks.session_start_common import (
     _MIN_HEAT,
     _log,
 )
+from mcp_server.infrastructure.hook_queries import (
+    session_anchor_rows,
+    session_hot_rows,
+    session_team_decision_rows,
+)
 from mcp_server.shared.project_scope import memory_matches_project, project_ancestors
-
-
-# source: ADR-0498
-_ANCHORS_SQL = (
-    "SELECT m.id, m.content, m.tags, m.domain, m.is_global, "
-    "m.directory_context, "
-    "m.created_at, m.source_attribution, m.is_stale "
-    # source: ADR-0498
-    "FROM memories m JOIN current_memories cm ON cm.id = m.id "
-    "WHERE m.is_protected = TRUE "
-    # Exclude auto-captured noise (defense-in-depth — they should never
-    # be protected, but guard against misconfiguration).
-    # contract: zetetic-team-subagents memory/contract.md §8b
-    "AND NOT (m.tags @> '[\"auto-captured\"]'::jsonb) "
-    # source: ADR-0498
-    "AND m.superseded_by_id IS NULL "
-    "AND (m.is_global = TRUE OR m.directory_context = ANY(%s::TEXT[])) "
-    # source: ADR-1106 -- exact ties go to the newer memory.
-    "ORDER BY effective_heat(m, NOW()) DESC, m.created_at DESC, m.id DESC LIMIT %s"
-)
-
-# source: ADR-0498
-_TEAM_DECISIONS_SQL = (
-    "SELECT m.id, m.content, m.domain, m.agent_context, "
-    "m.created_at, m.source_attribution, m.is_stale, "
-    # JOIN current_memories: same pattern as _fetch_anchors —
-    # supersession exclusion via the view, m stays table-typed
-    # for effective_heat().
-    "effective_heat(m, NOW()) AS heat "
-    "FROM memories m JOIN current_memories cm ON cm.id = m.id "
-    "WHERE m.is_team_decision = TRUE AND NOT m.is_benchmark "
-    "AND (m.is_global = TRUE OR m.directory_context = ANY(%s::TEXT[])) "
-    "AND m.agent_context != '' "
-    # source: ADR-0498
-    "AND m.superseded_by_id IS NULL "
-    # source: ADR-1106 -- exact ties go to the newer memory.
-    "ORDER BY effective_heat(m, NOW()) DESC, m.created_at DESC, m.id DESC LIMIT 5"
-)
-
-# contract: zetetic-team-subagents memory/contract.md §8b
-_HOT_SQL = (
-    "SELECT id, content, domain, heat_base AS heat, tags, is_global, "
-    "directory_context, "
-    "created_at, source_attribution, is_stale "
-    # current_memories: hot-pool content injected into the session
-    # banner — supersession chain heads only.
-    "FROM current_memories "
-    "WHERE heat_base >= %s "
-    # Exclude tier-1 noise: auto-captured tool outputs and block replicas.
-    # JSONB containment: tags @> '[\"x\"]' is true when the array contains x.
-    # contract: zetetic-team-subagents memory/contract.md §8b
-    "AND NOT (tags @> '[\"auto-captured\"]'::jsonb "
-    "         OR tags @> '[\"memory-replica\"]'::jsonb) "
-    # source: ADR-0498
-    "AND superseded_by_id IS NULL "
-    "AND (is_global = TRUE OR directory_context = ANY(%s::TEXT[])) "
-    # source: ADR-1106 -- exact ties go to the newer memory.
-    "ORDER BY heat_base DESC, id DESC LIMIT %s"
-)
 
 
 def _banner_entry(r: dict, **extra) -> dict:
@@ -106,7 +52,7 @@ def _has_anchor_tag(r: dict) -> bool:
     )
 
 
-def _fetch_anchors(conn, project_root: str | None = None) -> list[dict]:
+def _fetch_anchors(store, project_root: str | None = None) -> list[dict]:
     """Fetch anchored memories (is_protected with _anchor tag) scoped to
     project_root or global (issue #604).
 
@@ -119,7 +65,7 @@ def _fetch_anchors(conn, project_root: str | None = None) -> list[dict]:
     source: ADR-0498"""
     ancestors = project_ancestors(project_root)
     try:
-        rows = conn.execute(_ANCHORS_SQL, (ancestors, int(_ANCHOR_LIMIT))).fetchall()
+        rows = store.call(session_anchor_rows, ancestors, int(_ANCHOR_LIMIT))
     except Exception as exc:  # noqa: BLE001 — hook boundary; failure is logged to the hook log, the banner degrades
         _log(f"anchor fetch failed (non-fatal): {exc}")
         return []
@@ -131,13 +77,11 @@ def _fetch_anchors(conn, project_root: str | None = None) -> list[dict]:
 
 
 def _fetch_team_decisions(
-    conn, exclude_ids: set, project_root: str | None = None
+    store, exclude_ids: set, project_root: str | None = None
 ) -> list[dict]:
     """Fetch team decisions within the current project. source: ADR-1083"""
     try:
-        rows = conn.execute(
-            _TEAM_DECISIONS_SQL, (project_ancestors(project_root),)
-        ).fetchall()
+        rows = store.call(session_team_decision_rows, project_ancestors(project_root))
     except Exception as exc:  # noqa: BLE001 — hook boundary; failure is logged to the hook log, the banner degrades
         _log(f"team-decision fetch failed (non-fatal): {exc}")
         return []
@@ -150,7 +94,7 @@ def _fetch_team_decisions(
 
 
 def _fetch_hot_memories(
-    conn, exclude_ids: set, project_root: str | None = None
+    store, exclude_ids: set, project_root: str | None = None
 ) -> list[dict]:
     """Fetch high-heat memories, excluding anchors, scoped to project_root
     or global (issue #604).
@@ -166,13 +110,13 @@ def _fetch_hot_memories(
     a defense-in-depth belt on top of the query's own suspenders.
     # contract: zetetic-team-subagents memory/contract.md §8b
     """
-    params = (
-        float(_MIN_HEAT),
-        project_ancestors(project_root),
-        int(_HOT_LIMIT + len(exclude_ids)),
-    )
     try:
-        rows = conn.execute(_HOT_SQL, params).fetchall()
+        rows = store.call(
+            session_hot_rows,
+            float(_MIN_HEAT),
+            project_ancestors(project_root),
+            int(_HOT_LIMIT + len(exclude_ids)),
+        )
     except Exception as exc:  # noqa: BLE001 — hook boundary; failure is logged to the hook log, the banner degrades
         _log(f"hot-memory fetch failed (non-fatal): {exc}")
         return []

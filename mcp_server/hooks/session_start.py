@@ -27,10 +27,7 @@ from __future__ import annotations
 import asyncio
 import os
 
-from mcp_server.handlers.injection_receipts import (
-    emit_hook_receipt,
-    emit_injection_receipt,
-)
+from mcp_server.handlers.injection_receipts import emit_injection_receipt
 from mcp_server.hooks import session_start_status as _status
 from mcp_server.hooks._telemetry import observe_hook
 from mcp_server.hooks.output_streams import use_utf8_output
@@ -50,7 +47,7 @@ from mcp_server.hooks.session_start_curation import (
     _fetch_grooming_staleness,
 )
 from mcp_server.hooks.session_start_db import (
-    _connect_pg,
+    _pg_store,
     _count_memories,
     _count_session_files,
     _fetch_checkpoint,
@@ -112,14 +109,14 @@ def _lookup_cached_graph_path(project_root: str) -> str | None:
 
 
 def _emit_banner_receipt(
-    conn, event: dict, anchors: list[dict], team_decisions: list[dict], hot: list[dict]
+    store, event: dict, anchors: list[dict], team_decisions: list[dict], hot: list[dict]
 ) -> int | None:
     """Emit the session_start injection receipt for the banner (T2).
 
     source: ADR-0498"""
     payload = [{"memory_id": m["id"]} for m in (*anchors, *team_decisions, *hot)]
-    return emit_hook_receipt(
-        conn,
+    return emit_injection_receipt(
+        store,
         payload,
         channel="session_start",
         session_id=session_id_from_transcript(event.get("transcript_path")),
@@ -178,7 +175,7 @@ def _session_start() -> str:
 
 def _pg_connection():
     """``(conn, None)``, or ``(None, status)`` after printing the first-run text."""
-    conn = _connect_pg()
+    conn = _pg_store()
     if conn is not None:
         return conn, None
     # Can't connect — try auto-setup
@@ -186,7 +183,7 @@ def _pg_connection():
     setup_result = _try_setup_db()
     if setup_result and setup_result.get("status") == "ready":
         # Setup succeeded, try connecting again
-        conn = _connect_pg()
+        conn = _pg_store()
         if conn is not None:
             return conn, None
         _log("Setup reported ready but still can't connect")
@@ -205,7 +202,6 @@ def _pg_empty_store(conn) -> str:
     """Empty database — first run with a working PostgreSQL."""
     session_files = _count_session_files()
     _log(f"Empty database, {session_files} session files found")
-    conn.close()
     msg = _build_cold_start_message(
         {"status": "ready", "memories": 0, "session_files": session_files},
         _auto_backfill,
@@ -239,7 +235,6 @@ def _pg_banner(event: dict, conn, memory_count: int) -> str:
         stale_grooming=_fetch_grooming_staleness(conn),
         receipt_id=_emit_banner_receipt(conn, event, anchors, team_decisions, hot),
     )
-    conn.close()
     if context:
         print(context)
         _log(
@@ -266,4 +261,9 @@ if __name__ == "__main__":
     from mcp_server.hooks.wiring import wire_composition_root  # noqa: PLC0415 — source: issue #560
 
     wire_composition_root()
-    main()
+    # The store's pool must close before exit: an open pool stalls
+    # interpreter shutdown ~5 s per worker thread (ADR-0479, ADR-1112).
+    from mcp_server.hooks._store_lifecycle import close_shared_store_on_exit  # noqa: PLC0415 — entry-only teardown helper
+
+    with close_shared_store_on_exit():
+        main()

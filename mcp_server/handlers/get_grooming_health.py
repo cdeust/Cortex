@@ -17,7 +17,6 @@ from mcp_server.infrastructure.memory_store import get_shared_store
 from mcp_server.infrastructure.pg_store_lesson_promotion import (
     count_lesson_promotion_candidates,
 )
-from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 from mcp_server.infrastructure.sqlite_store_lesson_promotion import (
     count_lesson_promotion_candidates as count_promotion_candidates_sqlite,
 )
@@ -76,9 +75,9 @@ def _count_promotion_candidates(store: Any) -> int:
     """Backend dispatch for the promotion backlog count.
 
     source: ADR-0394"""
-    if isinstance(store, SqliteMemoryStore):
-        return count_promotion_candidates_sqlite(store._conn)
-    return count_lesson_promotion_candidates(store._conn)
+    if getattr(store, "backend", "") == "sqlite":
+        return store.call(count_promotion_candidates_sqlite)
+    return store.call(count_lesson_promotion_candidates)
 
 
 async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:

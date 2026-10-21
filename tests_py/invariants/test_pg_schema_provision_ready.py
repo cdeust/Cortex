@@ -2,7 +2,7 @@
 schema-provisioning and top-level orchestration (issue #312).
 
 `TestProvisionSchema` pins that `_provision_schema` reuses the exact
-production migration path (`PgMemoryStore.__init__` -> `_init_schema`)
+production migration path (`pg_migrations.apply_schema`, ADR-1112)
 rather than a hand-copied one, and that a construction failure escalates
 via `pytest.exit`, never a swallowed exception. `TestEnsurePgReady` pins
 the top-level branching contract: which of the three inputs (server
@@ -24,22 +24,20 @@ from tests_py.conftest import requires_psycopg  # type: ignore
 
 @requires_psycopg
 class TestProvisionSchema:
-    def test_constructs_store_with_the_given_url_and_closes_it(self) -> None:
-        store = mock.MagicMock()
+    def test_applies_the_schema_to_the_given_url(self) -> None:
         with mock.patch(
-            "mcp_server.infrastructure.pg_store.PgMemoryStore",
-            return_value=store,
-        ) as mock_ctor:
+            "mcp_server.infrastructure.pg_migrations.apply_schema",
+            return_value=True,
+        ) as mock_apply:
             provision._provision_schema("postgresql://host/cortex_test")
-        mock_ctor.assert_called_once_with(database_url="postgresql://host/cortex_test")
-        store.close.assert_called_once()
+        mock_apply.assert_called_once_with("postgresql://host/cortex_test")
 
     def test_construction_failure_calls_pytest_exit_with_actionable_message(
         self,
     ) -> None:
         with (
             mock.patch(
-                "mcp_server.infrastructure.pg_store.PgMemoryStore",
+                "mcp_server.infrastructure.pg_migrations.apply_schema",
                 side_effect=RuntimeError('extension "vector" is not available'),
             ),
             mock.patch.object(provision.pytest, "exit") as mock_exit,
@@ -65,7 +63,7 @@ class TestProvisionSchema:
         cleanly reporting the exit call."""
         with (
             mock.patch(
-                "mcp_server.infrastructure.pg_store.PgMemoryStore",
+                "mcp_server.infrastructure.pg_migrations.apply_schema",
                 side_effect=RuntimeError("boom"),
             ),
             mock.patch.object(provision.pytest, "exit"),

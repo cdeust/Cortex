@@ -43,9 +43,10 @@ def run_compression_cycle(
 
     # Stream in chunks when not pre-loaded so peak RAM is one chunk, not the
     # whole corpus. Writes go through the interactive pool / persistent conn
-    # (update_memory_compression, insert_archive), while the read cursor holds
-    # a batch-pool connection — different pools, so no contention, and the
-    # cursor's MVCC snapshot means compressed rows are never re-processed.
+    # (update_memory_compression, insert_archive); each chunk is one keyset
+    # page read in autocommit, so no transaction is open while this loop
+    # encodes, and id-ordered paging never re-reads a compressed row
+    # (ADR-1112).
     for chunk in iter_memory_chunks(store, memories):
         for mem in chunk:
             stats["rows_scanned"] += 1

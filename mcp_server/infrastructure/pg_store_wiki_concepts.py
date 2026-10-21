@@ -18,6 +18,7 @@ import json
 
 
 from mcp_server.infrastructure.pg_store_wiki_common import _returning_id
+from mcp_server.infrastructure.store_operations import store_operation
 
 
 def list_concepts(
@@ -38,6 +39,7 @@ def list_concepts(
         return list(cur.fetchall())
 
 
+@store_operation
 def get_concepts_by_entity_overlap(
     conn: StoreConnection, entity_ids: list[int]
 ) -> list[dict]:
@@ -52,6 +54,7 @@ def get_concepts_by_entity_overlap(
         return list(cur.fetchall())
 
 
+@store_operation
 def insert_concept(conn: StoreConnection, concept: dict[str, Any]) -> int:
     """Insert a new concept. Returns wiki.concepts.id."""
     sql = """
@@ -103,6 +106,7 @@ _UPDATABLE_COLUMNS: frozenset[str] = frozenset(
 )
 
 
+@store_operation
 def update_concept(
     conn: StoreConnection, concept_id: int, fields: dict[str, Any]
 ) -> bool:

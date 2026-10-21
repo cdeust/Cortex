@@ -19,6 +19,7 @@ from typing import Any
 import numpy as np
 
 from mcp_server.shared.temporal_normalize import normalize_date_to_iso
+from mcp_server.infrastructure.store_operations import StoreOperationsMixin
 from mcp_server.infrastructure.sqlite_compat import (
     PsycopgCompatConnection,
     SqliteConnectionLike,
@@ -100,6 +101,7 @@ _CHAIN_HEAD_MAX_DEPTH = 100_000
 
 
 class SqliteMemoryStore(
+    StoreOperationsMixin,
     SqliteEntityMixin,
     SqliteEntityMergeMixin,
     SqliteRelationshipMixin,
@@ -115,6 +117,9 @@ class SqliteMemoryStore(
     SqliteSpreadActivationMixin,
 ):
     """SQLite + FTS5 + sqlite-vec storage engine for Cortex memory system."""
+
+    # source: ADR-1112 (callers branch on the backend, never on the class)
+    backend = "sqlite"
 
     _raw_conn: SqliteConnectionLike
 

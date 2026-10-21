@@ -166,18 +166,16 @@ def _cite_page(rel_path: str) -> None:
         return
     try:
         store = _get_store()
-        conn = store._conn
-        page = get_page_by_rel_path(conn, rel_path)
+        page = store.call(get_page_by_rel_path, rel_path)
         if page is None:
             return
-        insert_citation(
-            conn,
+        store.call(
+            insert_citation,
             page_id=page["id"],
             session_id=session_id,
             domain=page.get("domain", ""),
             memory_id=page.get("memory_id"),
         )
-        conn.commit()
     except Exception:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.debug(
             "wiki_read citation side-effect failed for %s", rel_path, exc_info=True

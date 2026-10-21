@@ -200,27 +200,15 @@ def _create_extensions(host: str, port: str, dbname: str) -> tuple[bool, str]:
 
 
 def _init_schema(database_url: str) -> tuple[bool, str]:
-    """Run full schema initialization via psycopg.
+    """Bring the schema to the code's revision through the explicit
+    migration step (records the revision, so opening a store later finds it
+    current and runs no DDL).
 
-    source: ADR-0784"""
+    source: ADR-1112"""
     try:
-        import psycopg  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
-        from psycopg.rows import dict_row  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
-        from mcp_server.infrastructure.pg_schema import get_all_ddl  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
+        from mcp_server.infrastructure.pg_migrations import apply_schema  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
 
-        conn = psycopg.connect(database_url, row_factory=dict_row, autocommit=True)
-        errors: list[str] = []
-        for ddl in get_all_ddl():
-            try:
-                conn.execute(ddl)
-            except Exception as stmt_err:  # noqa: BLE001 — per-statement DDL isolation — failure is reported in the schema-warnings list
-                first_line = ddl.strip().split("\n")[0][:60]
-                errors.append(f"{first_line}: {stmt_err}")
-        conn.close()
-        if errors:
-            _log(f"Schema warnings ({len(errors)} statements had issues):")
-            for e in errors[:5]:
-                _log(f"  {e}")
+        apply_schema(database_url)
         return True, ""
     except ImportError:
         return False, "psycopg not installed (run: pip install psycopg[binary])"

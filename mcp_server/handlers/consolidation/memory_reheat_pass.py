@@ -23,7 +23,7 @@ DEFAULT_REHEAT_SCAN_LIMIT = 5000
 
 
 def _process_row(
-    conn: Any,
+    store: Any,
     row: dict[str, Any],
     *,
     target: float,
@@ -60,8 +60,8 @@ def _process_row(
 
     written = False
     if apply:
-        written = apply_reheat(
-            conn, row["id"], row["heat_base"], decision.new_heat_base
+        written = store.call_batch(
+            apply_reheat, row["id"], row["heat_base"], decision.new_heat_base
         )
     if apply and not written:
         out["skipped_race"] += 1
@@ -101,11 +101,10 @@ async def run_memory_reheat_pass(
         "target": target,
     }
     try:
-        with store.batch_pool.connection() as conn:
-            rows = list_deliberate_below_target(conn, target, limit)
-            out["scanned_rows"] = len(rows)
-            for row in rows:
-                _process_row(conn, row, target=target, apply=apply, out=out)
+        rows = store.call_batch(list_deliberate_below_target, target, limit)
+        out["scanned_rows"] = len(rows)
+        for row in rows:
+            _process_row(store, row, target=target, apply=apply, out=out)
     except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("memory_reheat_pass failed (non-fatal): %s", exc)
         out["status"] = f"error: {type(exc).__name__}: {exc}"

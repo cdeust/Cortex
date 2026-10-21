@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 
 from mcp_server.core.sleep_phases import run_two_phase_consolidation
+from mcp_server.infrastructure.consolidation_queries import set_memory_embedding
 from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
 from mcp_server.infrastructure.memory_store import MemoryStore
 
@@ -111,27 +112,24 @@ def _fix_stale_embeddings(
 ) -> int:
     """Re-embed memories with stale or missing embeddings.
 
-    Phase 5: batched UPDATEs run on the batch pool.
+    Each UPDATE borrows a batch-pool connection for itself; no connection is
+    held while ``encode`` runs (ADR-1112).
     """
     count = 0
-    with store.acquire_batch() as conn:
-        for item in stale_items:
-            try:
-                content = item["content"]
-                if not content:
-                    continue
-                new_emb = embeddings.encode(content)
-                if new_emb:
-                    conn.execute(
-                        "UPDATE memories SET embedding = %s WHERE id = %s",
-                        (new_emb, item["memory_id"]),
-                    )
-                    count += 1
-            except Exception:
-                logger.exception(
-                    "Re-embedding failed for memory %s",
-                    item.get("memory_id"),
-                )
+    for item in stale_items:
+        try:
+            content = item["content"]
+            if not content:
+                continue
+            new_emb = embeddings.encode(content)
+            if new_emb:
+                store.call_batch(set_memory_embedding, item["memory_id"], new_emb)
+                count += 1
+        except Exception:
+            logger.exception(
+                "Re-embedding failed for memory %s",
+                item.get("memory_id"),
+            )
     return count
 
 

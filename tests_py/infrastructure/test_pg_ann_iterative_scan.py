@@ -35,6 +35,9 @@ from tests_py._pg_ann_rows import (
 )
 from tests_py._pg_hnsw import empty_memories_index
 
+# source: ADR-1112 (tests of the store itself run on the in-process store)
+pytestmark = pytest.mark.in_process_store
+
 # source: test_pg_store_near_dup_index_path.py — 300 hidden rows exceed the
 # default hnsw.ef_search (40) several times over.
 _HIDDEN_ROWS = 300

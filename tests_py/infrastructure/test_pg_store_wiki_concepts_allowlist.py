@@ -5,7 +5,7 @@ keys into its ``SET`` clause — the one S608 site whose identifiers did
 NOT flow through an in-code allowlist (docs/ASSURANCE-CASE.md §5). These
 tests pin the fixed contract: unknown keys are REFUSED before any SQL is
 built (refuse-not-escape, same mechanism as
-``wiki_view_executor._TABLE_WHITELIST``), known keys still build the
+``wiki_view_dsl._TABLE_WHITELIST``), known keys still build the
 exact allowlisted statement, and the allowlist itself cannot drift from
 the ``wiki.concepts`` DDL.
 

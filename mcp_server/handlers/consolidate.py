@@ -34,10 +34,12 @@ from mcp_server.infrastructure.embedding_engine import (
     EmbeddingEngine,
     get_embedding_engine,
 )
+from mcp_server.infrastructure.consolidate_lock import consolidate_single_flight
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
 from mcp_server.hooks.consolidate_background import _write_stamp
+from mcp_server.infrastructure.store_operations import background_work
 
 logger = logging.getLogger(__name__)
 
@@ -231,9 +233,18 @@ async def _atimed(fn, *args, **kwargs) -> dict[str, Any]:
     return result
 
 
+@background_work  # source: ADR-1112 decision 4 (background class)
 async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Run maintenance cycles on the memory system."""
-    args = args or {}
+    """Run maintenance cycles on the memory system, one cycle at a time across
+    every process: a second caller returns ``status: skipped`` (ADR-1112)."""
+    with consolidate_single_flight() as held:
+        if not held:
+            return {"status": "skipped", "reason": "another consolidation is running"}
+        return await _run_handler(args or {})
+
+
+async def _run_handler(args: dict[str, Any]) -> dict[str, Any]:
+    """Body of ``handler``; the caller holds the single-flight lock."""
     settings = get_memory_settings()
     store = _get_store()
     embeddings = get_embedding_engine()
@@ -249,27 +260,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
     # source: ADR-0341
     if args.get("wiki", True):
-        cap_raw = args.get("wiki_max_purges_per_axis", 500)
-        cap = int(cap_raw) if cap_raw is not None and int(cap_raw) > 0 else None
-        seed_limit_raw = args.get("wiki_citation_seed_limit")
-        seed_limit = int(seed_limit_raw) if seed_limit_raw is not None else None
-        wiki_stats = await _atimed(
-            run_wiki_maintenance,
-            store,
-            apply_stubs=bool(args.get("wiki_apply_stubs", True)),
-            apply_classifier_rejects=bool(
-                args.get("wiki_apply_classifier_rejects", True)
-            ),
-            max_purges_per_axis=cap,
-            apply_citation_seed=bool(args.get("wiki_apply_citation_seed", True)),
-            citation_seed_limit=seed_limit,
-        )
-        stats["wiki"] = wiki_stats
-        # source: ADR-0341
-        if isinstance(wiki_stats, dict) and "pending_total" in wiki_stats:
-            stats["pending_curations"] = wiki_stats["pending_total"]
-        else:
-            stats["pending_curations"] = None
+        await _run_wiki_stage(args, store, stats)
 
     elapsed_ms = int((time.monotonic() - start) * 1000)
     stats["duration_ms"] = elapsed_ms
@@ -288,6 +279,31 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         logger.debug("consolidate stamp write failed (non-fatal): %s", exc)
 
     return stats
+
+
+async def _run_wiki_stage(
+    args: dict[str, Any], store: MemoryStore, stats: dict[str, Any]
+) -> None:
+    """Autonomous wiki maintenance; records ``wiki`` and ``pending_curations``."""
+    cap_raw = args.get("wiki_max_purges_per_axis", 500)
+    cap = int(cap_raw) if cap_raw is not None and int(cap_raw) > 0 else None
+    seed_limit_raw = args.get("wiki_citation_seed_limit")
+    seed_limit = int(seed_limit_raw) if seed_limit_raw is not None else None
+    wiki_stats = await _atimed(
+        run_wiki_maintenance,
+        store,
+        apply_stubs=bool(args.get("wiki_apply_stubs", True)),
+        apply_classifier_rejects=bool(args.get("wiki_apply_classifier_rejects", True)),
+        max_purges_per_axis=cap,
+        apply_citation_seed=bool(args.get("wiki_apply_citation_seed", True)),
+        citation_seed_limit=seed_limit,
+    )
+    stats["wiki"] = wiki_stats
+    # source: ADR-0341
+    if isinstance(wiki_stats, dict) and "pending_total" in wiki_stats:
+        stats["pending_curations"] = wiki_stats["pending_total"]
+    else:
+        stats["pending_curations"] = None
 
 
 def _run_cycles(

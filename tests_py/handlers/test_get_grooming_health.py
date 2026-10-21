@@ -26,6 +26,7 @@ from mcp_server.handlers.get_grooming_health import (
     _count_promotion_candidates as _count_candidates,
 )
 from mcp_server.handlers.lesson_promotion import _list_candidates
+from tests_py._db_peek import store_connection
 
 
 # These assertions are backend-agnostic contracts ("the count equals the
@@ -61,8 +62,10 @@ class TestCountLessonPromotionCandidates:
         """The count must equal len(list(..., limit=<very large>)) --
         same WHERE clause, this is just the aggregate form."""
         store = get_shared_store()
-        count = count_lesson_promotion_candidates(store._conn)
-        full_list = list_lesson_promotion_candidates(store._conn, limit=1_000_000)
+        count = count_lesson_promotion_candidates(store_connection(store))
+        full_list = list_lesson_promotion_candidates(
+            store_connection(store), limit=1_000_000
+        )
         assert count == len(full_list)
 
     def test_increases_after_a_qualifying_lesson_is_rated_useful(self):
@@ -70,7 +73,7 @@ class TestCountLessonPromotionCandidates:
         from mcp_server.handlers.remember import handler as remember_handler
 
         store = get_shared_store()
-        before = count_lesson_promotion_candidates(store._conn)
+        before = count_lesson_promotion_candidates(store_connection(store))
 
         marker = f"g4-count-{int(time.time() * 1000)}"
         remembered = _run(
@@ -91,7 +94,7 @@ class TestCountLessonPromotionCandidates:
         rated = _run(rate_memory_handler({"memory_id": lesson_id, "useful": True}))
         assert rated["rated"] is True
 
-        after = count_lesson_promotion_candidates(store._conn)
+        after = count_lesson_promotion_candidates(store_connection(store))
         assert after == before + 1
 
 
@@ -146,7 +149,7 @@ class TestGetGroomingHealthHandler:
 
     def test_promotion_backlog_count_matches_the_indexed_count(self):
         store = get_shared_store()
-        expected = count_lesson_promotion_candidates(store._conn)
+        expected = count_lesson_promotion_candidates(store_connection(store))
         result = _run(get_grooming_health.handler({}))
         assert result["kinds"]["promotion"]["backlog_count"] == expected
 

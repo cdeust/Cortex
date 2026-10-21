@@ -21,6 +21,9 @@ from mcp_server.infrastructure.memory_store import get_shared_store
 from mcp_server.infrastructure.pg_store_near_dup import list_candidate_pairs
 from tests_py._pg_hnsw import empty_memories_index
 
+# source: ADR-1112 (tests of the store itself run on the in-process store)
+pytestmark = pytest.mark.in_process_store
+
 _DIM = 384  # source: memory_config EMBEDDING_DIM (all-MiniLM-L6-v2)
 # source: ADR-0557 — more live rows than one batch, so the pair, inserted
 # last, lies outside the first batch (on main: outside the anchor subset).

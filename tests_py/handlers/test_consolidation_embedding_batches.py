@@ -7,6 +7,7 @@ from contextlib import nullcontext
 from unittest.mock import Mock, call
 
 from mcp_server.handlers.consolidation import cls, embedding_upgrade, sleep
+from tests_py._store_call import bind_store_calls
 from mcp_server.infrastructure.embedding_batch import encode_items
 
 
@@ -117,7 +118,8 @@ class DirectWriters(unittest.TestCase):
 
     def test_stale_updates_keep_id_vector_pairs_and_skip_empty(self):
         engine, store, conn = Engine(), Mock(), Mock()
-        store.acquire_batch.return_value = nullcontext(conn)
+        store.acquire_batch.side_effect = lambda: nullcontext(conn)
+        bind_store_calls(store)
         rows = [
             {"memory_id": mid, "content": text}
             for mid, text in [(7, "b"), (2, ""), (5, "a")]

@@ -83,10 +83,15 @@ class _FakeStore:
     def __init__(self):
         self.memories: list[dict] = []
         self._next = 1000
-        self._conn = MagicMock()
+        self.conn = MagicMock()
         cur = MagicMock()
-        self._conn.cursor.return_value.__enter__.return_value = cur
+        self.conn.cursor.return_value.__enter__.return_value = cur
         cur.fetchone.return_value = None  # no prior memo
+        cur.fetchall.return_value = []
+
+    def call(self, fn, *args, pool="interactive", **kwargs):
+        """``store.call`` as the in-process store runs it (ADR-1112)."""
+        return fn(self.conn, *args, **kwargs)
 
     def insert_memory(self, data: dict) -> int:
         mid = self._next

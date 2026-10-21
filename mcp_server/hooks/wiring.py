@@ -35,6 +35,8 @@ from mcp_server.core.wiki_axis_registry import (
 from mcp_server.core.wiki_coverage import configure_wiki_coverage_filesystem
 from mcp_server.core.wiki_coverage_dashboard import configure_dashboard_filesystem
 from mcp_server.core.wiki_drift import configure_wiki_drift_filesystem
+from mcp_server.hooks.store_broker_launch import launch_broker
+from mcp_server.infrastructure.broker_endpoint import configure_broker_launcher
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.reranker_cache import (
     reranker_cache_dir,
@@ -95,6 +97,7 @@ def wire_composition_root() -> None:
         file_exists_under=source_file_exists_under,
         iter_pages=iter_wiki_markdown_pages,
     )
+    configure_broker_launcher(launch_broker)
     configure_dashboard_filesystem(
         count_curation_gaps=count_curation_gaps_under,
         kind_page_counts=kind_page_counts,

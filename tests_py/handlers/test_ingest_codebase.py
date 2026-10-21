@@ -72,6 +72,11 @@ class _FakeStore:
                 )
         return self._pool
 
+    def call_batch(self, fn, *args, **kwargs):
+        """``store.call_batch`` as the store lends it (ADR-1112)."""
+        with self.batch_pool.connection() as conn:
+            return fn(conn, *args, **kwargs)
+
     def close_pool(self):
         if self._pool is not None:
             self._pool.close()

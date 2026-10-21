@@ -19,6 +19,7 @@ from mcp_server.core.curation import (
     identify_strengtheneable,
 )
 from mcp_server.handlers.consolidation.chunks import iter_memory_chunks
+from mcp_server.infrastructure.consolidation_queries import relationship_weights
 from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.observability import silent_failure
 
@@ -199,22 +200,9 @@ def _reweight_relationships(store: MemoryStore) -> int:
         entities = store.get_all_entities(min_heat=0.0)
         entity_heats = {e["id"]: e.get("heat", 0.5) for e in entities}
 
-        with store.acquire_batch() as conn:
-            rows = conn.execute(
-                "SELECT id, source_entity_id, target_entity_id, weight "
-                "FROM relationships",
-            ).fetchall()
-            rels = [dict(r) for r in rows]
-            reweights = compute_relationship_reweights(rels, entity_heats)
-
-            count = 0
-            for rid, new_weight in reweights:
-                conn.execute(
-                    "UPDATE relationships SET weight = %s WHERE id = %s",
-                    (new_weight, rid),
-                )
-                count += 1
-        return count
+        rels = store.call_batch(relationship_weights)
+        reweights = compute_relationship_reweights(rels, entity_heats)
+        return store.update_relationships_weight_batch(list(reweights))
     except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
         silent_failure.note("memify.relationship_reweight", exc)
         return 0

@@ -77,7 +77,7 @@ class TestMainCallsRegistryRefresh:
             patch(
                 "mcp_server.hooks.session_start._refresh_session_registry"
             ) as mock_refresh,
-            patch("mcp_server.hooks.session_start._connect_pg", return_value=None),
+            patch("mcp_server.hooks.session_start._pg_store", return_value=None),
             patch("mcp_server.hooks.session_start._try_setup_db", return_value=None),
             patch(
                 "mcp_server.hooks.session_start._build_cold_start_message",

@@ -29,6 +29,7 @@ from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.handlers._tool_meta import NON_IDEMPOTENT_WRITE
 from mcp_server.handlers.seed_project_constants import is_transient_seed_root
+from mcp_server.infrastructure.store_operations import background_work
 
 _store: MemoryStore | None = None
 
@@ -173,6 +174,7 @@ def _build_stage_counts(discoveries: list[dict]) -> dict[str, int]:
     }
 
 
+@background_work  # source: ADR-1112 decision 4 (background class)
 async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Seed memory from an existing codebase."""
     root, domain, max_bytes, dry_run = _parse_args(args)

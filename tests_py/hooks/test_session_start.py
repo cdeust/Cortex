@@ -36,6 +36,7 @@ from mcp_server.hooks import session_start_fetch as ss_fetch
 from mcp_server.hooks import session_start_sources as ss_sources
 from mcp_server.hooks import session_start_sqlite as ss_sqlite
 from mcp_server.shared import detached_spawn, log_rotation
+from tests_py.hooks._store_fakes import ConnStore
 from tests_py.hooks.stdin_support import utf8_stdin
 from tests_py._windows_spawn_fake import (
     as_windows_in_breakaway_job,
@@ -109,15 +110,17 @@ def test_checkpoint_from_row_maps_columns_and_none_passes_through():
 
 
 def _conn_returning(rows):
+    """A store whose operations run on a fake connection returning ``rows``."""
     conn = MagicMock()
     conn.execute.return_value.fetchall.return_value = rows
-    return conn
+    return ConnStore(conn)
 
 
 def _failing_conn():
+    """A store whose operations fail like a missing relation."""
     conn = MagicMock()
     conn.execute.side_effect = RuntimeError("relation does not exist")
-    return conn
+    return ConnStore(conn)
 
 
 def test_fetch_anchors_keeps_only_anchor_tagged_rows():
@@ -285,16 +288,19 @@ def test_fetch_hot_memories_drops_other_project_keeps_global_and_ancestor():
 
 
 def test_fetch_checkpoint_maps_the_row():
-    conn = MagicMock()
-    conn.execute.return_value.fetchone.return_value = {
-        "current_task": "t",
-        "next_steps": [],
-        "open_questions": [],
-        "active_errors": [],
-        "key_decisions": [],
-        "directory_context": "",
-    }
-    assert ss_db._fetch_checkpoint(conn)["current_task"] == "t"
+    store = _conn_returning(
+        [
+            {
+                "current_task": "t",
+                "next_steps": [],
+                "open_questions": [],
+                "active_errors": [],
+                "key_decisions": [],
+                "directory_context": "",
+            }
+        ]
+    )
+    assert ss_db._fetch_checkpoint(store)["current_task"] == "t"
 
 
 def test_fetch_checkpoint_failure_degrades_to_none():
@@ -302,20 +308,15 @@ def test_fetch_checkpoint_failure_degrades_to_none():
 
 
 def test_count_memories_reads_the_count_and_degrades_to_zero():
-    conn = MagicMock()
-    conn.execute.return_value.fetchone.return_value = {"c": 42}
-    assert ss_db._count_memories(conn) == 42
+    assert ss_db._count_memories(_conn_returning([{"c": 42}])) == 42
     assert ss_db._count_memories(_failing_conn()) == 0
 
 
 def test_grooming_staleness_never_run_reports_all_kinds_stale():
-    conn = MagicMock()
-    conn.execute.return_value.fetchone.return_value = {
-        "wiki_last": None,
-        "distill_last": None,
-        "promo_last": None,
-    }
-    assert ss_curation._fetch_grooming_staleness(conn) == [
+    store = _conn_returning(
+        [{"wiki_last": None, "distill_last": None, "promo_last": None}]
+    )
+    assert ss_curation._fetch_grooming_staleness(store) == [
         "wiki",
         "distillation",
         "promotion",
@@ -324,13 +325,10 @@ def test_grooming_staleness_never_run_reports_all_kinds_stale():
 
 def test_grooming_staleness_recent_runs_report_nothing():
     now = datetime.datetime.now(datetime.timezone.utc)
-    conn = MagicMock()
-    conn.execute.return_value.fetchone.return_value = {
-        "wiki_last": now,
-        "distill_last": now,
-        "promo_last": now,
-    }
-    assert ss_curation._fetch_grooming_staleness(conn) == []
+    store = _conn_returning(
+        [{"wiki_last": now, "distill_last": now, "promo_last": now}]
+    )
+    assert ss_curation._fetch_grooming_staleness(store) == []
 
 
 def test_grooming_staleness_query_failure_degrades_to_empty():
@@ -564,13 +562,14 @@ def test_build_context_without_receipt_has_no_marker():
 
 
 def test_emit_banner_receipt_payload_mirrors_banner_order():
-    conn = MagicMock()
+    store = MagicMock()
     anchors = [{"id": 1}]
     team = [{"id": 2}]
     hot = [{"id": 3}]
-    with patch.object(hook, "emit_hook_receipt", return_value=5) as emit:
-        rid = hook._emit_banner_receipt(conn, {}, anchors, team, hot)
+    with patch.object(hook, "emit_injection_receipt", return_value=5) as emit:
+        rid = hook._emit_banner_receipt(store, {}, anchors, team, hot)
     assert rid == 5
+    assert emit.call_args.args[0] is store, "the receipt goes through the store"
     assert emit.call_args.args[1] == [
         {"memory_id": 1},
         {"memory_id": 2},
@@ -767,11 +766,27 @@ def test_sqlite_context_unavailable_store_logs_and_returns(capsys, monkeypatch):
 # ── PG connection failure arm ─────────────────────────────────────────
 
 
-def test_connect_pg_unreachable_server_logs_and_returns_none(capsys, monkeypatch):
-    # Point at a closed port — never the developer's real server.
-    monkeypatch.setattr(ss_db, "_DATABASE_URL", "postgresql://127.0.0.1:1/none")
-    assert ss_db._connect_pg() is None
-    assert "PostgreSQL connect failed" in capsys.readouterr().err
+def test_pg_store_unavailable_logs_and_returns_none(capsys, monkeypatch):
+    """The shared store cannot open (unreachable server, refused schema):
+    the hook logs and takes the cold-start path (ADR-1112)."""
+    from mcp_server.infrastructure import memory_store
+
+    def _refuse():
+        raise RuntimeError("PostgreSQL connection failed")
+
+    monkeypatch.setattr(memory_store, "get_shared_store", _refuse)
+    assert ss_db._pg_store() is None
+    assert "PostgreSQL store unavailable: PostgreSQL connection failed" in (
+        capsys.readouterr().err
+    )
+
+
+def test_pg_store_is_the_shared_store(monkeypatch):
+    from mcp_server.infrastructure import memory_store
+
+    store = object()
+    monkeypatch.setattr(memory_store, "get_shared_store", lambda: store)
+    assert ss_db._pg_store() is store
 
 
 # ── Best-effort side channels ─────────────────────────────────────────
@@ -1255,7 +1270,7 @@ def test_main_sqlite_backend_dispatches_to_the_sqlite_path(capsys):
     _run_main(
         patch.object(hook, "_backend_is_sqlite", return_value=True),
         patch.object(hook, "_sqlite_context", sqlite_ctx),
-        patch.object(hook, "_connect_pg"),
+        patch.object(hook, "_pg_store"),
     )
     sqlite_ctx.assert_called_once()
     assert _emitted(capsys.readouterr().out)["systemMessage"] == (
@@ -1266,7 +1281,7 @@ def test_main_sqlite_backend_dispatches_to_the_sqlite_path(capsys):
 def test_main_without_pg_and_failed_setup_prints_cold_start(capsys):
     _run_main(
         patch.object(hook, "_backend_is_sqlite", return_value=False),
-        patch.object(hook, "_connect_pg", return_value=None),
+        patch.object(hook, "_pg_store", return_value=None),
         patch.object(hook, "_try_setup_db", return_value={"status": "needs_install"}),
     )
     emitted = _emitted(capsys.readouterr().out)
@@ -1278,7 +1293,7 @@ def test_main_without_pg_and_failed_setup_prints_cold_start(capsys):
 def test_main_setup_ready_but_still_unreachable_prints_the_ready_message(capsys):
     _run_main(
         patch.object(hook, "_backend_is_sqlite", return_value=False),
-        patch.object(hook, "_connect_pg", return_value=None),
+        patch.object(hook, "_pg_store", return_value=None),
         patch.object(
             hook,
             "_try_setup_db",
@@ -1290,26 +1305,26 @@ def test_main_setup_ready_but_still_unreachable_prints_the_ready_message(capsys)
     assert "No previous sessions found" in out
 
 
-def test_main_empty_database_prints_cold_start_and_closes_the_conn(capsys):
+def test_main_empty_database_prints_cold_start(capsys):
     conn = MagicMock()
     _run_main(
         patch.object(hook, "_backend_is_sqlite", return_value=False),
-        patch.object(hook, "_connect_pg", return_value=conn),
+        patch.object(hook, "_pg_store", return_value=conn),
         patch.object(hook, "_count_memories", return_value=0),
         patch.object(hook, "_count_session_files", return_value=0),
     )
     out = capsys.readouterr().out
     assert "No previous sessions found" in out
-    conn.close.assert_called_once()
+    conn.close.assert_not_called()  # the shared store is closed at hook exit
 
 
-def test_main_normal_flow_prints_banner_receipt_and_closes_conn(capsys):
+def test_main_normal_flow_prints_banner_and_receipt(capsys):
     conn = MagicMock()
     anchors = [{"id": 1, "content": "a", "domain": "", "is_global": False}]
     hot = [{"id": 2, "content": "h", "domain": "", "heat": 0.5}]
     _run_main(
         patch.object(hook, "_backend_is_sqlite", return_value=False),
-        patch.object(hook, "_connect_pg", return_value=conn),
+        patch.object(hook, "_pg_store", return_value=conn),
         patch.object(hook, "_count_memories", return_value=7),
         patch.object(hook, "_fetch_anchors", return_value=anchors),
         patch.object(hook, "_fetch_hot_memories", return_value=hot),
@@ -1329,14 +1344,14 @@ def test_main_normal_flow_prints_banner_receipt_and_closes_conn(capsys):
         "Cortex ready: PostgreSQL memory store, 7 memories; "
     )
     assert "Injected 1 anchors + 1 hot memories (total: 7)" in err
-    conn.close.assert_called_once()
+    conn.close.assert_not_called()  # the shared store is closed at hook exit
 
 
 def test_main_normal_flow_with_nothing_to_inject_logs_the_absence(capsys):
     conn = MagicMock()
     _run_main(
         patch.object(hook, "_backend_is_sqlite", return_value=False),
-        patch.object(hook, "_connect_pg", return_value=conn),
+        patch.object(hook, "_pg_store", return_value=conn),
         patch.object(hook, "_count_memories", return_value=7),
         patch.object(hook, "_fetch_anchors", return_value=[]),
         patch.object(hook, "_fetch_hot_memories", return_value=[]),

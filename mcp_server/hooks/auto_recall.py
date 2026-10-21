@@ -44,10 +44,8 @@ from typing import Any
 
 from mcp_server.hooks.output_streams import use_utf8_output
 from mcp_server.hooks.stdin_event import read_event_text
-from mcp_server.handlers.injection_receipts import (
-    emit_hook_receipt,
-    emit_injection_receipt,
-)
+from mcp_server.handlers.injection_receipts import emit_injection_receipt
+from mcp_server.infrastructure.hook_recall_queries import auto_recall_rows
 from mcp_server.shared.injection_markers import (
     receipt_marker,
     session_id_from_transcript,
@@ -109,65 +107,28 @@ def _should_skip(query: str) -> bool:
     return False
 
 
-def _connect():
-    """Open the hook's PG connection; None when PG is unreachable."""
-    try:
-        import psycopg  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
-        from psycopg.rows import DictRow, dict_row  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
-    except ImportError:
-        return None
-    try:
-        return psycopg.Connection[DictRow].connect(
-            _DATABASE_URL, row_factory=dict_row, autocommit=True
-        )
-    except psycopg.Error:
-        return None
+def _store():
+    """The configured store, shared by the process (ADR-1112: the hook holds
+    no database connection of its own)."""
+    from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: PLC0415 — hook latency boundary
+
+    return get_shared_store()
 
 
-def _recall_memories(conn, query: str, project_root: str | None = None) -> list[dict]:
+def _recall_memories(store, query: str, project_root: str | None = None) -> list[dict]:
     """Fast FTS-based recall against PG. No embedding model needed.
 
-    Uses plainto_tsquery for natural language matching against the
-    content_tsv tsvector column. Combined with heat filter to surface
-    important memories.
-
-    Each result keeps the memory ``id`` — the injection receipt (T2)
+    plainto_tsquery against the content_tsv tsvector column, with a heat
+    floor. Each result keeps the memory ``id``: the injection receipt (T2)
     records exactly which memories entered the context. The project
-    predicate runs inside the query, before ORDER BY/LIMIT: pushed to the
-    output it would let foreign-project rows outrank and starve the
-    project's own rows out of the LIMIT window (issue #604 follow-up).
+    predicate runs inside the query, before ORDER BY/LIMIT (issue #604
+    follow-up). source: ADR-0485
     """
     results = []
-    ancestors = project_ancestors(project_root)
-
-    # source: ADR-0485
     try:
-        rows = conn.execute(
-            (
-                # source: ADR-0485
-                """
-            SELECT m.id, m.content,
-                   effective_heat(m, NOW()) AS heat,
-                   m.domain, m.agent_context, m.is_protected,
-                   m.created_at, m.source_attribution, m.is_stale,
-                   ts_rank_cd(m.content_tsv, q) AS rank
-            FROM memories m
-                 JOIN current_memories cm ON cm.id = m.id,
-                 plainto_tsquery('english', %s) q
-            WHERE m.content_tsv @@ q
-              AND effective_heat(m, NOW()) >= %s
-              AND NOT m.is_benchmark
-              AND m.superseded_by_id IS NULL
-              AND (m.is_global = TRUE OR m.directory_context = ANY(%s::TEXT[]))
-            -- source: ADR-1106 -- exact ties go to the newer memory.
-            ORDER BY m.is_protected DESC, rank DESC, effective_heat(m, NOW()) DESC,
-                     m.created_at DESC, m.id DESC
-            LIMIT %s
-            """
-            ),
-            (query[:200], _MIN_HEAT, ancestors, _MAX_MEMORIES + 2),
-        ).fetchall()
-
+        rows = store.call(
+            auto_recall_rows, query, _MIN_HEAT, project_root, _MAX_MEMORIES + 2
+        )
         for r in rows:
             results.append(
                 {
@@ -384,8 +345,10 @@ def process_event(event: dict[str, Any]) -> None:
         _process_event_sqlite(event, query)
         return
 
-    conn = _connect()
-    if conn is None:
+    try:
+        store = _store()
+    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
+        _log(f"store unavailable: {exc}")
         sys.exit(0)
 
     project_root = resolve_project_root(event, os.environ)
@@ -395,24 +358,21 @@ def process_event(event: dict[str, Any]) -> None:
             "restricting to global memories"
         )
 
-    try:
-        memories = _recall_memories(conn, query, project_root)
-        if not memories:
-            sys.exit(0)
+    memories = _recall_memories(store, query, project_root)
+    if not memories:
+        sys.exit(0)
 
-        injection, included = _format_injection(memories)
-        if not injection:
-            sys.exit(0)
+    injection, included = _format_injection(memories)
+    if not injection:
+        sys.exit(0)
 
-        # source: ADR-0485
-        receipt_id = emit_hook_receipt(
-            conn,
-            [{"memory_id": m["id"]} for m in included],
-            channel="auto_recall",
-            session_id=session_id_from_transcript(event.get("transcript_path")),
-        )
-    finally:
-        conn.close()
+    # source: ADR-0485
+    receipt_id = emit_injection_receipt(
+        store,
+        [{"memory_id": m["id"]} for m in included],
+        channel="auto_recall",
+        session_id=session_id_from_transcript(event.get("transcript_path")),
+    )
 
     if receipt_id is not None:
         first, _, rest = injection.partition("\n")
@@ -457,4 +417,9 @@ if __name__ == "__main__":
     from mcp_server.hooks.wiring import wire_composition_root  # noqa: PLC0415 — source: issue #560
 
     wire_composition_root()
-    main()
+    # The store's pool must close before exit: an open pool stalls
+    # interpreter shutdown ~5 s per worker thread (ADR-0479, ADR-1112).
+    from mcp_server.hooks._store_lifecycle import close_shared_store_on_exit  # noqa: PLC0415 — entry-only teardown helper
+
+    with close_shared_store_on_exit():
+        main()

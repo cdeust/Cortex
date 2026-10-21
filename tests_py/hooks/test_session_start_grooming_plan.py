@@ -6,19 +6,15 @@ The fixtures use VALUES inside SELECT; no schema or stored rows are changed.
 
 from __future__ import annotations
 
-import ast
 from datetime import datetime, timezone
 import os
-from pathlib import Path
-import sys
-from types import ModuleType
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 import pytest
 
 
 def _grooming_sql() -> str:
-    from mcp_server.hooks.session_start_curation import _GROOMING_AGES_SQL
+    from mcp_server.infrastructure.hook_queries import _GROOMING_AGES_SQL
 
     return _GROOMING_AGES_SQL
 
@@ -93,36 +89,40 @@ def test_grooming_prefilter_preserves_timestamp_semantics(rows, distill_day, pro
     }
 
 
-def test_session_start_disables_jit_on_its_connection_without_environment_changes():
-    source = (
-        Path(__file__).resolve().parents[2] / "mcp_server/hooks/session_start_db.py"
-    )
-    function = next(
-        node
-        for node in ast.parse(source.read_text()).body
-        if isinstance(node, ast.FunctionDef) and node.name == "_connect_pg"
-    )
-    namespace = {"_DATABASE_URL": "postgresql://test.invalid/banner", "_log": print}
-    exec(
-        compile(ast.Module(body=[function], type_ignores=[]), str(source), "exec"),
-        namespace,
-    )
+def test_session_start_queries_disable_jit_for_their_own_transaction_only():
+    """SessionStart's queries run with ``SET LOCAL jit = off`` inside their own
+    one-statement transaction (ADR-1112: the hook has no connection of its
+    own to configure), and never touch the process environment."""
+    from mcp_server.infrastructure import hook_queries
+
     environment = dict(os.environ)
-    connect = Mock()
+    calls: list[str] = []
+    conn = Mock()
+    transaction = conn.transaction.return_value
+    transaction.__enter__ = Mock(side_effect=lambda *a: calls.append("BEGIN"))
+    transaction.__exit__ = Mock(side_effect=lambda *a: calls.append("END"))
 
-    class Connection:
-        @classmethod
-        def __class_getitem__(cls, row_type):
-            return cls
+    def execute(sql, params=()):
+        calls.append(sql)
+        result = Mock()
+        result.fetchall.return_value = [{"c": 3}]
+        return result
 
-    Connection.connect = connect
-    driver = ModuleType("psycopg")
-    driver.Connection = Connection
-    rows = ModuleType("psycopg.rows")
-    rows.DictRow = dict
-    rows.dict_row = Mock()
-    with patch.dict(sys.modules, {"psycopg": driver, "psycopg.rows": rows}):
-        assert namespace["_connect_pg"]() is connect.return_value
-    assert connect.call_args.kwargs["options"] == "-c jit=off"
-    assert connect.call_args.kwargs["autocommit"] is True
+    conn.execute.side_effect = execute
+    assert hook_queries.session_memory_count(conn) == 3
+    assert calls == [
+        "BEGIN",
+        "SET LOCAL jit = off",
+        "SELECT COUNT(*) as c FROM memories",
+        "END",
+    ]
+    for op in (
+        hook_queries.session_curation_sample,
+        hook_queries.session_grooming_ages,
+        hook_queries.session_active_checkpoint,
+    ):
+        calls.clear()
+        op(conn)
+        assert calls[:2] == ["BEGIN", "SET LOCAL jit = off"]
+        assert calls[-1] == "END"
     assert dict(os.environ) == environment

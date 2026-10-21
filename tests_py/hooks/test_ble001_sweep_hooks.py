@@ -21,9 +21,12 @@ from mcp_server.hooks import (
 
 
 def _broken_conn(message: str = "pg down"):
+    """A store whose operations fail on their connection (ADR-1112)."""
+    from tests_py.hooks._store_fakes import ConnStore
+
     conn = MagicMock()
     conn.execute.side_effect = RuntimeError(message)
-    return conn
+    return ConnStore(conn)
 
 
 class TestSessionStartBannerFetches:

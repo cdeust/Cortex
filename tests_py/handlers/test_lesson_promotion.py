@@ -9,15 +9,15 @@ from __future__ import annotations
 import asyncio
 
 from mcp_server.handlers import lesson_promotion
+from tests_py._store_call import FakeConnStore, mark_test_operation
 
 
 def _run(coro):
     return asyncio.new_event_loop().run_until_complete(coro)
 
 
-class _FakeStore:
-    def __init__(self) -> None:
-        self._conn = object()
+class _FakeStore(FakeConnStore):
+    """PostgreSQL-shaped store; the listing operation is monkeypatched."""
 
 
 def test_returns_jobs_built_from_candidates(monkeypatch) -> None:
@@ -35,7 +35,7 @@ def test_returns_jobs_built_from_candidates(monkeypatch) -> None:
     monkeypatch.setattr(
         lesson_promotion,
         "list_lesson_promotion_candidates",
-        lambda conn, limit: rows,
+        mark_test_operation(lambda conn, limit: rows),
     )
 
     result = _run(lesson_promotion.handler({"limit": 5}))
@@ -66,6 +66,7 @@ def test_degrades_to_empty_on_db_failure(monkeypatch) -> None:
 def test_default_limit_is_ten(monkeypatch) -> None:
     captured = {}
 
+    @mark_test_operation
     def _fake_list(conn, limit):
         captured["limit"] = limit
         return []

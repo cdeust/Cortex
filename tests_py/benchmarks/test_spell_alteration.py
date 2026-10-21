@@ -22,6 +22,7 @@ from mcp_server.handlers.recall import handler as recall_handler
 from mcp_server.handlers.remember import handler as remember_handler
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
+from tests_py._db_peek import store_connection
 
 # ── Spell corpus ──────────────────────────────────────────────────────────
 
@@ -88,11 +89,11 @@ def _get_store() -> MemoryStore:
 def clean_benchmark_memories():
     """Remove benchmark memories before and after each test."""
     store = _get_store()
-    store._conn.execute("DELETE FROM memories WHERE domain = %s", (DOMAIN,))
-    store._conn.commit()
+    store_connection(store).execute("DELETE FROM memories WHERE domain = %s", (DOMAIN,))
+    store_connection(store).commit()
     yield
-    store._conn.execute("DELETE FROM memories WHERE domain = %s", (DOMAIN,))
-    store._conn.commit()
+    store_connection(store).execute("DELETE FROM memories WHERE domain = %s", (DOMAIN,))
+    store_connection(store).commit()
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────
@@ -131,16 +132,25 @@ async def _ingest_spells(
 def _query_store_for_spell(store: MemoryStore, spell_name: str) -> list[dict]:
     """Direct store query — find memories containing a spell name."""
     # Direct query — works with both PgMemoryStore and SqliteMemoryStore
-    if hasattr(store, "_execute"):
-        rows = store._execute(
-            "SELECT id, content FROM memories WHERE domain = %s AND content LIKE %s",
-            (DOMAIN, f"%Spell: {spell_name}%"),
-        ).fetchall()
+    if store.backend == "postgresql":
+        rows = (
+            store_connection(store)
+            .execute(
+                "SELECT id, content FROM memories"
+                " WHERE domain = %s AND content LIKE %s",
+                (DOMAIN, f"%Spell: {spell_name}%"),
+            )
+            .fetchall()
+        )
     else:
-        rows = store._conn.execute(
-            "SELECT id, content FROM memories WHERE domain = ? AND content LIKE ?",
-            (DOMAIN, f"%Spell: {spell_name}%"),
-        ).fetchall()
+        rows = (
+            store_connection(store)
+            .execute(
+                "SELECT id, content FROM memories WHERE domain = ? AND content LIKE ?",
+                (DOMAIN, f"%Spell: {spell_name}%"),
+            )
+            .fetchall()
+        )
     return [dict(r) for r in rows]
 
 
@@ -171,10 +181,14 @@ class TestSpellAlteration:
         async def _test():
             await _ingest_spells(REAL_SPELLS, {})
             store = _get_store()
-            count = store._conn.execute(
-                "SELECT COUNT(*) as c FROM memories WHERE domain = %s",
-                (DOMAIN,),
-            ).fetchone()
+            count = (
+                store_connection(store)
+                .execute(
+                    "SELECT COUNT(*) as c FROM memories WHERE domain = %s",
+                    (DOMAIN,),
+                )
+                .fetchone()
+            )
             assert count["c"] == len(REAL_SPELLS)
 
         self._run(_test())
@@ -299,10 +313,14 @@ class TestSpellAlteration:
             await _ingest_spells(REAL_SPELLS, replacements)
 
             store = _get_store()
-            count = store._conn.execute(
-                "SELECT COUNT(*) as c FROM memories WHERE domain = %s",
-                (DOMAIN,),
-            ).fetchone()
+            count = (
+                store_connection(store)
+                .execute(
+                    "SELECT COUNT(*) as c FROM memories WHERE domain = %s",
+                    (DOMAIN,),
+                )
+                .fetchone()
+            )
             assert count["c"] == len(REAL_SPELLS)
 
         self._run(_test())

@@ -184,10 +184,24 @@ def test_session_start_banner_receipt_roundtrip(_db) -> None:
         is_global=True,
     )
 
-    anchors = session_start_fetch._fetch_anchors(_db)
-    anchor_ids = {a["id"] for a in anchors}
-    hot = session_start_fetch._fetch_hot_memories(_db, anchor_ids)
-    team = session_start_fetch._fetch_team_decisions(_db, anchor_ids)
+    # The hook reads and writes through the store (ADR-1112).
+    from mcp_server.infrastructure.pg_store import PgMemoryStore
+
+    store = PgMemoryStore(database_url=_TEST_DB_URL)
+    try:
+        anchors = session_start_fetch._fetch_anchors(store)
+        anchor_ids = {a["id"] for a in anchors}
+        hot = session_start_fetch._fetch_hot_memories(store, anchor_ids)
+        team = session_start_fetch._fetch_team_decisions(store, anchor_ids)
+        receipt_id = session_start._emit_banner_receipt(
+            store,
+            {"transcript_path": _TRANSCRIPT, "session_id": _DIVERGENT_EVENT_SESSION},
+            anchors,
+            team,
+            hot,
+        )
+    finally:
+        store.close()
 
     assert anchor_id in anchor_ids
     hot_ids = [m["id"] for m in hot]
@@ -197,11 +211,6 @@ def test_session_start_banner_receipt_roundtrip(_db) -> None:
     assert stale_id not in hot_ids
     assert stale_id not in anchor_ids
 
-    event = {
-        "transcript_path": _TRANSCRIPT,
-        "session_id": _DIVERGENT_EVENT_SESSION,
-    }
-    receipt_id = session_start._emit_banner_receipt(_db, event, anchors, team, hot)
     assert receipt_id is not None
 
     # Correction 2: the banner header carries the in-context marker.
@@ -441,7 +450,7 @@ def test_pg_rejects_unknown_channel_live(_db) -> None:
 def test_channel_enum_migration_restores_dropped_constraint(_db) -> None:
     # Exercise the real T1→T2 path: on a T1 database the table exists with
     # free-TEXT channel AND schema_meta records the T1 DDL hash — which
-    # differs from the T2 hash, so _init_schema replays the DDL and the
+    # differs from the T2 hash, so the migration step replays the DDL and the
     # MIGRATIONS_DDL DO block adds the CHECK. Simulate that state by
     # dropping the constraint and invalidating the recorded revision
     # (schema init is hash-gated; without this it correctly no-ops).
@@ -450,8 +459,10 @@ def test_channel_enum_migration_restores_dropped_constraint(_db) -> None:
         "DROP CONSTRAINT IF EXISTS injection_receipts_channel_enum"
     )
     _db.execute("DELETE FROM schema_meta WHERE id = 1")
+    from mcp_server.infrastructure.pg_migrations import apply_schema
     from mcp_server.infrastructure.pg_store import PgMemoryStore
 
+    apply_schema(_TEST_DB_URL)  # the explicit migration step (ADR-1112)
     store = PgMemoryStore(database_url=_TEST_DB_URL)
     try:
         row = _db.execute(

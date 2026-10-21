@@ -15,6 +15,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from mcp_server.observability import silent_failure
+from tests_py._store_call import bind_store_calls, mark_test_operation
 
 WARN_LOGGER = "mcp_server.observability.silent_failure"
 
@@ -445,13 +446,17 @@ class TestWikiWriteSessionLookup:
     def test_session_lookup_failure_degrades_to_empty_and_is_logged(self, monkeypatch):
         from mcp_server.handlers import wiki_write
 
-        store = MagicMock()
+        store = bind_store_calls(MagicMock())
         monkeypatch.setattr(wiki_write, "get_memory_settings", MagicMock())
         monkeypatch.setattr(wiki_write, "get_shared_store", lambda *a, **k: store)
         monkeypatch.setattr(
             wiki_write, "page_row_from_md", lambda rel, content: {"slug": rel}
         )
-        monkeypatch.setattr(wiki_write, "upsert_page", lambda conn, row: (1, False))
+        monkeypatch.setattr(
+            wiki_write,
+            "upsert_page",
+            mark_test_operation(lambda conn, row: (1, False)),
+        )
 
         def broken():
             raise RuntimeError("registry broke")
@@ -459,6 +464,7 @@ class TestWikiWriteSessionLookup:
         monkeypatch.setattr(wiki_write, "current_window_session", broken)
         inserted = []
 
+        @mark_test_operation
         def fake_citation(conn, **kwargs):
             inserted.append(kwargs)
             return 1

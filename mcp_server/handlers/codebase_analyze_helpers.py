@@ -9,9 +9,13 @@ from pathlib import Path
 from mcp_server.core.codebase_parser import EXT_TO_LANG, FileAnalysis
 from mcp_server.handlers.seed_project_constants import IGNORE_DIRS
 from mcp_server.handlers.source_walk import walk_pruned
+from mcp_server.infrastructure.handler_operations import (
+    live_memory_tags_for_agent,
+    mark_memories_stale,
+    tag_codebase_memories_mentioning,
+)
 from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.observability import silent_failure
-import json
 
 CODEBASE_AGENT_CONTEXT = "codebase"
 FILE_TAG_PREFIX = "file:"
@@ -117,18 +121,6 @@ def _collect_bounded(
 # ── Hash-based change detection ───────────────────────────────────────────
 
 
-def _parse_tags(raw: object) -> list:
-    """Parse tags from a list (PG) or JSON string (SQLite)."""
-    if isinstance(raw, list):
-        return raw
-    if isinstance(raw, str):
-        try:
-            return json.loads(raw)
-        except (ValueError, TypeError):
-            return []
-    return []
-
-
 def load_existing_hashes(store: MemoryStore) -> dict[str, tuple[int, str]]:
     """Load existing codebase memory hashes: {path: (id, hash)}.
 
@@ -136,15 +128,10 @@ def load_existing_hashes(store: MemoryStore) -> dict[str, tuple[int, str]]:
     """
     hashes: dict[str, tuple[int, str]] = {}
     try:
-        with store.acquire_batch() as conn:
-            rows = conn.execute(
-                "SELECT id, tags FROM memories "
-                "WHERE agent_context = %s AND NOT is_stale",
-                (CODEBASE_AGENT_CONTEXT,),
-            ).fetchall()
+        rows = store.call_batch(live_memory_tags_for_agent, CODEBASE_AGENT_CONTEXT)
         for row in rows:
             mem_id = row["id"]
-            tags = _parse_tags(row["tags"])
+            tags = row["tags"]
             file_path, content_hash = _extract_file_hash(tags)
             if file_path and content_hash:
                 hashes[file_path] = (mem_id, content_hash)
@@ -172,13 +159,7 @@ def mark_stale(store: MemoryStore, memory_ids: list[int]) -> int:
     if not memory_ids:
         return 0
     try:
-        with store.acquire_batch() as conn:
-            for mid in memory_ids:
-                conn.execute(
-                    "UPDATE memories SET is_stale = TRUE WHERE id = %s",
-                    (mid,),
-                )
-        return len(memory_ids)
+        return store.call_batch(mark_memories_stale, list(memory_ids))
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"mark stale failed: {exc}")
         return 0
@@ -357,25 +338,11 @@ def persist_god_node_tags(
 
     if not god_nodes:
         return
-    with store.acquire_batch() as conn:
-        for file_path in god_nodes:
-            try:
-                rows = conn.execute(
-                    "SELECT id, tags FROM memories "
-                    "WHERE agent_context = 'codebase' AND NOT is_stale "
-                    "AND content LIKE %s",
-                    (f"%{file_path}%",),
-                ).fetchall()
-                for row in rows:
-                    tags = _parse_tags(row["tags"])
-                    if "god-node" not in tags:
-                        tags.append("god-node")
-                        conn.execute(
-                            "UPDATE memories SET tags = %s WHERE id = %s",
-                            (json.dumps(tags), row["id"]),
-                        )
-            except Exception as exc:  # noqa: BLE001 — per-file failure must not abort the batch
-                silent_failure.note("codebase_analyze.god_node_tag", exc)
+    for file_path in god_nodes:
+        try:
+            store.call_batch(tag_codebase_memories_mentioning, file_path, "god-node")
+        except Exception as exc:  # noqa: BLE001 — per-file failure must not abort the batch
+            silent_failure.note("codebase_analyze.god_node_tag", exc)
 
 
 def persist_community_tags(
@@ -389,23 +356,10 @@ def persist_community_tags(
 
     if not communities:
         return
-    with store.acquire_batch() as conn:
-        for file_path, cluster_id in communities.items():
-            try:
-                rows = conn.execute(
-                    "SELECT id, tags FROM memories "
-                    "WHERE agent_context = 'codebase' AND NOT is_stale "
-                    "AND content LIKE %s",
-                    (f"%{file_path}%",),
-                ).fetchall()
-                for row in rows:
-                    tags = _parse_tags(row["tags"])
-                    tag = f"cluster:{cluster_id}"
-                    if tag not in tags:
-                        tags.append(tag)
-                        conn.execute(
-                            "UPDATE memories SET tags = %s WHERE id = %s",
-                            (json.dumps(tags), row["id"]),
-                        )
-            except Exception as exc:  # noqa: BLE001 — per-file failure must not abort the batch
-                silent_failure.note("codebase_analyze.community_tag", exc)
+    for file_path, cluster_id in communities.items():
+        try:
+            store.call_batch(
+                tag_codebase_memories_mentioning, file_path, f"cluster:{cluster_id}"
+            )
+        except Exception as exc:  # noqa: BLE001 — per-file failure must not abort the batch
+            silent_failure.note("codebase_analyze.community_tag", exc)

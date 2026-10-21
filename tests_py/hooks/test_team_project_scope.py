@@ -16,6 +16,9 @@ from mcp_server.hooks.agent_briefing_query import _fetch_agent_context
 from mcp_server.hooks.session_start_fetch import _fetch_team_decisions
 from tests_py._hermetic_hook_env import hermetic_hook_env
 
+# source: ADR-1112 (tests of the store itself run on the in-process store)
+pytestmark = pytest.mark.in_process_store
+
 
 def _write(content, **kwargs):
     result = asyncio.run(handler({"content": content, "force": True, **kwargs}))
@@ -74,7 +77,7 @@ def test_pg_team_readers_scope_both_agent_passes():
         agent_topic="engineer",
         directory="/tmp/project-b",
     )
-    conn = store._conn
+    conn = store  # the hooks read through the store (ADR-1112)
     team_ids = {r["id"] for r in _fetch_team_decisions(conn, set(), "/tmp/project-a")}
     assert own in team_ids and foreign not in team_ids
     briefing_ids = {

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from mcp_server.handlers.wiki_extract import _memory_rows
+from mcp_server.infrastructure.wiki_handler_queries import extraction_candidates
 from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 
 
@@ -26,12 +26,14 @@ def pair():
 
 def test_backlog_scan_returns_the_head_not_the_superseded_row(pair):
     store, old_id, new_id = pair
-    ids = [r["id"] for r in _memory_rows(store._conn, None, 50, True)]
+    ids = [r["id"] for r in store.call(extraction_candidates, None, 50, True)]
     assert new_id in ids
     assert old_id not in ids
 
 
 def test_explicit_memory_id_of_a_superseded_row_yields_nothing(pair):
     store, old_id, new_id = pair
-    assert _memory_rows(store._conn, old_id, 50, True) == []
-    assert [r["id"] for r in _memory_rows(store._conn, new_id, 50, True)] == [new_id]
+    assert store.call(extraction_candidates, old_id, 50, True) == []
+    assert [r["id"] for r in store.call(extraction_candidates, new_id, 50, True)] == [
+        new_id
+    ]

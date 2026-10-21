@@ -19,18 +19,19 @@ import os
 
 import pytest
 
-from mcp_server.hooks.agent_briefing_role import _pg_role_rows
 from mcp_server.hooks.agent_briefing_sqlite import _MAX_MEMORIES
+from mcp_server.hooks.agent_briefing_sqlite import _MIN_HEAT as _BRIEFING_MIN_HEAT
 from mcp_server.hooks.session_start_common import (
     _ANCHOR_LIMIT,
     _HOT_LIMIT,
     _MIN_HEAT,
 )
-from mcp_server.hooks.session_start_fetch import (
+from mcp_server.infrastructure.hook_queries import (
     _ANCHORS_SQL,
     _HOT_SQL,
     _TEAM_DECISIONS_SQL,
 )
+from mcp_server.infrastructure.hook_recall_queries import briefing_role_rows
 from tests_py._tie_layouts import (
     inserted_newest_first,
     newest_first,
@@ -103,7 +104,7 @@ def test_banner_team_decisions_keep_the_newest_ties(conn):
     got = same_in_every_layout(
         conn, "memories", lambda: _ids(conn, _TEAM_DECISIONS_SQL, ([_PROJECT],))
     )
-    # source: session_start_fetch._TEAM_DECISIONS_SQL ends in LIMIT 5
+    # source: hook_queries._TEAM_DECISIONS_SQL ends in LIMIT 5
     assert got == expected[:5]
 
 
@@ -123,7 +124,10 @@ def test_briefing_role_prior_keeps_the_newest_ties(conn):
         conn,
         "memories",
         lambda: [
-            r["id"] for r in _pg_role_rows(conn, "worker", _PROJECT, _MAX_MEMORIES)
+            r["id"]
+            for r in briefing_role_rows(
+                conn, "worker", _PROJECT, _BRIEFING_MIN_HEAT, _MAX_MEMORIES
+            )
         ],
     )
     assert got == expected[:_MAX_MEMORIES]

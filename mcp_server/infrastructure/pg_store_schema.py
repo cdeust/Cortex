@@ -13,6 +13,7 @@ from pgvector.psycopg import register_vector
 from psycopg_pool import ConnectionPool
 
 from mcp_server.infrastructure.pg_iterative_scan import enable_iterative_scan
+from mcp_server.infrastructure.pg_session_bounds import session_options
 from mcp_server.infrastructure.pg_store_host import PgStoreHost
 from mcp_server.infrastructure.memory_config import get_memory_settings
 
@@ -29,8 +30,13 @@ class PgSchemaMixin(PgStoreHost):
 
     def _create_connection(self) -> psycopg.Connection[DictRow]:
         """Create a new database connection."""
+        bounds = session_options("direct")
         return psycopg.Connection[DictRow].connect(
-            self._url, row_factory=dict_row, autocommit=True
+            self._url,
+            row_factory=dict_row,
+            autocommit=True,
+            application_name=bounds["application_name"],
+            options=bounds["options"],
         )
 
     # source: ADR-0565
@@ -60,7 +66,11 @@ class PgSchemaMixin(PgStoreHost):
             max_size=settings.POOL_INTERACTIVE_MAX,
             timeout=settings.POOL_INTERACTIVE_TIMEOUT_S,
             configure=self._configure_pool_connection,
-            kwargs={"row_factory": dict_row, "autocommit": True},
+            kwargs={
+                "row_factory": dict_row,
+                "autocommit": True,
+                **session_options("interactive"),
+            },
             open=True,
         )
         return pool
@@ -75,7 +85,11 @@ class PgSchemaMixin(PgStoreHost):
             max_size=settings.POOL_BATCH_MAX,
             timeout=settings.POOL_BATCH_TIMEOUT_S,
             configure=self._configure_pool_connection,
-            kwargs={"row_factory": dict_row, "autocommit": True},
+            kwargs={
+                "row_factory": dict_row,
+                "autocommit": True,
+                **session_options("batch"),
+            },
             open=True,
         )
         return pool
@@ -84,9 +98,13 @@ class PgSchemaMixin(PgStoreHost):
     def interactive_pool(self) -> ConnectionPool[psycopg.Connection[DictRow]]:
         """Hot-path ConnectionPool for recall / remember / anchor / etc.
 
-        source: ADR-0565"""
+        source: ADR-0565 (the pool), ADR-1112 acceptance A1 (the lock): A1
+        measured 12 to 16 interactive connections from one broker whose 10
+        workers raced the first use, each opening its own pool (max 8)"""
         if self._interactive_pool is None:
-            self._interactive_pool = self._open_interactive_pool()
+            with self._pool_lock:
+                if self._interactive_pool is None:
+                    self._interactive_pool = self._open_interactive_pool()
         return self._interactive_pool
 
     @property
@@ -95,9 +113,12 @@ class PgSchemaMixin(PgStoreHost):
         ingest / seed_project / backfill_memories.
 
         Separate resource so batch jobs cannot starve the interactive pool.
+        Opened once under the store's pool lock, as ``interactive_pool``.
         """
         if self._batch_pool is None:
-            self._batch_pool = self._open_batch_pool()
+            with self._pool_lock:
+                if self._batch_pool is None:
+                    self._batch_pool = self._open_batch_pool()
         return self._batch_pool
 
     @contextmanager

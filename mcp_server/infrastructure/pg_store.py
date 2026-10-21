@@ -4,16 +4,18 @@ source: ADR-0538"""
 
 from __future__ import annotations
 
+import threading
+
 import logging
 
 import psycopg
 from psycopg.rows import DictRow
 from psycopg_pool import ConnectionPool
 
+from mcp_server.infrastructure.pg_schema_fingerprint import compute_ddl_hash
 from mcp_server.infrastructure.pg_store_ddl import (
     PgDdlMixin,
     _get_database_url,
-    compute_ddl_hash,
     read_schema_hash,
 )
 from mcp_server.infrastructure.pg_store_schema import PgSchemaMixin
@@ -43,6 +45,7 @@ from mcp_server.infrastructure.pg_store_consolidation_stage import (
     PgConsolidationStageMixin,
 )
 from mcp_server.infrastructure.pg_store_cls import PgClsMixin
+from mcp_server.infrastructure.store_operations import StoreOperationsMixin
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +58,7 @@ __all__ = [
 
 
 class PgMemoryStore(
+    StoreOperationsMixin,
     PgSchemaMixin,
     PgDdlMixin,
     PgSerializeMixin,
@@ -84,6 +88,9 @@ class PgMemoryStore(
 ):
     """PostgreSQL + pgvector storage engine for Cortex memory system."""
 
+    # source: ADR-1112 (callers branch on the backend, never on the class)
+    backend = "postgresql"
+
     def __init__(self, database_url: str | None = None) -> None:
         self._url = database_url or _get_database_url()
         self._conn = self._create_connection()
@@ -97,6 +104,8 @@ class PgMemoryStore(
             None
         )
         self._batch_pool: ConnectionPool[psycopg.Connection[DictRow]] | None = None
+        # source: ADR-1112 A1 (one pool per kind, however many threads)
+        self._pool_lock = threading.Lock()
 
     def close(self) -> None:
         if self._interactive_pool is not None:

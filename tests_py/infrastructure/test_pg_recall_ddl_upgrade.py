@@ -1,11 +1,13 @@
 """An existing database gets the tie-broken recall_memories() on upgrade.
 
-``PgDdlMixin._init_schema`` re-applies the whole DDL set when the recorded
-``schema_meta.ddl_hash`` differs from the code's (ADR-0545). Here the
-database is put back in origin/main's state: recall_memories() without the
-ADR-1106 tie-break and a foreign hash. Opening a store must replace the
-function body. The assertion reads the body itself, not the hash:
-``_apply_ddl_locked`` logs a failing statement and records the hash anyway.
+The explicit migration step, ``pg_migrations.apply_schema`` (ADR-1112; it
+was ``PgDdlMixin._init_schema`` on store open before), re-applies the whole
+DDL set when the recorded ``schema_meta.ddl_hash`` differs from the code's
+(ADR-0545). Here the database is put back in origin/main's state:
+recall_memories() without the ADR-1106 tie-break and a foreign hash.
+Migrating must replace the function body. The assertion reads the body
+itself, not the hash: ``_apply_ddl_locked`` logs a failing statement and
+records the hash anyway.
 
 Live PG (throwaway test database via conftest); skipped on SQLite.
 
@@ -54,11 +56,11 @@ def install(conn, ddl: str) -> None:
         conn.execute(statement)
 
 
-def test_opening_a_store_replaces_the_old_recall_function():
+def test_migrating_replaces_the_old_recall_function():
     from mcp_server.infrastructure.pg_store import (  # noqa: PLC0415 — PG-only import
-        PgMemoryStore,
         compute_ddl_hash,
     )
+    from mcp_server.infrastructure.pg_migrations import apply_schema  # noqa: PLC0415 — PG-only import
 
     url = os.environ["DATABASE_URL"]
     with psycopg.connect(url, autocommit=True) as conn:
@@ -66,7 +68,7 @@ def test_opening_a_store_replaces_the_old_recall_function():
         conn.execute("UPDATE schema_meta SET ddl_hash = 'origin/main 6cecb7c2'")
         assert _TIE_BREAK not in function_body(conn)
     try:
-        PgMemoryStore(database_url=url).close()
+        apply_schema(url)
         with psycopg.connect(url, autocommit=True) as conn:
             assert _TIE_BREAK in function_body(conn)
             recorded = conn.execute("SELECT ddl_hash FROM schema_meta").fetchone()[0]
@@ -85,12 +87,12 @@ def b2e63876_body() -> str:
     return body
 
 
-def test_opening_a_store_installs_the_tie_keeping_pools():
+def test_migrating_installs_the_tie_keeping_pools():
     """ADR-1109: the pools' WITH TIES reaches databases created before it."""
     from mcp_server.infrastructure.pg_store import (  # noqa: PLC0415 — PG-only import
-        PgMemoryStore,
         compute_ddl_hash,
     )
+    from mcp_server.infrastructure.pg_migrations import apply_schema  # noqa: PLC0415 — PG-only import
 
     url = os.environ["DATABASE_URL"]
     with psycopg.connect(url, autocommit=True) as conn:
@@ -98,7 +100,7 @@ def test_opening_a_store_installs_the_tie_keeping_pools():
         conn.execute("UPDATE schema_meta SET ddl_hash = 'origin/main b2e63876'")
         assert "ROWS WITH TIES" not in function_body(conn)
     try:
-        PgMemoryStore(database_url=url).close()
+        apply_schema(url)
         with psycopg.connect(url, autocommit=True) as conn:
             assert function_body(conn).count("ROWS WITH TIES") == 5
             recorded = conn.execute("SELECT ddl_hash FROM schema_meta").fetchone()[0]

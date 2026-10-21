@@ -12,6 +12,7 @@ import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from mcp_server.doctor_broker import database_roles_check, store_broker_check
 from mcp_server.doctor_pgvector import pgvector_iterative_scan
 from mcp_server.hooks.output_streams import use_utf8_output
 from mcp_server.shared.platform import home_dir, python_executable
@@ -615,6 +616,8 @@ def collect_mcp_report() -> McpReport:
     report.checks.append(_check_launcher_smoke(install_path))
     report.checks.append(_check_database_url())
     report.checks.append(_check_pg_reachable())
+    report.checks.append(McpCheck(**store_broker_check()))
+    report.checks.append(McpCheck(**database_roles_check()))
     report.checks.append(_check_pg_extensions())
     report.checks.append(_check_pg_iterative_scan())
     report.checks.append(_check_critical_imports())

@@ -21,21 +21,25 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 from mcp_server.infrastructure.pg_scope_clause import directory_scope_clause
+from mcp_server.infrastructure.store_operations import store_operation
 from mcp_server.shared.project_scope import project_ancestors
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
-
     from typing_extensions import LiteralString
 
     from mcp_server.infrastructure.memory_store import MemoryStore
+
+
+def _has_cue(cues: list[str]) -> bool:
+    """No cue, no request: the store is not asked for a connection."""
+    return any(cues)
 
 
 def _literal_pattern(value: str) -> str:
     return "%" + value.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%"
 
 
-def _contains_clause(store: MemoryStore) -> str:
+def _contains_clause(conn: object) -> str:
     """Case-insensitive literal substring test the backend can index.
 
     PostgreSQL: ``ILIKE``, which ``idx_memories_content_trgm`` (gin_trgm_ops)
@@ -45,26 +49,31 @@ def _contains_clause(store: MemoryStore) -> str:
 
     source: PostgreSQL docs, pgtrgm (index support for LIKE and ILIKE)
     source: SQLite docs, lang_expr (LIKE is case-insensitive for ASCII)"""
-    from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore  # noqa: PLC0415 — the SQLite store module imports the infrastructure stack; resolve at call time
+    from mcp_server.infrastructure.sqlite_compat import PsycopgCompatConnection  # noqa: PLC0415 — the SQLite adapter is optional at import time
 
-    if isinstance(store, SqliteMemoryStore):
+    if isinstance(conn, PsycopgCompatConnection):
         return "content LIKE %s ESCAPE '!'"
     return "content ILIKE %s ESCAPE '!'"
 
 
-def _boost_matching(
-    store: MemoryStore,
-    cues: Iterable[str],
+@store_operation
+def boost_matching(
+    conn: object,
+    cues: list[str],
     boost: float,
-    scope: str = "",
-    scope_params: tuple = (),
+    project: str | None,
+    scoped: bool,
 ) -> int:
     """One UPDATE: every current, nonstale, nonbenchmark row below the heat
-    cap whose content contains a cue, within ``scope``; heat capped at 1.0."""
+    cap whose content contains a cue, within ``project``'s directory scope
+    when ``scoped``; heat capped at 1.0. Returns the rows changed."""
     patterns = tuple(_literal_pattern(cue) for cue in dict.fromkeys(cues) if cue)
     if not patterns:
         return 0
-    matches = " OR ".join(_contains_clause(store) for _ in patterns)
+    scope, scope_params = (
+        directory_scope_clause(project_ancestors(project)) if scoped else ("", [])
+    )
+    matches = " OR ".join(_contains_clause(conn) for _ in patterns)
     sql = (
         "UPDATE memories SET heat_base = CASE WHEN heat_base + %s > 1.0 "  # noqa: S608 — static predicates/placeholders; all cues and project values are bound
         "THEN 1.0 ELSE heat_base + %s END, "
@@ -73,18 +82,12 @@ def _boost_matching(
         "AND NOT COALESCE(is_stale, FALSE) AND heat_base < 1.0 "
         f"{scope} AND ({matches})"
     )
-    with store.acquire_interactive() as conn:
-        try:
-            # Query fragments contain only fixed SQL and generated placeholders;
-            # project paths and content cues are exclusively bound parameters.
-            result = conn.execute(
-                cast("LiteralString", sql), (boost, boost, *scope_params, *patterns)
-            )
-            conn.commit()
-            return result.rowcount
-        except Exception:
-            conn.rollback()
-            raise
+    # Query fragments contain only fixed SQL and generated placeholders;
+    # project paths and content cues are exclusively bound parameters.
+    result = conn.execute(  # type: ignore[attr-defined]
+        cast("LiteralString", sql), (boost, boost, *scope_params, *patterns)
+    )
+    return result.rowcount
 
 
 def prime_file_memories(
@@ -92,8 +95,9 @@ def prime_file_memories(
 ) -> int:
     """Boost each matching current row once, regardless of matching cue count."""
     cues = [cue for path in paths for cue in (path, Path(path).name)]
-    scope, scope_params = directory_scope_clause(project_ancestors(project))
-    return _boost_matching(store, cues, boost, scope, tuple(scope_params))
+    if not _has_cue(cues):
+        return 0
+    return store.call(boost_matching, cues, boost, project, True)
 
 
 def bump_memories_mentioning(
@@ -104,4 +108,6 @@ def bump_memories_mentioning(
     No project scope and no row limit, as main's impact-bump UPDATE.
 
     source: ADR-0493"""
-    return _boost_matching(store, symbol_names, boost)
+    if not _has_cue(symbol_names):
+        return 0
+    return store.call(boost_matching, list(symbol_names), boost, None, False)

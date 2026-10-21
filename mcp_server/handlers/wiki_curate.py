@@ -108,7 +108,6 @@ def _get_store() -> MemoryStore:
 async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     args = args or {}
     store = _get_store()
-    conn = store._conn
     registry = load_registry(Path(WIKI_ROOT))
 
     # source: ADR-0457
@@ -116,11 +115,11 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         draft_id = int(args["draft_id"])
         decision = args["decision"]
         reason = args.get("reason", "manual decision via wiki_curate")
-        ok = update_draft_status(conn, draft_id, status=decision)
+        ok = store.call(update_draft_status, draft_id, status=decision)
         if not ok:
             return {"error": f"draft {draft_id} not found"}
-        insert_memo(
-            conn,
+        store.call(
+            insert_memo,
             subject_type="draft",
             subject_id=draft_id,
             decision=decision,
@@ -128,12 +127,11 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
             confidence=1.0,
             author="user_manual",
         )
-        conn.commit()
         return {"draft_id": draft_id, "verdict": decision, "manual": True}
 
     # Auto-sweep path
-    pending = list_drafts(
-        conn,
+    pending = store.call(
+        list_drafts,
         status="pending",
         kind=args.get("kind"),
         limit=int(args.get("limit", 200)),
@@ -159,9 +157,9 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
                     )
                 continue
 
-            update_draft_status(conn, d["id"], status=decision.verdict)
-            insert_memo(
-                conn,
+            store.call(update_draft_status, d["id"], status=decision.verdict)
+            store.call(
+                insert_memo,
                 subject_type="draft",
                 subject_id=d["id"],
                 decision=decision.verdict,
@@ -176,7 +174,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         except Exception as e:  # noqa: BLE001 — per-draft batch isolation — failure is reported in the returned errors list
             errors.append(f"draft {d.get('id')}: {e}")
 
-    conn.commit()
     return {
         "drafts_evaluated": len(pending),
         "approved": counts["approved"],

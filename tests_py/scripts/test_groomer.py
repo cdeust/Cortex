@@ -17,6 +17,9 @@ from pathlib import Path
 
 import pytest
 
+# source: ADR-1112 (tests of the store itself run on the in-process store)
+pytestmark = pytest.mark.in_process_store
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 GROOMER_PATH = REPO_ROOT / "scripts" / "groomer.py"
 

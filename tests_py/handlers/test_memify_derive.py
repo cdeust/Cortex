@@ -16,6 +16,7 @@ from mcp_server.handlers.consolidation import memify_derive
 from mcp_server.handlers.consolidation.memify_derive import (
     run_memify_derivation_cycle,
 )
+from mcp_server.infrastructure.store_operations import StoreOperationsMixin
 
 
 # ─── Fakes ─────────────────────────────────────────────────────────────────
@@ -39,8 +40,11 @@ class _FakeConn:
     def commit(self) -> None:
         pass
 
+    def rollback(self) -> None:
+        pass
 
-class _FakeStore:
+
+class _FakeStore(StoreOperationsMixin):
     """Minimal MemoryStore stand-in for the derivation cycle.
 
     `derived_memories` seeds `get_memories_by_tag("derived", ...)` so tests

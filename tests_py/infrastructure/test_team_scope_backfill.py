@@ -15,6 +15,9 @@ from mcp_server.infrastructure.team_scope_backfill import (
     TEAM_DECISION_BACKFILL_SQLITE,
 )
 
+# source: ADR-1112 (tests of the store itself run on the in-process store)
+pytestmark = pytest.mark.in_process_store
+
 # (label, row overrides, expected is_team_decision after the backfill)
 _CASES = [
     ("decision", {}, True),

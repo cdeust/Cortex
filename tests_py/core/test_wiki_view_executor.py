@@ -1,4 +1,4 @@
-"""Tests for mcp_server.core.wiki_view_executor (#196).
+"""Tests for mcp_server.shared.wiki_view_dsl and wiki_view_yamlish (#196).
 
 compile_view is pure logic (parse YAML-ish -> whitelist-validated ->
 parameterised SQL) with zero prior test coverage. Adversarial-payload
@@ -9,16 +9,18 @@ column name through a hardcoded whitelist).
 
 from __future__ import annotations
 
-from mcp_server.core.wiki_view_executor import (
+from mcp_server.shared.wiki_view_dsl import (
     CompiledView,
-    _coerce_scalar,
     _compile_where,
-    _is_indented,
-    _parse_kv_line,
-    _parse_yamlish,
     compile_view,
     compiled_view_ok,
 )
+from mcp_server.shared.wiki_view_yamlish import (
+    _coerce_scalar,
+    _is_indented,
+    _parse_kv_line,
+)
+from mcp_server.shared.wiki_view_yamlish import parse_yamlish as _parse_yamlish
 
 
 class TestParseKvLine:

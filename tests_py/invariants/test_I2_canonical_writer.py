@@ -17,7 +17,7 @@ Allow-list (post-A3 single-canonical-path):
     - homeostatic_apply.py _apply_fold        (rare amortized fold UPDATE,
                                                per write class since M-D3)
     - anchor.py    anchor handler              (heat_base=1.0, no_decay=TRUE)
-    - file_memory_priming.py _boost_matching (scoped file-cue boost, ADR-1086,
+    - file_memory_priming.py boost_matching (scoped file-cue boost, ADR-1086,
                                               and the impact bump, ADR-0493)
 
 Any new writer outside this list fails this test.
@@ -45,22 +45,23 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     # PostgreSQL batched writer.
     ("infrastructure/pg_store_heat.py", 143),
     # SQLite anchor transfer.
-    ("infrastructure/sqlite_store.py", 502),
+    ("infrastructure/sqlite_store.py", 507),
     # SQLite single-row writer.
-    ("infrastructure/sqlite_store.py", 529),
+    ("infrastructure/sqlite_store.py", 534),
     # SQLite batched writer.
-    ("infrastructure/sqlite_store.py", 606),
+    ("infrastructure/sqlite_store.py", 611),
     # Homeostatic fold, one per backend dialect (issue #736).
     ("infrastructure/pg_store_heat.py", 66),
-    ("infrastructure/sqlite_store.py", 543),
-    # Anchor pin.
-    ("handlers/anchor.py", 145),
+    ("infrastructure/sqlite_store.py", 548),
+    # Anchor pin (moved from handlers/anchor.py into a store operation,
+    # ADR-1112).
+    ("infrastructure/handler_operations.py", 100),
     # Atomic cue boost: the project-scoped file cues moved from the hook in
     # ADR-1086, and the pipeline impact bump moved from its hook (ADR-0493,
     # issue #750) so SQLite runs it too. One UPDATE serves both.
-    ("infrastructure/file_memory_priming.py", 69),
+    ("infrastructure/file_memory_priming.py", 78),
     # CAS-guarded deliberate reheat.
-    ("infrastructure/pg_store_memory_reheat.py", 104),
+    ("infrastructure/pg_store_memory_reheat.py", 107),
 }
 
 

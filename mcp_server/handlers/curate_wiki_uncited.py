@@ -21,7 +21,7 @@ def report_uncited_deliberate(limit: int) -> dict[str, Any]:
     source: ADR-0386"""
     try:
         store = get_shared_store()
-        candidates = list_uncited_deliberate_memories(store._conn, limit=limit)
+        candidates = store.call(list_uncited_deliberate_memories, limit=limit)
     except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
         silent_failure.note("curate_wiki_uncited.candidates", exc)
         candidates = []

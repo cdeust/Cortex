@@ -21,7 +21,7 @@ def test_native_start_without_prompt_briefs_generic_worker(capsys):
         "cwd": "/project",
     }
     with (
-        patch.object(hook, "_connect", return_value=MagicMock()),
+        patch.object(hook, "_store", return_value=MagicMock()),
         patch.object(
             hook,
             "_fetch_role_context",
@@ -49,7 +49,7 @@ def test_spawn_preserves_every_argument_and_message(capsys):
     }
     original = json.loads(json.dumps(arguments))
     with (
-        patch.object(hook, "_connect", return_value=MagicMock()),
+        patch.object(hook, "_store", return_value=MagicMock()),
         patch.object(
             hook,
             "_fetch_agent_context",
@@ -79,9 +79,9 @@ def test_two_task_requests_keep_their_own_keywords_and_project(
         ]
 
     with (
-        patch.object(hook, "_connect", return_value=MagicMock()),
+        patch.object(hook, "_store", return_value=MagicMock()),
         patch.object(hook, "_fetch_agent_context", side_effect=fetch),
-        patch.object(hook, "emit_hook_receipt", return_value=None),
+        patch.object(hook, "emit_injection_receipt", return_value=None),
     ):
         for task, project in [("orchid latency", "/a"), ("violet storage", "/b")]:
             run(
@@ -109,7 +109,7 @@ def test_two_task_requests_keep_their_own_keywords_and_project(
     "arguments", [None, {"message": []}, {"message": "task", "agent_type": []}]
 )
 def test_invalid_native_arguments_report_skip_without_store(arguments, capsys):
-    with patch.object(hook, "_connect") as connect:
+    with patch.object(hook, "_store") as connect:
         run(
             {
                 "hook_event_name": "PreToolUse",
@@ -124,7 +124,7 @@ def test_invalid_native_arguments_report_skip_without_store(arguments, capsys):
 
 def test_empty_store_leaves_spawn_unchanged(capsys):
     with (
-        patch.object(hook, "_connect", return_value=MagicMock()),
+        patch.object(hook, "_store", return_value=MagicMock()),
         patch.object(hook, "_fetch_agent_context", return_value=[]),
     ):
         run(
@@ -139,22 +139,22 @@ def test_empty_store_leaves_spawn_unchanged(capsys):
 
 
 def test_store_open_failure_is_visible_and_nonblocking(capsys):
-    with patch.object(hook, "_connect", side_effect=OSError("unavailable")):
+    with patch.object(hook, "_store", side_effect=OSError("unavailable")):
         run({"hook_event_name": "SubagentStart", "agent_type": "worker"})
     out, err = capsys.readouterr()
     assert not out and "store unavailable" in err
 
 
-def test_query_failure_closes_connection_and_reports(capsys):
-    conn = MagicMock()
+def test_query_failure_reports_and_leaves_the_shared_store_open(capsys):
+    store = MagicMock()
     with (
-        patch.object(hook, "_connect", return_value=conn),
+        patch.object(hook, "_store", return_value=store),
         patch.object(hook, "_fetch_role_context", side_effect=RuntimeError("broken")),
     ):
         run({"hook_event_name": "SubagentStart", "agent_type": "worker"})
     out, err = capsys.readouterr()
     assert not out and "query failed" in err
-    conn.close.assert_called_once()
+    store.close.assert_not_called()  # the shared store is closed at hook exit
 
 
 @pytest.mark.parametrize(
@@ -166,7 +166,7 @@ def test_query_failure_closes_connection_and_reports(capsys):
     ],
 )
 def test_invalid_or_unrelated_events_never_open_store(event, capsys):
-    with patch.object(hook, "_connect") as connect:
+    with patch.object(hook, "_store") as connect:
         run(event)
     connect.assert_not_called()
     assert not capsys.readouterr().out
@@ -183,7 +183,7 @@ def test_opaque_collaboration_input_is_never_rewritten(capsys):
         "tool_name": "collaborationspawn_agent",
         "tool_input": arguments,
     }
-    with patch.object(hook, "_connect") as connect:
+    with patch.object(hook, "_store") as connect:
         run(event)
     assert not capsys.readouterr().out
     assert arguments["message"] == "gAAAAopaque-native-payload"

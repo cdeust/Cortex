@@ -19,6 +19,9 @@ from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import get_shared_store
 from tests_py._pg_hnsw import empty_memories_index
 
+# source: ADR-1112 (tests of the store itself run on the in-process store)
+pytestmark = pytest.mark.in_process_store
+
 EMBEDDING_DIM = 384
 
 

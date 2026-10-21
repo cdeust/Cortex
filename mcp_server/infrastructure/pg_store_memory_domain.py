@@ -9,6 +9,7 @@ from __future__ import annotations
 from mcp_server.infrastructure.row_factory import DICT_ROW
 
 from typing import TYPE_CHECKING
+from mcp_server.infrastructure.store_operations import store_operation
 
 if TYPE_CHECKING:
     from mcp_server.infrastructure.db_types import StoreConnection
@@ -17,6 +18,7 @@ if TYPE_CHECKING:
 _ORPHAN_TAG = "domain-orphan"
 
 
+@store_operation
 def list_domainless_memories(
     conn: StoreConnection, limit: int, *, include_orphans: bool = False
 ) -> list[dict]:
@@ -45,6 +47,7 @@ def list_domainless_memories(
         return list(cur.fetchall())
 
 
+@store_operation
 def update_memory_domain(conn: StoreConnection, memory_id: int, domain: str) -> bool:
     """Fill an empty memory domain and remove its orphan tag.
 
@@ -67,6 +70,7 @@ def update_memory_domain(conn: StoreConnection, memory_id: int, domain: str) -> 
         return cur.rowcount > 0
 
 
+@store_operation
 def tag_memory_orphan(conn: StoreConnection, memory_id: int) -> bool:
     """Tag a memory as domain-orphan without assigning a domain.
 

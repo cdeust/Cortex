@@ -55,7 +55,7 @@ def _build_containment_fn(
 
 
 def _process_page(
-    conn: Any,
+    store: Any,
     page: dict[str, Any],
     containing: Callable[[str], set[str]],
     *,
@@ -70,7 +70,7 @@ def _process_page(
     out["domains_reassigned"] += 1
     out["by_domain"][domain] = out["by_domain"].get(domain, 0) + 1
     if apply:
-        update_page_domain(conn, page["id"], domain)
+        store.call_batch(update_page_domain, page["id"], domain)
 
 
 async def run_domain_backfill_pass(
@@ -78,7 +78,7 @@ async def run_domain_backfill_pass(
 ) -> dict[str, Any]:
     """Re-derive and persist the true domain for catch-all wiki pages.
 
-    Pre-condition:  ``store`` exposes ``batch_pool``
+    Pre-condition:  ``store`` is PostgreSQL-backed (``store.backend``)
                     (``psycopg_pool.ConnectionPool``), enforced by the
                     sole caller ``run_wiki_maintenance`` once at wiring
                     time (issue #636) — called without it, this raises
@@ -99,11 +99,12 @@ async def run_domain_backfill_pass(
         "by_domain": {},
         "status": "ok",
     }
-    with store.batch_pool.connection() as conn:
-        domain_roots = _registry_domain_roots()
-        containing = _build_containment_fn(domain_roots)
-        pages = list_catchall_pages_with_sources(conn, list(domain_roots), limit=limit)
-        out["pages_scanned"] = len(pages)
-        for page in pages:
-            _process_page(conn, page, containing, apply=apply, out=out)
+    domain_roots = _registry_domain_roots()
+    containing = _build_containment_fn(domain_roots)
+    pages = store.call_batch(
+        list_catchall_pages_with_sources, list(domain_roots), limit=limit
+    )
+    out["pages_scanned"] = len(pages)
+    for page in pages:
+        _process_page(store, page, containing, apply=apply, out=out)
     return out

@@ -21,6 +21,9 @@ from mcp_server.handlers.consolidation.write_class_backfill_pass import (
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import get_shared_store
 
+# source: ADR-1112 (tests of the store itself run on the in-process store)
+pytestmark = pytest.mark.in_process_store
+
 
 def _store():
     s = get_memory_settings()

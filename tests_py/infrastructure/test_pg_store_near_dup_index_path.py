@@ -33,6 +33,9 @@ from mcp_server.infrastructure.pg_iterative_scan import (
 from mcp_server.infrastructure.pg_store_near_dup import list_candidate_pairs
 from tests_py._pg_hnsw import empty_memories_index
 
+# source: ADR-1112 (tests of the store itself run on the in-process store)
+pytestmark = pytest.mark.in_process_store
+
 _DIM = 384  # source: memory_config EMBEDDING_DIM (all-MiniLM-L6-v2)
 # source: measured 2026-10-14 (pgvector 0.8.2, default hnsw.ef_search 40):
 # 300 superseded rows around the pair hid it on main; identical deleted rows

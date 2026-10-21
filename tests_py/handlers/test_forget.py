@@ -30,6 +30,7 @@ from __future__ import annotations
 import pytest
 
 from mcp_server.handlers.forget import handler as forget_handler
+from tests_py._db_peek import store_connection
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
@@ -416,7 +417,7 @@ class TestForgetDeletesDerivedClaims:
 
         store = _get_forget_store()
         ids = insert_claim_events(
-            store._conn,
+            store_connection(store),
             [{"text": text, "claim_type": "observation", "memory_id": memory_id}],
         )
         assert ids, "precondition: the claim must be inserted"
@@ -426,7 +427,7 @@ class TestForgetDeletesDerivedClaims:
     def _claims_for(memory_id: int) -> list:
         from mcp_server.infrastructure.pg_store_wiki import get_claims_for_memory
 
-        return get_claims_for_memory(_get_forget_store()._conn, memory_id)
+        return get_claims_for_memory(store_connection(_get_forget_store()), memory_id)
 
     def test_hard_delete_removes_derived_claims_and_reports_the_count(self):
         mid = _seed_memory("memory with a derived wiki claim")
@@ -455,6 +456,9 @@ class TestForgetDeletesDerivedClaims:
 
 
 class TestForgetArtifactSignals:
+    # The signal is logged by the process that runs the operation: through
+    # the broker that is the broker's own log, which caplog cannot see.
+    @pytest.mark.in_process_store
     def test_already_absent_artifact_logs_the_path_it_expected(self, caplog):
         """§13 F1: the degraded path must emit an actionable signal.
 

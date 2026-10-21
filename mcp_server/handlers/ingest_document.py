@@ -31,6 +31,7 @@ from mcp_server.infrastructure.document_reader import (
 )
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
+from mcp_server.infrastructure.store_operations import background_work
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +143,7 @@ def _read_and_parse(path: Path, kind: str, title: str) -> tuple[ParsedDocument, 
     return parse_confluence_storage(raw, title=title), raw
 
 
+@background_work  # source: ADR-1112 decision 4 (background class)
 async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Ingest a .docx or Confluence export into Cortex.
 

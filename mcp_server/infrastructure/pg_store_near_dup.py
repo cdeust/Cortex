@@ -23,6 +23,7 @@ from mcp_server.shared.near_dup_calibration import (
     CandidatePair,
     merge_pair_batches,
 )
+from mcp_server.infrastructure.store_operations import store_operation
 
 # source: ADR-0557
 DEFAULT_TOP_K = 30
@@ -126,6 +127,7 @@ def _anchor_batches(
         after_id = last_id
 
 
+@store_operation
 def list_candidate_pairs(
     conn: Connection[DictRow],
     *,
@@ -173,6 +175,7 @@ _NEAR_TO_SQL = """
 """
 
 
+@store_operation
 def ids_near_to(
     conn: StoreConnection, anchor_id: int, ids: list[int], *, threshold: float
 ) -> set[int]:
@@ -193,6 +196,7 @@ def ids_near_to(
         return {row["id"] for row in cur.fetchall()}
 
 
+@store_operation
 def fetch_contents(conn: StoreConnection, ids: list[int]) -> dict[int, str]:
     """Fetch content text for the supplied memory IDs.
 
@@ -211,6 +215,7 @@ def fetch_contents(conn: StoreConnection, ids: list[int]) -> dict[int, str]:
         return {row["id"]: row["content"] for row in cur.fetchall()}
 
 
+@store_operation
 def fetch_member_stats(conn: StoreConnection, ids: list[int]) -> dict[int, dict]:
     """Fetch heat and creation time for the supplied current memory IDs.
 

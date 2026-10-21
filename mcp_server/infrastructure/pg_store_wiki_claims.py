@@ -17,8 +17,10 @@ import json
 
 
 from mcp_server.infrastructure.pg_store_wiki_common import _returning_id
+from mcp_server.infrastructure.store_operations import store_operation
 
 
+@store_operation
 def insert_claim_events(conn: StoreConnection, claims: list[dict]) -> list[int]:
     """Bulk insert ClaimEvent rows. Returns the new ids in order.
 
@@ -56,6 +58,7 @@ def insert_claim_events(conn: StoreConnection, claims: list[dict]) -> list[int]:
     return out
 
 
+@store_operation
 def delete_claims_for_memory(conn: StoreConnection, memory_id: int) -> int:
     """Remove all claim_events derived from a single memory.
 
@@ -76,6 +79,7 @@ def get_claims_for_memory(conn: StoreConnection, memory_id: int) -> list[dict]:
         return list(cur.fetchall())
 
 
+@store_operation
 def get_entities_by_memory(
     conn: StoreConnection, memory_ids: list[int]
 ) -> dict[int, list[int]]:
@@ -103,6 +107,7 @@ def get_entities_by_memory(
 _MIN_ENTITY_NAME_CHARS = 3
 
 
+@store_operation
 def get_entity_name_index(conn: StoreConnection, limit: int = 5000) -> dict[str, int]:
     """Return name → entity_id map for inline-mention matching.
 
@@ -124,6 +129,7 @@ def get_entity_name_index(conn: StoreConnection, limit: int = 5000) -> dict[str,
     return out
 
 
+@store_operation
 def get_claims_by_entity(
     conn: StoreConnection,
     entity_ids: list[int],
@@ -156,6 +162,7 @@ def get_claims_by_entity(
     return out
 
 
+@store_operation
 def update_claim_entities(
     conn: StoreConnection, updates: list[tuple[int, list[int]]]
 ) -> int:
@@ -181,6 +188,7 @@ def update_claim_entities(
     return written
 
 
+@store_operation
 def update_claim_supersedes(
     conn: StoreConnection, updates: list[tuple[int, int]]
 ) -> int:

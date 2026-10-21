@@ -12,7 +12,10 @@ contract: zetetic-team-subagents memory/contract.md §8b
 from __future__ import annotations
 
 import json
+from contextlib import contextmanager
 from typing import Any
+
+from mcp_server.infrastructure.store_operations import StoreOperationsMixin
 
 
 # ── C1: checkpoint _is_tier_noise / _partition_hot_memories ──────────────
@@ -161,12 +164,31 @@ class _FakeExecuteResult:
         return self._rows
 
 
-class _FakeStoreForReplica:
-    """Fake store that records UPDATE calls and returns configurable query results."""
+class _ReplicaConn:
+    """Connection double: statements go to the owning fake store."""
+
+    def __init__(self, store: _FakeStoreForReplica) -> None:
+        self.execute = store._execute
+
+    def commit(self) -> None:
+        pass
+
+    def rollback(self) -> None:
+        pass
+
+
+class _FakeStoreForReplica(StoreOperationsMixin):
+    """Fake store that records UPDATE calls and returns configurable query
+    results; the replica operations run on it through the real
+    ``store.call`` funnel (ADR-1112 increment 2)."""
 
     def __init__(self, existing_id: int | None = None) -> None:
         self._existing_id = existing_id
         self.updates: list[tuple] = []
+
+    @contextmanager
+    def acquire_interactive(self):
+        yield _ReplicaConn(self)
 
     def _execute(self, query: str, params: Any = None) -> _FakeExecuteResult:
         if "SELECT id FROM memories" in query:

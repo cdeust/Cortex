@@ -52,35 +52,32 @@ async def run_near_dup_sample(
         "status": "ok",
     }
     try:
-        with store.batch_pool.connection() as conn:
-            pairs = list_candidate_pairs(
-                conn,
-                top_k=top_k,
-                min_similarity=min_similarity,
-            )
-            out["candidate_total"] = len(pairs)
-            buckets = bucket_by_stratum(pairs)
-            out["histogram"] = {
-                label: len(members) for label, members in buckets.items()
+        pairs = store.call_batch(
+            list_candidate_pairs,
+            top_k=top_k,
+            min_similarity=min_similarity,
+        )
+        out["candidate_total"] = len(pairs)
+        buckets = bucket_by_stratum(pairs)
+        out["histogram"] = {label: len(members) for label, members in buckets.items()}
+
+        sample = stratified_sample(pairs, per_stratum=per_stratum)
+        ids: set[int] = set()
+        for pair in sample:
+            ids.add(pair.id_a)
+            ids.add(pair.id_b)
+        contents = store.call_batch(fetch_contents, sorted(ids))
+
+        out["sample"] = [
+            {
+                "id_a": pair.id_a,
+                "id_b": pair.id_b,
+                "similarity": pair.similarity,
+                "content_a": contents.get(pair.id_a, ""),
+                "content_b": contents.get(pair.id_b, ""),
             }
-
-            sample = stratified_sample(pairs, per_stratum=per_stratum)
-            ids: set[int] = set()
-            for pair in sample:
-                ids.add(pair.id_a)
-                ids.add(pair.id_b)
-            contents = fetch_contents(conn, sorted(ids))
-
-            out["sample"] = [
-                {
-                    "id_a": pair.id_a,
-                    "id_b": pair.id_b,
-                    "similarity": pair.similarity,
-                    "content_a": contents.get(pair.id_a, ""),
-                    "content_b": contents.get(pair.id_b, ""),
-                }
-                for pair in sample
-            ]
+            for pair in sample
+        ]
     except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("near_dup sample scan failed (non-fatal): %s", exc)
         out["status"] = f"error: {type(exc).__name__}: {exc}"
@@ -88,7 +85,7 @@ async def run_near_dup_sample(
 
 
 def _supersede_group(
-    conn: Any,
+    store: Any,
     survivor_id: int,
     attached: tuple[int, ...],
     *,
@@ -98,7 +95,9 @@ def _supersede_group(
     """Supersede one group's members into its survivor, journaling it."""
     written: list[int] = []
     for duplicate_id in attached:
-        ok = apply and supersede_to_existing(conn, duplicate_id, survivor_id)
+        ok = apply and store.call_batch(
+            supersede_to_existing, duplicate_id, survivor_id
+        )
         if apply and not ok:
             out["skipped_race"] += 1
         else:
@@ -115,7 +114,7 @@ def _supersede_group(
 
 
 def _group_component(
-    conn: Any,
+    store: Any,
     member_ids: frozenset[int],
     stats: dict[int, dict],
     *,
@@ -143,10 +142,10 @@ def _group_component(
     while len(pending) >= _MIN_COMPONENT_MEMBERS:
         survivor_id = pending[0].id
         others = [m.id for m in pending[1:]]
-        near = ids_near_to(conn, survivor_id, others, threshold=threshold)
+        near = store.call_batch(ids_near_to, survivor_id, others, threshold=threshold)
         attached, pending = settle_round(pending, near)
         if attached:
-            _supersede_group(conn, survivor_id, attached, apply=apply, out=out)
+            _supersede_group(store, survivor_id, attached, apply=apply, out=out)
         else:
             out["unmerged_ids"].append(survivor_id)
     out["unmerged_ids"].extend(m.id for m in pending)
@@ -182,39 +181,38 @@ async def run_near_dup_apply_pass(
         "status": "ok",
     }
     try:
-        with store.batch_pool.connection() as conn:
-            pairs = list_candidate_pairs(
-                conn,
-                top_k=top_k,
-                min_similarity=min_similarity,
-            )
-            out["candidate_total"] = len(pairs)
+        pairs = store.call_batch(
+            list_candidate_pairs,
+            top_k=top_k,
+            min_similarity=min_similarity,
+        )
+        out["candidate_total"] = len(pairs)
 
-            above: list[CandidatePair] = [p for p in pairs if p.similarity >= threshold]
-            below: list[CandidatePair] = [p for p in pairs if p.similarity < threshold]
+        above: list[CandidatePair] = [p for p in pairs if p.similarity >= threshold]
+        below: list[CandidatePair] = [p for p in pairs if p.similarity < threshold]
 
-            if above:
-                components = build_components(above)
-                all_ids = sorted({mid for comp in components for mid in comp})
-                stats = fetch_member_stats(conn, all_ids)
-                for comp in components:
-                    _group_component(
-                        conn, comp, stats, threshold=threshold, apply=apply, out=out
-                    )
+        if above:
+            components = build_components(above)
+            all_ids = sorted({mid for comp in components for mid in comp})
+            stats = store.call_batch(fetch_member_stats, all_ids)
+            for comp in components:
+                _group_component(
+                    store, comp, stats, threshold=threshold, apply=apply, out=out
+                )
 
-            if below:
-                review_ids = sorted({p.id_a for p in below} | {p.id_b for p in below})
-                contents = fetch_contents(conn, review_ids)
-                out["review_queue"] = [
-                    {
-                        "id_a": p.id_a,
-                        "id_b": p.id_b,
-                        "similarity": p.similarity,
-                        "content_a": contents.get(p.id_a, ""),
-                        "content_b": contents.get(p.id_b, ""),
-                    }
-                    for p in below
-                ]
+        if below:
+            review_ids = sorted({p.id_a for p in below} | {p.id_b for p in below})
+            contents = store.call_batch(fetch_contents, review_ids)
+            out["review_queue"] = [
+                {
+                    "id_a": p.id_a,
+                    "id_b": p.id_b,
+                    "similarity": p.similarity,
+                    "content_a": contents.get(p.id_a, ""),
+                    "content_b": contents.get(p.id_b, ""),
+                }
+                for p in below
+            ]
     except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("near_dup apply pass failed (non-fatal): %s", exc)
         out["status"] = f"error: {type(exc).__name__}: {exc}"

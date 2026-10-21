@@ -5,6 +5,7 @@ from __future__ import annotations
 from mcp_server.infrastructure.row_factory import DICT_ROW
 
 from typing import TYPE_CHECKING
+from mcp_server.infrastructure.store_operations import store_operation
 
 if TYPE_CHECKING:
     from mcp_server.infrastructure.db_types import StoreConnection
@@ -14,6 +15,7 @@ if TYPE_CHECKING:
 DEFAULT_SEED_SCAN_LIMIT = 5000
 
 
+@store_operation
 def list_page_memory_seed_candidates(conn: StoreConnection, limit: int) -> list[dict]:
     """Every ``wiki.pages`` row with a non-null, FK-valid ``memory_id``.
 
@@ -37,6 +39,7 @@ def list_page_memory_seed_candidates(conn: StoreConnection, limit: int) -> list[
         return list(cur.fetchall())
 
 
+@store_operation
 def list_existing_page_memory_citations(
     conn: StoreConnection, page_ids: list[int]
 ) -> set[tuple[int, int]]:

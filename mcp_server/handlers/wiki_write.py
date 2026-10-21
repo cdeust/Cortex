@@ -198,11 +198,9 @@ def _sync_page_and_cite(rel_path: str, content: str, memory_ids: list[int]) -> i
     try:
         settings = get_memory_settings()
         store = get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
-        conn = store._conn
         page_row = page_row_from_md(rel_path, content)
-        page_id, _was_modified = upsert_page(conn, page_row)
+        page_id, _was_modified = store.call(upsert_page, page_row)
         if page_id is None or page_id < 0 or not memory_ids:
-            conn.commit()
             return 0
         try:
             session_id = current_window_session() or ""
@@ -211,8 +209,8 @@ def _sync_page_and_cite(rel_path: str, content: str, memory_ids: list[int]) -> i
             session_id = ""
         written = 0
         for mid in memory_ids:
-            new_id = insert_citation(
-                conn,
+            new_id = store.call(
+                insert_citation,
                 page_id=page_id,
                 session_id=session_id,
                 domain=page_row.get("domain", ""),
@@ -220,7 +218,6 @@ def _sync_page_and_cite(rel_path: str, content: str, memory_ids: list[int]) -> i
             )
             if new_id is not None:
                 written += 1
-        conn.commit()
         return written
     except Exception:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.debug(

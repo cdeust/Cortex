@@ -118,9 +118,10 @@ async def run_wiki_maintenance(
         a backlog stanza (``coverage_gaps``, ``cluster_jobs``,
         ``pending_total``).
 
-        Four keys exist ONLY when ``store`` is PostgreSQL-backed (has
-        ``batch_pool``), decided once here rather than defended against
-        per call site (issue #636): ``lesson_promotion_backlog`` (int on
+        Four keys exist ONLY when ``store`` is PostgreSQL-backed
+        (``store.backend == "postgresql"``), decided once here rather
+        than defended against per call site (issue #636):
+        ``lesson_promotion_backlog`` (int on
         success, ``None`` with ``status`` escalated to
         ``lesson_promotion_backlog_error: ...`` on a genuine query
         failure), a ``source_backfill`` stanza (``{pages_scanned,
@@ -133,7 +134,7 @@ async def run_wiki_maintenance(
         response on that backend, not reported as failed or skipped.
 
     source: ADR-0379"""
-    store_is_postgres = hasattr(store, "batch_pool")
+    store_is_postgres = getattr(store, "backend", "") == "postgresql"
     out: dict[str, Any] = {
         "stub": {
             "applied": apply_stubs,

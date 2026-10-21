@@ -17,6 +17,7 @@ from typing import Any
 
 from mcp_server.core.claim_resolver import resolve
 from mcp_server.infrastructure.memory_config import get_memory_settings
+from mcp_server.infrastructure.wiki_handler_queries import claims_needing_resolution
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.pg_store_wiki import (
     get_claims_by_entity,
@@ -89,51 +90,6 @@ def _get_store() -> MemoryStore:
     return get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
 
 
-def _fetch_claims(conn, memory_id: int | None, limit: int) -> list[dict]:
-    """Fetch claims that need resolution.
-
-    Default: claims whose entity_ids is empty (never resolved).
-    With memory_id: all claims for that memory regardless of state.
-    """
-    if memory_id is not None:
-        sql = (
-            "SELECT id, memory_id, text, claim_type, entity_ids, "
-            "supersedes, extracted_at "
-            "FROM wiki.claim_events WHERE memory_id = %s ORDER BY id"
-        )
-        params: tuple = (memory_id,)
-    else:
-        sql = (
-            "SELECT id, memory_id, text, claim_type, entity_ids, "
-            "supersedes, extracted_at "
-            "FROM wiki.claim_events "
-            # source: ADR-0470
-            "WHERE COALESCE(array_length(entity_ids, 1), 0) = 0 "
-            "ORDER BY id LIMIT %s"
-        )
-        params = (limit,)
-    with conn.cursor() as cur:
-        cur.execute(sql, params)
-        rows = cur.fetchall()
-    out: list[dict] = []
-    for r in rows:
-        if isinstance(r, dict):
-            out.append(r)
-        else:
-            out.append(
-                {
-                    "id": r[0],
-                    "memory_id": r[1],
-                    "text": r[2],
-                    "claim_type": r[3],
-                    "entity_ids": r[4] or [],
-                    "supersedes": r[5],
-                    "extracted_at": r[6],
-                }
-            )
-    return out
-
-
 async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     args = args or {}
     memory_id = args.get("memory_id")
@@ -141,9 +97,8 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     name_index_size = int(args.get("name_index_size", 5000))
 
     store = _get_store()
-    conn = store._conn
 
-    claims = _fetch_claims(conn, memory_id, limit)
+    claims = store.call(claims_needing_resolution, memory_id, limit)
     if not claims:
         return {
             "claims_processed": 0,
@@ -155,9 +110,11 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
     # Pre-fetch the inputs the resolver needs
     memory_ids = list({c["memory_id"] for c in claims if c.get("memory_id")})
-    entities_by_memory = get_entities_by_memory(conn, memory_ids)
+    entities_by_memory = store.call(get_entities_by_memory, memory_ids)
     entity_name_to_id = (
-        get_entity_name_index(conn, name_index_size) if name_index_size > 0 else {}
+        store.call(get_entity_name_index, name_index_size)
+        if name_index_size > 0
+        else {}
     )
 
     # Compute the planned entity sets so we can pull priors for THOSE entities
@@ -167,8 +124,8 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         if claim_memory_id is not None:
             candidate_entities.update(entities_by_memory.get(claim_memory_id, []))
     excl_ids = [c["id"] for c in claims]
-    prior_claims_by_entity = get_claims_by_entity(
-        conn, list(candidate_entities), exclude_claim_ids=excl_ids
+    prior_claims_by_entity = store.call(
+        get_claims_by_entity, list(candidate_entities), exclude_claim_ids=excl_ids
     )
 
     # Run the resolver
@@ -183,13 +140,13 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     entity_updates = [(p.claim_id, p.entity_ids) for p in link_plans if p.entity_ids]
     sup_updates = [(p.new_claim_id, p.superseded_claim_id) for p in sup_plans]
 
-    entity_links_written = update_claim_entities(conn, entity_updates)
-    supersedes_written = update_claim_supersedes(conn, sup_updates)
+    entity_links_written = store.call(update_claim_entities, entity_updates)
+    supersedes_written = store.call(update_claim_supersedes, sup_updates)
 
     # source: ADR-0470
     for plan in sup_plans:
-        insert_memo(
-            conn,
+        store.call(
+            insert_memo,
             subject_type="claim",
             subject_id=plan.new_claim_id,
             decision="supersedes",
@@ -200,8 +157,8 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         )
 
     for plan in conf_plans:
-        insert_memo(
-            conn,
+        store.call(
+            insert_memo,
             subject_type="claim",
             subject_id=plan.claim_a_id,
             decision="conflict_candidate",
@@ -213,8 +170,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
             confidence=0.5,
             author="resolver",
         )
-
-    conn.commit()
 
     return {
         "claims_processed": stats.claims_processed,

@@ -36,6 +36,19 @@ from mcp_server.infrastructure.staging_resolve_sink import (  # noqa: E402
 )
 from tests_py.conftest import _TEST_DB_URL, _USE_PG  # type: ignore  # noqa: E402
 
+
+class _PoolStore:
+    """``store.call_batch`` on a bare pool: one borrowed connection per
+    operation, as the store lends it (ADR-1112)."""
+
+    def __init__(self, pool) -> None:
+        self._pool = pool
+
+    def call_batch(self, fn, *args, **kwargs):
+        with self._pool.connection() as conn:
+            return fn(conn, *args, **kwargs)
+
+
 pytestmark = pytest.mark.skipif(
     not _USE_PG, reason="PostgreSQL not available — staging path needs live schema"
 )
@@ -103,14 +116,14 @@ def _run(pool):
     edges += [(f"sym_{i}", f"ghost_{i}", "calls", 1.0, "verify") for i in range(50)]
     ent = BackpressurePipeline(
         source=_ListSource(entities),
-        sink_factory=lambda: build_entity_sink(pool.connection),
+        sink_factory=lambda: build_entity_sink(_PoolStore(pool)),
         max_batch=64,
         queue_cap=4,
         concurrency=1,  # entity stage is single-writer (race-free NOT EXISTS)
     )
     edge = BackpressurePipeline(
         source=_ListSource(edges),
-        sink_factory=lambda: build_edge_sink(pool.connection),
+        sink_factory=lambda: build_edge_sink(_PoolStore(pool)),
         max_batch=64,
         queue_cap=4,
         concurrency=2,
@@ -149,7 +162,7 @@ def test_entity_dedup_is_domain_scoped(pg_pool):
         backpressure_pipeline_run(
             BackpressurePipeline(
                 source=_ListSource(rows),
-                sink_factory=lambda: build_entity_sink(pg_pool.connection),
+                sink_factory=lambda: build_entity_sink(_PoolStore(pg_pool)),
                 max_batch=64,
                 queue_cap=4,
                 concurrency=conc,
@@ -158,7 +171,7 @@ def test_entity_dedup_is_domain_scoped(pg_pool):
     rr = backpressure_pipeline_run(
         BackpressurePipeline(
             source=_ListSource(edges_b),
-            sink_factory=lambda: build_edge_sink(pg_pool.connection),
+            sink_factory=lambda: build_edge_sink(_PoolStore(pg_pool)),
             max_batch=64,
             queue_cap=4,
             concurrency=2,

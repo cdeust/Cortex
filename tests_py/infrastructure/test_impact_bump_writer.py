@@ -19,6 +19,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from tests_py._store_call import bind_store_calls
 from mcp_server.infrastructure.file_memory_priming import bump_memories_mentioning
 from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 
@@ -87,6 +88,7 @@ def test_postgres_receives_one_unlimited_update():
         yield conn
 
     pg.acquire_interactive = acquire
+    bind_store_calls(pg)
     assert bump_memories_mentioning(pg, ["a_b", "c%d", "a_b"], _BOOST) == 7
     (sql, params), _ = conn.execute.call_args
     assert conn.execute.call_count == 1 and conn.commit.call_count == 1
@@ -113,6 +115,6 @@ def test_postgres_receives_one_unlimited_update():
 
 
 def test_no_symbol_sends_nothing():
-    pg = MagicMock()
+    pg = bind_store_calls(MagicMock())
     assert bump_memories_mentioning(pg, [], _BOOST) == 0
     pg.acquire_interactive.assert_not_called()

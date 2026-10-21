@@ -11,6 +11,7 @@ import logging
 from datetime import datetime, timezone, timedelta
 
 from mcp_server.core.cascade_advancement import compute_advancement_readiness
+from mcp_server.infrastructure.consolidation_queries import set_stage_entered_at
 from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.observability import silent_failure
 
@@ -180,10 +181,6 @@ def _update_stage_entered(store: MemoryStore, memory_id: int, now: datetime) -> 
     Phase 5: batch pool (consolidation stage advancement).
     """
     try:
-        with store.acquire_batch() as conn:
-            conn.execute(
-                "UPDATE memories SET stage_entered_at = %s WHERE id = %s",
-                (now, memory_id),
-            )
+        store.call_batch(set_stage_entered_at, memory_id, now)
     except Exception as exc:  # noqa: BLE001 — stamp failure must not abort advancement
         silent_failure.note("consolidation.stage_timestamp", exc)

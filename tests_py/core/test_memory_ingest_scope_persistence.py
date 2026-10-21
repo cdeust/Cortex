@@ -5,6 +5,9 @@ import pytest
 from mcp_server.core.memory_ingest import ingest_memory
 from mcp_server.handlers.forget import _get_store
 
+# source: ADR-1112 (tests of the store itself run on the in-process store)
+pytestmark = pytest.mark.in_process_store
+
 
 @pytest.mark.parametrize("origin", ["local_action", "deliberate", "network", "unknown"])
 @pytest.mark.parametrize("write_class", ["auto", "deliberate"])
@@ -30,12 +33,7 @@ def test_ingest_privileges_survive_reopen(origin, write_class, tmp_path):
         "local_action",
         "deliberate",
     }
-    if type(store).__name__ == "PgMemoryStore":
-        # Force the schema-init path, including backfill, in this scratch DB.
-        store._conn.execute("DELETE FROM schema_meta")
-        reopened = type(store)(store._url)
-    else:
-        reopened = type(store)(sqlite_path)
+    reopened = _reopen_through_migration(store, sqlite_path)
     try:
         for mid in ids:
             row = reopened.get_memory(mid)
@@ -48,3 +46,15 @@ def test_ingest_privileges_survive_reopen(origin, write_class, tmp_path):
         reopened.close()
         if type(store).__name__ != "PgMemoryStore":
             store.close()
+
+
+def _reopen_through_migration(store, sqlite_path):
+    """Reopen after the migration path, including backfill, in this scratch
+    DB: the explicit step on PostgreSQL (ADR-1112; opening never migrates)."""
+    if type(store).__name__ != "PgMemoryStore":
+        return type(store)(sqlite_path)
+    from mcp_server.infrastructure.pg_migrations import apply_schema  # noqa: PLC0415 — PG-only import
+
+    store._conn.execute("DELETE FROM schema_meta")
+    apply_schema(store._url)
+    return type(store)(store._url)

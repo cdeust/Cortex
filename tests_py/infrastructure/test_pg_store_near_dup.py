@@ -22,6 +22,9 @@ from mcp_server.infrastructure.pg_store_near_dup import (
     list_candidate_pairs,
 )
 
+# source: ADR-1112 (tests of the store itself run on the in-process store)
+pytestmark = pytest.mark.in_process_store
+
 EMBEDDING_DIM = 384
 
 

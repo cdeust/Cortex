@@ -22,6 +22,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from mcp_server.hooks import agent_briefing as hook
+from tests_py.hooks._store_fakes import ConnStore
 from tests_py.hooks.stdin_support import utf8_stdin
 
 
@@ -139,38 +140,22 @@ def test_keywords_from_stop_words_only_prompt_is_empty():
     assert hook._extract_task_keywords("the and for that this with from") == []
 
 
-# ── Connection ────────────────────────────────────────────────────────
+# ── Store ─────────────────────────────────────────────────────────────
 
 
-def test_connect_without_psycopg_returns_none(monkeypatch):
-    monkeypatch.setenv("CORTEX_MEMORY_STORE_BACKEND", "postgresql")
-    monkeypatch.setitem(sys.modules, "psycopg", None)
-
-    def _raise(name, *args, **kwargs):
-        if name == "psycopg":
-            raise ImportError("no psycopg")
-        return original(name, *args, **kwargs)
-
-    original = __import__
-    monkeypatch.setattr("builtins.__import__", _raise)
-    assert hook._connect() is None
+def test_store_is_the_shared_store_and_opens_no_connection_of_its_own():
+    """The hook reaches the database only through the shared store (ADR-1112)."""
+    store = object()
+    with patch(
+        "mcp_server.infrastructure.memory_store.get_shared_store", return_value=store
+    ):
+        assert hook._store() is store
 
 
-class _FakePgError(Exception):
-    """Stands in for psycopg.Error — the class the hook's typed except pins."""
-
-
-def test_connect_with_unreachable_database_returns_none(monkeypatch):
-    monkeypatch.setenv("CORTEX_MEMORY_STORE_BACKEND", "postgresql")
-    module = MagicMock()
-    module.Error = _FakePgError
-    # The hook connects via psycopg.Connection[DictRow].connect(...) so the
-    # returned connection is typed with dict rows; mirror that call path.
-    module.Connection.__getitem__.return_value.connect.side_effect = _FakePgError(
-        "connection refused"
-    )
-    monkeypatch.setitem(sys.modules, "psycopg", module)
-    assert hook._connect() is None
+def test_store_open_failure_is_skipped_with_a_signal(capsys):
+    with patch.object(hook, "_store", side_effect=RuntimeError("connection refused")):
+        _run({"agent_name": "engineer", "prompt": "improve reranker latency now"})
+    assert "briefing store unavailable: connection refused" in capsys.readouterr().err
 
 
 # ── Briefing queries ──────────────────────────────────────────────────
@@ -187,7 +172,7 @@ def test_agent_scoped_memories_come_back_first_with_their_source():
         [_row(2, "team decision", 0.8, "dba")],
     ]
 
-    results = hook._fetch_agent_context(conn, "engineer", ["reranker"])
+    results = hook._fetch_agent_context(ConnStore(conn), "engineer", ["reranker"])
 
     assert [r["id"] for r in results] == [1, 2]
     assert results[0]["source"] == "agent-prior"
@@ -200,7 +185,7 @@ def test_full_first_pass_skips_the_team_query():
         _row(i, "prior", 0.9, "engineer") for i in range(hook._MAX_MEMORIES)
     ]
 
-    results = hook._fetch_agent_context(conn, "engineer", ["kw"])
+    results = hook._fetch_agent_context(ConnStore(conn), "engineer", ["kw"])
 
     assert len(results) == hook._MAX_MEMORIES
     assert conn.execute.call_count == 1, "no remaining slots — pass 2 skipped"
@@ -210,7 +195,7 @@ def test_no_keywords_skips_the_agent_scoped_query():
     conn = MagicMock()
     conn.execute.return_value.fetchall.return_value = []
 
-    hook._fetch_agent_context(conn, "engineer", [])
+    hook._fetch_agent_context(ConnStore(conn), "engineer", [])
 
     assert conn.execute.call_count == 1, "only the team-decisions query ran"
     sql = conn.execute.call_args[0][0]
@@ -224,7 +209,7 @@ def test_memory_content_is_truncated_to_300_chars():
         [],
     ]
 
-    results = hook._fetch_agent_context(conn, "engineer", ["kw"])
+    results = hook._fetch_agent_context(ConnStore(conn), "engineer", ["kw"])
 
     assert len(results[0]["content"]) == 300
 
@@ -237,7 +222,7 @@ def test_failed_agent_scoped_query_is_logged_and_team_pass_still_runs(capsys):
     second.fetchall.return_value = [_row(9, "decision", 0.7, "dba")]
     conn.execute.side_effect = [first, second]
 
-    results = hook._fetch_agent_context(conn, "engineer", ["kw"])
+    results = hook._fetch_agent_context(ConnStore(conn), "engineer", ["kw"])
 
     assert "agent-scoped query failed" in capsys.readouterr().err
     assert [r["id"] for r in results] == [9], "pass 2 degraded-continues"
@@ -251,7 +236,7 @@ def test_failed_team_query_is_logged_and_returns_partial_results(capsys):
     second.fetchall.side_effect = RuntimeError("timeout")
     conn.execute.side_effect = [first, second]
 
-    results = hook._fetch_agent_context(conn, "engineer", ["kw"])
+    results = hook._fetch_agent_context(ConnStore(conn), "engineer", ["kw"])
 
     assert "team decisions query failed" in capsys.readouterr().err
     assert [r["id"] for r in results] == [1]
@@ -267,41 +252,36 @@ def _run(event: dict) -> None:
 
 
 def test_unknown_agent_is_skipped(capsys):
-    with patch.object(hook, "_connect") as connect:
+    with patch.object(hook, "_store") as connect:
         _run({"agent_name": "Random-Agent", "prompt": "x" * 40})
     connect.assert_not_called()
     assert "not a specialist" in capsys.readouterr().err
 
 
 def test_short_prompt_is_skipped(capsys):
-    with patch.object(hook, "_connect") as connect:
+    with patch.object(hook, "_store") as connect:
         _run({"agent_name": "engineer", "prompt": "tiny"})
     connect.assert_not_called()
     assert "prompt too short" in capsys.readouterr().err
 
 
 def test_prompt_without_keywords_is_skipped(capsys):
-    with patch.object(hook, "_connect") as connect:
+    with patch.object(hook, "_store") as connect:
         _run({"agent_name": "engineer", "prompt": "the and for that this with from"})
     connect.assert_not_called()
     assert "no keywords" in capsys.readouterr().err
 
 
-def test_unreachable_postgres_is_skipped_with_a_signal(capsys):
-    with patch.object(hook, "_connect", return_value=None):
-        _run({"agent_name": "engineer", "prompt": "improve reranker latency now"})
-    assert "PostgreSQL unavailable" in capsys.readouterr().err
-
-
-def test_no_relevant_memories_is_skipped_and_connection_closed(capsys):
-    conn = MagicMock()
+def test_no_relevant_memories_is_skipped_without_a_receipt(capsys):
+    store = MagicMock()
     with (
-        patch.object(hook, "_connect", return_value=conn),
+        patch.object(hook, "_store", return_value=store),
         patch.object(hook, "_fetch_agent_context", return_value=[]),
+        patch.object(hook, "emit_injection_receipt") as receipt,
     ):
         _run({"agent_name": "engineer", "prompt": "improve reranker latency now"})
     assert "no relevant memories" in capsys.readouterr().err
-    conn.close.assert_called_once()
+    receipt.assert_not_called()
 
 
 # ── Successful briefing ───────────────────────────────────────────────
@@ -317,11 +297,11 @@ _MEMORIES = [
 
 
 def test_briefing_prints_header_marker_and_one_line_per_memory(capsys):
-    conn = MagicMock()
+    store = MagicMock()
     with (
-        patch.object(hook, "_connect", return_value=conn),
+        patch.object(hook, "_store", return_value=store),
         patch.object(hook, "_fetch_agent_context", return_value=_MEMORIES),
-        patch.object(hook, "emit_hook_receipt", return_value=7) as receipt,
+        patch.object(hook, "emit_injection_receipt", return_value=7) as receipt,
     ):
         _run({"agent_name": "Engineer", "prompt": "improve reranker latency now"})
 
@@ -332,17 +312,16 @@ def test_briefing_prints_header_marker_and_one_line_per_memory(capsys):
     assert "second line" not in out, "only the first line of a memory is injected"
     assert "- [team:dba] Team: SQLite is the default" in out
     assert "briefed engineer with 2 memories" in err
-    conn.close.assert_called_once()
     receipt.assert_called_once()
+    assert receipt.call_args.args[0] is store, "receipt goes through the store"
     assert receipt.call_args.kwargs["channel"] == "agent_briefing"
 
 
 def test_failed_receipt_degrades_to_marker_less_briefing(capsys):
-    conn = MagicMock()
     with (
-        patch.object(hook, "_connect", return_value=conn),
+        patch.object(hook, "_store", return_value=MagicMock()),
         patch.object(hook, "_fetch_agent_context", return_value=_MEMORIES),
-        patch.object(hook, "emit_hook_receipt", return_value=None),
+        patch.object(hook, "emit_injection_receipt", return_value=None),
     ):
         _run({"agent_name": "engineer", "prompt": "improve reranker latency now"})
 

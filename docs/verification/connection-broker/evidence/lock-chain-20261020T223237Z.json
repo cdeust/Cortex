@@ -1,0 +1,654 @@
+{
+  "trees": {
+    "branch": "/Users/cdeust/Developments/anthropic-partnership/Cortex/.claude/worktrees/fix-idle-tx",
+    "main": "/var/folders/0c/_rq0tstn19z9j3vtt65phgxr0000gn/T/cortex-lock-chain-y_7i11vw/main",
+    "other": "/var/folders/0c/_rq0tstn19z9j3vtt65phgxr0000gn/T/cortex-lock-chain-y_7i11vw/other"
+  },
+  "stream/main": {
+    "tree": "main",
+    "consumer_ready": true,
+    "chain": {
+      "activity": [
+        {
+          "pid": 25296,
+          "app": "main-consolidation",
+          "state": "idle",
+          "wait_event_type": "Client",
+          "wait_event": "ClientRead",
+          "blocked_by": [],
+          "query": "SET hnsw.iterative_scan = relaxed_order",
+          "blocked_by_apps": []
+        },
+        {
+          "pid": 25297,
+          "app": "main-consolidation",
+          "state": "idle in transaction",
+          "wait_event_type": "Client",
+          "wait_event": "ClientRead",
+          "blocked_by": [],
+          "query": "FETCH FORWARD 1 FROM \"decay_stream\"",
+          "blocked_by_apps": []
+        },
+        {
+          "pid": 25298,
+          "app": "main-consolidation",
+          "state": "idle",
+          "wait_event_type": "Client",
+          "wait_event": "ClientRead",
+          "blocked_by": [],
+          "query": "SET hnsw.iterative_scan = relaxed_order",
+          "blocked_by_apps": []
+        },
+        {
+          "pid": 25301,
+          "app": "ddl",
+          "state": "active",
+          "wait_event_type": "Lock",
+          "wait_event": "relation",
+          "blocked_by": [
+            25297
+          ],
+          "query": "ALTER TABLE memories ADD COLUMN IF NOT EXISTS is_team_decision BOOLEAN NOT NULL DEFAULT FA",
+          "blocked_by_apps": [
+            "main-consolidation"
+          ]
+        },
+        {
+          "pid": 25302,
+          "app": "reader-0",
+          "state": "active",
+          "wait_event_type": "Lock",
+          "wait_event": "relation",
+          "blocked_by": [
+            25301
+          ],
+          "query": "SELECT count(*) FROM memories",
+          "blocked_by_apps": [
+            "ddl"
+          ]
+        },
+        {
+          "pid": 25303,
+          "app": "reader-1",
+          "state": "active",
+          "wait_event_type": "Lock",
+          "wait_event": "relation",
+          "blocked_by": [
+            25301
+          ],
+          "query": "SELECT count(*) FROM memories",
+          "blocked_by_apps": [
+            "ddl"
+          ]
+        },
+        {
+          "pid": 25304,
+          "app": "reader-2",
+          "state": "active",
+          "wait_event_type": "Lock",
+          "wait_event": "relation",
+          "blocked_by": [
+            25301
+          ],
+          "query": "SELECT count(*) FROM memories",
+          "blocked_by_apps": [
+            "ddl"
+          ]
+        }
+      ],
+      "locks_on_memories": [
+        {
+          "app": "main-consolidation",
+          "pid": 25297,
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "app": "ddl",
+          "pid": 25301,
+          "mode": "AccessExclusiveLock",
+          "granted": false
+        },
+        {
+          "app": "reader-0",
+          "pid": 25302,
+          "mode": "AccessShareLock",
+          "granted": false
+        },
+        {
+          "app": "reader-1",
+          "pid": 25303,
+          "mode": "AccessShareLock",
+          "granted": false
+        },
+        {
+          "app": "reader-2",
+          "pid": 25304,
+          "mode": "AccessShareLock",
+          "granted": false
+        }
+      ]
+    },
+    "consumer_write_done_within_deadlock_window": false,
+    "after_write": {
+      "activity": [
+        {
+          "pid": 25296,
+          "app": "main-consolidation",
+          "state": "idle",
+          "wait_event_type": "Client",
+          "wait_event": "ClientRead",
+          "blocked_by": [],
+          "query": "SET hnsw.iterative_scan = relaxed_order",
+          "blocked_by_apps": []
+        },
+        {
+          "pid": 25297,
+          "app": "main-consolidation",
+          "state": "idle in transaction",
+          "wait_event_type": "Client",
+          "wait_event": "ClientRead",
+          "blocked_by": [],
+          "query": "FETCH FORWARD 1 FROM \"decay_stream\"",
+          "blocked_by_apps": []
+        },
+        {
+          "pid": 25298,
+          "app": "main-consolidation",
+          "state": "idle",
+          "wait_event_type": "Client",
+          "wait_event": "ClientRead",
+          "blocked_by": [],
+          "query": "SET hnsw.iterative_scan = relaxed_order",
+          "blocked_by_apps": []
+        },
+        {
+          "pid": 25301,
+          "app": "ddl",
+          "state": "active",
+          "wait_event_type": "Lock",
+          "wait_event": "relation",
+          "blocked_by": [
+            25297
+          ],
+          "query": "ALTER TABLE memories ADD COLUMN IF NOT EXISTS is_team_decision BOOLEAN NOT NULL DEFAULT FA",
+          "blocked_by_apps": [
+            "main-consolidation"
+          ]
+        },
+        {
+          "pid": 25302,
+          "app": "reader-0",
+          "state": "active",
+          "wait_event_type": "Lock",
+          "wait_event": "relation",
+          "blocked_by": [
+            25301
+          ],
+          "query": "SELECT count(*) FROM memories",
+          "blocked_by_apps": [
+            "ddl"
+          ]
+        },
+        {
+          "pid": 25303,
+          "app": "reader-1",
+          "state": "active",
+          "wait_event_type": "Lock",
+          "wait_event": "relation",
+          "blocked_by": [
+            25301
+          ],
+          "query": "SELECT count(*) FROM memories",
+          "blocked_by_apps": [
+            "ddl"
+          ]
+        },
+        {
+          "pid": 25304,
+          "app": "reader-2",
+          "state": "active",
+          "wait_event_type": "Lock",
+          "wait_event": "relation",
+          "blocked_by": [
+            25301
+          ],
+          "query": "SELECT count(*) FROM memories",
+          "blocked_by_apps": [
+            "ddl"
+          ]
+        },
+        {
+          "pid": 25306,
+          "app": "main-consolidation",
+          "state": "active",
+          "wait_event_type": "Lock",
+          "wait_event": "relation",
+          "blocked_by": [
+            25301
+          ],
+          "query": "UPDATE memories SET importance = $1 WHERE id = $2",
+          "blocked_by_apps": [
+            "ddl"
+          ]
+        },
+        {
+          "pid": 25307,
+          "app": "main-consolidation",
+          "state": "idle",
+          "wait_event_type": "Client",
+          "wait_event": "ClientRead",
+          "blocked_by": [],
+          "query": "SET hnsw.iterative_scan = relaxed_order",
+          "blocked_by_apps": []
+        },
+        {
+          "pid": 25308,
+          "app": "main-consolidation",
+          "state": "idle",
+          "wait_event_type": "Client",
+          "wait_event": "ClientRead",
+          "blocked_by": [],
+          "query": "SET hnsw.iterative_scan = relaxed_order",
+          "blocked_by_apps": []
+        }
+      ],
+      "locks_on_memories": [
+        {
+          "app": "main-consolidation",
+          "pid": 25297,
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "app": "ddl",
+          "pid": 25301,
+          "mode": "AccessExclusiveLock",
+          "granted": false
+        },
+        {
+          "app": "reader-0",
+          "pid": 25302,
+          "mode": "AccessShareLock",
+          "granted": false
+        },
+        {
+          "app": "reader-1",
+          "pid": 25303,
+          "mode": "AccessShareLock",
+          "granted": false
+        },
+        {
+          "app": "reader-2",
+          "pid": 25304,
+          "mode": "AccessShareLock",
+          "granted": false
+        },
+        {
+          "app": "main-consolidation",
+          "pid": 25306,
+          "mode": "RowExclusiveLock",
+          "granted": false
+        }
+      ]
+    },
+    "released_by": "consumer process killed by the harness",
+    "alter": {
+      "at": 16699.748722875
+    },
+    "readers_completed": 3,
+    "readers_waited_s": 3.143,
+    "readers_completed_before_release": 0
+  },
+  "open/main": {
+    "tree": "main",
+    "opened_while_reader_idle": null,
+    "chain": {
+      "activity": [
+        {
+          "pid": 25571,
+          "app": "blocker",
+          "state": "idle in transaction",
+          "wait_event_type": "Client",
+          "wait_event": "ClientRead",
+          "blocked_by": [],
+          "query": "SELECT 1 FROM memories LIMIT 1",
+          "blocked_by_apps": []
+        },
+        {
+          "pid": 25688,
+          "app": "main-store-open",
+          "state": "active",
+          "wait_event_type": "Lock",
+          "wait_event": "relation",
+          "blocked_by": [
+            25571
+          ],
+          "query": "-- source: ADR-1083\nALTER TABLE memories ADD COLUMN IF NOT EXISTS\n    is_team_decision BOO",
+          "blocked_by_apps": [
+            "blocker"
+          ]
+        },
+        {
+          "pid": 26502,
+          "app": "reader-0",
+          "state": "active",
+          "wait_event_type": "Lock",
+          "wait_event": "relation",
+          "blocked_by": [
+            25688
+          ],
+          "query": "SELECT count(*) FROM memories",
+          "blocked_by_apps": [
+            "main-store-open"
+          ]
+        },
+        {
+          "pid": 26503,
+          "app": "reader-1",
+          "state": "active",
+          "wait_event_type": "Lock",
+          "wait_event": "relation",
+          "blocked_by": [
+            25688
+          ],
+          "query": "SELECT count(*) FROM memories",
+          "blocked_by_apps": [
+            "main-store-open"
+          ]
+        },
+        {
+          "pid": 26504,
+          "app": "reader-2",
+          "state": "active",
+          "wait_event_type": "Lock",
+          "wait_event": "relation",
+          "blocked_by": [
+            25688
+          ],
+          "query": "SELECT count(*) FROM memories",
+          "blocked_by_apps": [
+            "main-store-open"
+          ]
+        }
+      ],
+      "locks_on_memories": [
+        {
+          "app": "blocker",
+          "pid": 25571,
+          "mode": "AccessShareLock",
+          "granted": true
+        },
+        {
+          "app": "main-store-open",
+          "pid": 25688,
+          "mode": "AccessExclusiveLock",
+          "granted": false
+        },
+        {
+          "app": "reader-0",
+          "pid": 26502,
+          "mode": "AccessShareLock",
+          "granted": false
+        },
+        {
+          "app": "reader-1",
+          "pid": 26503,
+          "mode": "AccessShareLock",
+          "granted": false
+        },
+        {
+          "app": "reader-2",
+          "pid": 26504,
+          "mode": "AccessShareLock",
+          "granted": false
+        }
+      ]
+    },
+    "store_done": true,
+    "readers_completed": 3,
+    "readers_waited_s": 0.173,
+    "readers_completed_before_release": 0,
+    "ddl_statements_logged": 98,
+    "ddl_sample": [
+      "2026-10-21 00:32:28.384 CEST [25688] main-store-open LOG:  statement: CREATE EXTENSION IF NOT EXISTS vector;",
+      "2026-10-21 00:32:28.385 CEST [25688] main-store-open LOG:  statement: CREATE EXTENSION IF NOT EXISTS pg_trgm;",
+      "2026-10-21 00:32:28.385 CEST [25688] main-store-open LOG:  statement: CREATE TABLE IF NOT EXISTS memories ("
+    ],
+    "recorded_revision_after": "44002703f29f0c2d"
+  },
+  "stream/branch": {
+    "tree": "branch",
+    "consumer_ready": true,
+    "chain": {
+      "activity": [
+        {
+          "pid": 26724,
+          "app": "branch-consolidation",
+          "state": "idle",
+          "wait_event_type": "Client",
+          "wait_event": "ClientRead",
+          "blocked_by": [],
+          "query": "SET hnsw.iterative_scan = relaxed_order",
+          "blocked_by_apps": []
+        },
+        {
+          "pid": 26733,
+          "app": "branch-consolidation",
+          "state": "idle",
+          "wait_event_type": "Client",
+          "wait_event": "ClientRead",
+          "blocked_by": [],
+          "query": "SELECT * FROM memories WHERE NOT is_stale ORDER BY id LIMIT $1",
+          "blocked_by_apps": []
+        },
+        {
+          "pid": 26734,
+          "app": "branch-consolidation",
+          "state": "idle",
+          "wait_event_type": "Client",
+          "wait_event": "ClientRead",
+          "blocked_by": [],
+          "query": "SET hnsw.iterative_scan = relaxed_order",
+          "blocked_by_apps": []
+        },
+        {
+          "pid": 26740,
+          "app": "ddl",
+          "state": "idle",
+          "wait_event_type": "Client",
+          "wait_event": "ClientRead",
+          "blocked_by": [],
+          "query": "ALTER TABLE memories ADD COLUMN IF NOT EXISTS is_team_decision BOOLEAN NOT NULL DEFAULT FA",
+          "blocked_by_apps": []
+        }
+      ],
+      "locks_on_memories": []
+    },
+    "consumer_write_done_within_deadlock_window": true,
+    "after_write": {
+      "activity": [
+        {
+          "pid": 26724,
+          "app": "branch-consolidation",
+          "state": "idle",
+          "wait_event_type": "Client",
+          "wait_event": "ClientRead",
+          "blocked_by": [],
+          "query": "SET hnsw.iterative_scan = relaxed_order",
+          "blocked_by_apps": []
+        },
+        {
+          "pid": 26733,
+          "app": "branch-consolidation",
+          "state": "idle",
+          "wait_event_type": "Client",
+          "wait_event": "ClientRead",
+          "blocked_by": [],
+          "query": "SELECT * FROM memories WHERE NOT is_stale ORDER BY id LIMIT $1",
+          "blocked_by_apps": []
+        },
+        {
+          "pid": 26734,
+          "app": "branch-consolidation",
+          "state": "idle",
+          "wait_event_type": "Client",
+          "wait_event": "ClientRead",
+          "blocked_by": [],
+          "query": "SET hnsw.iterative_scan = relaxed_order",
+          "blocked_by_apps": []
+        },
+        {
+          "pid": 26740,
+          "app": "ddl",
+          "state": "idle",
+          "wait_event_type": "Client",
+          "wait_event": "ClientRead",
+          "blocked_by": [],
+          "query": "ALTER TABLE memories ADD COLUMN IF NOT EXISTS is_team_decision BOOLEAN NOT NULL DEFAULT FA",
+          "blocked_by_apps": []
+        },
+        {
+          "pid": 26797,
+          "app": "branch-consolidation",
+          "state": "idle",
+          "wait_event_type": "Client",
+          "wait_event": "ClientRead",
+          "blocked_by": [],
+          "query": "SET hnsw.iterative_scan = relaxed_order",
+          "blocked_by_apps": []
+        },
+        {
+          "pid": 26798,
+          "app": "branch-consolidation",
+          "state": "idle",
+          "wait_event_type": "Client",
+          "wait_event": "ClientRead",
+          "blocked_by": [],
+          "query": "UPDATE memories SET importance = $1 WHERE id = $2",
+          "blocked_by_apps": []
+        },
+        {
+          "pid": 26799,
+          "app": "branch-consolidation",
+          "state": "idle",
+          "wait_event_type": "Client",
+          "wait_event": "ClientRead",
+          "blocked_by": [],
+          "query": "SET hnsw.iterative_scan = relaxed_order",
+          "blocked_by_apps": []
+        }
+      ],
+      "locks_on_memories": []
+    },
+    "released_by": "consumer finished its pass",
+    "alter": {
+      "at": 16705.400003208
+    },
+    "readers_completed": 3,
+    "readers_waited_s": 0.008,
+    "readers_completed_before_release": 3
+  },
+  "open/branch": {
+    "tree": "branch",
+    "opened_while_reader_idle": "OPENED",
+    "chain": {
+      "activity": [
+        {
+          "pid": 26813,
+          "app": "blocker",
+          "state": "idle in transaction",
+          "wait_event_type": "Client",
+          "wait_event": "ClientRead",
+          "blocked_by": [],
+          "query": "SELECT 1 FROM memories LIMIT 1",
+          "blocked_by_apps": []
+        }
+      ],
+      "locks_on_memories": [
+        {
+          "app": "blocker",
+          "pid": 26813,
+          "mode": "AccessShareLock",
+          "granted": true
+        }
+      ]
+    },
+    "store_done": true,
+    "readers_completed": 3,
+    "readers_waited_s": 0.009,
+    "readers_completed_before_release": 3,
+    "ddl_statements_logged": 0,
+    "ddl_sample": [],
+    "recorded_revision_after": "another-install-"
+  },
+  "flipflop/main+other": {
+    "order": [
+      "main",
+      "other",
+      "main",
+      "other"
+    ],
+    "steps": [
+      {
+        "tree": "main",
+        "completed": true,
+        "ddl_statements_logged": 0,
+        "recorded_revision_after": "44002703f29f0c2d"
+      },
+      {
+        "tree": "other",
+        "completed": true,
+        "ddl_statements_logged": 98,
+        "recorded_revision_after": "c867454173d6227e"
+      },
+      {
+        "tree": "main",
+        "completed": true,
+        "ddl_statements_logged": 98,
+        "recorded_revision_after": "44002703f29f0c2d"
+      },
+      {
+        "tree": "other",
+        "completed": true,
+        "ddl_statements_logged": 98,
+        "recorded_revision_after": "c867454173d6227e"
+      }
+    ]
+  },
+  "flipflop/branch+other": {
+    "order": [
+      "branch",
+      "other",
+      "branch",
+      "other"
+    ],
+    "steps": [
+      {
+        "tree": "branch",
+        "completed": true,
+        "ddl_statements_logged": 0,
+        "recorded_revision_after": "44002703f29f0c2d"
+      },
+      {
+        "tree": "other",
+        "completed": true,
+        "ddl_statements_logged": 98,
+        "recorded_revision_after": "c867454173d6227e"
+      },
+      {
+        "tree": "branch",
+        "completed": true,
+        "ddl_statements_logged": 0,
+        "recorded_revision_after": "c867454173d6227e"
+      },
+      {
+        "tree": "other",
+        "completed": true,
+        "ddl_statements_logged": 0,
+        "recorded_revision_after": "c867454173d6227e"
+      }
+    ]
+  },
+  "head": "df3a4479fbd0207de6e0bade919f4de09da4273e"
+}

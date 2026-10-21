@@ -7,10 +7,6 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from mcp_server.infrastructure.pg_store_receipts import (
-    insert_receipt_on_connection,
-)
-
 logger = logging.getLogger(__name__)
 
 # source: ADR-0417
@@ -67,36 +63,4 @@ def emit_injection_receipt(
         )
     except Exception:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.warning("injection receipt emission failed", exc_info=True)
-        return None
-
-
-def emit_hook_receipt(
-    conn: Any,
-    memories: list[dict[str, Any]],
-    *,
-    channel: str,
-    session_id: str | None,
-) -> int | None:
-    """Persist a receipt from a hook channel (T2); return receipt_id.
-
-    Hooks own a short-lived psycopg connection and no store instance.
-    Same parity invariant as ``emit_injection_receipt``: call with
-    exactly the memories that will be printed to stdout — entries
-    dropped by an injection budget were never in context; entries
-    printed truncated keep their id and ARE in context.
-
-    Same degradation contract: None on empty payload or receipt-write
-    I/O failure (the hook keeps injecting its banner either way); loud
-    raise on contract violations.
-    """
-    _check_channel(channel)
-    if not memories:
-        return None
-    items = _build_items(memories)
-    try:
-        return insert_receipt_on_connection(
-            conn, channel=channel, items=items, session_id=session_id
-        )
-    except Exception:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
-        logger.warning("hook receipt emission failed", exc_info=True)
         return None

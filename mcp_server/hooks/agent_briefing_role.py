@@ -3,26 +3,20 @@
 source: ADR-1085
 """
 
+from typing import Any
+
 from mcp_server.hooks.agent_briefing_query import _fetch_agent_context
-from mcp_server.hooks.agent_briefing_sqlite import (
-    SqliteBriefingConnection,
-    _MAX_MEMORIES,
-    _MIN_HEAT,
-)
-from mcp_server.infrastructure.sqlite_scope_clause import directory_scope_clause
-from mcp_server.shared.project_scope import project_ancestors
+from mcp_server.hooks.agent_briefing_sqlite import _MAX_MEMORIES, _MIN_HEAT
+from mcp_server.infrastructure.hook_recall_queries import briefing_role_rows
 
 
-def fetch_role_context(conn, agent, project_root):
+def fetch_role_context(store: Any, agent: str, project_root: str | None) -> list:
     """Team decisions first; existing role-prior heat order fills unused slots."""
-    result = _fetch_agent_context(conn, agent, [], project_root)
+    result = _fetch_agent_context(store, agent, [], project_root)
     remaining = _MAX_MEMORIES - len(result)
     if not remaining:
         return result
-    if isinstance(conn, SqliteBriefingConnection):
-        rows = _sqlite_role_rows(conn.store._conn, agent, project_root, remaining)
-    else:
-        rows = _pg_role_rows(conn, agent, project_root, remaining)
+    rows = store.call(briefing_role_rows, agent, project_root, _MIN_HEAT, remaining)
     result.extend(
         {
             "id": row["id"],
@@ -33,32 +27,3 @@ def fetch_role_context(conn, agent, project_root):
         for row in rows
     )
     return result
-
-
-def _sqlite_role_rows(conn, agent, project_root, remaining):
-    scope, params = directory_scope_clause(project_ancestors(project_root), "m.")
-    return conn.execute(
-        "SELECT m.id, m.content, m.heat_base AS heat FROM current_memories m "  # noqa: S608 — only placeholder-bearing scope fragment; all values bound
-        "WHERE m.agent_context = ? AND m.heat_base >= ? "
-        "AND NOT COALESCE(m.is_team_decision, 0) "
-        "AND NOT COALESCE(m.is_benchmark, 0) AND m.superseded_by_id IS NULL "
-        + scope
-        # source: ADR-1106 -- exact ties go to the newer memory.
-        + "ORDER BY m.heat_base DESC, m.id DESC LIMIT ?",
-        (agent, _MIN_HEAT, *params, remaining),
-    ).fetchall()
-
-
-def _pg_role_rows(conn, agent, project_root, remaining):
-    return conn.execute(
-        "SELECT m.id, m.content, effective_heat(m, NOW()) AS heat FROM memories m "
-        "JOIN current_memories cm ON cm.id = m.id "
-        "WHERE m.agent_context = %s AND effective_heat(m, NOW()) >= %s "
-        "AND NOT COALESCE(m.is_team_decision, FALSE) AND NOT m.is_benchmark "
-        "AND m.superseded_by_id IS NULL "
-        "AND (m.is_global = TRUE OR m.directory_context = ANY(%s::TEXT[])) "
-        # source: ADR-1106 -- exact ties go to the newer memory.
-        "ORDER BY effective_heat(m, NOW()) DESC, m.created_at DESC, m.id DESC "
-        "LIMIT %s",
-        (agent, _MIN_HEAT, project_ancestors(project_root), remaining),
-    ).fetchall()

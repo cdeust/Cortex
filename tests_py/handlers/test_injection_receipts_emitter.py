@@ -13,7 +13,6 @@ import pytest
 
 from mcp_server.handlers.injection_receipts import (
     INJECTION_CHANNELS,
-    emit_hook_receipt,
     emit_injection_receipt,
 )
 from mcp_server.shared.injection_markers import (
@@ -82,77 +81,31 @@ def test_unknown_channel_is_a_loud_contract_violation() -> None:
     assert store.calls == []
 
 
-# ── T2 hook emitter (caller-owned psycopg connection) ────────────────────
+# ── T2 hook channels: the same store path since ADR-1112 increment 2 ─────
 
 
-class _Conn:
-    """Fake psycopg connection capturing the single-statement insert."""
-
-    def __init__(self, fail: bool = False) -> None:
-        self.calls: list[tuple[str, tuple]] = []
-        self.fail = fail
-        self.autocommit = True
-
-    def execute(self, sql: str, params: tuple):
-        if self.fail:
-            raise RuntimeError("db down")
-        self.calls.append((sql, params))
-        return self
-
-    def fetchone(self) -> dict:
-        return {"receipt_id": 57}
-
-
-def test_hook_receipt_records_channel_session_and_ranks() -> None:
-    conn = _Conn()
-    rid = emit_hook_receipt(
-        conn,
+@pytest.mark.parametrize("channel", ["session_start", "auto_recall", "agent_briefing"])
+def test_hook_channel_receipt_records_channel_session_and_ranks(channel) -> None:
+    """Hooks no longer own a connection: they emit through the store like
+    the recall handler, with their channel and the transcript's session."""
+    store = _Store()
+    rid = emit_injection_receipt(
+        store,
         [{"memory_id": 11}, {"memory_id": 7}],
-        channel="session_start",
+        channel=channel,
         session_id="7374abf5-9c12",
     )
-    assert rid == 57
-    ((_, params),) = conn.calls
-    # (session_id, channel, memory_ids, ranks, scores)  # noqa: ERA001
-    assert params == ("7374abf5-9c12", "session_start", [11, 7], [0, 1], [None, None])
-
-
-def test_hook_receipt_empty_payload_emits_nothing() -> None:
-    conn = _Conn()
-    assert emit_hook_receipt(conn, [], channel="session_start", session_id=None) is None
-    assert conn.calls == []
-
-
-def test_hook_receipt_write_failure_degrades_to_none() -> None:
-    # I/O is the only named degradation mode — the hook keeps printing
-    # its (marker-less) banner.
-    assert (
-        emit_hook_receipt(
-            _Conn(fail=True),
-            [{"memory_id": 1}],
-            channel="agent_briefing",
-            session_id=None,
-        )
-        is None
-    )
-
-
-def test_hook_receipt_unknown_channel_raises_before_io() -> None:
-    conn = _Conn()
-    with pytest.raises(ValueError):
-        emit_hook_receipt(
-            conn, [{"memory_id": 1}], channel="preemptive", session_id=None
-        )
-    assert conn.calls == []
-
-
-def test_hook_receipt_missing_memory_id_raises() -> None:
-    conn = _Conn()
-    with pytest.raises(KeyError):
-        emit_hook_receipt(
-            conn, [{"content": "x"}], channel="auto_recall", session_id=None
-        )
-    assert conn.calls == []
+    assert rid == 42
+    assert store.calls == [
+        {
+            "channel": channel,
+            "items": [
+                {"memory_id": 11, "rank": 0, "score": None},
+                {"memory_id": 7, "rank": 1, "score": None},
+            ],
+            "session_id": "7374abf5-9c12",
+        }
+    ]
 
 
 # ── Correction 7: session identity = transcript basename ─────────────────

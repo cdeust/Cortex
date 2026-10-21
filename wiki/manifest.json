@@ -3599,6 +3599,10 @@
     "ADR-1109": {
       "mirror": "ADR-1109-recall-pools-keep-their-whole-boundary-tie-group.md",
       "path": "adr/cortex/1109-recall-pools-keep-their-whole-boundary-tie-group.md"
+    },
+    "ADR-1112": {
+      "mirror": "ADR-1112-one-local-broker-owns-every-postgresql-connection.md",
+      "path": "adr/cortex/1112-one-local-broker-owns-every-postgresql-connection.md"
     }
   },
   "project": "cortex",

@@ -16,12 +16,9 @@ from __future__ import annotations
 
 import pytest
 
-from mcp_server.hooks.agent_briefing_role import _sqlite_role_rows
-from mcp_server.hooks.agent_briefing_sqlite import (
-    _MAX_MEMORIES,
-    SqliteBriefingConnection,
-    fetch_sqlite_context,
-)
+from mcp_server.hooks.agent_briefing_query import _fetch_agent_context
+from mcp_server.hooks.agent_briefing_sqlite import _MAX_MEMORIES, _MIN_HEAT
+from mcp_server.infrastructure.hook_recall_queries import briefing_role_rows
 from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 from tests_py._tie_layouts import inserted_newest_first, newest_first, stamps
 
@@ -71,16 +68,14 @@ def _insert_row(store, table: str, row: dict) -> int:
 )
 def test_briefing_passes_keep_the_newest_ties(store, values, keywords, source):
     expected = insert_tied(store, **values)
-    rows = fetch_sqlite_context(
-        SqliteBriefingConnection(store), "worker", keywords, _PROJECT
-    )
+    rows = _fetch_agent_context(store, "worker", keywords, _PROJECT)
     assert [r["source"] for r in rows] == [source] * _MAX_MEMORIES
     assert [r["id"] for r in rows] == inserted_newest_first(expected)[:_MAX_MEMORIES]
 
 
 def test_briefing_role_prior_keeps_the_newest_ties(store):
     expected = insert_tied(store)
-    rows = _sqlite_role_rows(store._conn, "worker", _PROJECT, _MAX_MEMORIES)
+    rows = store.call(briefing_role_rows, "worker", _PROJECT, _MIN_HEAT, _MAX_MEMORIES)
     assert [r["id"] for r in rows] == inserted_newest_first(expected)[:_MAX_MEMORIES]
 
 
