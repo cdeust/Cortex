@@ -1,55 +1,34 @@
 name: Claude Code Review
 
-# Every push to a PR gets a Claude Code review (/code-review then /security-review,
-# one cycle), the findings are applied on the PR branch, and squash auto-merge is
-# armed so the PR merges once CI is green.
-# Kept apart from claude.yml: this file runs only on the unprivileged pull_request
-# trigger, so checking out the PR head never happens in a privileged workflow
-# (CodeQL actions/untrusted-checkout, actions/untrusted-checkout-toctou).
-# Action pinned by SHA: anthropics/claude-code-action v1.0.256.
+# Source: https://code.claude.com/docs/en/github-actions ("Run a skill"), with the
+# subscription token and actions pinned by SHA. The code-review plugin's skill
+# brings its own allowed-tools; --allowedTools must name the inline-comment MCP
+# tool so the action starts that server. The skill skips drafts, closed PRs and
+# PRs that already carry a Claude comment.
 
 on:
   pull_request:
     types: [opened, synchronize, ready_for_review, reopened]
 
-permissions:
-  contents: write
-  pull-requests: write
-  issues: write
-  id-token: write
-  actions: read
-
 jobs:
   review:
-    # Commits pushed by Claude itself do not trigger another review.
-    if: |
-      github.event_name == 'pull_request' &&
-      !github.event.pull_request.draft &&
-      github.event.sender.login != 'claude[bot]' &&
-      github.event.sender.login != 'github-actions[bot]'
     runs-on: ubuntu-latest
-    concurrency:
-      group: claude-review-${{ github.event.pull_request.number }}
-      cancel-in-progress: true
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
-          fetch-depth: 0
-
+          fetch-depth: 1
       - uses: anthropics/claude-code-action@a5a423f75c251dcbff8a74e99f83b2cb03c72bfa # v1.0.256
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          track_progress: true
-          prompt: |
-            REPO: ${{ github.repository }}
-            PR NUMBER: ${{ github.event.pull_request.number }}
-            HEAD: ${{ github.event.pull_request.head.sha }}
-
-            1. Post a PR comment starting with "@claude" that summarises the commits pushed to this PR.
-            2. Run /code-review on this PR's diff against its base, then /security-review. One run each, one cycle.
-            3. Post the findings as inline comments on the lines concerned.
-            4. Apply every real finding on the PR branch, run the repository's tests for the touched code, commit and push.
-            5. Arm auto-merge: gh pr merge ${{ github.event.pull_request.number }} --auto --squash
-          claude_args: |
-            --allowedTools "Read,Edit,Write,Glob,Grep,Bash(git:*),Bash(gh pr:*),Bash(gh api:*),Bash(python3:*),Bash(pytest:*),Bash(bash:*),Bash(npm:*),Bash(uv:*),Bash(cargo:*),mcp__github_inline_comment__create_inline_comment"
+          # Dependabot PRs: the action rejects bot actors unless listed
+          # (docs: "Who can trigger runs").
+          allowed_bots: "dependabot[bot]"
+          plugin_marketplaces: "https://github.com/anthropics/claude-code.git"
+          plugins: "code-review@claude-code-plugins"
+          prompt: "/code-review:code-review --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number }}"
+          claude_args: '--allowedTools "mcp__github_inline_comment__create_inline_comment"'
