@@ -558,6 +558,13 @@ jobs:
       # the job of the runner is read from the real kernel32 (by mcp_server and
       # by the Codex copy) and a child starts with the creation flags decided
       # from it. source: ADR-1102
+      # The resolver tests and the four migrated bash callers below join per
+      # issue #689: the callers are the migrated files with 0 failures in
+      # windows-latest run 38012683041, variant D (WSL launcher renamed, Git
+      # Bash first on PATH, PYTHONUTF8=1); this job sets no PYTHONUTF8, so
+      # its first run is the isolating measurement. The other migrated
+      # callers still failed in variant D for the causes tracked in issue
+      # #692 and join as that issue clears them. source: ADR-1101
       - name: Run portability + backend tests
         env:
           HF_HUB_OFFLINE: "1"
@@ -587,6 +594,59 @@ jobs:
           tests_py/shared/test_detached_spawn.py
           tests_py/shared/test_win32_job.py
           tests_py/hooks/test_codex_windows_job.py
+          tests_py/shared/test_bash_resolution.py
+          tests_py/benchmarks/test_bench_regression_datasets.py
+          tests_py/benchmarks/test_reproduce_only_validation.py
+          tests_py/benchmarks/test_reranker_matrix_runner.py
+          tests_py/scripts/test_setup_py_failure_message.py
+
+      # Only the WSL stubs stay reachable once Git leaves PATH (System32
+      # cannot): resolving bash must fail and name Git for Windows.
+      # source: ADR-1101 (issue #689)
+      - name: Without Git on PATH, resolving bash fails naming Git for Windows
+        shell: pwsh
+        run: |
+          $env:PATH = ($env:PATH -split ';' | Where-Object { $_ -notmatch '\\Git\\' }) -join ';'
+          $code = @'
+          from mcp_server.shared.platform import BashNotFoundError, resolve_bash
+          try:
+              found = resolve_bash()
+          except BashNotFoundError as error:
+              print(error)
+              assert 'Git for Windows' in str(error), error
+          else:
+              raise SystemExit(f'bash still resolved without Git on PATH: {found}')
+          '@
+          python -c $code
+
+      # The hook commands of .claude-plugin/plugin.json all start with a bare
+      # `bash -c`. With no bash anywhere on PATH (Git for Windows and the WSL
+      # launchers alike) PowerShell must refuse each one with a
+      # command-not-found error naming bash: no silent success, no WSL
+      # message. The step first proves that bash is gone, then runs each command.
+      # source: ADR-1101 (issue #689, owner decision 2026-10-13)
+      - name: Hook commands fail loudly under PowerShell with bash off PATH
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $kept = $env:PATH -split ';' | Where-Object { $_ -and -not (Test-Path -LiteralPath ($_ + '\bash.exe')) }
+          $env:PATH = $kept -join ';'
+          if (Get-Command bash -ErrorAction SilentlyContinue) { throw 'bash is still on PATH' }
+          $plugin = Get-Content -Raw -Encoding utf8 .claude-plugin/plugin.json | ConvertFrom-Json
+          $commands = @(foreach ($event in $plugin.hooks.PSObject.Properties) { foreach ($group in $event.Value) { foreach ($hook in $group.hooks) { $hook.command } } })
+          if ($commands.Count -eq 0) { throw 'no hook command found in plugin.json' }
+          foreach ($command in $commands) {
+            $failure = $null
+            try { Invoke-Expression $command } catch { $failure = $_ }
+            if ($null -eq $failure) { throw "hook command ran without bash on PATH: $command" }
+            # FullyQualifiedErrorId carries the reporting command after a comma
+            # ('CommandNotFoundException,...InvokeExpressionCommand' under
+            # Invoke-Expression), so the check is on the exception type.
+            if ($failure.Exception -isnot [System.Management.Automation.CommandNotFoundException] -or $failure.Exception.Message -notmatch 'bash') {
+              throw "hook command failed the wrong way: $($failure.FullyQualifiedErrorId): $($failure.Exception.Message)"
+            }
+            Write-Host "refused: $($failure.Exception.Message)"
+          }
 
   # source: ADR-0802
 

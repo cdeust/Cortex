@@ -9,6 +9,10 @@ import subprocess
 import sys
 
 import yaml
+from mcp_server.shared.platform import resolve_bash
+
+# A bare "bash" on Windows is the System32 WSL stub. source: ADR-1101
+BASH = resolve_bash()
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -26,7 +30,7 @@ def _host_step() -> str:
 
 def test_native_host_step_is_valid_shell_and_resolves_plugin_command():
     step = _host_step()
-    subprocess.run(["bash", "-n"], input=step, text=True, check=True)
+    subprocess.run([BASH, "-n"], input=step, text=True, check=True)
     expression = next(
         code
         for code in re.findall(r"python -c '([^']*)'", step)

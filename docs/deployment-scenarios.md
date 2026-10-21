@@ -32,6 +32,22 @@ inside WSL.
 Everything else — hook registration, `python3 -m mcp_server.doctor`,
 `scripts/setup_db.py`, `scripts/setup.py` — works without modification.
 
+WSL is the recommended way to run Cortex on Windows.
+
+### Native Windows (without WSL)
+
+Native Windows stays supported, with one requirement: **Git for Windows**
+(<https://git-scm.com/download/win>). The plugin installer and hook commands
+are bash, and Claude Code runs them through its own Git Bash.
+
+Code that starts bash from Python (tests, benchmark drivers) resolves it
+through `mcp_server.shared.platform.resolve_bash`. A bare `bash` on Windows
+finds `C:\Windows\System32\bash.exe` first, which is the WSL launcher, not
+Git Bash. The resolver skips that launcher and the one under `WindowsApps`,
+then looks for `bin\bash.exe` next to `git.exe` when PATH only holds
+`Git\cmd` (the Git for Windows default). With no usable bash it fails with a
+message naming Git for Windows; it never skips. Decision: ADR-1101.
+
 ---
 
 ## Client-certificate authentication (no password)
