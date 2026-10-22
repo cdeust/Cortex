@@ -433,6 +433,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- `.github/workflows/claude.yml`: the @claude mention workflow can run ruff, uv, pipx, coverage, tsc, shellcheck and the Claude CLI.
 - **`uv.lock` is the only dependency source (ADR-1092).** The thirteen
   generated `requirements/*.txt` exports, their generator and the launcher's
   hand-kept pins are gone. CI jobs, the three Docker images and the

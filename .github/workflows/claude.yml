@@ -38,4 +38,4 @@ jobs:
           plugin_marketplaces: "https://github.com/anthropics/claude-code.git"
           plugins: "code-review@claude-code-plugins"
           claude_args: |
-            --allowedTools "Read,Edit,MultiEdit,Write,Glob,Grep,LS,Skill,Task,Agent,Bash(git:*),Bash(gh:*),Bash(python3:*),Bash(python:*),Bash(pytest:*),Bash(pip:*),Bash(uv:*),Bash(uvx:*),Bash(npm:*),Bash(npx:*),Bash(pnpm:*),Bash(node:*),Bash(cargo:*),Bash(bash:*),Bash(sh:*),Bash(make:*),Bash(jq:*),mcp__github_inline_comment__create_inline_comment"
+            --allowedTools "Read,Edit,MultiEdit,Write,Glob,Grep,LS,Skill,Task,Agent,Bash(git:*),Bash(gh:*),Bash(python3:*),Bash(python:*),Bash(pytest:*),Bash(pip:*),Bash(uv:*),Bash(uvx:*),Bash(npm:*),Bash(npx:*),Bash(pnpm:*),Bash(node:*),Bash(cargo:*),Bash(bash:*),Bash(sh:*),Bash(make:*),Bash(jq:*),Bash(claude:*),Bash(actionlint:*),Bash(ruff:*),Bash(pipx:*),Bash(coverage:*),Bash(tsc:*),Bash(shellcheck:*),Bash(cd:*),Bash(ls:*),Bash(cat:*),Bash(test:*),mcp__github_inline_comment__create_inline_comment"
