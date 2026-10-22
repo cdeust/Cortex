@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/cdeust/Cortex/actions/workflows/ci.yml"><img src="https://github.com/cdeust/Cortex/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/cdeust/Cortex/actions/workflows/pipeline.yml"><img src="https://github.com/cdeust/Cortex/actions/workflows/pipeline.yml/badge.svg" alt="Pipeline"></a>
   <a href="LICENSE"><img src="assets/badge-license.svg" alt="License: MIT"></a>
   <img src="assets/badge-python.svg" alt="Python 3.10+">
   <img src="assets/badge-tests.svg" alt="tests passing">
