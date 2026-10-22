@@ -143,10 +143,19 @@ The only outbound network activity is:
    `CORTEX_RERANKER_OFFLINE=1`: Cortex then refuses the download when the model
    is not already cached and degrades to first-stage retrieval scores, logging
    a warning that names the path it expected, rather than reaching out.
-3. **Integrations you explicitly enable.** If you configure optional upstream MCP
+3. **The code-intelligence server, only when you run `scripts/setup.sh`.**
+   `setup.sh` installs another product, ai-architect-mcp-codebase: the latest
+   release binary from GitHub Releases (`api.github.com/repos/cdeust/ai-architect-mcp-codebase`,
+   about 46 MB, measured 2026-10-10), or, when no release fits, a shallow
+   `git clone` of that repository, the Rust toolchain from `sh.rustup.rs`
+   (hash-pinned) and its crates from crates.io. No hook and no MCP tool
+   downloads or builds it: SessionStart only registers one that is already
+   installed (ADR-1116). `CORTEX_AUTO_INSTALL_PIPELINE=0` makes `setup.sh`
+   skip it too.
+4. **Integrations you explicitly enable.** If you configure optional upstream MCP
    servers or a remote PostgreSQL database, Cortex communicates only with the
    endpoints you provided.
-4. **Optional OTLP telemetry export (opt-in, OFF by default).** If you set the
+5. **Optional OTLP telemetry export (opt-in, OFF by default).** If you set the
    `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable, Cortex additionally
    mirrors the same aggregate, content-free metrics already visible via
    `get_telemetry` (per-tool call counts, latencies, and result counts —

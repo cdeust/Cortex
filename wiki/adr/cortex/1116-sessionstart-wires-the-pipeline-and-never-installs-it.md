@@ -1,0 +1,29 @@
+---
+created: 2026-10-20T17:00:00Z
+kind: adr
+number: 1116
+status: accepted
+tags: [install, hooks, pipeline, privacy, consent]
+title: SessionStart wires the pipeline and never installs it
+---
+# ADR-1116: SessionStart wires the pipeline and never installs it
+
+## Status
+
+accepted. Amends ADR-0584 (SessionStart auto-discovery) and ADR-0589 (the installer): the installer is unchanged, but only `scripts/setup.sh` calls it.
+
+## Context
+
+Issue #705. An independent audit (2026-10-10, main b4a62b23, plugin 4.23.5, macOS arm64) saw the first SessionStart download a 46 MB binary of another product (ai-architect-mcp-codebase) from GitHub Releases and register it, with no consent and with no mention in PRIVACY. Cause, read on main df3a447: `session_start._session_start` calls `_auto_wire_pipeline`, which calls `pipeline_discovery.ensure_pipeline_connection`; when no pipeline is discovered that function called `pipeline_installer.install_pipeline()` in band, which tries the release binary, then rustup + `git clone` + `cargo build --release` (timeout 1800 s) inside a hook whose timeout is 30 s. Reproduced 2026-10-20 in this session: a hook probe hung 120 s, `faulthandler` showed the stack inside `install_pipeline`. The dependency half of #705 is ADR-1108 (no hook installs dependencies).
+
+## Decision
+
+1. `ensure_pipeline_connection` never installs: it registers a pipeline that discovery finds, purges a stale entry, and otherwise returns `no_pipeline_found`.
+2. Installing the pipeline is an explicit step the user runs: `scripts/setup.sh` already calls `install_pipeline()` and then `ensure_pipeline_connection` (unchanged); `CORTEX_AUTO_INSTALL_PIPELINE=0` skips it there.
+3. PRIVACY lists that download with its origin and size.
+
+## Consequences
+
+- Test `tests_py/infrastructure/test_pipeline_discovery.py::TestEnsureConnection::test_never_installs_the_pipeline` replaces `install_pipeline` with a function that raises: failed on main df3a447, passes with this change.
+- A plugin user who never runs `setup.sh` and never installs ai-architect-mcp-codebase has no `codebase` server: `ingest_codebase` and `change_impact` stay unregistered (they are conditional, `docs/mcp-tools.md`), exactly as for a user who set `CORTEX_AUTO_INSTALL_PIPELINE=0` before.
+- SessionStart no longer reaches the network for the pipeline.

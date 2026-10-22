@@ -168,7 +168,9 @@ def ensure_pipeline_connection(project_root: Optional[str]) -> dict:
       path:   path to the config file (always)
       binary: resolved pipeline binary path (when discovered)
 
-    Idempotent. Safe to call every SessionStart. ``project_root`` is
+    Idempotent. Safe to call every SessionStart: it only wires a pipeline
+    that is already installed and never downloads or builds one (ADR-1116).
+    ``project_root`` is
     forwarded to ``discover_pipeline_command`` as its sibling-scan anchor.
     """
     path = Path(MCP_CONNECTIONS_PATH)
@@ -202,14 +204,7 @@ def ensure_pipeline_connection(project_root: Optional[str]) -> dict:
                 "Failed to purge stale codebase entry from %s: %s", path, exc
             )
 
-    # source: ADR-0584
-    if command is None:
-        from mcp_server.infrastructure.pipeline_installer import install_pipeline  # noqa: PLC0415 — import cycle with mcp_server.infrastructure.pipeline_installer; a top-level import fails at boot
-
-        install_result = install_pipeline()
-        if install_result.get("action") == "installed":
-            command = discover_pipeline_command(project_root)
-
+    # source: ADR-1116 — never installs; installing is scripts/setup.sh's step
     if command is None:
         return {"action": "no_pipeline_found", "path": str(path)}
 

@@ -232,6 +232,24 @@ class TestEnsureConnection:
         assert result["action"] == "no_pipeline_found"
         assert not config_path.exists()
 
+    def test_never_installs_the_pipeline(self, tmp_path, monkeypatch):
+        """SessionStart wires a pipeline that is already there; installing
+        another product's binary is an explicit setup step (#705, ADR-1116)."""
+        monkeypatch.setattr(
+            pipeline_discovery, "MCP_CONNECTIONS_PATH", tmp_path / "mcp.json"
+        )
+        monkeypatch.setattr(
+            pipeline_discovery, "discover_pipeline_command", lambda project_root: None
+        )
+        from mcp_server.infrastructure import pipeline_installer
+
+        def refuse(*args, **kwargs):
+            raise AssertionError("ensure_pipeline_connection installed the pipeline")
+
+        monkeypatch.setattr(pipeline_installer, "install_pipeline", refuse)
+        result = pipeline_discovery.ensure_pipeline_connection(str(tmp_path))
+        assert result["action"] == "no_pipeline_found"
+
     def test_existing_codebase_entry_preserved(self, tmp_path, monkeypatch):
         """User already configured codebase server with a real binary
         → we leave it alone (don't overwrite custom config)."""
@@ -282,17 +300,8 @@ class TestEnsureConnection:
             )
         )
         monkeypatch.setattr(pipeline_discovery, "MCP_CONNECTIONS_PATH", config_path)
-        # Simulate fresh discovery finding nothing (no install attempted
-        # because we monkeypatch install_pipeline import).
         monkeypatch.setattr(
             pipeline_discovery, "discover_pipeline_command", lambda project_root: None
-        )
-        from mcp_server.infrastructure import pipeline_installer
-
-        monkeypatch.setattr(
-            pipeline_installer,
-            "install_pipeline",
-            lambda: {"action": "missing_toolchain", "missing": ["cargo"]},
         )
 
         result = pipeline_discovery.ensure_pipeline_connection(str(tmp_path))
