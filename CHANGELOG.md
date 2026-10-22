@@ -141,6 +141,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The `@claude` mention workflow (`.github/workflows/claude.yml`) checks out full history and can run git, gh and the test runners.
 - **No hook installs dependencies any more; run `claude --init-only` after
   `claude plugin install` and after `claude plugin update`** (ADR-1108,
   replacing ADR-1104 decision 4). Every hook used to install whenever its
