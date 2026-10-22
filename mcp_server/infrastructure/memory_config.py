@@ -62,8 +62,6 @@ class MemorySettings(BaseSettings):
     EMOTIONAL_DECAY_RESISTANCE: float = 0.5
     SYNAPTIC_WINDOW_MINUTES: int = 30
     SYNAPTIC_BOOST: float = 0.2
-    SESSION_COHERENCE_BONUS: float = 0.2
-    SESSION_COHERENCE_WINDOW_HOURS: float = 4.0
 
     # ── Retrieval ─────────────────────────────────────────────────────────
     DEFAULT_RECALL_LIMIT: int = 10
@@ -112,11 +110,6 @@ class MemorySettings(BaseSettings):
     # ── Compression ───────────────────────────────────────────────────────
     COMPRESSION_GIST_AGE_HOURS: float = 168.0  # 7 days
     COMPRESSION_TAG_AGE_HOURS: float = 720.0  # 30 days
-
-    # source: ADR-0534
-    RECENCY_BOOST_MAX: float = 0.15  # Maximum recency bonus
-    RECENCY_BOOST_HALFLIFE_DAYS: float = 30.0  # Exponential decay half-life
-    RECENCY_BOOST_CUTOFF_DAYS: float = 90.0  # No boost after this age
 
     # source: ADR-0534
     STRATEGIC_ORDERING_ENABLED: bool = True

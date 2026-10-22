@@ -109,14 +109,6 @@ class BlindSpot(BaseModel):
 # --- Detection Types ---
 
 
-class DetectionContext(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    cwd: str | None = None
-    project: str | None = None
-    first_message: str | None = None
-
-
 class AlternativeDomain(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -192,9 +184,3 @@ class SessionLogEntry(BaseModel):
     tools_used: list[str] = Field(default_factory=list, alias="toolsUsed")
     category: str = ""
     entry_keywords: list[str] = Field(default_factory=list, alias="entryKeywords")
-
-
-class SessionLog(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    sessions: list[SessionLogEntry] = Field(default_factory=list)

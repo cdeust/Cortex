@@ -16,7 +16,6 @@ WRITE_RAM_BUDGET_BYTES = 256 * 1024 * 1024
 ENTITY_B_MIN = 500
 ENTITY_B_MAX = 5000
 ENTITY_W_TARGET_S = 0.111
-ENTITY_ROW_BYTES = 213
 
 # Edge staging path (COPY → INSERT … JOIN entities … ON CONFLICT DO NOTHING).
 EDGE_B_MIN = 1000
@@ -43,13 +42,6 @@ def make_edge_controller() -> AdaptiveBatchController:
     source: ADR-0270
     """
     return AdaptiveBatchController(EDGE_B_MIN, EDGE_B_MAX, EDGE_W_TARGET_S)
-
-
-def entity_queue_cap() -> int:
-    return min(
-        _MAX_QUEUE_CAP,
-        compute_queue_cap(WRITE_RAM_BUDGET_BYTES, ENTITY_B_MAX, ENTITY_ROW_BYTES),
-    )
 
 
 def edge_queue_cap() -> int:

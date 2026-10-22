@@ -214,18 +214,6 @@ def _extract_evidence(content: str) -> list[EvidenceRef]:
     return refs
 
 
-# source: ADR-0123
-
-_SUPERSEDES_RE = re.compile(
-    r"\b(supersed(?:es|ed by)|replaces?|replaced by|deprecated by|in favour of)\b",
-    re.IGNORECASE,
-)
-
-
-def _detects_supersedes(sentence: str) -> bool:
-    return bool(_SUPERSEDES_RE.search(sentence))
-
-
 # ── Public extractor entry point ─────────────────────────────────────
 
 

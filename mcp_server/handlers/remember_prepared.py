@@ -30,7 +30,6 @@ class PreparedWrite:
 @dataclass(frozen=True)
 class InputFailure:
     error: Exception
-    abort: bool = False
 
 
 @dataclass
@@ -49,10 +48,6 @@ class PreparedEncoding:
     @property
     def args(self) -> dict | None:
         return self.input if isinstance(self.input, dict) else None
-
-    def raise_input_abort(self) -> None:
-        if isinstance(self.input, InputFailure) and self.input.abort:
-            raise self.input.error
 
     def checked(self) -> PreparedWrite | dict:
         if self.prepared is not None:

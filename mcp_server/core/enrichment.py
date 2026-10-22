@@ -120,19 +120,3 @@ def build_expanded_query(query: str) -> str:
     if not expansions:
         return query
     return query + " " + " ".join(expansions)
-
-
-# ── COMET-style commonsense patterns ──────────────────────────────────────
-
-_COMET_TEMPLATES = [
-    ("{X} is used to {Y}", "purpose"),
-    ("{X} causes {Y}", "causation"),
-    ("{X} requires {Y}", "dependency"),
-    ("{X} enables {Y}", "enablement"),
-]
-
-
-def generate_comet_frames(subject: str, object_hint: str = "") -> list[str]:
-    """Generate COMET-style commonsense inference frames."""
-    obj = object_hint or "downstream systems"
-    return [t.replace("{X}", subject).replace("{Y}", obj) for t, _ in _COMET_TEMPLATES]

@@ -27,13 +27,6 @@ def _now_iso() -> str:
 _TITLE_MAX_LEN = 80
 
 
-def should_sync(tags: list[str] | None) -> bool:
-    """True if the memory's tags warrant a wiki page."""
-    if not tags:
-        return False
-    return any(t.lower() in _DECISION_TAGS for t in tags)
-
-
 def _derive_title(content: str) -> str:
     """Extract a short title from the first line or sentence of content.
 

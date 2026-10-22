@@ -100,21 +100,6 @@ class PgEntityMixin(PgStoreHost):
         ).fetchone()
         return dict(row) if row else None
 
-    def get_top_entities_for_domain(
-        self, domain_slug: str, limit: int = 20
-    ) -> list[dict[str, Any]]:
-        """Return the highest-heat entities tagged with ``domain_slug``.
-
-        Used by the chain endpoint to seed a domain-level BFS — the domain
-        node itself is not an entity, but its code symbols are.
-        """
-        rows = self._execute(
-            "SELECT * FROM entities WHERE domain = %s "
-            "ORDER BY heat DESC, mention_count DESC LIMIT %s",
-            (domain_slug, limit),
-        ).fetchall()
-        return [dict(r) for r in rows]
-
     def get_all_entities(
         self, min_heat: float = 0.05, include_archived: bool = False
     ) -> list[dict[str, Any]]:
@@ -207,22 +192,6 @@ class PgEntityMixin(PgStoreHost):
             "VALUES (%s, %s) ON CONFLICT DO NOTHING",
             (memory_id, entity_id),
         )
-
-    def list_memory_entity_edges(self) -> list[dict[str, Any]]:
-        """Return every row of the ``memory_entities`` join table.
-
-        Shape: ``[{memory_id: int, entity_id: int}, ...]``. Used by the
-        workflow-graph loader to synthesise ABOUT_ENTITY edges — each
-        row becomes one MEMORY→ENTITY edge, skipped silently if either
-        endpoint is not in the graph (below min_heat or archived)."""
-        rows = self._execute(
-            "SELECT memory_id, entity_id FROM memory_entities"
-        ).fetchall()
-        return [
-            {"memory_id": r["memory_id"], "entity_id": r["entity_id"]}
-            for r in rows
-            if r.get("memory_id") is not None and r.get("entity_id") is not None
-        ]
 
     def get_entities_for_memory(self, memory_id: int) -> list[dict[str, Any]]:
         """Return all entities linked to a memory via the join table."""

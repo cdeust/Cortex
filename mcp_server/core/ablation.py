@@ -228,34 +228,9 @@ def neutral_encoding_strength() -> float:
     return 1.0
 
 
-def neutral_retrieval_strength() -> float:
-    """Return neutral retrieval strength (no oscillatory modulation)."""
-    return 1.0
-
-
-def neutral_ltp_modulation() -> float:
-    """Return neutral LTP modulation (no astrocyte/neuromodulation)."""
-    return 1.0
-
-
 def neutral_schema_match() -> float:
     """Return neutral schema match (no schema acceleration)."""
     return 0.0
-
-
-def neutral_interference_score() -> float:
-    """Return neutral interference (no interference management)."""
-    return 0.0
-
-
-def neutral_separation_index() -> float:
-    """Return neutral separation (no pattern separation)."""
-    return 0.0
-
-
-def neutral_hippocampal_dependency() -> float:
-    """Return neutral dependency (no two-stage model)."""
-    return 0.5
 
 
 def neutral_scaling_factor() -> float:

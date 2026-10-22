@@ -240,22 +240,6 @@ def _set_memory_metadata(store: MemoryStore, memory_id: int) -> None:
         silent_failure.note("codebase_analyze.semantic_promotion", exc)
 
 
-async def _store_file(
-    root: Path,
-    rel_path: str,
-    analysis: Any,
-    domain: str,
-    store: MemoryStore,
-) -> tuple[int | None, int, int]:
-    """Store a single file as a memory with entities.
-
-    Returns:
-        Tuple of (memory_id, entities, relationships).
-    """
-    result = await remember_handler(_file_args(root, rel_path, analysis, domain))
-    return _finish_file(store, analysis, result, domain)
-
-
 def _file_args(root: Path, rel_path: str, analysis: Any, domain: str) -> dict:
     return {
         "content": build_memory_content(analysis),

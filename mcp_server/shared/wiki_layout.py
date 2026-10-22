@@ -78,14 +78,6 @@ def adr_filename(number: int, slug: str) -> str:
     return f"{number:04d}-{slug}.md"
 
 
-def domain_page_path(kind: str, domain: str, slug: str) -> str:
-    """Generate a domain-scoped page path: <kind>/<domain>/<slug>.md."""
-    if kind not in PAGE_KINDS:
-        raise ValueError(f"unknown wiki page kind: {kind}")
-    safe_domain = slugify(domain, max_len=40) if domain else "_general"
-    return f"{kind}/{safe_domain}/{slug}.md"
-
-
 def page_path(kind: str, filename: str) -> PurePosixPath:
     """Path relative to the wiki root for a page of a given kind."""
     if kind not in PAGE_KINDS:

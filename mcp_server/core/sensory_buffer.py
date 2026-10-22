@@ -132,13 +132,6 @@ class SensoryBuffer:
         items = list(self._buffer)
         return items[-n:]
 
-    def peek_important(self, threshold: float | None = None) -> list[BufferItem]:
-        """Return items above an importance threshold without removing them."""
-        thresh = (
-            threshold if threshold is not None else self._importance_threshold * 0.8
-        )
-        return [item for item in self._buffer if item.importance >= thresh]
-
     def focus(
         self,
         query: str,
@@ -200,18 +193,6 @@ class SensoryBuffer:
 
         return qualifying
 
-    def drain_displaced(self) -> list[BufferItem]:
-        """Return and clear items that were evicted due to buffer overflow."""
-        evicted = list(self._displaced)
-        self._displaced.clear()
-        return evicted
-
-    def drain_all(self) -> list[BufferItem]:
-        """Drain everything, sorted by importance descending."""
-        all_items = sorted(self._buffer, key=lambda x: x.importance, reverse=True)
-        self._buffer.clear()
-        return all_items
-
     # ── Stats ──────────────────────────────────────────────────────────
 
     @property
@@ -250,22 +231,3 @@ class SensoryBuffer:
 # Handlers can import and use this directly.
 
 _global_buffer: SensoryBuffer | None = None
-
-
-def get_global_buffer(
-    capacity: int = 50, importance_threshold: float = 0.7
-) -> SensoryBuffer:
-    """Get or create the module-level shared sensory buffer."""
-    global _global_buffer
-    if _global_buffer is None:
-        _global_buffer = SensoryBuffer(
-            capacity=capacity,
-            importance_threshold=importance_threshold,
-        )
-    return _global_buffer
-
-
-def reset_global_buffer() -> None:
-    """Reset the global buffer (useful for testing)."""
-    global _global_buffer
-    _global_buffer = None

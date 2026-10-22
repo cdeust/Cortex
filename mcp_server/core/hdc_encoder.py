@@ -75,15 +75,6 @@ def bundle(vectors: list[np.ndarray]) -> np.ndarray:
     return np.where(result == 0, tiebreak, result).astype(np.float32)
 
 
-def permute(v: np.ndarray, n: int = 1) -> np.ndarray:
-    """Permute a hypervector by circular left-shift of n positions.
-
-    Encodes sequence position / temporal order.
-    permute(v, 0) = v; permute(permute(v, 1), -1) = v.
-    """
-    return np.roll(v, -n)
-
-
 def similarity(a: np.ndarray, b: np.ndarray) -> float:
     """Cosine-like similarity for bipolar vectors.
 
@@ -174,19 +165,6 @@ def encode_text(text: str, dim: int = HDC_DIM, use_bigrams: bool = True) -> np.n
             bound = bind(_word_to_hdc(words[i], dim), _word_to_hdc(words[i + 1], dim))
             vecs.append(bound)
 
-    return bundle(vecs)
-
-
-def encode_with_position(tokens: list[str], dim: int = HDC_DIM) -> np.ndarray:
-    """Encode a token sequence preserving order via permutation.
-
-    pos_i encodes token at position i by permuting its atom i times.
-    Useful for encoding structured sequences (import paths, function signatures).
-    """
-    if not tokens:
-        return np.zeros(dim, dtype=np.float32)
-
-    vecs = [permute(_word_to_hdc(t, dim), i) for i, t in enumerate(tokens)]
     return bundle(vecs)
 
 

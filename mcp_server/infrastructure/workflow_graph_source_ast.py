@@ -100,18 +100,6 @@ class WorkflowGraphASTSource:
         paths = [p for p in file_paths if p]
         yield from self._loop_owner.run_iter(self._iter_edges_async(graph_paths, paths))
 
-    def load_ast_edges(
-        self,
-        file_paths: Iterable[str],
-    ) -> list[dict[str, Any]]:
-        """Collect iter_ast_edges into a complete edge list.
-
-        source: ADR-0634"""
-        out: list[dict[str, Any]] = []
-        for batch in self.iter_ast_edges(file_paths):
-            out.extend(batch)
-        return out
-
     async def _iter_symbols_async(
         self,
         graph_paths: list[str],
@@ -145,19 +133,6 @@ class WorkflowGraphASTSource:
             except Exception as exc:  # noqa: BLE001 — one corrupt/missing graph never kills the whole stream; logged per skip
                 logger.debug("edge batches failed for graph %s (skipped): %s", gp, exc)
                 continue
-
-    async def _load_symbols_async(
-        self,
-        graph_path: str,
-        paths: list[str],
-    ) -> list[dict[str, Any]]:
-        """Full-set per-graph drain of ``_symbol_batches_async``.
-
-        source: ADR-0634"""
-        out: list[dict[str, Any]] = []
-        async for batch in self._symbol_batches_async(graph_path, paths):
-            out.extend(batch)
-        return out
 
     def _symbol_batches_async(self, graph_path: str, paths: list[str]):
         """Delegates to ``workflow_graph_ast_symbols.symbol_batches_async``.
@@ -209,22 +184,6 @@ class WorkflowGraphASTSource:
     ) -> dict[str, bool]:
         """Delegates to ``workflow_graph_ast_symbols.verify_symbols_async``."""
         return await verify_symbols_async(self._bridge, graph_path, qualnames)
-
-    async def _load_edges_async(
-        self,
-        graph_path: str,
-        paths: list[str],
-    ) -> list[dict[str, Any]]:
-        """Full-set per-graph drain of ``_edge_batches_async``.
-
-        Kept list-returning for ``http_standalone_graph`` (caches the
-        per-project edge list, reports ``len(edgs)``) — a genuine full-set
-        consumer (reported as needing-full-set in the C3 RCA).
-        """
-        out: list[dict[str, Any]] = []
-        async for batch in self._edge_batches_async(graph_path, paths):
-            out.extend(batch)
-        return out
 
     def _edge_batches_async(self, graph_path: str, paths: list[str]):
         """Yield edge-query batches through

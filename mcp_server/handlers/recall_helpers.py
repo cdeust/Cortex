@@ -7,7 +7,6 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from mcp_server.core import thermodynamics
 from mcp_server.core.enrichment import build_expanded_query
 from mcp_server.shared.code_tokenize import expand_fts_query
 from mcp_server.core.prospective import check_trigger
@@ -17,7 +16,6 @@ from mcp_server.core.retrieval_signals import (
     compute_hopfield_hdc,
 )
 from mcp_server.core.scoring import compute_bm25_scores, compute_ngram_score
-from mcp_server.shared.temporal import compute_recency_boost
 from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
 from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.observability import silent_failure
@@ -127,23 +125,6 @@ def collect_signals(
         "bm25": bm25,
         "ngram": ngram,
     }
-
-
-def compute_result_boost(intent: str, created_at: str, settings: Any) -> float:
-    """Compute recency boost based on query intent."""
-    if intent == QueryIntent.KNOWLEDGE_UPDATE:
-        return compute_recency_boost(
-            created_at,
-            boost_max=settings.RECENCY_BOOST_MAX * 3.0,
-            halflife_days=settings.RECENCY_BOOST_HALFLIFE_DAYS * 0.5,
-            cutoff_days=settings.RECENCY_BOOST_CUTOFF_DAYS * 2.0,
-        )
-    return compute_recency_boost(
-        created_at,
-        boost_max=settings.RECENCY_BOOST_MAX,
-        halflife_days=settings.RECENCY_BOOST_HALFLIFE_DAYS,
-        cutoff_days=settings.RECENCY_BOOST_CUTOFF_DAYS,
-    )
 
 
 def parse_tags(tags: Any) -> list:
@@ -257,31 +238,6 @@ def filter_by_tags(
             continue
         kept.append(r)
     return kept
-
-
-def build_result(mem: dict, score: float, intent: str, settings: Any) -> dict:
-    """Build a single result dict with recency boost."""
-    created_at = mem.get("created_at", "")
-    heat = thermodynamics.compute_session_coherence(
-        mem["heat"],
-        created_at,
-        bonus=settings.SESSION_COHERENCE_BONUS,
-        window_hours=settings.SESSION_COHERENCE_WINDOW_HOURS,
-    )
-    boost = compute_result_boost(intent, created_at, settings)
-    return {
-        "memory_id": mem["id"],
-        "content": mem["content"],
-        "score": round(score * (1.0 + boost), 4),
-        "heat": round(heat, 4),
-        "domain": mem.get("domain", ""),
-        "tags": parse_tags(mem.get("tags", [])),
-        "store_type": mem.get("store_type", "episodic"),
-        "created_at": created_at,
-        "importance": mem.get("importance", 0.5),
-        "surprise": mem.get("surprise_score", 0.0),
-        "recency_boost": round(boost, 4),
-    }
 
 
 def inject_triggered_memories(

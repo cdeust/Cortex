@@ -188,37 +188,3 @@ def vader_compound(text: str) -> float:
     total = sum(sentiments)
     compound = total / math.sqrt(total * total + _ALPHA)
     return max(-1.0, min(1.0, round(compound, 4)))
-
-
-def vader_scores(text: str) -> dict[str, float]:
-    """Compute VADER pos/neg/neu/compound scores.
-
-    Returns dict with keys: pos, neg, neu, compound.
-    pos + neg + neu = 1.0 (proportions of tokens).
-    """
-    tokens = _tokenize(text)
-    compound = vader_compound(text)
-
-    if not tokens:
-        return {"pos": 0.0, "neg": 0.0, "neu": 1.0, "compound": 0.0}
-
-    pos_count = 0
-    neg_count = 0
-    neu_count = 0
-
-    for token in tokens:
-        v = _LEXICON.get(token, 0.0)
-        if v > 0:
-            pos_count += 1
-        elif v < 0:
-            neg_count += 1
-        else:
-            neu_count += 1
-
-    total = len(tokens)
-    return {
-        "pos": round(pos_count / total, 4),
-        "neg": round(neg_count / total, 4),
-        "neu": round(neu_count / total, 4),
-        "compound": compound,
-    }

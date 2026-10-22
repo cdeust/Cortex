@@ -31,7 +31,7 @@ def _inputs(inputs: Iterable[dict | InputFailure]) -> Iterator[dict | InputFailu
         except StopIteration:
             return
         except Exception as exc:  # noqa: BLE001 — defer caller preparation failure until preceding writes finish
-            yield InputFailure(exc, abort=True)
+            yield InputFailure(exc)
             return
         yield item
 

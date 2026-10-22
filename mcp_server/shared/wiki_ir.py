@@ -211,30 +211,5 @@ class ApprovedPage(BaseModel):
     tended: datetime | None = None
 
 
-# source: ADR-0681
-
-
-MemoSubject = Literal["concept", "draft", "page", "claim"]
-
-
-class CurationMemo(BaseModel):
-    """The grounded-theory memoing layer.
-
-    source: ADR-0681"""
-
-    model_config = ConfigDict(extra="forbid")
-
-    id: int | None = None
-    subject_type: MemoSubject
-    subject_id: int
-    decision: str
-    rationale: str = ""
-    alternatives: list[dict] = Field(default_factory=list)
-    inputs: dict = Field(default_factory=dict)
-    confidence: float = Field(0.5, ge=0.0, le=1.0)
-    author: str = "system"
-    created_at: datetime | None = None
-
-
 # Forward reference resolution for ClaimEvent.evidence_refs
 ClaimEvent.model_rebuild()

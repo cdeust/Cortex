@@ -181,16 +181,6 @@ def extract_entities_from_content(content: str) -> list[str]:
     return entities
 
 
-def _cluster_topic_from_entities(entities: list[str]) -> str:
-    """Pick a topic label from a list of entities (most-frequent wins)."""
-    if not entities:
-        return "untitled"
-    c = Counter(entities)
-    top = c.most_common(1)[0][0]
-    # Strip extension if present
-    return top.rsplit(".", 1)[0]
-
-
 # ── Clustering ──────────────────────────────────────────────────────────
 
 

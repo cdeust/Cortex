@@ -82,34 +82,6 @@ def build_reconciliation_sql(
     return _RECONCILE_SQL, params
 
 
-def build_count_eligible_sql(
-    memory_age_days: int = DEFAULT_MEMORY_AGE_DAYS,
-    entity_age_hours: int = DEFAULT_ENTITY_AGE_HOURS,
-    min_name_length: int = DEFAULT_MIN_NAME_LENGTH,
-) -> tuple[str, tuple[int, int, int]]:
-    """Return (SQL, params) for counting eligible pairs in the window.
-
-    Preconditions: same as build_reconciliation_sql.
-
-    Postconditions:
-      - Returned SQL selects a single BIGINT (the eligible-pair count).
-      - Used to compute the "leak ratio" (see reconcile_leak_ratio()):
-        if (inserted / eligible) > 0.01 then the write path is leaking.
-
-    This is a read-only query; callers use it before running the
-    reconciliation to compute the window's expected cardinality.
-    """
-    if memory_age_days < 1:
-        raise ValueError(f"memory_age_days must be >= 1, got {memory_age_days}")
-    if entity_age_hours < 1:
-        raise ValueError(f"entity_age_hours must be >= 1, got {entity_age_hours}")
-    if min_name_length < 1:
-        raise ValueError(f"min_name_length must be >= 1, got {min_name_length}")
-
-    params = (min_name_length, memory_age_days, entity_age_hours)
-    return _COUNT_ELIGIBLE_SQL, params
-
-
 def reconcile_leak_ratio(
     reconciled_pairs: int,
     eligible_pairs: int,

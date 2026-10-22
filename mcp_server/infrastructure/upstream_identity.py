@@ -32,11 +32,6 @@ RELEASES_LATEST_URL = f"https://api.github.com/repos/{CANONICAL_REPO}/releases/l
 REPOSITORY_URL = f"https://github.com/{CANONICAL_REPO}"
 
 
-def release_asset_name(os_tag: str, arch_tag: str) -> str:
-    """Release tarball published by the producer for a platform."""
-    return f"{CANONICAL_BINARY}-{os_tag}-{arch_tag}.tar.gz"
-
-
 def built_binary_relatives() -> tuple[str, ...]:
     """target/release paths to try, canonical first, .exe first on NT.
 

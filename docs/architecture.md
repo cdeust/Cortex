@@ -135,7 +135,7 @@ for current file counts per layer.
 | Module | Purpose |
 |---|---|
 | `query_router.py` | Deprecated shim (ADR-0234); intent now comes from `query_intent.py`, signal weights from `pg_recall_weights.py` |
-| `hdc_encoder.py` | 1024D bipolar hyperdimensional computing (bind/bundle/permute/similarity) |
+| `hdc_encoder.py` | 1024D bipolar hyperdimensional computing (bind/bundle/similarity) |
 | `cognitive_map.py` | Successor Representation co-access graph + 2D projection |
 | `hopfield.py` | Hopfield network for content-addressable recall |
 | `fractal.py` | Hierarchical clustering (L0/L1/L2 levels) for fractal recall |

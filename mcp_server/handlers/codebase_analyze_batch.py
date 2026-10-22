@@ -58,7 +58,7 @@ def _file_jobs(
         try:
             yield _file_job(path, context, operations)
         except Exception as exc:  # noqa: BLE001 — defer fatal parse/preparation error until preceding writes finish
-            yield InputFailure(exc, abort=True)
+            yield InputFailure(exc)
             return
 
 

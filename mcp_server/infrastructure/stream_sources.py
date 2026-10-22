@@ -24,20 +24,3 @@ class CursorStreamSource:
     def stream(self, max_batch: int) -> Iterator[list[Any]]:
         """Yield batches of at most ``max_batch`` rows from the wrapped iterator."""
         yield from self._iter_factory(max_batch)
-
-
-class ListStreamSource:
-    """Adapt an already-materialized list to the ``StreamSource`` port.
-
-    For stages whose upstream is a bounded in-memory list (e.g. edge rows that
-    a yet-to-be-paged fetcher returns whole). Slices the list into batches so
-    the consumer side stays constant-memory; the list itself is the caller's
-    bound. Prefer ``CursorStreamSource`` whenever the upstream can stream.
-    """
-
-    def __init__(self, rows: list[Any]) -> None:
-        self._rows = rows
-
-    def stream(self, max_batch: int) -> Iterator[list[Any]]:
-        for i in range(0, len(self._rows), max_batch):
-            yield self._rows[i : i + max_batch]

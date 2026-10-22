@@ -166,7 +166,7 @@ not exist." The registered tools are listed in `docs/mcp-tools.md`.
 - `reranker_scoring.py` — Pure score-blending math: confidence gate, adaptive alpha, WRRF/CE blend
 - `scoring.py` — BM25, n-gram, keyword scoring (reference; PG does this server-side)
 - `spreading_activation.py` — Collins & Loftus 1975 semantic priming over entity graph
-- `hdc_encoder.py` — 1024D bipolar HDC (bind/bundle/permute/similarity)
+- `hdc_encoder.py` — 1024D bipolar HDC (bind/bundle/similarity)
 - `cognitive_map.py` — Successor Representation co-access graph + 2D projection
 - `hopfield.py` — Hopfield network for content-addressable recall
 - `fractal.py` — Hierarchical clustering (L0/L1/L2 levels)
@@ -267,7 +267,6 @@ Run the measurement command in the header to get a current file listing.
 - `memory_store.py` — Memory store abstraction
 - `embedding_engine.py` — Vector embeddings (384-dim, sentence-transformers)
 - `artifact_store.py` — Content-addressed raw-output artifacts (`~/.claude/methodology/artifacts/<yyyy-mm>/<sha256[:16]>.md`) backing gist+pointer memories
-- `agent_config.py` — Agent configuration and topic scoping
 - `wiki_schema_reader.py` — Filesystem adapter for `shared/wiki_schema_loader.py`'s data model/parsers; walks `wiki/_kinds|_rules|_views|_triggers/` and builds a `WikiRegistry` (issue #126 port-and-adapter split)
 - `wiki_store.py` — Wiki filesystem read/write primitives (`read_page`/`write_page`); listing/append (`wiki_pages_listing.py`) and reindex (`wiki_reindex_io.py`) split out (issue: 439 lines over the 300-line §4.1 cap, pre-existing, surfaced while fixing infra→core layer violations in this subsystem — see `mcp_server.handlers.wiki_memory_sync`)
 - `wiki_pages_listing.py` — `append_section`/`list_pages`/`next_adr_number`

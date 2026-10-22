@@ -150,11 +150,6 @@ def modulate_spreading_breadth(base_breadth: int, ser: float) -> int:
     return max(1, round(base_breadth * ser))
 
 
-def modulate_retrieval_temperature(base_temp: float, ser: float) -> float:
-    """5-HT scales retrieval temperature via proportional gain."""
-    return base_temp * ser
-
-
 # source: ADR-0154
 _CASCADE_GATE_THRESHOLD = 0.7
 
