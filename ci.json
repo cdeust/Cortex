@@ -1,0 +1,8 @@
+{
+  "unit": "command -v uv >/dev/null || pipx install uv==0.11.3; export PATH=\"$HOME/.local/bin:$PATH\"; uv sync --locked --extra dev --extra sqlite --extra codebase && CORTEX_MEMORY_STORE_BACKEND=sqlite CORTEX_RERANKER_OFFLINE=1 uv run --locked pytest --tb=short -q -p no:randomly --cov=mcp_server --cov-report=xml",
+  "regression": "command -v uv >/dev/null || pipx install uv==0.11.3; export PATH=\"$HOME/.local/bin:$PATH\"; uv sync --locked --extra dev --extra sqlite --extra codebase && CORTEX_MEMORY_STORE_BACKEND=sqlite CORTEX_RERANKER_OFFLINE=1 uv run --locked pytest --tb=short -q -p no:randomly tests_py/integration",
+  "e2e": "bash scripts/docker_smoke.sh",
+  "environment": "PY=\"$(command -v python3 || command -v python)\" && \"$PY\" -m venv \"$CI_WORK/venv\" && VPY=\"$CI_WORK/venv/bin/python\" && { [ -x \"$VPY\" ] || VPY=\"$CI_WORK/venv/Scripts/python.exe\"; } && \"$VPY\" -m pip install --quiet . && \"$VPY\" -c \"from mcp_server.doctor import run; raise SystemExit(run())\"",
+  "install": "PY=\"$(command -v python3 || command -v python)\" && \"$PY\" scripts/install_e2e/run.py --marketplace \"$PWD\" --work \"$CI_WORK/install-e2e\" --settle-seconds 1500",
+  "version_file": "pyproject.toml"
+}

@@ -6,6 +6,22 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **The single CI pipeline, run by the Claude bot (ADR-1115).**
+  `.github/workflows/pipeline.yml` runs contract, unit (the SQLite-backed
+  pytest suite, 90 % of lines from `coverage.xml`), regression
+  (`tests_py/integration`), e2e (`scripts/docker_smoke.sh`), environment
+  (`cortex-doctor` after a `pip install .` into a fresh venv on ubuntu, macOS
+  and Windows, bare runner plus the pinned Claude Code CLI 2.1.296) and
+  install (`scripts/install_e2e/run.py` on the three OS, the Windows leg new),
+  then the bot's review and fix, then a squash auto-merge that fails
+  explicitly instead of skipping; the release tag on push to main keeps
+  ADR-0802's gate with `canonical_version`. The commands live in `ci.json`.
+  `claude-review.yml` is retired (the pipeline's review job replaces it);
+  `ci.yml` and the other workflows are untouched. Red on day one: coverage
+  82 % under the 90 % floor, and the Windows install leg.
+
 ### Security
 
 - The Claude Code workflows are aligned with the documented Claude Code GitHub Actions setup (https://code.claude.com/docs/en/github-actions, "Run a skill" and "Respond to @claude mentions"): the PR review runs the code-review plugin skill with `--comment` under read-only review permissions, and no checkout names the PR head ref, which clears CodeQL `actions/untrusted-checkout`.

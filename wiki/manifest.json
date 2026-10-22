@@ -3619,6 +3619,10 @@
     "ADR-1114": {
       "mirror": "ADR-1114-the-plugin-runs-its-own-postgresql-from-pinned-theseus-binaries.md",
       "path": "adr/cortex/1114-the-plugin-runs-its-own-postgresql-from-pinned-theseus-binaries.md"
+    },
+    "ADR-1115": {
+      "mirror": "ADR-1115-one-pipeline-for-every-pull-request-run-by-the-claude-bot.md",
+      "path": "adr/cortex/1115-one-pipeline-for-every-pull-request-run-by-the-claude-bot.md"
     }
   },
   "project": "cortex",
