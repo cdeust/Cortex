@@ -1,0 +1,55 @@
+{
+ "label": "pr771",
+ "ref": "fix/pipeline-install-out-of-hook",
+ "base": "df3a447",
+ "changedNodeIds": [
+  "class:tests_py/infrastructure/test_pipeline_discovery.py:TestEnsureConnection",
+  "config:wiki/manifest.json",
+  "document:CHANGELOG.md",
+  "document:PRIVACY.md",
+  "file:mcp_server/infrastructure/pipeline_discovery.py",
+  "file:tests_py/infrastructure/test_pipeline_discovery.py",
+  "function:mcp_server/infrastructure/pipeline_discovery.py:ensure_pipeline_connection",
+  "function:tests_py/infrastructure/test_pipeline_discovery.py:test_stale_codebase_entry_purged"
+ ],
+ "affectedNodeIds": [
+  "document:docs/adr/ADR-0584-pipeline-discovery.md",
+  "document:docs/adr/ADR-0998-tests-py-infrastructure-test-pipeline-discovery-py.md",
+  "document:wiki/adr/migration/0584-pipeline-discovery.md",
+  "document:wiki/adr/migration/0998-tests-py-infrastructure-test-pipeline-discovery-py.md",
+  "file:mcp_server/hooks/session_start.py",
+  "file:mcp_server/hooks/session_start_background.py",
+  "file:tests_py/hooks/test_hook_telemetry.py",
+  "file:tests_py/hooks/test_session_start.py",
+  "file:tests_py/hooks/test_session_start_registry.py",
+  "function:mcp_server/hooks/session_start.py:_session_start",
+  "function:mcp_server/hooks/session_start.py:main",
+  "function:mcp_server/hooks/session_start_background.py:_auto_wire_pipeline",
+  "function:tests_py/hooks/test_hook_telemetry.py:test_isolated_session_records_all_context_operations",
+  "function:tests_py/hooks/test_hook_telemetry.py:test_session_main_counts_banner_receipt_and_external_sources",
+  "function:tests_py/hooks/test_session_start.py:_run_main",
+  "function:tests_py/hooks/test_session_start.py:test_auto_wire_pipeline_failure_is_logged_not_raised",
+  "function:tests_py/hooks/test_session_start.py:test_auto_wire_pipeline_logs_when_it_wires",
+  "function:tests_py/hooks/test_session_start.py:test_auto_wire_pipeline_noop_actions_stay_quiet",
+  "function:tests_py/hooks/test_session_start_registry.py:test_main_invokes_refresh_before_pg_work",
+  "function:tests_py/infrastructure/test_pipeline_discovery.py:test_adds_codebase_to_existing_config",
+  "function:tests_py/infrastructure/test_pipeline_discovery.py:test_existing_codebase_entry_preserved",
+  "function:tests_py/infrastructure/test_pipeline_discovery.py:test_install_failure_in_ensure_does_not_crash",
+  "function:tests_py/infrastructure/test_pipeline_discovery.py:test_new_entries_set_unbounded_call_timeout",
+  "function:tests_py/infrastructure/test_pipeline_discovery.py:test_no_pipeline_leaves_config_untouched",
+  "function:tests_py/infrastructure/test_pipeline_discovery.py:test_writes_new_config"
+ ],
+ "entryPoints": [
+  "hook:session_start"
+ ],
+ "summary": {
+  "changed": 8,
+  "affected": 25,
+  "tests": 14,
+  "files_in_diff": 7,
+  "files_not_in_graph": [
+   "docs/adr/ADR-1111-sessionstart-wires-the-pipeline-and-never-installs-it.md",
+   "wiki/adr/cortex/1111-sessionstart-wires-the-pipeline-and-never-installs-it.md"
+  ]
+ }
+}

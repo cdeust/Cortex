@@ -1,0 +1,1 @@
+{"systemMessage": "Cortex is installing its dependencies (about 2 minutes, about 5 with semantic search); memory is available when it is done.", "hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "Cortex is installing its dependencies (about 2 minutes, about 5 with semantic search); memory is available when it is done."}}

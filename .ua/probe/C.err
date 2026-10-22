@@ -1,0 +1,47 @@
+[cortex] scipy/sklearn preload failed (startup continues): No module named 'scipy'
+PostgreSQL unavailable (OperationalError: connection failed: connection to server at "127.0.0.1", port 5432 failed: server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.), falling back to SQLite
+safe_handler caught RuntimeError in tool 'remember'
+Traceback (most recent call last):
+  File "/home/user/Cortex/mcp_server/tool_error_handler.py", line 121, in safe_handler
+    result = await asyncio.to_thread(
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+        _run_coroutine_on_thread, handler_fn, args
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/usr/lib/python3.13/asyncio/threads.py", line 26, in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.13/concurrent/futures/thread.py", line 59, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/home/user/Cortex/mcp_server/tool_error_handler.py", line 90, in _run_coroutine_on_thread
+    return loop.run_until_complete(handler_fn(args))
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.13/asyncio/base_events.py", line 726, in run_until_complete
+    return future.result()
+           ~~~~~~~~~~~~~^^
+  File "/home/user/Cortex/mcp_server/handlers/_telemetry_wrap.py", line 90, in wrapped
+    result = await fn(args)
+             ^^^^^^^^^^^^^^
+  File "/home/user/Cortex/mcp_server/handlers/remember.py", line 207, in _handler_impl
+    prepared = prepare_write(args)
+  File "/home/user/Cortex/mcp_server/handlers/remember.py", line 184, in prepare_write
+    store = _get_store()
+  File "/home/user/Cortex/mcp_server/handlers/remember.py", line 63, in _get_store
+    _store = get_shared_store(s.DB_PATH, s.EMBEDDING_DIM)
+  File "/home/user/Cortex/mcp_server/infrastructure/memory_store.py", line 79, in get_shared_store
+    store = _construct_store(db_path, embedding_dim, database_url=database_url)
+  File "/home/user/Cortex/mcp_server/infrastructure/memory_store.py", line 164, in _construct_store
+    raise RuntimeError(
+    ...<7 lines>...
+    )
+RuntimeError: PostgreSQL connection failed (url=postgresql://127.0.0.1:5432/cortex): OperationalError: connection failed: connection to server at "127.0.0.1", port 5432 failed: server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+Cortex requires PostgreSQL in CLI mode.
+Run: bash setup.sh to configure PostgreSQL.
+If DATABASE_URL is set, verify it points to a reachable Postgres instance (host/port/credentials/database exists).
+Or set CORTEX_RUNTIME=cowork (or CORTEX_ALLOW_SQLITE_FALLBACK=1) to allow SQLite fallback.
+Tool 'remember' failed: 'Error executing tool remember: database_not_connected: Cortex could not connect to the PostgreSQL configured for it: PostgreSQL connection failed (url=postgresql://127.0.0.1:5432/cortex): OperationalError: connection failed: connection to server at "127.0.0.1", port 5432 failed: server closed the connection unexpectedly\n\tThis probably means the server terminated abnormally\n\tbefore or while processing the request.\nCortex requires PostgreSQL in CLI mode.\nRun: bash setup.sh to configure PostgreSQL.\nIf DATABASE_URL is set, verify it points to a reachable Postgres instance (host/port/credentials/database exists).\nOr set CORTEX_RUNTIME=cowork (or CORTEX_ALLOW_SQLITE_FALLBACK=1) to allow SQLite fallback.\nStart that server, or clear the plugin\'s database URL option to use the local SQLite store.'

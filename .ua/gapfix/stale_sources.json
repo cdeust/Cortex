@@ -1,0 +1,128 @@
+[
+ {
+  "doc": "wiki/adr/migration/0618-staging-resolve-sink.md",
+  "line": 24,
+  "missing": "~/.claude/plans/sharded-popping-harbor.md",
+  "superseded": false,
+  "status": "status: accepted"
+ },
+ {
+  "doc": "wiki/adr/migration/0703-scripts-aggregate-hook-timings-py.md",
+  "line": 24,
+  "missing": "tasks/codex-green-remediation-plan.md",
+  "superseded": false,
+  "status": "Status: accepted; preserved from the existing implementation during issue #514."
+ },
+ {
+  "doc": "wiki/adr/migration/0710-scripts-check-ci-gate-complete-py.md",
+  "line": 18,
+  "missing": "tasks/codex-green-remediation-plan.md",
+  "superseded": false,
+  "status": "Status: accepted; preserved from the existing implementation during issue #514."
+ },
+ {
+  "doc": "wiki/adr/migration/0711-scripts-check-ci-gate-results-py.md",
+  "line": 19,
+  "missing": "tasks/codex-green-remediation-plan.md",
+  "superseded": false,
+  "status": "Status: accepted; preserved from the existing implementation during issue #514."
+ },
+ {
+  "doc": "wiki/adr/migration/0737-scripts-generate-pip-constraints-py.md",
+  "line": 6,
+  "missing": "scripts/generate_pip_constraints.py",
+  "superseded": true,
+  "status": "Status: superseded by ADR-1092; was accepted; preserved from the existing implementation during issue #514."
+ },
+ {
+  "doc": "wiki/adr/migration/0750-scripts-launcher-pins-py.md",
+  "line": 6,
+  "missing": "scripts/launcher_pins.py",
+  "superseded": true,
+  "status": "Status: superseded by ADR-1092; was accepted; preserved from the existing implementation during issue #514."
+ },
+ {
+  "doc": "wiki/adr/migration/0752-scripts-launcher-torch-cpu-py.md",
+  "line": 6,
+  "missing": "scripts/launcher_torch_cpu.py",
+  "superseded": true,
+  "status": "Status: superseded by ADR-1092; was accepted; preserved from the existing implementation during issue #514."
+ },
+ {
+  "doc": "wiki/adr/migration/0764-scripts-measure-pipeline-hook-py.md",
+  "line": 22,
+  "missing": "tasks/codex-green-remediation-plan.md",
+  "superseded": false,
+  "status": "Status: accepted; preserved from the existing implementation during issue #514."
+ },
+ {
+  "doc": "wiki/adr/migration/0775-scripts-pip-constraint-sets-py.md",
+  "line": 6,
+  "missing": "scripts/pip_constraint_sets.py",
+  "superseded": true,
+  "status": "Status: superseded by ADR-1092; was accepted; preserved from the existing implementation during issue #514."
+ },
+ {
+  "doc": "docs/adr/ADR-0618-staging-resolve-sink.md",
+  "line": 26,
+  "missing": "~/.claude/plans/sharded-popping-harbor.md",
+  "superseded": false,
+  "status": "status: accepted"
+ },
+ {
+  "doc": "docs/adr/ADR-0703-scripts-aggregate-hook-timings-py.md",
+  "line": 26,
+  "missing": "tasks/codex-green-remediation-plan.md",
+  "superseded": false,
+  "status": "Status: accepted; preserved from the existing implementation during issue #514."
+ },
+ {
+  "doc": "docs/adr/ADR-0710-scripts-check-ci-gate-complete-py.md",
+  "line": 20,
+  "missing": "tasks/codex-green-remediation-plan.md",
+  "superseded": false,
+  "status": "Status: accepted; preserved from the existing implementation during issue #514."
+ },
+ {
+  "doc": "docs/adr/ADR-0711-scripts-check-ci-gate-results-py.md",
+  "line": 21,
+  "missing": "tasks/codex-green-remediation-plan.md",
+  "superseded": false,
+  "status": "Status: accepted; preserved from the existing implementation during issue #514."
+ },
+ {
+  "doc": "docs/adr/ADR-0737-scripts-generate-pip-constraints-py.md",
+  "line": 8,
+  "missing": "scripts/generate_pip_constraints.py",
+  "superseded": true,
+  "status": "Status: superseded by ADR-1092; was accepted; preserved from the existing implementation during issue #514."
+ },
+ {
+  "doc": "docs/adr/ADR-0750-scripts-launcher-pins-py.md",
+  "line": 8,
+  "missing": "scripts/launcher_pins.py",
+  "superseded": true,
+  "status": "Status: superseded by ADR-1092; was accepted; preserved from the existing implementation during issue #514."
+ },
+ {
+  "doc": "docs/adr/ADR-0752-scripts-launcher-torch-cpu-py.md",
+  "line": 8,
+  "missing": "scripts/launcher_torch_cpu.py",
+  "superseded": true,
+  "status": "Status: superseded by ADR-1092; was accepted; preserved from the existing implementation during issue #514."
+ },
+ {
+  "doc": "docs/adr/ADR-0764-scripts-measure-pipeline-hook-py.md",
+  "line": 24,
+  "missing": "tasks/codex-green-remediation-plan.md",
+  "superseded": false,
+  "status": "Status: accepted; preserved from the existing implementation during issue #514."
+ },
+ {
+  "doc": "docs/adr/ADR-0775-scripts-pip-constraint-sets-py.md",
+  "line": 8,
+  "missing": "scripts/pip_constraint_sets.py",
+  "superseded": true,
+  "status": "Status: superseded by ADR-1092; was accepted; preserved from the existing implementation during issue #514."
+ }
+]

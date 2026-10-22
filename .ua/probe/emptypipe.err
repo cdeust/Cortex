@@ -1,0 +1,6 @@
+[cortex-launcher] storage: sqlite (fresh install); recorded in /home/user/Cortex/.ua/probe/home.nm7m/.claude/methodology/backend.json
+[cortex-launcher] Cortex not ready: the locked base dependency set is not installed for this uv.lock and Python 3.13. This hook ran nothing and installed nothing (a hook's time budget does not fit an install); the last background install failed: the locked base set did not install (log: /home/user/Cortex/deps-install.log). To install now and wait, run `claude --init-only` (needs the network). To work without Cortex, offline or not, run `claude plugin disable hypermnesia-mcp@cortex-plugins`.
+
+real	0m0.098s
+user	0m0.075s
+sys	0m0.023s

@@ -1,0 +1,1 @@
+{"systemMessage": "Cortex could not install its dependencies: the locked base set did not install.", "hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "Cortex could not install its dependencies: the locked base set did not install."}}

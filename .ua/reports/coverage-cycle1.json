@@ -1,0 +1,40 @@
+{
+ "file_nodes": {
+  "config": "384/384",
+  "infra": "18/18",
+  "script": "22/22",
+  "code": "1767/1767",
+  "data": "25/25",
+  "docs": "1981/1981"
+ },
+ "python_symbols": {
+  "prod": "5216/5216 (100%)",
+  "benchmarks": "670/670 (100%)",
+  "tests": "12783/12783 (100%)"
+ },
+ "python_symbols_missing_examples": {},
+ "test_files_linked_by_tested_by": "705/765 (92%)",
+ "prod_files_with_tests": "603/794 (76%)",
+ "docs_with_outgoing_link": "1880/1981 (95%)",
+ "config_with_any_edge": "362/384 (94%)",
+ "infra_with_any_edge": "18/18 (100%)",
+ "script_with_any_edge": "22/22 (100%)",
+ "data_with_any_edge": "22/25 (88%)",
+ "orphan_nodes": 114,
+ "edge_types": {
+  "contains": 18418,
+  "exports": 2963,
+  "imports": 3689,
+  "calls": 6994,
+  "tested_by": 1794,
+  "depends_on": 77,
+  "inherits": 85,
+  "implements": 3,
+  "related": 903,
+  "configures": 20,
+  "deploys": 3,
+  "triggers": 13,
+  "documents": 2225,
+  "migrates": 7
+ }
+}

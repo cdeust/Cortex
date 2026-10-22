@@ -1,0 +1,56 @@
+{
+ "file_nodes": {
+  "config": "384/384",
+  "infra": "18/18",
+  "script": "22/22",
+  "code": "1767/1767",
+  "data": "25/25",
+  "docs": "1981/1981"
+ },
+ "python_symbols": {
+  "prod": "3797/5216 (73%)",
+  "benchmarks": "517/670 (77%)",
+  "tests": "3215/12783 (25%)"
+ },
+ "python_symbols_missing_examples": {
+  "benchmarks": [
+   "benchmarks/_repro.py:_lib_version",
+   "benchmarks/active_forgetting/run_benchmark.py:_series_fire_cycle",
+   "benchmarks/active_forgetting/run_benchmark.py:_write"
+  ],
+  "prod": [
+   "mcp_server/core/ablation_report.py:_format_result_section",
+   "mcp_server/core/ast_extractors.py:_text",
+   "mcp_server/core/ast_extractors.py:_find_children"
+  ],
+  "tests": [
+   "tests_py/_domain_mapping_isolation.py:isolate_dev_root_scan",
+   "tests_py/_memory_read_fakes.py:vector_bytes",
+   "tests_py/_memory_read_fakes.py:__init__"
+  ]
+ },
+ "test_files_linked_by_tested_by": "665/765 (87%)",
+ "prod_files_with_tests": "532/794 (67%)",
+ "docs_with_outgoing_link": "1880/1981 (95%)",
+ "config_with_any_edge": "362/384 (94%)",
+ "infra_with_any_edge": "18/18 (100%)",
+ "script_with_any_edge": "22/22 (100%)",
+ "data_with_any_edge": "22/25 (88%)",
+ "orphan_nodes": 116,
+ "edge_types": {
+  "contains": 7571,
+  "exports": 2963,
+  "imports": 3689,
+  "calls": 5708,
+  "tested_by": 1311,
+  "depends_on": 77,
+  "inherits": 85,
+  "implements": 3,
+  "related": 903,
+  "configures": 20,
+  "deploys": 3,
+  "triggers": 13,
+  "documents": 2225,
+  "migrates": 7
+ }
+}

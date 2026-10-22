@@ -1,0 +1,32 @@
+[cortex-launcher] storage: sqlite (fresh install); recorded in /home/user/Cortex/.ua/probe/home.2YnQ/.claude/methodology/backend.json
+Fatal Python error: Aborted
+
+Current thread 0x00007f0811218080 (most recent call first):
+  File "/usr/lib/python3.13/selectors.py", line 398 in select
+  File "/usr/lib/python3.13/subprocess.py", line 2155 in _communicate
+  File "/usr/lib/python3.13/subprocess.py", line 1223 in communicate
+  File "/usr/lib/python3.13/subprocess.py", line 557 in run
+  File "/home/user/Cortex/mcp_server/infrastructure/pipeline_installer_common.py", line 30 in _run_quiet
+  File "/home/user/Cortex/mcp_server/infrastructure/pipeline_installer.py", line 144 in _install_locked
+  File "/home/user/Cortex/mcp_server/infrastructure/pipeline_installer.py", line 89 in install_pipeline
+  File "/home/user/Cortex/mcp_server/infrastructure/pipeline_discovery.py", line 209 in ensure_pipeline_connection
+  File "/home/user/Cortex/mcp_server/hooks/session_start_background.py", line 31 in _auto_wire_pipeline
+  File "/home/user/Cortex/mcp_server/hooks/session_start.py", line 158 in _session_start
+  File "/home/user/Cortex/mcp_server/hooks/session_start_status.py", line 83 in run_and_report
+  File "/home/user/Cortex/mcp_server/hooks/session_start.py", line 143 in main
+  File "/home/user/Cortex/mcp_server/hooks/_telemetry.py", line 114 in _run_observed
+  File "/home/user/Cortex/mcp_server/hooks/_telemetry.py", line 136 in observed
+  File "/home/user/Cortex/mcp_server/hooks/session_start.py", line 269 in <module>
+  File "<frozen runpy>", line 88 in _run_code
+  File "<frozen runpy>", line 98 in _run_module_code
+  File "<frozen runpy>", line 231 in run_module
+  File "/home/user/Cortex/scripts/launcher.py", line 158 in _run
+  File "/home/user/Cortex/scripts/launcher.py", line 243 in main
+  File "/home/user/Cortex/scripts/launcher.py", line 267 in entrypoint
+  File "/home/user/Cortex/scripts/launcher.py", line 271 in <module>
+
+Extension modules: psycopg_binary.pq, psycopg_binary._psycopg (total: 2)
+
+real	0m40.010s
+user	0m0.461s
+sys	0m0.139s

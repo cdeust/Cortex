@@ -1,0 +1,8 @@
+batch11: edge groomer.py->headless_authoring.run_headless_authoring_cycle not in neighborMap
+batch13: class/function summaries script-generated from names+docstrings (formulaic)
+batch40: test functions <20 lines omitted (stricter than 10-line filter)
+batches 48/57/58/60-62: tested_by edges to scripts/launcher_*.py, init_plugin.py, check_marketplace_pins.py omitted (runtime-loaded, absent from import data)
+FINDING: ADR-0737/0750/0752 document scripts no longer on disk (generate_pip_constraints.py, launcher_pins.py, launcher_torch_cpu.py) — stale ADRs
+FINDING: ADR-0775 source scripts/pip_constraint_sets.py no longer on disk — stale ADR
+FINDING: ADR-1039/1041 source test files no longer exist — stale ADRs
+FINDING: ADR-migration-0623 names mcp_server/server/viz_instance.py which no longer exists (stale ADR)

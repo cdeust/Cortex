@@ -1,0 +1,9 @@
+PostgreSQL unavailable (OperationalError: connection failed: connection to server at "127.0.0.1", port 5432 failed: server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.), falling back to SQLite
+PostgreSQL unavailable (OperationalError: connection failed: connection to server at "127.0.0.1", port 5432 failed: server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.); falling back to SQLite. This is expected for inspection/sandbox launches; production installs should set DATABASE_URL.
+[session-start-hook] background consolidate spawned → /home/user/Cortex/.ua/probe/home.7Lsk/.claude/methodology/consolidate.log
+[session-start-hook] groomer coordinator: started
+[session-start-hook] Empty SQLite store, 0 session files found

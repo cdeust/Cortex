@@ -1,0 +1,37 @@
+{
+ "label": "pr772",
+ "ref": "fix/tests-launcher-plugin-data",
+ "base": "df3a447",
+ "changedNodeIds": [
+  "file:tests_py/_launcher_ready.py",
+  "file:tests_py/hooks/test_entry.py",
+  "function:tests_py/_launcher_ready.py:ready_launcher_argv",
+  "function:tests_py/hooks/test_entry.py:_isolated_env"
+ ],
+ "affectedNodeIds": [
+  "document:wiki/adr/cortex/1108-dependencies-install-at-setup-and-live-in-per-lock-sets.md",
+  "file:tests_py/hooks/test_entry_apply_patch.py",
+  "file:tests_py/hooks/test_launcher_command.py",
+  "file:tests_py/scripts/test_launcher_encoding.py",
+  "function:tests_py/hooks/test_entry.py:test_entry_matches_launcher_on_benign_event",
+  "function:tests_py/hooks/test_entry.py:test_entry_refuses_a_module_outside_the_allowlist",
+  "function:tests_py/hooks/test_entry.py:test_packaged_codex_entry_selects_sqlite_before_hook_wiring",
+  "function:tests_py/hooks/test_entry_apply_patch.py:test_apply_patch_posttooluse_matches_equivalent_edit_stdout",
+  "function:tests_py/hooks/test_entry_apply_patch.py:test_apply_patch_pretooluse_blocks_like_equivalent_write",
+  "function:tests_py/hooks/test_entry_apply_patch.py:test_malformed_patch_on_posttooluse_exits_1_with_stderr",
+  "function:tests_py/hooks/test_entry_apply_patch.py:test_malformed_patch_on_pretooluse_exits_2",
+  "function:tests_py/hooks/test_entry_apply_patch.py:test_posttooluse_exit_code_is_the_worst_not_the_last",
+  "function:tests_py/hooks/test_entry_apply_patch.py:test_posttooluse_runs_every_derived_operation",
+  "function:tests_py/hooks/test_entry_apply_patch.py:test_pretooluse_stops_after_first_blocked_operation",
+  "function:tests_py/hooks/test_launcher_command.py:test_the_launcher_keeps_a_descriptor_passed_with_pass_fds",
+  "function:tests_py/scripts/test_launcher_encoding.py:_run_marker_module"
+ ],
+ "entryPoints": [],
+ "summary": {
+  "changed": 4,
+  "affected": 16,
+  "tests": 12,
+  "files_in_diff": 2,
+  "files_not_in_graph": []
+ }
+}

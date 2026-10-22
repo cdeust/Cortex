@@ -1,0 +1,1001 @@
+[
+ {
+  "source": "file:scripts/check_venv_lock_parity.py",
+  "target": "file:tests_py/conftest.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/conftest.py:20",
+  "provenance": "gapfix/link_runtime_tested_by.py (import)"
+ },
+ {
+  "source": "file:scripts/launcher.py",
+  "target": "file:tests_py/hooks/test_capture_drain.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/hooks/test_capture_drain.py:214",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher.py",
+  "target": "file:tests_py/hooks/test_entry.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/hooks/test_entry.py:39",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher.py",
+  "target": "file:tests_py/hooks/test_launcher_command.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/hooks/test_launcher_command.py:18",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/setup.py",
+  "target": "file:tests_py/hooks/test_no_deps_gate.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/hooks/test_no_deps_gate.py:52",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher.py",
+  "target": "file:tests_py/hooks/test_output_streams_guard.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/hooks/test_output_streams_guard.py:23",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/setup.py",
+  "target": "file:tests_py/hooks/test_output_streams_guard.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/hooks/test_output_streams_guard.py:165",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/measure_pipeline_hook.py",
+  "target": "file:tests_py/hooks/test_pipeline_lazy_imports.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/hooks/test_pipeline_lazy_imports.py:23",
+  "provenance": "gapfix/link_runtime_tested_by.py (import)"
+ },
+ {
+  "source": "file:scripts/launcher.py",
+  "target": "file:tests_py/hooks/test_post_commit_reindex.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/hooks/test_post_commit_reindex.py:197",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/aggregate_hook_timings.py",
+  "target": "file:tests_py/hooks/test_post_tool_matchers.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/hooks/test_post_tool_matchers.py:23",
+  "provenance": "gapfix/link_runtime_tested_by.py (import)"
+ },
+ {
+  "source": "file:scripts/launcher.py",
+  "target": "file:tests_py/hooks/test_session_lifecycle.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/hooks/test_session_lifecycle.py:323",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher.py",
+  "target": "file:tests_py/hooks/test_session_start.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/hooks/test_session_start.py:932",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher.py",
+  "target": "file:tests_py/hooks/test_session_start_cached_graph.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/hooks/test_session_start_cached_graph.py:40",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher_capture.py",
+  "target": "file:tests_py/hooks/test_stdin_failures.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/hooks/test_stdin_failures.py:127",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher_mcp_bootstrap.py",
+  "target": "file:tests_py/hooks/test_stdin_guard.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/hooks/test_stdin_guard.py:19",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher_capture.py",
+  "target": "file:tests_py/hooks/test_stdin_guard.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/hooks/test_stdin_guard.py:130",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher.py",
+  "target": "file:tests_py/hooks/test_worker_log_rotation.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/hooks/test_worker_log_rotation.py:24",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/embedding_prefix_fixtures.py",
+  "target": "file:tests_py/infrastructure/test_embedding_prefix_guard.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/infrastructure/test_embedding_prefix_guard.py:13",
+  "provenance": "gapfix/link_runtime_tested_by.py (import)"
+ },
+ {
+  "source": "file:scripts/measure_embedding_prefix.py",
+  "target": "file:tests_py/infrastructure/test_embedding_prefix_guard.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/infrastructure/test_embedding_prefix_guard.py:14",
+  "provenance": "gapfix/link_runtime_tested_by.py (import)"
+ },
+ {
+  "source": "file:scripts/launcher_cleanup_registry.py",
+  "target": "file:tests_py/scripts/_cleanup_fixture.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/_cleanup_fixture.py:16",
+  "provenance": "gapfix/link_runtime_tested_by.py (sys.path import)"
+ },
+ {
+  "source": "file:scripts/craftsmanship_rules.py",
+  "target": "file:tests_py/scripts/_craftsmanship_support.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/_craftsmanship_support.py:53",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/craftsmanship_imports.py",
+  "target": "file:tests_py/scripts/_craftsmanship_support.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/_craftsmanship_support.py:55",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/craftsmanship_constants.py",
+  "target": "file:tests_py/scripts/_craftsmanship_support.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/_craftsmanship_support.py:58",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/craftsmanship_layer_table.py",
+  "target": "file:tests_py/scripts/_craftsmanship_support.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/_craftsmanship_support.py:61",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/craftsmanship_baseline.py",
+  "target": "file:tests_py/scripts/_craftsmanship_support.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/_craftsmanship_support.py:63",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher_sets.py",
+  "target": "file:tests_py/scripts/_host_tree.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/_host_tree.py:36",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher.py",
+  "target": "file:tests_py/scripts/_host_tree.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/_host_tree.py:52",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher_setup.py",
+  "target": "file:tests_py/scripts/_host_tree.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/_host_tree.py:53",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher_layout.py",
+  "target": "file:tests_py/scripts/_host_tree.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/_host_tree.py:56",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher_site.py",
+  "target": "file:tests_py/scripts/_launcher_site_fixture.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/_launcher_site_fixture.py:18",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher_uv.py",
+  "target": "file:tests_py/scripts/_launcher_uv_fixture.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/_launcher_uv_fixture.py:24",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/check_marketplace_pins.py",
+  "target": "file:tests_py/scripts/_marketplace_pins_test_loader.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/_marketplace_pins_test_loader.py:22",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/check_ci_gate_results.py",
+  "target": "file:tests_py/scripts/test_check_ci_gate_results.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_check_ci_gate_results.py:13",
+  "provenance": "gapfix/link_runtime_tested_by.py (import)"
+ },
+ {
+  "source": "file:scripts/check_craftsmanship.py",
+  "target": "file:tests_py/scripts/test_check_craftsmanship.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_check_craftsmanship.py:34",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/craftsmanship_rules.py",
+  "target": "file:tests_py/scripts/test_check_craftsmanship_exploits.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_check_craftsmanship_exploits.py:39",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/craftsmanship_imports.py",
+  "target": "file:tests_py/scripts/test_check_craftsmanship_exploits.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_check_craftsmanship_exploits.py:40",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/craftsmanship_constants.py",
+  "target": "file:tests_py/scripts/test_check_craftsmanship_exploits.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_check_craftsmanship_exploits.py:41",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/craftsmanship_baseline.py",
+  "target": "file:tests_py/scripts/test_check_craftsmanship_exploits.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_check_craftsmanship_exploits.py:42",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/craftsmanship_layer_table.py",
+  "target": "file:tests_py/scripts/test_check_craftsmanship_exploits.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_check_craftsmanship_exploits.py:43",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/craftsmanship_git.py",
+  "target": "file:tests_py/scripts/test_check_craftsmanship_exploits.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_check_craftsmanship_exploits.py:44",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/craftsmanship_decisions.py",
+  "target": "file:tests_py/scripts/test_check_craftsmanship_exploits.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_check_craftsmanship_exploits.py:45",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/check_craftsmanship.py",
+  "target": "file:tests_py/scripts/test_check_craftsmanship_exploits.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_check_craftsmanship_exploits.py:46",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/check_doc_claims.py",
+  "target": "file:tests_py/scripts/test_check_doc_claims.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_check_doc_claims.py:31",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/doc_claim_structural.py",
+  "target": "file:tests_py/scripts/test_check_doc_claims.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_check_doc_claims.py:50",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/doc_claim_sources.py",
+  "target": "file:tests_py/scripts/test_check_doc_claims.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_check_doc_claims.py:70",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/doc_claim_scan.py",
+  "target": "file:tests_py/scripts/test_check_doc_claims.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_check_doc_claims.py:83",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/setup.py",
+  "target": "file:tests_py/scripts/test_check_no_deps_invariant.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_check_no_deps_invariant.py:37",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher.py",
+  "target": "file:tests_py/scripts/test_codex_plugin_hooks_contract.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_codex_plugin_hooks_contract.py:64",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher.py",
+  "target": "file:tests_py/scripts/test_composition_root_wiring_coverage.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_composition_root_wiring_coverage.py:95",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/check_craftsmanship.py",
+  "target": "file:tests_py/scripts/test_craftsmanship_imports.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_craftsmanship_imports.py:163",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/check_version_surfaces.py",
+  "target": "file:tests_py/scripts/test_cross_host_manifests.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_cross_host_manifests.py:19",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/docker_smoke_client.py",
+  "target": "file:tests_py/scripts/test_docker_smoke_client.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_docker_smoke_client.py:22",
+  "provenance": "gapfix/link_runtime_tested_by.py (import)"
+ },
+ {
+  "source": "file:scripts/mcp_host_client.py",
+  "target": "file:tests_py/scripts/test_docker_smoke_client.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_docker_smoke_client.py:23",
+  "provenance": "gapfix/link_runtime_tested_by.py (import)"
+ },
+ {
+  "source": "file:scripts/badge_render.py",
+  "target": "file:tests_py/scripts/test_generate_repo_badges.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_generate_repo_badges.py:54",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher_deps.py",
+  "target": "file:tests_py/scripts/test_installer_rerun_keeps_entries.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_installer_rerun_keeps_entries.py:34",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher_pip.py",
+  "target": "file:tests_py/scripts/test_installer_upgrade_single_version.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_installer_upgrade_single_version.py:85",
+  "provenance": "gapfix/link_runtime_tested_by.py (sys.path import)"
+ },
+ {
+  "source": "file:scripts/setup.py",
+  "target": "file:tests_py/scripts/test_installer_upgrade_single_version.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_installer_upgrade_single_version.py:37",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher.py",
+  "target": "file:tests_py/scripts/test_launcher_base_job.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_launcher_base_job.py:79",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher.py",
+  "target": "file:tests_py/scripts/test_launcher_cleanup_cli.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_launcher_cleanup_cli.py:101",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher.py",
+  "target": "file:tests_py/scripts/test_launcher_deps.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_launcher_deps.py:905",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher_layout.py",
+  "target": "file:tests_py/scripts/test_launcher_deps_lock.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_launcher_deps_lock.py:23",
+  "provenance": "gapfix/link_runtime_tested_by.py (sys.path import)"
+ },
+ {
+  "source": "file:scripts/launcher_deps_fs.py",
+  "target": "file:tests_py/scripts/test_launcher_deps_scratch_sweep.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_launcher_deps_scratch_sweep.py:25",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher.py",
+  "target": "file:tests_py/scripts/test_launcher_encoding.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_launcher_encoding.py:30",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher_base_job.py",
+  "target": "file:tests_py/scripts/test_launcher_hook_deps.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_launcher_hook_deps.py:100",
+  "provenance": "gapfix/link_runtime_tested_by.py (sys.path import)"
+ },
+ {
+  "source": "file:scripts/launcher_layout.py",
+  "target": "file:tests_py/scripts/test_launcher_hooks_never_install.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_launcher_hooks_never_install.py:80",
+  "provenance": "gapfix/link_runtime_tested_by.py (sys.path import)"
+ },
+ {
+  "source": "file:scripts/launcher_base_job.py",
+  "target": "file:tests_py/scripts/test_launcher_hooks_never_install.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_launcher_hooks_never_install.py:142",
+  "provenance": "gapfix/link_runtime_tested_by.py (sys.path import)"
+ },
+ {
+  "source": "file:scripts/launcher_lock.py",
+  "target": "file:tests_py/scripts/test_launcher_hooks_never_install.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_launcher_hooks_never_install.py:143",
+  "provenance": "gapfix/link_runtime_tested_by.py (sys.path import)"
+ },
+ {
+  "source": "file:scripts/launcher_sets.py",
+  "target": "file:tests_py/scripts/test_launcher_layout.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_launcher_layout.py:104",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher_layout.py",
+  "target": "file:tests_py/scripts/test_launcher_layout.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_launcher_layout.py:136",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher.py",
+  "target": "file:tests_py/scripts/test_launcher_maintain.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_launcher_maintain.py:58",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher.py",
+  "target": "file:tests_py/scripts/test_launcher_mcp_bootstrap.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_launcher_mcp_bootstrap.py:170",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher_mcp_wire.py",
+  "target": "file:tests_py/scripts/test_launcher_mcp_bootstrap.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_launcher_mcp_bootstrap.py:170",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher_python.py",
+  "target": "file:tests_py/scripts/test_launcher_mcp_bootstrap.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_launcher_mcp_bootstrap.py:171",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher_uv.py",
+  "target": "file:tests_py/scripts/test_launcher_mcp_bootstrap.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_launcher_mcp_bootstrap.py:171",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher_pip.py",
+  "target": "file:tests_py/scripts/test_launcher_mcp_bootstrap.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_launcher_mcp_bootstrap.py:171",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher_deps.py",
+  "target": "file:tests_py/scripts/test_launcher_mcp_bootstrap.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_launcher_mcp_bootstrap.py:171",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher_lock.py",
+  "target": "file:tests_py/scripts/test_launcher_mcp_bootstrap.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_launcher_mcp_bootstrap.py:172",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher_ml.py",
+  "target": "file:tests_py/scripts/test_launcher_mcp_bootstrap.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_launcher_mcp_bootstrap.py:172",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher_site.py",
+  "target": "file:tests_py/scripts/test_launcher_mcp_bootstrap.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_launcher_mcp_bootstrap.py:172",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher.py",
+  "target": "file:tests_py/scripts/test_launcher_ml.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_launcher_ml.py:91",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher_pip.py",
+  "target": "file:tests_py/scripts/test_launcher_pip_entry.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_launcher_pip_entry.py:22",
+  "provenance": "gapfix/link_runtime_tested_by.py (sys.path import)"
+ },
+ {
+  "source": "file:scripts/launcher_sets.py",
+  "target": "file:tests_py/scripts/test_launcher_platform_coverage.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_launcher_platform_coverage.py:41",
+  "provenance": "gapfix/link_runtime_tested_by.py (sys.path import)"
+ },
+ {
+  "source": "file:scripts/launcher.py",
+  "target": "file:tests_py/scripts/test_launcher_python.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_launcher_python.py:70",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher.py",
+  "target": "file:tests_py/scripts/test_launcher_setup.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_launcher_setup.py:77",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher.py",
+  "target": "file:tests_py/scripts/test_launcher_site.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_launcher_site.py:172",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/setup.py",
+  "target": "file:tests_py/scripts/test_launcher_site.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_launcher_site.py:204",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher_deps_install.py",
+  "target": "file:tests_py/scripts/test_launcher_uv_install.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_launcher_uv_install.py:151",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/mcp_host_client.py",
+  "target": "file:tests_py/scripts/test_mcp_host_client.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_mcp_host_client.py:18",
+  "provenance": "gapfix/link_runtime_tested_by.py (import)"
+ },
+ {
+  "source": "file:scripts/measure_embedding_cache.py",
+  "target": "file:tests_py/scripts/test_measure_embedding_cache.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_measure_embedding_cache.py:12",
+  "provenance": "gapfix/link_runtime_tested_by.py (import)"
+ },
+ {
+  "source": "file:scripts/memory_staleness_revalidate.py",
+  "target": "file:tests_py/scripts/test_memory_staleness_revalidate_script.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_memory_staleness_revalidate_script.py:23",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/decision_migration_io.py",
+  "target": "file:tests_py/scripts/test_migrate_decision_blocks.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_migrate_decision_blocks.py:122",
+  "provenance": "gapfix/link_runtime_tested_by.py (import)"
+ },
+ {
+  "source": "file:scripts/mutation_recheck_survivors.py",
+  "target": "file:tests_py/scripts/test_mutation_recheck_survivors.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_mutation_recheck_survivors.py:29",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/mcp_toplist_ranking.py",
+  "target": "file:tests_py/scripts/test_refresh_mcp_toplist_badge.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_refresh_mcp_toplist_badge.py:41",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/refresh_mcp_toplist_badge.py",
+  "target": "file:tests_py/scripts/test_refresh_mcp_toplist_badge.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_refresh_mcp_toplist_badge.py:49",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/collect_response_budget_payloads.py",
+  "target": "file:tests_py/scripts/test_response_budget_measurements.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_response_budget_measurements.py:13",
+  "provenance": "gapfix/link_runtime_tested_by.py (import)"
+ },
+ {
+  "source": "file:scripts/response_budget_measurements.py",
+  "target": "file:tests_py/scripts/test_response_budget_measurements.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_response_budget_measurements.py:14",
+  "provenance": "gapfix/link_runtime_tested_by.py (import)"
+ },
+ {
+  "source": "file:scripts/setup.py",
+  "target": "file:tests_py/scripts/test_setup_py_backend_skip.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_setup_py_backend_skip.py:28",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/install-plugin.sh",
+  "target": "file:tests_py/scripts/test_setup_py_failure_message.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_setup_py_failure_message.py:24",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher_sets.py",
+  "target": "file:tests_py/scripts/test_setup_py_installs_from_lock.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_setup_py_installs_from_lock.py:28",
+  "provenance": "gapfix/link_runtime_tested_by.py (sys.path import)"
+ },
+ {
+  "source": "file:scripts/setup.py",
+  "target": "file:tests_py/scripts/test_setup_py_installs_from_lock.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_setup_py_installs_from_lock.py:24",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher_deps.py",
+  "target": "file:tests_py/scripts/test_setup_py_installs_from_lock.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_setup_py_installs_from_lock.py:49",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher_sets.py",
+  "target": "file:tests_py/scripts/test_uv_lock_single_source.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_uv_lock_single_source.py:27",
+  "provenance": "gapfix/link_runtime_tested_by.py (sys.path import)"
+ },
+ {
+  "source": "file:scripts/launcher_uv.py",
+  "target": "file:tests_py/scripts/test_uv_lock_single_source.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_uv_lock_single_source.py:28",
+  "provenance": "gapfix/link_runtime_tested_by.py (sys.path import)"
+ },
+ {
+  "source": "file:scripts/verify_release_artifact.py",
+  "target": "file:tests_py/scripts/test_verify_release_artifact.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_verify_release_artifact.py:25",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/verify_sqlite_extra_parity.py",
+  "target": "file:tests_py/scripts/test_verify_sqlite_extra_parity.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_verify_sqlite_extra_parity.py:26",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/check_version_surfaces.py",
+  "target": "file:tests_py/scripts/test_version_surfaces.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/scripts/test_version_surfaces.py:24",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher_deps_fs.py",
+  "target": "file:tests_py/shared/test_process_liveness.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/shared/test_process_liveness.py:27",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/launcher.py",
+  "target": "file:tests_py/test_doctor_mcp.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/test_doctor_mcp.py:138",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ },
+ {
+  "source": "file:scripts/verify_mcp_hosts.py",
+  "target": "file:tests_py/test_tool_surface.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/test_tool_surface.py:69",
+  "provenance": "gapfix/link_runtime_tested_by.py (import)"
+ },
+ {
+  "source": "file:scripts/mcp_host_client.py",
+  "target": "file:tests_py/test_tool_surface.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/test_tool_surface.py:133",
+  "provenance": "gapfix/link_runtime_tested_by.py (import)"
+ },
+ {
+  "source": "file:scripts/docker_smoke.sh",
+  "target": "file:tests_py/test_tool_surface.py",
+  "type": "tested_by",
+  "direction": "forward",
+  "weight": 0.5,
+  "evidence": "tests_py/test_tool_surface.py:82",
+  "provenance": "gapfix/link_runtime_tested_by.py (path literal)"
+ }
+]
