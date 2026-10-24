@@ -622,7 +622,7 @@ jobs:
       # "Run a skill"): read-only, findings as inline comments.
       - name: Review
         if: steps.guard.outputs.review == 'true'
-        uses: anthropics/claude-code-action@a5a423f75c251dcbff8a74e99f83b2cb03c72bfa # v1.0.256
+        uses: anthropics/claude-code-action@aa8a7738e48bf30a40ee499ce818bef081c5ab5e # v1.0.257
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           plugin_marketplaces: "https://github.com/anthropics/claude-code.git"
@@ -635,7 +635,7 @@ jobs:
       # Its push is a synchronize event; the five tests run again on it.
       - name: Fix
         if: steps.guard.outputs.fix == 'true'
-        uses: anthropics/claude-code-action@a5a423f75c251dcbff8a74e99f83b2cb03c72bfa # v1.0.256
+        uses: anthropics/claude-code-action@aa8a7738e48bf30a40ee499ce818bef081c5ab5e # v1.0.257
         with:
           allowed_bots: "claude[bot],chatgpt-codex-connector[bot]"
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -758,7 +758,7 @@ jobs:
 
       - name: Set up Python
         if: steps.guard.outputs.has_deploy_key == 'true'
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
 
