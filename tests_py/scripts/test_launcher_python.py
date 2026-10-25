@@ -1,4 +1,4 @@
-"""scripts/launcher_python.py: below Python 3.10 the launcher re-runs itself on
+"""scripts/launcher_python.py: below Python 3.11 the launcher re-runs itself on
 the pinned CPython it installs, or stops with uv's own error.
 
 On a Mac with only the Command Line Tools, ``python3`` is 3.9.6 and the
@@ -46,6 +46,32 @@ def test_a_supported_python_is_used_as_is(py_mod, execs, monkeypatch):
     assert execs == []
 
 
+# source: https://pypi.org/project/pillow/13.0.0/ (Requires-Python >=3.11)
+@pytest.mark.parametrize("version", [(3, 10, 18), (3, 11, 13)])
+def test_pillow_security_floor_reexecs_only_the_unsupported_python(
+    py_mod, execs, monkeypatch, version
+):
+    """Pillow 13 requires Python >=3.11; keep the older bootstrap usable."""
+    monkeypatch.setattr(py_mod.sys, "version_info", version)
+    monkeypatch.setattr(py_mod, "installed", lambda d: "/data/python/bin/python3.12")
+    monkeypatch.setattr(py_mod, "provide", lambda d: pytest.fail("provided"))
+    monkeypatch.setattr(py_mod.sys, "argv", ["launcher.py", "mcp_server"])
+    py_mod.ensure_supported("/data/sets/k", "/plugin/scripts/launcher.py")
+    if version == (3, 10, 18):
+        assert execs == [
+            (
+                "/data/python/bin/python3.12",
+                [
+                    "/data/python/bin/python3.12",
+                    "/plugin/scripts/launcher.py",
+                    "mcp_server",
+                ],
+            )
+        ]
+    else:
+        assert execs == []
+
+
 def test_an_old_python_reexecs_on_the_installed_one(py_mod, execs, monkeypatch):
     monkeypatch.setattr(py_mod, "supported", lambda: False)
     monkeypatch.setattr(py_mod, "installed", lambda d: "/data/python/bin/python3.12")
@@ -83,7 +109,7 @@ def test_no_python_to_install_is_a_loud_stop(py_mod, execs, monkeypatch, capsys)
         py_mod.ensure_supported("/data/sets/k", "launcher.py")
     assert stopped.value.code == 1
     err = capsys.readouterr().err
-    assert ">= 3.10" in err and py_mod.MANAGED_PYTHON in err
+    assert ">= 3.11" in err and py_mod.MANAGED_PYTHON in err
     assert "Failed to download cpython-3.12.13" in err
     assert execs == []
 

@@ -131,9 +131,9 @@ def run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
 # ── Step 1: Python version check ──────────────────────────────────────
 
 
-# source: ADR-0782
+# source: pyproject.toml requires-python, Pillow 13 PyPI metadata
 _MIN_PY_MAJOR = 3
-_MIN_PY_MINOR = 10
+_MIN_PY_MINOR = 11
 
 # source: ADR-0782
 _REQUIRED_PG_EXTENSIONS = 2
@@ -145,7 +145,7 @@ def check_python() -> None:
     if v.major < _MIN_PY_MAJOR or (
         v.major == _MIN_PY_MAJOR and v.minor < _MIN_PY_MINOR
     ):
-        fail(f"Python 3.10+ required (found {v.major}.{v.minor})")
+        fail(f"Python 3.11+ required (found {v.major}.{v.minor})")
     ok(f"Python {v.major}.{v.minor}.{v.micro}")
 
 

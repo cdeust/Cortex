@@ -12,7 +12,7 @@ are loaded on demand by the host's skills and agents.
 # Cortex — Persistent Memory MCP Server
 
 Persistent memory and cognitive profiling MCP server for Claude Code.
-Python 3.10+, FastMCP, Pydantic, numpy. Storage: SQLite by default
+Python 3.11+, FastMCP, Pydantic, numpy. Storage: SQLite by default
 (plugin installs, `.mcpb`/Cowork sandboxed launches) or
 PostgreSQL+pgvector as the opt-in upgrade (`install-plugin.sh
 --postgres`, CLI/dev mode, team databases) — see `PRIVACY.md` for the

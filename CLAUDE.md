@@ -1,6 +1,6 @@
 # Cortex — Persistent Memory MCP Server
 
-Persistent memory and cognitive profiling MCP server for Claude Code. Python 3.10+,
+Persistent memory and cognitive profiling MCP server for Claude Code. Python 3.11+,
 FastMCP, Pydantic, numpy; SQLite by default, PostgreSQL+pgvector opt-in (`PRIVACY.md`).
 
 This file is deliberately short: the host harness (hooks, skills, agents) loads what it

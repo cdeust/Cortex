@@ -32,6 +32,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+- Pillow now requires version 13.0.0 or newer to address the advisories affecting
+  12.3.0, including GHSA-5x8w-8jj5-q52h. Pillow 13 requires Python 3.11+, so
+  Python 3.10 users must upgrade. The plugin bootstrap selects its managed
+  Python on older interpreters; direct package installations require 3.11+.
+
 - The Claude Code workflows are aligned with the documented Claude Code GitHub Actions setup (https://code.claude.com/docs/en/github-actions, "Run a skill" and "Respond to @claude mentions"): the PR review runs the code-review plugin skill with `--comment` under read-only review permissions, and no checkout names the PR head ref, which clears CodeQL `actions/untrusted-checkout`.
 - The Claude Code PR review no longer checks out PR code in a privileged workflow (CodeQL `actions/untrusted-checkout/high`, `actions/untrusted-checkout-toctou/high`): the review job moves to `.github/workflows/claude-review.yml`, triggered by `pull_request` only, and `.github/workflows/claude.yml` keeps only the `@claude` job on its comment, review and issue triggers, with no PR head checkout.
 - **Personal data is stored owner-only (ADR-1112).** The 2026-10-21 audit

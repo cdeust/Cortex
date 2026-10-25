@@ -73,17 +73,18 @@ class Check:
         self.optional = optional
 
 
+# source: pyproject.toml requires-python, Pillow 13 PyPI metadata
 def _python_version() -> Check:
     ver = sys.version_info
-    if ver >= (3, 10):
+    if ver >= (3, 11):
         return Check(
-            "Python >= 3.10", True, f"Python {ver.major}.{ver.minor}.{ver.micro}"
+            "Python >= 3.11", True, f"Python {ver.major}.{ver.minor}.{ver.micro}"
         )
     return Check(
-        "Python >= 3.10",
+        "Python >= 3.11",
         False,
         f"Python {ver.major}.{ver.minor}.{ver.micro}",
-        "Upgrade Python: install Python 3.10+ via the official installer "
+        "Upgrade Python: install Python 3.11+ via the official installer "
         "(https://www.python.org/downloads/) or your platform's package manager.",
     )
 

@@ -9,7 +9,7 @@ the canonical list) backing the algorithms. Every change is held to that bar.
 
 ## What this project is
 
-A Python 3.10+ MCP server with **57 standalone tools** (60 with the optional
+A Python 3.11+ MCP server with **57 standalone tools** (60 with the optional
 ai-architect-mcp-codebase + prd-spec-generator integrations) and **9 automatic
 hooks**, persisting to a local SQLite store by default or to PostgreSQL +
 pgvector when configured. Implements rate-distortion forgetting,
@@ -23,7 +23,7 @@ results (LongMemEval Recall@10 = 98.2%, LoCoMo Recall@10 = 94.2%, BEAM-10M
 
 ## Dev setup
 
-**Prerequisites:** Python 3.10+ and `uv` with `uvx` (`pip install uv` or `pipx install uv`).
+**Prerequisites:** Python 3.11+ and `uv` with `uvx` (`pip install uv` or `pipx install uv`).
 `uv` itself must be on `PATH` for `pytest`, not only `uvx`: once psycopg is
 installed, pytest's start-up check (`scripts/check_venv_lock_parity.py`) runs
 `uv export` to compare your venv with `uv.lock`, and stops with an explicit

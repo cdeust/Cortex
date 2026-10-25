@@ -18,7 +18,7 @@ schema = {
         "Verify the local Cortex installation before first interactive "
         "use. Runs the identical check functions as `python -m "
         "mcp_server.doctor` (no duplicated logic), backend-aware. "
-        "PostgreSQL backend: Python >= 3.10, "
+        "PostgreSQL backend: Python >= 3.11, "
         "psycopg/psycopg_pool/pgvector driver imports, DATABASE_URL set, "
         "live PostgreSQL connection, pgvector + pg_trgm extensions, "
         "~/.claude/methodology writability, auto-capture health (judged "

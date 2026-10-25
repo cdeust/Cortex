@@ -8,7 +8,7 @@ version = "4.23.5"
 description = "Scientifically-grounded memory system based on computational neuroscience research"
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [
     { name = "Clement Deust", email = "admin@ai-architect.tools" },
 ]
@@ -21,10 +21,15 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
+    # source: https://github.com/advisories/GHSA-5x8w-8jj5-q52h
+    "Pillow>=13.0.0",
     # source: ADR-1092
     # macOS Intel wheels stop at cryptography 48.
     # uvx resolves published metadata without the lock-shaping platform group.
     "cryptography<49 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    # source: ADR-1092 platform-bounds below; uv 0.11.3/0.13.5 resolution
+    # on 2026-10-25 requires this complementary marker at the same level.
+    "cryptography>=49 ; sys_platform != 'darwin' or platform_machine != 'x86_64'",
     # source: ADR-0874
     #
     #
@@ -141,7 +146,7 @@ viz-tile = [
     "pyarrow>=15.0",             # Arrow IPC for the quadtree endpoint
     "pandas>=2.2",               # Datashader's native frame format
     "cachetools>=5.0",           # L1 in-memory tile LRU
-    "Pillow>=10.0",              # PNG encode
+    "Pillow>=13.0.0",            # PNG encode
 ]
 benchmarks = [
     "datasets>=2.14.0",          # HuggingFace dataset loader (BEAM, LoCoMo, LongMemEval)
