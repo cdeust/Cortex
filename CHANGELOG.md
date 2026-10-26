@@ -14,6 +14,9 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 - The `merge` job of `.github/workflows/pipeline.yml` sets `GH_REPO: ${{ github.repository }}` on its `gh pr merge` step: the job runs without a checkout, so gh could not infer the repository and failed with `fatal: not a git repository` after every stage was green (session-optimizer #65, run 39756969927, 2026-10-22).
 
+- CI rejects bot review or repair executions with denied permissions, failed tools
+  or missing completion evidence. Reviews must include completed review agents.
+
 ### Added
 
 - **The single CI pipeline, run by the Claude bot (ADR-1115).**
