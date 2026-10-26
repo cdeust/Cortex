@@ -632,8 +632,11 @@ jobs:
           display_report: true
           show_full_output: false
           allowed_bots: "claude[bot],chatgpt-codex-connector[bot]"
-          prompt: "/code-review:code-review --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number }}"
-          claude_args: '--allowedTools "mcp__github_inline_comment__create_inline_comment"'
+          prompt: |
+            /code-review:code-review --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number }}
+            Wait for every review agent's completed result. A background launch is not a completed review.
+            If required tools are unavailable or denied, report the failure; do not substitute a manual partial review.
+          claude_args: '--allowedTools "Agent,Skill,Read,Glob,Grep,mcp__github_inline_comment__create_inline_comment"'
 
       # The action reports nominal SDK success even with denied tools. Validate
       # before Fix overwrites its fixed execution_file (pinned action.yml).
@@ -641,7 +644,10 @@ jobs:
         if: always() && !cancelled() && steps.review_action.outcome != 'skipped'
         env:
           EXECUTION_FILE: ${{ steps.review_action.outputs.execution_file }}
-        run: python3 scripts/ci_review_execution.py "$EXECUTION_FILE" --require-agents
+          VALIDATOR_REVISION: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          git show "$VALIDATOR_REVISION:scripts/ci_review_execution.py" | python3 -I - "$EXECUTION_FILE" --require-agents
 
       # The fix: every review finding and every failed job, on the branch.
       # Its push is a synchronize event; the five tests run again on it.
@@ -668,7 +674,10 @@ jobs:
         if: always() && !cancelled() && steps.fix_action.outcome != 'skipped'
         env:
           EXECUTION_FILE: ${{ steps.fix_action.outputs.execution_file }}
-        run: python3 scripts/ci_review_execution.py "$EXECUTION_FILE"
+          VALIDATOR_REVISION: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          git show "$VALIDATOR_REVISION:scripts/ci_review_execution.py" | python3 -I - "$EXECUTION_FILE"
 
   # Decision 4, hardened after claude-mods #38 and session-optimizer #73 merged
   # on a red pipeline: GitHub treats a skipped required check as satisfied, so

@@ -14,6 +14,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
+ToolBlock = dict[str, Any]
+PendingTools = dict[str, str]
+
 
 class ExecutionError(ValueError):
     """The recorded execution cannot prove an unblocked completion."""
@@ -82,7 +85,7 @@ def _tool_call(block: dict[str, Any], seen: set[str]) -> tuple[str, str]:
     return identity, name
 
 
-def _tool_result(block: dict[str, Any], pending: dict[str, str]) -> bool:
+def _tool_result(block: ToolBlock, pending: PendingTools, output: Any) -> bool:
     identity = block.get("tool_use_id")
     if not isinstance(identity, str) or identity not in pending:
         raise ExecutionError("tool result has no pending call")
@@ -90,7 +93,15 @@ def _tool_result(block: dict[str, Any], pending: dict[str, str]) -> bool:
         raise ExecutionError("tool result reports an error or invalid error flag")
     if not isinstance(block.get("content"), (str, list)):
         raise ExecutionError("tool result is missing completion output")
-    return pending.pop(identity) in {"Agent", "Task"}
+    is_agent = pending[identity] in {"Agent", "Task"}
+    # Source: https://code.claude.com/docs/en/agent-sdk/subagents#choose-whether-claude-waits-for-subagents
+    # AgentOutput acknowledges background launches before their reports exist.
+    if is_agent and (
+        not isinstance(output, dict) or output.get("status") != "completed"
+    ):
+        raise ExecutionError("agent result must report structured completed status")
+    pending.pop(identity)
+    return is_agent
 
 
 def validate_execution(value: Any, *, require_agents: bool = False) -> None:
@@ -111,7 +122,10 @@ def validate_execution(value: Any, *, require_agents: bool = False) -> None:
                 identity, name = _tool_call(block, seen)
                 pending[identity] = name
             elif block.get("type") == "tool_result":
-                completed_agent = _tool_result(block, pending) or completed_agent
+                completed_agent = (
+                    _tool_result(block, pending, message.get("tool_use_result"))
+                    or completed_agent
+                )
     if pending:
         raise ExecutionError("tool calls remain incomplete")
     if require_agents and not completed_agent:

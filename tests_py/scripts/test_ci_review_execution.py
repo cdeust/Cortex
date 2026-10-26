@@ -40,6 +40,7 @@ def agent_run(name="Agent"):
         },
         {
             "type": "user",
+            "tool_use_result": {"status": "completed"},
             "message": {
                 "content": [
                     {
@@ -173,6 +174,54 @@ class ReviewExecutionTests(unittest.TestCase):
     def test_background_agent_launch_is_not_completion(self):
         messages = agent_run()
         messages[1]["message"]["content"][0]["input"]["run_in_background"] = True
+        self.rejected(messages, "agent", agents=True)
+
+    def test_async_agent_acknowledgment_without_input_flag_is_not_completion(self):
+        for name in ("Agent", "Task"):
+            messages = agent_run(name)
+            messages[2]["tool_use_result"] = {"status": "async_launched"}
+            self.rejected(messages, "agent", agents=True)
+            self.rejected(messages, "agent")
+
+    def test_agent_completion_requires_structured_completed_status(self):
+        for name in ("Agent", "Task"):
+            self.assert_invalid_agent_statuses(name)
+
+    def assert_invalid_agent_statuses(self, name):
+        for metadata in (
+            None,
+            False,
+            0,
+            [],
+            "completed",
+            {},
+            {"status": "remote_launched"},
+            {"status": "unknown"},
+            {"status": None},
+            {"status": False},
+            {"status": 0},
+            {"status": []},
+            {"status": {}},
+        ):
+            messages = agent_run(name)
+            messages[2]["tool_use_result"] = metadata
+            self.rejected(messages, "agent", agents=True)
+        messages = agent_run(name)
+        del messages[2]["tool_use_result"]
+        self.rejected(messages, "agent", agents=True)
+
+    def test_agent_response_status_controls_completion_despite_input_false(self):
+        for name in ("Agent", "Task"):
+            messages = agent_run(name)
+            messages[1]["message"]["content"][0]["input"]["run_in_background"] = False
+            messages[2]["tool_use_result"] = {"status": "async_launched"}
+            self.rejected(messages, "agent", agents=True)
+
+    def test_generic_tool_result_does_not_require_agent_status(self):
+        messages = agent_run("Read")
+        del messages[2]["tool_use_result"]
+        result = self.run_gate(messages)
+        self.assertEqual(result.returncode, 0, result.stderr)
         self.rejected(messages, "agent", agents=True)
 
     def test_duplicate_agent_calls_and_results_are_rejected(self):

@@ -5,6 +5,11 @@ Source: Cortex PR796, run40200974594 attempt2, review job121876760991.
 
 from pathlib import Path
 import re
+import json
+import os
+import subprocess
+import tempfile
+import textwrap
 import unittest
 
 
@@ -29,15 +34,16 @@ class ReviewExecutionWiringTests(unittest.TestCase):
                     ".outputs.execution_file }}",
                     block,
                 )
+                self.assertIn('python3 -I - "$EXECUTION_FILE"', block)
+                self.assertIn('git show "$VALIDATOR_REVISION:scripts/', block)
                 self.assertIn(
-                    'python3 scripts/ci_review_execution.py "$EXECUTION_FILE"', block
+                    "VALIDATOR_REVISION: ${{ github.event.pull_request.base.sha }}",
+                    block,
                 )
                 self.assertNotIn("continue-on-error", block)
 
     def test_review_requires_agents_and_fix_does_not(self):
-        commands = re.findall(
-            r"run: (python3 scripts/ci_review_execution.py[^\n]+)", self.text
-        )
+        commands = re.findall(r"python3 -I -[^\n]+", self.text)
         self.assertEqual(len(commands), 2)
         self.assertTrue(commands[0].endswith(" --require-agents"))
         self.assertNotIn("--require-agents", commands[1])
@@ -49,6 +55,83 @@ class ReviewExecutionWiringTests(unittest.TestCase):
                 block = self.text[start:].split("\n      - name:", 1)[0]
                 self.assertIn("always() && !cancelled()", block)
                 self.assertIn(f"steps.{action}_action.outcome != 'skipped'", block)
+
+    def validation_command(self):
+        start = self.text.index("      - name: Validate fix execution\n")
+        block = self.text[start:].split("\n  # Decision 4", 1)[0]
+        command = block.split("        run: ", 1)[1]
+        return textwrap.dedent(command[2:]) if command.startswith("|\n") else command
+
+    def test_validator_and_python_imports_come_from_trusted_revision(self):
+        with tempfile.TemporaryDirectory() as directory:
+            self.assert_trusted_execution(Path(directory))
+
+    def assert_trusted_execution(self, root):
+        revision, execution = self.malicious_checkout(root)
+        result = subprocess.run(
+            ["bash", "-eo", "pipefail", "-c", self.validation_command()],
+            cwd=root,
+            env={
+                **os.environ,
+                "EXECUTION_FILE": str(execution),
+                "VALIDATOR_REVISION": revision,
+                "PYTHONPATH": str(root),
+            },
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse((root / "candidate-executed").exists())
+        self.assertIn("execution verified", result.stdout)
+
+    def malicious_checkout(self, root):
+        scripts = root / "scripts"
+        scripts.mkdir()
+        helper = scripts / "ci_review_execution.py"
+        helper.write_bytes(
+            (WORKFLOW.parents[2] / helper.relative_to(root)).read_bytes()
+        )
+        self.git(root, "init", "-q")
+        self.git(root, "add", "scripts/ci_review_execution.py")
+        self.git(root, "commit", "-qm", "trusted validator")
+        revision = self.git(root, "rev-parse", "HEAD").stdout.strip()
+        payload = "from pathlib import Path; Path('candidate-executed').touch()\n"
+        helper.write_text(payload)
+        (root / "json.py").write_text(payload)
+        execution = root / "execution.json"
+        execution.write_text(
+            json.dumps(
+                [
+                    {
+                        "type": "result",
+                        "subtype": "success",
+                        "is_error": False,
+                        "permission_denials": [],
+                    }
+                ]
+            )
+        )
+        return revision, execution
+
+    def git(self, root, *args):
+        return subprocess.run(
+            [
+                "git",
+                "-c",
+                "user.name=CI fixture",
+                "-c",
+                "user.email=ci@example.invalid",
+                "-c",
+                "commit.gpgsign=false",
+                "-C",
+                str(root),
+                *args,
+            ],
+            text=True,
+            capture_output=True,
+            check=True,
+        )
 
 
 if __name__ == "__main__":
