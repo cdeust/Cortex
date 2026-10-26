@@ -133,6 +133,67 @@ class ReviewExecutionWiringTests(unittest.TestCase):
             check=True,
         )
 
+    def test_non_main_base_is_rejected_before_git_and_without_action_outputs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            result = self.run_review_guard(root, {"BASE_REF": "untrusted-base"})
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertFalse((root / "git-calls").exists())
+            self.assertFalse((root / "outputs").exists())
+
+    def test_main_base_retains_normal_and_bootstrap_action_decisions(self):
+        for changed, expected in (
+            ("docs/a.md", "true"),
+            (".github/workflows/pipeline.yml", "false"),
+        ):
+            with (
+                self.subTest(changed=changed),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                root = Path(directory)
+                result = self.run_review_guard(root, {"CHANGED": changed})
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(
+                    (root / "outputs").read_text(),
+                    f"review={expected}\nfix={expected}\n",
+                )
+
+    def run_review_guard(self, root, overrides):
+        fake_git = root / "git"
+        fake_git.write_text(
+            '#!/bin/sh\nprintf "%s\\n" "$*" >> "$GIT_CALLS"\n'
+            'case "$1" in\n'
+            'rev-parse) printf "%s\\n" "$HEAD_SHA" ;;\n'
+            'diff) printf "%s\\n" "$CHANGED" ;;\n'
+            'log) printf "ci@example.invalid\\n" ;;\n'
+            "*) exit 2 ;;\nesac\n"
+        )
+        fake_git.chmod(0o700)
+        start = self.text.index("      - name: Review guard\n")
+        block = self.text[start:].split("\n      - name:", 1)[0]
+        command = textwrap.dedent(block.split("        run: |\n", 1)[1])
+        # Source: pipeline.yml Review guard environment; synthetic full SHA-1.
+        env = {
+            **os.environ,
+            "PATH": f"{root}{os.pathsep}{os.environ['PATH']}",
+            "BASE_REF": "main",
+            "HEAD_SHA": "a" * 40,
+            "CHANGED": "docs/a.md",
+            "TEST_RESULTS": "{}",
+            "GIT_CALLS": str(root / "git-calls"),
+            "GITHUB_OUTPUT": str(root / "outputs"),
+            "GITHUB_STEP_SUMMARY": str(root / "summary"),
+            **overrides,
+        }
+        return subprocess.run(
+            ["bash", "-eo", "pipefail", "-c", command],
+            cwd=root,
+            env=env,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -25,7 +25,10 @@ to wait for completed agents. Access deny rules still apply; no unrestricted
 shell or editing capability is added to Review.
 
 Validation code is read with `git show` from the event's immutable base SHA,
-never from the candidate checkout. Python isolated mode (`-I`) prevents a
+never from the candidate checkout. The review guard first requires the base
+branch to be `main`, before any Git call or secret-bearing action: immutability
+alone would not make an unprotected feature branch a trusted source.
+Python isolated mode (`-I`) prevents a
 candidate module or `PYTHONPATH` from replacing a standard-library import.
 Both checks retain shell pipe failure propagation if the trusted file is absent.
 
