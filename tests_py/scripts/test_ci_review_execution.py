@@ -183,6 +183,16 @@ class ReviewExecutionTests(unittest.TestCase):
             self.rejected(messages, "agent", agents=True)
             self.rejected(messages, "agent")
 
+    def test_agent_result_cannot_share_structured_output_with_other_results(self):
+        messages = agent_run()
+        messages[1]["message"]["content"].append(
+            {"type": "tool_use", "id": "agent-2", "name": "Agent", "input": {}}
+        )
+        messages[2]["message"]["content"].append(
+            {"type": "tool_result", "tool_use_id": "agent-2", "content": "launched"}
+        )
+        self.rejected(messages, "shares a message", agents=True)
+
     def test_agent_completion_requires_structured_completed_status(self):
         for name in ("Agent", "Task"):
             self.assert_invalid_agent_statuses(name)

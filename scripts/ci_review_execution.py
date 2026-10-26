@@ -104,6 +104,18 @@ def _tool_result(block: ToolBlock, pending: PendingTools, output: Any) -> bool:
     return is_agent
 
 
+def _unambiguous_output(blocks: list[ToolBlock], pending: PendingTools) -> None:
+    # Source: sdk.d.ts SDKUserMessage.tool_use_result (SDK 0.3.307): one
+    # structured Output per message, keyed by the matching tool_use block. Several
+    # results sharing it could let one completed status vouch for a launch ack.
+    results = [block for block in blocks if block.get("type") == "tool_result"]
+    if len(results) > 1 and any(
+        pending.get(block.get("tool_use_id")) in {"Agent", "Task"}
+        for block in results
+    ):
+        raise ExecutionError("agent result shares a message with other tool results")
+
+
 def validate_execution(value: Any, *, require_agents: bool = False) -> None:
     """Check completion evidence, without claiming semantic review correctness."""
     messages = _messages(value)
@@ -117,7 +129,9 @@ def validate_execution(value: Any, *, require_agents: bool = False) -> None:
             and message.get("subtype") == "permission_denied"
         ):
             raise ExecutionError("permission denied event prevents completion")
-        for block in _blocks(message):
+        blocks = _blocks(message)
+        _unambiguous_output(blocks, pending)
+        for block in blocks:
             if block.get("type") == "tool_use":
                 identity, name = _tool_call(block, seen)
                 pending[identity] = name
