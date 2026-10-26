@@ -118,13 +118,30 @@ def _unambiguous_output(blocks: list[ToolBlock], pending: PendingTools) -> None:
         raise ExecutionError("agent result shares a message with other tool results")
 
 
-def validate_execution(value: Any, *, require_agents: bool = False) -> None:
+def _skill_evidence(skills: dict[str, str], done: list[str], required: tuple[str, ...]):
+    # Source: code-review plugin 1.0.0 commands/code-review.md and the bundled
+    # security-review skill: each required skill is invoked exactly once.
+    invoked = sorted(skills.values())
+    for name in required:
+        if invoked.count(name) != 1 or done.count(name) != 1:
+            raise ExecutionError("required skill was not invoked and completed once")
+
+
+def validate_execution(
+    value: Any,
+    *,
+    require_agents: bool = False,
+    min_agents: int = 0,
+    skills: tuple[str, ...] = (),
+) -> None:
     """Check completion evidence, without claiming semantic review correctness."""
     messages = _messages(value)
     _terminal(messages)
     seen: set[str] = set()
     pending: dict[str, str] = {}
-    completed_agent = False
+    skill_calls: dict[str, str] = {}
+    skills_done: list[str] = []
+    completed_agents = 0
     for message in messages:
         if (
             message["type"] == "system"
@@ -137,21 +154,27 @@ def validate_execution(value: Any, *, require_agents: bool = False) -> None:
             if block.get("type") == "tool_use":
                 identity, name = _tool_call(block, seen)
                 pending[identity] = name
+                if name == "Skill":
+                    skill_calls[identity] = str(block["input"].get("skill"))
             elif block.get("type") == "tool_result":
-                completed_agent = (
-                    _tool_result(block, pending, message.get("tool_use_result"))
-                    or completed_agent
-                )
+                identity = block.get("tool_use_id")
+                if _tool_result(block, pending, message.get("tool_use_result")):
+                    completed_agents += 1
+                if identity in skill_calls:
+                    skills_done.append(skill_calls[identity])
     if pending:
         raise ExecutionError("tool calls remain incomplete")
-    if require_agents and not completed_agent:
+    if completed_agents < max(min_agents, 1 if require_agents else 0):
         raise ExecutionError("agent completion evidence is missing")
+    _skill_evidence(skill_calls, skills_done, skills)
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("execution_file", type=Path)
     parser.add_argument("--require-agents", action="store_true")
+    parser.add_argument("--min-agents", type=int, default=0)
+    parser.add_argument("--require-skill", action="append", default=[])
     args = parser.parse_args(argv)
     try:
         value = json.loads(args.execution_file.read_text(encoding="utf-8"))
@@ -162,7 +185,12 @@ def main(argv: list[str] | None = None) -> int:
         print("review execution: invalid JSON execution file", file=sys.stderr)
         return 1
     try:
-        validate_execution(value, require_agents=args.require_agents)
+        validate_execution(
+            value,
+            require_agents=args.require_agents,
+            min_agents=args.min_agents,
+            skills=tuple(args.require_skill),
+        )
     except ExecutionError as exc:
         print(f"review execution: {exc}", file=sys.stderr)
         return 1
