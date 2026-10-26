@@ -109,8 +109,10 @@ def _unambiguous_output(blocks: list[ToolBlock], pending: PendingTools) -> None:
     # structured Output per message, keyed by the matching tool_use block. Several
     # results sharing it could let one completed status vouch for a launch ack.
     results = [block for block in blocks if block.get("type") == "tool_result"]
+    # Non-string identities are left for _tool_result to reject by category.
     if len(results) > 1 and any(
-        pending.get(block.get("tool_use_id")) in {"Agent", "Task"}
+        isinstance(block.get("tool_use_id"), str)
+        and pending.get(block["tool_use_id"]) in {"Agent", "Task"}
         for block in results
     ):
         raise ExecutionError("agent result shares a message with other tool results")
