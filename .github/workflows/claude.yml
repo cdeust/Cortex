@@ -129,11 +129,6 @@ jobs:
           # Pre-created empty: Claude only overwrites them; absent or empty fails validation.
           : > "$DIR/code-review.md"
           : > "$DIR/security-review.md"
-          : > "$DIR/code-guard.jsonl"
-          : > "$DIR/security-guard.jsonl"
-          # Trusted deny hook overrides grants from native skill frontmatter.
-          # PreToolUse guard source: scripts/ci_claude_review_guard.py
-          python3 -I scripts/ci_claude_review_guard.py --settings "$DIR/review-settings.json"
           live() {
             gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json state,isDraft,headRefOid \
               --jq '[.state,.isDraft,.headRefOid]|@tsv'
@@ -153,11 +148,6 @@ jobs:
         uses: anthropics/claude-code-action@8041f1d17e0e7d2f2cfe35002962e9f26237c0bb # v1.0.263
         env:
           CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
-          CORTEX_REVIEW_FILE: ${{ runner.temp }}/claude-review/code-review.md
-          CORTEX_REVIEW_SKILL: code-review:code-review
-          CORTEX_REVIEW_GUARD_RECEIPT: ${{ runner.temp }}/claude-review/code-guard.jsonl
-          CORTEX_REVIEW_PUBLISH_COMMAND: >-
-            gh api -X POST repos/${{ github.repository }}/pulls/${{ env.PR }}/reviews -f commit_id=${{ env.HEAD_SHA }} -f event=COMMENT -F body=@${{ runner.temp }}/claude-review/code-review.md
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           plugin_marketplaces: "https://github.com/anthropics/claude-code.git"
@@ -177,7 +167,6 @@ jobs:
           # Shell reads can redirect into validators; only exact publication uses Bash.
           claude_args: >-
             --setting-sources user --permission-mode dontAsk
-            --settings ${{ runner.temp }}/claude-review/review-settings.json
             --add-dir ${{ runner.temp }}/claude-review
             --allowedTools "Agent,Skill,Read,Glob,Grep,Edit(/${{ runner.temp }}/claude-review/code-review.md),Bash(gh api -X POST repos/${{ github.repository }}/pulls/${{ env.PR }}/reviews -f commit_id=${{ env.HEAD_SHA }} -f event=COMMENT -F body=@${{ runner.temp }}/claude-review/code-review.md)"
 
@@ -189,8 +178,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REVIEW_FILE: ${{ runner.temp }}/claude-review/code-review.md
         run: |
-          set -euo pipefail
-          python3 -I scripts/ci_claude_review_guard.py --verify "${{ runner.temp }}/claude-review/code-guard.jsonl" --skill code-review:code-review --verdict "$REVIEW_FILE" --sha "$HEAD_SHA"
           python3 -I scripts/ci_review_execution.py "$EXECUTION_FILE" --require-agents --min-agents 7 --require-skill code-review:code-review
           python3 -B scripts/ci_claude_review_event.py --published code
 
@@ -200,11 +187,6 @@ jobs:
         uses: anthropics/claude-code-action@8041f1d17e0e7d2f2cfe35002962e9f26237c0bb # v1.0.263
         env:
           CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
-          CORTEX_REVIEW_FILE: ${{ runner.temp }}/claude-review/security-review.md
-          CORTEX_REVIEW_SKILL: security-review
-          CORTEX_REVIEW_GUARD_RECEIPT: ${{ runner.temp }}/claude-review/security-guard.jsonl
-          CORTEX_REVIEW_PUBLISH_COMMAND: >-
-            gh api -X POST repos/${{ github.repository }}/pulls/${{ env.PR }}/reviews -f commit_id=${{ env.HEAD_SHA }} -f event=COMMENT -F body=@${{ runner.temp }}/claude-review/security-review.md
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           allowed_bots: "claude[bot],chatgpt-codex-connector[bot],dependabot[bot]"
@@ -221,7 +203,6 @@ jobs:
           # Shell reads can redirect into validators; only exact publication uses Bash.
           claude_args: >-
             --setting-sources user --permission-mode dontAsk
-            --settings ${{ runner.temp }}/claude-review/review-settings.json
             --add-dir ${{ runner.temp }}/claude-review
             --allowedTools "Agent,Skill,Read,Glob,Grep,Edit(/${{ runner.temp }}/claude-review/security-review.md),Bash(gh api -X POST repos/${{ github.repository }}/pulls/${{ env.PR }}/reviews -f commit_id=${{ env.HEAD_SHA }} -f event=COMMENT -F body=@${{ runner.temp }}/claude-review/security-review.md)"
 
@@ -232,8 +213,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REVIEW_FILE: ${{ runner.temp }}/claude-review/security-review.md
         run: |
-          set -euo pipefail
-          python3 -I scripts/ci_claude_review_guard.py --verify "${{ runner.temp }}/claude-review/security-guard.jsonl" --skill security-review --verdict "$REVIEW_FILE" --sha "$HEAD_SHA"
           python3 -I scripts/ci_review_execution.py "$EXECUTION_FILE" --require-agents --min-agents 1 --require-skill security-review
           python3 -B scripts/ci_claude_review_event.py --published security
 

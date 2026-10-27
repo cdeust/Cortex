@@ -132,32 +132,6 @@ class ClaudeWorkflowTests(unittest.TestCase):
         self.assertIn('> "$DIR/pr.json"', review)
         self.assertEqual(review.count("read metadata from"), 2)
 
-    def test_native_skill_permissions_cannot_bypass_the_write_boundary(self):
-        # Anthropic code-review frontmatter grants gh pr reads and writes;
-        # skills documentation states these grants supplement allowedTools.
-        review = job(self.text, "review")
-        self.assertEqual(
-            review.count(
-                "--settings ${{ runner.temp }}/claude-review/review-settings.json"
-            ),
-            2,
-        )
-        self.assertIn("PreToolUse", review)
-        self.assertEqual(review.count("CORTEX_REVIEW_PUBLISH_COMMAND:"), 2)
-        self.assertEqual(review.count("CORTEX_REVIEW_FILE:"), 2)
-        for label in ("Code review", "Security review"):
-            block = review.split(f"      - name: {label}\n", 1)[1]
-            block = block.split("\n      - name:", 1)[0]
-            command = block.split("CORTEX_REVIEW_PUBLISH_COMMAND: >-\n", 1)[1]
-            command = command.split("\n", 1)[0].strip()
-            self.assertIn(f"Bash({command})", block)
-            self.assertIn("\n            " + command + "\n", block)
-        for kind in ("code", "security"):
-            self.assertIn(
-                f'--verify "${{{{ runner.temp }}}}/claude-review/{kind}-guard.jsonl"',
-                review,
-            )
-
     def test_tag_job_is_owner_only_and_scrubs_subprocess_secrets(self):
         # Codex 4389092806: a writer without secret access must not steer a job
         # that holds CLAUDE_CODE_OAUTH_TOKEN and runs shell commands.

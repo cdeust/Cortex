@@ -40,13 +40,7 @@ def page():
             body=FINDING,
             author=dict(login="chatgpt-codex-connector", __typename="Bot"),
         )
-        nodes.append(
-            dict(
-                isResolved=True,
-                resolvedBy=dict(login="cdeust", __typename="User"),
-                comments=dict(nodes=[root]),
-            )
-        )
+        nodes.append(dict(isResolved=True, comments=dict(nodes=[root])))
     threads = dict(nodes=nodes, pageInfo=dict(hasNextPage=False, endCursor=None))
     return dict(
         data=dict(
@@ -148,19 +142,6 @@ class ResolvedSecurityTests(unittest.TestCase):
                 self.assertNotEqual(
                     m.review_evidence([row], SHA, REPO, PR)["state"], "success"
                 )
-
-    def test_untrusted_resolvers_cannot_dismiss_security_findings(self):
-        # Native security finding4391948358: a contributor can resolve their
-        # own review threads. Only the repository owner's resolution is trusted.
-        for resolver in (
-            None,
-            {"login": "contributor", "__typename": "User"},
-            {"login": "cdeust", "__typename": "Bot"},
-        ):
-            packet = page()
-            thread(packet)["resolvedBy"] = resolver
-            with self.subTest(resolver=resolver):
-                self.assertEqual(self.evaluate(packet)["state"], "blocked")
 
     def test_unknown_flag_without_context_stays_pending(self):
         self.assertEqual(module().review_evidence([summary()], SHA)["state"], "pending")

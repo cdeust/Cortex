@@ -60,29 +60,47 @@ As of issue #178, every Cortex release ships with verifiable provenance
   Scorecard via `scorecard.yml`. The Scorecard number is a recorded baseline,
   not a badge.
 
-- Change control: `main` requires the `merge` check from GitHub Actions and
-  `CodeQL` from GitHub's code-scanning app. The aggregate Pipeline gate checks
-  contract, unit, regression and end-to-end tests, environment/install checks
-  on Linux, macOS and Windows, and native Codex review evidence for the current
-  head. Claude's requirement follows `CLAUDE_REVIEW_GATE` in the default-branch
-  `.github/workflows/claude.yml`. These branch protections apply to administrators;
-  force pushes and branch deletion are disabled. The observed configuration is
-  recorded in `docs/verification/claude-bot-ci-20261027.md`.
+- **Change control** — `main` is protected: direct pushes are refused, every
+  change lands through a pull request, and eleven status checks are *required*
+  to pass before merge (`Lint`, `Type Check`, `Build Package`, `CodeQL`,
+  `Docker Smoke`, `Test` on Python 3.10–3.13, `Test (SQLite backend)`, and
+  `Test (Windows, SQLite backend)`). Force-pushes and branch deletion are
+  blocked, and conversation resolution is required.
+  `ci.yml`'s own aggregate gate (`CI Green`, the single context branch
+  protection actually names — see `scripts/check_ci_gate_complete.py`)
+  additionally runs a `Craftsmanship Gate` job as of the PR that added
+  `scripts/check_craftsmanship.py`; this number becomes twelve once a
+  repository admin adds it to the required-checks list in GitHub's branch
+  protection settings (Settings → Branches) — an action this document
+  cannot perform and the PR that introduced the job does not perform
+  either, so the two may legitimately disagree until that setting is
+  updated by hand.
 
-### Automated review evidence
+### Why Scorecard's Code-Review check will not go green here
 
-Codex and Claude use their own GitHub App identities for review publication.
-Their respective gates validate evidence for the exact pull-request head.
-Claude publishes `COMMENT` reviews; these are not GitHub `APPROVE` reviews.
-Human approval is not required by the current branch configuration.
+Scorecard's `Code-Review` check scores a changeset as reviewed only when it
+carries an **approving review from someone other than its author**. Cortex has
+one maintainer, and GitHub structurally forbids approving your own pull request.
+The check is therefore **unattainable by construction**, not unimplemented — no
+configuration of this repository can satisfy it while it has a single
+maintainer.
 
-When a completed native security review has a nullable unresolved-findings
-verdict, the gate requires a nonempty, complete match between its announced
-findings and authenticated GitHub review threads. Every matching finding must
-be resolved through the repository owner account. Authorized automation uses
-that account to resolve verified findings. A contributor resolving their own
-conversation does not satisfy this proof. Explicit native verdicts retain
-their existing validation.
+What is implemented instead is every part of the control that does not require a
+second human: the pull-request requirement above (so no change reaches `main`
+unreviewed by *machine* gates), the required-checks list, and the automated
+analysis (CodeQL, Scorecard, Dependabot). The required approving-review count is
+deliberately set to **0** rather than 1: at 1, a solo maintainer cannot merge at
+all, so the setting would be traded for a repository that cannot ship — security
+theatre that reduces real safety by pushing work outside the PR flow.
+
+**The residual risk is real and is not claimed away:** a logic error that all
+eleven automated gates accept will reach `main` without a second pair of human
+eyes. Mitigation is the gate breadth above plus post-merge scanning; the honest
+statement is that human code review is *absent*, not *satisfied*. This is why
+the corresponding Scorecard alert is dismissed as "won't fix" rather than left
+open — an alert that can never be actioned is noise that hides actionable ones.
+It becomes actionable the moment a second maintainer joins, at which point the
+approving-review count should be raised to 1 and this paragraph deleted.
 
 **What this does NOT claim.** Provenance proves *who built the artifact and
 from which commit*, not that the source is free of defects; and it is worth

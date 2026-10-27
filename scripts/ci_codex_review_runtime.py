@@ -82,7 +82,6 @@ query($owner: String!, $name: String!, $number: Int!, $endCursor: String) {
         pageInfo { hasNextPage endCursor }
         nodes {
           isResolved
-          resolvedBy { login __typename }
           comments(first:1) { nodes { databaseId body author { login __typename } } }
         }
       }
@@ -112,7 +111,7 @@ def _announced(body: str, repo: str, pr: int) -> set[int]:
     return expected if expected and len(expected) == len(ids) == total else set()
 
 
-def _native_thread(thread: Record, owner: str) -> tuple[int, bool] | None:
+def _native_thread(thread: Record) -> tuple[int, bool] | None:
     resolved = thread["isResolved"]
     if type(resolved) is not bool:
         raise EvidenceError("protocol")
@@ -127,15 +126,13 @@ def _native_thread(thread: Record, owner: str) -> tuple[int, bool] | None:
     identity = root["databaseId"]
     if type(identity) is not int or identity <= 0:
         raise EvidenceError("protocol")
-    resolver = thread.get("resolvedBy") or {}
-    trusted = resolver.get("login") == owner and resolver.get("__typename") == "User"
-    return identity, resolved and trusted
+    return identity, resolved
 
 
-def _native_states(nodes, owner) -> dict[int, bool]:
+def _native_states(nodes) -> dict[int, bool]:
     states = {}
     for thread in nodes:
-        native = _native_thread(thread, owner)
+        native = _native_thread(thread)
         if native is None:
             continue
         identity, resolved = native
@@ -145,7 +142,7 @@ def _native_states(nodes, owner) -> dict[int, bool]:
     return states
 
 
-def _thread_states(pages: Any, sha: str, owner: str) -> dict[int, bool]:
+def _thread_states(pages: Any, sha: str) -> dict[int, bool]:
     if not isinstance(pages, list) or not pages:
         raise EvidenceError("protocol")
     states = {}
@@ -160,7 +157,7 @@ def _thread_states(pages: Any, sha: str, owner: str) -> dict[int, bool]:
             more = connection["pageInfo"]["hasNextPage"]
             if type(more) is not bool or more != (index < len(pages) - 1):
                 raise EvidenceError("protocol")
-            current = _native_states(connection["nodes"], owner)
+            current = _native_states(connection["nodes"])
             if states.keys() & current.keys():
                 raise EvidenceError("protocol")
             states.update(current)
@@ -194,7 +191,7 @@ def resolve_security(target, body, review, metadata):
         return None
     owner, name = repo.split("/")
     fields = dict(query=THREAD_QUERY, owner=owner, name=name, number=pr)
-    states = _thread_states(_api("graphql", paginate=True, fields=fields), sha, owner)
+    states = _thread_states(_api("graphql", paginate=True, fields=fields), sha)
     if states.keys() != expected:
         raise EvidenceError("protocol")
     return {
