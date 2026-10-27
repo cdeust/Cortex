@@ -1020,10 +1020,18 @@ jobs:
         run: |
           set -euo pipefail
           title="Claude review of Pipeline run $GITHUB_RUN_ID"
-          claude_run="$(gh run list --workflow claude.yml --event workflow_run --limit 100 --json databaseId,displayTitle --jq "[.[] | select(.displayTitle == \"$title\")][0].databaseId // empty")"
-          [ -n "$claude_run" ] || { echo "::error::No Claude review run named '$title'; the review never started."; exit 1; }
-          gh run watch "$claude_run" --interval 30 >/dev/null
-          [ "$(gh run view "$claude_run" --json conclusion --jq .conclusion)" = success ] || { echo "::error::Claude review run $claude_run did not succeed, so its execution validation failed or never ran."; exit 1; }
+          # Bootstrap: the automatic review run exists only once main's claude.yml carries
+          # the review job (its run-name is the marker). main is the trust anchor and a PR
+          # cannot change it. Until then only tag-triggered verdicts exist, and the exact
+          # commit_id and claude[bot] checks below are the whole proof.
+          if gh api "repos/$GH_REPO/contents/.github/workflows/claude.yml?ref=main" --jq .content | base64 -d | grep -qF 'Claude review of Pipeline run'; then
+            claude_run="$(gh run list --workflow claude.yml --event workflow_run --limit 100 --json databaseId,displayTitle --jq "[.[] | select(.displayTitle == \"$title\")][0].databaseId // empty")"
+            [ -n "$claude_run" ] || { echo "::error::No Claude review run named '$title'; the review never started."; exit 1; }
+            gh run watch "$claude_run" --interval 30 >/dev/null
+            [ "$(gh run view "$claude_run" --json conclusion --jq .conclusion)" = success ] || { echo "::error::Claude review run $claude_run did not succeed, so its execution validation failed or never ran."; exit 1; }
+          else
+            echo "::notice::main's claude.yml has no automatic review job yet; counting tag-triggered claude[bot] verdicts only."
+          fi
           gh api --paginate "repos/$GH_REPO/pulls/$PR/reviews" | jq -s 'add // []' > "$RUNNER_TEMP/reviews.json"
           jq -e --arg sha "$HEAD_SHA" '
             [.[] | select(.user.login == "claude[bot]" and .user.type == "Bot"

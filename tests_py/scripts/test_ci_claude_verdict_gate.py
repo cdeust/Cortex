@@ -13,7 +13,7 @@ CLAUDE = (ROOT / ".github/workflows/claude.yml").read_text()
 # Synthetic full SHA-1 values and run id for fixtures.
 SHA, OTHER, RUN = "a" * 40, "b" * 40, "4242"
 
-# The fake gh answers only the four calls the gate makes. run list prints the Claude
+# The fake gh answers only the five calls the gate makes. run list prints the Claude
 # run id only when the title query names this pipeline run.
 FAKE_GH = """#!/bin/sh
 case "$1 $2" in
@@ -23,6 +23,7 @@ case "$1 $2" in
     esac ;;
   "run watch") exit "$WATCH_RC" ;;
   "run view") echo "$CONCLUSION" ;;
+  "api repos/"*contents*) printf '%s' "$MAIN_CLAUDE_YML" | base64 ;;
   api*) cat "$FIXTURE/fixture.json" ;;
   *) echo "unexpected gh call: $*" >&2; exit 99 ;;
 esac
@@ -47,7 +48,9 @@ def review(kind, findings=0, state="COMMENTED", sha=SHA, login="claude[bot]"):
 
 
 class VerdictGateTests(unittest.TestCase):
-    def run_gate(self, reviews, run="99", watch=0, conclusion="success"):
+    def run_gate(
+        self, reviews, run="99", watch=0, conclusion="success", main_has_review=True
+    ):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "fixture.json").write_text(json.dumps(reviews))
@@ -68,6 +71,11 @@ class VerdictGateTests(unittest.TestCase):
                     "CLAUDE_RUN": run,
                     "WATCH_RC": str(watch),
                     "CONCLUSION": conclusion,
+                    "MAIN_CLAUDE_YML": (
+                        "run-name: Claude review of Pipeline run 1"
+                        if main_has_review
+                        else "name: Claude Code"
+                    ),
                 },
                 capture_output=True,
                 text=True,
@@ -122,6 +130,24 @@ class VerdictGateTests(unittest.TestCase):
                 self.assertNotEqual(
                     self.run_gate(self.clean(), conclusion=conclusion), 0
                 )
+
+    def test_bootstrap_counts_tag_verdicts_until_main_has_the_review_job(self):
+        # Before claude.yml with the review job is on main no automatic run can exist,
+        # so the wait is skipped; the exact-commit claude[bot] verdicts still decide.
+        boot = {"run": "", "main_has_review": False}
+        self.assertEqual(self.run_gate(self.clean(), **boot), 0)
+        self.assertNotEqual(self.run_gate([review("code")], **boot), 0)
+        self.assertNotEqual(self.run_gate([], **boot), 0)
+        self.assertNotEqual(
+            self.run_gate([review("code", sha=OTHER), review("security")], **boot), 0
+        )
+        self.assertNotEqual(
+            self.run_gate(
+                [review("code"), review("security", login="github-actions[bot]")],
+                **boot,
+            ),
+            0,
+        )
 
     def test_run_name_and_merge_permissions_match_the_gate(self):
         self.assertIn("format('Claude review of Pipeline run {0}'", CLAUDE)
