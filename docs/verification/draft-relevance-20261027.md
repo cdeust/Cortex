@@ -272,3 +272,12 @@ Native Claude `/code-review` and `/security-review` were not run by this Codex
 worker. No review verdict, hosted CI success, mergeability or published replacement
 head is claimed. The host forbids GitHub publication during this dispatch; the
 coordinator receives the tested local commit for publication and review.
+
+
+## Native review follow-up
+
+The [native Codex finding](https://github.com/cdeust/Cortex/pull/804#discussion_r4388465600) on `ea37061b` identified explicit `auto` hooks losing both concrete storage paths. Engine selection is restored before hook dispatch; the actual chosen PostgreSQL URL is exported, and SQLite selection reaches the SQLite hook branch. Four dispatch regressions failed on the reviewed head and pass after the correction, covering both engine choices and CLI/Codex runtimes. The engine and PostgreSQL connections are substituted at their boundaries in those four tests.
+
+Test preflight also exposed `maintenance_url` discarding query-host settings and reaching the default local endpoint. Four endpoint regressions failed before its fix. The helper now preserves endpoint/TLS/service query text and its encoding while selecting the maintenance database. Real libpq parsing covers encoded spaces and literal plus signs. A live connection verifies the rewritten URL reaches the owned private cluster and its `postgres` database. The empty test database created on the default local server during the failed preflight was identified by the measured creation window, checked for zero user objects and no other sessions, then removed; its cleanup receipt is retained in project verification records.
+
+Broader follow-up: 938 passed, 26 skipped, 13 subtests passed, with two existing fork warnings. Final affected suites: 65 passed. Pinned Ruff, Pyright on the changed hook entry point and the repository craftsmanship gate pass. A long test name was shortened to keep `test_entry.py` under the existing 300-line cap without removing a test.

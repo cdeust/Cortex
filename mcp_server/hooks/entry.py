@@ -65,6 +65,28 @@ def prepare_environment(
     settle_backend(environ, marker_path)
 
 
+def resolve_auto_backend(environ: MutableMapping[str, str]) -> None:
+    """Export the engine's auto choice before raw-SQL hooks bind their config.
+
+    source: ADR-0535
+    Native review: PR804 discussion4388465600.
+    """
+    if environ.get("CORTEX_MEMORY_STORE_BACKEND") != "auto":
+        return
+    if environ.get("DATABASE_URL") or environ.get("CORTEX_MEMORY_DATABASE_URL"):
+        return
+    from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: PLC0415 — auto selection follows first-launch environment resolution
+    from mcp_server.infrastructure.memory_config import get_memory_settings  # noqa: PLC0415 — preserve the engine-selected PostgreSQL URL
+    from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore  # noqa: PLC0415 — auto selection follows first-launch environment resolution
+
+    store = get_shared_store()
+    if isinstance(store, SqliteMemoryStore):
+        environ["CORTEX_MEMORY_STORE_BACKEND"] = "sqlite"
+    else:
+        environ["CORTEX_MEMORY_STORE_BACKEND"] = "postgresql"
+        environ["DATABASE_URL"] = get_memory_settings().DATABASE_URL
+
+
 def _print_usage() -> None:
     names = ", ".join(sorted(HOOK_MODULES))
     print(
@@ -112,6 +134,7 @@ def main() -> None:
 
     os.environ.setdefault("CORTEX_RUNTIME", "cowork")
     _prepare_or_exit(os.environ)
+    resolve_auto_backend(os.environ)
 
     from mcp_server.hooks.wiring import wire_composition_root  # noqa: PLC0415 - issue number 560, same seam as scripts/launcher.py:153
 

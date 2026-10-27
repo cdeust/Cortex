@@ -228,9 +228,7 @@ def test_codex_auto_hook_uses_actual_sqlite_store_without_marker(
     assert "shared Codex decision" in capsys.readouterr().out
 
 
-def test_fresh_codex_hook_never_asks_the_auto_store(
-    tmp_path: Path, monkeypatch
-) -> None:
+def test_fresh_hook_avoids_auto_probe(tmp_path: Path, monkeypatch) -> None:
     from mcp_server.hooks.entry import prepare_environment
     from mcp_server.infrastructure import memory_store
 
