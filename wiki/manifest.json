@@ -3631,6 +3631,10 @@
     "ADR-1116": {
       "mirror": "ADR-1116-claude-bot-reviews-run-from-main-via-workflow_run-with-staged-gate-activation.md",
       "path": "adr/cortex/1116-claude-bot-reviews-run-from-main-via-workflow_run-with-staged-gate-activation.md"
+    },
+    "ADR-1117": {
+      "mirror": "ADR-1117-use-the-official-anthropic-direct-pr-review-workflow.md",
+      "path": "adr/cortex/1117-use-the-official-anthropic-direct-pr-review-workflow.md"
     }
   },
   "project": "cortex",

@@ -15,9 +15,8 @@ PREREQUISITES = BASE_CATEGORIES + tuple(
     for kind in ("environment", "install")
     for os in ("ubuntu-latest", "macos-latest", "windows-latest")
 )
-# Pipeline step names: the claude[bot] readers sit beside the Codex readers.
-READINESS = ("Require completed Codex reviews", "Require completed Claude reviews")
-MERGE = ("Require complete Codex reviews", "Require complete Claude reviews")
+READINESS = ("Require completed Codex reviews",)
+MERGE = ("Require complete Codex reviews",)
 
 
 def _success(job: Record) -> bool:
@@ -100,30 +99,6 @@ def _green_wait(indexed: dict[str, Record]) -> bool:
             job.get("conclusion") in ("success", "skipped") for job in indexed.values()
         )
     )
-
-
-def combined_proof(codex: Record, claude: Record) -> Record:
-    """One proof: Codex alone until main requires Claude, then both sources."""
-    if claude.get("state") == "not_required":
-        return codex
-    sha = codex.get("sha")
-    if claude.get("sha") != sha:
-        return {
-            "state": "blocked",
-            "reason": "protocol",
-            "sha": sha,
-            "reviews_complete": False,
-        }
-    complete = all(p.get("reviews_complete") is True for p in (codex, claude))
-    states = (codex.get("state"), claude.get("state"))
-    if complete:
-        clean = states == ("success", "success")
-        state = "success" if clean else "blocked"
-        reason = "reviews_complete" if clean else "review_unresolved"
-    else:
-        state = "blocked" if "blocked" in states else "pending"
-        reason = next(p["reason"] for p in (codex, claude) if p.get("state") == state)
-    return {"state": state, "reason": reason, "sha": sha, "reviews_complete": complete}
 
 
 def _complete_inputs(source: Any, jobs: Any, proof: Any, sha: str) -> bool:

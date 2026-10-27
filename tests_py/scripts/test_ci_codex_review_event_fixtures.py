@@ -23,13 +23,6 @@ DETAIL = PREFIX + "/actions/runs/50"
 JOBS = DETAIL + "/attempts/1/jobs"
 PULL = PREFIX + "/pulls/797"
 COMMENTS = PREFIX + "/issues/797/comments"
-# Main's workflow listing: the trust anchor that decides whether claude[bot]
-# reviews join the proof (scripts/ci_claude_review_gate.py main_requires_claude).
-WORKFLOWS = PREFIX + "/contents/.github/workflows?ref=main"
-CLAUDE_YML = PREFIX + "/contents/.github/workflows/claude.yml?ref=main"
-REVIEWS = PULL + "/reviews"
-# The producing claude.yml run of a run-bound review (ci_claude_reviews attest).
-CLAUDE_RUN = PREFIX + "/actions/runs/900"
 
 
 def source():
@@ -110,14 +103,6 @@ class Server:
                 "commit_id": SHA,
                 "pull_request_url": "https://api.github.com/" + PULL,
             },
-            "workflows": [
-                {"name": "Codex.yml", "type": "file"},
-                {"name": "pipeline.yml", "type": "file"},
-            ],
-            "claude_yml": None,
-            "reviews": [],
-            "claude_run": None,
-            "claude_jobs": [],
         }
         self.calls = []
         self.overrides = {}
@@ -145,17 +130,6 @@ class Server:
             ]
         elif endpoint == PREFIX + "/commits/" + SHA + "/pulls":
             result = [[self.data["pull"]]]
-        elif endpoint == WORKFLOWS:
-            result = self.data["workflows"]
-        elif endpoint == CLAUDE_YML and self.data["claude_yml"] is not None:
-            result = self.data["claude_yml"]
-        elif endpoint == REVIEWS:
-            result = [self.data["reviews"]]
-        elif endpoint == CLAUDE_RUN and missing:
-            result = self.data["claude_run"]
-        elif endpoint == CLAUDE_RUN + "/attempts/1/jobs" and paginate:
-            jobs = self.data["claude_jobs"]
-            result = [{"total_count": len(jobs), "jobs": jobs}]
         else:
             raise AssertionError("unexpected API endpoint: " + endpoint)
         return copy.deepcopy(result)
