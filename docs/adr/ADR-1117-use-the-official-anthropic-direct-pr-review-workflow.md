@@ -4,7 +4,7 @@
 created: 2026-10-27T18:47:20Z
 kind: adr
 number: 1117
-status: proposed
+status: accepted
 tags: [ci, claude, supersedes-adr-1116]
 title: Use the official Anthropic direct PR review workflow
 ---
@@ -12,7 +12,7 @@ title: Use the official Anthropic direct PR review workflow
 
 ## Status
 
-proposed
+accepted; shipped by [PR807](https://github.com/cdeust/Cortex/pull/807) as main commit 7a85eb38af278541aaf6507829e998e8e4d8e7e7.
 
 ## Context
 
@@ -25,3 +25,9 @@ Replace Claude workflow_run with pull_request_target opened, synchronize, reopen
 ## Consequences
 
 This supersedes ADR-1116's custom Claude execution and evidence architecture. Claude reports through native PR comments and its Actions check. The App validates workflow content against main, so bootstrap cannot prove native acceptance; verify actual review execution after configuration reaches main before declaring the native Claude bot operational. Keep branch protection tied to checks that actually bind to the PR head; do not require a target-workflow check attached to the base commit. No fabricated review or status is accepted.
+
+## Installation evidence
+
+[Pipeline40566519242](https://github.com/cdeust/Cortex/actions/runs/40566519242) passed all required jobs before merge. The unit job reported 10,987 passed, 26 skipped and 826 passing subtests, with 90.81 percent line coverage. Regression tests reported 30 passed and 4 skipped. Docker smoke returned 57 tools from a bare container. Both native Codex reviews completed without findings on c18e174de286bf37c20b4058b8c91eb944b07f12. The merged tree matches that reviewed head (acc3351e0369586deee7d160ed6ff5078f0b4683).
+
+Claude acceptance requires a fresh PR event after installation. Earlier installation-PR jobs soft-skipped App workflow validation; they are not successful Claude reviews.

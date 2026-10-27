@@ -4,7 +4,7 @@
 created: 2026-10-27T12:25:50Z
 kind: adr
 number: 1116
-status: accepted
+status: superseded
 tags: [ci, claude-bot, review, security]
 title: claude[bot] reviews run from main via workflow_run with staged gate activation
 ---
@@ -12,7 +12,7 @@ title: claude[bot] reviews run from main via workflow_run with staged gate activ
 
 ## Status
 
-accepted
+superseded by [ADR-1117](1117-use-the-official-anthropic-direct-pr-review-workflow.md), shipped in PR807 as main commit 7a85eb38af278541aaf6507829e998e8e4d8e7e7. The workflow_run marker protocol described below is historical.
 
 ## Context
 
