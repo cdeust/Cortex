@@ -561,6 +561,7 @@ jobs:
       contents: read
       pull-requests: write
       issues: write
+      id-token: write
       actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -605,10 +606,6 @@ jobs:
         if: steps.guard.outputs.review == 'true'
         uses: anthropics/claude-code-action@aa8a7738e48bf30a40ee499ce818bef081c5ab5e # v1.0.257
         with:
-          # Review phases only: the App OIDC exchange refuses a workflow that differs
-          # from the default branch and the action then skips with success.
-          # Source: claude-code-action aa8a7738 action.yml github_token, src/github/token.ts.
-          github_token: ${{ github.token }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           plugin_marketplaces: "https://github.com/anthropics/claude-code.git"
           plugins: "code-review@claude-code-plugins"
@@ -844,10 +841,6 @@ jobs:
         if: always() && !cancelled() && steps.guard.outputs.review == 'true'
         uses: anthropics/claude-code-action@aa8a7738e48bf30a40ee499ce818bef081c5ab5e # v1.0.257
         with:
-          # Review phases only: the App OIDC exchange refuses a workflow that differs
-          # from the default branch and the action then skips with success.
-          # Source: claude-code-action aa8a7738 action.yml github_token, src/github/token.ts.
-          github_token: ${{ github.token }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           plugin_marketplaces: "https://github.com/anthropics/claude-code.git"
           plugins: "code-review@claude-code-plugins"
