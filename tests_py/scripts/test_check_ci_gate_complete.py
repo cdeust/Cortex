@@ -181,11 +181,13 @@ class PipelineGateTests(unittest.TestCase):
                 )
                 self.assertTrue(gate.check_runtime_contract(changed))
 
-    def test_review_skip_exception_stays_dependabot_only(self) -> None:
+    def test_review_skip_exception_cannot_be_reintroduced(self) -> None:
         changed = change_job(
             self.workflow,
             "merge",
-            lambda block: block.replace("'skipped:dependabot[bot]'", "skipped:*"),
+            lambda block: block.replace(
+                "success:*) ;;", "success:*|'skipped:dependabot[bot]') ;;"
+            ),
         )
         self.assertTrue(gate.check_runtime_contract(changed))
 

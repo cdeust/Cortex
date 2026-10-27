@@ -60,7 +60,7 @@ def conditions(post_merge: bool) -> dict[str, str]:
     else:
         result.update(
             contract="!cancelled()",
-            review=PR_CONDITION + " && github.actor != 'dependabot[bot]'",
+            review=PR_CONDITION,
             merge=PR_CONDITION,
             tag="!cancelled() && github.event_name == 'push' "
             "&& github.ref == 'refs/heads/main'",

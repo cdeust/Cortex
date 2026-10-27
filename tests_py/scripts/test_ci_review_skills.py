@@ -20,7 +20,9 @@ def exchange(identity, name, arguments, structured=None):
     user = {
         "type": "user",
         "message": {
-            "content": [{"type": "tool_result", "tool_use_id": identity, "content": "ok"}]
+            "content": [
+                {"type": "tool_result", "tool_use_id": identity, "content": "ok"}
+            ]
         },
     }
     if structured is not None:
@@ -36,8 +38,12 @@ def execution(skills=(CODE, SECURITY), agents=8):
     for index in range(agents):
         messages += exchange(f"a{index}", "Agent", {}, {"status": "completed"})
     messages.append(
-        {"type": "result", "subtype": "success", "is_error": False,
-         "permission_denials": []}
+        {
+            "type": "result",
+            "subtype": "success",
+            "is_error": False,
+            "permission_denials": [],
+        }
     )
     return messages
 
@@ -47,9 +53,20 @@ def gate(value):
         path = Path(directory) / "execution.json"
         path.write_text(json.dumps(value), encoding="utf-8")
         return subprocess.run(
-            [sys.executable, str(SCRIPT), str(path), "--min-agents", MIN_AGENTS,
-             "--require-skill", CODE, "--require-skill", SECURITY],
-            text=True, capture_output=True, check=False,
+            [
+                sys.executable,
+                str(SCRIPT),
+                str(path),
+                "--min-agents",
+                MIN_AGENTS,
+                "--require-skill",
+                CODE,
+                "--require-skill",
+                SECURITY,
+            ],
+            text=True,
+            capture_output=True,
+            check=False,
         )
 
 

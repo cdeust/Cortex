@@ -160,8 +160,8 @@ jobs:
 
 
           def _validate_jobs(jobs, actor):
-              # Source: templates/ci/pipeline.yml, five categories and the existing
-              # Dependabot review exception. Overall success alone accepts skipped jobs.
+              # Source: the owner's single-push contract requires every author
+              # to complete review. Overall success alone accepts skipped jobs.
               required = ["contract", "unit", "regression", "e2e", "review", "merge"]
               for category in ("environment", "install"):
                   expected = {
@@ -184,11 +184,7 @@ jobs:
                       len(matching) == 1, f"source merge gate requires exactly one {name} job"
                   )
                   job = matching[0]
-                  allowed = job.get("conclusion") == "success" or (
-                      name == "review"
-                      and actor == "dependabot[bot]"
-                      and job.get("conclusion") == "skipped"
-                  )
+                  allowed = job.get("conclusion") == "success"
                   require(
                       job.get("status") == "completed" and allowed,
                       f"source merge gate requires completed {name}",
@@ -917,11 +913,7 @@ jobs:
           CLAUDE_CONFIG_DIR: ${{ env.CI_WORK }}/claude
         run: bash -eo pipefail -c "$CI_COMMAND"
 
-  # The bot (design, "The bot step"): runs whether install passed or failed,
-  # on same-repo, non-draft pull requests. Dependabot remains out of scope.
-  # Claude commits skip duplicate review, but failing tests still need repair.
-  # Workflow changes retain the bootstrap skip (design decision 2).
-  # Cancellation stops mutation; ordinary failed tests still reach repair.
+  # Publish only after all five categories pass on the actual merge commit.
   tag:
     needs: [contract, unit, regression, e2e, environment, install]
     if: >-

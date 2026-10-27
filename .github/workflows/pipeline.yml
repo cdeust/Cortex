@@ -548,18 +548,14 @@ jobs:
           CLAUDE_CONFIG_DIR: ${{ env.CI_WORK }}/claude
         run: bash -eo pipefail -c "$CI_COMMAND"
 
-  # The bot (design, "The bot step"): runs whether install passed or failed,
-  # on same-repo, non-draft pull requests. Dependabot remains out of scope.
-  # Claude commits skip duplicate review, but failing tests still need repair.
-  # Workflow changes retain the bootstrap skip (design decision 2).
-  # Cancellation stops mutation; ordinary failed tests still reach repair.
+  # Each ready same-repository head receives both native read-only reviews.
+  # Workflow changes disable automatic repair, never either review phase.
   review:
     needs: [unit, regression, e2e, environment, install]
     if: >-
       always() && !cancelled() && github.event_name == 'pull_request'
       && !github.event.pull_request.draft
       && github.event.pull_request.head.repo.full_name == github.repository
-      && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -575,13 +571,15 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
+          # checkout v7 uses includeIf, missed by the pinned action's include.path cleanup.
+          # Sources: checkout3d3c42e git-auth-helper.ts; action aa8a7738 git-config.ts.
+          persist-credentials: false
 
       - name: Review guard
         id: guard
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
-          TEST_RESULTS: ${{ toJSON(needs) }}
         run: |
           if [ "$BASE_REF" != main ]; then
             echo "::error::Review requires the trusted main base."
@@ -591,22 +589,13 @@ jobs:
             echo "::error::The branch advanced after this run started; use its new run."
             exit 1
           fi
+          git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
           changed="$(git diff --name-only "origin/$BASE_REF...$HEAD_SHA")"
-          author="$(git log -1 --format=%ae "$HEAD_SHA")"
           review=true
           fix=true
-          if grep -qx '.github/workflows/pipeline.yml' <<<"$changed"; then
-            review=false
+          if grep -q '^\.github/workflows/' <<<"$changed"; then
             fix=false
-            echo "## Review: bootstrap workflow change, bot steps skipped" >> "$GITHUB_STEP_SUMMARY"
-          else
-            case "$author" in
-              *'+claude[bot]@users.noreply.github.com'|'claude[bot]@users.noreply.github.com')
-                review=false
-                fix="$(jq -r 'any(.[]; .result != "success")' <<<"$TEST_RESULTS")"
-                echo "## Review: Claude head; duplicate review skipped, repair=$fix" >> "$GITHUB_STEP_SUMMARY"
-                ;;
-            esac
+            echo "## Review: workflow changes receive both reviews; automatic repair is disabled" >> "$GITHUB_STEP_SUMMARY"
           fi
           { echo "review=$review"; echo "fix=$fix"; } >> "$GITHUB_OUTPUT"
 
@@ -623,8 +612,8 @@ jobs:
             echo "EOF_JOBS"
           } >> "$GITHUB_OUTPUT"
 
-      # The documented review (https://code.claude.com/docs/en/github-actions,
-      # "Run a skill"): read-only, findings as inline comments.
+      # Source: code-review commands/code-review.md steps 1-4 (seven agents).
+      # Security requires one independent agent by the owner's acceptance policy.
       - name: Review
         id: review_action
         if: steps.guard.outputs.review == 'true'
@@ -635,23 +624,773 @@ jobs:
           plugins: "code-review@claude-code-plugins"
           display_report: true
           show_full_output: false
-          allowed_bots: "claude[bot],chatgpt-codex-connector[bot]"
+          allowed_bots: "claude[bot],chatgpt-codex-connector[bot],dependabot[bot]"
           prompt: |
-            /code-review:code-review --comment ${{ github.repository }}/pull/${{ github.event.pull_request.number }}
-            Wait for every review agent's completed result. A background launch is not a completed review.
-            If required tools are unavailable or denied, report the failure; do not substitute a manual partial review.
-          claude_args: '--allowedTools "Agent,Skill,Read,Glob,Grep,mcp__github_inline_comment__create_inline_comment"'
+            Review ${{ github.repository }}/pull/${{ github.event.pull_request.number }} at head ${{ github.event.pull_request.head.sha }}.
+            Call the Skill tool exactly once with skill code-review:code-review and args "--comment ${{ github.repository }}/pull/${{ github.event.pull_request.number }}".
+            Perform the full native review on this exact head, including dependency and Claude-authored PRs, despite earlier Claude comments or earlier-head reviews.
+            Wait for every review agent's completed result, including at least 7 completed agents for this phase. A background launch is not a completed review.
+            Report tool failures and denied permissions; never substitute a manual partial review. Use separate commands without compound cd plus relative reads.
+            Publish findings from the native skill on this PR with the reviewed head SHA. Limit writes to review comments; do not edit or push code.
+          claude_args: '--allowedTools "Agent,Skill,Read,Glob,Grep,mcp__github_inline_comment__create_inline_comment,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr list:*),Bash(gh pr comment:*),Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh search:*),Bash(git diff:*),Bash(git show:*),Bash(git log:*),Bash(git status:*)"'
 
-      # The action reports nominal SDK success even with denied tools. Validate
-      # before Fix overwrites its fixed execution_file (pinned action.yml).
+      # Inline workflow code avoids candidate helper execution and initial
+      # bootstrap dependency on a helper absent from main. Parity is tested.
       - name: Validate review execution
         if: always() && !cancelled() && steps.review_action.outcome != 'skipped'
         env:
           EXECUTION_FILE: ${{ steps.review_action.outputs.execution_file }}
-          VALIDATOR_REVISION: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
-          git show "$VALIDATOR_REVISION:scripts/ci_review_execution.py" | python3 -I - "$EXECUTION_FILE" --require-agents
+          python3 -I - "$EXECUTION_FILE" --require-agents --min-agents 7 --require-skill code-review:code-review <<'PY_REVIEW'
+          #!/usr/bin/env python3
+          """Reject incomplete Claude action executions without exposing transcript content.
+
+          Source: anthropics/claude-code-action@aa8a7738e48bf30a40ee499ce818bef081c5ab5e,
+          base-action/src/{execution-file,run-claude-sdk}.ts: execution_file is a raw SDK
+          message array; a successful result can still contain permission_denials.
+          """
+
+          from __future__ import annotations
+
+          import argparse
+          import json
+          import sys
+          from pathlib import Path
+          from typing import Any
+
+          ToolBlock = dict[str, Any]
+          PendingTools = dict[str, str]
+
+
+          class ExecutionError(ValueError):
+              """The recorded execution cannot prove an unblocked completion."""
+
+
+          def _messages(value: Any) -> list[dict[str, Any]]:
+              if not isinstance(value, list):
+                  raise ExecutionError("message stream must be an array")
+              for message in value:
+                  if (
+                      not isinstance(message, dict)
+                      or not isinstance(message.get("type"), str)
+                      or not message.get("type")
+                  ):
+                      raise ExecutionError("message must have a string type")
+              return value
+
+
+          def _terminal(messages: list[dict[str, Any]]) -> None:
+              results = [message for message in messages if message["type"] == "result"]
+              if len(results) != 1 or messages[-1] is not results[0]:
+                  raise ExecutionError("result must occur exactly once at the end")
+              result = results[0]
+              if result.get("subtype") != "success" or result.get("is_error") is not False:
+                  raise ExecutionError("result must report successful completion")
+              denials = result.get("permission_denials")
+              if not isinstance(denials, list) or denials:
+                  raise ExecutionError("permission denials must be explicitly empty")
+
+
+          def _blocks(message: dict[str, Any]) -> list[dict[str, Any]]:
+              if message["type"] not in {"assistant", "user"}:
+                  return []
+              body = message.get("message")
+              if not isinstance(body, dict):
+                  raise ExecutionError("message body must be an object")
+              content = body.get("content")
+              if isinstance(content, str):
+                  return []
+              if not isinstance(content, list) or any(
+                  not isinstance(block, dict)
+                  or not isinstance(block.get("type"), str)
+                  or not block.get("type")
+                  for block in content
+              ):
+                  raise ExecutionError("message content must be text or content blocks")
+              return content
+
+
+          def _tool_call(block: dict[str, Any], seen: set[str]) -> tuple[str, str]:
+              identity, name, arguments = block.get("id"), block.get("name"), block.get("input")
+              if (
+                  not isinstance(identity, str)
+                  or not identity
+                  or not isinstance(name, str)
+                  or not name
+              ):
+                  raise ExecutionError("message tool call requires an identity and name")
+              if not isinstance(arguments, dict):
+                  raise ExecutionError("message tool input must be an object")
+              if identity in seen:
+                  raise ExecutionError("tool call identity was reused")
+              if name in {"Agent", "Task"} and arguments.get("run_in_background"):
+                  raise ExecutionError("agent background launch cannot prove completion")
+              seen.add(identity)
+              return identity, name
+
+
+          def _tool_result(block: ToolBlock, pending: PendingTools, output: Any) -> bool:
+              identity = block.get("tool_use_id")
+              if not isinstance(identity, str) or identity not in pending:
+                  raise ExecutionError("tool result has no pending call")
+              if block.get("is_error", False) is not False:
+                  raise ExecutionError("tool result reports an error or invalid error flag")
+              if not isinstance(block.get("content"), (str, list)):
+                  raise ExecutionError("tool result is missing completion output")
+              is_agent = pending[identity] in {"Agent", "Task"}
+              # Source: https://code.claude.com/docs/en/agent-sdk/subagents#choose-whether-claude-waits-for-subagents
+              # AgentOutput acknowledges background launches before their reports exist.
+              if is_agent and (
+                  not isinstance(output, dict) or output.get("status") != "completed"
+              ):
+                  raise ExecutionError("agent result must report structured completed status")
+              pending.pop(identity)
+              return is_agent
+
+
+          def _unambiguous_output(blocks: list[ToolBlock], pending: PendingTools) -> None:
+              # Source: sdk.d.ts SDKUserMessage.tool_use_result (SDK 0.3.307): one
+              # structured Output per message, keyed by the matching tool_use block. Several
+              # results sharing it could let one completed status vouch for a launch ack.
+              results = [block for block in blocks if block.get("type") == "tool_result"]
+              # Non-string identities are left for _tool_result to reject by category.
+              if len(results) > 1 and any(
+                  isinstance(block.get("tool_use_id"), str)
+                  and pending.get(block["tool_use_id"]) in {"Agent", "Task"}
+                  for block in results
+              ):
+                  raise ExecutionError("agent result shares a message with other tool results")
+
+
+          def _skill_evidence(skills: dict[str, str], done: list[str], required: tuple[str, ...]):
+              # Source: code-review plugin 1.0.0 commands/code-review.md and the bundled
+              # security-review skill: each required skill is invoked exactly once.
+              invoked = sorted(skills.values())
+              for name in required:
+                  if invoked.count(name) != 1 or done.count(name) != 1:
+                      raise ExecutionError("required skill was not invoked and completed once")
+
+
+          def validate_execution(
+              value: Any,
+              *,
+              require_agents: bool = False,
+              min_agents: int = 0,
+              skills: tuple[str, ...] = (),
+          ) -> None:
+              """Check completion evidence, without claiming semantic review correctness."""
+              messages = _messages(value)
+              _terminal(messages)
+              seen: set[str] = set()
+              pending: dict[str, str] = {}
+              skill_calls: dict[str, str] = {}
+              skills_done: list[str] = []
+              completed_agents = 0
+              for message in messages:
+                  if (
+                      message["type"] == "system"
+                      and message.get("subtype") == "permission_denied"
+                  ):
+                      raise ExecutionError("permission denied event prevents completion")
+                  blocks = _blocks(message)
+                  _unambiguous_output(blocks, pending)
+                  for block in blocks:
+                      if block.get("type") == "tool_use":
+                          identity, name = _tool_call(block, seen)
+                          pending[identity] = name
+                          if name == "Skill":
+                              skill_calls[identity] = str(block["input"].get("skill"))
+                      elif block.get("type") == "tool_result":
+                          identity = block.get("tool_use_id")
+                          if _tool_result(block, pending, message.get("tool_use_result")):
+                              completed_agents += 1
+                          if identity in skill_calls:
+                              skills_done.append(skill_calls[identity])
+              if pending:
+                  raise ExecutionError("tool calls remain incomplete")
+              if completed_agents < max(min_agents, 1 if require_agents else 0):
+                  raise ExecutionError("agent completion evidence is missing")
+              _skill_evidence(skill_calls, skills_done, skills)
+
+
+          def main(argv: list[str] | None = None) -> int:
+              parser = argparse.ArgumentParser(description=__doc__)
+              parser.add_argument("execution_file", type=Path)
+              parser.add_argument("--require-agents", action="store_true")
+              parser.add_argument("--min-agents", type=int, default=0)
+              parser.add_argument("--require-skill", action="append", default=[])
+              args = parser.parse_args(argv)
+              try:
+                  value = json.loads(args.execution_file.read_text(encoding="utf-8"))
+              except (OSError, UnicodeError):
+                  print("review execution: cannot read execution file", file=sys.stderr)
+                  return 1
+              except (json.JSONDecodeError, RecursionError):
+                  print("review execution: invalid JSON execution file", file=sys.stderr)
+                  return 1
+              try:
+                  validate_execution(
+                      value,
+                      require_agents=args.require_agents,
+                      min_agents=args.min_agents,
+                      skills=tuple(args.require_skill),
+                  )
+              except ExecutionError as exc:
+                  print(f"review execution: {exc}", file=sys.stderr)
+                  return 1
+              print("review execution verified")
+              return 0
+
+
+          if __name__ == "__main__":
+              sys.exit(main())
+          PY_REVIEW
+
+      # Source: code-review commands/code-review.md steps 1-4 (seven agents).
+      # Security requires one independent agent by the owner's acceptance policy.
+      - name: Security review
+        id: security_review_action
+        if: always() && !cancelled() && steps.guard.outputs.review == 'true'
+        uses: anthropics/claude-code-action@aa8a7738e48bf30a40ee499ce818bef081c5ab5e # v1.0.257
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          plugin_marketplaces: "https://github.com/anthropics/claude-code.git"
+          plugins: "code-review@claude-code-plugins"
+          display_report: true
+          show_full_output: false
+          allowed_bots: "claude[bot],chatgpt-codex-connector[bot],dependabot[bot]"
+          prompt: |
+            Review ${{ github.repository }}/pull/${{ github.event.pull_request.number }} at head ${{ github.event.pull_request.head.sha }}.
+            Call the Skill tool exactly once with skill security-review and args "Review the exact current PR head and publish security findings on this PR.".
+            Perform the full native review on this exact head, including dependency and Claude-authored PRs, despite earlier Claude comments or earlier-head reviews.
+            Wait for every review agent's completed result, including at least 1 completed agents for this phase. A background launch is not a completed review.
+            Report tool failures and denied permissions; never substitute a manual partial review. Use separate commands without compound cd plus relative reads.
+            Publish findings from the native skill on this PR with the reviewed head SHA. Limit writes to review comments; do not edit or push code.
+          claude_args: '--allowedTools "Agent,Skill,Read,Glob,Grep,mcp__github_inline_comment__create_inline_comment,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr list:*),Bash(gh pr comment:*),Bash(gh issue view:*),Bash(gh issue list:*),Bash(gh search:*),Bash(git diff:*),Bash(git show:*),Bash(git log:*),Bash(git status:*)"'
+
+      # Inline workflow code avoids candidate helper execution and initial
+      # bootstrap dependency on a helper absent from main. Parity is tested.
+      - name: Validate security review execution
+        if: always() && !cancelled() && steps.security_review_action.outcome != 'skipped'
+        env:
+          EXECUTION_FILE: ${{ steps.security_review_action.outputs.execution_file }}
+        run: |
+          set -euo pipefail
+          python3 -I - "$EXECUTION_FILE" --require-agents --min-agents 1 --require-skill security-review <<'PY_REVIEW'
+          #!/usr/bin/env python3
+          """Reject incomplete Claude action executions without exposing transcript content.
+
+          Source: anthropics/claude-code-action@aa8a7738e48bf30a40ee499ce818bef081c5ab5e,
+          base-action/src/{execution-file,run-claude-sdk}.ts: execution_file is a raw SDK
+          message array; a successful result can still contain permission_denials.
+          """
+
+          from __future__ import annotations
+
+          import argparse
+          import json
+          import sys
+          from pathlib import Path
+          from typing import Any
+
+          ToolBlock = dict[str, Any]
+          PendingTools = dict[str, str]
+
+
+          class ExecutionError(ValueError):
+              """The recorded execution cannot prove an unblocked completion."""
+
+
+          def _messages(value: Any) -> list[dict[str, Any]]:
+              if not isinstance(value, list):
+                  raise ExecutionError("message stream must be an array")
+              for message in value:
+                  if (
+                      not isinstance(message, dict)
+                      or not isinstance(message.get("type"), str)
+                      or not message.get("type")
+                  ):
+                      raise ExecutionError("message must have a string type")
+              return value
+
+
+          def _terminal(messages: list[dict[str, Any]]) -> None:
+              results = [message for message in messages if message["type"] == "result"]
+              if len(results) != 1 or messages[-1] is not results[0]:
+                  raise ExecutionError("result must occur exactly once at the end")
+              result = results[0]
+              if result.get("subtype") != "success" or result.get("is_error") is not False:
+                  raise ExecutionError("result must report successful completion")
+              denials = result.get("permission_denials")
+              if not isinstance(denials, list) or denials:
+                  raise ExecutionError("permission denials must be explicitly empty")
+
+
+          def _blocks(message: dict[str, Any]) -> list[dict[str, Any]]:
+              if message["type"] not in {"assistant", "user"}:
+                  return []
+              body = message.get("message")
+              if not isinstance(body, dict):
+                  raise ExecutionError("message body must be an object")
+              content = body.get("content")
+              if isinstance(content, str):
+                  return []
+              if not isinstance(content, list) or any(
+                  not isinstance(block, dict)
+                  or not isinstance(block.get("type"), str)
+                  or not block.get("type")
+                  for block in content
+              ):
+                  raise ExecutionError("message content must be text or content blocks")
+              return content
+
+
+          def _tool_call(block: dict[str, Any], seen: set[str]) -> tuple[str, str]:
+              identity, name, arguments = block.get("id"), block.get("name"), block.get("input")
+              if (
+                  not isinstance(identity, str)
+                  or not identity
+                  or not isinstance(name, str)
+                  or not name
+              ):
+                  raise ExecutionError("message tool call requires an identity and name")
+              if not isinstance(arguments, dict):
+                  raise ExecutionError("message tool input must be an object")
+              if identity in seen:
+                  raise ExecutionError("tool call identity was reused")
+              if name in {"Agent", "Task"} and arguments.get("run_in_background"):
+                  raise ExecutionError("agent background launch cannot prove completion")
+              seen.add(identity)
+              return identity, name
+
+
+          def _tool_result(block: ToolBlock, pending: PendingTools, output: Any) -> bool:
+              identity = block.get("tool_use_id")
+              if not isinstance(identity, str) or identity not in pending:
+                  raise ExecutionError("tool result has no pending call")
+              if block.get("is_error", False) is not False:
+                  raise ExecutionError("tool result reports an error or invalid error flag")
+              if not isinstance(block.get("content"), (str, list)):
+                  raise ExecutionError("tool result is missing completion output")
+              is_agent = pending[identity] in {"Agent", "Task"}
+              # Source: https://code.claude.com/docs/en/agent-sdk/subagents#choose-whether-claude-waits-for-subagents
+              # AgentOutput acknowledges background launches before their reports exist.
+              if is_agent and (
+                  not isinstance(output, dict) or output.get("status") != "completed"
+              ):
+                  raise ExecutionError("agent result must report structured completed status")
+              pending.pop(identity)
+              return is_agent
+
+
+          def _unambiguous_output(blocks: list[ToolBlock], pending: PendingTools) -> None:
+              # Source: sdk.d.ts SDKUserMessage.tool_use_result (SDK 0.3.307): one
+              # structured Output per message, keyed by the matching tool_use block. Several
+              # results sharing it could let one completed status vouch for a launch ack.
+              results = [block for block in blocks if block.get("type") == "tool_result"]
+              # Non-string identities are left for _tool_result to reject by category.
+              if len(results) > 1 and any(
+                  isinstance(block.get("tool_use_id"), str)
+                  and pending.get(block["tool_use_id"]) in {"Agent", "Task"}
+                  for block in results
+              ):
+                  raise ExecutionError("agent result shares a message with other tool results")
+
+
+          def _skill_evidence(skills: dict[str, str], done: list[str], required: tuple[str, ...]):
+              # Source: code-review plugin 1.0.0 commands/code-review.md and the bundled
+              # security-review skill: each required skill is invoked exactly once.
+              invoked = sorted(skills.values())
+              for name in required:
+                  if invoked.count(name) != 1 or done.count(name) != 1:
+                      raise ExecutionError("required skill was not invoked and completed once")
+
+
+          def validate_execution(
+              value: Any,
+              *,
+              require_agents: bool = False,
+              min_agents: int = 0,
+              skills: tuple[str, ...] = (),
+          ) -> None:
+              """Check completion evidence, without claiming semantic review correctness."""
+              messages = _messages(value)
+              _terminal(messages)
+              seen: set[str] = set()
+              pending: dict[str, str] = {}
+              skill_calls: dict[str, str] = {}
+              skills_done: list[str] = []
+              completed_agents = 0
+              for message in messages:
+                  if (
+                      message["type"] == "system"
+                      and message.get("subtype") == "permission_denied"
+                  ):
+                      raise ExecutionError("permission denied event prevents completion")
+                  blocks = _blocks(message)
+                  _unambiguous_output(blocks, pending)
+                  for block in blocks:
+                      if block.get("type") == "tool_use":
+                          identity, name = _tool_call(block, seen)
+                          pending[identity] = name
+                          if name == "Skill":
+                              skill_calls[identity] = str(block["input"].get("skill"))
+                      elif block.get("type") == "tool_result":
+                          identity = block.get("tool_use_id")
+                          if _tool_result(block, pending, message.get("tool_use_result")):
+                              completed_agents += 1
+                          if identity in skill_calls:
+                              skills_done.append(skill_calls[identity])
+              if pending:
+                  raise ExecutionError("tool calls remain incomplete")
+              if completed_agents < max(min_agents, 1 if require_agents else 0):
+                  raise ExecutionError("agent completion evidence is missing")
+              _skill_evidence(skill_calls, skills_done, skills)
+
+
+          def main(argv: list[str] | None = None) -> int:
+              parser = argparse.ArgumentParser(description=__doc__)
+              parser.add_argument("execution_file", type=Path)
+              parser.add_argument("--require-agents", action="store_true")
+              parser.add_argument("--min-agents", type=int, default=0)
+              parser.add_argument("--require-skill", action="append", default=[])
+              args = parser.parse_args(argv)
+              try:
+                  value = json.loads(args.execution_file.read_text(encoding="utf-8"))
+              except (OSError, UnicodeError):
+                  print("review execution: cannot read execution file", file=sys.stderr)
+                  return 1
+              except (json.JSONDecodeError, RecursionError):
+                  print("review execution: invalid JSON execution file", file=sys.stderr)
+                  return 1
+              try:
+                  validate_execution(
+                      value,
+                      require_agents=args.require_agents,
+                      min_agents=args.min_agents,
+                      skills=tuple(args.require_skill),
+                  )
+              except ExecutionError as exc:
+                  print(f"review execution: {exc}", file=sys.stderr)
+                  return 1
+              print("review execution verified")
+              return 0
+
+
+          if __name__ == "__main__":
+              sys.exit(main())
+          PY_REVIEW
+
+      # Embedded code is trusted workflow code, not the candidate checkout.
+      # Source: GitHub Actions YAML anchors/aliases; exact file parity is tested.
+      - name: Require completed Codex reviews for repair
+        if: steps.guard.outputs.fix == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CODEX_COMPLETION_ONLY: 'true'
+        run: &codex_review_reader |
+          set -euo pipefail
+          args=(--repo "$GH_REPO" --pr "$PR" --sha "$HEAD_SHA")
+          if [ "$CODEX_COMPLETION_ONLY" = true ]; then args+=(--require-complete); fi
+          python3 -I - "${args[@]}" <<'CODEX_REVIEW_PY'
+          #!/usr/bin/env python3
+          """Read authenticated native Codex review evidence for one immutable PR head.
+
+          Protocol: Cortex PR797 bot comment6428675514, captured in
+           tasks/ci-review-evidence-codex-{711f0ede,57e4c1d}.json. Native automation:
+          https://learn.chatgpt.com/docs/third-party/github
+          https://learn.chatgpt.com/docs/security/security-review
+          This validates completion metadata, not semantic review quality.
+          """
+
+          from __future__ import annotations
+
+          import argparse
+          import json
+          import os
+          import re
+          import subprocess
+          import sys
+          from datetime import datetime
+          from pathlib import Path
+          from typing import Any
+
+          Record = dict[str, Any]
+          SUMMARY = "<!-- codex-pull-request-review-summary -->"
+          BOT = "chatgpt-codex-connector[bot]"
+          KINDS = ("code_review", "security_review")
+          FAILED = ("failed", "error", "cancelled")
+          SHA_PATTERN = re.compile(r"[0-9a-f]{40}")
+          REPO_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+")
+          STAMP_PATTERN = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z")
+
+
+          class EvidenceError(ValueError):
+              """Only fixed diagnostic categories may cross the CLI boundary."""
+
+
+          class Parser(argparse.ArgumentParser):
+              def error(self, message: str) -> None:
+                  raise EvidenceError("arguments")
+
+
+          def _pairs(items: list[tuple[str, Any]]) -> Record:
+              value: Record = {}
+              for key, item in items:
+                  if key in value:
+                      raise EvidenceError("protocol")
+                  value[key] = item
+              return value
+
+
+          def _invalid_constant(value: str) -> None:
+              raise EvidenceError("protocol")
+
+
+          def _json(text: str) -> Any:
+              try:
+                  return json.loads(
+                      text, object_pairs_hook=_pairs, parse_constant=_invalid_constant
+                  )
+              except (ValueError, RecursionError, TypeError) as exc:
+                  raise EvidenceError("protocol") from exc
+
+
+          def _result(sha: str) -> Record:
+              result = {
+                  "state": "pending",
+                  "reason": "review_missing",
+                  "sha": sha,
+                  "comment_id": 0,
+                  "updated_at": None,
+                  "reviews_complete": False,
+              }
+              for kind in KINDS:
+                  result[kind] = {
+                      "commit_sha": None,
+                      "status": None,
+                      "has_any_findings": None,
+                      "has_unresolved_findings": None,
+                  }
+              return result
+
+
+          def _canonical(comment: Any) -> bool:
+              if not isinstance(comment, dict):
+                  return False
+              user, body = comment.get("user"), comment.get("body")
+              return (
+                  isinstance(user, dict)
+                  and user.get("login") == BOT
+                  and user.get("type") == "Bot"
+                  and isinstance(body, str)
+                  and body.startswith(SUMMARY)
+              )
+
+
+          def _order(comment: Record) -> tuple[datetime, int]:
+              identity, updated = comment.get("id"), comment.get("updated_at")
+              if type(identity) is not int or identity <= 0:
+                  raise EvidenceError("protocol")
+              if not isinstance(updated, str) or STAMP_PATTERN.fullmatch(updated) is None:
+                  raise EvidenceError("protocol")
+              try:
+                  return datetime.fromisoformat(updated.replace("Z", "+00:00")), identity
+              except ValueError as exc:
+                  raise EvidenceError("protocol") from exc
+
+
+          def _marker(body: str, name: str, required: bool) -> Any:
+              count = body.count("<!-- " + name + ":")
+              if count == 0 and not required:
+                  return None
+              if count != 1:
+                  raise EvidenceError("protocol")
+              pattern = re.escape("<!-- " + name + ":v1") + r"\s+(.*?)\s*-->"
+              match = re.search(pattern, body, re.DOTALL)
+              if match is None:
+                  raise EvidenceError("protocol")
+              value = _json(match.group(1))
+              if not isinstance(value, dict):
+                  raise EvidenceError("protocol")
+              return value
+
+
+          def _review(value: Any, expected_sha: str) -> tuple[str, Record]:
+              clean = _result(expected_sha)["code_review"]
+              if value is None or value == {}:
+                  return "pending", clean
+              if not isinstance(value, dict):
+                  raise EvidenceError("protocol")
+              status, sha = value.get("status"), value.get("commit_sha")
+              if status is not None and status not in ("completed", "running", "queued", *FAILED):
+                  raise EvidenceError("protocol")
+              if sha is not None and (
+                  not isinstance(sha, str) or SHA_PATTERN.fullmatch(sha) is None
+              ):
+                  raise EvidenceError("protocol")
+              clean.update(status=status, commit_sha=sha)
+              for flag in ("has_any_findings", "has_unresolved_findings"):
+                  item = value.get(flag)
+                  if item is not None and type(item) is not bool:
+                      raise EvidenceError("protocol")
+                  if status == "completed" and type(item) is not bool:
+                      raise EvidenceError("protocol")
+                  clean[flag] = item
+              if clean["has_any_findings"] is False and clean["has_unresolved_findings"] is True:
+                  raise EvidenceError("protocol")
+              if status == "completed" and sha is None:
+                  raise EvidenceError("protocol")
+              if status in FAILED:
+                  return "failed", clean
+              if sha != expected_sha or status != "completed":
+                  return "pending", clean
+              return ("unresolved" if clean["has_unresolved_findings"] else "success"), clean
+
+
+          def review_evidence(comments: list[Record], expected_sha: str) -> Record:
+              """Require both current reviews; never fall back from a newer invalid summary."""
+              valid_sha = isinstance(expected_sha, str) and SHA_PATTERN.fullmatch(expected_sha)
+              result = _result(expected_sha if valid_sha else "")
+              try:
+                  if not valid_sha or not isinstance(comments, list):
+                      raise EvidenceError("arguments" if not valid_sha else "protocol")
+                  if any(not isinstance(comment, dict) for comment in comments):
+                      raise EvidenceError("protocol")
+                  candidates = [comment for comment in comments if _canonical(comment)]
+                  if not candidates:
+                      return result
+                  latest = max(candidates, key=_order)
+                  result.update(comment_id=latest["id"], updated_at=latest["updated_at"])
+                  if latest["body"].count(SUMMARY) != 1:
+                      raise EvidenceError("protocol")
+                  data = _marker(latest["body"], "codex-review-state", True)
+                  _marker(latest["body"], "codex-security-review", False)
+                  states = []
+                  for kind in KINDS:
+                      state, result[kind] = _review(data.get(kind), expected_sha)
+                      states.append(state)
+                  result["reviews_complete"] = all(s in ("success", "unresolved") for s in states)
+                  result["state"] = (
+                      "blocked"
+                      if any(s in ("failed", "unresolved") for s in states)
+                      else ("pending" if "pending" in states else "success")
+                  )
+                  result["reason"] = {
+                      "blocked": "review_failed" if "failed" in states else "review_unresolved",
+                      "pending": "review_pending",
+                      "success": "reviews_complete",
+                  }[result["state"]]
+              except EvidenceError as exc:
+                  result.update(state="blocked", reason=str(exc), reviews_complete=False)
+              return result
+
+
+          def _api(endpoint: str, *, paginate: bool = False) -> Any:
+              # https://cli.github.com/manual/gh_api: --slurp wraps all paginated pages.
+              command = ["gh", "api", *(["--paginate", "--slurp"] if paginate else []), endpoint]
+              try:
+                  done = subprocess.run(command, text=True, capture_output=True, check=True)
+              except (OSError, subprocess.SubprocessError) as exc:
+                  raise EvidenceError("api") from exc
+              return _json(done.stdout)
+
+
+          def _eligible(pull: Any, repo: str, sha: str) -> None:
+              if not isinstance(pull, dict):
+                  raise EvidenceError("pr_eligibility")
+              head, base = pull.get("head"), pull.get("base")
+              if not isinstance(head, dict) or not isinstance(base, dict):
+                  raise EvidenceError("pr_eligibility")
+              head_repo, base_repo = head.get("repo"), base.get("repo")
+              if not isinstance(head_repo, dict) or not isinstance(base_repo, dict):
+                  raise EvidenceError("pr_eligibility")
+              if any(
+                  not isinstance(item.get("full_name"), str) for item in (head_repo, base_repo)
+              ):
+                  raise EvidenceError("pr_eligibility")
+              if (
+                  pull.get("state") != "open"
+                  or pull.get("draft") is not False
+                  or base.get("ref") != "main"
+                  or head_repo.get("full_name", "").casefold() != repo.casefold()
+                  or base_repo.get("full_name", "").casefold() != repo.casefold()
+              ):
+                  raise EvidenceError("pr_eligibility")
+              if head.get("sha") != sha:
+                  raise EvidenceError("head_moved")
+
+
+          def _fetch(args: argparse.Namespace) -> Record:
+              endpoint = f"repos/{args.repo}/pulls/{args.pr}"
+              _eligible(_api(endpoint), args.repo, args.sha)
+              pages = _api(f"repos/{args.repo}/issues/{args.pr}/comments", paginate=True)
+              if not isinstance(pages, list) or any(not isinstance(page, list) for page in pages):
+                  raise EvidenceError("protocol")
+              result = review_evidence([comment for page in pages for comment in page], args.sha)
+              _eligible(_api(endpoint), args.repo, args.sha)
+              return result
+
+
+          def _arguments(argv: list[str] | None) -> argparse.Namespace:
+              parser = Parser(description=__doc__)
+              parser.add_argument("--repo", required=True)
+              parser.add_argument("--pr", required=True, type=int)
+              parser.add_argument("--sha", required=True)
+              parser.add_argument("--github-output", action="store_true")
+              parser.add_argument("--require-complete", action="store_true")
+              args = parser.parse_args(argv)
+              if (
+                  REPO_PATTERN.fullmatch(args.repo) is None
+                  or args.repo.split("/")[1] in (".", "..")
+                  or args.pr <= 0
+                  or SHA_PATTERN.fullmatch(args.sha) is None
+              ):
+                  raise EvidenceError("arguments")
+              return args
+
+
+          def _outputs(result: Record) -> None:
+              path = os.environ.get("GITHUB_OUTPUT")
+              if not path:
+                  raise EvidenceError("output")
+              text = (
+                  f"ready={str(result['state'] == 'success').lower()}\n"
+                  f"state={result['state']}\nsha={result['sha']}\ncomment_id={result['comment_id']}\n"
+              )
+              try:
+                  with Path(path).open("a", encoding="utf-8") as output:
+                      output.write(text)
+              except OSError as exc:
+                  raise EvidenceError("output") from exc
+
+
+          def main(argv: list[str] | None = None) -> int:
+              try:
+                  args = _arguments(argv)
+                  result = _fetch(args)
+                  if args.github_output:
+                      _outputs(result)
+                  print(json.dumps(result, sort_keys=True))
+                  if (
+                      args.require_complete
+                      and result["reviews_complete"]
+                      and result["reason"] in ("reviews_complete", "review_unresolved")
+                  ):
+                      return 0
+                  return {"success": 0, "pending": 2, "blocked": 1}[result["state"]]
+              except EvidenceError as exc:
+                  print(f"codex reviews: {exc}", file=sys.stderr)
+                  return 1
+
+
+          if __name__ == "__main__":
+              sys.exit(main())
+          CODEX_REVIEW_PY
 
       # The fix: every review finding and every failed job, on the branch.
       # Its push is a synchronize event; the five tests run again on it.
@@ -660,7 +1399,7 @@ jobs:
         if: steps.guard.outputs.fix == 'true'
         uses: anthropics/claude-code-action@aa8a7738e48bf30a40ee499ce818bef081c5ab5e # v1.0.257
         with:
-          allowed_bots: "claude[bot],chatgpt-codex-connector[bot]"
+          allowed_bots: "claude[bot],chatgpt-codex-connector[bot],dependabot[bot]"
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
             You own pull request #${{ github.event.pull_request.number }} of ${{ github.repository }}
@@ -718,13 +1457,22 @@ jobs:
             esac
           done
           case "$REVIEW:$ACTOR" in
-            success:*|'skipped:dependabot[bot]') ;;
+            success:*) ;;
             *) echo "::error::review: $REVIEW, requires completion"; blocked=1 ;;
           esac
           if [ -n "$blocked" ]; then
             echo "## Merge: blocked, a job above is not green on this commit" >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
+
+      - name: Require complete Codex reviews
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CODEX_COMPLETION_ONLY: 'false'
+        run: *codex_review_reader
 
       - name: Verify live PR eligibility
         env:

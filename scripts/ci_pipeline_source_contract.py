@@ -81,8 +81,7 @@ def _check_receipt(body, field) -> list[str]:
         'for runner in ("ubuntu-latest", "macos-latest", "windows-latest")',
         "len(actual) == len(expected) and set(actual) == expected",
         "len(matching) == 1,",
-        'allowed = job.get("conclusion") == "success" or ( name == "review" '
-        'and actor == "dependabot[bot]" and job.get("conclusion") == "skipped" )',
+        'allowed = job.get("conclusion") == "success"',
         'job.get("status") == "completed" and allowed,',
         "_validate_run(source, repository)",
         "_validate_run(run, repository)",

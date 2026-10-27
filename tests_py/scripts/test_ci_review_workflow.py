@@ -21,40 +21,56 @@ class ReviewExecutionWiringTests(unittest.TestCase):
         self.text = WORKFLOW.read_text()
 
     def test_each_action_is_validated_before_another_can_overwrite_its_execution(self):
-        for action, next_step in (("Review", "Fix"), ("Fix", "merge:")):
+        for action, next_step in (
+            ("Review", "Security review"),
+            ("Security review", "Fix"),
+            ("Fix", "merge:"),
+        ):
             with self.subTest(action=action):
                 start = self.text.index(f"      - name: {action}\n")
-                marker = "      - name: Fix\n" if next_step == "Fix" else "\n  merge:\n"
+                marker = (
+                    f"      - name: {next_step}\n"
+                    if next_step != "merge:"
+                    else "\n  merge:\n"
+                )
                 end = self.text.index(marker, start + len(action) + 20)
                 block = self.text[start:end]
-                self.assertIn(f"id: {action.lower()}_action", block)
+                identifier = action.lower().replace(" ", "_")
+                self.assertIn(f"id: {identifier}_action", block)
                 self.assertIn(f"- name: Validate {action.lower()} execution", block)
                 self.assertIn(
-                    f"EXECUTION_FILE: ${{{{ steps.{action.lower()}_action"
+                    f"EXECUTION_FILE: ${{{{ steps.{identifier}_action"
                     ".outputs.execution_file }}",
                     block,
                 )
                 self.assertIn('python3 -I - "$EXECUTION_FILE"', block)
-                self.assertIn('git show "$VALIDATOR_REVISION:scripts/', block)
-                self.assertIn(
-                    "VALIDATOR_REVISION: ${{ github.event.pull_request.base.sha }}",
-                    block,
-                )
+                if action == "Fix":
+                    self.assertIn('git show "$VALIDATOR_REVISION:scripts/', block)
+                    self.assertIn(
+                        "VALIDATOR_REVISION: ${{ github.event.pull_request.base.sha }}",
+                        block,
+                    )
                 self.assertNotIn("continue-on-error", block)
 
     def test_review_requires_agents_and_fix_does_not(self):
-        commands = re.findall(r"python3 -I -[^\n]+", self.text)
-        self.assertEqual(len(commands), 2)
-        self.assertTrue(commands[0].endswith(" --require-agents"))
-        self.assertNotIn("--require-agents", commands[1])
+        commands = re.findall(r'python3 -I - "\$EXECUTION_FILE"[^\n]*', self.text)
+        self.assertEqual(len(commands), 3)
+        self.assertIn(
+            "--min-agents 7 --require-skill code-review:code-review", commands[0]
+        )
+        self.assertIn("--min-agents 1 --require-skill security-review", commands[1])
+        self.assertNotIn("--require-agents", commands[2])
 
     def test_validation_runs_for_executed_actions_including_action_failure(self):
-        for action in ("review", "fix"):
+        for action in ("review", "security review", "fix"):
             with self.subTest(action=action):
                 start = self.text.index(f"      - name: Validate {action} execution\n")
                 block = self.text[start:].split("\n      - name:", 1)[0]
                 self.assertIn("always() && !cancelled()", block)
-                self.assertIn(f"steps.{action}_action.outcome != 'skipped'", block)
+                self.assertIn(
+                    f"steps.{action.replace(' ', '_')}_action.outcome != 'skipped'",
+                    block,
+                )
 
     def validation_command(self):
         start = self.text.index("      - name: Validate fix execution\n")
@@ -145,6 +161,7 @@ class ReviewExecutionWiringTests(unittest.TestCase):
         for changed, expected in (
             ("docs/a.md", "true"),
             (".github/workflows/pipeline.yml", "false"),
+            (".github/workflows/claude.yml", "false"),
         ):
             with (
                 self.subTest(changed=changed),
@@ -155,7 +172,7 @@ class ReviewExecutionWiringTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(
                     (root / "outputs").read_text(),
-                    f"review={expected}\nfix={expected}\n",
+                    f"review=true\nfix={expected}\n",
                 )
 
     def run_review_guard(self, root, overrides):
@@ -165,6 +182,7 @@ class ReviewExecutionWiringTests(unittest.TestCase):
             'case "$1" in\n'
             'rev-parse) printf "%s\\n" "$HEAD_SHA" ;;\n'
             'diff) printf "%s\\n" "$CHANGED" ;;\n'
+            "symbolic-ref) exit 0 ;;\n"
             'log) printf "ci@example.invalid\\n" ;;\n'
             "*) exit 2 ;;\nesac\n"
         )
