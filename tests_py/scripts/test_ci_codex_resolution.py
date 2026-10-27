@@ -40,7 +40,10 @@ def page():
             body=FINDING,
             author=dict(login="chatgpt-codex-connector", __typename="Bot"),
         )
-        nodes.append(dict(isResolved=True, comments=dict(nodes=[root])))
+        resolver = dict(login="cdeust", __typename="User")
+        nodes.append(
+            dict(isResolved=True, resolvedBy=resolver, comments=dict(nodes=[root]))
+        )
     threads = dict(nodes=nodes, pageInfo=dict(hasNextPage=False, endCursor=None))
     return dict(
         data=dict(
@@ -77,6 +80,32 @@ class ResolvedSecurityTests(unittest.TestCase):
         result = self.evaluate(packet)
         self.assertEqual(result["state"], "blocked")
         self.assertEqual(result["reason"], "review_unresolved")
+
+    def test_only_the_repository_owner_account_can_resolve_a_finding(self):
+        # Codex discussion_r4391948358: a PR author must not dismiss findings.
+        for resolver in (
+            dict(login="contributor", __typename="User"),
+            dict(login="cdeust", __typename="Bot"),
+            dict(login="chatgpt-codex-connector", __typename="Bot"),
+            None,
+        ):
+            packet = page()
+            thread(packet)["resolvedBy"] = resolver
+            with self.subTest(resolver=resolver):
+                result = self.evaluate(packet)
+                self.assertEqual(result["state"], "blocked")
+                self.assertEqual(result["reason"], "review_unresolved")
+
+    def test_unrequested_or_malformed_resolver_never_allows_merge(self):
+        for change in (
+            lambda t: t.pop("resolvedBy"),
+            lambda t: t.update(resolvedBy="cdeust"),
+            lambda t: t["resolvedBy"].update(login=None),
+        ):
+            packet = page()
+            change(thread(packet))
+            with self.subTest(change=change):
+                self.assertEqual(self.evaluate(packet)["state"], "blocked")
 
     def test_missing_extra_forged_or_malformed_threads_never_allow_merge(self):
         changes = (
@@ -191,3 +220,4 @@ class ResolvedSecurityTests(unittest.TestCase):
         self.assertIn("graphql", graphql)
         self.assertIn("--paginate", graphql)
         self.assertIn("number=805", graphql)
+        self.assertIn("resolvedBy { login __typename }", " ".join(graphql))

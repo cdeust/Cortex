@@ -278,7 +278,12 @@ The reader now reconciles this specific incomplete verdict with that positive
 GitHub proof. It requires the completed current-head review, matching native
 security metadata for this repository/PR/head, a nonempty fully enumerated
 finding list, and an exact identity match against all paginated native security
-threads. A non-resolved thread blocks merging. Missing, forged, duplicated,
+threads. A non-resolved thread blocks merging. A thread counts as resolved only
+when GraphQL `resolvedBy` is the repository owner's `User` account, the sole
+trusted actor of the claude.yml tag mode (native finding
+[4391948358](https://github.com/cdeust/Cortex/pull/805#discussion_r4391948358)):
+a PR author, a bot or a missing resolver leaves it blocking until a new head
+receives a clean review. Missing, forged, duplicated,
 partial or stale proof cannot establish success. Other unknown verdicts stay
 pending. The original null flag is retained in output, with the independent
 `resolution.source=github_review_threads` receipt added.
