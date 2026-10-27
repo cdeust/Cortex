@@ -15,8 +15,7 @@ DIRECT_NEEDS = {
     "e2e": ("contract", "regression"),
     "environment": ("contract", "e2e"),
     "install": ("contract", "environment"),
-    "native_review": ("contract",),
-    "review": (*TEST_JOBS, "native_review"),
+    "review": TEST_JOBS,
     "merge": (*REQUIRED_RESULTS, "review"),
     "tag": REQUIRED_RESULTS,
 }
@@ -25,7 +24,7 @@ POST_MERGE_NEEDS = {
     **{
         job: needs
         for job, needs in DIRECT_NEEDS.items()
-        if job not in ("native_review", "review", "merge")
+        if job not in ("review", "merge")
     },
     "contract": ("resolve",),
 }
@@ -61,7 +60,6 @@ def conditions(post_merge: bool) -> dict[str, str]:
     else:
         result.update(
             contract="!cancelled()",
-            native_review=PR_CONDITION,
             review=PR_CONDITION,
             merge=PR_CONDITION,
             tag="!cancelled() && github.event_name == 'push' "

@@ -124,7 +124,7 @@ class CodexWiringTests(unittest.TestCase):
         (root / "comments.json").write_text(json.dumps(comments))
 
     def test_completion_workflow_never_checks_out_candidate_or_uses_oauth(self):
-        text = (ROOT / ".github/workflows/codex-review-resume.yml").read_text()
+        text = (ROOT / ".github/workflows/Codex.yml").read_text()
         self.assertIn("types: [created, edited]", text)
         self.assertIn("workflows: [Pipeline]", text)
         self.assertIn("ref: main", text)

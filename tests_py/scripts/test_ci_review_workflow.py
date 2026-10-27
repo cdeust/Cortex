@@ -21,11 +21,7 @@ class ReviewExecutionWiringTests(unittest.TestCase):
         self.text = WORKFLOW.read_text()
 
     def test_each_action_is_validated_before_another_can_overwrite_its_execution(self):
-        for action, next_step in (
-            ("Review", "Security review"),
-            ("Security review", "Fix"),
-            ("Fix", "merge:"),
-        ):
+        for action, next_step in (("Fix", "merge:"),):
             with self.subTest(action=action):
                 start = self.text.index(f"      - name: {action}\n")
                 marker = (
@@ -52,17 +48,14 @@ class ReviewExecutionWiringTests(unittest.TestCase):
                     )
                 self.assertNotIn("continue-on-error", block)
 
-    def test_review_requires_agents_and_fix_does_not(self):
+    def test_fix_does_not_require_agents(self):
+        # The two reviews and their agent counts are validated in claude.yml.
         commands = re.findall(r'python3 -I - "\$EXECUTION_FILE"[^\n]*', self.text)
-        self.assertEqual(len(commands), 3)
-        self.assertIn(
-            "--min-agents 7 --require-skill code-review:code-review", commands[0]
-        )
-        self.assertIn("--min-agents 1 --require-skill security-review", commands[1])
-        self.assertNotIn("--require-agents", commands[2])
+        self.assertEqual(len(commands), 1)
+        self.assertNotIn("--require-agents", commands[0])
 
     def test_validation_runs_for_executed_actions_including_action_failure(self):
-        for action in ("review", "security review", "fix"):
+        for action in ("fix",):
             with self.subTest(action=action):
                 start = self.text.index(f"      - name: Validate {action} execution\n")
                 block = self.text[start:].split("\n      - name:", 1)[0]

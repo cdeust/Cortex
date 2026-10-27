@@ -66,7 +66,7 @@ The merge gate requires both reviews to have no unresolved findings. A YAML
 anchor shares one embedded reader between the gates, with exact file parity
 and malicious candidate-import regression tests.
 
-`codex-review-resume.yml` receives native bot completion events and completed
+`Codex.yml` receives native bot completion events and completed
 Pipeline failures. It executes only trusted main code with Actions write
 permission, never a candidate checkout or an event-body command. The coordinator
 rechecks server-side PR, run, attempt, jobs and review evidence before requesting
