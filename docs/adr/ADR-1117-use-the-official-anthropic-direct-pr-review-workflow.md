@@ -31,3 +31,9 @@ This supersedes ADR-1116's custom Claude execution and evidence architecture. Cl
 [Pipeline40566519242](https://github.com/cdeust/Cortex/actions/runs/40566519242) passed all required jobs before merge. The unit job reported 10,987 passed, 26 skipped and 826 passing subtests, with 90.81 percent line coverage. Regression tests reported 30 passed and 4 skipped. Docker smoke returned 57 tools from a bare container. Both native Codex reviews completed without findings on c18e174de286bf37c20b4058b8c91eb944b07f12. The merged tree matches that reviewed head (acc3351e0369586deee7d160ed6ff5078f0b4683).
 
 Claude acceptance requires a fresh PR event after installation. Earlier installation-PR jobs soft-skipped App workflow validation; they are not successful Claude reviews.
+
+## Authentication correction after installation
+
+The first fresh PR run, [40570016061](https://github.com/cdeust/Cortex/actions/runs/40570016061), selected agent mode but failed before Claude execution with401 Invalid OIDC token. This reproduces [upstream issue713](https://github.com/anthropics/claude-code-action/issues/713): the App token exchange rejects pull_request_target events.
+
+PR808 supplies the documented github_token input from the short-lived GITHUB_TOKEN and removes id-token permission from the automatic review job. Claude still authenticates to Anthropic using the existing OAuth secret. Automatic review comments therefore publish as github-actions[bot], while the reviewer is Claude; they are not attributed to claude[bot]. Owner mention mode retains its existing App authentication. The regression test fails without explicit GitHub authentication and passes with it.

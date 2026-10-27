@@ -9,6 +9,20 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class NativeClaudeTrustTests(unittest.TestCase):
+    def test_target_review_uses_supported_explicit_github_authentication(self):
+        # Upstream issue713: target-event OIDC exchange returns401.
+        workflow = yaml.safe_load((ROOT / ".github/workflows/claude.yml").read_text())
+        review = workflow["jobs"]["review"]
+        invocation = next(
+            step
+            for step in review["steps"]
+            if "claude-code-action@" in step.get("uses", "")
+        )
+        self.assertEqual(
+            invocation["with"].get("github_token"), "${{ secrets.GITHUB_TOKEN }}"
+        )
+        self.assertNotIn("id-token", review["permissions"])
+
     def test_privileged_review_uses_base_workflow(self):
         workflow = yaml.safe_load((ROOT / ".github/workflows/claude.yml").read_text())
         events = workflow.get("on", workflow.get(True))
