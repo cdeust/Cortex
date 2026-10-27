@@ -100,9 +100,10 @@ jobs:
           prompt: |
             Review ${{ github.repository }}/pull/${{ env.PR }} at head ${{ env.HEAD_SHA }}.
             Read the complete diff file ${{ runner.temp }}/pr.diff, then call the Skill tool once with skill code-review:code-review.
-            Wait for every review agent; at least 7 must complete. Write the skill's full result to ${{ runner.temp }}/code-review.md, headed with the reviewed SHA, and publish it with gh pr comment ${{ env.PR }} --body-file ${{ runner.temp }}/code-review.md.
+            Wait for every review agent; at least 7 must complete. Write the verdict to ${{ runner.temp }}/code-review.md: first line exactly <!-- claude-review:v1 kind=code findings=N --> with N the number of findings, then the skill's full result.
+            Publish it as a GitHub review on the reviewed commit: gh api -X POST repos/${{ github.repository }}/pulls/${{ env.PR }}/reviews -f commit_id=${{ env.HEAD_SHA }} -f event=COMMENT -F body=@${{ runner.temp }}/code-review.md
             Never check out or run PR code. Report any tool failure instead of a partial review.
-          claude_args: '--allowedTools "Agent,Skill,Read,Write,Glob,Grep,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(git diff:*),Bash(git show:*),Bash(git log:*)"'
+          claude_args: '--allowedTools "Agent,Skill,Read,Write,Glob,Grep,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh api:*),Bash(git diff:*),Bash(git show:*),Bash(git log:*)"'
 
       - name: Validate code review execution
         if: always() && !cancelled() && steps.code_review_action.outcome != 'skipped'
@@ -120,9 +121,10 @@ jobs:
           prompt: |
             Review ${{ github.repository }}/pull/${{ env.PR }} at head ${{ env.HEAD_SHA }}.
             Read the complete diff file ${{ runner.temp }}/pr.diff, then call the Skill tool once with skill security-review.
-            Wait for its agent. Write the skill's full result to ${{ runner.temp }}/security-review.md, headed with the reviewed SHA, and publish it with gh pr comment ${{ env.PR }} --body-file ${{ runner.temp }}/security-review.md.
+            Wait for its agent. Write the verdict to ${{ runner.temp }}/security-review.md: first line exactly <!-- claude-review:v1 kind=security findings=N --> with N the number of findings, then the skill's full result.
+            Publish it as a GitHub review on the reviewed commit: gh api -X POST repos/${{ github.repository }}/pulls/${{ env.PR }}/reviews -f commit_id=${{ env.HEAD_SHA }} -f event=COMMENT -F body=@${{ runner.temp }}/security-review.md
             Never check out or run PR code. Report any tool failure instead of a partial review.
-          claude_args: '--allowedTools "Agent,Skill,Read,Write,Glob,Grep,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(git diff:*),Bash(git show:*),Bash(git log:*)"'
+          claude_args: '--allowedTools "Agent,Skill,Read,Write,Glob,Grep,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh api:*),Bash(git diff:*),Bash(git show:*),Bash(git log:*)"'
 
       - name: Validate security review execution
         if: always() && !cancelled() && steps.security_review_action.outcome != 'skipped'

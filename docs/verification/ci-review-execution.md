@@ -95,3 +95,14 @@ Sources at the pinned official action commit:
 - [Workflow YAML anchors](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations)
 - [Rerun a job and its dependents](https://docs.github.com/en/rest/actions/workflow-runs#re-run-a-job-from-a-workflow-run)
 - [Dependabot event secret restrictions](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-on-actions)
+
+## Claude verdict format
+
+The merge gate (`Require complete Claude verdicts` in `pipeline.yml`) accepts a
+GitHub review by `claude[bot]` whose `commit_id` is the exact PR head, whose state
+is `COMMENTED` or `APPROVED` (GitHub refuses self-approval on PRs authored by
+`claude[bot]`), and whose body contains
+`<!-- claude-review:v1 kind=code|security findings=N -->`. The latest review per
+kind decides and `N` must be `0`. Reviews started by an `@claude` tag and by the
+automatic `claude.yml` review job count alike. Publish with
+`gh api -X POST repos/OWNER/REPO/pulls/N/reviews -f commit_id=SHA -f event=COMMENT -F body=@file`.

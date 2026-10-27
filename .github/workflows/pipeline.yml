@@ -1002,6 +1002,27 @@ jobs:
           CODEX_COMPLETION_ONLY: 'false'
         run: *codex_review_reader
 
+      # Verdict: a claude[bot] review on this exact commit_id, COMMENTED or APPROVED
+      # (GitHub refuses self-approval on claude[bot] PRs), whose body carries
+      # <!-- claude-review:v1 kind=code|security findings=N -->. The latest review per
+      # kind decides; the gate counts tag-triggered and automatic reviews alike.
+      - name: Require complete Claude verdicts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/$GH_REPO/pulls/$PR/reviews" | jq -s 'add // []' > "$RUNNER_TEMP/reviews.json"
+          jq -e --arg sha "$HEAD_SHA" '
+            [.[] | select(.user.login == "claude[bot]" and .user.type == "Bot"
+              and .commit_id == $sha and (.state == "COMMENTED" or .state == "APPROVED"))] as $mine
+            | ["code", "security"] | map(. as $kind
+              | [$mine[] | (.body // "" | capture("<!-- claude-review:v1 kind=" + $kind + " findings=(?<n>[0-9]+) -->")? // empty)] | last
+              | . != null and .n == "0") | all
+          ' "$RUNNER_TEMP/reviews.json" >/dev/null || { echo "::error::Needs complete claude[bot] code and security verdicts with no findings on $HEAD_SHA."; exit 1; }
+
       - name: Verify live PR eligibility
         env:
           GH_TOKEN: ${{ github.token }}
