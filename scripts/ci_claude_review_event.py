@@ -75,13 +75,18 @@ def target(event: Record, repo: str) -> Record | None:
 
 
 def missing(repo: str, number: int, sha: str) -> dict[str, bool]:
-    """Kinds absent on this head: a posted kind is never reviewed twice."""
+    """Kinds absent on this head, or whose every attempt failed validation."""
     rows = source.records(f"repos/{repo}/pulls/{number}/reviews")
     # Unbound markers (an @claude session) are not evidence and do not suppress.
     result = claude.review_evidence(rows, sha, claude.attest(repo, sha))
     if result["reason"] in ("protocol", "arguments", "api"):
         raise EvidenceError("protocol")
-    return {kind: result[kind]["state"] == "pending" for kind in claude.KINDS}
+    # Only failed attempts (retry) are reviewed again; a conflict among validated
+    # attempts, or real findings, waits for a new head.
+    return {
+        kind: result[kind]["state"] == "pending" or result[kind].get("retry") is True
+        for kind in claude.KINDS
+    }
 
 
 def _text(body: str) -> str:

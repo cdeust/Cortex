@@ -1,15 +1,10 @@
 #!/usr/bin/env python3
 """Read authenticated, run-bound claude[bot] review evidence for one PR head.
 
-Protocol: the review job of .github/workflows/claude.yml publishes each native
-review as a pull request review by claude[bot] on commit_id=<head>, first body
-line <!-- claude-review:v2 kind=code|security findings=N run=<run id>-<attempt> -->.
-A review is evidence only when the Actions API shows that run is a claude.yml
-workflow_run on main with job "review <head>" whose "Validate <kind> review
-execution" step succeeded; that step proves the run itself published exactly
-this body. Unbound markers (an @claude session, a manual post) are ignored.
-Sources: https://docs.github.com/en/rest/pulls/reviews#list-reviews-for-a-pull-request
-https://docs.github.com/en/rest/actions/workflow-runs and /workflow-jobs
+A review is evidence only when its marker's run=<id>-<attempt> is a claude.yml
+workflow_run on main whose job "review <head>" passed "Validate <kind> review
+execution"; attempts that failed it are superseded by a later attempt.
+Protocol, rules and sources: docs/verification/claude-bot-ci-20261027.md.
 Self-contained on purpose: pipeline.yml embeds this exact file under python3 -I.
 source: ADR-1116
 """
@@ -17,6 +12,7 @@ source: ADR-1116
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import os
 import re
@@ -37,6 +33,7 @@ CITED = re.compile(r" run=([1-9][0-9]*-[1-9][0-9]*) -->$")
 WORKFLOW = ".github/workflows/claude.yml"
 SHA_PATTERN = re.compile(r"[0-9a-f]{40}")
 REPO_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+")
+PENDING = {"state": "pending", "review_id": 0, "findings": None, "run": ""}
 
 
 class EvidenceError(ValueError):
@@ -115,18 +112,8 @@ def _review_job(call: Callable, repo: str, sha: str, token: str) -> Record | Non
 
 def attest(repo: str, sha: str, api: Any = None) -> Callable[[str], Record | None]:
     """Memoised <run id>-<attempt> -> producing job lookup for one PR head."""
-    call, cache = (_api if api is None else api), {}
-
-    def job(token: str) -> Record | None:
-        if token not in cache:
-            cache[token] = _review_job(call, repo, sha, token)
-        return cache[token]
-
-    return job
-
-
-def _pending() -> Record:
-    return {"state": "pending", "review_id": 0, "findings": None, "run": ""}
+    call = _api if api is None else api
+    return functools.cache(lambda token: _review_job(call, repo, sha, token))
 
 
 def _shape(review: Any) -> None:
@@ -166,28 +153,40 @@ def _bound(review: Record, sha: str, job: Callable) -> tuple[str, Record] | None
     return (match.group(1) if valid else ""), producer
 
 
-def _kind_state(kind: str, items: list[tuple[Record, Record]]) -> Record:
-    """One state per kind; a duplicate fails instead of latest-wins."""
-    if len(items) != 1:
-        return dict(_pending(), state="failed") if items else _pending()
-    review, producer = items[0]
-    match = MARKER.fullmatch(review["body"].split("\n", 1)[0].rstrip("\r"))
-    findings = int(match.group(2))
-    state = dict(_pending(), review_id=review["id"], findings=findings)
-    state["run"] = match.group(3)
+def _validation(kind: str, producer: Record) -> str:
     if producer.get("status") != "completed":
-        return state
+        return "running"
     name, steps = f"Validate {kind} review execution", producer.get("steps") or []
     steps = [s for s in steps if isinstance(s, dict) and s.get("name") == name]
-    if len(steps) != 1 or steps[0].get("conclusion") != "success":
-        return dict(state, state="failed")
+    valid = len(steps) == 1 and steps[0].get("conclusion") == "success"
+    return "valid" if valid else "failed"
+
+
+def _kind_state(kind: str, items: list[tuple[Record, Record]]) -> Record:
+    """Failed attempts are superseded; conflicts fail closed; findings stay."""
+    live = [(r, v) for r, p in items if (v := _validation(kind, p)) != "failed"]
+    if not live:
+        return dict(PENDING, state="failed", retry=True) if items else dict(PENDING)
+    parsed = [
+        (MARKER.fullmatch(r["body"].split("\n", 1)[0].rstrip("\r")), r, v)
+        for r, v in live
+    ]
+    if len(parsed) > 1:
+        separate = len({m.group(3) for m, _, _ in parsed}) == len(parsed)
+        found = any(int(m.group(2)) for m, _, v in parsed if v == "valid")
+        return dict(PENDING, state="unresolved" if separate and found else "failed")
+    match, review, verdict = parsed[0]
+    findings = int(match[2])
+    state = dict(PENDING, review_id=review["id"], findings=findings, run=match[3])
+    if verdict == "running":
+        return state
     return dict(state, state="unresolved" if findings else "success")
 
 
 def review_evidence(reviews: Any, expected_sha: str, job: Callable) -> Record:
     """Classify this head's run-bound claude[bot] reviews; the rest stay pending."""
     valid = isinstance(expected_sha, str) and SHA_PATTERN.fullmatch(expected_sha)
-    result: Record = {kind: _pending() for kind in KINDS}
+    result: Record = {kind: dict(PENDING) for kind in KINDS}
     result.update(state="pending", reason="review_missing", reviews_complete=False)
     result["sha"] = expected_sha if valid else ""
     try:
@@ -204,7 +203,9 @@ def review_evidence(reviews: Any, expected_sha: str, job: Callable) -> Record:
                 found[hit[0]].append((review, hit[1]))
         result.update({kind: _kind_state(kind, found[kind]) for kind in KINDS})
         values = [result[kind]["state"] for kind in KINDS]
-        values += ["failed"] if found[""] else []
+        # A malformed marker citing an attempt with no failed validation conflicts.
+        if any(all(_validation(k, p) != "failed" for k in KINDS) for _, p in found[""]):
+            values.append("failed")
         result["reviews_complete"] = all(v in ("success", "unresolved") for v in values)
         if "failed" in values or "unresolved" in values:
             reason = "review_failed" if "failed" in values else "review_unresolved"
@@ -278,7 +279,6 @@ def main(argv: list[str] | None = None) -> int:
         args = _arguments(argv)
         result = _fetch(args)
         if args.github_output:
-            # An unset GITHUB_OUTPUT opens Path("."), a directory: OSError.
             with Path(os.environ.get("GITHUB_OUTPUT", "")).open("a") as output:
                 output.write(f"state={result['state']}\nsha={result['sha']}\n")
         print(json.dumps(result, sort_keys=True))

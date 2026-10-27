@@ -52,12 +52,27 @@ step runs main's code right after Claude: `ci_review_execution.py` proves the
 skill and agents ran without permission denials (an empty execution file from
 a soft skip fails), and `ci_claude_review_event.py --published <kind>` proves
 this attempt published exactly the verdict file the trusted preparation step
-pre-created (absent or empty fails). Per kind: success (N=0), unresolved (N>0,
-blocked until a new head), pending (absent, producer still running), failed
-(validation not successful, malformed bound marker, non-COMMENTED, two bound
-reviews of one kind). Markers without such a producer, including a citation of
-a run that does not exist (gh prints the 404 body and exits 1; read as an
-answer), are ignored: they neither satisfy nor suppress the CI review.
+pre-created (absent or empty fails). Markers without such a producer,
+including a citation of a run that does not exist (gh prints the 404 body and
+exits 1; read as an answer), are ignored: they neither satisfy nor suppress the
+CI review.
+
+Per kind, over the bound reviews of the head:
+
+1. A review whose attempt completed with that kind's validation not `success`
+   is superseded. If every bound review of the kind is superseded, the kind is
+   `failed` with `retry`, and the next attempt reviews that kind again.
+2. Exactly one remaining review: `pending` while its attempt runs, then
+   `success` (N=0) or `unresolved` (N>0, blocked until a new head).
+3. Two or more remaining reviews fail closed: `unresolved` if they come from
+   different validated attempts and one has findings (a later `findings=0` never
+   overrides real findings), otherwise `failed` without `retry` (two reviews of
+   one attempt, a forged duplicate). A malformed marker citing an attempt with no
+   failed validation also fails the head.
+
+Recovery on the same head: the owner re-runs the claude.yml run (attempt 2);
+its kinds step asks again only for kinds whose every attempt failed, publishes
+markers citing `<id>-2`, and its own validation decides.
 The Pipeline review job waits (`pending`, job green, merge named
 `merge pending review`); the required `merge` context appears only after both
 sources complete and the coordinator reruns the gate. `combined_proof` in
@@ -77,6 +92,30 @@ review either, because main has no claude.yml yet. After merge, every PR push
 is reviewed and verified but not gated. Activation is a one-line follow-up PR
 (`observe` to `required`) once a hosted claude[bot] review is recorded.
 
+## Hosted proof and activation (after this PR merges)
+
+Merging this PR changes nothing that gates: main says `observe`. Ordinary PRs
+may already be merged when their `workflow_run` fires, so the proof uses the
+activation PR itself, held open on purpose:
+
+1. Open the one-line activation PR (`CLAUDE_REVIEW_GATE: observe` → `required`)
+   held by the `hold` label (or "do not merge" in the title): those are the
+   markers the merge step (`pipeline.yml` merge job), the completion handler
+   (`scripts/ci_codex_review_event_source.py:96`) and the post-merge resolver
+   (`pipeline-post-merge.yml:322-328`) honour; a `[hold]` title prefix alone is
+   not one of them. Main still says `observe`, so its Pipeline is Codex-only and
+   cannot hardlock, and claude.yml still reviews a held PR (its target ignores
+   holds).
+2. Its Pipeline request triggers main's claude.yml. Record: the claude.yml run
+   id and attempt, the `review <head>` job id and both `Validate <kind> review
+   execution` step conclusions, the two claude[bot] review ids on the head, the
+   `verify` job conclusion, and the Pipeline run id with its review job state.
+3. Condition for `required`: both kinds `success` or `unresolved` with run-bound
+   evidence, `verify` green, no manual marker and no empty push. Then remove
+   the hold and let the protected merge activate the gate.
+4. If a Dependabot PR is open, record whether its claude.yml run received the
+   secret before relying on `required` for Dependabot PRs.
+
 ## Review findings and fixes
 
 | Finding | Verdict | Regression (fails on 005dc258) | Fix |
@@ -88,6 +127,7 @@ is reviewed and verified but not gated. Activation is a one-line follow-up PR
 | Coordinator msg_6cee25591704: tag/manual markers satisfy the gate | valid | as for 4389070516 | as for 4389070516 |
 | Coordinator msg_037967ba0159 (a): publication check counts unbound markers; bind to run attempt | valid | `test_ci_claude_review_publication.py::test_unbound_or_other_attempt_markers_do_not_fail_this_attempt`, `test_ci_claude_reviews.py::ProvenanceTests::test_citation_of_another_attempt_is_unbound` | marker cites `<run id>-<attempt>`; jobs read from `/attempts/<n>/jobs`; `published()` counts only this attempt's markers |
 | Coordinator msg_037967ba0159 (b): verdict files may never be created | valid (scoped Edit creating an absent file under dontAsk is unproven) | `test_ci_claude_workflow.py::test_trusted_preparation_creates_both_verdict_files`, `test_ci_claude_review_publication.py::test_absent_verdict_file_fails_closed` | preparation step pre-creates both files; absent or empty fails `--published` |
+| Coordinator msg_bf2bf23dfa88: a failed attempt hardlocks the head (no retry, duplicate with the retry) | valid | `test_ci_claude_recovery.py` (5 of 6 fail on af490f5d; the same-attempt conflict guard passes on both) | `_validation`/`_kind_state` in `scripts/ci_claude_reviews.py` supersede failed attempts; `missing()` retries `retry` kinds |
 | Own review: gate variants silently disable the gate | valid | `test_ci_claude_review_gate.py::test_gate_line_decides_activation` | `declares_required` fails loudly on unrecognised lines |
 
 ## Threat model (STRIDE) of the privileged path
