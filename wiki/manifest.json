@@ -3627,6 +3627,10 @@
     "ADR-1115": {
       "mirror": "ADR-1115-one-pipeline-for-every-pull-request-run-by-the-claude-bot.md",
       "path": "adr/cortex/1115-one-pipeline-for-every-pull-request-run-by-the-claude-bot.md"
+    },
+    "ADR-1116": {
+      "mirror": "ADR-1116-claude-bot-reviews-run-from-main-via-workflow_run-with-staged-gate-activation.md",
+      "path": "adr/cortex/1116-claude-bot-reviews-run-from-main-via-workflow_run-with-staged-gate-activation.md"
     }
   },
   "project": "cortex",

@@ -23,6 +23,11 @@ DETAIL = PREFIX + "/actions/runs/50"
 JOBS = DETAIL + "/attempts/1/jobs"
 PULL = PREFIX + "/pulls/797"
 COMMENTS = PREFIX + "/issues/797/comments"
+# Main's workflow listing: the trust anchor that decides whether claude[bot]
+# reviews join the proof (scripts/ci_claude_reviews.py read_gate).
+WORKFLOWS = PREFIX + "/contents/.github/workflows?ref=main"
+CLAUDE_YML = PREFIX + "/contents/.github/workflows/claude.yml?ref=main"
+REVIEWS = PULL + "/reviews"
 
 
 def source():
@@ -103,6 +108,12 @@ class Server:
                 "commit_id": SHA,
                 "pull_request_url": "https://api.github.com/" + PULL,
             },
+            "workflows": [
+                {"name": "Codex.yml", "type": "file"},
+                {"name": "pipeline.yml", "type": "file"},
+            ],
+            "claude_yml": None,
+            "reviews": [],
         }
         self.calls = []
         self.overrides = {}
@@ -130,6 +141,12 @@ class Server:
             ]
         elif endpoint == PREFIX + "/commits/" + SHA + "/pulls":
             result = [[self.data["pull"]]]
+        elif endpoint == WORKFLOWS:
+            result = self.data["workflows"]
+        elif endpoint == CLAUDE_YML and self.data["claude_yml"] is not None:
+            result = self.data["claude_yml"]
+        elif endpoint == REVIEWS:
+            result = [self.data["reviews"]]
         else:
             raise AssertionError("unexpected API endpoint: " + endpoint)
         return copy.deepcopy(result)

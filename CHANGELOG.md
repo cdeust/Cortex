@@ -8,7 +8,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Removed
 
-- Claude review and repair actions are removed following the owner decision.
+- Claude repair actions are removed following the owner decision; Claude
+  review returns review-only under ADR-1116 (see Added).
 - Duplicate legacy CI workflows are retired. Pipeline, required CodeQL and the
   protected merge resolver remain active.
 
@@ -21,6 +22,18 @@ adheres to [Semantic Versioning](https://semver.org/).
   successful prerequisites and supersede obsolete skipped matrix placeholders.
 
 ### Added
+
+- **Genuine claude[bot] code and security reviews beside Codex (ADR-1116).**
+  `.github/workflows/claude.yml` reviews every first-attempt same-repository
+  Pipeline run from main (`workflow_run`), reads the PR only as a diff file and
+  publishes two COMMENT reviews as claude[bot] on the exact head with a
+  `<!-- claude-review:v1 kind=... findings=N -->` marker. The Pipeline review
+  job reads them with `scripts/ci_claude_reviews.py` (embedded, read-only), and
+  the shared completion coordinator now combines Codex and Claude evidence so a
+  green waiting run is never rerun while Claude is pending. Activation is the
+  line `CLAUDE_REVIEW_GATE: required` in main's claude.yml; this change installs
+  it as `observe`, so the installing PR stays Codex-only and cannot be blocked
+  by its own gate. Evidence: `docs/verification/claude-bot-ci-20261027.md`.
 
 - **The single CI pipeline, run by the Claude bot (ADR-1115).**
   `.github/workflows/pipeline.yml` runs contract, unit (the SQLite-backed

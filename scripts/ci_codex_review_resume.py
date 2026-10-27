@@ -15,15 +15,16 @@ PREREQUISITES = BASE_CATEGORIES + tuple(
     for kind in ("environment", "install")
     for os in ("ubuntu-latest", "macos-latest", "windows-latest")
 )
-READINESS = "Require completed Codex reviews"
-MERGE = "Require complete Codex reviews"
+# Pipeline step names: the claude[bot] readers sit beside the Codex readers.
+READINESS = ("Require completed Codex reviews", "Require completed Claude reviews")
+MERGE = ("Require complete Codex reviews", "Require complete Claude reviews")
 
 
 def _success(job: Record) -> bool:
     return job.get("status") == "completed" and job.get("conclusion") == "success"
 
 
-def _waited(job: Record, step: str) -> bool:
+def _waited(job: Record, names: tuple[str, ...]) -> bool:
     steps = job.get("steps")
     if (
         job.get("status") != "completed"
@@ -33,8 +34,13 @@ def _waited(job: Record, step: str) -> bool:
     ):
         return False
     failed = [item.get("name") for item in steps if item.get("conclusion") == "failure"]
-    return failed == [step] and all(
-        item.get("conclusion") in ("success", "failure", "skipped") for item in steps
+    return (
+        len(failed) == 1
+        and failed[0] in names
+        and all(
+            item.get("conclusion") in ("success", "failure", "skipped")
+            for item in steps
+        )
     )
 
 
@@ -96,23 +102,52 @@ def _green_wait(indexed: dict[str, Record]) -> bool:
     )
 
 
+def combined_proof(codex: Record, claude: Record) -> Record:
+    """One proof: Codex alone until main requires Claude, then both sources."""
+    if claude.get("required") is False and claude.get("state") == "not_required":
+        return codex
+    sha = codex.get("sha")
+    if claude.get("sha") != sha:
+        return {
+            "state": "blocked",
+            "reason": "protocol",
+            "sha": sha,
+            "reviews_complete": False,
+        }
+    complete = all(p.get("reviews_complete") is True for p in (codex, claude))
+    states = (codex.get("state"), claude.get("state"))
+    if complete:
+        clean = states == ("success", "success")
+        state = "success" if clean else "blocked"
+        reason = "reviews_complete" if clean else "review_unresolved"
+    else:
+        state = "blocked" if "blocked" in states else "pending"
+        reason = next(p["reason"] for p in (codex, claude) if p.get("state") == state)
+    return {"state": state, "reason": reason, "sha": sha, "reviews_complete": complete}
+
+
+def _complete_inputs(source: Any, jobs: Any, proof: Any, sha: str) -> bool:
+    """A completed run of this head and a complete proof for the same head."""
+    return (
+        isinstance(source, dict)
+        and isinstance(proof, dict)
+        and source.get("status") == "completed"
+        and source.get("conclusion") in ("failure", "success")
+        and source.get("head_sha") == sha
+        and proof.get("sha") == sha
+        and proof.get("reviews_complete") is True
+        and (proof.get("state"), proof.get("reason"))
+        in (("success", "reviews_complete"), ("blocked", "review_unresolved"))
+        and isinstance(jobs, list)
+    )
+
+
 def resumption_plan(
     source: Record, jobs: list[Record], proof: Record, sha: str
 ) -> Record:
     """Consume server-verified run/jobs and the normalized evidence reader output."""
     none = {"action": "none"}
-    if (
-        not isinstance(source, dict)
-        or not isinstance(proof, dict)
-        or source.get("status") != "completed"
-        or source.get("conclusion") not in ("failure", "success")
-        or source.get("head_sha") != sha
-        or proof.get("sha") != sha
-        or proof.get("reviews_complete") is not True
-        or (proof.get("state"), proof.get("reason"))
-        not in (("success", "reviews_complete"), ("blocked", "review_unresolved"))
-        or not isinstance(jobs, list)
-    ):
+    if not _complete_inputs(source, jobs, proof, sha):
         return none
     indexed = _index(jobs)
     if indexed is None:

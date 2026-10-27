@@ -156,7 +156,7 @@ def _check_merge_results(body: list[str]) -> list[str]:
         f"for pair in {pairs}; do",
         'case "$pair" in *=success) ;; *)',
         "blocked=1 ;; esac done",
-        "case \"$REVIEW:$ACTOR\" in success:*) ;; *)",
+        'case "$REVIEW:$ACTOR" in success:*) ;; *)',
         'blocked=1 ;; esac if [ -n "$blocked" ]; then',
         "exit 1 fi",
     )
