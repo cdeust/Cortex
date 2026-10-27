@@ -1,5 +1,6 @@
 """Regression for native Codex finding4392874807: PR-controlled reviewer config."""
 
+import shlex
 import unittest
 from pathlib import Path
 
@@ -9,6 +10,27 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class NativeClaudeTrustTests(unittest.TestCase):
+    def test_automatic_review_can_read_and_publish_without_interactive_approval(self):
+        # Upstream docs/solutions.md: Basic Example (No Tracking).
+        workflow = yaml.safe_load((ROOT / ".github/workflows/claude.yml").read_text())
+        invocation = next(
+            step
+            for step in workflow["jobs"]["review"]["steps"]
+            if "claude-code-action@" in step.get("uses", "")
+        )
+        args = shlex.split(invocation["with"]["claude_args"])
+        approved = set(args[args.index("--allowedTools") + 1].split(","))
+        self.assertEqual(
+            approved,
+            {
+                "mcp__github_inline_comment__create_inline_comment",
+                "Bash(gh pr comment:*)",
+                "Bash(gh pr diff:*)",
+                "Bash(gh pr view:*)",
+            },
+        )
+        self.assertIn("Only post GitHub comments", invocation["with"]["prompt"])
+
     def test_target_review_uses_supported_explicit_github_authentication(self):
         # Upstream issue713: target-event OIDC exchange returns401.
         workflow = yaml.safe_load((ROOT / ".github/workflows/claude.yml").read_text())
@@ -76,7 +98,7 @@ class NativeClaudeTrustTests(unittest.TestCase):
             step for step in steps if "claude-code-action@" in step.get("uses", "")
         )
         self.assertNotIn("track_progress", invocation["with"])
-        self.assertTrue(invocation["with"]["prompt"].startswith("/review-pr "))
+        self.assertTrue(invocation["with"]["prompt"].startswith("REPO: "))
 
     def test_existing_bot_actors_can_trigger_the_review(self):
         workflow = yaml.safe_load((ROOT / ".github/workflows/claude.yml").read_text())

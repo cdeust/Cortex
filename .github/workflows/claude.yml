@@ -1,6 +1,6 @@
 name: Claude Code
 
-# source: https://github.com/anthropics/claude-code-action/blob/8041f1d17e0e7d2f2cfe35002962e9f26237c0bb/.github/workflows/claude-review.yml
+# source: https://github.com/anthropics/claude-code-action/blob/8041f1d17e0e7d2f2cfe35002962e9f26237c0bb/docs/solutions.md#automatic-pr-code-review
 # Adaptations: standard runner, existing OAuth secret, review every PR push.
 # Trusted base workflow: upstream docs/security.md, findings4392874807/4392971185.
 on:
@@ -37,7 +37,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y bubblewrap
           bwrap --version
-      - name: PR Review with Progress Tracking
+      - name: Review pull request
         uses: anthropics/claude-code-action@8041f1d17e0e7d2f2cfe35002962e9f26237c0bb # v1.0.263
         env:
           CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
@@ -46,10 +46,23 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           allowed_bots: "claude[bot],chatgpt-codex-connector[bot],dependabot[bot]"
-          prompt: "/review-pr REPO: ${{ github.repository }} PR_NUMBER: ${{ github.event.pull_request.number }}"
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            Please review this pull request with a focus on:
+            - Code quality and best practices
+            - Potential bugs or issues
+            - Security implications
+            - Performance considerations
+
+            The checkout contains trusted main. Read the PR changes with `gh pr diff`.
+
+            Use `gh pr comment` for top-level feedback.
+            Use `mcp__github_inline_comment__create_inline_comment` (with `confirmed: true`) to highlight specific code issues.
+            Only post GitHub comments - don't submit review text as messages.
           claude_args: |
-            --permission-mode auto
-            --allowedTools "mcp__github_inline_comment__create_inline_comment"
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
             --model "claude-opus-4-7"
 
   claude:
