@@ -6,7 +6,7 @@ import unittest
 
 from tests_py.scripts.test_ci_claude_reviews import (
     OTHER,
-    RUN,
+    TOKEN,
     SHA,
     clean,
     module,
@@ -23,7 +23,7 @@ class CombineTests(unittest.TestCase):
 
         self.reader = module()
         self.combine = load_policy().combined_proof
-        self.jobs = {RUN: producer()}
+        self.jobs = {TOKEN: producer()}
 
     def claude(self, rows):
         return self.reader.review_evidence(rows, SHA, self.jobs.get)

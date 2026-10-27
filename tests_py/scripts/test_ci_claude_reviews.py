@@ -2,7 +2,7 @@
 
 Protocol (ADR-1116): the review job of .github/workflows/claude.yml publishes
 each native review on commit_id=<head> with first body line
-<!-- claude-review:v2 kind=code|security findings=N run=<run id> -->; the run
+<!-- claude-review:v2 kind=code|security findings=N run=<id>-<attempt> -->;
 must be a claude.yml workflow_run on main whose job "review <head>" validated
 that kind. The job lookup is injected here as a dict.
 """
@@ -20,6 +20,7 @@ OTHER = "b" * 40
 BOT = {"login": "claude[bot]", "type": "Bot"}
 # source: synthetic fixture id of the producing claude.yml run, not GitHub data
 RUN = 900
+TOKEN = f"{RUN}-1"  # the marker's run=<id>-<attempt>
 
 
 def module():
@@ -31,7 +32,7 @@ def module():
 
 def review(kind="code", findings=0, review_id=1, **extra):
     """claude[bot] v2 marker review on SHA citing RUN; extra overrides fields."""
-    run = extra.pop("run", RUN)
+    run = extra.pop("run", TOKEN)
     value = {
         "id": review_id,
         "user": copy.deepcopy(BOT),
@@ -64,7 +65,7 @@ def producer(status="completed", **conclusions):
 class EvidenceTests(unittest.TestCase):
     def setUp(self):
         self.reader = module()
-        self.jobs = {RUN: producer()}
+        self.jobs = {TOKEN: producer()}
 
     def evidence(self, rows, sha=SHA):
         return self.reader.review_evidence(rows, sha, self.jobs.get)
@@ -79,7 +80,9 @@ class EvidenceTests(unittest.TestCase):
             (result["state"], result["reason"]), ("success", "reviews_complete")
         )
         self.assertTrue(result["reviews_complete"])
-        self.assertEqual((result["code"]["review_id"], result["code"]["run"]), (1, RUN))
+        self.assertEqual(
+            (result["code"]["review_id"], result["code"]["run"]), (1, TOKEN)
+        )
 
     def test_absent_review_is_pending_never_failed(self):
         self.assertEqual(self.outcome([]), ("pending", "review_missing"))
@@ -108,7 +111,7 @@ class EvidenceTests(unittest.TestCase):
         tagged.append(review("security", 0, 2, body=legacy.format("security")))
         for rows in (
             tagged,
-            [review("code", run=901), review("security", 0, 2, run=901)],
+            [review("code", run="901-1"), review("security", 0, 2, run="901-1")],
             [review("code", body="<!-- claude-review:v2 kind=code findings=0 -->")],
         ):
             with self.subTest(rows=rows):
@@ -116,13 +119,13 @@ class EvidenceTests(unittest.TestCase):
 
     def test_failed_or_skipped_execution_validation_fails_the_kind(self):
         for job in (producer(code="failure"), producer(code="skipped")):
-            self.jobs[RUN] = job
+            self.jobs[TOKEN] = job
             self.assertEqual(self.outcome(clean()), ("blocked", "review_failed"))
-        self.jobs[RUN] = dict(producer(), steps=[])
+        self.jobs[TOKEN] = dict(producer(), steps=[])
         self.assertEqual(self.outcome(clean()), ("blocked", "review_failed"))
 
     def test_running_producer_keeps_the_kind_pending(self):
-        self.jobs[RUN] = producer(status="in_progress")
+        self.jobs[TOKEN] = producer(status="in_progress")
         self.assertEqual(self.outcome(clean()), ("pending", "review_pending"))
 
     def test_findings_block_until_a_new_head(self):
@@ -135,10 +138,10 @@ class EvidenceTests(unittest.TestCase):
 
     def test_malformed_bound_marker_fails(self):
         for first in (
-            "<!-- claude-review:v2 kind=other findings=0 run=900 -->",
-            "<!-- claude-review:v2 kind=code findings=abc run=900 -->",
-            "<!-- claude-review:v2 kind=code findings=01 run=900 -->",
-            "<!-- claude-review:v3 kind=code findings=0 run=900 -->",
+            "<!-- claude-review:v2 kind=other findings=0 run=900-1 -->",
+            "<!-- claude-review:v2 kind=code findings=abc run=900-1 -->",
+            "<!-- claude-review:v2 kind=code findings=01 run=900-1 -->",
+            "<!-- claude-review:v3 kind=code findings=0 run=900-1 -->",
         ):
             with self.subTest(first=first):
                 rows = clean() + [review(review_id=3, body=first + "\nbody")]
@@ -199,12 +202,14 @@ class ProvenanceTests(unittest.TestCase):
     def api(self, endpoint, paginate=False, missing=False):
         if endpoint.endswith(f"/actions/runs/{RUN}"):
             return copy.deepcopy(self.run) if self.run else None
-        if endpoint.endswith(f"/actions/runs/{RUN}/jobs") and paginate:
+        if endpoint.endswith(f"/actions/runs/{RUN}/attempts/1/jobs") and paginate:
             return copy.deepcopy(self.jobs)
+        if missing:  # gh api: HTTP 404 body, read as an answer
+            return None
         raise AssertionError(endpoint)
 
     def job(self):
-        return self.reader.attest("cdeust/Cortex", SHA, self.api)(RUN)
+        return self.reader.attest("cdeust/Cortex", SHA, self.api)(TOKEN)
 
     def test_genuine_claude_workflow_run_yields_the_head_review_job(self):
         self.assertEqual(self.job()["name"], f"review {SHA}")
@@ -224,6 +229,11 @@ class ProvenanceTests(unittest.TestCase):
         self.setUp()
         self.run = None
         self.assertIsNone(self.job())
+
+    def test_citation_of_another_attempt_is_unbound(self):
+        # The validation evidence must come from the attempt that published.
+        attest = self.reader.attest("cdeust/Cortex", SHA, self.api)
+        self.assertIsNone(attest(f"{RUN}-2"))
 
     def test_job_for_another_head_is_unbound(self):
         self.jobs[0]["jobs"][0]["name"] = f"review {OTHER}"

@@ -78,10 +78,19 @@ class ClaudeWorkflowTests(unittest.TestCase):
             self.assertIn(f"Edit(/{temp}/claude-review/{kind}-review.md)", review)
             self.assertNotIn(",Write,", review)
             self.assertIn("steps.kinds.outputs." + kind + " == 'true'", review)
-            run_id = "${{ github.run_id }}"
+            run_id = "${{ github.run_id }}-${{ github.run_attempt }}"
             marker = f"<!-- claude-review:v2 kind={kind} findings=N run={run_id} -->"
             self.assertIn(marker, review)
             self.assertIn(f"--published {kind}", review)
+
+    def test_trusted_preparation_creates_both_verdict_files(self):
+        # msg_037967ba0159: whether a scoped Edit rule may create an absent file
+        # under dontAsk is not proven, so main's preparation step creates them.
+        review = job(self.text, "review")
+        prepare = review.split("      - name: Read the pull request as data\n", 1)[1]
+        prepare = prepare.split("\n      - name:", 1)[0]
+        for kind in ("code", "security"):
+            self.assertIn(f': > "$DIR/{kind}-review.md"', prepare)
 
     def test_review_concurrency_is_per_head_and_never_cancels(self):
         # Codex 4389070526: a stale run entering a per-PR group could cancel the

@@ -34,8 +34,15 @@ adheres to [Semantic Versioning](https://semver.org/).
   `.github/workflows/claude.yml` reviews every first-attempt same-repository
   Pipeline run from main (`workflow_run`), reads the PR only as a diff file and
   publishes two COMMENT reviews as claude[bot] on the exact head with a
-  `<!-- claude-review:v1 kind=... findings=N -->` marker. The Pipeline review
-  job reads them with `scripts/ci_claude_reviews.py` (embedded, read-only), and
+  `<!-- claude-review:v2 kind=... findings=N run=<id>-<attempt> -->` marker.
+  A review counts only when the Actions API shows that attempt is a claude.yml
+  `workflow_run` on main whose `review <head>` job validated the execution and
+  the publication, so markers from an @claude session or a manual post are
+  ignored. Review sessions load no repository settings (`--setting-sources
+  user --permission-mode dontAsk`), review concurrency is per head, and the
+  @claude job answers only the repository owner. The Pipeline review job reads
+  main's gate with `scripts/ci_claude_review_gate.py` and the reviews with
+  `scripts/ci_claude_reviews.py` (both embedded, read-only), and
   the shared completion coordinator now combines Codex and Claude evidence so a
   green waiting run is never rerun while Claude is pending. Activation is the
   line `CLAUDE_REVIEW_GATE: required` in main's claude.yml; this change installs

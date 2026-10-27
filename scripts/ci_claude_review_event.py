@@ -89,19 +89,23 @@ def _text(body: str) -> str:
 
 
 def published(repo: str, kind: str, environ: dict[str, str]) -> None:
-    """This run published exactly its local verdict as the only <kind> marker.
+    """This run attempt published exactly its local verdict for <kind>.
 
     Runs in the review job right after Claude, as main's code: it binds the
-    claude[bot] review to the run that the readers later attest.
+    claude[bot] review to the run attempt that the readers later attest. Only
+    markers citing this attempt count, so an unbound @claude marker cannot fail
+    it; a second marker citing this attempt fails closed.
     """
     if kind not in claude.KINDS:
         raise EvidenceError("arguments")
     pr = environ.get("PR", "")
     if not (pr.isascii() and pr.isdecimal()) or pr.startswith("0"):
         raise EvidenceError("environment")
-    sha, run = environ.get("HEAD_SHA", ""), environ.get("GITHUB_RUN_ID", "")
+    sha = environ.get("HEAD_SHA", "")
+    run = f"{environ.get('GITHUB_RUN_ID', '')}-{environ.get('GITHUB_RUN_ATTEMPT', '')}"
+    # Pre-created empty by the trusted preparation step: absent or empty fails.
     expected = Path(environ.get("REVIEW_FILE", "")).read_text(encoding="utf-8")
-    prefix = f"<!-- claude-review:v2 kind={kind} "
+    cites = f" run={run} -->"
     mine = [
         row
         for row in source.records(f"repos/{repo}/pulls/{pr}/reviews")
@@ -110,10 +114,10 @@ def published(repo: str, kind: str, environ: dict[str, str]) -> None:
         and row["user"].get("type") == "Bot"
         and row.get("commit_id") == sha
         and isinstance(row.get("body"), str)
-        and row["body"].startswith(prefix)
+        and row["body"].split("\n", 1)[0].rstrip("\r").endswith(cites)
+        and row["body"].startswith(f"<!-- claude-review:v2 kind={kind} ")
     ]
-    first = _text(expected).split("\n", 1)[0]
-    match = claude.MARKER.fullmatch(first)
+    match = claude.MARKER.fullmatch(_text(expected).split("\n", 1)[0])
     if (
         len(mine) != 1
         or match is None

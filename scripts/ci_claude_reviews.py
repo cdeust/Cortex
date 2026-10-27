@@ -3,7 +3,7 @@
 
 Protocol: the review job of .github/workflows/claude.yml publishes each native
 review as a pull request review by claude[bot] on commit_id=<head>, first body
-line <!-- claude-review:v2 kind=code|security findings=N run=<run id> -->.
+line <!-- claude-review:v2 kind=code|security findings=N run=<run id>-<attempt> -->.
 A review is evidence only when the Actions API shows that run is a claude.yml
 workflow_run on main with job "review <head>" whose "Validate <kind> review
 execution" step succeeded; that step proves the run itself published exactly
@@ -31,9 +31,9 @@ KINDS = ("code", "security")
 PREFIX = "<!-- claude-review:"
 MARKER = re.compile(
     r"<!-- claude-review:v2 kind=(code|security) findings=(0|[1-9][0-9]*)"
-    r" run=([1-9][0-9]*) -->"
+    r" run=([1-9][0-9]*-[1-9][0-9]*) -->"
 )
-CITED = re.compile(r" run=([1-9][0-9]*) -->$")
+CITED = re.compile(r" run=([1-9][0-9]*-[1-9][0-9]*) -->$")
 WORKFLOW = ".github/workflows/claude.yml"
 SHA_PATTERN = re.compile(r"[0-9a-f]{40}")
 REPO_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+")
@@ -71,8 +71,7 @@ def _json(text: str) -> Any:
 
 
 def _api(endpoint: str, *, paginate: bool = False, missing: bool = False) -> Any:
-    # https://cli.github.com/manual/gh_api: --slurp wraps paginated pages; on an
-    # HTTP error gh still prints the response body, so a 404 is an answer.
+    # https://cli.github.com/manual/gh_api; on HTTP errors the body is on stdout.
     command = ["gh", "api", *(["--paginate", "--slurp"] if paginate else []), endpoint]
     try:
         done = subprocess.run(command, text=True, capture_output=True, check=True)
@@ -85,8 +84,9 @@ def _api(endpoint: str, *, paginate: bool = False, missing: bool = False) -> Any
     return _json(done.stdout)
 
 
-def _review_job(call: Callable, repo: str, sha: str, run_id: int) -> Record | None:
-    """The trusted job that produced a review, or None for an unbound citation."""
+def _review_job(call: Callable, repo: str, sha: str, token: str) -> Record | None:
+    """The trusted job of run <id>-<attempt> that produced a review, else None."""
+    run_id, attempt = (int(part) for part in token.split("-"))
     run = call(f"repos/{repo}/actions/runs/{run_id}", missing=True)
     if run is None:
         return None
@@ -100,7 +100,10 @@ def _review_job(call: Callable, repo: str, sha: str, run_id: int) -> Record | No
         or str(run["repository"].get("full_name")).casefold() != repo.casefold()
     ):
         return None
-    pages = call(f"repos/{repo}/actions/runs/{run_id}/jobs", paginate=True)
+    endpoint = f"repos/{repo}/actions/runs/{run_id}/attempts/{attempt}/jobs"
+    pages = call(endpoint, paginate=True, missing=True)
+    if pages is None:
+        return None
     if not isinstance(pages, list) or any(
         not isinstance(p, dict) or not isinstance(p.get("jobs"), list) for p in pages
     ):
@@ -110,20 +113,20 @@ def _review_job(call: Callable, repo: str, sha: str, run_id: int) -> Record | No
     return named[0] if len(named) == 1 else None
 
 
-def attest(repo: str, sha: str, api: Any = None) -> Callable[[int], Record | None]:
-    """Memoised run id -> producing job lookup for one PR head."""
+def attest(repo: str, sha: str, api: Any = None) -> Callable[[str], Record | None]:
+    """Memoised <run id>-<attempt> -> producing job lookup for one PR head."""
     call, cache = (_api if api is None else api), {}
 
-    def job(run_id: int) -> Record | None:
-        if run_id not in cache:
-            cache[run_id] = _review_job(call, repo, sha, run_id)
-        return cache[run_id]
+    def job(token: str) -> Record | None:
+        if token not in cache:
+            cache[token] = _review_job(call, repo, sha, token)
+        return cache[token]
 
     return job
 
 
 def _pending() -> Record:
-    return {"state": "pending", "review_id": 0, "findings": None, "run": 0}
+    return {"state": "pending", "review_id": 0, "findings": None, "run": ""}
 
 
 def _shape(review: Any) -> None:
@@ -155,7 +158,7 @@ def _bound(review: Record, sha: str, job: Callable) -> tuple[str, Record] | None
         return None
     first = body.split("\n", 1)[0].rstrip("\r")
     cited = CITED.search(first)
-    producer = job(int(cited.group(1))) if cited else None
+    producer = job(cited.group(1)) if cited else None
     if producer is None:
         return None
     match = MARKER.fullmatch(first)
@@ -171,7 +174,7 @@ def _kind_state(kind: str, items: list[tuple[Record, Record]]) -> Record:
     match = MARKER.fullmatch(review["body"].split("\n", 1)[0].rstrip("\r"))
     findings = int(match.group(2))
     state = dict(_pending(), review_id=review["id"], findings=findings)
-    state["run"] = int(match.group(3))
+    state["run"] = match.group(3)
     if producer.get("status") != "completed":
         return state
     name, steps = f"Validate {kind} review execution", producer.get("steps") or []

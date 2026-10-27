@@ -153,7 +153,7 @@ class Server:
             result = [self.data["reviews"]]
         elif endpoint == CLAUDE_RUN and missing:
             result = self.data["claude_run"]
-        elif endpoint == CLAUDE_RUN + "/jobs" and paginate:
+        elif endpoint == CLAUDE_RUN + "/attempts/1/jobs" and paginate:
             jobs = self.data["claude_jobs"]
             result = [{"total_count": len(jobs), "jobs": jobs}]
         else:

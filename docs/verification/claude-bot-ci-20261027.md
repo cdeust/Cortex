@@ -41,48 +41,80 @@ both use the same combined proof and the same per-PR concurrency group.
 
 ## Evidence model
 
-`scripts/ci_claude_reviews.py` (embedded in pipeline.yml, run with `python3 -I`):
-claude[bot] (`type` Bot) reviews whose `commit_id` is the live head and whose
-first body line is `<!-- claude-review:v1 kind=code|security findings=N -->`.
-Per kind: success (N=0), unresolved (N>0, blocked until a new head), pending
-(absent, stale head, other author), failed (malformed marker, non-COMMENTED
-state, or two reviews of one kind on one head). The Pipeline review job waits
-(`pending`, job green, merge named `merge pending review`); the required
-`merge` context appears only after both sources complete and the coordinator
-reruns the gate. `combined_proof` in `scripts/ci_codex_review_resume.py` keeps
-the Codex proof unchanged while Claude is not required.
+`scripts/ci_claude_reviews.py` (embedded in pipeline.yml, run with `python3 -I`)
+accepts a claude[bot] (`type` Bot) review on the live head only when its first
+line `<!-- claude-review:v2 kind=code|security findings=N run=<id>-<attempt> -->`
+cites a run attempt that the Actions API shows is `.github/workflows/claude.yml`,
+event `workflow_run`, branch `main`, this repository, with a job named
+`review <head sha>` (the name is set by main's workflow from the server-derived
+head) whose step `Validate <kind> review execution` concluded `success`. That
+step runs main's code right after Claude: `ci_review_execution.py` proves the
+skill and agents ran without permission denials (an empty execution file from
+a soft skip fails), and `ci_claude_review_event.py --published <kind>` proves
+this attempt published exactly the verdict file the trusted preparation step
+pre-created (absent or empty fails). Per kind: success (N=0), unresolved (N>0,
+blocked until a new head), pending (absent, producer still running), failed
+(validation not successful, malformed bound marker, non-COMMENTED, two bound
+reviews of one kind). Markers without such a producer, including a citation of
+a run that does not exist (gh prints the 404 body and exits 1; read as an
+answer), are ignored: they neither satisfy nor suppress the CI review.
+The Pipeline review job waits (`pending`, job green, merge named
+`merge pending review`); the required `merge` context appears only after both
+sources complete and the coordinator reruns the gate. `combined_proof` in
+`scripts/ci_codex_review_resume.py` keeps the Codex proof unchanged while
+Claude is not required.
 
 ## Bootstrap and activation
 
-The trust anchor is main: the reader lists `.github/workflows` at `ref=main`
-and reads `CLAUDE_REVIEW_GATE` from main's claude.yml. Absent or `observe`
-gives the distinct state `not_required` (Codex-only, never a success claim);
-`required` makes Claude a prerequisite. This PR installs claude.yml with
-`observe`, so it is Codex-only and cannot be blocked by the gate it installs;
-by construction it cannot receive a claude[bot] review either, because main has
-no claude.yml yet. After merge, every PR push is reviewed and verified but not
-gated. Activation is a one-line follow-up PR (`observe` to `required`) once a
-hosted claude[bot] review is recorded; that PR is still Codex-only because main
-says `observe`.
+The trust anchor is main: `scripts/ci_claude_review_gate.py` lists
+`.github/workflows` at `ref=main` and reads `CLAUDE_REVIEW_GATE` from main's
+claude.yml; an unrecognised declaration (trailing comment, quotes, duplicates)
+fails loudly. Absent or `observe` gives the distinct state `not_required`
+(Codex-only, never a success claim); `required` makes Claude a prerequisite.
+This PR installs claude.yml with `observe`, so it is Codex-only and cannot be
+blocked by the gate it installs; by construction it cannot receive a claude[bot]
+review either, because main has no claude.yml yet. After merge, every PR push
+is reviewed and verified but not gated. Activation is a one-line follow-up PR
+(`observe` to `required`) once a hosted claude[bot] review is recorded.
+
+## Review findings and fixes
+
+| Finding | Verdict | Regression (fails on 005dc258) | Fix |
+|---|---|---|---|
+| Codex 4389070506: allowlist not exclusive, project settings loaded | valid: `settingSources` default user+project+local (`base-action/src/parse-sdk-options.ts:340-345`), `.claude/settings.json` allows `Bash(uv *)` | `test_ci_claude_workflow.py::test_review_sessions_ignore_repository_settings_and_deny_unlisted_tools` | `--setting-sources user --permission-mode dontAsk` on both review actions (CLI 2.1.311, `src/entrypoints/run.ts:80`, lists `dontAsk`) |
+| Codex 4389070516: markers accepted despite failed execution validation | valid | `test_ci_claude_review_event.py::ResumeTests::test_failed_execution_validation_never_resumes`, `::test_marker_only_reviews_cannot_satisfy_the_required_gate`, `test_ci_claude_bootstrap.py::test_marker_only_or_forged_citation_never_satisfies_required_gate` | run-bound evidence in `scripts/ci_claude_reviews.py` (`_review_job`, `_kind_state`), shared by Pipeline, verify and both completion handlers |
+| Codex 4389070526: stale run cancels newer head's reviewer | valid (group entry order is not dispatch order) | `test_ci_claude_workflow.py::test_review_concurrency_is_per_head_and_never_cancels` | review group keyed by head SHA, `cancel-in-progress: false` |
+| Codex 4389092806: OAuth secret reachable from comment-driven commands | valid | `test_ci_claude_workflow.py::test_tag_job_is_owner_only_and_scrubs_subprocess_secrets` | tag job only when `github.event.sender.login == github.repository_owner`; `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"` on every action step (best effort per `action.yml:41-43`, passed at `:301`) |
+| Coordinator msg_6cee25591704: tag/manual markers satisfy the gate | valid | as for 4389070516 | as for 4389070516 |
+| Coordinator msg_037967ba0159 (a): publication check counts unbound markers; bind to run attempt | valid | `test_ci_claude_review_publication.py::test_unbound_or_other_attempt_markers_do_not_fail_this_attempt`, `test_ci_claude_reviews.py::ProvenanceTests::test_citation_of_another_attempt_is_unbound` | marker cites `<run id>-<attempt>`; jobs read from `/attempts/<n>/jobs`; `published()` counts only this attempt's markers |
+| Coordinator msg_037967ba0159 (b): verdict files may never be created | valid (scoped Edit creating an absent file under dontAsk is unproven) | `test_ci_claude_workflow.py::test_trusted_preparation_creates_both_verdict_files`, `test_ci_claude_review_publication.py::test_absent_verdict_file_fails_closed` | preparation step pre-creates both files; absent or empty fails `--published` |
+| Own review: gate variants silently disable the gate | valid | `test_ci_claude_review_gate.py::test_gate_line_decides_activation` | `declares_required` fails loudly on unrecognised lines |
 
 ## Threat model (STRIDE) of the privileged path
 
 | Threat | Vector | Guard |
 |---|---|---|
 | Spoofing | Marker review by github-actions[bot], a User or a look-alike login | login `claude[bot]` and type `Bot` required; tests per identity |
-| Spoofing | `findings=0` posted later to override findings | duplicate kind on one head fails |
+| Spoofing | @claude session or manual post writes markers as claude[bot] | evidence requires a validated claude.yml attempt; tag job owner-only |
+| Spoofing | `findings=0` posted later citing a genuine attempt | two bound reviews of one kind fail; `--published` fails on a second marker |
 | Tampering | PR rewrites the Actions-write job | resume runs only under `workflow_run` from main; no `pull_request_review` trigger |
-| Tampering | Injected Claude edits the checkout to fake validation | verify and resume are separate fresh jobs; Claude may edit only its review file |
-| Tampering | Stale review satisfies a new head | `commit_id` must equal the live head, rechecked before and after reads |
-| Repudiation | Which run reviewed which head | review on `commit_id`, run-name carries the Pipeline run id |
-| Information disclosure | Secrets reach PR code | PR never checked out or executed; `persist-credentials: false`; no `github_token` |
+| Tampering | Injected Claude runs tools beyond the review | `dontAsk`, user settings only, exact publish command, Edit only on its verdict file |
+| Tampering | Stale review satisfies a new head | `commit_id` and job name `review <head>` must match the live head |
+| Repudiation | Which run reviewed which head | marker cites `<run id>-<attempt>`, attested through the Actions API |
+| Information disclosure | Secrets reach PR code or a non-owner prompt | PR never checked out or executed; owner-only tag job; subprocess scrub |
 | Denial of service | Rerun loop while Claude pends | combined proof: no rerun until both sources complete (regression test) |
+| Denial of service | Forged citation turns the gate red | a 404 is an answer (unbound), not an API error |
 | Denial of service | Gate installed broken blocks every PR | staged activation; installing PR is Codex-only |
 | Elevation of privilege | `actions: write` misused | one job, re-reads every fact from the REST API, reruns only the matching gate job |
 
-Residual: the @claude tag job also posts as claude[bot] with broad tools for a
-human with write access; its reviews are indistinguishable by identity. A
-duplicate-kind review it posts fails closed (blocked until a new head).
+Residual, recorded rather than closed here: a marker citing a genuine attempt
+of the same head, posted by the owner's @claude session, fails that kind closed
+(blocked until a new head); GitHub's Dependabot-on-Actions documentation
+treats `workflow_run` runs started by Dependabot as Dependabot-triggered (no
+Actions secrets), so before `required` the first hosted Dependabot PR must show
+a claude[bot] review or a Dependabot secret must be configured (activation
+precondition); a review body above GitHub's size limit is rejected by the POST
+and stays pending (verify turns red).
 
 ## Three pillars
 
