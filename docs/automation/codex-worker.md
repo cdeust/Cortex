@@ -44,7 +44,7 @@ Routine implementation choices are yours; do not ask the owner to coordinate.
 Do not block on orchestration ask for routine decisions. Report a genuine external
 blocker through worker_done with outcome failed and a precise public explanation.
 
-The dispatcher maintains one public PR or issue status comment through the
+The dispatcher maintains one public PR status comment through the
 maintainer account. Report progress through Orca; respect your host's prohibition
 on GitHub comments. Report the real publication SHA and CI link to the coordinator.
 Never claim a pushed correction or passing check without its receipt.

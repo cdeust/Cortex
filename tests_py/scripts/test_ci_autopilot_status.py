@@ -13,6 +13,12 @@ from ci_autopilot_status import MARKER, publish  # noqa: E402
 
 
 class StatusTests(unittest.TestCase):
+    def test_issue_status_never_changes_its_approved_requirement_revision(self):
+        options = SimpleNamespace(repository="cdeust/Cortex", status_comments=True)
+        github = Mock(side_effect=[{"login": "cdeust"}, [[]], {}])
+        publish(options, github, {"kind": "issue", "number": 801}, "dispatched")
+        github.assert_not_called()
+
     def test_existing_maintainer_comment_is_updated_and_phase_is_not_repeated(self):
         options = SimpleNamespace(repository="cdeust/Cortex", status_comments=True)
         item = {"kind": "pull", "number": 776}

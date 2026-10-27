@@ -14,6 +14,9 @@ MARKER = "<!-- cortex-autopilot-status -->"
 def publish(options, github, item: dict, phase: str) -> None:
     if not getattr(options, "status_comments", False):
         return
+    # Owner comments form approved issue revisions; never self-trigger issue intake.
+    if item.get("kind") != "pull":
+        return
     if item.get("announced_phase") == phase:
         return
     try:
