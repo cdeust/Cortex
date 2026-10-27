@@ -225,6 +225,14 @@ because `uv venv` otherwise selects an x86_64 managed CPython that cannot run
 on this arm64 host (`Bad CPU type in executable`), which
 `tests_py/scripts/test_launcher_platform_coverage.py` needs.
 
+## Native Codex incomplete-verdict follow-up
+
+The authenticated bot summary [6442631163](https://github.com/cdeust/Cortex/pull/805#issuecomment-6442631163) on `6de74656` reported a completed security review with `has_any_findings=true` and `has_unresolved_findings=null`. The reader returned `blocked/protocol` for this incomplete verdict. Explicit null flags now remain pending with `reviews_complete=false`; missing fields, invalid types, contradictory flags and malformed summaries still fail closed. A newer incomplete verdict cannot fall back to an older clean summary.
+
+Five assertions failed before the correction. After it, all 165 affected Codex and Claude CI tests pass, including the embedded-reader contract. The live summary returns pending, rather than completion. Pinned Ruff, actionlint and the repository craftsmanship gate pass. The earlier full-suite result above remains scoped to `953ed145`.
+
+The stale statement that CI enforces Ruff was also removed from `docs/agent-guidance.md`; both Ruff commands remain mandatory before local commits.
+
 ## Official sources
 
 - [Events that trigger workflows](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows)

@@ -139,7 +139,7 @@ def _review(value: Any, expected_sha: str) -> tuple[str, Record]:
         item = value.get(flag)
         if item is not None and type(item) is not bool:
             raise EvidenceError("protocol")
-        if status == "completed" and type(item) is not bool:
+        if status == "completed" and flag not in value:
             raise EvidenceError("protocol")
         clean[flag] = item
     if clean["has_any_findings"] is False and clean["has_unresolved_findings"] is True:
@@ -148,7 +148,13 @@ def _review(value: Any, expected_sha: str) -> tuple[str, Record]:
         raise EvidenceError("protocol")
     if status in FAILED:
         return "failed", clean
-    if sha != expected_sha or status != "completed":
+    # source: PR805 summary6442631163 emitted completed with an unknown verdict.
+    if (
+        sha != expected_sha
+        or status != "completed"
+        or clean["has_any_findings"] is None
+        or clean["has_unresolved_findings"] is None
+    ):
         return "pending", clean
     return ("unresolved" if clean["has_unresolved_findings"] else "success"), clean
 

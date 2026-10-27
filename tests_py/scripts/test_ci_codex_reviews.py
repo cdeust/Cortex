@@ -100,8 +100,30 @@ class CodexEvidenceTests(unittest.TestCase):
         del data["security_review"]
         self.assertEqual(self.evidence([comment(data)])["state"], "pending")
 
-    def test_completed_review_missing_fields_or_unknown_bools_blocks(self):
-        for value in (None, 0, 1, "", "false", [], {}):
+    def test_completed_review_with_null_verdict_stays_pending(self):
+        # PR805 bot summary6442631163 emitted completed/true/null on6de74656.
+        for kind in ("code_review", "security_review"):
+            for flag in ("has_any_findings", "has_unresolved_findings"):
+                data = state()
+                data[kind].update(has_any_findings=True)
+                data[kind][flag] = None
+                with self.subTest(kind=kind, flag=flag):
+                    result = self.evidence([comment(data)])
+                    self.assertEqual(result["state"], "pending")
+                    self.assertEqual(result["reason"], "review_pending")
+                    self.assertFalse(result["reviews_complete"])
+
+    def test_newer_null_verdict_cannot_fall_back_to_older_clean_summary(self):
+        data = state()
+        data["security_review"]["has_unresolved_findings"] = None
+        latest = comment(data, 2, "2026-10-26T22:01:00Z")
+        result = self.evidence([comment(), latest])
+        self.assertEqual(result["comment_id"], 2)
+        self.assertEqual(result["state"], "pending")
+        self.assertFalse(result["reviews_complete"])
+
+    def test_completed_review_missing_fields_or_invalid_bools_blocks(self):
+        for value in (0, 1, "", "false", [], {}):
             data = state()
             data["security_review"]["has_unresolved_findings"] = value
             self.assertEqual(self.evidence([comment(data)])["state"], "blocked")
