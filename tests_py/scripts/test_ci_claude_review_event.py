@@ -136,6 +136,21 @@ class ResumeTests(unittest.TestCase):
         self.assertEqual(result, {"action": "review", "job_id": 20})
         self.assertEqual([item.args[0] for item in post], [RERUN_REVIEW])
 
+    def test_running_pipeline_defers_without_rerun_or_error(self):
+        # The usual case: reviews finish before the Pipeline. The rerun API
+        # refuses an unfinished run, so resume must defer (no POST, no raise);
+        # Codex.yml's Pipeline-completed catch resumes it later.
+        for status in ("queued", "in_progress"):
+            with self.subTest(status=status):
+                server = waiting(gate(Server()))
+                server.data["source"].update(status=status, conclusion=None)
+                server.data["reviews"] = clean()
+                result, post = call(server, "resume", requested(), REPO)
+                self.assertEqual((result, post), ({"action": "none"}, []))
+                self.assertNotIn(
+                    (PREFIX + "/actions/runs/50/attempts/1/jobs", True), server.calls
+                )
+
     def test_pending_claude_review_never_resumes(self):
         server = waiting(gate(Server()))
         result, post = call(server, "resume", requested(), REPO)
