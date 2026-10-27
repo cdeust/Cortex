@@ -30,24 +30,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- **Genuine claude[bot] code and security reviews beside Codex (ADR-1116).**
-  `.github/workflows/claude.yml` reviews every first-attempt same-repository
-  Pipeline run from main (`workflow_run`), reads the PR only as a diff file and
-  publishes two COMMENT reviews as claude[bot] on the exact head with a
-  `<!-- claude-review:v2 kind=... findings=N run=<id>-<attempt> -->` marker.
-  A review counts only when the Actions API shows that attempt is a claude.yml
-  `workflow_run` on main whose `review <head>` job validated the execution and
-  the publication, so markers from an @claude session or a manual post are
-  ignored. Review sessions load no repository settings (`--setting-sources
-  user --permission-mode dontAsk`), review concurrency is per head, and the
-  @claude job answers only the repository owner. The Pipeline review job reads
-  main's gate with `scripts/ci_claude_review_gate.py` and the reviews with
-  `scripts/ci_claude_reviews.py` (both embedded, read-only), and
-  the shared completion coordinator now combines Codex and Claude evidence so a
-  green waiting run is never rerun while Claude is pending. Activation is the
-  line `CLAUDE_REVIEW_GATE: required` in main's claude.yml; this change installs
-  it as `observe`, so the installing PR stays Codex-only and cannot be blocked
-  by its own gate. Evidence: `docs/verification/claude-bot-ci-20261027.md`.
+- Claude PR reviews use Anthropic's official direct PR workflow and its five
+  upstream reviewer agents (ADR-1117). Reviewer configuration loads from trusted
+  main; PR content is read through GitHub. This replaces ADR-1116's custom
+  workflow_run marker protocol. Codex retains its native review checks.
+  Evidence: `docs/verification/claude-bot-ci-20261027.md`.
 
 - **The single CI pipeline, run by the Claude bot (ADR-1115).**
   `.github/workflows/pipeline.yml` runs contract, unit (the SQLite-backed

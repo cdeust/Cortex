@@ -2,8 +2,9 @@ name: Claude Code
 
 # source: https://github.com/anthropics/claude-code-action/blob/8041f1d17e0e7d2f2cfe35002962e9f26237c0bb/.github/workflows/claude-review.yml
 # Adaptations: standard runner, existing OAuth secret, review every PR push.
+# Trusted base workflow: upstream docs/security.md, findings4392874807/4392971185.
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened, ready_for_review]
   issue_comment:
     types: [created]
@@ -16,7 +17,7 @@ jobs:
   review:
     name: Claude review
     if: >-
-      github.event_name == 'pull_request'
+      github.event_name == 'pull_request_target'
       && github.event.pull_request.head.repo.full_name == github.repository
       && !github.event.pull_request.draft
     runs-on: ubuntu-latest
@@ -43,7 +44,7 @@ jobs:
           CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          track_progress: true
+          allowed_bots: "claude[bot],chatgpt-codex-connector[bot],dependabot[bot]"
           prompt: "/review-pr REPO: ${{ github.repository }} PR_NUMBER: ${{ github.event.pull_request.number }}"
           claude_args: |
             --permission-mode auto
