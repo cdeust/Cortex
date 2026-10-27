@@ -123,6 +123,15 @@ class ReviewPhaseTests(unittest.TestCase):
             "if: always() && !cancelled()", step(REVIEW_JOB, "Security review")
         )
 
+    def test_earlier_claude_comments_never_exempt_the_current_head(self):
+        # Native code-review step 1 skips a PR Claude already commented on; the
+        # prompt must override that for the exact head (Codex finding 4384225106).
+        for name in ("Code review", "Security review"):
+            self.assertIn(
+                "despite earlier Claude comments or earlier-head reviews",
+                step(REVIEW_JOB, name),
+            )
+
     def test_pipeline_no_longer_hosts_a_claude_review(self):
         self.assertNotIn("native_review", PIPELINE)
         for name in ("Review", "Security review"):

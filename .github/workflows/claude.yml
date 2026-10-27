@@ -99,6 +99,7 @@ jobs:
           allowed_bots: "dependabot[bot],chatgpt-codex-connector[bot]"
           prompt: |
             Review ${{ github.repository }}/pull/${{ env.PR }} at head ${{ env.HEAD_SHA }}.
+            Perform the full native review on this exact head, including dependency and Claude-authored PRs, despite earlier Claude comments or earlier-head reviews: they never exempt the current head from step 1 eligibility or from any later step.
             Read the complete diff file ${{ runner.temp }}/pr.diff, then call the Skill tool once with skill code-review:code-review.
             Wait for every review agent; at least 7 must complete. Write the verdict to ${{ runner.temp }}/code-review.md: first line exactly <!-- claude-review:v1 kind=code findings=N --> with N the number of findings, then the skill's full result.
             Publish it as a GitHub review on the reviewed commit: gh api -X POST repos/${{ github.repository }}/pulls/${{ env.PR }}/reviews -f commit_id=${{ env.HEAD_SHA }} -f event=COMMENT -F body=@${{ runner.temp }}/code-review.md
@@ -120,6 +121,7 @@ jobs:
           allowed_bots: "dependabot[bot],chatgpt-codex-connector[bot]"
           prompt: |
             Review ${{ github.repository }}/pull/${{ env.PR }} at head ${{ env.HEAD_SHA }}.
+            Perform the full native review on this exact head, including dependency and Claude-authored PRs, despite earlier Claude comments or earlier-head reviews: they never exempt the current head.
             Read the complete diff file ${{ runner.temp }}/pr.diff, then call the Skill tool once with skill security-review.
             Wait for its agent. Write the verdict to ${{ runner.temp }}/security-review.md: first line exactly <!-- claude-review:v1 kind=security findings=N --> with N the number of findings, then the skill's full result.
             Publish it as a GitHub review on the reviewed commit: gh api -X POST repos/${{ github.repository }}/pulls/${{ env.PR }}/reviews -f commit_id=${{ env.HEAD_SHA }} -f event=COMMENT -F body=@${{ runner.temp }}/security-review.md
