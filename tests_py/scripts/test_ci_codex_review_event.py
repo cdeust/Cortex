@@ -26,6 +26,17 @@ from tests_py.scripts.test_ci_codex_review_resume import waiting_jobs
 
 
 class CodexEventTests(unittest.TestCase):
+    def test_completed_review_resumes_successful_waiting_pipeline(self):
+        for name in ("issue_comment", "workflow_run"):
+            server = Server()
+            server.data["source"]["conclusion"] = "success"
+            server.data["jobs"][-1].update(
+                name="merge pending review", conclusion="success", steps=[]
+            )
+            result, post = invoke(server, name)
+            self.assertEqual(result, {"action": "review", "job_id": 20})
+            self.assertEqual(len(post), 1)
+
     def test_unknown_cli_event_does_nothing(self):
         env = dict(os.environ)
         env["GITHUB_EVENT_NAME"] = "push"

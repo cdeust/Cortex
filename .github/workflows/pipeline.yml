@@ -552,6 +552,8 @@ jobs:
   # This job reads authenticated completion evidence without executing PR code.
   review:
     needs: [unit, regression, e2e, environment, install]
+    outputs:
+      state: ${{ steps.evidence.outputs.state }}
     if: >-
       always() && !cancelled() && github.event_name == 'pull_request'
       && !github.event.pull_request.draft
@@ -563,6 +565,7 @@ jobs:
       issues: read
     steps:
       - name: Require completed Codex reviews
+        id: evidence
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -571,8 +574,8 @@ jobs:
           CODEX_COMPLETION_ONLY: 'true'
         run: &codex_review_reader |
           set -euo pipefail
-          args=(--repo "$GH_REPO" --pr "$PR" --sha "$HEAD_SHA")
-          if [ "$CODEX_COMPLETION_ONLY" = true ]; then args+=(--require-complete); fi
+          args=(--repo "$GH_REPO" --pr "$PR" --sha "$HEAD_SHA" --github-output)
+          if [ "$CODEX_COMPLETION_ONLY" = true ]; then args+=(--require-complete --allow-pending); fi
           python3 -I - "${args[@]}" <<'CODEX_REVIEW_PY'
           #!/usr/bin/env python3
           """Read authenticated native Codex review evidence for one immutable PR head.
@@ -820,6 +823,7 @@ jobs:
               parser.add_argument("--sha", required=True)
               parser.add_argument("--github-output", action="store_true")
               parser.add_argument("--require-complete", action="store_true")
+              parser.add_argument("--allow-pending", action="store_true")
               args = parser.parse_args(argv)
               if (
                   REPO_PATTERN.fullmatch(args.repo) is None
@@ -853,6 +857,8 @@ jobs:
                   if args.github_output:
                       _outputs(result)
                   print(json.dumps(result, sort_keys=True))
+                  if args.allow_pending and result["state"] == "pending":
+                      return 0
                   if (
                       args.require_complete
                       and result["reviews_complete"]
@@ -872,9 +878,14 @@ jobs:
   # Decision 4, hardened after claude-mods #38 and session-optimizer #73 merged
   # on a red pipeline: GitHub treats a skipped required check as satisfied, so
   # merge runs even after failure on a non-cancelled same-repo PR, and fails if a
-  # test job did not succeed or the review was incomplete. No checkout or merge
+  # test job did not succeed. Pending reviews keep the required name expected.
+  # No checkout or merge
   # mutation here: the completed-run resolver performs the protected merge.
   merge:
+    # Only the exact name "merge" satisfies branch protection. A pending review
+    # keeps that required check expected, without failing successful test jobs.
+    # source: GitHub Actions contexts reference, jobs.<job_id>.name supports needs.
+    name: ${{ needs.review.outputs.state == 'pending' && 'merge pending review' || 'merge' }}
     needs: [contract, unit, regression, e2e, environment, install, review]
     if: >-
       always() && !cancelled() && github.event_name == 'pull_request'
@@ -914,6 +925,7 @@ jobs:
           fi
 
       - name: Require complete Codex reviews
+        if: needs.review.outputs.state != 'pending'
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -928,6 +940,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
           PR: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REVIEW_STATE: ${{ needs.review.outputs.state }}
         run: |
           live="$(gh pr view "$PR" --json state,isDraft,headRefOid,title,labels)"
           if ! jq -e --arg sha "$HEAD_SHA" '
@@ -938,7 +951,11 @@ jobs:
             echo "::error::PR is closed, draft, held, or no longer at the tested head."
             exit 1
           fi
-          echo "## Merge: gate passed for #$PR at $HEAD_SHA" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$REVIEW_STATE" = pending ]; then
+            echo "## Tests passed; native Codex reviews pending for #$PR at $HEAD_SHA" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Merge: gate passed for #$PR at $HEAD_SHA" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
 
   # Decision 1: the release gate of Cortex (.github/workflows/ci.yml, ADR-0802)

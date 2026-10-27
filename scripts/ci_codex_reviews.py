@@ -244,6 +244,7 @@ def _arguments(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--sha", required=True)
     parser.add_argument("--github-output", action="store_true")
     parser.add_argument("--require-complete", action="store_true")
+    parser.add_argument("--allow-pending", action="store_true")
     args = parser.parse_args(argv)
     if (
         REPO_PATTERN.fullmatch(args.repo) is None
@@ -277,6 +278,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.github_output:
             _outputs(result)
         print(json.dumps(result, sort_keys=True))
+        if args.allow_pending and result["state"] == "pending":
+            return 0
         if (
             args.require_complete
             and result["reviews_complete"]

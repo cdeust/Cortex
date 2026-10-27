@@ -54,6 +54,15 @@ class QueueTests(unittest.TestCase):
         item["statusCheckRollup"][0]["conclusion"] = "FAILURE"
         self.assertEqual(candidates([item], [])[0]["kind"], "pull")
 
+    def test_review_wait_is_idle_but_failed_tests_remain_repairable(self):
+        item = pull()
+        item["statusCheckRollup"] = [
+            {"name": "merge pending review", "conclusion": "SUCCESS"}
+        ]
+        self.assertEqual(candidates([item], []), [])
+        item["statusCheckRollup"][0]["conclusion"] = "FAILURE"
+        self.assertEqual(candidates([item], [])[0]["kind"], "pull")
+
     def test_new_head_or_result_changes_the_queue_fingerprint(self):
         original = pull()
         changed = copy.deepcopy(original)

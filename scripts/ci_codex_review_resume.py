@@ -84,6 +84,18 @@ def _index(jobs: list[Record]) -> dict[str, Record] | None:
     return indexed
 
 
+def _green_wait(indexed: dict[str, Record]) -> bool:
+    return (
+        "merge" not in indexed
+        and _success(indexed.get("merge pending review", {}))
+        and _success(indexed.get("review", {}))
+        and all(_success(indexed.get(name, {})) for name in PREREQUISITES)
+        and all(
+            job.get("conclusion") in ("success", "skipped") for job in indexed.values()
+        )
+    )
+
+
 def resumption_plan(
     source: Record, jobs: list[Record], proof: Record, sha: str
 ) -> Record:
@@ -93,7 +105,7 @@ def resumption_plan(
         not isinstance(source, dict)
         or not isinstance(proof, dict)
         or source.get("status") != "completed"
-        or source.get("conclusion") != "failure"
+        or source.get("conclusion") not in ("failure", "success")
         or source.get("head_sha") != sha
         or proof.get("sha") != sha
         or proof.get("reviews_complete") is not True
@@ -106,6 +118,12 @@ def resumption_plan(
     if indexed is None:
         return none
     review, merge = indexed.get("review", {}), indexed.get("merge", {})
+    if source.get("conclusion") == "success":
+        return (
+            {"action": "review", "job_id": review["id"]}
+            if _green_wait(indexed)
+            else none
+        )
     if _waited(review, READINESS) and _repair_dependencies(indexed):
         return {"action": "review", "job_id": review["id"]}
     if any(not _success(indexed.get(name, {})) for name in PREREQUISITES):

@@ -181,7 +181,7 @@ def latest(repo: str, sha: str, number: int) -> Record | None:
             if (
                 trusted
                 and current["status"] == "completed"
-                and current.get("conclusion") == "failure"
+                and current.get("conclusion") in ("failure", "success")
             )
             else None
         )
@@ -217,7 +217,7 @@ def _workflow(event: Record, repo: str) -> Record | None:
     if (
         not trusted_run(actual, repo)
         or actual["status"] != "completed"
-        or actual.get("conclusion") != "failure"
+        or actual.get("conclusion") not in ("failure", "success")
     ):
         return None
     if actual["id"] != identity:

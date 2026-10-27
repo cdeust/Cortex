@@ -24,7 +24,7 @@ jobs:
        && github.event.comment.user.login == 'chatgpt-codex-connector[bot]'
        && github.event.comment.user.type == 'Bot')
       || (github.event_name == 'workflow_run'
-       && github.event.workflow_run.conclusion == 'failure'
+       && contains(fromJSON('["success", "failure"]'), github.event.workflow_run.conclusion)
        && github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
     outputs:

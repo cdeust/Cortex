@@ -28,6 +28,11 @@ def candidates(pulls: list[dict], issues: list[dict]) -> list[dict]:
         ):
             continue
         indexed = {row.get("name", row.get("context")): row for row in checks}
+        if (
+            indexed.get("merge pending review", {}).get("conclusion") == "SUCCESS"
+            and "merge" not in indexed
+        ):
+            continue
         ready = indexed.get("merge", {}).get("conclusion") == "SUCCESS"
         result.append(
             {

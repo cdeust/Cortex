@@ -163,6 +163,11 @@ jobs:
               # Source: the owner's single-push contract requires every author
               # to complete review. Overall success alone accepts skipped jobs.
               required = ["contract", "unit", "regression", "e2e", "review", "merge"]
+              pending = not any(job.get("name") == "merge" for job in jobs) and any(
+                  job.get("name") == "merge pending review" for job in jobs
+              )
+              if pending:
+                  required[-1] = "merge pending review"
               for category in ("environment", "install"):
                   expected = {
                       f"{category} ({runner})"
@@ -189,6 +194,7 @@ jobs:
                       job.get("status") == "completed" and allowed,
                       f"source merge gate requires completed {name}",
                   )
+              return pending
 
 
           def _pr_identity(pr, repository, head):
@@ -251,7 +257,8 @@ jobs:
               jobs = _effective_jobs(
                   api.records(f"{prefix}/actions/runs/{run['id']}/jobs?filter=all", "jobs"), run
               )
-              _validate_jobs(jobs, run.get("actor", {}).get("login"))
+              if _validate_jobs(jobs, run.get("actor", {}).get("login")):
+                  run["review_pending"] = True
 
               return run
 
@@ -355,6 +362,13 @@ jobs:
           def resolve(event, repository: str, api: GitHub):
               run = _source_run(event, repository, api)
               number, pr = _pull_request(run, repository, api)
+              if run.get("review_pending"):
+                  return {
+                      "tested_sha": run["head_sha"],
+                      "run_tests": "false",
+                      "pr_number": str(number),
+                      "reason": "Tests passed; native Codex reviews pending",
+                  }
               pr_path = f"/repos/{repository}/pulls/{number}"
               already_merged = pr.get("merged") is True
               if already_merged:

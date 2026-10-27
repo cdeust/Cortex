@@ -44,6 +44,9 @@ class CodexWiringTests(unittest.TestCase):
         merge = text.split("\n  merge:\n", 1)[1]
         self.assertIn("      - name: Require complete Codex reviews\n", merge)
         self.assertIn("CODEX_COMPLETION_ONLY: 'false'", merge)
+        self.assertIn("if: needs.review.outputs.state != 'pending'", merge)
+        self.assertIn("needs.review.outputs.state == 'pending'", merge)
+        self.assertIn("'merge pending review' || 'merge'", merge)
 
     def test_current_clean_and_pending_evidence_with_poisoned_checkout(self):
         for completed in (True, False):
@@ -64,7 +67,16 @@ class CodexWiringTests(unittest.TestCase):
                 )
                 self.assertNotIn("candidate", result.stderr)
 
-    def run_gate(self, root, completed):
+    def test_pending_observation_is_green_but_does_not_authorize_merge(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.seed_comments(root, False)
+            result = self.run_gate(root, False, completion_only=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("state=pending", (root / "output").read_text())
+            self.assertIn("ready=false", (root / "output").read_text())
+
+    def run_gate(self, root, completed, completion_only=False):
         repo = {"full_name": "cdeust/Cortex"}
         pull = {
             "state": "open",
@@ -91,7 +103,8 @@ class CodexWiringTests(unittest.TestCase):
                 "GH_REPO": "cdeust/Cortex",
                 "PR": "797",
                 "HEAD_SHA": SHA,
-                "CODEX_COMPLETION_ONLY": "false",
+                "CODEX_COMPLETION_ONLY": str(completion_only).lower(),
+                "GITHUB_OUTPUT": str(root / "output"),
             },
             capture_output=True,
             text=True,

@@ -93,6 +93,15 @@ class ResumePolicyTests(unittest.TestCase):
     def test_clean_complete_reviews_resume_failed_merge_only(self):
         self.assertEqual(self.plan(), {"action": "merge", "job_id": 21})
 
+    def test_clean_completion_resumes_green_pipeline_that_waited_for_review(self):
+        current = jobs()
+        current[-1].update(name="merge pending review", conclusion="success", steps=[])
+        source = {**run(), "conclusion": "success"}
+        self.assertEqual(
+            self.plan(source=source, job_list=current),
+            {"action": "review", "job_id": 20},
+        )
+
     def test_complete_reviews_resume_readiness_for_fix_even_with_findings(self):
         for state in ("success", "blocked"):
             self.assertEqual(
