@@ -965,6 +965,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+      actions: read
     steps:
       - name: Require completed tests and review
         env:
@@ -1002,10 +1003,14 @@ jobs:
           CODEX_COMPLETION_ONLY: 'false'
         run: *codex_review_reader
 
-      # Verdict: a claude[bot] review on this exact commit_id, COMMENTED or APPROVED
-      # (GitHub refuses self-approval on claude[bot] PRs), whose body carries
-      # <!-- claude-review:v1 kind=code|security findings=N -->. The latest review per
-      # kind decides; the gate counts tag-triggered and automatic reviews alike.
+      # The Claude reviews run in claude.yml beside this pipeline (workflow_run, run name
+      # "Claude review of Pipeline run <id>"). Wait on that run to finish, with no time
+      # budget, so a late verdict never strands the gate. It must have succeeded, which
+      # means both execution validators passed. Then accept only claude[bot] reviews on
+      # this exact commit_id, COMMENTED or APPROVED (GitHub refuses self-approval on
+      # claude[bot] PRs), whose body carries
+      # <!-- claude-review:v1 kind=code|security findings=N -->. The latest review per kind
+      # decides; tag-triggered and automatic reviews count alike.
       - name: Require complete Claude verdicts
         env:
           GH_TOKEN: ${{ github.token }}
@@ -1014,6 +1019,11 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
+          title="Claude review of Pipeline run $GITHUB_RUN_ID"
+          claude_run="$(gh run list --workflow claude.yml --event workflow_run --limit 100 --json databaseId,displayTitle --jq "[.[] | select(.displayTitle == \"$title\")][0].databaseId // empty")"
+          [ -n "$claude_run" ] || { echo "::error::No Claude review run named '$title'; the review never started."; exit 1; }
+          gh run watch "$claude_run" --interval 30 >/dev/null
+          [ "$(gh run view "$claude_run" --json conclusion --jq .conclusion)" = success ] || { echo "::error::Claude review run $claude_run did not succeed, so its execution validation failed or never ran."; exit 1; }
           gh api --paginate "repos/$GH_REPO/pulls/$PR/reviews" | jq -s 'add // []' > "$RUNNER_TEMP/reviews.json"
           jq -e --arg sha "$HEAD_SHA" '
             [.[] | select(.user.login == "claude[bot]" and .user.type == "Bot"

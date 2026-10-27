@@ -1,4 +1,6 @@
 name: Claude Code
+# The merge gate in pipeline.yml finds this run by its name: keep both in sync.
+run-name: ${{ github.event_name == 'workflow_run' && format('Claude review of Pipeline run {0}', github.event.workflow_run.id) || 'Claude Code' }}
 
 # @claude on a PR or issue: Claude can fetch, rebase, test, push and arm
 # auto-merge. Every push also gets the two native Claude reviews (code, security)
@@ -84,6 +86,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          # The native security-review skill diffs against origin/HEAD, unset after checkout.
+          git remote set-head origin main
           live="$(gh pr view "$PR" --json state,isDraft,headRefOid --jq '[.state,.isDraft,.headRefOid]|@tsv')"
           [ "$live" = "$(printf 'OPEN\tfalse\t%s' "$HEAD_SHA")" ] || { echo "::error::PR $PR is not an open non-draft PR at $HEAD_SHA; a newer run reviews it."; exit 1; }
           gh pr diff "$PR" > "$RUNNER_TEMP/pr.diff"
@@ -96,7 +100,7 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           plugin_marketplaces: "https://github.com/anthropics/claude-code.git"
           plugins: "code-review@claude-code-plugins"
-          allowed_bots: "dependabot[bot],chatgpt-codex-connector[bot]"
+          allowed_bots: "claude[bot],chatgpt-codex-connector[bot],dependabot[bot]"
           prompt: |
             Review ${{ github.repository }}/pull/${{ env.PR }} at head ${{ env.HEAD_SHA }}.
             Perform the full native review on this exact head, including dependency and Claude-authored PRs, despite earlier Claude comments or earlier-head reviews: they never exempt the current head from step 1 eligibility or from any later step.
@@ -118,7 +122,7 @@ jobs:
         uses: anthropics/claude-code-action@aa8a7738e48bf30a40ee499ce818bef081c5ab5e # v1.0.257
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          allowed_bots: "dependabot[bot],chatgpt-codex-connector[bot]"
+          allowed_bots: "claude[bot],chatgpt-codex-connector[bot],dependabot[bot]"
           prompt: |
             Review ${{ github.repository }}/pull/${{ env.PR }} at head ${{ env.HEAD_SHA }}.
             Perform the full native review on this exact head, including dependency and Claude-authored PRs, despite earlier Claude comments or earlier-head reviews: they never exempt the current head.

@@ -106,3 +106,9 @@ is `COMMENTED` or `APPROVED` (GitHub refuses self-approval on PRs authored by
 kind decides and `N` must be `0`. Reviews started by an `@claude` tag and by the
 automatic `claude.yml` review job count alike. Publish with
 `gh api -X POST repos/OWNER/REPO/pulls/N/reviews -f commit_id=SHA -f event=COMMENT -F body=@file`.
+
+The gate first waits, without a time budget, for the `claude.yml` run named
+`Claude review of Pipeline run <pipeline run id>` (the `run-name` of that workflow)
+and requires it to have succeeded, which means both execution validators passed.
+A late verdict therefore never strands the merge job. `claude[bot]` is in
+`allowed_bots` so a repair pushed by the Fix action is reviewed too.
