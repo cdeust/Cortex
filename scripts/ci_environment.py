@@ -128,10 +128,13 @@ def check(work: Path) -> int:
     import launcher_backend  # noqa: PLC0415 — requires the installed runtime
     import launcher_pg_provision  # noqa: PLC0415 — requires the installed runtime
     from mcp_server import doctor  # noqa: PLC0415 — must observe the isolated home
+    from mcp_server.shared.platform import resolve_bash  # noqa: PLC0415 — requires the checked-out runtime
     from mcp_server.infrastructure import backend_marker, managed_pg  # noqa: PLC0415 — must observe the isolated home
 
     paths = managed_pg.root_under(backend_marker.BACKEND_MARKER_PATH.parent)
     try:
+        # Exercise the actual host binary, including Git Bash on Windows.
+        subprocess.run([resolve_bash(), "-c", "exit 0"], check=True)
         outcome = launcher_pg_provision.setup_step(str(work / "data"), print)
         launcher_backend.apply()
         require_backend(

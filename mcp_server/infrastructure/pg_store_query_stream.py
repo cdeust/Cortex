@@ -11,7 +11,7 @@ from mcp_server.infrastructure.pg_store_host import PgStoreHost
 
 
 class PgQueryStreamMixin(PgStoreHost):
-    """Keyset-paginated / server-side-cursor streaming memory reads."""
+    """Keyset-paginated memory reads that release connections before yielding."""
 
     def _fetch_hot_page(
         self,
@@ -83,38 +83,48 @@ class PgQueryStreamMixin(PgStoreHost):
         remaining = cap - yielded
         return min(page, remaining) if remaining > 0 else None
 
-    def _stream_decay_cursor_chunks(
-        self, chunk_size: int
-    ) -> "Iterator[list[dict[str, Any]]]":
-        """Server-side-cursor half of ``iter_memories_for_decay`` (pool
-                enabled path).
+    def _stream_decay_pages(self, chunk_size: int) -> "Iterator[list[dict[str, Any]]]":
+        """Materialize one batch page before returning control to the consumer.
 
-        source: ADR-0561"""
-        with (
-            self.batch_pool.connection() as conn,
-            conn.transaction(),
-            conn.cursor(name="decay_stream") as cur,
-        ):
-            cur.itersize = chunk_size
-            cur.execute("SELECT * FROM memories WHERE NOT is_stale")
-            chunk: list[dict[str, Any]] = []
-            for row in cur:
-                chunk.append(self._normalize_memory_row(dict(row)))
-                if len(chunk) >= chunk_size:
-                    yield chunk
-                    chunk = []
-            if chunk:
-                yield chunk
+        source: ADR-0561 keyset precedent; PR776 transaction regression."""
+        page = int(chunk_size)
+        if page <= 0:
+            raise ValueError("chunk_size must be positive")
+        with self.batch_pool.connection() as conn:
+            upper_id = conn.execute(
+                "SELECT max(id) AS id FROM memories WHERE NOT is_stale"
+            ).fetchall()[0]["id"]
+        if upper_id is None:
+            return
+        last_id: int | None = None
+        while True:
+            query = (
+                "SELECT * FROM memories WHERE NOT is_stale AND id <= %s "
+                "ORDER BY id LIMIT %s"
+                if last_id is None
+                else "SELECT * FROM memories WHERE NOT is_stale AND id <= %s "
+                "AND id > %s ORDER BY id LIMIT %s"
+            )
+            params = (upper_id, page) if last_id is None else (upper_id, last_id, page)
+            with self.batch_pool.connection() as conn:
+                rows = conn.execute(query, params).fetchall()
+            if not rows:
+                return
+            chunk = [self._normalize_memory_row(dict(row)) for row in rows]
+            last_id = chunk[-1]["id"]
+            yield chunk
+            if len(chunk) < page:
+                return
 
     def iter_memories_for_decay(
         self,
         chunk_size: int = 1000,
     ) -> "Iterator[list[dict[str, Any]]]":
-        """Stream active memories in chunks via server-side cursor.
+        """Read active memories in ID order, without a cross-page snapshot.
 
         source: ADR-0561"""
         if get_memory_settings().POOL_DISABLED:
             # Kill-switch path: materialize in one call for compat.
             yield self.get_all_memories_for_decay()
             return
-        yield from self._stream_decay_cursor_chunks(chunk_size)
+        yield from self._stream_decay_pages(chunk_size)

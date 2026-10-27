@@ -42,9 +42,13 @@ def read_schema_hash(conn: psycopg.Connection[DictRow]) -> str | None:
 
     source: ADR-0545"""
     try:
-        row = conn.execute("SELECT ddl_hash FROM schema_meta WHERE id = 1;").fetchone()
+        # A missing table must not abort an enclosing migration transaction.
+        with conn.transaction():
+            row = conn.execute(
+                "SELECT ddl_hash FROM schema_meta WHERE id = 1;"
+            ).fetchone()
         return row["ddl_hash"] if row else None
-    except psycopg.Error:
+    except psycopg.errors.UndefinedTable:
         return None
 
 
@@ -107,9 +111,6 @@ class PgDdlMixin(PgStoreHost):
                     "DEALLOCATE ALL during stale-plan recovery failed: %s", exc
                 )
             cur = conn.execute(typed_query, params, **kwargs)
-        except psycopg.OperationalError:
-            logger.warning("Database connection lost on pool checkout, retrying")
-            cur = conn.execute(typed_query, params, **kwargs)
         return MaterializedCursor(cur)
 
     # source: ADR-0545
@@ -145,8 +146,8 @@ class PgDdlMixin(PgStoreHost):
                 per schema REVISION, not once per ``MemoryStore``.
 
                 Pre: self._conn is a live psycopg connection (autocommit).
-                Post: schema is at the code's revision; advisory lock released
-                even on failure (try/finally, inside ``_apply_ddl_locked``).
+                Post: schema is at the code's revision; failed DDL rolls back
+                without recording the revision or retaining the advisory lock.
 
         source: ADR-0545"""
         ddl_list = get_all_ddl()
@@ -158,33 +159,19 @@ class PgDdlMixin(PgStoreHost):
         self._apply_ddl_locked(ddl_list, ddl_hash)
 
     def _apply_ddl_locked(self, ddl_list: list[LiteralString], ddl_hash: str) -> None:
-        """Serialize DDL application under the schema advisory lock.
+        """Apply DDL and its revision atomically under a transaction lock.
 
         source: ADR-0545"""
-        self._conn.execute("SELECT pg_advisory_lock(%s);", (self._SCHEMA_LOCK_ID,))
-        try:
+        with self._conn.transaction():
+            self._conn.execute(
+                "SELECT pg_advisory_xact_lock(%s);", (self._SCHEMA_LOCK_ID,)
+            )
             # A peer may have applied the new revision while we waited.
             if self._recorded_schema_hash() == ddl_hash:
                 return
             for ddl in ddl_list:
-                try:
-                    self._conn.execute(ddl)
-                except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
-                    logger.warning(
-                        "Schema statement failed: %s — %s",
-                        ddl.split("\n")[0][:50],
-                        exc,
-                    )
+                self._conn.execute(ddl)
             self._record_schema_hash(ddl_hash)
-            self._conn.commit()
-        finally:
-            try:
-                self._conn.execute(
-                    "SELECT pg_advisory_unlock(%s);", (self._SCHEMA_LOCK_ID,)
-                )
-                self._conn.commit()
-            except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
-                logger.warning("Failed to release schema advisory lock: %s", exc)
 
     @property
     def has_vec(self) -> bool:

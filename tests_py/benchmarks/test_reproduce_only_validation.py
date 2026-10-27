@@ -13,6 +13,10 @@ from pathlib import Path
 import subprocess
 
 import pytest
+from mcp_server.shared.platform import resolve_bash
+
+# A bare "bash" on Windows is the System32 WSL stub. source: ADR-1101
+BASH = resolve_bash()
 
 REPO = Path(__file__).resolve().parents[2]
 LIBRARY = REPO / "benchmarks/lib/bench_only.sh"
@@ -22,7 +26,7 @@ SCRIPT = REPO / "benchmarks/reproduce.sh"
 def _validate(only: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [
-            "bash",
+            BASH,
             "-c",
             'source "$1"; ONLY="$2"; validate_only && printf "%s" "$ONLY"',
             "bash",
@@ -76,7 +80,7 @@ def test_cleaned_leg_runs_only_when_named(only: str, selected: bool) -> None:
     """An empty --only keeps the historical set; the cleaned leg is opt-in."""
     done = subprocess.run(
         [
-            "bash",
+            BASH,
             "-c",
             'source "$1"; ONLY="$2"; want_bench_explicit longmemeval-cleaned',
             "bash",
@@ -109,7 +113,7 @@ def test_script_rejects_an_unknown_selector_before_doing_anything(
     out = tmp_path / "out"
     done = subprocess.run(
         [
-            "bash",
+            BASH,
             str(SCRIPT),
             "--only",
             "bogus",
