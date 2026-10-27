@@ -18,3 +18,5 @@ The filename uses the local Europe/Paris date, October 28. UTC was still October
 The regenerated Pipeline also replaces four version-only global CLI installs with npm ci against committed SHA512 package integrity hashes. The canonical renderer ships the private CLI manifest and lockfile to each native-profile consumer. Actual isolated installation returned Claude Code 2.1.306 without invoking a model; evidence is preserved in native-cli-integrity-20261028.json.
 
 Regression initially failed twice for explicit token and target event. Hosted attribution remains pending.
+
+Owner model selection: both workflows use `claude-opus-5-5`, verified against the [official Opus 5.5 model identifier](https://platform.claude.com/docs/en/models/opus-5-5/overview). The five unchanged Anthropic reviewer definitions use `model: inherit`.
