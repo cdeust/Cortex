@@ -60,21 +60,31 @@ jobs:
           python3 - <<'PYDIAG'
           import json, os
           from pathlib import Path
-          # SDK execution_file schema: anthropics/claude-code-action base-action/src/execution-file.ts.
-          messages = json.loads(Path(os.environ["EXECUTION_FILE"]).read_text())
-          known = {"Read", "Glob", "Grep", "Bash", "Skill", "Agent", "Task", "mcp__github_inline_comment__create_inline_comment"}
-          keywords = ("permission", "not found", "unknown", "draft", "skip", "auth", "token", "repository", "argument", "cannot", "sandbox", "network", "confirmation", "approve", "usage", "invalid", "review-pr", "help", "empty", "prompt", "socat", "bwrap", "namespace", "operation not permitted", "no such file", "permission denied", "mcp.json")
-          for message in messages:
-              for block in message.get("message", {}).get("content", []):
-                  if not isinstance(block, dict):
-                      continue
-                  if block.get("type") == "tool_use":
-                      name = block.get("name")
-                      print(json.dumps({"tool": name if name in known else "other"}))
-                  if block.get("type") == "tool_result":
-                      content = str(block.get("content", "")).lower()
-                      print(json.dumps({"tool_error": block.get("is_error") is True, "keywords": {word: word in content for word in keywords}}))
-              if message.get("type") == "result":
-                  content = str(message.get("result", "")).lower()
-                  print(json.dumps({"result_error": message.get("is_error") is True, "keywords": {word: word in content for word in keywords}}))
+          # Source: official action execution_file SDK message array and permission_denials.
+          stack = [json.loads(Path(os.environ["EXECUTION_FILE"]).read_text())]
+          known = {"Read", "Glob", "Grep", "Bash", "Skill", "Agent", "Task", "TaskOutput", "mcp__github_inline_comment__create_inline_comment"}
+          keywords = ("permission", "draft", "skip", "sandbox", "cannot", "unknown", "not found", "auth", "token", "argument", "review-pr", "agent", "denied", "network", "approve", "gh pr comment")
+          commands = ("gh pr view", "gh pr diff", "gh pr comment", "gh api", "git diff", "git log", "git show", "cat ", "ls ", "pwd")
+          while stack:
+              item = stack.pop()
+              if isinstance(item, list):
+                  stack.extend(reversed(item))
+                  continue
+              if not isinstance(item, dict):
+                  continue
+              kind = item.get("type")
+              if kind == "tool_use" or "tool_name" in item:
+                  name = item.get("name", item.get("tool_name"))
+                  args = item.get("input", item.get("tool_input", {}))
+                  command = str(args.get("command", "")) if isinstance(args, dict) else ""
+                  print(json.dumps({"tool": name if name in known else "other", "denied": "tool_name" in item, "command_categories": {value: command.startswith(value) for value in commands}}))
+              if kind in {"result", "tool_result"}:
+                  content = str(item.get("result", item.get("content", ""))).lower()
+                  print(json.dumps({"terminal": kind == "result", "error": item.get("is_error") is True, "keywords": {word: word in content for word in keywords}}))
+              if kind == "result":
+                  stack.extend(reversed(item.get("permission_denials", [])))
+              if "message" in item:
+                  stack.append(item["message"])
+              if "content" in item and isinstance(item["content"], list):
+                  stack.extend(reversed(item["content"]))
           PYDIAG
