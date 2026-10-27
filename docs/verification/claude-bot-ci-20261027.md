@@ -128,6 +128,7 @@ activation PR itself, held open on purpose:
 | Coordinator msg_037967ba0159 (a): publication check counts unbound markers; bind to run attempt | valid | `test_ci_claude_review_publication.py::test_unbound_or_other_attempt_markers_do_not_fail_this_attempt`, `test_ci_claude_reviews.py::ProvenanceTests::test_citation_of_another_attempt_is_unbound` | marker cites `<run id>-<attempt>`; jobs read from `/attempts/<n>/jobs`; `published()` counts only this attempt's markers |
 | Coordinator msg_037967ba0159 (b): verdict files may never be created | valid (scoped Edit creating an absent file under dontAsk is unproven) | `test_ci_claude_workflow.py::test_trusted_preparation_creates_both_verdict_files`, `test_ci_claude_review_publication.py::test_absent_verdict_file_fails_closed` | preparation step pre-creates both files; absent or empty fails `--published` |
 | Coordinator msg_bf2bf23dfa88: a failed attempt hardlocks the head (no retry, duplicate with the retry) | valid | `test_ci_claude_recovery.py` (5 of 6 fail on af490f5d; the same-attempt conflict guard passes on both) | `_validation`/`_kind_state` in `scripts/ci_claude_reviews.py` supersede failed attempts; `missing()` retries `retry` kinds |
+| Codex 4389808387: `issues: assigned` lets the owner's assignment run Claude on an external author's issue text | valid: the job authorised the sender (assigner), not the author; upstream tag mode reads "the entire issue body" for assigned issues (`src/create-prompt/index.ts:733`) | `test_ci_claude_workflow.py::test_owner_assigning_an_external_issue_never_runs_claude` (fails on 3f4e768b: `AssertionError: True is not false`) | `issues` triggers only on `opened`, and that route also requires `github.event.issue.user.login == github.repository_owner` |
 | Own review: gate variants silently disable the gate | valid | `test_ci_claude_review_gate.py::test_gate_line_decides_activation` | `declares_required` fails loudly on unrecognised lines |
 
 ## Threat model (STRIDE) of the privileged path
@@ -150,7 +151,9 @@ activation PR itself, held open on purpose:
 Residual, recorded rather than closed here: a marker citing a genuine attempt
 of the same head, posted by the owner's @claude session, fails that kind closed
 (blocked until a new head); a review body above GitHub's size limit is
-rejected by the POST and stays pending (verify turns red).
+rejected by the POST and stays pending (verify turns red); when the owner
+writes `@claude` in a comment on a thread opened by someone else, tag mode
+also reads that thread's text, so the owner chooses to expose the run to it.
 
 Not yet measured: how a claude.yml `workflow_run` started by a Dependabot PR's
 Pipeline behaves on GitHub (secret availability, App token exchange, the

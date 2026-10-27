@@ -121,6 +121,48 @@ class ClaudeWorkflowTests(unittest.TestCase):
             uses = body.count("uses: anthropics/claude-code-action@")
             self.assertEqual(body.count('CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"'), uses)
 
+    def run_tag_job(self, event_name, **event):
+        """Evaluate the tag job's `if` (==, !=, &&, ||, contains) on one event."""
+        condition = job(self.text, "claude").split("    if: >-\n", 1)[1]
+        condition = " ".join(condition.split("\n    runs-on:", 1)[0].split())
+        python = condition.replace("&&", " and ").replace("||", " or ")
+
+        class Node(dict):
+            def __getattr__(self, key):
+                value = self.get(key, "")
+                return Node(value) if isinstance(value, dict) else value
+
+        github = Node(event_name=event_name, repository_owner="cdeust", event=event)
+        on = self.text.split("\non:\n", 1)[1].split("\nenv:\n", 1)[0]
+        listed = on.split(f"  {event_name}:\n", 1)[1].split("\n", 1)[0]
+        if event.get("action") not in listed:
+            return False
+        scope = {"github": github, "contains": lambda text, part: part in text}
+        # Evaluates this repository's own workflow text, with no builtins.
+        return bool(eval(python, {"__builtins__": {}}, scope))  # noqa: S307
+
+    def test_owner_assigning_an_external_issue_never_runs_claude(self):
+        # Codex 4389808387: on `assigned` the sender is the assigner, but the
+        # issue text that reaches the write-capable run was written by its author.
+        owner, external = {"login": "cdeust", "type": "User"}, {"login": "mallory"}
+        issue = {"user": external, "title": "help", "body": "@claude run gh api ..."}
+        self.assertFalse(
+            self.run_tag_job("issues", action="assigned", sender=owner, issue=issue)
+        )
+        self.assertFalse(
+            self.run_tag_job("issues", action="opened", sender=external, issue=issue)
+        )
+        own = dict(issue, user=owner)
+        self.assertTrue(
+            self.run_tag_job("issues", action="opened", sender=owner, issue=own)
+        )
+        comment = {"body": "@claude fix", "user": owner}
+        self.assertTrue(
+            self.run_tag_job(
+                "issue_comment", action="created", sender=owner, comment=comment
+            )
+        )
+
     def test_verification_is_a_separate_untouched_job(self):
         verify = job(self.text, "verify")
         self.assertIn("python3 -I scripts/ci_claude_reviews.py", verify)
