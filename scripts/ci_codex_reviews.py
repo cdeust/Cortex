@@ -12,13 +12,18 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import re
-import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+# CLI callers execute this trusted file; the isolated workflow preloads its
+# exact embedded runtime, so candidate checkout imports are never consulted.
+if "ci_codex_review_runtime" not in sys.modules:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+import ci_codex_review_runtime as runtime  # noqa: E402
+from ci_codex_review_runtime import _outputs  # noqa: E402
 
 Record = dict[str, Any]
 SUMMARY = "<!-- codex-pull-request-review-summary -->"
@@ -30,35 +35,27 @@ REPO_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+")
 STAMP_PATTERN = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z")
 
 
-class EvidenceError(ValueError):
-    """Only fixed diagnostic categories may cross the CLI boundary."""
+class EvidenceError(runtime.EvidenceError):
+    """Preserve the evidence-reader exception interface for its event callers."""
+
+
+def _json(text: str) -> Any:
+    try:
+        return runtime._json(text)
+    except runtime.EvidenceError as exc:
+        raise EvidenceError(str(exc)) from exc
+
+
+def _api(endpoint: str, *, paginate: bool = False) -> Any:
+    try:
+        return runtime._api(endpoint, paginate=paginate)
+    except runtime.EvidenceError as exc:
+        raise EvidenceError(str(exc)) from exc
 
 
 class Parser(argparse.ArgumentParser):
     def error(self, message: str) -> None:
         raise EvidenceError("arguments")
-
-
-def _pairs(items: list[tuple[str, Any]]) -> Record:
-    value: Record = {}
-    for key, item in items:
-        if key in value:
-            raise EvidenceError("protocol")
-        value[key] = item
-    return value
-
-
-def _invalid_constant(value: str) -> None:
-    raise EvidenceError("protocol")
-
-
-def _json(text: str) -> Any:
-    try:
-        return json.loads(
-            text, object_pairs_hook=_pairs, parse_constant=_invalid_constant
-        )
-    except (ValueError, RecursionError, TypeError) as exc:
-        raise EvidenceError("protocol") from exc
 
 
 def _result(sha: str) -> Record:
@@ -155,7 +152,29 @@ def _review(value: Any, expected_sha: str) -> tuple[str, Record]:
     return ("unresolved" if clean["has_unresolved_findings"] else "success"), clean
 
 
-def review_evidence(comments: list[Record], expected_sha: str) -> Record:
+def _reviews(latest, target):
+    expected_sha, repo, pr = target
+    reviews = {}
+    data = _marker(latest["body"], "codex-review-state", True)
+    security = _marker(latest["body"], "codex-security-review", False)
+    states = []
+    for kind in KINDS:
+        state, reviews[kind] = _review(data.get(kind), expected_sha)
+        proof = None
+        if kind == "security_review" and state == "pending" and repo and pr:
+            proof = runtime.resolve_security(
+                (repo, pr, expected_sha), latest["body"], reviews[kind], security
+            )
+        if proof is not None:
+            state = proof.pop("state")
+            reviews[kind]["resolution"] = proof
+        states.append(state)
+    return states, reviews
+
+
+def review_evidence(
+    comments: list[Record], expected_sha: str, repo=None, pr=None
+) -> Record:
     """Require both current reviews; never fall back from a newer invalid summary."""
     valid_sha = isinstance(expected_sha, str) and SHA_PATTERN.fullmatch(expected_sha)
     result = _result(expected_sha if valid_sha else "")
@@ -171,12 +190,8 @@ def review_evidence(comments: list[Record], expected_sha: str) -> Record:
         result.update(comment_id=latest["id"], updated_at=latest["updated_at"])
         if latest["body"].count(SUMMARY) != 1:
             raise EvidenceError("protocol")
-        data = _marker(latest["body"], "codex-review-state", True)
-        _marker(latest["body"], "codex-security-review", False)
-        states = []
-        for kind in KINDS:
-            state, result[kind] = _review(data.get(kind), expected_sha)
-            states.append(state)
+        states, details = _reviews(latest, (expected_sha, repo, pr))
+        result.update(details)
         result["reviews_complete"] = all(s in ("success", "unresolved") for s in states)
         result["state"] = (
             "blocked"
@@ -188,19 +203,9 @@ def review_evidence(comments: list[Record], expected_sha: str) -> Record:
             "pending": "review_pending",
             "success": "reviews_complete",
         }[result["state"]]
-    except EvidenceError as exc:
+    except runtime.EvidenceError as exc:
         result.update(state="blocked", reason=str(exc), reviews_complete=False)
     return result
-
-
-def _api(endpoint: str, *, paginate: bool = False) -> Any:
-    # https://cli.github.com/manual/gh_api: --slurp wraps all paginated pages.
-    command = ["gh", "api", *(["--paginate", "--slurp"] if paginate else []), endpoint]
-    try:
-        done = subprocess.run(command, text=True, capture_output=True, check=True)
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise EvidenceError("api") from exc
-    return _json(done.stdout)
 
 
 def _eligible(pull: Any, repo: str, sha: str) -> None:
@@ -234,7 +239,9 @@ def _fetch(args: argparse.Namespace) -> Record:
     pages = _api(f"repos/{args.repo}/issues/{args.pr}/comments", paginate=True)
     if not isinstance(pages, list) or any(not isinstance(page, list) for page in pages):
         raise EvidenceError("protocol")
-    result = review_evidence([comment for page in pages for comment in page], args.sha)
+    result = review_evidence(
+        [comment for page in pages for comment in page], args.sha, args.repo, args.pr
+    )
     _eligible(_api(endpoint), args.repo, args.sha)
     return result
 
@@ -258,21 +265,6 @@ def _arguments(argv: list[str] | None) -> argparse.Namespace:
     return args
 
 
-def _outputs(result: Record) -> None:
-    path = os.environ.get("GITHUB_OUTPUT")
-    if not path:
-        raise EvidenceError("output")
-    text = (
-        f"ready={str(result['state'] == 'success').lower()}\n"
-        f"state={result['state']}\nsha={result['sha']}\ncomment_id={result['comment_id']}\n"
-    )
-    try:
-        with Path(path).open("a", encoding="utf-8") as output:
-            output.write(text)
-    except OSError as exc:
-        raise EvidenceError("output") from exc
-
-
 def main(argv: list[str] | None = None) -> int:
     try:
         args = _arguments(argv)
@@ -289,7 +281,7 @@ def main(argv: list[str] | None = None) -> int:
         ):
             return 0
         return {"success": 0, "pending": 2, "blocked": 1}[result["state"]]
-    except EvidenceError as exc:
+    except runtime.EvidenceError as exc:
         print(f"codex reviews: {exc}", file=sys.stderr)
         return 1
 

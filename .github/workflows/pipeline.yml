@@ -578,45 +578,32 @@ jobs:
           args=(--repo "$GH_REPO" --pr "$PR" --sha "$HEAD_SHA" --github-output)
           if [ "$CODEX_COMPLETION_ONLY" = true ]; then args+=(--require-complete --allow-pending); fi
           python3 -I - "${args[@]}" <<'CODEX_REVIEW_PY'
-          #!/usr/bin/env python3
-          """Read authenticated native Codex review evidence for one immutable PR head.
+          import sys
+          from types import ModuleType
 
-          Protocol: Cortex PR797 bot comment6428675514, captured in
-           tasks/ci-review-evidence-codex-{711f0ede,57e4c1d}.json. Native automation:
-          https://learn.chatgpt.com/docs/third-party/github
-          https://learn.chatgpt.com/docs/security/security-review
-          This validates completion metadata, not semantic review quality.
+          RUNTIME_SOURCE = r'''
+          """Trusted Codex review I/O and nullable security-resolution proof.
+
+          Sources: PR805 summary6442631163 on0134b085 and authenticated GraphQL
+          reviewThreads.isResolved, author.__typename and comment.databaseId.
+          https://docs.github.com/en/graphql/guides/using-pagination-in-the-graphql-api
+          https://cli.github.com/manual/gh_api
           """
 
           from __future__ import annotations
 
-          import argparse
           import json
           import os
           import re
           import subprocess
-          import sys
-          from datetime import datetime
           from pathlib import Path
           from typing import Any
 
           Record = dict[str, Any]
-          SUMMARY = "<!-- codex-pull-request-review-summary -->"
-          BOT = "chatgpt-codex-connector[bot]"
-          KINDS = ("code_review", "security_review")
-          FAILED = ("failed", "error", "cancelled")
-          SHA_PATTERN = re.compile(r"[0-9a-f]{40}")
-          REPO_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+")
-          STAMP_PATTERN = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z")
 
 
           class EvidenceError(ValueError):
               """Only fixed diagnostic categories may cross the CLI boundary."""
-
-
-          class Parser(argparse.ArgumentParser):
-              def error(self, message: str) -> None:
-                  raise EvidenceError("arguments")
 
 
           def _pairs(items: list[tuple[str, Any]]) -> Record:
@@ -639,6 +626,224 @@ jobs:
                   )
               except (ValueError, RecursionError, TypeError) as exc:
                   raise EvidenceError("protocol") from exc
+
+
+          def _api(endpoint: str, *, paginate: bool = False, fields: Record | None = None) -> Any:
+              # https://cli.github.com/manual/gh_api: --slurp wraps all paginated pages.
+              command = ["gh", "api", *(["--paginate", "--slurp"] if paginate else []), endpoint]
+              for key, value in (fields or {}).items():
+                  flag = "--field" if type(value) is int else "--raw-field"
+                  command.extend((flag, f"{key}={value}"))
+              try:
+                  done = subprocess.run(command, text=True, capture_output=True, check=True)
+              except (OSError, subprocess.SubprocessError) as exc:
+                  raise EvidenceError("api") from exc
+              return _json(done.stdout)
+
+
+          def _outputs(result: Record) -> None:
+              path = os.environ.get("GITHUB_OUTPUT")
+              if not path:
+                  raise EvidenceError("output")
+              text = (
+                  f"ready={str(result['state'] == 'success').lower()}\n"
+                  f"state={result['state']}\nsha={result['sha']}\ncomment_id={result['comment_id']}\n"
+              )
+              try:
+                  with Path(path).open("a", encoding="utf-8") as output:
+                      output.write(text)
+              except OSError as exc:
+                  raise EvidenceError("output") from exc
+
+
+          # first:100 is GitHub's documented maximum connection page, not a score threshold.
+          THREAD_QUERY = """
+          query($owner: String!, $name: String!, $number: Int!, $endCursor: String) {
+            repository(owner: $owner, name: $name) {
+              pullRequest(number: $number) {
+                headRefOid
+                reviewThreads(first:100, after:$endCursor) {
+                  pageInfo { hasNextPage endCursor }
+                  nodes {
+                    isResolved
+                    comments(first:1) { nodes { databaseId body author { login __typename } } }
+                  }
+                }
+              }
+            }
+          }
+          """
+          FINDING = "<!-- codex-security-review-finding:v1 -->"
+
+
+          def _announced(body: str, repo: str, pr: int) -> set[int]:
+              """Require a nonempty, fully enumerated native security finding list."""
+              heading = "\n### Security findings\n"
+              if body.count(heading) != 1:
+                  return set()
+              section = body.split(heading, 1)[1].split("\n<details>", 1)[0]
+              counts = re.findall(
+                  r"^#### (?:Blocking|Advisory) findings \(([0-9]+)\)$", section, re.M
+              )
+              prefix = re.escape(f"https://github.com/{repo}/pull/{pr}#discussion_r")
+              ids = re.findall(prefix + r"([1-9][0-9]*)\)", section)
+              try:
+                  expected = {int(identity) for identity in ids}
+                  total = sum(int(count) for count in counts)
+              except ValueError as exc:
+                  raise EvidenceError("protocol") from exc
+              return expected if expected and len(expected) == len(ids) == total else set()
+
+
+          def _native_thread(thread: Record) -> tuple[int, bool] | None:
+              resolved = thread["isResolved"]
+              if type(resolved) is not bool:
+                  raise EvidenceError("protocol")
+              root = thread["comments"]["nodes"][0]
+              author = root.get("author") or {}
+              if (
+                  author.get("login") != "chatgpt-codex-connector"
+                  or author.get("__typename") != "Bot"
+                  or not root["body"].startswith(FINDING)
+              ):
+                  return None
+              identity = root["databaseId"]
+              if type(identity) is not int or identity <= 0:
+                  raise EvidenceError("protocol")
+              return identity, resolved
+
+
+          def _native_states(nodes) -> dict[int, bool]:
+              states = {}
+              for thread in nodes:
+                  native = _native_thread(thread)
+                  if native is None:
+                      continue
+                  identity, resolved = native
+                  if identity in states:
+                      raise EvidenceError("protocol")
+                  states[identity] = resolved
+              return states
+
+
+          def _thread_states(pages: Any, sha: str) -> dict[int, bool]:
+              if not isinstance(pages, list) or not pages:
+                  raise EvidenceError("protocol")
+              states = {}
+              try:
+                  for index, page in enumerate(pages):
+                      if page.get("errors"):
+                          raise EvidenceError("protocol")
+                      pull = page["data"]["repository"]["pullRequest"]
+                      if pull["headRefOid"] != sha:
+                          raise EvidenceError("head_moved")
+                      connection = pull["reviewThreads"]
+                      more = connection["pageInfo"]["hasNextPage"]
+                      if type(more) is not bool or more != (index < len(pages) - 1):
+                          raise EvidenceError("protocol")
+                      current = _native_states(connection["nodes"])
+                      if states.keys() & current.keys():
+                          raise EvidenceError("protocol")
+                      states.update(current)
+              except (KeyError, TypeError, IndexError, AttributeError) as exc:
+                  raise EvidenceError("protocol") from exc
+              return states
+
+
+          def resolve_security(target, body, review, metadata):
+              """Reconcile one unknown verdict with positive, authenticated finding proof.
+
+              Raw flags remain unchanged. Running/stale reviews and explicit verdicts
+              never use this path. No findings, incomplete pages or missing identities
+              cannot establish a resolved review.
+              """
+              repo, pr, sha = target
+              if (
+                  review.get("status") != "completed"
+                  or review.get("commit_sha") != sha
+                  or review.get("has_any_findings") is not True
+                  or review.get("has_unresolved_findings") is not None
+                  or not isinstance(metadata, dict)
+                  or metadata.get("repository") != repo
+                  or metadata.get("pullRequestNumber") != pr
+                  or metadata.get("headSha") != sha
+                  or metadata.get("status") != "completed"
+              ):
+                  return None
+              expected = _announced(body, repo, pr)
+              if not expected:
+                  return None
+              owner, name = repo.split("/")
+              fields = dict(query=THREAD_QUERY, owner=owner, name=name, number=pr)
+              states = _thread_states(_api("graphql", paginate=True, fields=fields), sha)
+              if states.keys() != expected:
+                  raise EvidenceError("protocol")
+              return {
+                  "state": "success" if all(states.values()) else "unresolved",
+                  "source": "github_review_threads",
+                  "finding_ids": sorted(states),
+              }
+          '''
+
+          READER_SOURCE = r'''
+          #!/usr/bin/env python3
+          """Read authenticated native Codex review evidence for one immutable PR head.
+
+          Protocol: Cortex PR797 bot comment6428675514, captured in
+           tasks/ci-review-evidence-codex-{711f0ede,57e4c1d}.json. Native automation:
+          https://learn.chatgpt.com/docs/third-party/github
+          https://learn.chatgpt.com/docs/security/security-review
+          This validates completion metadata, not semantic review quality.
+          """
+
+          from __future__ import annotations
+
+          import argparse
+          import json
+          import re
+          import sys
+          from datetime import datetime
+          from pathlib import Path
+          from typing import Any
+
+          # CLI callers execute this trusted file; the isolated workflow preloads its
+          # exact embedded runtime, so candidate checkout imports are never consulted.
+          if "ci_codex_review_runtime" not in sys.modules:
+              sys.path.insert(0, str(Path(__file__).resolve().parent))
+          import ci_codex_review_runtime as runtime  # noqa: E402
+          from ci_codex_review_runtime import _outputs  # noqa: E402
+
+          Record = dict[str, Any]
+          SUMMARY = "<!-- codex-pull-request-review-summary -->"
+          BOT = "chatgpt-codex-connector[bot]"
+          KINDS = ("code_review", "security_review")
+          FAILED = ("failed", "error", "cancelled")
+          SHA_PATTERN = re.compile(r"[0-9a-f]{40}")
+          REPO_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+")
+          STAMP_PATTERN = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z")
+
+
+          class EvidenceError(runtime.EvidenceError):
+              """Preserve the evidence-reader exception interface for its event callers."""
+
+
+          def _json(text: str) -> Any:
+              try:
+                  return runtime._json(text)
+              except runtime.EvidenceError as exc:
+                  raise EvidenceError(str(exc)) from exc
+
+
+          def _api(endpoint: str, *, paginate: bool = False) -> Any:
+              try:
+                  return runtime._api(endpoint, paginate=paginate)
+              except runtime.EvidenceError as exc:
+                  raise EvidenceError(str(exc)) from exc
+
+
+          class Parser(argparse.ArgumentParser):
+              def error(self, message: str) -> None:
+                  raise EvidenceError("arguments")
 
 
           def _result(sha: str) -> Record:
@@ -735,7 +940,29 @@ jobs:
               return ("unresolved" if clean["has_unresolved_findings"] else "success"), clean
 
 
-          def review_evidence(comments: list[Record], expected_sha: str) -> Record:
+          def _reviews(latest, target):
+              expected_sha, repo, pr = target
+              reviews = {}
+              data = _marker(latest["body"], "codex-review-state", True)
+              security = _marker(latest["body"], "codex-security-review", False)
+              states = []
+              for kind in KINDS:
+                  state, reviews[kind] = _review(data.get(kind), expected_sha)
+                  proof = None
+                  if kind == "security_review" and state == "pending" and repo and pr:
+                      proof = runtime.resolve_security(
+                          (repo, pr, expected_sha), latest["body"], reviews[kind], security
+                      )
+                  if proof is not None:
+                      state = proof.pop("state")
+                      reviews[kind]["resolution"] = proof
+                  states.append(state)
+              return states, reviews
+
+
+          def review_evidence(
+              comments: list[Record], expected_sha: str, repo=None, pr=None
+          ) -> Record:
               """Require both current reviews; never fall back from a newer invalid summary."""
               valid_sha = isinstance(expected_sha, str) and SHA_PATTERN.fullmatch(expected_sha)
               result = _result(expected_sha if valid_sha else "")
@@ -751,12 +978,8 @@ jobs:
                   result.update(comment_id=latest["id"], updated_at=latest["updated_at"])
                   if latest["body"].count(SUMMARY) != 1:
                       raise EvidenceError("protocol")
-                  data = _marker(latest["body"], "codex-review-state", True)
-                  _marker(latest["body"], "codex-security-review", False)
-                  states = []
-                  for kind in KINDS:
-                      state, result[kind] = _review(data.get(kind), expected_sha)
-                      states.append(state)
+                  states, details = _reviews(latest, (expected_sha, repo, pr))
+                  result.update(details)
                   result["reviews_complete"] = all(s in ("success", "unresolved") for s in states)
                   result["state"] = (
                       "blocked"
@@ -768,19 +991,9 @@ jobs:
                       "pending": "review_pending",
                       "success": "reviews_complete",
                   }[result["state"]]
-              except EvidenceError as exc:
+              except runtime.EvidenceError as exc:
                   result.update(state="blocked", reason=str(exc), reviews_complete=False)
               return result
-
-
-          def _api(endpoint: str, *, paginate: bool = False) -> Any:
-              # https://cli.github.com/manual/gh_api: --slurp wraps all paginated pages.
-              command = ["gh", "api", *(["--paginate", "--slurp"] if paginate else []), endpoint]
-              try:
-                  done = subprocess.run(command, text=True, capture_output=True, check=True)
-              except (OSError, subprocess.SubprocessError) as exc:
-                  raise EvidenceError("api") from exc
-              return _json(done.stdout)
 
 
           def _eligible(pull: Any, repo: str, sha: str) -> None:
@@ -814,7 +1027,9 @@ jobs:
               pages = _api(f"repos/{args.repo}/issues/{args.pr}/comments", paginate=True)
               if not isinstance(pages, list) or any(not isinstance(page, list) for page in pages):
                   raise EvidenceError("protocol")
-              result = review_evidence([comment for page in pages for comment in page], args.sha)
+              result = review_evidence(
+                  [comment for page in pages for comment in page], args.sha, args.repo, args.pr
+              )
               _eligible(_api(endpoint), args.repo, args.sha)
               return result
 
@@ -838,21 +1053,6 @@ jobs:
               return args
 
 
-          def _outputs(result: Record) -> None:
-              path = os.environ.get("GITHUB_OUTPUT")
-              if not path:
-                  raise EvidenceError("output")
-              text = (
-                  f"ready={str(result['state'] == 'success').lower()}\n"
-                  f"state={result['state']}\nsha={result['sha']}\ncomment_id={result['comment_id']}\n"
-              )
-              try:
-                  with Path(path).open("a", encoding="utf-8") as output:
-                      output.write(text)
-              except OSError as exc:
-                  raise EvidenceError("output") from exc
-
-
           def main(argv: list[str] | None = None) -> int:
               try:
                   args = _arguments(argv)
@@ -869,13 +1069,19 @@ jobs:
                   ):
                       return 0
                   return {"success": 0, "pending": 2, "blocked": 1}[result["state"]]
-              except EvidenceError as exc:
+              except runtime.EvidenceError as exc:
                   print(f"codex reviews: {exc}", file=sys.stderr)
                   return 1
 
 
           if __name__ == "__main__":
               sys.exit(main())
+          '''
+
+          _runtime = ModuleType("ci_codex_review_runtime")
+          exec(compile(RUNTIME_SOURCE, "ci_codex_review_runtime.py", "exec"), _runtime.__dict__)
+          sys.modules[_runtime.__name__] = _runtime
+          exec(compile(READER_SOURCE, "ci_codex_reviews.py", "exec"))
           CODEX_REVIEW_PY
 
       # main's claude.yml, never the PR, decides whether Claude gates. source: ADR-1116

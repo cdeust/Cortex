@@ -53,7 +53,7 @@ class CodexCliTests(unittest.TestCase):
             for value in payloads
         ]
         with (
-            patch.object(target.subprocess, "run", side_effect=replies) as api,
+            patch.object(target.runtime.subprocess, "run", side_effect=replies) as api,
             contextlib.redirect_stdout(out),
             contextlib.redirect_stderr(err),
         ):
@@ -107,7 +107,7 @@ class CodexCliTests(unittest.TestCase):
         err = io.StringIO()
         with (
             patch.object(
-                target.subprocess,
+                target.runtime.subprocess,
                 "run",
                 side_effect=subprocess.CalledProcessError(
                     1, ["gh"], stderr="PRIVATE_TOKEN"
@@ -136,7 +136,7 @@ class CodexCliTests(unittest.TestCase):
             args = ["--repo", "cdeust/Cortex", "--pr", "797", "--sha", SHA]
             args[args.index(flag) + 1] = value
             with (
-                patch.object(target.subprocess, "run") as api,
+                patch.object(target.runtime.subprocess, "run") as api,
                 contextlib.redirect_stderr(err),
             ):
                 code = target.main(args)

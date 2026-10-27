@@ -264,3 +264,44 @@ checks that the head is unchanged after both reads. Each session has exactly
 one Bash permission: its complete, head-bound publication command, with no
 wildcard. The permission regression fails before this correction. All 276 CI
 unit tests pass after it, including 168 affected Codex/Claude tests.
+
+## Completed native security review with a nullable verdict
+
+On `0134b085`, authentic summary `6442631163` records both native reviews as
+completed. Code has no findings. Security retains `has_any_findings=true` and
+`has_unresolved_findings=null`, while listing four resolved findings. A separate
+GraphQL read on the same head confirmed all four root comments are authored by
+`chatgpt-codex-connector` with `__typename=Bot`, and every thread has
+`isResolved=true`: 4389092806, 4389808387, 4390480666 and 4391507098.
+
+The reader now reconciles this specific incomplete verdict with that positive
+GitHub proof. It requires the completed current-head review, matching native
+security metadata for this repository/PR/head, a nonempty fully enumerated
+finding list, and an exact identity match against all paginated native security
+threads. A non-resolved thread blocks merging. Missing, forged, duplicated,
+partial or stale proof cannot establish success. Other unknown verdicts stay
+pending. The original null flag is retained in output, with the independent
+`resolution.source=github_review_threads` receipt added.
+
+The isolated Pipeline embeds the exact runtime and reader; it imports neither
+from the candidate checkout. The completion handler uses the same reconciliation.
+Before correction the observed completed-null case returned pending and failed
+the success assertion. The live read-only corrected CLI on `0134b085` returned
+success with the four IDs above, without publishing a GitHub status.
+
+| Path | Evidence |
+|---|---|
+| Completed current review and all native findings resolved | `test_completed_null_is_clean_only_with_matching_resolved_native_threads` |
+| Unresolved authenticated finding | `test_unresolved_authenticated_finding_blocks` |
+| Forged, missing, malformed or stale API proof | `test_missing_extra_forged_or_malformed_threads_never_allow_merge` |
+| Running/stale/unknown review or explicit verdict | `test_running_stale_unknown_or_explicit_verdict_never_uses_resolution` |
+| Incomplete context, metadata or another PR | `test_incomplete_metadata_and_other_pr_links_stay_pending`, `test_unknown_flag_without_context_stays_pending` |
+| Pagination and duplicate findings | `test_pagination_covers_every_native_finding_and_rejects_duplicates` |
+| Authenticated CLI and post-read head check | `test_cli_reads_threads_and_rechecks_the_live_head` |
+| Isolated embedded runtime under a poisoned checkout | `test_isolated_gate_uses_authenticated_thread_resolution` |
+
+Final local validation of this reconciliation: 286 CI unit tests pass; pinned
+Ruff check/format, actionlint, source and both craftsmanship gates pass.
+The preceding hosted unit job on `0134b085` passed 11,051 tests with 26 skips
+and 892 subtests in 838.30 seconds. Hosted acceptance of the reconciliation
+still requires its own pushed head.

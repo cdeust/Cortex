@@ -100,7 +100,7 @@ def _superseded_placeholder(effective: dict[str, Record], category: str) -> bool
 def _proof(repo: str, number: int, run: Record, jobs: list[Record]) -> Record:
     sha = run["head_sha"]
     rows = source.records(f"repos/{repo}/issues/{number}/comments")
-    result = review_evidence(rows, sha)
+    result = review_evidence(rows, sha, repo, number)
     if result.get("reason") in ("protocol", "arguments"):
         raise EvidenceError("protocol")
     return combined_proof(result, _claude_proof(repo, number, sha))

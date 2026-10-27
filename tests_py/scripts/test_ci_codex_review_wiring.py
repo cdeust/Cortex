@@ -11,6 +11,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 PIPELINE = ROOT / ".github/workflows/pipeline.yml"
 READER = ROOT / "scripts/ci_codex_reviews.py"
+RUNTIME = ROOT / "scripts/ci_codex_review_runtime.py"
 SHA = "a" * 40  # GitHub SHA-1 field, synthetic fixture.
 
 
@@ -26,10 +27,10 @@ def command():
 class CodexWiringTests(unittest.TestCase):
     def test_workflow_embeds_exact_reader_and_reuses_it_for_merge(self):
         run = command()
-        source = run.split("<<'CODEX_REVIEW_PY'\n", 1)[1].split("\nCODEX_REVIEW_PY", 1)[
-            0
-        ]
-        self.assertEqual(source + "\n", READER.read_text())
+        for name, path in (("RUNTIME_SOURCE", RUNTIME), ("READER_SOURCE", READER)):
+            source = run.split(name + " = r" + chr(39) * 3 + "\n", 1)[1]
+            source = source.split("\n" + chr(39) * 3, 1)[0]
+            self.assertEqual(source + "\n", path.read_text())
         text = PIPELINE.read_text()
         self.assertEqual(text.count("run: *codex_review_reader"), 1)
         self.assertIn('python3 -I - "${args[@]}"', run)
@@ -60,6 +61,9 @@ class CodexWiringTests(unittest.TestCase):
                 (root / "scripts/ci_codex_reviews.py").write_text(
                     "raise RuntimeError('candidate code')"
                 )
+                (root / "ci_codex_review_runtime.py").write_text(
+                    "raise RuntimeError('candidate runtime')"
+                )
                 self.seed_comments(root, completed)
                 result = self.run_gate(root, completed)
                 self.assertEqual(
@@ -76,6 +80,26 @@ class CodexWiringTests(unittest.TestCase):
             self.assertIn("state=pending", (root / "output").read_text())
             self.assertIn("ready=false", (root / "output").read_text())
 
+    def test_isolated_gate_uses_authenticated_thread_resolution(self):
+        from tests_py.scripts.test_ci_codex_resolution import page, summary
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            row = summary()
+            row["body"] = (
+                row["body"]
+                .replace("/805#", "/797#")
+                .replace('"pullRequestNumber": 805', '"pullRequestNumber": 797')
+            )
+            (root / "comments.json").write_text(json.dumps([[row]]))
+            (root / "threads.json").write_text(json.dumps([page()]))
+            (root / "ci_codex_review_runtime.py").write_text(
+                "raise RuntimeError('candidate runtime')"
+            )
+            result = self.run_gate(root, True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("ready=true", (root / "output").read_text())
+
     def run_gate(self, root, completed, completion_only=False):
         repo = {"full_name": "cdeust/Cortex"}
         pull = {
@@ -88,6 +112,7 @@ class CodexWiringTests(unittest.TestCase):
         gh = root / "gh"
         gh.write_text(
             '#!/bin/sh\ncase "$*" in '
+            '*graphql*) cat "$FIXTURE/threads.json" ;; '
             '*comments*) cat "$FIXTURE/comments.json" ;; '
             '*) cat "$FIXTURE/pull.json" ;; esac\n'
         )
