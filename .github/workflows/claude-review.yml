@@ -44,9 +44,10 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           allowed_bots: "claude[bot],chatgpt-codex-connector[bot],dependabot[bot]"
           prompt: |
-            /review-pr REPO: ${{ github.repository }} PR_NUMBER: ${{ github.event.pull_request.number }}
-            Use `gh pr comment` for top-level feedback and a completion summary, including when there are no findings.
-            Only post GitHub comments - don't submit review text as messages.
+            Diagnostic only for REPO: cdeust/Cortex PR_NUMBER: 812.
+            Use Agent once with code-quality-reviewer to inspect the checked-out .github/workflows/claude-review.yml.
+            Ask for one concise observation. Wait for its actual report, then publish that observation using gh pr comment 812 --repo cdeust/Cortex.
+            Do not modify files. This is a single-agent diagnostic, not a complete PR review.
           # Scoped gh permissions are from upstream docs/solutions.md.
           claude_args: |
             --permission-mode auto
@@ -62,7 +63,7 @@ jobs:
           from pathlib import Path
           # Source: official action execution_file SDK message array and permission_denials.
           stack = [json.loads(Path(os.environ["EXECUTION_FILE"]).read_text())]
-          known = {"Read", "Glob", "Grep", "Bash", "Skill", "Agent", "Task", "TaskOutput", "mcp__github_inline_comment__create_inline_comment"}
+          known = {"Read", "Glob", "Grep", "Bash", "Skill", "Agent", "Task", "TaskOutput", "AgentOutput", "SubagentHandback", "SendMessage", "ToolSearch", "TodoWrite", "ListAgents", "ReadNotifications", "ExitPlanMode", "EnterPlanMode", "AskUserQuestion", "Write", "Edit", "WebFetch", "WebSearch", "TaskCreate", "TaskUpdate", "TaskList", "TaskGet", "TaskStop", "BashOutput", "KillBash", "mcp__github_inline_comment__create_inline_comment"}
           keywords = ("permission", "draft", "skip", "sandbox", "cannot", "unknown", "not found", "auth", "token", "argument", "review-pr", "agent", "denied", "network", "approve", "gh pr comment")
           commands = ("gh pr view", "gh pr diff", "gh pr comment", "gh api", "git diff", "git log", "git show", "cat ", "ls ", "pwd")
           while stack:
