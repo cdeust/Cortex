@@ -242,3 +242,14 @@ The stale statement that CI enforces Ruff was also removed from `docs/agent-guid
 - [Repository contents REST API](https://docs.github.com/en/rest/repos/contents)
 - [Rerun a job and its dependents](https://docs.github.com/en/rest/actions/workflow-runs#re-run-a-job-from-a-workflow-run)
 - [Claude Code GitHub Actions](https://code.claude.com/docs/en/github-actions)
+
+## Native finding 4391382583: Git output writes
+
+The native Codex review on `b9298fad` demonstrated that allowed Git reads can
+write files through `--output`. Root reproduced this on a disposable Python
+file: its exit code changed from 1 to 0 after `git diff HEAD HEAD --output=...`
+truncated it to zero bytes. Both automatic review sessions now omit Git Bash
+permissions. They retain file reads, `gh pr view` and `gh pr diff`, plus the
+exact scoped verdict edit and publication command. The regression
+`test_reviews_cannot_use_git_output_to_overwrite_validators` fails before the
+permission change. After the change, 79 Claude and 88 Codex CI tests pass.

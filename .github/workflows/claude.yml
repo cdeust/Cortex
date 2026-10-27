@@ -161,10 +161,11 @@ jobs:
             Then publish it with exactly this command, the only write you may perform:
             gh api -X POST repos/${{ github.repository }}/pulls/${{ env.PR }}/reviews -f commit_id=${{ env.HEAD_SHA }} -f event=COMMENT -F body=@${{ runner.temp }}/claude-review/code-review.md
             Report any tool failure instead of publishing a partial review.
+          # Git read commands accept --output: only Read and read-only gh here.
           claude_args: >-
             --setting-sources user --permission-mode dontAsk
             --add-dir ${{ runner.temp }}/claude-review
-            --allowedTools "Agent,Skill,Read,Glob,Grep,Edit(/${{ runner.temp }}/claude-review/code-review.md),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(git diff:*),Bash(git show:*),Bash(git log:*),Bash(gh api -X POST repos/${{ github.repository }}/pulls/${{ env.PR }}/reviews -f commit_id=${{ env.HEAD_SHA }} -f event=COMMENT -F body=@${{ runner.temp }}/claude-review/code-review.md)"
+            --allowedTools "Agent,Skill,Read,Glob,Grep,Edit(/${{ runner.temp }}/claude-review/code-review.md),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh api -X POST repos/${{ github.repository }}/pulls/${{ env.PR }}/reviews -f commit_id=${{ env.HEAD_SHA }} -f event=COMMENT -F body=@${{ runner.temp }}/claude-review/code-review.md)"
 
       # An empty execution file (workflow-validation soft skip) fails here.
       - name: Validate code review execution
@@ -195,10 +196,11 @@ jobs:
             Then publish it with exactly this command, the only write you may perform:
             gh api -X POST repos/${{ github.repository }}/pulls/${{ env.PR }}/reviews -f commit_id=${{ env.HEAD_SHA }} -f event=COMMENT -F body=@${{ runner.temp }}/claude-review/security-review.md
             Report any tool failure instead of publishing a partial review.
+          # Git read commands accept --output: only Read and read-only gh here.
           claude_args: >-
             --setting-sources user --permission-mode dontAsk
             --add-dir ${{ runner.temp }}/claude-review
-            --allowedTools "Agent,Skill,Read,Glob,Grep,Edit(/${{ runner.temp }}/claude-review/security-review.md),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(git diff:*),Bash(git show:*),Bash(git log:*),Bash(gh api -X POST repos/${{ github.repository }}/pulls/${{ env.PR }}/reviews -f commit_id=${{ env.HEAD_SHA }} -f event=COMMENT -F body=@${{ runner.temp }}/claude-review/security-review.md)"
+            --allowedTools "Agent,Skill,Read,Glob,Grep,Edit(/${{ runner.temp }}/claude-review/security-review.md),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh api -X POST repos/${{ github.repository }}/pulls/${{ env.PR }}/reviews -f commit_id=${{ env.HEAD_SHA }} -f event=COMMENT -F body=@${{ runner.temp }}/claude-review/security-review.md)"
 
       - name: Validate security review execution
         if: ${{ !cancelled() && steps.kinds.outputs.security == 'true' && steps.kinds.outputs.sha == env.HEAD_SHA }}

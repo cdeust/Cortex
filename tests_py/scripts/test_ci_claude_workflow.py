@@ -111,6 +111,17 @@ class ClaudeWorkflowTests(unittest.TestCase):
         self.assertEqual(review.count(flags), 2)
         self.assertEqual(review.count("claude_args:"), 2)
 
+    def test_reviews_cannot_use_git_output_to_overwrite_validators(self):
+        # Native finding4391382583: even git diff HEAD HEAD --output=script.py
+        # truncates a validator. Git show/log also accept output-file options.
+        review = job(self.text, "review")
+        for action in review.split("          claude_args: >-\n")[1:]:
+            args = action.split("\n\n", 1)[0]
+            self.assertNotIn("Bash(git", args)
+            self.assertIn("Read,Glob,Grep", args)
+            self.assertIn("Bash(gh pr diff:*)", args)
+            self.assertIn("Bash(gh pr view:*)", args)
+
     def test_tag_job_is_owner_only_and_scrubs_subprocess_secrets(self):
         # Codex 4389092806: a writer without secret access must not steer a job
         # that holds CLAUDE_CODE_OAUTH_TOKEN and runs shell commands.
