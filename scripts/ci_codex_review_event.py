@@ -77,7 +77,22 @@ def _jobs(repo: str, run: Record) -> list[Record]:
             names.add(job["name"])
             identities.add(job["id"])
             effective.setdefault(job["name"], job)
+    # Job-level if precedes expansion; newer children replace skipped placeholders.
+    for category in ("environment", "install"):
+        if _superseded_placeholder(effective, category):
+            del effective[category]
     return list(effective.values())
+
+
+def _superseded_placeholder(effective: dict[str, Record], category: str) -> bool:
+    placeholder = effective.get(category)
+    if not placeholder or placeholder["conclusion"] != "skipped":
+        return False
+    return any(
+        name.startswith(category + " (")
+        and job["run_attempt"] > placeholder["run_attempt"]
+        for name, job in effective.items()
+    )
 
 
 def _proof(repo: str, number: int, run: Record, jobs: list[Record]) -> Record:

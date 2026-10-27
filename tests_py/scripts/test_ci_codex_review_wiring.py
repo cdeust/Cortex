@@ -35,14 +35,11 @@ class CodexWiringTests(unittest.TestCase):
         self.assertIn('python3 -I - "${args[@]}"', run)
         self.assertNotIn("git show", run)
 
-    def test_pre_fix_requires_completion_and_merge_requires_cleanliness(self):
+    def test_review_requires_completion_and_merge_requires_cleanliness(self):
         text = PIPELINE.read_text()
-        readiness = text.index(
-            "      - name: Require completed Codex reviews for repair\n"
-        )
-        self.assertLess(readiness, text.index("      - name: Fix\n"))
+        readiness = text.index("      - name: Require completed Codex reviews\n")
         block = text[readiness:].split("\n      - name:", 1)[0]
-        self.assertIn("steps.guard.outputs.fix == 'true'", block)
+        self.assertNotIn("        if:", block)
         self.assertIn("CODEX_COMPLETION_ONLY: 'true'", block)
         merge = text.split("\n  merge:\n", 1)[1]
         self.assertIn("      - name: Require complete Codex reviews\n", merge)

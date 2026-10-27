@@ -67,7 +67,7 @@ def waiting_jobs():
         conclusion="failure",
         steps=[
             {
-                "name": "Require completed Codex reviews for repair",
+                "name": "Require completed Codex reviews",
                 "conclusion": "failure",
             }
         ],

@@ -548,8 +548,8 @@ jobs:
           CLAUDE_CONFIG_DIR: ${{ env.CI_WORK }}/claude
         run: bash -eo pipefail -c "$CI_COMMAND"
 
-  # Each ready same-repository head receives both native read-only reviews.
-  # Workflow changes disable automatic repair, never either review phase.
+  # Native Codex code and security reviews run independently on every push.
+  # This job reads authenticated completion evidence without executing PR code.
   review:
     needs: [unit, regression, e2e, environment, install]
     if: >-
@@ -558,62 +558,11 @@ jobs:
       && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      pull-requests: write
-      issues: write
-      id-token: write
-      actions: read
+      contents: read
+      pull-requests: read
+      issues: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        if: >-
-          github.event_name == 'pull_request'
-          && github.event.pull_request.head.repo.full_name == github.repository
-        with:
-          ref: ${{ github.event.pull_request.head.ref }}
-          fetch-depth: 0
-          # checkout v7 uses includeIf, missed by the pinned action's include.path cleanup.
-          # Sources: checkout3d3c42e git-auth-helper.ts; action aa8a7738 git-config.ts.
-          persist-credentials: false
-
-      - name: Review guard
-        id: guard
-        env:
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
-        run: |
-          if [ "$BASE_REF" != main ]; then
-            echo "::error::Review requires the trusted main base."
-            exit 1
-          fi
-          if [ "$(git rev-parse HEAD)" != "$HEAD_SHA" ]; then
-            echo "::error::The branch advanced after this run started; use its new run."
-            exit 1
-          fi
-          git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
-          changed="$(git diff --name-only "origin/$BASE_REF...$HEAD_SHA")"
-          review=true
-          fix=true
-          if grep -q '^\.github/workflows/' <<<"$changed"; then
-            fix=false
-            echo "## Review: workflow changes receive both reviews; automatic repair is disabled" >> "$GITHUB_STEP_SUMMARY"
-          fi
-          { echo "review=$review"; echo "fix=$fix"; } >> "$GITHUB_OUTPUT"
-
-      - name: Collect the failed jobs of this run
-        id: failed
-        if: steps.guard.outputs.fix == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          {
-            echo "list<<EOF_JOBS"
-            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?per_page=100" \
-              --jq '.jobs[] | select(.conclusion == "failure") | "- \(.name): \(.html_url)"'
-            echo "EOF_JOBS"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Require completed Codex reviews for repair
-        if: steps.guard.outputs.fix == 'true'
+      - name: Require completed Codex reviews
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -920,36 +869,6 @@ jobs:
               sys.exit(main())
           CODEX_REVIEW_PY
 
-      # The fix: every review finding and every failed job, on the branch.
-      # Its push is a synchronize event; the five tests run again on it.
-      - name: Fix
-        id: fix_action
-        if: steps.guard.outputs.fix == 'true'
-        uses: anthropics/claude-code-action@aa8a7738e48bf30a40ee499ce818bef081c5ab5e # v1.0.257
-        with:
-          allowed_bots: "claude[bot],chatgpt-codex-connector[bot],dependabot[bot]"
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          prompt: |
-            You own pull request #${{ github.event.pull_request.number }} of ${{ github.repository }}
-            (branch ${{ github.event.pull_request.head.ref }}, checked out here).
-            1. Read every review comment on the pull request (gh pr view --comments, gh api for inline comments) and apply each finding.
-            2. Fix every failed job of pipeline run ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}:
-            ${{ steps.failed.outputs.list }}
-            Read each job's log (gh run view ${{ github.run_id }} --log-failed) and correct the product, not the pipeline.
-            3. Run the tests you touched, commit on this branch with a message that names what was fixed, and git push.
-            Change nothing when there is nothing to fix. Never edit .github/workflows/pipeline.yml.
-          claude_args: >-
-            --allowedTools "Edit,MultiEdit,Write,Read,Glob,Grep,LS,Bash(git:*),Bash(gh:*),Bash(python3:*),Bash(python:*),Bash(pytest:*),Bash(uv:*),Bash(uvx:*),Bash(npm:*),Bash(npx:*),Bash(pnpm:*),Bash(cargo:*),Bash(bash:*)"
-
-      - name: Validate fix execution
-        if: always() && !cancelled() && steps.fix_action.outcome != 'skipped'
-        env:
-          EXECUTION_FILE: ${{ steps.fix_action.outputs.execution_file }}
-          VALIDATOR_REVISION: ${{ github.event.pull_request.base.sha }}
-        run: |
-          set -euo pipefail
-          git show "$VALIDATOR_REVISION:scripts/ci_review_execution.py" | python3 -I - "$EXECUTION_FILE"
-
   # Decision 4, hardened after claude-mods #38 and session-optimizer #73 merged
   # on a red pipeline: GitHub treats a skipped required check as satisfied, so
   # merge runs even after failure on a non-cancelled same-repo PR, and fails if a
@@ -1002,44 +921,6 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           CODEX_COMPLETION_ONLY: 'false'
         run: *codex_review_reader
-
-      # The Claude reviews run in claude.yml beside this pipeline (workflow_run, run name
-      # "Claude review of Pipeline run <id>"). Wait on that run to finish, with no time
-      # budget, so a late verdict never strands the gate. It must have succeeded, which
-      # means both execution validators passed. Then accept only claude[bot] reviews on
-      # this exact commit_id, COMMENTED or APPROVED (GitHub refuses self-approval on
-      # claude[bot] PRs), whose body carries
-      # <!-- claude-review:v1 kind=code|security findings=N -->. The latest review per kind
-      # decides; tag-triggered and automatic reviews count alike.
-      - name: Require complete Claude verdicts
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          PR: ${{ github.event.pull_request.number }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          set -euo pipefail
-          title="Claude review of Pipeline run $GITHUB_RUN_ID"
-          # Bootstrap: the automatic review run exists only once main's claude.yml carries
-          # the review job (its run-name is the marker). main is the trust anchor and a PR
-          # cannot change it. Until then only tag-triggered verdicts exist, and the exact
-          # commit_id and claude[bot] checks below are the whole proof.
-          if gh api "repos/$GH_REPO/contents/.github/workflows/claude.yml?ref=main" --jq .content | base64 -d | grep -qF 'Claude review of Pipeline run'; then
-            claude_run="$(gh run list --workflow claude.yml --event workflow_run --limit 100 --json databaseId,displayTitle --jq "[.[] | select(.displayTitle == \"$title\")][0].databaseId // empty")"
-            [ -n "$claude_run" ] || { echo "::error::No Claude review run named '$title'; the review never started."; exit 1; }
-            gh run watch "$claude_run" --interval 30 >/dev/null
-            [ "$(gh run view "$claude_run" --json conclusion --jq .conclusion)" = success ] || { echo "::error::Claude review run $claude_run did not succeed, so its execution validation failed or never ran."; exit 1; }
-          else
-            echo "::notice::main's claude.yml has no automatic review job yet; counting tag-triggered claude[bot] verdicts only."
-          fi
-          gh api --paginate "repos/$GH_REPO/pulls/$PR/reviews" | jq -s 'add // []' > "$RUNNER_TEMP/reviews.json"
-          jq -e --arg sha "$HEAD_SHA" '
-            [.[] | select(.user.login == "claude[bot]" and .user.type == "Bot"
-              and .commit_id == $sha and (.state == "COMMENTED" or .state == "APPROVED"))] as $mine
-            | ["code", "security"] | map(. as $kind
-              | [$mine[] | (.body // "" | capture("<!-- claude-review:v1 kind=" + $kind + " findings=(?<n>[0-9]+) -->")? // empty)] | last
-              | . != null and .n == "0") | all
-          ' "$RUNNER_TEMP/reviews.json" >/dev/null || { echo "::error::Needs complete claude[bot] code and security verdicts with no findings on $HEAD_SHA."; exit 1; }
 
       - name: Verify live PR eligibility
         env:

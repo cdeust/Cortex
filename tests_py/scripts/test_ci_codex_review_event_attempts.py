@@ -49,6 +49,31 @@ class PartialAttempts(unittest.TestCase):
         self.assertEqual(result, {"action": "merge", "job_id": 221})
         self.assertEqual(len(post), 1)
 
+    def test_new_matrix_children_supersede_old_skipped_placeholders(self):
+        # Native review finding4384491846: job-level if precedes matrix expansion.
+        server = Server()
+        current = copy.deepcopy(server.data["jobs"])
+        current[-2].update(
+            conclusion="failure",
+            steps=[
+                {"name": "Require completed Codex reviews", "conclusion": "failure"}
+            ],
+        )
+        first = [
+            job
+            for job in copy.deepcopy(current)
+            if not job["name"].startswith(("environment (", "install ("))
+        ]
+        first[0]["conclusion"] = "failure"
+        for identity, name in ((90, "environment"), (91, "install")):
+            placeholder = copy.deepcopy(first[0])
+            placeholder.update(id=identity, name=name, conclusion="skipped")
+            first.append(placeholder)
+        attempts(server, [first, current])
+        result, post = invoke(server)
+        self.assertEqual(result, {"action": "review", "job_id": 220})
+        self.assertEqual(len(post), 1)
+
     def test_older_target_is_never_rerun(self):
         server = Server()
         attempts(server, [server.data["jobs"], [server.data["jobs"][0]]])

@@ -8,6 +8,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Removed
 
+- Claude review and repair actions are removed following the owner decision.
 - Duplicate legacy CI workflows are retired. Pipeline, required CodeQL and the
   protected merge resolver remain active.
 
@@ -15,10 +16,9 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 - The `merge` job of `.github/workflows/pipeline.yml` sets `GH_REPO: ${{ github.repository }}` on its `gh pr merge` step: the job runs without a checkout, so gh could not infer the repository and failed with `fatal: not a git repository` after every stage was green (session-optimizer #65, run 39756969927, 2026-10-22).
 
-- CI rejects bot review or repair executions with denied permissions, failed tools
-  or missing completion evidence. Every eligible push requires native code and
-  security review from Claude and Codex on the current head. Completed findings
-  reach automatic repair; unresolved findings block protected integration.
+- CI requires completed native Codex code and security reviews on the current
+  head. Unresolved findings block protected integration. Partial reruns retain
+  successful prerequisites and supersede obsolete skipped matrix placeholders.
 
 ### Added
 

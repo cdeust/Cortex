@@ -15,7 +15,7 @@ PREREQUISITES = BASE_CATEGORIES + tuple(
     for kind in ("environment", "install")
     for os in ("ubuntu-latest", "macos-latest", "windows-latest")
 )
-READINESS = "Require completed Codex reviews for repair"
+READINESS = "Require completed Codex reviews"
 MERGE = "Require complete Codex reviews"
 
 
