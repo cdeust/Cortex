@@ -21,14 +21,15 @@ env:
   CLAUDE_REVIEW_GATE: observe
 
 jobs:
-  # @claude from the repository owner only: the job holds the OAuth secret and
-  # broad tools, so no other writer may steer it. The trigger text must be the
-  # owner's too: no `assigned` route (assigner != author). source: ADR-1116
+  # Only the repository owner may invoke tag mode on an owner-authored thread.
+  # Assignment does not authenticate the author of the trigger text.
+  # source: ADR-1116; native findings4389808387 and4390480666.
   claude:
     if: >-
       github.event.sender.login == github.repository_owner
       && ((github.event_name == 'issue_comment'
        && contains(github.event.comment.body, '@claude')
+       && github.event.issue.user.login == github.repository_owner
        && github.event.comment.user.login != 'claude[bot]'
        && github.event.comment.user.type != 'Bot')
       || (github.event_name == 'issues'

@@ -159,9 +159,31 @@ class ClaudeWorkflowTests(unittest.TestCase):
         comment = {"body": "@claude fix", "user": owner}
         self.assertTrue(
             self.run_tag_job(
-                "issue_comment", action="created", sender=owner, comment=comment
+                "issue_comment",
+                action="created",
+                sender=owner,
+                comment=comment,
+                issue=own,
             )
         )
+
+    def test_owner_comment_requires_an_owner_authored_thread(self):
+        # Native security finding4390480666: commenter and thread author differ.
+        owner = {"login": "cdeust", "type": "User"}
+        comment = {"body": "@claude help", "user": owner}
+        for author in ("mallory", "cdeust"):
+            issue = {"user": {"login": author}, "body": "task", "title": "task"}
+            with self.subTest(author=author):
+                self.assertEqual(
+                    self.run_tag_job(
+                        "issue_comment",
+                        action="created",
+                        sender=owner,
+                        comment=comment,
+                        issue=issue,
+                    ),
+                    author == "cdeust",
+                )
 
     def test_verification_is_a_separate_untouched_job(self):
         verify = job(self.text, "verify")

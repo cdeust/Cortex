@@ -227,6 +227,8 @@ on this arm64 host (`Bad CPU type in executable`), which
 
 ## Native Codex incomplete-verdict follow-up
 
+Native security finding [4390480666](https://github.com/cdeust/Cortex/pull/805#discussion_r4390480666) also identified the owner-comment route on an externally authored issue or PR. Tag mode now authenticates the thread author as the repository owner on comment events as well as opened issues. The new regression failed before the condition was added; the affected CI suites pass 166 tests after it. Automatic CI reviews retain their existing same-repository eligibility.
+
 The authenticated bot summary [6442631163](https://github.com/cdeust/Cortex/pull/805#issuecomment-6442631163) on `6de74656` reported a completed security review with `has_any_findings=true` and `has_unresolved_findings=null`. The reader returned `blocked/protocol` for this incomplete verdict. Explicit null flags now remain pending with `reviews_complete=false`; missing fields, invalid types, contradictory flags and malformed summaries still fail closed. A newer incomplete verdict cannot fall back to an older clean summary.
 
 Five assertions failed before the correction. After it, all 165 affected Codex and Claude CI tests pass, including the embedded-reader contract. The live summary returns pending, rather than completion. Pinned Ruff, actionlint and the repository craftsmanship gate pass. The earlier full-suite result above remains scoped to `953ed145`.
