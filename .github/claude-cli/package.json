@@ -1,0 +1,7 @@
+{
+  "name": "zetetic-ci-claude-cli",
+  "private": true,
+  "dependencies": {
+    "@anthropic-ai/claude-code": "2.1.306"
+  }
+}

@@ -1,7 +1,7 @@
 name: PR Review
 
 # source: https://github.com/anthropics/claude-code-action/blob/8041f1d17e0e7d2f2cfe35002962e9f26237c0bb/.github/workflows/claude-review.yml
-# App authentication: upstream issue396; supported event: upstream issue713.
+# Native App OIDC auth on same-repository PRs; main checkout retained.
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
@@ -51,6 +51,7 @@ jobs:
             Only post GitHub comments - don't submit review text as messages.
           # Scoped gh permissions are from upstream docs/solutions.md.
           claude_args: |
+            --strict-mcp-config
             --permission-mode auto
             --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
             --model "claude-opus-4-7"

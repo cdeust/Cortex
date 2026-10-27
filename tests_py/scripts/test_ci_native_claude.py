@@ -47,6 +47,10 @@ class NativeClaudeTrustTests(unittest.TestCase):
             review["permissions"],
             {"contents": "read", "pull-requests": "write", "id-token": "write"},
         )
+        self.assertEqual(
+            invocation["with"].get("claude_code_oauth_token"),
+            "${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}",
+        )
 
     def test_owner_mentions_keep_app_authentication(self):
         workflow = yaml.safe_load(MENTIONS.read_text())
@@ -70,6 +74,14 @@ class NativeClaudeTrustTests(unittest.TestCase):
         events = workflow.get("on", workflow.get(True))
         self.assertIn("pull_request", events)
         self.assertNotIn("pull_request_target", events)
+        self.assertIn("ready_for_review", events["pull_request"]["types"])
+
+    def test_automatic_review_excludes_forks_and_drafts(self):
+        workflow = yaml.safe_load(REVIEW.read_text())
+        predicate = workflow["jobs"]["review"]["if"]
+        self.assertIn("head.repo.full_name == github.repository", predicate)
+        self.assertIn("!github.event.pull_request.draft", predicate)
+        self.assertEqual(workflow["permissions"], {})
 
     def test_review_loads_trusted_configuration_before_receiving_authority(self):
         workflow = yaml.safe_load(REVIEW.read_text())
