@@ -14,6 +14,7 @@ import uuid
 
 from ci_autopilot_queue import candidates
 from ci_autopilot_issues import intake
+from ci_autopilot_status import publish
 
 # source: gh pr list --help (--limit); fail closed if this operational bound is hit.
 PR_INTAKE_LIMIT = 1000
@@ -107,11 +108,17 @@ def settle(options, state, items):
         raise RuntimeError("Active worker is unverifiable; never launch a duplicate")
     row = matches[0]
     if row.get("terminalState") not in ("reclaimable", "released"):
-        return False
+        # Orca retains a user-owned terminal independently of accepted task completion.
+        if row.get("terminalState") != "retained" or row.get("dispatchStatus") not in (
+            "completed",
+            "failed",
+        ):
+            return False
     if row["terminalState"] == "reclaimable":
         orca(
             options, "orchestration", "worker-release", "--dispatch", active["dispatch"]
         )
+    publish(options, github, active, row.get("workerState", "completed"))
     key = f"{active['kind']}:{active['number']}"
     state["seen"][key] = active["fingerprint"]
     state.pop("active")
@@ -192,6 +199,7 @@ def tick(options, state):
         return launch(options, state, state["launch_pending"])
     items = snapshot(options)
     if not settle(options, state, items):
+        publish(options, github, state["active"], "dispatched")
         return {"state": "worker_active"}
     for item in items:
         key = f"{item['kind']}:{item['number']}"
@@ -231,6 +239,7 @@ def main():
     parser.add_argument("--brief", type=Path, required=True)
     parser.add_argument("--orca", default="/usr/local/bin/orca")
     parser.add_argument("--inspect", action="store_true")
+    parser.add_argument("--status-comments", action="store_true")
     options = parser.parse_args()
     options.state.parent.mkdir(parents=True, exist_ok=True)
     with options.state.with_suffix(".lock").open("w") as lock:

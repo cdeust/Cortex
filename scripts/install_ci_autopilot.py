@@ -20,7 +20,12 @@ LABEL = "com.cortex.codex-autopilot"
 
 def copy_runtime(options, root):
     source = Path(__file__).resolve().parent
-    for name in ("ci_autopilot.py", "ci_autopilot_queue.py", "ci_autopilot_issues.py"):
+    for name in (
+        "ci_autopilot.py",
+        "ci_autopilot_queue.py",
+        "ci_autopilot_issues.py",
+        "ci_autopilot_status.py",
+    ):
         shutil.copyfile(source / name, root / name)
     brief = source.parent / "docs/automation/codex-worker.md"
     shutil.copyfile(brief, root / "codex-worker.md")
@@ -36,6 +41,7 @@ def copy_runtime(options, root):
             "ci_autopilot.py",
             "ci_autopilot_queue.py",
             "ci_autopilot_issues.py",
+            "ci_autopilot_status.py",
             "codex-worker.md",
             "contract.md",
         )
@@ -63,6 +69,7 @@ def install(options):
         str(root / "state.json"),
         "--brief",
         str(root / "codex-worker.md"),
+        "--status-comments",
     ]
     configuration = {
         "Label": LABEL,
@@ -70,7 +77,8 @@ def install(options):
         "StartInterval": options.interval,
         "RunAtLoad": True,
         "EnvironmentVariables": {
-            "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+            "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin",
+            "ORCA_TERMINAL_HANDLE": options.coordinator_terminal,
         },
         "StandardOutPath": str(root / "dispatcher.log"),
         "StandardErrorPath": str(root / "dispatcher-error.log"),
@@ -92,6 +100,7 @@ def main():
     parser.add_argument("--runtime", type=Path, required=True)
     parser.add_argument("--interval", type=int, required=True)
     parser.add_argument("--contract", type=Path, required=True)
+    parser.add_argument("--coordinator-terminal", required=True)
     parser.add_argument("--enable", action="store_true")
     install(parser.parse_args())
 

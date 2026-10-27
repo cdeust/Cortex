@@ -87,6 +87,39 @@ class QueueTests(unittest.TestCase):
 
 
 class DispatchTests(unittest.TestCase):
+    def test_user_retained_terminal_does_not_block_a_completed_dispatch(self):
+        # source: native worker-list receipts, succeeded=>completed, failed=>failed.
+        for status in ("completed", "failed"):
+            item = candidates([pull()], [])[0]
+            state = {
+                "run": "run-a",
+                "seen": {},
+                "active": {**item, "dispatch": "dispatch-a"},
+            }
+            row = {
+                "dispatchId": "dispatch-a",
+                "terminalState": "retained",
+                "dispatchStatus": status,
+            }
+            with (
+                patch.object(runtime, "workers", return_value=[row]),
+                patch.object(runtime, "orca") as orca,
+            ):
+                self.assertTrue(runtime.settle(None, state, []))
+                orca.assert_not_called()
+            self.assertNotIn("active", state)
+
+    def test_retaining_a_live_terminal_never_settles_its_active_dispatch(self):
+        state = {"run": "run-a", "active": {"dispatch": "dispatch-a"}}
+        row = {
+            "dispatchId": "dispatch-a",
+            "terminalState": "retained",
+            "dispatchStatus": "dispatched",
+        }
+        with patch.object(runtime, "workers", return_value=[row]):
+            self.assertFalse(runtime.settle(None, state, []))
+        self.assertIn("active", state)
+
     def test_unchanged_items_do_not_call_a_model(self):
         item = candidates([pull()], [])[0]
         state = {"seen": {"pull:12": item["fingerprint"]}}

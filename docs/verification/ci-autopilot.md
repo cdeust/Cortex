@@ -51,7 +51,19 @@ Run scripts/install_ci_autopilot.py with --repo pointing at the main checkout,
 --control pointing at the dedicated registered control worktree,
 --runtime pointing at a durable per-user directory, --contract pointing at the
 installed dispatch-contract SKILL.md, and --interval giving the
-observation cadence in seconds. --enable bootstraps the per-user launchd service.
+observation cadence in seconds. Pass --coordinator-terminal with the handle of
+the service's own dedicated live Orca terminal. launchd has no active sender;
+Orca rejects worker-start with no_active_sender_terminal unless its sender is
+explicit. The installer persists ORCA_TERMINAL_HANDLE for this service only.
+Create a dedicated terminal with orca terminal create and bind it to the Run
+with orchestration run-use. Preserve it as a service resource. Do not borrow
+another session's terminal. --enable bootstraps the per-user launchd service.
+The installed dispatcher enables one maintainer-owned status comment per item,
+updating marker cortex-autopilot-status at dispatch and accepted settlement.
+It reports the live remote head and links hosted checks. A comment API error is
+logged and does not stop repair. Workers report through Orca rather than posting
+comments from a host that prohibits them. A user-retained terminal is preserved
+after accepted task completion and does not block the next work item.
 The installer copies the reviewed dispatcher and worker brief and records their
 SHA256 hashes, so disposing the development worktree does not remove the service.
 The service label is com.cortex.codex-autopilot. Stop with launchctl bootout

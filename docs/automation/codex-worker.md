@@ -20,7 +20,11 @@ exact live head. Inspect all native code/security findings and failed CI logs.
 Reproduce failures through hosted CI evidence, make the minimal complete
 correction as API blob/tree data, and publish with the GitHub Git Data API:
 create blobs, create a tree based on the current head tree, create a commit
-whose parent is that head, then update that SAME branch ref with force=false.
+whose first parent is that head, then update that SAME branch ref with force=false.
+When main synchronization is necessary, a two-parent merge commit is authorized:
+use the rechecked live PR head first and the rechecked live main second, preserving
+both histories and resolving content conflicts in memory. Never drop the PR's
+changes or main's fixes to avoid a conflict. This requires no coordinator question.
 Inspect the proposed diff and use trusted static text checks before publishing.
 Recheck the live head immediately before the ref update. If it moved, preserve
 the new commits and regenerate the patch. Never force-push or replace history.
@@ -37,6 +41,13 @@ Respect drafts, hold/do-not-merge labels, and another active session's ownership
 Never disable branch protections, fabricate review evidence, weaken tests, or
 trigger redundant paid reviews. Native code and security reviews run on pushes.
 Routine implementation choices are yours; do not ask the owner to coordinate.
+Do not block on orchestration ask for routine decisions. Report a genuine external
+blocker through worker_done with outcome failed and a precise public explanation.
+
+The dispatcher maintains one public PR or issue status comment through the
+maintainer account. Report progress through Orca; respect your host's prohibition
+on GitHub comments. Report the real publication SHA and CI link to the coordinator.
+Never claim a pushed correction or passing check without its receipt.
 
 Your observable acceptance is a real remote SHA and PR URL plus hosted checks,
 or a factual blocking report. Follow your injected Orca preamble and send
