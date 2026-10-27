@@ -113,8 +113,8 @@ activation PR itself, held open on purpose:
 3. Condition for `required`: both kinds `success` or `unresolved` with run-bound
    evidence, `verify` green, no manual marker and no empty push. Then remove
    the hold and let the protected merge activate the gate.
-4. If a Dependabot PR is open, record whether its claude.yml run received the
-   secret before relying on `required` for Dependabot PRs.
+4. Separately, on the first Dependabot PR, record the same run and review ids;
+   this is a measurement of hosted behaviour, not a precondition invented here.
 
 ## Review findings and fixes
 
@@ -149,12 +149,15 @@ activation PR itself, held open on purpose:
 
 Residual, recorded rather than closed here: a marker citing a genuine attempt
 of the same head, posted by the owner's @claude session, fails that kind closed
-(blocked until a new head); GitHub's Dependabot-on-Actions documentation
-treats `workflow_run` runs started by Dependabot as Dependabot-triggered (no
-Actions secrets), so before `required` the first hosted Dependabot PR must show
-a claude[bot] review or a Dependabot secret must be configured (activation
-precondition); a review body above GitHub's size limit is rejected by the POST
-and stays pending (verify turns red).
+(blocked until a new head); a review body above GitHub's size limit is
+rejected by the POST and stays pending (verify turns red).
+
+Not yet measured: how a claude.yml `workflow_run` started by a Dependabot PR's
+Pipeline behaves on GitHub (secret availability, App token exchange, the
+`allowed_bots` path). It is observed on the first Dependabot PR after this
+merges: the proof is that PR's claude.yml run id and attempt, its
+`review <head>` job with both `Validate <kind> review execution` steps, and the
+two claude[bot] review ids on its head.
 
 ## Three pillars
 
