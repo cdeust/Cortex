@@ -10,15 +10,15 @@ title: Use the official Anthropic direct PR review workflow
 
 ## Status
 
-accepted; shipped by [PR807](https://github.com/cdeust/Cortex/pull/807) as main commit 7a85eb38af278541aaf6507829e998e8e4d8e7e7.
+accepted; shipped by [PR 807](https://github.com/cdeust/Cortex/pull/807) as main commit 7a85eb38af278541aaf6507829e998e8e4d8e7e7.
 
 ## Context
 
-ADR-1116 introduced a custom workflow_run Claude review protocol. The owner explicitly rejected this architecture and requested the official anthropics/claude-code-action README and workflow. Run40553919216 failed before review because subprocess environment scrubbing requires bubblewrap.
+ADR-1116 introduced a custom workflow_run Claude review protocol. The owner explicitly rejected this architecture and requested the official anthropics/claude-code-action README and workflow. Run 40553919216 failed before review because subprocess environment scrubbing requires bubblewrap.
 
 ## Decision
 
-Replace Claude workflow_run with pull_request_target opened, synchronize, reopened and ready_for_review. Copy the upstream review-pr command and its five reviewer agents verbatim from8041f1d17e0e7d2f2cfe35002962e9f26237c0bb. Adapt the runner, existing OAuth auth and pinned actions; install bubblewrap. Execute the workflow from the trusted PR base using pull_request_target, the pattern documented by upstream docs/security.md, and check out trusted main. Keep the upstream explicit-prompt agent mode: omit track_progress because detector.ts otherwise forces tag mode and tag preparation checks out the PR head. Retain the existing explicit Claude, Codex and Dependabot actor allowlist. Retire custom Claude attestation markers, readers and combined proof. Preserve native Codex evidence and trusted resolver checks. Preserve owner-only mention invocation on owner-authored threads.
+Replace Claude workflow_run with pull_request_target opened, synchronize, reopened and ready_for_review. Copy the upstream review-pr command and its five reviewer agents verbatim from 8041f1d17e0e7d2f2cfe35002962e9f26237c0bb. Adapt the runner, existing OAuth auth and pinned actions; install bubblewrap. Execute the workflow from the trusted PR base using pull_request_target, the pattern documented by upstream docs/security.md, and check out trusted main. Keep the upstream explicit-prompt agent mode: omit track_progress because detector.ts otherwise forces tag mode and tag preparation checks out the PR head. Retain the existing explicit Claude, Codex and Dependabot actor allowlist. Retire custom Claude attestation markers, readers and combined proof. Preserve native Codex evidence and trusted resolver checks. Preserve owner-only mention invocation on owner-authored threads.
 
 ## Consequences
 
@@ -26,12 +26,12 @@ This supersedes ADR-1116's custom Claude execution and evidence architecture. Cl
 
 ## Installation evidence
 
-[Pipeline40566519242](https://github.com/cdeust/Cortex/actions/runs/40566519242) passed all required jobs before merge. The unit job reported 10,987 passed, 26 skipped and 826 passing subtests, with 90.81 percent line coverage. Regression tests reported 30 passed and 4 skipped. Docker smoke returned 57 tools from a bare container. Both native Codex reviews completed without findings on c18e174de286bf37c20b4058b8c91eb944b07f12. The merged tree matches that reviewed head (acc3351e0369586deee7d160ed6ff5078f0b4683).
+[Pipeline 40566519242](https://github.com/cdeust/Cortex/actions/runs/40566519242) passed all required jobs before merge. The unit job reported 10,987 passed, 26 skipped and 826 passing subtests, with 90.81 percent line coverage. Regression tests reported 30 passed and 4 skipped. Docker smoke returned 57 tools from a bare container. Both native Codex reviews completed without findings on c18e174de286bf37c20b4058b8c91eb944b07f12. The merged tree matches that reviewed head (acc3351e0369586deee7d160ed6ff5078f0b4683).
 
 Claude acceptance requires a fresh PR event after installation. Earlier installation-PR jobs soft-skipped App workflow validation; they are not successful Claude reviews.
 
 ## Authentication correction after installation
 
-The first fresh PR run, [40570016061](https://github.com/cdeust/Cortex/actions/runs/40570016061), selected agent mode but failed before Claude execution with401 Invalid OIDC token. This reproduces [upstream issue713](https://github.com/anthropics/claude-code-action/issues/713): the App token exchange rejects pull_request_target events.
+The first fresh PR run, [40570016061](https://github.com/cdeust/Cortex/actions/runs/40570016061), selected agent mode but failed before Claude execution with 401 Invalid OIDC token. This reproduces [upstream issue 713](https://github.com/anthropics/claude-code-action/issues/713): the App token exchange rejects pull_request_target events.
 
-PR808 supplies the documented github_token input from the short-lived GITHUB_TOKEN and removes id-token permission from the automatic review job. Claude still authenticates to Anthropic using the existing OAuth secret. Automatic review comments therefore publish as github-actions[bot], while the reviewer is Claude; they are not attributed to claude[bot]. Owner mention mode retains its existing App authentication. The regression test fails without explicit GitHub authentication and passes with it.
+PR 808 supplies the documented github_token input from the short-lived GITHUB_TOKEN and removes id-token permission from the automatic review job. Claude still authenticates to Anthropic using the existing OAuth secret. Automatic review comments therefore publish as github-actions[bot], while the reviewer is Claude; they are not attributed to claude[bot]. Owner mention mode retains its existing App authentication. The regression test fails without explicit GitHub authentication and passes with it.

@@ -12,7 +12,7 @@ title: claude[bot] reviews run from main via workflow_run with staged gate activ
 
 ## Status
 
-superseded by [ADR-1117](1117-use-the-official-anthropic-direct-pr-review-workflow.md), shipped in PR807 as main commit 7a85eb38af278541aaf6507829e998e8e4d8e7e7. The workflow_run marker protocol described below is historical.
+superseded by [ADR-1117](https://github.com/cdeust/Cortex/blob/main/wiki/adr/cortex/1117-use-the-official-anthropic-direct-pr-review-workflow.md), shipped in PR 807 as main commit 7a85eb38af278541aaf6507829e998e8e4d8e7e7. The workflow_run marker protocol described below is historical.
 
 ## Context
 

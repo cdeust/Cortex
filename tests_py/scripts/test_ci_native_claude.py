@@ -21,7 +21,26 @@ class NativeClaudeTrustTests(unittest.TestCase):
         self.assertEqual(
             invocation["with"].get("github_token"), "${{ secrets.GITHUB_TOKEN }}"
         )
-        self.assertNotIn("id-token", review["permissions"])
+        self.assertEqual(
+            review["permissions"], {"contents": "read", "pull-requests": "write"}
+        )
+
+    def test_owner_mentions_keep_app_authentication(self):
+        workflow = yaml.safe_load((ROOT / ".github/workflows/claude.yml").read_text())
+        mention = workflow["jobs"]["claude"]
+        self.assertEqual(mention["permissions"]["id-token"], "write")
+        invocation = next(
+            step
+            for step in mention["steps"]
+            if "claude-code-action@" in step.get("uses", "")
+        )
+        self.assertNotIn("github_token", invocation["with"])
+        checkout = next(
+            step
+            for step in mention["steps"]
+            if step.get("uses", "").startswith("actions/checkout@")
+        )
+        self.assertFalse(checkout["with"]["persist-credentials"])
 
     def test_privileged_review_uses_base_workflow(self):
         workflow = yaml.safe_load((ROOT / ".github/workflows/claude.yml").read_text())
