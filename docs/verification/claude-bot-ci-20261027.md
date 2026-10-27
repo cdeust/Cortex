@@ -253,3 +253,14 @@ permissions. They retain file reads, `gh pr view` and `gh pr diff`, plus the
 exact scoped verdict edit and publication command. The regression
 `test_reviews_cannot_use_git_output_to_overwrite_validators` fails before the
 permission change. After the change, 79 Claude and 88 Codex CI tests pass.
+
+## Native finding 4391507098: shell redirection on gh reads
+
+The security review of `3cb571e7` identified the remaining broad Bash reads as
+workspace write capabilities through shell redirection. Both review sessions
+now use Read/Glob/Grep for their inputs. The trusted preparation step supplies
+PR metadata, body, comments and reviews in `pr.json`, alongside `pr.diff`, and
+checks that the head is unchanged after both reads. Each session has exactly
+one Bash permission: its complete, head-bound publication command, with no
+wildcard. The permission regression fails before this correction. All 276 CI
+unit tests pass after it, including 168 affected Codex/Claude tests.

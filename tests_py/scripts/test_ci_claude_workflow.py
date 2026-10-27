@@ -119,8 +119,18 @@ class ClaudeWorkflowTests(unittest.TestCase):
             args = action.split("\n\n", 1)[0]
             self.assertNotIn("Bash(git", args)
             self.assertIn("Read,Glob,Grep", args)
-            self.assertIn("Bash(gh pr diff:*)", args)
-            self.assertIn("Bash(gh pr view:*)", args)
+
+    def test_only_exact_publication_command_is_available_to_review_agents(self):
+        # Native security finding4391507098: shell redirects on gh pr reads
+        # can replace the validator executed by the following trusted step.
+        review = job(self.text, "review")
+        for action in review.split("          claude_args: >-\n")[1:]:
+            args = action.split("\n\n", 1)[0]
+            bash_rules = re.findall(r"Bash\([^)]*\)", args)
+            self.assertEqual(len(bash_rules), 1)
+            self.assertTrue(bash_rules[0].startswith("Bash(gh api -X POST repos/"))
+        self.assertIn('> "$DIR/pr.json"', review)
+        self.assertEqual(review.count("read metadata from"), 2)
 
     def test_tag_job_is_owner_only_and_scrubs_subprocess_secrets(self):
         # Codex 4389092806: a writer without secret access must not steer a job
