@@ -1,9 +1,9 @@
-name: PR Review
+name: Claude metadata diagnostic
 
 # source: https://github.com/anthropics/claude-code-action/blob/8041f1d17e0e7d2f2cfe35002962e9f26237c0bb/.github/workflows/claude-review.yml
 # Trusted-base variant: upstream docs/security.md. Auth: upstream issue713.
 on:
-  pull_request_target:
+  pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
 
 permissions: {}
@@ -13,7 +13,7 @@ jobs:
     name: Claude review
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository
-      && !github.event.pull_request.draft
+      && github.event.pull_request.draft
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -31,6 +31,7 @@ jobs:
           sudo apt-get install --no-install-recommends -y bubblewrap
           bwrap --version
       - name: PR Review
+        id: native
         uses: anthropics/claude-code-action@8041f1d17e0e7d2f2cfe35002962e9f26237c0bb # v1.0.263
         env:
           CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
@@ -47,3 +48,29 @@ jobs:
             --permission-mode auto
             --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
             --model "claude-opus-4-7"
+      - name: Publication diagnostic categories only
+        if: always()
+        env:
+          EXECUTION_FILE: ${{ steps.native.outputs.execution_file }}
+        run: |
+          python3 - <<'PYDIAG'
+          import json, os
+          from pathlib import Path
+          # SDK execution_file schema: anthropics/claude-code-action base-action/src/execution-file.ts.
+          messages = json.loads(Path(os.environ["EXECUTION_FILE"]).read_text())
+          known = {"Read", "Glob", "Grep", "Bash", "Skill", "Agent", "Task", "mcp__github_inline_comment__create_inline_comment"}
+          keywords = ("permission", "not found", "unknown", "draft", "skip", "auth", "token", "repository", "argument", "cannot", "sandbox", "network", "confirmation", "approve", "usage", "invalid", "review-pr", "help", "empty", "prompt")
+          for message in messages:
+              for block in message.get("message", {}).get("content", []):
+                  if not isinstance(block, dict):
+                      continue
+                  if block.get("type") == "tool_use":
+                      name = block.get("name")
+                      print(json.dumps({"tool": name if name in known else "other"}))
+                  if block.get("type") == "tool_result":
+                      content = str(block.get("content", "")).lower()
+                      print(json.dumps({"tool_error": block.get("is_error") is True, "keywords": {word: word in content for word in keywords}}))
+              if message.get("type") == "result":
+                  content = str(message.get("result", "")).lower()
+                  print(json.dumps({"result_error": message.get("is_error") is True, "keywords": {word: word in content for word in keywords}}))
+          PYDIAG
