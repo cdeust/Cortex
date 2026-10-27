@@ -21,3 +21,14 @@ class CodexOnlyTests(unittest.TestCase):
         self.assertNotIn(": write", review)
         self.assertIn("CODEX_COMPLETION_ONLY:", review)
         self.assertIn("Require completed Codex reviews", review)
+
+    def test_control_plane_brief_forbids_candidate_execution_and_hooks(self):
+        brief = (ROOT / "docs/automation/codex-worker.md").read_text()
+        for boundary in (
+            "NEVER CHECK OUT, DOWNLOAD TO LOCAL FILES, IMPORT OR EXECUTE PR CODE.",
+            "All executable verification runs on GitHub-hosted CI runners",
+            "Do not invoke git commit or any candidate hook",
+            "force=false",
+        ):
+            with self.subTest(boundary=boundary):
+                self.assertIn(boundary, brief)

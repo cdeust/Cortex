@@ -57,6 +57,8 @@ def install(options):
         str(root / "ci_autopilot.py"),
         "--repo",
         str(options.repo.resolve()),
+        "--control",
+        str(options.control.resolve()),
         "--state",
         str(root / "state.json"),
         "--brief",
@@ -86,6 +88,7 @@ def install(options):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", type=Path, required=True)
+    parser.add_argument("--control", type=Path, required=True)
     parser.add_argument("--runtime", type=Path, required=True)
     parser.add_argument("--interval", type=int, required=True)
     parser.add_argument("--contract", type=Path, required=True)

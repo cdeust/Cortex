@@ -133,6 +133,11 @@ def worker_brief(options, item):
             "Later unapproved requests are not authorized.\n"
         )
     brief += "\n" + Path(options.brief).with_name("contract.md").read_text()
+    brief += (
+        "\nRole-specific boundary: candidate edits use remote GitHub API data. "
+        "Never checkout, download, import, install or execute candidate code locally. "
+        "Publish via the Git Data API; execute tests only on hosted GitHub CI.\n"
+    )
     return brief
 
 
@@ -150,6 +155,11 @@ def launch(options, state, item):
     state["launch_request"] = request
     state["launch_pending"] = item
     save(options.state, state)
+    # Refresh only tracking refs; never alter the owner's main checkout.
+    subprocess.run(["git", "fetch", "origin", "main"], cwd=options.repo, check=True)
+    subprocess.run(
+        ["git", "merge", "--ff-only", "origin/main"], cwd=options.control, check=True
+    )
     result = orca(
         options,
         "orchestration",
@@ -159,17 +169,9 @@ def launch(options, state, item):
         "--spec",
         brief,
         "--worktree",
-        "new-top-level",
-        "--repo",
-        f"path:{options.repo}",
-        "--base-branch",
-        "origin/main",
-        "--setup",
-        "skip",
+        f"path:{options.control}",
         "--agent",
         "codex",
-        "--name",
-        f"auto-{item['kind']}-{item['number']}-{item['fingerprint'][:8]}",
         "--retry-request",
         request,
     )
@@ -223,6 +225,7 @@ def tick(options, state):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", type=Path, required=True)
+    parser.add_argument("--control", type=Path, required=True)
     parser.add_argument("--repository", default="cdeust/Cortex")
     parser.add_argument("--state", type=Path, required=True)
     parser.add_argument("--brief", type=Path, required=True)

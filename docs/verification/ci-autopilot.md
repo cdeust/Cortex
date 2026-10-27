@@ -6,6 +6,10 @@ PR results and open issues, then starts one supervised Codex worker in Orca.
 It uses the existing local account, with no API key uploaded to GitHub.
 The Mac and Orca must be running for local repair and issue intake.
 
+The dispatcher refreshes origin/main without altering the main checkout and
+fast-forwards its dedicated trusted control worktree before dispatch. It reuses
+that workspace and releases worker terminals instead of creating a checkout per
+repair. Candidate branches are never checked out there.
 The dispatcher uses a filesystem lock and one durable active Dispatch. Pending
 CI, drafts, holds and branches owned by existing Orca agents are excluded.
 Owner-authored/edited issue requirements are automatic. Other authors require
@@ -18,7 +22,11 @@ Identical snapshots do not launch an LLM. Changed heads or terminal results
 wake repair. Issue intake paginates the REST API. PR intake has an explicit
 CLI limit and fails rather than silently discarding a full result set.
 
-A worker fixes the current PR branch, or implements an issue in its own PR.
+A control-plane worker edits a PR or issue branch through the GitHub Git Data
+API. Candidate sources remain API data: no local checkout, installation, import
+or execution. All candidate tests execute on hosted GitHub runners without the
+local Codex account. API publication avoids candidate Git hooks and updates
+branch refs with force=false to preserve concurrent commits.
 Its brief preserves other sessions, requires meaningful tests and real push
 receipts, and delegates hosted waiting back to the dispatcher. The dispatcher
 arms protected squash auto-merge only after the current merge gate succeeds.
@@ -40,6 +48,7 @@ This proves account access and worker lifecycle, not a completed automatic fix.
 ## Installation
 
 Run scripts/install_ci_autopilot.py with --repo pointing at the main checkout,
+--control pointing at the dedicated registered control worktree,
 --runtime pointing at a durable per-user directory, --contract pointing at the
 installed dispatch-contract SKILL.md, and --interval giving the
 observation cadence in seconds. --enable bootstraps the per-user launchd service.
