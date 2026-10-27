@@ -729,12 +729,8 @@ jobs:
               if status in FAILED:
                   return "failed", clean
               # source: PR805 summary6442631163 emitted completed with an unknown verdict.
-              if (
-                  sha != expected_sha
-                  or status != "completed"
-                  or clean["has_any_findings"] is None
-                  or clean["has_unresolved_findings"] is None
-              ):
+              flags = (clean["has_any_findings"], clean["has_unresolved_findings"])
+              if sha != expected_sha or status != "completed" or None in flags:
                   return "pending", clean
               return ("unresolved" if clean["has_unresolved_findings"] else "success"), clean
 
