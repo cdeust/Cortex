@@ -38,12 +38,13 @@ def candidates(pulls: list[dict], issues: list[dict]) -> list[dict]:
             }
         )
     for issue in issues:
-        if not held(issue):
+        if issue.get("authorized") is True and not held(issue):
             result.append(
                 {
                     "kind": "issue",
                     "number": issue["number"],
-                    "fingerprint": fingerprint(issue),
+                    "fingerprint": issue["revision"],
+                    "snapshot": issue["snapshot"],
                 }
             )
     return result

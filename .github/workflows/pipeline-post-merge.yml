@@ -204,6 +204,28 @@ jobs:
               require(pr.get("head", {}).get("sha") == head, "PR head advanced after testing")
 
 
+          def _effective_jobs(rows, run):
+              # GitHub list-jobs filter=all includes jobs retained from earlier attempts.
+              # source: https://docs.github.com/en/rest/actions/workflow-jobs#list-jobs-for-a-workflow-run
+              indexed, identities = {}, set()
+              for job in rows:
+                  attempt, identity, name = job.get("run_attempt"), job.get("id"), job.get("name")
+                  require(type(attempt) is int and 0 < attempt <= run["run_attempt"],
+                          "invalid job attempt")
+                  require(type(identity) is int and identity > 0 and identity not in identities,
+                          "invalid or duplicate job identity")
+                  require(job.get("run_id") == run["id"] and job.get("head_sha") == run["head_sha"],
+                          "job source identity differs")
+                  require(isinstance(name, str), "invalid job name")
+                  identities.add(identity)
+                  previous = indexed.get(name)
+                  require(previous is None or previous["run_attempt"] != attempt,
+                          "duplicate job name in one attempt")
+                  if previous is None or attempt > previous["run_attempt"]:
+                      indexed[name] = job
+              return list(indexed.values())
+
+
           def _source_run(event, repository, api):
               require(
                   re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository),
@@ -226,7 +248,9 @@ jobs:
                   run.get("run_attempt") == source.get("run_attempt"),
                   "source run has a newer attempt",
               )
-              jobs = list(api.records(f"{prefix}/actions/runs/{run['id']}/jobs", "jobs"))
+              jobs = _effective_jobs(
+                  api.records(f"{prefix}/actions/runs/{run['id']}/jobs?filter=all", "jobs"), run
+              )
               _validate_jobs(jobs, run.get("actor", {}).get("login"))
 
               return run

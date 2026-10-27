@@ -64,7 +64,14 @@ class QueueTests(unittest.TestCase):
         self.assertNotEqual(candidates([original], []), candidates([changed], []))
 
     def test_issue_intake_follows_pr_repairs(self):
-        issue = {"number": 4, "title": "Bug", "labels": [], "updated_at": "now"}
+        issue = {
+            "number": 4,
+            "title": "Bug",
+            "labels": [],
+            "authorized": True,
+            "revision": "r1",
+            "snapshot": {},
+        }
         self.assertEqual(
             [i["kind"] for i in candidates([pull()], [issue])], ["pull", "issue"]
         )
@@ -147,3 +154,38 @@ class OrcaReceiptTests(unittest.TestCase):
                 runtime.orca(options, "orchestration", "worker-start"),
                 receipt["result"],
             )
+
+
+class ReviewRegressions(unittest.TestCase):
+    def test_inspect_never_replays_a_pending_launch(self):
+        options = SimpleNamespace(inspect=True)
+        item = candidates([pull()], [])[0]
+        with patch.object(runtime, "launch") as launch:
+            result = runtime.tick(options, {"launch_pending": item})
+        launch.assert_not_called()
+        self.assertEqual(result["state"], "launch_pending")
+
+    def test_inspect_never_releases_a_settled_worker(self):
+        active = {"kind": "pull", "number": 12, "dispatch": "ctx-a"}
+        with (
+            patch.object(runtime, "snapshot", return_value=[]),
+            patch.object(runtime, "settle") as settle,
+        ):
+            result = runtime.tick(SimpleNamespace(inspect=True), {"active": active})
+        settle.assert_not_called()
+        self.assertEqual(result["state"], "worker_recorded")
+
+    def test_finishing_worker_cannot_consume_unprocessed_issue_updates(self):
+        issue = {"kind": "issue", "number": 3, "fingerprint": "new"}
+        state = {
+            "run": "run-a",
+            "seen": {},
+            "active": {**issue, "fingerprint": "old", "dispatch": "ctx-a"},
+        }
+        with patch.object(
+            runtime,
+            "workers",
+            return_value=[{"dispatchId": "ctx-a", "terminalState": "released"}],
+        ):
+            runtime.settle(None, state, [issue])
+        self.assertEqual(state["seen"]["issue:3"], "old")

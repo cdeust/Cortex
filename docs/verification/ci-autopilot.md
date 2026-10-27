@@ -8,6 +8,12 @@ The Mac and Orca must be running for local repair and issue intake.
 
 The dispatcher uses a filesystem lock and one durable active Dispatch. Pending
 CI, drafts, holds and branches owned by existing Orca agents are excluded.
+Owner-authored/edited issue requirements are automatic. Other authors require
+an owner approval comment binding the exact snapshot SHA256; later edits or
+new untrusted discussion invalidate that approval. Untrusted comments cannot
+wake an owner issue. Trusted follow-up requirements change the revision and
+remain eligible even if they arrive while a worker finishes.
+Inspection never launches, replays or releases a worker.
 Identical snapshots do not launch an LLM. Changed heads or terminal results
 wake repair. Issue intake paginates the REST API. PR intake has an explicit
 CLI limit and fails rather than silently discarding a full result set.

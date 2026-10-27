@@ -20,7 +20,7 @@ LABEL = "com.cortex.codex-autopilot"
 
 def copy_runtime(options, root):
     source = Path(__file__).resolve().parent
-    for name in ("ci_autopilot.py", "ci_autopilot_queue.py"):
+    for name in ("ci_autopilot.py", "ci_autopilot_queue.py", "ci_autopilot_issues.py"):
         shutil.copyfile(source / name, root / name)
     brief = source.parent / "docs/automation/codex-worker.md"
     shutil.copyfile(brief, root / "codex-worker.md")
@@ -35,6 +35,7 @@ def copy_runtime(options, root):
         for name in (
             "ci_autopilot.py",
             "ci_autopilot_queue.py",
+            "ci_autopilot_issues.py",
             "codex-worker.md",
             "contract.md",
         )
