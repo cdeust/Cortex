@@ -4,6 +4,7 @@
 Runs only adjacent trusted default-branch modules. No candidate checkout.
 Sources: https://docs.github.com/en/rest/actions/workflow-runs#re-run-a-job-from-a-workflow-run
 https://docs.github.com/en/rest/actions/workflow-jobs#list-jobs-for-a-workflow-run-attempt
+https://docs.github.com/en/rest/actions/workflow-jobs#list-jobs-for-a-workflow-run
 Workflow concurrency serializes events; REST rerun offers no head/attempt CAS.
 """
 
@@ -27,9 +28,9 @@ EVENTS = ("issue_comment", "workflow_run")
 NONE = {"action": "none"}
 
 
-def _jobs(repo: str, run: Record) -> list[Record]:
+def _attempt_jobs(repo: str, run: Record, attempt: int) -> list[Record]:
     rows = source.records(
-        f"repos/{repo}/actions/runs/{run['id']}/attempts/{run['run_attempt']}/jobs",
+        f"repos/{repo}/actions/runs/{run['id']}/attempts/{attempt}/jobs",
         "jobs",
     )
     for job in rows:
@@ -37,7 +38,7 @@ def _jobs(repo: str, run: Record) -> list[Record]:
             source.positive(job.get(field))
         if (
             job.get("run_id") != run["id"]
-            or job.get("run_attempt") != run["run_attempt"]
+            or job.get("run_attempt") != attempt
             or job.get("head_sha") != run["head_sha"]
             or not isinstance(job.get("name"), str)
             or not isinstance(job.get("status"), str)
@@ -59,7 +60,28 @@ def _jobs(repo: str, run: Record) -> list[Record]:
     return rows
 
 
-def _proof(repo: str, number: int, sha: str) -> Record:
+def _jobs(repo: str, run: Record) -> list[Record]:
+    """Keep the newest result per name, including jobs untouched by partial reruns.
+
+    The run/jobs default filter=latest exposes only the most recent execution.
+    Read authenticated attempts back to attempt1 to retain the entire original graph,
+    including unexpected failures; required job names alone cannot prove this.
+    """
+    effective: dict[str, Record] = {}
+    identities: set[int] = set()
+    for attempt in range(source.positive(run["run_attempt"]), 0, -1):
+        names: set[str] = set()
+        for job in _attempt_jobs(repo, run, attempt):
+            if job["name"] in names or job["id"] in identities:
+                raise EvidenceError("protocol")
+            names.add(job["name"])
+            identities.add(job["id"])
+            effective.setdefault(job["name"], job)
+    return list(effective.values())
+
+
+def _proof(repo: str, number: int, run: Record, jobs: list[Record]) -> Record:
+    sha = run["head_sha"]
     rows = source.records(f"repos/{repo}/issues/{number}/comments")
     result = review_evidence(rows, sha)
     if result.get("reason") in ("protocol", "arguments"):
@@ -75,7 +97,11 @@ def _plan(run: Record, jobs: list[Record], proof: Record, sha: str) -> Record:
         return NONE.copy()
     if result.get("action") not in ("review", "merge"):
         raise EvidenceError("protocol")
-    return {"action": result["action"], "job_id": source.positive(result.get("job_id"))}
+    identity = source.positive(result.get("job_id"))
+    selected = [job for job in jobs if job["id"] == identity]
+    if len(selected) != 1 or selected[0]["run_attempt"] != run["run_attempt"]:
+        return NONE.copy()
+    return {"action": result["action"], "job_id": identity}
 
 
 def _post(repo: str, identity: int) -> None:
@@ -125,7 +151,7 @@ def coordinate(name: str, event: Record, repo: str) -> Record:
     ):
         return NONE.copy()
     jobs = _jobs(repo, run)
-    plan = _plan(run, jobs, _proof(repo, number, sha), sha)
+    plan = _plan(run, jobs, _proof(repo, number, run, jobs), sha)
     if plan["action"] == "none":
         return plan
     current = source.latest(repo, sha, number)
@@ -133,7 +159,8 @@ def coordinate(name: str, event: Record, repo: str) -> Record:
         current[key] != run[key] for key in ("id", "run_attempt")
     ):
         return NONE.copy()
-    fresh = _plan(current, _jobs(repo, current), _proof(repo, number, sha), sha)
+    fresh_jobs = _jobs(repo, current)
+    fresh = _plan(current, fresh_jobs, _proof(repo, number, current, fresh_jobs), sha)
     if fresh != plan or source.live_pr(repo, number, sha) is None:
         return NONE.copy()
     _post(repo, plan["job_id"])

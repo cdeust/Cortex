@@ -100,6 +100,46 @@ class ResumePolicyTests(unittest.TestCase):
                 {"action": "review", "job_id": 20},
             )
 
+    def test_late_reviews_resume_failed_tests_for_repair(self):
+        current = waiting_jobs()
+        current[1]["conclusion"] = "failure"
+        for job in current[2:-2]:
+            job["conclusion"] = "skipped"
+        self.assertEqual(
+            self.plan(job_list=current), {"action": "review", "job_id": 20}
+        )
+
+    def test_unexpanded_skipped_matrices_still_allow_failed_test_repair(self):
+        current = waiting_jobs()
+        current[1]["conclusion"] = "failure"
+        current = [
+            j
+            for j in current
+            if not j["name"].startswith(("environment (", "install ("))
+        ]
+        for identity, name in enumerate(("environment", "install"), start=30):
+            current.append(
+                {
+                    "id": identity,
+                    "name": name,
+                    "status": "completed",
+                    "conclusion": "skipped",
+                }
+            )
+        self.assertEqual(
+            self.plan(job_list=current), {"action": "review", "job_id": 20}
+        )
+
+    def test_missing_or_cancelled_test_evidence_does_not_resume_repair(self):
+        for mutate in (
+            lambda j: j.pop(0),
+            lambda j: j[1].update(conclusion="cancelled"),
+            lambda j: j[1].update(status="in_progress"),
+        ):
+            current = waiting_jobs()
+            mutate(current)
+            self.assertEqual(self.plan(job_list=current), {"action": "none"})
+
     def test_pending_stale_or_protocol_error_never_resumes(self):
         for change in (
             {"reviews_complete": False},

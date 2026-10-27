@@ -550,18 +550,17 @@ jobs:
 
   # Each ready same-repository head receives both native read-only reviews.
   # Workflow changes disable automatic repair, never either review phase.
-  review:
-    needs: [unit, regression, e2e, environment, install]
+  native_review:
+    needs: contract
     if: >-
       always() && !cancelled() && github.event_name == 'pull_request'
       && !github.event.pull_request.draft
       && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
       pull-requests: write
       issues: write
-      id-token: write
       actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -599,19 +598,6 @@ jobs:
           fi
           { echo "review=$review"; echo "fix=$fix"; } >> "$GITHUB_OUTPUT"
 
-      - name: Collect the failed jobs of this run
-        id: failed
-        if: steps.guard.outputs.fix == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          {
-            echo "list<<EOF_JOBS"
-            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?per_page=100" \
-              --jq '.jobs[] | select(.conclusion == "failure") | "- \(.name): \(.html_url)"'
-            echo "EOF_JOBS"
-          } >> "$GITHUB_OUTPUT"
-
       # Source: code-review commands/code-review.md steps 1-4 (seven agents).
       # Security requires one independent agent by the owner's acceptance policy.
       - name: Review
@@ -619,6 +605,10 @@ jobs:
         if: steps.guard.outputs.review == 'true'
         uses: anthropics/claude-code-action@aa8a7738e48bf30a40ee499ce818bef081c5ab5e # v1.0.257
         with:
+          # Review phases only: the App OIDC exchange refuses a workflow that differs
+          # from the default branch and the action then skips with success.
+          # Source: claude-code-action aa8a7738 action.yml github_token, src/github/token.ts.
+          github_token: ${{ github.token }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           plugin_marketplaces: "https://github.com/anthropics/claude-code.git"
           plugins: "code-review@claude-code-plugins"
@@ -854,6 +844,10 @@ jobs:
         if: always() && !cancelled() && steps.guard.outputs.review == 'true'
         uses: anthropics/claude-code-action@aa8a7738e48bf30a40ee499ce818bef081c5ab5e # v1.0.257
         with:
+          # Review phases only: the App OIDC exchange refuses a workflow that differs
+          # from the default branch and the action then skips with success.
+          # Source: claude-code-action aa8a7738 action.yml github_token, src/github/token.ts.
+          github_token: ${{ github.token }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           plugin_marketplaces: "https://github.com/anthropics/claude-code.git"
           plugins: "code-review@claude-code-plugins"
@@ -1084,6 +1078,74 @@ jobs:
 
       # Embedded code is trusted workflow code, not the candidate checkout.
       # Source: GitHub Actions YAML anchors/aliases; exact file parity is tested.
+
+  review:
+    needs: [unit, regression, e2e, environment, install, native_review]
+    if: >-
+      always() && !cancelled() && github.event_name == 'pull_request'
+      && !github.event.pull_request.draft
+      && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: >-
+          github.event_name == 'pull_request'
+          && github.event.pull_request.head.repo.full_name == github.repository
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+          # checkout v7 uses includeIf, missed by the pinned action's include.path cleanup.
+          # Sources: checkout3d3c42e git-auth-helper.ts; action aa8a7738 git-config.ts.
+          persist-credentials: false
+
+      - name: Review guard
+        id: guard
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          if [ "$BASE_REF" != main ]; then
+            echo "::error::Review requires the trusted main base."
+            exit 1
+          fi
+          if [ "$(git rev-parse HEAD)" != "$HEAD_SHA" ]; then
+            echo "::error::The branch advanced after this run started; use its new run."
+            exit 1
+          fi
+          git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
+          changed="$(git diff --name-only "origin/$BASE_REF...$HEAD_SHA")"
+          review=true
+          fix=true
+          if grep -q '^\.github/workflows/' <<<"$changed"; then
+            fix=false
+            echo "## Review: workflow changes receive both reviews; automatic repair is disabled" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          { echo "review=$review"; echo "fix=$fix"; } >> "$GITHUB_OUTPUT"
+
+      - name: Require completed native Claude reviews
+        env:
+          NATIVE_RESULT: ${{ needs.native_review.result }}
+        run: test "$NATIVE_RESULT" = success
+
+      - name: Collect the failed jobs of this run
+        id: failed
+        if: steps.guard.outputs.fix == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "list<<EOF_JOBS"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?per_page=100" \
+              --jq '.jobs[] | select(.conclusion == "failure") | "- \(.name): \(.html_url)"'
+            echo "EOF_JOBS"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Require completed Codex reviews for repair
         if: steps.guard.outputs.fix == 'true'
         env:

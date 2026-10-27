@@ -9,7 +9,8 @@ successful readiness cannot match its previous failed-step predicate again.
 from typing import Any
 
 Record = dict[str, Any]
-PREREQUISITES = ("contract", "unit", "regression", "e2e") + tuple(
+BASE_CATEGORIES = ("contract", "unit", "regression", "e2e")
+PREREQUISITES = BASE_CATEGORIES + tuple(
     f"{kind} ({os})"
     for kind in ("environment", "install")
     for os in ("ubuntu-latest", "macos-latest", "windows-latest")
@@ -37,6 +38,52 @@ def _waited(job: Record, step: str) -> bool:
     )
 
 
+def _repair_dependencies(indexed: dict[str, Record]) -> bool:
+    # https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idif
+    # Job-level if runs before matrix expansion. Failed
+    # tests may therefore leave an unexpanded skipped environment/install job.
+    # Repair must consume failed tests; merge still requires all successes.
+    if any(name not in indexed for name in BASE_CATEGORIES):
+        return False
+    if any(
+        job.get("status") != "completed"
+        or job.get("conclusion") not in ("success", "failure", "skipped")
+        for job in indexed.values()
+    ):
+        return False
+    for category in ("environment", "install"):
+        expanded = [name for name in PREREQUISITES if name.startswith(category + " (")]
+        if category in indexed:
+            if indexed[category]["conclusion"] != "skipped" or any(
+                name in indexed for name in expanded
+            ):
+                return False
+        elif any(name not in indexed for name in expanded):
+            return False
+    return True
+
+
+def _index(jobs: list[Record]) -> dict[str, Record] | None:
+    """Index jobs by unique name and unique positive integer id, else None."""
+    indexed: dict[str, Record] = {}
+    identities: set[int] = set()
+    for job in jobs:
+        if not isinstance(job, dict):
+            return None
+        name, identity = job.get("name"), job.get("id")
+        if (
+            not isinstance(name, str)
+            or name in indexed
+            or type(identity) is not int
+            or identity <= 0
+            or identity in identities
+        ):
+            return None
+        indexed[name] = job
+        identities.add(identity)
+    return indexed
+
+
 def resumption_plan(
     source: Record, jobs: list[Record], proof: Record, sha: str
 ) -> Record:
@@ -55,22 +102,12 @@ def resumption_plan(
         or not isinstance(jobs, list)
     ):
         return none
-    indexed: dict[str, Record] = {}
-    identities: set[int] = set()
-    for job in jobs:
-        if not isinstance(job, dict):
-            return none
-        name, identity = job.get("name"), job.get("id")
-        if (
-            not isinstance(name, str)
-            or name in indexed
-            or type(identity) is not int
-            or identity <= 0
-            or identity in identities
-        ):
-            return none
-        indexed[name] = job
-        identities.add(identity)
+    indexed = _index(jobs)
+    if indexed is None:
+        return none
+    review, merge = indexed.get("review", {}), indexed.get("merge", {})
+    if _waited(review, READINESS) and _repair_dependencies(indexed):
+        return {"action": "review", "job_id": review["id"]}
     if any(not _success(indexed.get(name, {})) for name in PREREQUISITES):
         return none
     if any(
@@ -80,9 +117,6 @@ def resumption_plan(
         if name not in ("review", "merge")
     ):
         return none
-    review, merge = indexed.get("review", {}), indexed.get("merge", {})
-    if _waited(review, READINESS):
-        return {"action": "review", "job_id": review["id"]}
     if _success(review) and _waited(merge, MERGE) and proof["state"] == "success":
         return {"action": "merge", "job_id": merge["id"]}
     return none

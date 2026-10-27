@@ -61,41 +61,44 @@ class CodexWiringTests(unittest.TestCase):
                     "raise RuntimeError('candidate code')"
                 )
                 self.seed_comments(root, completed)
-                repo = {"full_name": "cdeust/Cortex"}
-                pull = {
-                    "state": "open",
-                    "draft": False,
-                    "head": {"sha": SHA, "repo": repo},
-                    "base": {"ref": "main", "repo": repo},
-                }
-                (root / "pull.json").write_text(json.dumps(pull))
-                gh = root / "gh"
-                gh.write_text(
-                    '#!/bin/sh\ncase "$*" in '
-                    '*comments*) cat "$FIXTURE/comments.json" ;; '
-                    '*) cat "$FIXTURE/pull.json" ;; esac\n'
-                )
-                gh.chmod(0o700)
-                result = subprocess.run(
-                    ["bash", "-eo", "pipefail", "-c", command()],
-                    cwd=root,
-                    env={
-                        **os.environ,
-                        "PATH": f"{root}:{os.environ['PATH']}",
-                        "FIXTURE": str(root),
-                        "PYTHONPATH": str(root),
-                        "GH_REPO": "cdeust/Cortex",
-                        "PR": "797",
-                        "HEAD_SHA": SHA,
-                        "CODEX_COMPLETION_ONLY": "false",
-                    },
-                    capture_output=True,
-                    text=True,
-                )
+                result = self.run_gate(root, completed)
                 self.assertEqual(
                     result.returncode, 0 if completed else 2, result.stderr
                 )
                 self.assertNotIn("candidate", result.stderr)
+
+    def run_gate(self, root, completed):
+        repo = {"full_name": "cdeust/Cortex"}
+        pull = {
+            "state": "open",
+            "draft": False,
+            "head": {"sha": SHA, "repo": repo},
+            "base": {"ref": "main", "repo": repo},
+        }
+        (root / "pull.json").write_text(json.dumps(pull))
+        gh = root / "gh"
+        gh.write_text(
+            '#!/bin/sh\ncase "$*" in '
+            '*comments*) cat "$FIXTURE/comments.json" ;; '
+            '*) cat "$FIXTURE/pull.json" ;; esac\n'
+        )
+        gh.chmod(0o700)
+        return subprocess.run(
+            ["bash", "-eo", "pipefail", "-c", command()],
+            cwd=root,
+            env={
+                **os.environ,
+                "PATH": f"{root}:{os.environ['PATH']}",
+                "FIXTURE": str(root),
+                "PYTHONPATH": str(root),
+                "GH_REPO": "cdeust/Cortex",
+                "PR": "797",
+                "HEAD_SHA": SHA,
+                "CODEX_COMPLETION_ONLY": "false",
+            },
+            capture_output=True,
+            text=True,
+        )
 
     def seed_comments(self, root, completed):
         user = {"login": "chatgpt-codex-connector[bot]", "type": "Bot"}
