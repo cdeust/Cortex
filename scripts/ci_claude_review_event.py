@@ -77,10 +77,51 @@ def target(event: Record, repo: str) -> Record | None:
 def missing(repo: str, number: int, sha: str) -> dict[str, bool]:
     """Kinds absent on this head: a posted kind is never reviewed twice."""
     rows = source.records(f"repos/{repo}/pulls/{number}/reviews")
-    result = claude.review_evidence(rows, sha, True)
-    if result["reason"] in ("protocol", "arguments"):
+    # Unbound markers (an @claude session) are not evidence and do not suppress.
+    result = claude.review_evidence(rows, sha, claude.attest(repo, sha))
+    if result["reason"] in ("protocol", "arguments", "api"):
         raise EvidenceError("protocol")
     return {kind: result[kind]["state"] == "pending" for kind in claude.KINDS}
+
+
+def _text(body: str) -> str:
+    return body.replace("\r\n", "\n").rstrip()
+
+
+def published(repo: str, kind: str, environ: dict[str, str]) -> None:
+    """This run published exactly its local verdict as the only <kind> marker.
+
+    Runs in the review job right after Claude, as main's code: it binds the
+    claude[bot] review to the run that the readers later attest.
+    """
+    if kind not in claude.KINDS:
+        raise EvidenceError("arguments")
+    pr = environ.get("PR", "")
+    if not (pr.isascii() and pr.isdecimal()) or pr.startswith("0"):
+        raise EvidenceError("environment")
+    sha, run = environ.get("HEAD_SHA", ""), environ.get("GITHUB_RUN_ID", "")
+    expected = Path(environ.get("REVIEW_FILE", "")).read_text(encoding="utf-8")
+    prefix = f"<!-- claude-review:v2 kind={kind} "
+    mine = [
+        row
+        for row in source.records(f"repos/{repo}/pulls/{pr}/reviews")
+        if isinstance(row.get("user"), dict)
+        and row["user"].get("login") == claude.BOT
+        and row["user"].get("type") == "Bot"
+        and row.get("commit_id") == sha
+        and isinstance(row.get("body"), str)
+        and row["body"].startswith(prefix)
+    ]
+    first = _text(expected).split("\n", 1)[0]
+    match = claude.MARKER.fullmatch(first)
+    if (
+        len(mine) != 1
+        or match is None
+        or match.group(1) != kind
+        or match.group(3) != run
+        or _text(mine[0]["body"]) != _text(expected)
+    ):
+        raise EvidenceError("unpublished")
 
 
 def targets(event: Record, repo: str) -> dict[str, str]:
@@ -127,6 +168,12 @@ def _event(repo: str) -> Record:
 def main(argv: list[str] | None = None) -> int:
     try:
         flags = sys.argv[1:] if argv is None else argv
+        if flags[:1] == ["--published"] and len(flags[1:]) == 1:
+            repo = os.environ.get("GITHUB_REPOSITORY", "")
+            _event(repo)  # validates the repository and token like other modes
+            published(repo, flags[1], dict(os.environ))
+            print(json.dumps({"published": flags[1]}))
+            return 0
         if flags not in ([], ["--target"]):
             raise EvidenceError("arguments")
         targeting = bool(flags)

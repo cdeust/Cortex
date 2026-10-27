@@ -1,13 +1,14 @@
-"""Adversarial claude[bot] review evidence: one invariant violation per test.
+"""Adversarial run-bound claude[bot] review evidence: one invariant per test.
 
-Protocol: the review job of .github/workflows/claude.yml publishes each native
-review as a GitHub pull request review on commit_id=<head> whose first body line
-is <!-- claude-review:v1 kind=code|security findings=N -->.
+Protocol (ADR-1116): the review job of .github/workflows/claude.yml publishes
+each native review on commit_id=<head> with first body line
+<!-- claude-review:v2 kind=code|security findings=N run=<run id> -->; the run
+must be a claude.yml workflow_run on main whose job "review <head>" validated
+that kind. The job lookup is injected here as a dict.
 """
 
 from __future__ import annotations
 
-import base64
 import copy
 import importlib.util
 import unittest
@@ -17,6 +18,8 @@ SCRIPT = Path(__file__).resolve().parents[2] / "scripts/ci_claude_reviews.py"
 SHA = "a" * 40  # GitHub SHA-1 field, synthetic fixture.
 OTHER = "b" * 40
 BOT = {"login": "claude[bot]", "type": "Bot"}
+# source: synthetic fixture id of the producing claude.yml run, not GitHub data
+RUN = 900
 
 
 def module():
@@ -27,13 +30,15 @@ def module():
 
 
 def review(kind="code", findings=0, review_id=1, **extra):
-    """claude[bot] marker review on SHA; extra overrides any REST field."""
+    """claude[bot] v2 marker review on SHA citing RUN; extra overrides fields."""
+    run = extra.pop("run", RUN)
     value = {
         "id": review_id,
         "user": copy.deepcopy(BOT),
         "commit_id": SHA,
         "state": "COMMENTED",
-        "body": f"<!-- claude-review:v1 kind={kind} findings={findings} -->\n## Review",
+        "body": f"<!-- claude-review:v2 kind={kind} findings={findings} run={run} -->"
+        "\n## Review",
     }
     value.update(copy.deepcopy(extra))
     return value
@@ -43,49 +48,46 @@ def clean():
     return [review("code", 0, 1), review("security", 0, 2)]
 
 
-def workflow(mode):
-    text = f"name: Claude Code\nenv:\n  CLAUDE_REVIEW_GATE: {mode}\njobs: {{}}\n"
-    return {
-        "type": "file",
-        "encoding": "base64",
-        "content": base64.encodebytes(text.encode()).decode(),
-    }
+def producer(status="completed", **conclusions):
+    """The 'review <head>' job of the producing run, with validation steps."""
+    steps = [
+        {"name": f"Validate {kind} review execution", "conclusion": result}
+        for kind, result in {
+            "code": "success",
+            "security": "success",
+            **conclusions,
+        }.items()
+    ]
+    return {"name": f"review {SHA}", "status": status, "steps": steps}
 
 
 class EvidenceTests(unittest.TestCase):
     def setUp(self):
         self.reader = module()
+        self.jobs = {RUN: producer()}
 
-    def evidence(self, rows, sha=SHA, required=True):
-        return self.reader.review_evidence(rows, sha, required)
+    def evidence(self, rows, sha=SHA):
+        return self.reader.review_evidence(rows, sha, self.jobs.get)
 
-    def test_both_clean_reviews_on_exact_head_succeed(self):
+    def outcome(self, rows):
+        result = self.evidence(rows)
+        return result["state"], result["reason"]
+
+    def test_both_validated_clean_reviews_on_exact_head_succeed(self):
         result = self.evidence(clean())
         self.assertEqual(
             (result["state"], result["reason"]), ("success", "reviews_complete")
         )
         self.assertTrue(result["reviews_complete"])
-        self.assertEqual(result["code"]["review_id"], 1)
-        self.assertEqual(result["security"]["review_id"], 2)
+        self.assertEqual((result["code"]["review_id"], result["code"]["run"]), (1, RUN))
 
     def test_absent_review_is_pending_never_failed(self):
-        result = self.evidence([])
-        self.assertEqual(
-            (result["state"], result["reason"]), ("pending", "review_missing")
-        )
-        self.assertFalse(result["reviews_complete"])
-        result = self.evidence([review("code")])
-        self.assertEqual(
-            (result["state"], result["reason"]), ("pending", "review_pending")
-        )
-        self.assertEqual(result["security"]["state"], "pending")
+        self.assertEqual(self.outcome([]), ("pending", "review_missing"))
+        self.assertEqual(self.outcome([review("code")]), ("pending", "review_pending"))
 
     def test_review_on_stale_sha_is_pending(self):
-        result = self.evidence(
-            [review("code", commit_id=OTHER), review("security", commit_id=OTHER)]
-        )
-        self.assertEqual(result["state"], "pending")
-        self.assertFalse(result["reviews_complete"])
+        rows = [review("code", commit_id=OTHER), review("security", commit_id=OTHER)]
+        self.assertEqual(self.outcome(rows), ("pending", "review_missing"))
 
     def test_marker_review_by_another_identity_is_ignored(self):
         for user in (
@@ -96,10 +98,32 @@ class EvidenceTests(unittest.TestCase):
         ):
             with self.subTest(user=user):
                 rows = [review("code", user=user), review("security", user=user)]
-                result = self.evidence(rows)
-                self.assertEqual(
-                    (result["state"], result["reason"]), ("pending", "review_missing")
-                )
+                self.assertEqual(self.outcome(rows), ("pending", "review_missing"))
+
+    def test_unbound_marker_from_tag_or_manual_post_is_not_evidence(self):
+        # An @claude session posts as claude[bot] too: without a producing
+        # claude.yml run that validated this kind, its marker is ignored.
+        legacy = "<!-- claude-review:v1 kind={} findings=0 -->"
+        tagged = [review("code", body=legacy.format("code"))]
+        tagged.append(review("security", 0, 2, body=legacy.format("security")))
+        for rows in (
+            tagged,
+            [review("code", run=901), review("security", 0, 2, run=901)],
+            [review("code", body="<!-- claude-review:v2 kind=code findings=0 -->")],
+        ):
+            with self.subTest(rows=rows):
+                self.assertEqual(self.outcome(rows), ("pending", "review_missing"))
+
+    def test_failed_or_skipped_execution_validation_fails_the_kind(self):
+        for job in (producer(code="failure"), producer(code="skipped")):
+            self.jobs[RUN] = job
+            self.assertEqual(self.outcome(clean()), ("blocked", "review_failed"))
+        self.jobs[RUN] = dict(producer(), steps=[])
+        self.assertEqual(self.outcome(clean()), ("blocked", "review_failed"))
+
+    def test_running_producer_keeps_the_kind_pending(self):
+        self.jobs[RUN] = producer(status="in_progress")
+        self.assertEqual(self.outcome(clean()), ("pending", "review_pending"))
 
     def test_findings_block_until_a_new_head(self):
         result = self.evidence([review("code", 2, 1), review("security", 0, 2)])
@@ -109,22 +133,16 @@ class EvidenceTests(unittest.TestCase):
         self.assertTrue(result["reviews_complete"])
         self.assertEqual(result["code"]["findings"], 2)
 
-    def test_malformed_marker_fails(self):
-        for body in (
-            "<!-- claude-review:v1 kind=other findings=0 -->",
-            "<!-- claude-review:v1 kind=code findings=abc -->",
-            "<!-- claude-review:v1 kind=code findings=01 -->",
-            "<!-- claude-review:v2 kind=code findings=0 -->",
-            "<!-- claude-review:v1 kind=code findings=0 --> trailing",
-            "<!-- claude-review:v1 kind=code findings=-1 -->\nbody",
+    def test_malformed_bound_marker_fails(self):
+        for first in (
+            "<!-- claude-review:v2 kind=other findings=0 run=900 -->",
+            "<!-- claude-review:v2 kind=code findings=abc run=900 -->",
+            "<!-- claude-review:v2 kind=code findings=01 run=900 -->",
+            "<!-- claude-review:v3 kind=code findings=0 run=900 -->",
         ):
-            with self.subTest(body=body):
-                rows = clean() + [review(review_id=3, body=body)]
-                result = self.evidence(rows)
-                self.assertEqual(
-                    (result["state"], result["reason"]), ("blocked", "review_failed")
-                )
-                self.assertFalse(result["reviews_complete"])
+            with self.subTest(first=first):
+                rows = clean() + [review(review_id=3, body=first + "\nbody")]
+                self.assertEqual(self.outcome(rows), ("blocked", "review_failed"))
 
     def test_duplicate_kind_on_one_head_fails_instead_of_latest_wins(self):
         rows = [review("code", 3, 1), review("code", 0, 4), review("security", 0, 2)]
@@ -138,8 +156,7 @@ class EvidenceTests(unittest.TestCase):
         for state in ("APPROVED", "CHANGES_REQUESTED", "DISMISSED"):
             with self.subTest(state=state):
                 rows = [review("code", state=state), review("security", 0, 2)]
-                result = self.evidence(rows)
-                self.assertEqual(result["reason"], "review_failed")
+                self.assertEqual(self.outcome(rows)[1], "review_failed")
 
     def test_unrelated_reviews_and_comments_are_ignored(self):
         rows = clean() + [
@@ -147,7 +164,7 @@ class EvidenceTests(unittest.TestCase):
             review(review_id=8, body=None),
             review(review_id=9, user={"login": "cdeust", "type": "User"}, body="ok"),
         ]
-        self.assertEqual(self.evidence(rows)["state"], "success")
+        self.assertEqual(self.outcome(rows)[0], "success")
 
     def test_malformed_api_rows_block_with_protocol(self):
         for mutate in (
@@ -160,86 +177,57 @@ class EvidenceTests(unittest.TestCase):
         ):
             rows = clean()
             mutate(rows[0])
-            result = self.evidence(rows)
-            self.assertEqual(
-                (result["state"], result["reason"]), ("blocked", "protocol")
-            )
+            self.assertEqual(self.outcome(rows), ("blocked", "protocol"))
         self.assertEqual(self.evidence("rows")["reason"], "protocol")
         self.assertEqual(self.evidence(clean(), sha="nope")["reason"], "arguments")
 
-    def test_not_required_is_a_distinct_state_and_reads_nothing(self):
-        result = self.evidence("unused", required=False)
-        self.assertEqual(
-            (result["state"], result["reason"]), ("not_required", "not_required")
-        )
-        self.assertFalse(result["reviews_complete"])
-        self.assertIs(result["required"], False)
 
+class ProvenanceTests(unittest.TestCase):
+    """attest(): the producing job is read from the Actions API, never the body."""
 
-class GateTests(unittest.TestCase):
     def setUp(self):
         self.reader = module()
+        self.run = {
+            "id": RUN,
+            "path": ".github/workflows/claude.yml",
+            "event": "workflow_run",
+            "head_branch": "main",
+            "repository": {"full_name": "cdeust/Cortex"},
+        }
+        self.jobs = [{"total_count": 2, "jobs": [producer(), {"name": "verify"}]}]
 
-    def test_gate_line_decides_activation(self):
-        mode = self.reader.gate_mode
-        self.assertTrue(mode("env:\n  CLAUDE_REVIEW_GATE: required\n"))
-        self.assertFalse(mode("env:\n  CLAUDE_REVIEW_GATE: observe\n"))
-        self.assertFalse(mode("name: Claude Code\n# CLAUDE_REVIEW_GATE: required\n"))
-        for text in (
-            "env:\n  CLAUDE_REVIEW_GATE: maybe\n",
-            "env:\n  CLAUDE_REVIEW_GATE: required\n  CLAUDE_REVIEW_GATE: observe\n",
+    def api(self, endpoint, paginate=False, missing=False):
+        if endpoint.endswith(f"/actions/runs/{RUN}"):
+            return copy.deepcopy(self.run) if self.run else None
+        if endpoint.endswith(f"/actions/runs/{RUN}/jobs") and paginate:
+            return copy.deepcopy(self.jobs)
+        raise AssertionError(endpoint)
+
+    def job(self):
+        return self.reader.attest("cdeust/Cortex", SHA, self.api)(RUN)
+
+    def test_genuine_claude_workflow_run_yields_the_head_review_job(self):
+        self.assertEqual(self.job()["name"], f"review {SHA}")
+
+    def test_other_workflow_event_branch_repo_or_missing_run_is_unbound(self):
+        for field, value in (
+            ("path", ".github/workflows/pipeline.yml"),
+            ("event", "issue_comment"),
+            ("head_branch", "fix/claude-bot-review"),
+            ("repository", {"full_name": "fork/Cortex"}),
+            ("id", 901),
         ):
-            with self.subTest(text=text), self.assertRaises(self.reader.EvidenceError):
-                mode(text)
+            with self.subTest(field=field):
+                self.setUp()
+                self.run[field] = value
+                self.assertIsNone(self.job())
+        self.setUp()
+        self.run = None
+        self.assertIsNone(self.job())
 
-    def test_main_workflow_listing_is_the_trust_anchor(self):
-        calls = []
-
-        def api(endpoint, **_):
-            calls.append(endpoint)
-            if endpoint.endswith("/contents/.github/workflows?ref=main"):
-                return listing
-            return content
-
-        listing, content = [{"name": "pipeline.yml", "type": "file"}], None
-        self.assertFalse(self.reader.read_gate("cdeust/Cortex", api))
-        self.assertEqual(
-            calls, ["repos/cdeust/Cortex/contents/.github/workflows?ref=main"]
-        )
-        listing = [{"name": "claude.yml", "type": "file"}]
-        for mode, expected in (("observe", False), ("required", True)):
-            content = workflow(mode)
-            self.assertIs(self.reader.read_gate("cdeust/Cortex", api), expected)
-        self.assertEqual(
-            calls[-1],
-            "repos/cdeust/Cortex/contents/.github/workflows/claude.yml?ref=main",
-        )
-
-    def test_unreadable_gate_blocks_instead_of_falling_back(self):
-        def server(listing, content):
-            def api(endpoint, **_):
-                return content if "claude.yml" in endpoint else listing
-
-            return api
-
-        listing = [{"name": "claude.yml", "type": "file"}]
-        for content in (
-            {"encoding": "none", "content": ""},
-            {"encoding": "base64", "content": "!!!"},
-            {"encoding": "base64", "content": base64.b64encode(b"\xff").decode()},
-            [],
-        ):
-            with (
-                self.subTest(content=content),
-                self.assertRaises(self.reader.EvidenceError),
-            ):
-                self.reader.read_gate("cdeust/Cortex", server(listing, content))
-        for bad in ("x", [{"name": 1}], [{"name": "claude.yml", "type": "dir"}]):
-            with (
-                self.subTest(listing=bad),
-                self.assertRaises(self.reader.EvidenceError),
-            ):
-                self.reader.read_gate("cdeust/Cortex", server(bad, None))
+    def test_job_for_another_head_is_unbound(self):
+        self.jobs[0]["jobs"][0]["name"] = f"review {OTHER}"
+        self.assertIsNone(self.job())
 
 
 if __name__ == "__main__":

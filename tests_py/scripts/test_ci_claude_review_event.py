@@ -8,14 +8,18 @@ from __future__ import annotations
 
 import importlib.util
 import os
-import subprocess
-import sys
-import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from tests_py.scripts.test_ci_claude_reviews import OTHER, clean, review, workflow
+from tests_py.scripts.test_ci_claude_reviews import (
+    OTHER,
+    RUN,
+    clean,
+    producer,
+    review,
+)
+from tests_py.scripts.test_ci_claude_review_gate import workflow
 from tests_py.scripts.test_ci_codex_review_event_fixtures import (
     PREFIX,
     REPO,
@@ -51,6 +55,19 @@ def gate(server, mode="required"):
     return server
 
 
+def produced(server, **conclusions):
+    """The genuine claude.yml run 900 whose review job validated each kind."""
+    server.data["claude_run"] = {
+        "id": RUN,
+        "path": ".github/workflows/claude.yml",
+        "event": "workflow_run",
+        "head_branch": "main",
+        "repository": {"full_name": REPO},
+    }
+    server.data["claude_jobs"] = [producer(**conclusions)]
+    return server
+
+
 def waiting(server):
     """Pipeline green while the merge job waits under 'merge pending review'."""
     server.data["source"]["conclusion"] = "success"
@@ -65,6 +82,7 @@ def call(server, function, *args, expected=797):
     with (
         patch.dict(os.environ, {"EXPECTED_PR": str(expected)}),
         patch.object(target.source, "_api", side_effect=server),
+        patch.object(target.claude, "_api", side_effect=server),
         patch.object(target.codex_event.subprocess, "run") as post,
     ):
         result = getattr(target, function)(*args)
@@ -80,8 +98,17 @@ class TargetTests(unittest.TestCase):
             result, {"pr": "797", "sha": SHA, "code": "true", "security": "true"}
         )
         server.data["reviews"] = [review("code", 0, 1)]
+        produced(server)
         result, _ = call(server, "targets", requested(), REPO)
         self.assertEqual((result["code"], result["security"]), ("false", "true"))
+
+    def test_unbound_marker_never_suppresses_the_ci_review(self):
+        # An @claude session posting a marker first must not stop the CI review.
+        server = Server()
+        legacy = "<!-- claude-review:v1 kind=code findings=0 -->"
+        server.data["reviews"] = [review("code", body=legacy), review("security")]
+        result, _ = call(server, "targets", requested(), REPO)
+        self.assertEqual((result["code"], result["security"]), ("true", "true"))
 
     def test_rerun_attempts_and_foreign_events_never_target(self):
         for payload in (
@@ -130,7 +157,7 @@ class TargetTests(unittest.TestCase):
 
 class ResumeTests(unittest.TestCase):
     def test_complete_sources_rerun_only_the_review_job(self):
-        server = waiting(gate(Server()))
+        server = produced(waiting(gate(Server())))
         server.data["reviews"] = clean()
         result, post = call(server, "resume", requested(), REPO)
         self.assertEqual(result, {"action": "review", "job_id": 20})
@@ -142,7 +169,7 @@ class ResumeTests(unittest.TestCase):
         # Codex.yml's Pipeline-completed catch resumes it later.
         for status in ("queued", "in_progress"):
             with self.subTest(status=status):
-                server = waiting(gate(Server()))
+                server = produced(waiting(gate(Server())))
                 server.data["source"].update(status=status, conclusion=None)
                 server.data["reviews"] = clean()
                 result, post = call(server, "resume", requested(), REPO)
@@ -150,6 +177,30 @@ class ResumeTests(unittest.TestCase):
                 self.assertNotIn(
                     (PREFIX + "/actions/runs/50/attempts/1/jobs", True), server.calls
                 )
+
+    def test_marker_only_reviews_cannot_satisfy_the_required_gate(self):
+        # Regression (coordinator msg_6cee25591704): claude[bot] markers that no
+        # validated claude.yml run produced, e.g. from the @claude tag job.
+        legacy = "<!-- claude-review:v1 kind={} findings=0 -->"
+        for rows in (
+            [
+                review("code", body=legacy.format("code")),
+                review("security", 0, 2, body=legacy.format("security")),
+            ],
+            clean(),
+        ):
+            server = waiting(gate(Server()))
+            server.data["reviews"] = rows
+            result, post = call(server, "resume", requested(), REPO)
+            self.assertEqual((result, post), ({"action": "none"}, []))
+
+    def test_failed_execution_validation_never_resumes(self):
+        # Regression (Codex 4389070516): published markers whose run failed
+        # its execution validation are not evidence on any merge path.
+        server = produced(waiting(gate(Server())), code="failure")
+        server.data["reviews"] = clean()
+        result, post = call(server, "resume", requested(), REPO)
+        self.assertEqual((result, post), ({"action": "none"}, []))
 
     def test_pending_claude_review_never_resumes(self):
         server = waiting(gate(Server()))
@@ -189,7 +240,7 @@ class ResumeTests(unittest.TestCase):
 
     def test_merge_blocked_on_claude_step_resumes_only_when_clean(self):
         for findings, expected in ((0, {"action": "merge", "job_id": 21}), (1, None)):
-            server = gate(Server())
+            server = produced(gate(Server()))
             server.data["jobs"][-1]["steps"] = [
                 {"name": "Require complete Claude reviews", "conclusion": "failure"}
             ]
@@ -210,6 +261,7 @@ class CodexCoordinatorTests(unittest.TestCase):
         with (
             patch.dict(os.environ, {"EXPECTED_PR": "797"}),
             patch.object(target.source, "_api", side_effect=server),
+            patch.object(target.claude, "_api", side_effect=server),
             patch.object(target.subprocess, "run") as post,
         ):
             payload = {
@@ -234,37 +286,11 @@ class CodexCoordinatorTests(unittest.TestCase):
             self.assertNotIn((REVIEWS, True), server.calls)
 
     def test_required_gate_with_complete_reviews_resumes(self):
-        server = waiting(gate(Server()))
+        server = produced(waiting(gate(Server())))
         server.data["reviews"] = clean()
         result, post = self.coordinate(server)
         self.assertEqual(result, {"action": "review", "job_id": 20})
         self.assertEqual(len(post), 1)
-
-
-class CommandLineTests(unittest.TestCase):
-    def test_other_events_write_empty_targets(self):
-        with tempfile.TemporaryDirectory() as directory:
-            output = Path(directory) / "output"
-            env = dict(os.environ, GITHUB_EVENT_NAME="issue_comment")
-            env["GITHUB_OUTPUT"] = str(output)
-            for flags in (["--target"], []):
-                done = subprocess.run(
-                    [sys.executable, str(CLAUDE), *flags],
-                    env=env,
-                    text=True,
-                    capture_output=True,
-                )
-                self.assertEqual(done.returncode, 0, done.stderr)
-            self.assertEqual(
-                output.read_text(), "pr=\nsha=\ncode=false\nsecurity=false\n"
-            )
-
-    def test_unknown_arguments_fail(self):
-        done = subprocess.run(
-            [sys.executable, str(CLAUDE), "--publish"], text=True, capture_output=True
-        )
-        self.assertEqual(done.returncode, 1)
-        self.assertIn("arguments", done.stderr)
 
 
 if __name__ == "__main__":

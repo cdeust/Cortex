@@ -104,7 +104,7 @@ def _green_wait(indexed: dict[str, Record]) -> bool:
 
 def combined_proof(codex: Record, claude: Record) -> Record:
     """One proof: Codex alone until main requires Claude, then both sources."""
-    if claude.get("required") is False and claude.get("state") == "not_required":
+    if claude.get("state") == "not_required":
         return codex
     sha = codex.get("sha")
     if claude.get("sha") != sha:

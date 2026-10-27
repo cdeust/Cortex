@@ -19,6 +19,7 @@ from typing import Any
 
 # The wrapper checks out trusted main; isolated Python may still load these files.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import ci_claude_review_gate as gate  # noqa: E402
 import ci_claude_reviews as claude  # noqa: E402
 import ci_codex_review_event_source as source  # noqa: E402
 from ci_codex_reviews import EvidenceError, REPO_PATTERN, _json, review_evidence  # noqa: E402
@@ -112,12 +113,15 @@ def _claude_proof(repo: str, number: int, sha: str) -> Record:
     while Claude is pending: each rerun ends as 'merge pending review' again.
     """
     try:
-        required = claude.read_gate(repo, source._api)
-    except claude.EvidenceError as exc:
+        required = gate.main_requires_claude(repo, source._api)
+    except gate.EvidenceError as exc:
         raise EvidenceError("protocol") from exc
-    rows = source.records(f"repos/{repo}/pulls/{number}/reviews") if required else []
-    result = claude.review_evidence(rows, sha, required)
-    if result.get("reason") in ("protocol", "arguments"):
+    if not required:
+        return {"state": "not_required", "reason": "not_required", "sha": sha}
+    rows = source.records(f"repos/{repo}/pulls/{number}/reviews")
+    # Run provenance goes through the reader's own gh wrapper: a 404 is an answer.
+    result = claude.review_evidence(rows, sha, claude.attest(repo, sha))
+    if result.get("reason") in ("protocol", "arguments", "api"):
         raise EvidenceError("protocol")
     return result
 

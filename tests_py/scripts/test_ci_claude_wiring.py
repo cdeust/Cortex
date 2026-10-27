@@ -8,8 +8,6 @@ from the default branch) and action.yml (App token revoked after the step).
 
 from __future__ import annotations
 
-import base64
-import json
 import os
 import re
 import subprocess
@@ -23,6 +21,7 @@ PIPELINE = ROOT / ".github/workflows/pipeline.yml"
 CLAUDE_YML = ROOT / ".github/workflows/claude.yml"
 CODEX_YML = ROOT / ".github/workflows/Codex.yml"
 READER = ROOT / "scripts/ci_claude_reviews.py"
+GATE = ROOT / "scripts/ci_claude_review_gate.py"
 SHA = "a" * 40  # GitHub SHA-1 field, synthetic fixture.
 # source: upstream tag v1.0.263, docs/verification/claude-bot-ci-20261027.md
 PIN = (
@@ -35,27 +34,32 @@ def job(text, name):
     return re.split(r"\n  [a-z][a-z_-]*:\n", body, maxsplit=1)[0]
 
 
-def command():
-    block = PIPELINE.read_text().split("        run: &claude_review_reader |\n", 1)[1]
+def command(anchor="claude_review_reader", heredoc="CLAUDE_REVIEW_PY"):
+    """The embedded step script of a pipeline.yml run anchor, dedented."""
+    block = PIPELINE.read_text().split(f"        run: &{anchor} |\n", 1)[1]
     return (
-        textwrap.dedent(block.split("\n          CLAUDE_REVIEW_PY", 1)[0])
-        + "\nCLAUDE_REVIEW_PY\n"
+        textwrap.dedent(block.split(f"\n          {heredoc}", 1)[0]) + f"\n{heredoc}\n"
     )
 
 
 class PipelineGateTests(unittest.TestCase):
-    def test_pipeline_embeds_exact_reader_once_and_reuses_it_for_merge(self):
-        run = command()
-        source = run.split("<<'CLAUDE_REVIEW_PY'\n", 1)[1].split(
-            "\nCLAUDE_REVIEW_PY", 1
-        )[0]
-        self.assertEqual(source + "\n", READER.read_text())
+    def test_pipeline_embeds_exact_gate_and_reader_once_each(self):
         text = PIPELINE.read_text()
-        self.assertEqual(text.count("run: *claude_review_reader"), 1)
-        self.assertIn('python3 -I - "${args[@]}"', run)
-        # The gate never bypasses main's activation line; only verify does.
-        shell = run.split("<<'CLAUDE_REVIEW_PY'\n", 1)[0]
-        self.assertNotIn("--assume-required", shell)
+        for anchor, heredoc, script in (
+            ("claude_review_reader", "CLAUDE_REVIEW_PY", READER),
+            ("claude_gate_reader", "CLAUDE_GATE_PY", GATE),
+        ):
+            with self.subTest(anchor=anchor):
+                run = command(anchor, heredoc)
+                source = run.split(f"<<'{heredoc}'\n", 1)[1]
+                source = source.split(f"\n{heredoc}", 1)[0]
+                self.assertEqual(source + "\n", script.read_text())
+                self.assertEqual(text.count(f"run: *{anchor}"), 1)
+                self.assertIn("python3 -I - ", run)
+        # Only the gate read from main decides that Claude is required.
+        shell = command().split("<<'CLAUDE_REVIEW_PY'\n", 1)[0]
+        self.assertIn('if [ "$CLAUDE_REQUIRED" != true ]', shell)
+        self.assertIn("steps.claude_gate.outputs.required", text)
 
     def test_soft_skipped_action_fails_execution_validation(self):
         # An action that soft-skips on workflow validation leaves no execution file.
@@ -123,97 +127,6 @@ class PipelineGateTests(unittest.TestCase):
                 )
                 self.assertEqual(done.returncode, 0)
                 self.assertEqual(output.read_text(), f"state={expected}\n")
-
-
-class BootstrapTests(unittest.TestCase):
-    """A PR cannot be blocked by a gate its own merge installs."""
-
-    def run_gate(self, root, listing, content, completion_only=True):
-        repo = {"full_name": "cdeust/Cortex"}
-        pull = {
-            "state": "open",
-            "draft": False,
-            "head": {"sha": SHA, "repo": repo},
-            "base": {"ref": "main", "repo": repo},
-        }
-        (root / "pull.json").write_text(json.dumps(pull))
-        (root / "listing.json").write_text(json.dumps(listing))
-        (root / "claude.json").write_text(json.dumps(content))
-        (root / "reviews.json").write_text("[[]]")
-        (root / "calls").write_text("")
-        gh = root / "gh"
-        gh.write_text(
-            '#!/bin/sh\necho "$*" >> "$FIXTURE/calls"\ncase "$*" in '
-            '*workflows/claude.yml?ref=main*) cat "$FIXTURE/claude.json" ;; '
-            '*workflows?ref=main*) cat "$FIXTURE/listing.json" ;; '
-            '*/reviews*) cat "$FIXTURE/reviews.json" ;; '
-            '*) cat "$FIXTURE/pull.json" ;; esac\n'
-        )
-        gh.chmod(0o700)
-        (root / "json.py").write_text("raise RuntimeError('candidate import')")
-        return subprocess.run(
-            ["bash", "-eo", "pipefail", "-c", command()],
-            cwd=root,
-            env={
-                **os.environ,
-                "PATH": f"{root}:{os.environ['PATH']}",
-                "FIXTURE": str(root),
-                "PYTHONPATH": str(root),
-                "GH_REPO": "cdeust/Cortex",
-                "PR": "804",
-                "HEAD_SHA": SHA,
-                "CLAUDE_COMPLETION_ONLY": str(completion_only).lower(),
-                "GITHUB_OUTPUT": str(root / "output"),
-            },
-            capture_output=True,
-            text=True,
-        )
-
-    def encoded(self, text):
-        return {
-            "type": "file",
-            "encoding": "base64",
-            "content": base64.b64encode(text.encode()).decode(),
-        }
-
-    def test_main_without_claude_workflow_is_codex_only(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            result = self.run_gate(
-                root, [{"name": "pipeline.yml", "type": "file"}], {}, False
-            )
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("state=not_required", (root / "output").read_text())
-            self.assertNotIn("/reviews", (root / "calls").read_text())
-
-    def test_this_repository_claude_workflow_installs_in_observe_mode(self):
-        text = CLAUDE_YML.read_text()
-        self.assertEqual(text.count("\n  CLAUDE_REVIEW_GATE: "), 1)
-        self.assertIn("\n  CLAUDE_REVIEW_GATE: observe\n", text)
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            listing = [{"name": "claude.yml", "type": "file"}]
-            result = self.run_gate(root, listing, self.encoded(text), False)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("state=not_required", (root / "output").read_text())
-
-    def test_required_gate_without_review_is_pending_never_failed(self):
-        text = CLAUDE_YML.read_text().replace(
-            "  CLAUDE_REVIEW_GATE: observe", "  CLAUDE_REVIEW_GATE: required"
-        )
-        listing = [{"name": "claude.yml", "type": "file"}]
-        for completion_only, code in ((True, 0), (False, 2)):
-            with (
-                self.subTest(completion_only=completion_only),
-                tempfile.TemporaryDirectory() as d,
-            ):
-                root = Path(d)
-                result = self.run_gate(
-                    root, listing, self.encoded(text), completion_only
-                )
-                self.assertEqual(result.returncode, code, result.stderr)
-                self.assertIn("state=pending", (root / "output").read_text())
-                self.assertNotIn("candidate", result.stderr)
 
 
 if __name__ == "__main__":

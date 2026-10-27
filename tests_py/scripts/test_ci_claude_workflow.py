@@ -55,7 +55,6 @@ class ClaudeWorkflowTests(unittest.TestCase):
         target = job(self.text, "target")
         self.assertIn("github.event.workflow_run.run_attempt == 1", target)
         review = job(self.text, "review")
-        self.assertIn("cancel-in-progress: true", review)
         self.assertIn(
             'allowed_bots: "claude[bot],chatgpt-codex-connector[bot],dependabot[bot]"',
             review,
@@ -79,12 +78,45 @@ class ClaudeWorkflowTests(unittest.TestCase):
             self.assertIn(f"Edit(/{temp}/claude-review/{kind}-review.md)", review)
             self.assertNotIn(",Write,", review)
             self.assertIn("steps.kinds.outputs." + kind + " == 'true'", review)
-            self.assertIn(f"<!-- claude-review:v1 kind={kind} findings=N -->", review)
+            run_id = "${{ github.run_id }}"
+            marker = f"<!-- claude-review:v2 kind={kind} findings=N run={run_id} -->"
+            self.assertIn(marker, review)
+            self.assertIn(f"--published {kind}", review)
+
+    def test_review_concurrency_is_per_head_and_never_cancels(self):
+        # Codex 4389070526: a stale run entering a per-PR group could cancel the
+        # newer head's reviewer; GitHub does not order group entry by dispatch.
+        review = job(self.text, "review")
+        group = "group: claude-review-${{ github.repository }}-"
+        group += "${{ needs.target.outputs.sha }}"
+        self.assertIn(group, review)
+        self.assertIn("cancel-in-progress: false", review)
+        self.assertNotIn("cancel-in-progress: true", self.text)
+        self.assertIn("name: review ${{ needs.target.outputs.sha }}", review)
+
+    def test_review_sessions_ignore_repository_settings_and_deny_unlisted_tools(self):
+        # Codex 4389070506: settingSources default to user+project+local
+        # (parse-sdk-options.ts:340-345); .claude/settings.json grants Bash(uv *).
+        review = job(self.text, "review")
+        flags = "--setting-sources user --permission-mode dontAsk"
+        self.assertEqual(review.count(flags), 2)
+        self.assertEqual(review.count("claude_args:"), 2)
+
+    def test_tag_job_is_owner_only_and_scrubs_subprocess_secrets(self):
+        # Codex 4389092806: a writer without secret access must not steer a job
+        # that holds CLAUDE_CODE_OAUTH_TOKEN and runs shell commands.
+        tag = job(self.text, "claude")
+        self.assertIn("github.event.sender.login == github.repository_owner", tag)
+        for name in ("claude", "review"):
+            body = job(self.text, name)
+            uses = body.count("uses: anthropics/claude-code-action@")
+            self.assertEqual(body.count('CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"'), uses)
 
     def test_verification_is_a_separate_untouched_job(self):
         verify = job(self.text, "verify")
         self.assertIn("python3 -I scripts/ci_claude_reviews.py", verify)
-        self.assertIn("--assume-required --require-complete", verify)
+        self.assertIn('--sha "$HEAD_SHA" --require-complete', verify)
+        self.assertIn("actions: read", verify)
         resume = job(self.text, "resume")
         self.assertIn("python3 -B scripts/ci_claude_review_event.py", resume)
         self.assertNotIn("needs.review.outputs", resume)
