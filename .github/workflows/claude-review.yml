@@ -41,6 +41,8 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Native progress/final publication; pinned action restores base config.
+          track_progress: true
           allowed_bots: "claude[bot],chatgpt-codex-connector[bot],dependabot[bot]"
           prompt: |
             /review-pr REPO: ${{ github.repository }} PR_NUMBER: ${{ github.event.pull_request.number }}

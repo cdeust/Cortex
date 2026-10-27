@@ -91,14 +91,19 @@ class NativeClaudeTrustTests(unittest.TestCase):
         )
         self.assertLess(steps.index(checkout), steps.index(invocation))
 
-    def test_action_preparation_preserves_trusted_checkout(self):
-        # Upstream detector.ts forces tag mode and PR checkout for track_progress.
+    def test_native_progress_publication_uses_config_restoring_action(self):
+        # Upstream run.ts restores sensitive config from base before starting CLI.
+        # track_progress enables native progress and final-summary publication.
         workflow = yaml.safe_load(REVIEW.read_text())
         steps = workflow["jobs"]["review"]["steps"]
         invocation = next(
             step for step in steps if "claude-code-action@" in step.get("uses", "")
         )
-        self.assertNotIn("track_progress", invocation["with"])
+        self.assertTrue(invocation["with"].get("track_progress"))
+        self.assertEqual(
+            invocation["uses"],
+            "anthropics/claude-code-action@8041f1d17e0e7d2f2cfe35002962e9f26237c0bb",
+        )
         self.assertTrue(invocation["with"]["prompt"].startswith("/review-pr "))
 
     def test_existing_bot_actors_can_trigger_the_review(self):
