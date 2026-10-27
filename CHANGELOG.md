@@ -14,6 +14,13 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Share the launcher's first-launch backend policy with wheel hooks and direct
+  MCP startup: a fresh unconfigured HOME records SQLite before settings bind;
+  explicit URLs and managed PostgreSQL keep their existing precedence (#703, #704).
+- Stop installing the optional code-intelligence server during hook discovery;
+  installation remains in explicit `scripts/setup.sh` and is disclosed in
+  `PRIVACY.md` (#705).
+
 - The `merge` job of `.github/workflows/pipeline.yml` sets `GH_REPO: ${{ github.repository }}` on its `gh pr merge` step: the job runs without a checkout, so gh could not infer the repository and failed with `fatal: not a git repository` after every stage was green (session-optimizer #65, run 39756969927, 2026-10-22).
 
 - CI requires completed native Codex code and security reviews on the current

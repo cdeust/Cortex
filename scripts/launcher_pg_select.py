@@ -50,6 +50,7 @@ def why_not_eligible(
 ) -> str:
     """``""`` when a new managed store may be selected, else the reason it may not."""
     import launcher_backend  # noqa: PLC0415 — launcher_backend imports this module
+    from mcp_server.infrastructure import backend_resolution  # noqa: PLC0415 — shared first-launch policy
     from mcp_server.infrastructure.backend_marker import environment_decides  # noqa: PLC0415 — resolvable once plugin_root is on sys.path
 
     configured = dict(environ)
@@ -57,11 +58,11 @@ def why_not_eligible(
     if environment_decides(configured):
         return "database_url or a CORTEX_* backend setting selects the store"
     if marker is None:
-        if launcher_backend.has_earlier_state(marker_path.parent, marker_path.name):
+        if backend_resolution.has_earlier_state(marker_path.parent, marker_path.name):
             return f"{marker_path.parent} holds earlier Cortex state"
     elif (
         marker.get("backend") != "sqlite"
-        or marker.get("written_by") != launcher_backend.WRITTEN_BY
+        or marker.get("written_by") != backend_resolution.WRITTEN_BY
     ):
         backend, by = marker.get("backend"), marker.get("written_by")
         return f"{marker_path} selects {backend} ({by})"
@@ -87,7 +88,7 @@ def retains_fallback_store(previous: dict) -> bool:
     if not previous.get("sqlite_fallback") or not previous.get("sqlite_fallback_paths"):
         return False
     import launcher_backend  # noqa: PLC0415 — sibling imports this module
-    from mcp_server.infrastructure import backend_marker  # noqa: PLC0415
+    from mcp_server.infrastructure import backend_marker, backend_resolution  # noqa: PLC0415
 
     configured = dict(os.environ)
     launcher_backend.map_database_option(configured)
@@ -98,7 +99,7 @@ def retains_fallback_store(previous: dict) -> bool:
     return bool(
         marker
         and marker.get("backend") == "sqlite"
-        and marker.get("written_by") == launcher_backend.WRITTEN_BY
+        and marker.get("written_by") == backend_resolution.WRITTEN_BY
         and previous.get("sqlite_fallback_paths") == paths
         and any(Path(path).is_file() for path in paths)
     )

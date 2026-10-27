@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from mcp_server.hooks.entry import prepare_environment, resolve_auto_backend
+from mcp_server.hooks.entry import prepare_environment
 from mcp_server.infrastructure import memory_store
 from mcp_server.infrastructure.backend_marker import apply_backend_resolution
 from mcp_server.infrastructure.memory_config import get_memory_settings
@@ -29,7 +29,6 @@ def test_explicit_postgres_target_never_falls_back_to_sqlite(
     get_memory_settings.cache_clear()
     try:
         prepare_environment(os.environ, tmp_path / "absent-marker.json")
-        resolve_auto_backend(os.environ)
         assert os.environ["DATABASE_URL"] == url
         with pytest.raises(RuntimeError, match="explicit DATABASE_URL unreachable"):
             memory_store.get_shared_store()
@@ -57,23 +56,37 @@ def test_mcp_namespaced_postgres_target_is_explicit(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "environ",
+    "environ, expected_backend",
     [
-        {"CORTEX_RUNTIME": "cli"},
-        {"CORTEX_RUNTIME": "cowork", "CORTEX_MEMORY_STORE_BACKEND": "sqlite"},
-        {"CORTEX_RUNTIME": "cowork", "CORTEX_MEMORY_STORE_BACKEND": "postgresql"},
-        {"CORTEX_RUNTIME": "cowork", "DATABASE_URL": "postgresql:///operator_db"},
-        {
-            "CORTEX_RUNTIME": "cowork",
-            "CORTEX_MEMORY_DATABASE_URL": "postgresql:///operator_db",
-        },
+        ({"CORTEX_RUNTIME": "cli"}, "sqlite"),
+        (
+            {"CORTEX_RUNTIME": "cowork", "CORTEX_MEMORY_STORE_BACKEND": "sqlite"},
+            "sqlite",
+        ),
+        (
+            {"CORTEX_RUNTIME": "cowork", "CORTEX_MEMORY_STORE_BACKEND": "postgresql"},
+            "postgresql",
+        ),
+        (
+            {"CORTEX_RUNTIME": "cowork", "DATABASE_URL": "postgresql:///operator_db"},
+            None,
+        ),
+        (
+            {
+                "CORTEX_RUNTIME": "cowork",
+                "CORTEX_MEMORY_DATABASE_URL": "postgresql:///operator_db",
+            },
+            None,
+        ),
     ],
 )
-def test_resolved_backend_skips_auto_store_probe(environ, monkeypatch):
+def test_resolved_backend_skips_auto_store_probe(
+    environ, expected_backend, monkeypatch, tmp_path
+):
     def unexpected_store():
         pytest.fail("configured backend must not run auto store selection")
 
     monkeypatch.setattr(memory_store, "get_shared_store", unexpected_store)
-    original = environ.copy()
-    resolve_auto_backend(environ)
-    assert environ == original
+    prepare_environment(environ, tmp_path / "backend.json")
+    backend = environ.get("CORTEX_MEMORY_STORE_BACKEND")
+    assert backend == expected_backend
