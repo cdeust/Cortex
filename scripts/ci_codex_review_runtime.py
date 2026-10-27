@@ -1,7 +1,7 @@
 """Trusted Codex review I/O and nullable security-resolution proof.
 
 Sources: PR805 summary6442631163 on0134b085 and authenticated GraphQL
-reviewThreads.isResolved, author.__typename and comment.databaseId.
+reviewThreads.isResolved, resolvedBy, author.__typename and comment.databaseId.
 https://docs.github.com/en/graphql/guides/using-pagination-in-the-graphql-api
 https://cli.github.com/manual/gh_api
 """
@@ -82,6 +82,7 @@ query($owner: String!, $name: String!, $number: Int!, $endCursor: String) {
         pageInfo { hasNextPage endCursor }
         nodes {
           isResolved
+          resolvedBy { login __typename }
           comments(first:1) { nodes { databaseId body author { login __typename } } }
         }
       }
@@ -111,7 +112,22 @@ def _announced(body: str, repo: str, pr: int) -> set[int]:
     return expected if expected and len(expected) == len(ids) == total else set()
 
 
-def _native_thread(thread: Record) -> tuple[int, bool] | None:
+def _trusted_resolver(resolver: Any, owner: str) -> bool:
+    """Only the repository owner's user account may dismiss a finding.
+
+    source: claude.yml tag-mode rule (ADR-1116, findings4389808387 and
+    4390480666) trusts github.repository_owner alone; PR805 finding4391948358
+    forbids a PR author resolving their own findings. A missing resolver
+    (deleted account, unknown actor) is never trusted.
+    """
+    if resolver is None:
+        return False
+    if not isinstance(resolver, dict) or type(resolver.get("login")) is not str:
+        raise EvidenceError("protocol")
+    return resolver["login"] == owner and resolver.get("__typename") == "User"
+
+
+def _native_thread(thread: Record, owner: str) -> tuple[int, bool] | None:
     resolved = thread["isResolved"]
     if type(resolved) is not bool:
         raise EvidenceError("protocol")
@@ -126,13 +142,13 @@ def _native_thread(thread: Record) -> tuple[int, bool] | None:
     identity = root["databaseId"]
     if type(identity) is not int or identity <= 0:
         raise EvidenceError("protocol")
-    return identity, resolved
+    return identity, resolved and _trusted_resolver(thread["resolvedBy"], owner)
 
 
-def _native_states(nodes) -> dict[int, bool]:
+def _native_states(nodes, owner: str) -> dict[int, bool]:
     states = {}
     for thread in nodes:
-        native = _native_thread(thread)
+        native = _native_thread(thread, owner)
         if native is None:
             continue
         identity, resolved = native
@@ -142,7 +158,7 @@ def _native_states(nodes) -> dict[int, bool]:
     return states
 
 
-def _thread_states(pages: Any, sha: str) -> dict[int, bool]:
+def _thread_states(pages: Any, sha: str, owner: str) -> dict[int, bool]:
     if not isinstance(pages, list) or not pages:
         raise EvidenceError("protocol")
     states = {}
@@ -157,7 +173,7 @@ def _thread_states(pages: Any, sha: str) -> dict[int, bool]:
             more = connection["pageInfo"]["hasNextPage"]
             if type(more) is not bool or more != (index < len(pages) - 1):
                 raise EvidenceError("protocol")
-            current = _native_states(connection["nodes"])
+            current = _native_states(connection["nodes"], owner)
             if states.keys() & current.keys():
                 raise EvidenceError("protocol")
             states.update(current)
@@ -191,7 +207,8 @@ def resolve_security(target, body, review, metadata):
         return None
     owner, name = repo.split("/")
     fields = dict(query=THREAD_QUERY, owner=owner, name=name, number=pr)
-    states = _thread_states(_api("graphql", paginate=True, fields=fields), sha)
+    pages = _api("graphql", paginate=True, fields=fields)
+    states = _thread_states(pages, sha, owner)
     if states.keys() != expected:
         raise EvidenceError("protocol")
     return {
