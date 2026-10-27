@@ -33,8 +33,8 @@ class NativeClaudeTrustTests(unittest.TestCase):
         )
         self.assertIn("Only post GitHub comments", invocation["with"]["prompt"])
 
-    def test_target_review_uses_supported_explicit_github_authentication(self):
-        # Upstream issue713: target-event OIDC exchange returns401.
+    def test_automatic_review_uses_claude_app_identity(self):
+        # Upstream issue396: github_token overrides the Claude App identity.
         workflow = yaml.safe_load(REVIEW.read_text())
         review = workflow["jobs"]["review"]
         invocation = next(
@@ -42,11 +42,10 @@ class NativeClaudeTrustTests(unittest.TestCase):
             for step in review["steps"]
             if "claude-code-action@" in step.get("uses", "")
         )
+        self.assertNotIn("github_token", invocation["with"])
         self.assertEqual(
-            invocation["with"].get("github_token"), "${{ secrets.GITHUB_TOKEN }}"
-        )
-        self.assertEqual(
-            review["permissions"], {"contents": "read", "pull-requests": "write"}
+            review["permissions"],
+            {"contents": "read", "pull-requests": "write", "id-token": "write"},
         )
 
     def test_owner_mentions_keep_app_authentication(self):
@@ -66,11 +65,11 @@ class NativeClaudeTrustTests(unittest.TestCase):
         )
         self.assertFalse(checkout["with"]["persist-credentials"])
 
-    def test_privileged_review_uses_base_workflow(self):
+    def test_automatic_review_uses_upstream_app_supported_event(self):
         workflow = yaml.safe_load(REVIEW.read_text())
         events = workflow.get("on", workflow.get(True))
-        self.assertIn("pull_request_target", events)
-        self.assertNotIn("pull_request", events)
+        self.assertIn("pull_request", events)
+        self.assertNotIn("pull_request_target", events)
 
     def test_review_loads_trusted_configuration_before_receiving_authority(self):
         workflow = yaml.safe_load(REVIEW.read_text())
