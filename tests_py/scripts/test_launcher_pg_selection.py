@@ -102,10 +102,10 @@ def test_a_managed_marker_without_root_is_an_error_naming_the_file(tmp_path):
 @pytest.fixture
 def select(monkeypatch):
     monkeypatch.syspath_prepend(str(REPO_ROOT / "scripts"))
-    import launcher_backend
+    from mcp_server.infrastructure import backend_resolution
     import launcher_pg_select
 
-    return launcher_pg_select, launcher_backend
+    return launcher_pg_select, backend_resolution
 
 
 def _eligible(select, tmp_path, marker=None, files=(), **env):

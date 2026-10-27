@@ -98,8 +98,10 @@ def test_explicit_backend_takes_precedence_over_marker(tmp_path, overrides):
     )
 
 
-def test_no_marker_keeps_existing_auto_behavior(tmp_path):
-    assert probe(tmp_path, None)["backend"] == "auto"
+def test_no_marker_records_sqlite_before_settings_bind(tmp_path):
+    assert probe(tmp_path, None)["backend"] == "sqlite"
+    marker = tmp_path / "claude" / "methodology" / "backend.json"
+    assert json.loads(marker.read_text())["backend"] == "sqlite"
 
 
 def test_an_invalid_marker_stops_the_server_and_names_the_file(tmp_path):
@@ -124,7 +126,10 @@ def test_an_invalid_marker_stops_the_server_and_names_the_file(tmp_path):
         timeout=PROCESS_TIMEOUT,
     )
     assert result.returncode != 0
-    assert "BackendMarkerError" in result.stderr and str(marker) in result.stderr
+    assert result.returncode == 1
+    assert "Cortex not ready: backend marker" in result.stderr
+    assert str(marker) in result.stderr
+    assert "Traceback" not in result.stderr
 
 
 def test_blank_manifest_dsn_does_not_override_marker(tmp_path):
