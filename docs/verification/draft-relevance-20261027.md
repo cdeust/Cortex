@@ -1,4 +1,4 @@
-# Draft relevance audit — 2026-10-27
+# Draft relevance audit, 2026-10-27
 
 Audited checkout: `.claude/worktrees/codex-drafts-current-main`, branch
 `codex-drafts-current-main`, Codex session `01a17d21-9d79-7683-a0a8-eb42c4777763`.
@@ -25,7 +25,7 @@ of a stale branch that has since merged older main commits.
 | [770](https://github.com/cdeust/Cortex/pull/770) | `d2bb5cb462a8dbee6860545a7d815742d494d5a2` | Backend-resolution residual remains | Deliver separate residual fix; preserve draft/branch under no-close hold |
 | [646](https://github.com/cdeust/Cortex/pull/646) | `a0531d33889299e67963322b32c0717c502eeeda` | Held experiment; no evidence authorizes promotion | Preserve draft and branch `exp/sqlite-score-fusion`; do not merge or close |
 
-## 774 — snapshot without an established current consumer
+## 774: snapshot without an established current consumer
 
 Primary artifacts at the exact old head:
 
@@ -67,7 +67,7 @@ Proposed coordinator hold text:
 > remain unestablished, so do not relabel or regenerate it. Native reviews and
 > runtime dashboard acceptance remain outstanding.
 
-## 771 — pipeline installation still reachable from SessionStart
+## 771: pipeline installation still reachable from SessionStart
 
 Original fix is commit `41fc50ef28c02b38ad4bdc9fa6359cd2af45c2c4`; later draft
 heads merged older main. On audited main:
@@ -101,7 +101,7 @@ Proposed coordinator wording:
 > discloses the explicit setup transfer. This audit neither closes issue705 nor
 > certifies the old draft's native reviews.
 
-## 770 — launcher policy still missing from wheel entry points
+## 770: launcher policy still missing from wheel entry points
 
 Original implementation `aa3a1fba3f71a8132c7f295a3b81f0dea0a56f0f`, followed by
 the supplied-environment correction `89d151a7` and postcondition correction
@@ -145,7 +145,7 @@ Proposed coordinator wording:
 > persistence through real MCP remember. The library portion of issue704 and the
 > old draft's native reviews remain outside that evidence.
 
-## 646 — owner hold remains binding
+## 646: owner hold remains binding
 
 Owner comment [6327774005](https://github.com/cdeust/Cortex/pull/646#issuecomment-6327774005)
 explicitly says retain draft, do not merge or close. Its primary committed
