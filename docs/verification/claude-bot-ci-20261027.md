@@ -171,28 +171,47 @@ and stays pending (verify turns red).
 
 ## Local gates
 
-Measured on commit 7b6e13a2 (only this section was amended after;
-markdown only). Before: the final `tests_py/scripts/test_ci_claude_*.py` files
-copied onto `git archive origin/main`:
+Final state: commit 953ed145 (base `origin/main` 0a711837 after merging PR804;
+this section was written after the run, markdown only). Before-runs copy the
+final test files onto `git archive` of the earlier commit.
+
+Round 1, before (`origin/main` b207d8c0): 53 failed, 5 passed; the decisive
+line is the rerun loop of the Codex catch while Claude pends:
 
 ```
-53 failed, 5 passed, 12 subtests passed in 1.85s
 FAILED ...::CodexCoordinatorTests::test_codex_completion_waits_for_required_claude_review
 E   AssertionError: Tuples differ: ({'action': 'review', 'job_id': 20}, [call(['gh', 'api[109 chars]ue)]) != ({'action': 'none'}, [])
 ```
 
-The last line is the rerun loop on `origin/main`: with Claude required and
-pending, the Codex catch reruns the green waiting job. After, on this branch:
+Round 2, before (PR head 005dc258), the twelve regressions named in the table
+above: `12 failed, 2 passed in 1.21s` (counting failed subtests). The two that
+pass on 005dc258 are `test_failed_execution_validation_never_resumes`, because
+005dc258 already rejected v2 markers as malformed, and
+`test_marker_only_or_forged_citation_never_satisfies_required_gate`, whose
+subtests fail. Failing lines include
+`AssertionError: Tuples differ: ('false', 'true') != ('true', 'true')` (a tag
+marker suppressed the CI review) and
+`AttributeError: module 'ci_claude_reviews' has no attribute 'attest'`.
+
+Round 3, before (af490f5d), `test_ci_claude_recovery.py`: `5 failed, 1 passed`,
+for example `AssertionError: {'action': 'none'} != {'action': 'review',
+'job_id': 20}` (a validated retry could not resume). The one that passes is the
+same-attempt conflict guard, unchanged by design.
+
+After, on 953ed145:
 
 ```
-pytest tests_py/scripts/test_ci_claude_*.py: 51 passed, 58 subtests passed in 2.06s
-pytest (full suite): 10993 passed, 23 skipped, 2 warnings, 865 subtests passed in 478.05s; exit=0
-uvx ruff@0.16.6 check .: All checks passed!; exit=0
-uvx ruff@0.16.6 format --check .: 3824 files already formatted; exit=0
-python scripts/check_craftsmanship.py --base origin/main: Craftsmanship gate: OK; exit=0
-actionlint claude.yml pipeline.yml Codex.yml: no output; exit=0
-python scripts/check_doc_claims.py: doc claims OK; exit=0
+pytest (full suite): 11048 passed, 23 skipped, 2 warnings, 886 subtests passed in 499.58s; exit 0
+uvx ruff@0.17.1 check . / format --check .: All checks passed! / 3837 files already formatted; exit 0 / 0
+uvx ruff@0.16.6 check . / format --check .: All checks passed! / 3837 files already formatted; exit 0 / 0
+python scripts/check_craftsmanship.py --base origin/main: Craftsmanship gate: OK; exit 0
+actionlint claude.yml pipeline.yml Codex.yml: no output; exit 0
+python scripts/check_doc_claims.py: doc claims OK
 ```
+
+Ruff: no workflow or `ci.json` invokes Ruff since #786 (51fe5479 removed
+`ci.yml` lines 709-719). The repository pins `ruff==0.17.1`
+(`pyproject.toml:652`, `uv.lock:1497`), so both that pin and 0.16.6 were run.
 
 Environment of the run: a worktree-local venv synced from `uv.lock` (the main
 checkout's shared venv had drifted), and `UV_PYTHON=/opt/homebrew/bin/python3.13`
