@@ -11,8 +11,9 @@ from mcp_server.infrastructure.memory_config import get_memory_settings
 
 
 @pytest.mark.parametrize("url_key", ["DATABASE_URL", "CORTEX_MEMORY_DATABASE_URL"])
+@pytest.mark.parametrize("unused_url", [None, "", "  "])
 def test_explicit_postgres_target_never_falls_back_to_sqlite(
-    tmp_path, monkeypatch, url_key
+    tmp_path, monkeypatch, url_key, unused_url
 ):
     url = "postgresql:///unavailable_cortex_test"
     monkeypatch.setenv("CORTEX_RUNTIME", "cowork")
@@ -23,7 +24,10 @@ def test_explicit_postgres_target_never_falls_back_to_sqlite(
     other = (
         "DATABASE_URL" if url_key != "DATABASE_URL" else "CORTEX_MEMORY_DATABASE_URL"
     )
-    monkeypatch.delenv(other, raising=False)
+    if unused_url is None:
+        monkeypatch.delenv(other, raising=False)
+    else:
+        monkeypatch.setenv(other, unused_url)
     monkeypatch.setattr(memory_store, "_try_pg_verbose", lambda _url: (None, "offline"))
     memory_store.reset_shared_store()
     get_memory_settings.cache_clear()

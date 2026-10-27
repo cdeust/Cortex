@@ -41,10 +41,14 @@ def apply() -> None:
         BackendMarkerError,
     )
     from mcp_server.infrastructure.managed_pg import ManagedPgError  # noqa: PLC0415 — same path as above
-    from mcp_server.infrastructure.backend_resolution import settle_backend  # noqa: PLC0415 — launcher adds plugin_root before apply, after importing this script
+    from mcp_server.infrastructure.backend_resolution import (  # noqa: PLC0415 — launcher adds plugin_root before apply
+        resolve_auto_backend,
+        settle_backend,
+    )
 
     try:
         settle_backend(os.environ)
+        resolve_auto_backend()
     except (BackendMarkerError, ManagedPgError, OSError) as exc:
         print(f"[cortex-launcher] Cortex not ready: {exc}", file=sys.stderr)
         sys.exit(1)

@@ -2,6 +2,7 @@
 
 import importlib
 import os
+from pathlib import Path
 
 import pytest
 
@@ -13,6 +14,7 @@ from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 @pytest.fixture
 def dispatch_hook(monkeypatch):
     observed = {}
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[2] / "scripts"))
     monkeypatch.setattr(entry.sys, "argv", ["hook", "auto_recall"])
     monkeypatch.setattr(entry, "use_utf8_output", lambda: None)
     monkeypatch.setattr(wiring, "wire_composition_root", lambda: None)
@@ -31,7 +33,13 @@ def dispatch_hook(monkeypatch):
 
     monkeypatch.setattr(entry, "run_all", capture)
 
-    def run():
+    def run(entry_point):
+        if entry_point == "launcher":
+            import launcher_backend
+
+            launcher_backend.apply()
+            capture()
+            return observed
         with pytest.raises(SystemExit) as stopped:
             entry.main()
         assert stopped.value.code == 0
@@ -40,15 +48,16 @@ def dispatch_hook(monkeypatch):
     return run
 
 
-@pytest.mark.parametrize("runtime", ["cowork", "cli"])
+@pytest.mark.parametrize("entry_point", ["wheel", "launcher"])
 @pytest.mark.parametrize("sqlite", [True, False])
 def test_engine_selected_auto_backend_reaches_hook(
-    runtime, sqlite, tmp_path, monkeypatch, dispatch_hook
+    entry_point, sqlite, tmp_path, monkeypatch, dispatch_hook
 ):
-    monkeypatch.setenv("CORTEX_RUNTIME", runtime)
+    monkeypatch.setenv("CORTEX_RUNTIME", "cowork" if entry_point == "wheel" else "cli")
     monkeypatch.setenv("CORTEX_MEMORY_STORE_BACKEND", "auto")
     for key in ("DATABASE_URL", "CORTEX_MEMORY_DATABASE_URL", "CORTEX_BACKEND"):
         monkeypatch.delenv(key, raising=False)
+    monkeypatch.delenv("CLAUDE_PLUGIN_OPTION_DATABASE_URL", raising=False)
     local = SqliteMemoryStore(str(tmp_path / "auto.sqlite"))
     selected_url = "postgresql://127.0.0.1/operator_selected_test"
     selected = local if sqlite else object()
@@ -59,7 +68,7 @@ def test_engine_selected_auto_backend_reaches_hook(
     )
     monkeypatch.setattr(db_connect, "pg_connect", lambda *args, **kwargs: connection)
     try:
-        observed = dispatch_hook()
+        observed = dispatch_hook(entry_point)
         assert observed["sqlite"] is sqlite
         assert os.environ["CORTEX_MEMORY_STORE_BACKEND"] == (
             "sqlite" if sqlite else "postgresql"

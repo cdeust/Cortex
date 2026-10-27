@@ -145,10 +145,36 @@ def settle_backend(
     backend_marker.apply_backend_resolution(environ, marker_path, default="sqlite")
     backend = environ.get("CORTEX_MEMORY_STORE_BACKEND", "")
     named_url = environ.get("CORTEX_MEMORY_DATABASE_URL", "").strip()
-    if backend != "sqlite" and "DATABASE_URL" not in environ:
+    if backend != "sqlite" and not environ.get("DATABASE_URL", "").strip():
         if named_url:
             environ["DATABASE_URL"] = named_url
         elif backend == "postgresql":
             # source: ADR-1104 -- only a selected PostgreSQL uses the legacy URL.
             environ["DATABASE_URL"] = "postgresql://localhost:5432/cortex"
     return backend
+
+
+def resolve_auto_backend() -> None:
+    """Export the process engine's auto choice for both hook dispatch adapters.
+
+    Call after ``settle_backend`` and before raw-SQL hook imports.
+    source: ADR-0535
+    Native review: PR804 discussions4388465600 and4388819779.
+    """
+    if os.environ.get("CORTEX_MEMORY_STORE_BACKEND") != "auto":
+        return
+    if (
+        os.environ.get("DATABASE_URL", "").strip()
+        or os.environ.get("CORTEX_MEMORY_DATABASE_URL", "").strip()
+    ):
+        return
+    from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: PLC0415 — runtime selection follows first-launch environment resolution
+    from mcp_server.infrastructure.memory_config import get_memory_settings  # noqa: PLC0415 — preserve the engine-selected PostgreSQL URL
+    from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore  # noqa: PLC0415 — runtime selection follows first-launch environment resolution
+
+    store = get_shared_store()
+    if isinstance(store, SqliteMemoryStore):
+        os.environ["CORTEX_MEMORY_STORE_BACKEND"] = "sqlite"
+    else:
+        os.environ["CORTEX_MEMORY_STORE_BACKEND"] = "postgresql"
+        os.environ["DATABASE_URL"] = get_memory_settings().DATABASE_URL
