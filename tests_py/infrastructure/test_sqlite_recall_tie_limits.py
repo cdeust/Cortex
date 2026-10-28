@@ -25,6 +25,8 @@ import sqlite3
 import numpy as np
 import pytest
 
+from tests_py._sqlite_vec import require_sqlite_vec
+
 from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 from mcp_server.infrastructure.sqlite_store_recall_signals import VEC0_K_MAX
 
@@ -53,6 +55,7 @@ _GROUP_SMALL, _GROUP_LARGE = 150, 1200
 
 @pytest.fixture
 def store():
+    require_sqlite_vec()
     s = SqliteMemoryStore()
     if not s._has_vec:
         pytest.fail("sqlite-vec must be loaded")

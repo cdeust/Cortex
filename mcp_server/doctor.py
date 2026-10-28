@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import sqlite3
 import sys
 import time
 from pathlib import Path
@@ -487,6 +488,15 @@ def _sqlite_vector_search() -> Check:
             "Restart Claude Code to let the launcher install it, or run: "
             "python3 scripts/launcher.py mcp_server --install-deps",
         )
+    if not hasattr(sqlite3.Connection, "enable_load_extension"):
+        return Check(
+            "SQLite vector search",
+            False,
+            "sqlite3.Connection.enable_load_extension is unavailable — "
+            "semantic recall falls back to full-text search only",
+            "Use Homebrew Python or a uv-managed Python built with loadable "
+            "SQLite extensions, then reinstall with that interpreter.",
+        )
     try:
         store = SqliteMemoryStore(db_path=get_memory_settings().SQLITE_FALLBACK_PATH)
         try:
@@ -509,8 +519,8 @@ def _sqlite_vector_search() -> Check:
         "was likely built without loadable-extension support (common on "
         "macOS system/Framework Python) — semantic recall falls back to "
         "full-text search only",
-        "Use a Python built with extension loading enabled (python.org "
-        "installer, pyenv, or Homebrew python), then reinstall.",
+        "Use a Python built with extension loading enabled (Homebrew or "
+        "uv-managed Python), then reinstall with that interpreter.",
     )
 
 

@@ -19,6 +19,8 @@ from datetime import datetime, timedelta, timezone
 import numpy as np
 import pytest
 
+from tests_py._sqlite_vec import require_sqlite_vec
+
 from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 
 # source: SqliteSearchMixin.recall_memories pool = max_results * 10 -> 100;
@@ -97,6 +99,7 @@ def test_sqlite_vector_ties_are_ranked_newest_first(store):
     """vec0's KNN takes no second ORDER BY key: the order of the rows it
     returns is total (newest first); which rows it keeps at its own LIMIT is
     vec0's choice, so this case stays under the pool size."""
+    require_sqlite_vec()
     newest = insert_tied(store, "zq vec row")
     rows = store.recall_memories(
         query_text="wxyv",

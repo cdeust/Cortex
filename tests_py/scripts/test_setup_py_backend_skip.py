@@ -134,6 +134,7 @@ def test_main_model_download_is_lazy_in_sqlite_mode(monkeypatch, skip_postgres):
         "verify",
     ):
         monkeypatch.setattr(mod, name, mock.Mock())
+    monkeypatch.setattr(mod.setup_sqlite, "check_sqlite_extension_loading", mock.Mock())
     cache_model = mock.Mock()
     monkeypatch.setattr(mod, "cache_embedding_model", cache_model)
 
