@@ -3635,6 +3635,10 @@
     "ADR-1117": {
       "mirror": "ADR-1117-use-the-official-anthropic-direct-pr-review-workflow.md",
       "path": "adr/cortex/1117-use-the-official-anthropic-direct-pr-review-workflow.md"
+    },
+    "ADR-9852": {
+      "mirror": "ADR-9852-restore-the-previous-head-when-a-superseding-memory-is-deleted.md",
+      "path": "adr/cortex/9852-restore-the-previous-head-when-a-superseding-memory-is-deleted.md"
     }
   },
   "project": "cortex",

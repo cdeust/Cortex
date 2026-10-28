@@ -1,0 +1,97 @@
+# source: issue #699, ADR-9852; ci.json and scripts/ci_unit.sh.
+name: Supersession deletion parity
+on:
+  pull_request:
+    paths:
+      - "mcp_server/infrastructure/sqlite_schema.py"
+      - "mcp_server/infrastructure/sqlite_store.py"
+      - "tests_py/infrastructure/test_supersession_delete_parity.py"
+      - ".github/workflows/supersession-delete-parity.yml"
+permissions:
+  contents: read
+jobs:
+  before-and-after:
+    runs-on: ubuntu-latest
+    env:
+      CORTEX_RERANKER_OFFLINE: "1"
+      BASE_SHA: ${{ github.event.pull_request.base.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Install the locked unit environment
+        run: |
+          command -v uv >/dev/null || pipx install uv==0.11.3
+          export PATH="$HOME/.local/bin:$PATH"
+          uv python install 3.12
+          uv sync --locked --managed-python --python 3.12 --extra dev --extra sqlite --extra codebase --extra postgresql
+          uv pip install pip
+      - name: Check the proposed sources and decision mirror
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          uvx ruff==0.17.1 check mcp_server/infrastructure/sqlite_schema.py mcp_server/infrastructure/sqlite_store.py tests_py/infrastructure/test_supersession_delete_parity.py
+          uvx ruff==0.17.1 format --check mcp_server/infrastructure/sqlite_schema.py mcp_server/infrastructure/sqlite_store.py tests_py/infrastructure/test_supersession_delete_parity.py
+          uv run --no-sync python scripts/check_craftsmanship.py --base origin/main
+          uv run --no-sync python scripts/check_project_wiki.py
+      - name: Reproduce the SQLite failure on the PR base
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          export UV_PROJECT_ENVIRONMENT="$GITHUB_WORKSPACE/.venv"
+          if git cat-file -e "$BASE_SHA:tests_py/infrastructure/test_supersession_delete_parity.py"; then
+            echo "The base already carries this regression; verify the head below."
+            exit 0
+          fi
+          baseline="$RUNNER_TEMP/issue-699-base"
+          git worktree add --detach "$baseline" "$BASE_SHA"
+          cp tests_py/infrastructure/test_supersession_delete_parity.py "$baseline/tests_py/infrastructure/"
+          cd "$baseline"
+          set +e
+          uv run --no-sync bash scripts/ci_unit.sh tests_py/infrastructure/test_supersession_delete_parity.py::test_deleting_head_restores_predecessor --junitxml="$RUNNER_TEMP/before.xml"
+          status=$?
+          set -e
+          test "$status" -eq 1
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          root = ET.parse(Path(os.environ["RUNNER_TEMP"]) / "before.xml")
+          cases = root.findall(".//testcase")
+          failed = [case for case in cases if case.find("failure") is not None]
+          assert len(cases) == 2, [case.attrib for case in cases]
+          assert len(failed) == 1, [case.attrib for case in failed]
+          assert failed[0].attrib["name"].endswith("[sqlite]")
+          assert not root.findall(".//error")
+          assert not root.findall(".//skipped")
+          print("BEFORE: SQLite regression fails; PostgreSQL control passes.")
+          PY
+      - name: Verify both backends and legacy repair on the PR head
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          uv run --no-sync bash scripts/ci_unit.sh tests_py/infrastructure/test_supersession_delete_parity.py --junitxml="$RUNNER_TEMP/after.xml"
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          root = ET.parse(Path(os.environ["RUNNER_TEMP"]) / "after.xml")
+          cases = root.findall(".//testcase")
+          assert len(cases) == 15, [case.attrib for case in cases]
+          assert not root.findall(".//failure")
+          assert not root.findall(".//error")
+          assert not root.findall(".//skipped")
+          print("AFTER: all 15 cases passed, including both storage backends.")
+          PY
+      - name: Preserve the hosted before and after receipts
+        if: always()
+        run: |
+          for report in "$RUNNER_TEMP/before.xml" "$RUNNER_TEMP/after.xml"; do
+            if [ -f "$report" ]; then
+              cat "$report"
+            fi
+          done
