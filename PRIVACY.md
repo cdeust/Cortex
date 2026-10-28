@@ -126,11 +126,12 @@ The only outbound network activity is:
    content is sent. `CORTEX_EMBEDDING_ZERO_DOWNLOAD=1` skips the
    machine-learning packages and the model. When the plugin runs its own
    PostgreSQL server (below), Setup also downloads, once per pinned version,
-   the PostgreSQL 18.6.0 archive of theseus-rs/postgresql-binaries and a
-   pgvector 0.8.7 archive from this repository's own GitHub releases (about
-   13 MB, each checked against a pinned sha256). The pgvector archives are
-   compiled by Cortex's CI from the pinned upstream source commit against that
-   same PostgreSQL, with a build-provenance attestation you can check with
+   the PostgreSQL archive of theseus-rs/postgresql-binaries (18.6.0 on
+   macOS, about 13 MB; 18.6.1 on Linux, about 40 MB) and a pgvector 0.8.7
+   archive from this repository's own GitHub releases, each checked against a
+   pinned sha256. The pgvector archives are compiled by Cortex's CI from the
+   pinned upstream source commit against PostgreSQL 18.6.0, with a
+   build-provenance attestation you can check with
    `gh attestation verify <archive> --repo cdeust/Cortex --source-ref refs/heads/main`
    (the workflow publishes only from main).
 2. **One-time model download.** On first use, the open-source embedding model

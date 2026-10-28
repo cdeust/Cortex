@@ -3,8 +3,9 @@
 Run by ``.github/workflows/pgvector.yml`` once per target triple, on a runner
 of that triple; stdlib only, POSIX only. In order:
 
-1. the pinned theseus PostgreSQL archive, sha256-verified
-   (``launcher_pg_assets``: one table for Setup and for this build);
+1. the theseus PostgreSQL 18.6.0 archive the published archives were built
+   against (``launcher_pg_assets.PGVECTOR_PG_VERSION``, ``BUILD_TREE_SHA256``),
+   sha256-verified; Setup's Linux trees are 18.6.1, into which they load;
 2. pgvector's source at the pinned upstream tag, kept only when the tag
    resolves to the pinned commit;
 3. ``make`` with PGXS from that tree (``OPTFLAGS=""``: no ``-march=native``,
@@ -40,7 +41,7 @@ import launcher_pg_assets as assets  # noqa: E402
 UPSTREAM = "https://github.com/pgvector/pgvector.git"  # source: ADR-1114
 # source: theseus 18.6.0 linux gnu bin/postgres requires GLIBC_2.34 at most
 # (objdump -T, measured 2026-10-17, ~/.claude/fleet/state/cortex-748.md step2)
-GLIBC_FLOOR = (2, 34)
+BUILD_TREE_GLIBC_MAX = (2, 34)
 _ARGC = 3  # source: this module's usage line (script, triple, work dir)
 # source: ADR-1114 (the extension Cortex creates, its version, one distance)
 _PROBE = (
@@ -49,6 +50,23 @@ _PROBE = (
     "SELECT '[1,2,3]'::vector <-> '[3,2,1]';\n"
 )
 _DISTANCE = "2.828427"  # source: sqrt(8), the L2 distance _PROBE computes
+# The theseus PostgreSQL 18.6.0 archives (PGVECTOR_PG_VERSION) the published
+# pgvector archives were built against, per triple. macOS still runs them; Linux
+# runs 18.6.1 since 2026-10-28, so these are no longer Setup's Linux pins.
+BUILD_TREE_SHA256 = {  # source: ADR-1114 (theseus 18.6.0 release digests)
+    "aarch64-apple-darwin": (
+        "a257bcdb8aa3301a13d6a5bcec48f8c9517045b7cbae71e50788b2615539e95b"
+    ),
+    "x86_64-apple-darwin": (
+        "f8918fbe747e0d79bda58ad8f8afcf23ac384b847ff3af18856f0825ba54b031"
+    ),
+    "x86_64-unknown-linux-gnu": (
+        "bb3d09f876b2383e25a8c9ce09e32d185a03656a23d074f5195542b1b1b3ca61"
+    ),
+    "aarch64-unknown-linux-gnu": (
+        "5d2b5e8be9e96bfc3d7f22090057a836ec36d5d092542d8d3b93cc145cf4ee13"
+    ),
+}
 
 
 def _run(argv: list[str], **kwargs) -> str:
@@ -60,11 +78,12 @@ def _run(argv: list[str], **kwargs) -> str:
 
 
 def postgres_tree(target: str, work: Path) -> Path:
-    """The pinned PostgreSQL tree of ``target``, downloaded and verified."""
-    name = f"postgresql-{assets.PG_VERSION}-{target}.tar.gz"
+    """The tree the pinned pgvector archives were built against, verified."""
+    version = assets.PGVECTOR_PG_VERSION
+    name = f"postgresql-{version}-{target}.tar.gz"
     archive = work / name
-    url = assets.PG_URL.format(version=assets.PG_VERSION, name=name)
-    assets._download(url, archive, assets.SHA256[target][0])
+    url = assets.PG_URL.format(version=version, name=name)
+    assets._download(url, archive, BUILD_TREE_SHA256[target])
     return assets._extract(archive, work / "pg")
 
 
@@ -133,7 +152,7 @@ def check_glibc(lib: Path) -> None:
     """No symbol version above the tree's own glibc floor (Linux only)."""
     found = re.findall(r"GLIBC_(\d+)\.(\d+)", _run(["objdump", "-T", str(lib)]))
     highest = max(((int(a), int(b)) for a, b in found), default=(0, 0))
-    if highest > GLIBC_FLOOR:
+    if highest > BUILD_TREE_GLIBC_MAX:
         raise SystemExit(f"{lib.name} needs GLIBC_{highest[0]}.{highest[1]} > floor")
 
 
