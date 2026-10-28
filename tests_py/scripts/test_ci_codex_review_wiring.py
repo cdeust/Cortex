@@ -8,6 +8,8 @@ import tempfile
 import textwrap
 import unittest
 
+from tests_py.scripts.test_ci_codex_reviews import BOT_NODE_ID, summary_pages
+
 ROOT = Path(__file__).resolve().parents[2]
 PIPELINE = ROOT / ".github/workflows/pipeline.yml"
 READER = ROOT / "scripts/ci_codex_reviews.py"
@@ -91,7 +93,7 @@ class CodexWiringTests(unittest.TestCase):
                 .replace("/805#", "/797#")
                 .replace('"pullRequestNumber": 805', '"pullRequestNumber": 797')
             )
-            (root / "comments.json").write_text(json.dumps([[row]]))
+            (root / "comments.json").write_text(json.dumps(summary_pages([[row]])))
             (root / "threads.json").write_text(json.dumps([page()]))
             (root / "ci_codex_review_runtime.py").write_text(
                 "raise RuntimeError('candidate runtime')"
@@ -112,8 +114,8 @@ class CodexWiringTests(unittest.TestCase):
         gh = root / "gh"
         gh.write_text(
             '#!/bin/sh\ncase "$*" in '
-            '*graphql*) cat "$FIXTURE/threads.json" ;; '
-            '*comments*) cat "$FIXTURE/comments.json" ;; '
+            '*reviewThreads*) cat "$FIXTURE/threads.json" ;; '
+            '*graphql*) cat "$FIXTURE/comments.json" ;; '
             '*) cat "$FIXTURE/pull.json" ;; esac\n'
         )
         gh.chmod(0o700)
@@ -136,7 +138,11 @@ class CodexWiringTests(unittest.TestCase):
         )
 
     def seed_comments(self, root, completed):
-        user = {"login": "chatgpt-codex-connector[bot]", "type": "Bot"}
+        user = {
+            "login": "chatgpt-codex-connector[bot]",
+            "type": "Bot",
+            "node_id": BOT_NODE_ID,
+        }
         review = {
             "status": "completed" if completed else "running",
             "commit_sha": SHA,
@@ -152,11 +158,13 @@ class CodexWiringTests(unittest.TestCase):
                     "id": 1,
                     "updated_at": "2026-10-27T00:00:00Z",
                     "user": user,
+                    "editor": None,
+                    "lastEditedAt": None,
                     "body": body,
                 }
             ]
         ]
-        (root / "comments.json").write_text(json.dumps(comments))
+        (root / "comments.json").write_text(json.dumps(summary_pages(comments)))
 
     def test_completion_workflow_never_checks_out_candidate_or_uses_oauth(self):
         text = (ROOT / ".github/workflows/Codex.yml").read_text()

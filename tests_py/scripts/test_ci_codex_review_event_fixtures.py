@@ -8,21 +8,31 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
-from tests_py.scripts.test_ci_codex_reviews import SHA, comment, pull
+from tests_py.scripts.test_ci_codex_reviews import (
+    SHA,
+    BOT_NODE_ID,
+    comment,
+    pull,
+    summary_pages,
+)
 from tests_py.scripts.test_ci_codex_review_resume import jobs
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts/ci_codex_review_event.py"
 REPO = "cdeust/Cortex"
 PREFIX = "repos/" + REPO
-BOT = {"login": "chatgpt-codex-connector[bot]", "type": "Bot"}
+BOT = {
+    "login": "chatgpt-codex-connector[bot]",
+    "type": "Bot",
+    "node_id": BOT_NODE_ID,
+}
 RUNS = (
     PREFIX + "/actions/workflows/pipeline.yml/runs?event=pull_request&head_sha=" + SHA
 )
 DETAIL = PREFIX + "/actions/runs/50"
 JOBS = DETAIL + "/attempts/1/jobs"
 PULL = PREFIX + "/pulls/797"
-COMMENTS = PREFIX + "/issues/797/comments"
+COMMENTS = "graphql"
 
 
 def source():
@@ -107,7 +117,7 @@ class Server:
         self.calls = []
         self.overrides = {}
 
-    def __call__(self, endpoint, *, paginate=False, missing=False):
+    def __call__(self, endpoint, *, paginate=False, fields=None):
         self.calls.append((endpoint, paginate))
         count = sum(path == endpoint for path, _ in self.calls)
         if endpoint in self.overrides:
@@ -119,7 +129,13 @@ class Server:
         elif endpoint == PULL + "/reviews/3":
             result = self.data["review"]
         elif endpoint == COMMENTS:
-            result = [self.data["comments"]]
+            if not fields or "reviewThreads(" in fields.get("query", ""):
+                raise AssertionError("unexpected GraphQL query")
+            result = summary_pages(
+                [self.data["comments"]],
+                number=fields["number"],
+                sha=self.data["pull"]["head"]["sha"],
+            )
         elif endpoint == RUNS:
             result = [{"total_count": 1, "workflow_runs": [self.data["source"]]}]
         elif endpoint == DETAIL:

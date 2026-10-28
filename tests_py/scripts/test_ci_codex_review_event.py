@@ -21,7 +21,7 @@ from tests_py.scripts.test_ci_codex_review_event_fixtures import (
     event,
     invoke,
 )
-from tests_py.scripts.test_ci_codex_reviews import OTHER, state, comment
+from tests_py.scripts.test_ci_codex_reviews import OTHER, state, comment, summary_pages
 from tests_py.scripts.test_ci_codex_review_resume import waiting_jobs
 
 
@@ -236,9 +236,9 @@ class CodexEventTests(unittest.TestCase):
         data["security_review"].update(
             has_any_findings=True, has_unresolved_findings=True
         )
-        server.overrides[COMMENTS] = lambda count: [
-            server.data["comments"] if count == 1 else [comment(data)]
-        ]
+        server.overrides[COMMENTS] = lambda count: summary_pages(
+            [server.data["comments"] if count == 1 else [comment(data)]]
+        )
         result, post = invoke(server)
         self.assertEqual(result["action"], "none")
         self.assertEqual(post, [])

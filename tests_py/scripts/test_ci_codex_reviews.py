@@ -10,6 +10,7 @@ import importlib.util
 import json
 import sys
 import unittest
+from itertools import product
 from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts/ci_codex_reviews.py"
@@ -17,6 +18,8 @@ SHA = "a" * 40
 OTHER = "b" * 40
 SUMMARY = "<!-- codex-pull-request-review-summary -->"
 STATE = "<!-- codex-review-state:v1 "
+# source: GitHub GraphQL native summary6456275844, Codebase PR464.
+BOT_NODE_ID = "BOT_kgDOC98s_g"
 
 
 def state(sha=SHA):
@@ -36,13 +39,65 @@ def comment(data=None, comment_id=1, updated="2026-10-26T22:00:00Z"):
     return {
         "id": comment_id,
         "updated_at": updated,
-        "user": {"login": "chatgpt-codex-connector[bot]", "type": "Bot"},
+        "user": {
+            "login": "chatgpt-codex-connector[bot]",
+            "type": "Bot",
+            "node_id": BOT_NODE_ID,
+        },
+        "editor": None,
+        "lastEditedAt": None,
         "body": SUMMARY
         + "\n"
         + STATE
         + json.dumps(state() if data is None else data)
         + " -->",
     }
+
+
+def _graphql_comment(row):
+    author = copy.deepcopy(row["user"])
+    if isinstance(author, dict):
+        login = author.get("login")
+        author = {
+            "login": login.removesuffix("[bot]") if isinstance(login, str) else login,
+            "__typename": author.get("type"),
+            "id": author.get("node_id"),
+        }
+    return {
+        "databaseId": row["id"],
+        "body": row["body"],
+        "updatedAt": row["updated_at"],
+        "author": author,
+        "editor": copy.deepcopy(row["editor"]),
+        "lastEditedAt": row["lastEditedAt"],
+    }
+
+
+def summary_pages(pages, *, number=797, sha=SHA):
+    """Capture GraphQL comments with body and editor metadata in each node."""
+    result = []
+    for index, rows in enumerate(pages):
+        more = index < len(pages) - 1
+        result.append(
+            {
+                "data": {
+                    "repository": {
+                        "pullRequest": {
+                            "number": number,
+                            "headRefOid": sha,
+                            "comments": {
+                                "pageInfo": {
+                                    "hasNextPage": more,
+                                    "endCursor": f"page-{index}" if more else None,
+                                },
+                                "nodes": [_graphql_comment(row) for row in rows],
+                            },
+                        }
+                    }
+                }
+            }
+        )
+    return result
 
 
 def pull():
@@ -102,16 +157,18 @@ class CodexEvidenceTests(unittest.TestCase):
 
     def test_completed_review_with_null_verdict_stays_pending(self):
         # PR805 bot summary6442631163 emitted completed/true/null on6de74656.
-        for kind in ("code_review", "security_review"):
-            for flag in ("has_any_findings", "has_unresolved_findings"):
-                data = state()
-                data[kind].update(has_any_findings=True)
-                data[kind][flag] = None
-                with self.subTest(kind=kind, flag=flag):
-                    result = self.evidence([comment(data)])
-                    self.assertEqual(result["state"], "pending")
-                    self.assertEqual(result["reason"], "review_pending")
-                    self.assertFalse(result["reviews_complete"])
+        for kind, flag in product(
+            ("code_review", "security_review"),
+            ("has_any_findings", "has_unresolved_findings"),
+        ):
+            data = state()
+            data[kind].update(has_any_findings=True)
+            data[kind][flag] = None
+            with self.subTest(kind=kind, flag=flag):
+                result = self.evidence([comment(data)])
+                self.assertEqual(result["state"], "pending")
+                self.assertEqual(result["reason"], "review_pending")
+                self.assertFalse(result["reviews_complete"])
 
     def test_newer_null_verdict_cannot_fall_back_to_older_clean_summary(self):
         data = state()

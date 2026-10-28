@@ -213,8 +213,23 @@ def resolve_security(target, body, review, metadata):
         raise EvidenceError("protocol")
     return {
         "state": (
-            "success" if all(states[identity] for identity in expected) else "unresolved"
+            "success"
+            if all(states[identity] for identity in expected)
+            else "unresolved"
         ),
         "source": "github_review_threads",
         "finding_ids": sorted(expected),
     }
+
+
+# Body and edit attribution live in the shared comment boundary.
+def _comment_pages(pages: Any, sha: str, pr: int) -> list[Record]:
+    from ci_codex_review_comments import _comment_pages as normalize  # noqa: PLC0415 - import cycle: comments shares RuntimeEvidenceError
+
+    return normalize(pages, sha, pr)
+
+
+def summary_comments(repo: str, pr: int, sha: str, request) -> list[Record]:
+    from ci_codex_review_comments import summary_comments as fetch  # noqa: PLC0415 - import cycle: comments shares RuntimeEvidenceError
+
+    return fetch(repo, pr, sha, request)
