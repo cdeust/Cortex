@@ -20,6 +20,8 @@ adheres to [Semantic Versioning](https://semver.org/).
   Doctor and check_setup expose process-local historical fallback counts as
   optional warnings; these lifetime counters do not block readiness.
   Capture workers roll back unfinished SQLite writes when a handler raises.
+  A broken SQLite vector index now rejects captures at the novelty lookup;
+  failed captures are not retried by the resident capture worker.
 
 - Session registry POSIX `ps` probes report nonzero exits and invalid UTF-8
   as named errors with the command and stderr; hooks log the actual cause

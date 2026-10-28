@@ -28,7 +28,7 @@ The capture boundary rolls back unfinished writes; it does not undo prior commit
 The fallback recorder retains its ADR-0640 contract. Propagating paths no longer
 call silent_failure.note or increment its fallback metric; existing handler
 instrumentation reports tool errors. The s110 regressions check the named
-freshness, dedup, and recall-signal counters; #685 handler tests also check
+freshness, dedup, and recall-signal counters; test_named_degrade_paths_685 also checks
 that injected failures leave fallback history empty. Historical counters never
 reset in production and do not
 establish current health, so their diagnostic check is optional.
@@ -53,10 +53,11 @@ Those assertions now require visible errors. Additional hosted regression gates:
   (curation) lookup fails; the original error escapes, the insert boundary is
   untouched (assert_not_called is the no-insert guard).
 - Direct search_vectors raises for a missing index and a misaligned buffer.
-- A real capture merge fails after updating the row but before completing FTS;
+- A stub handler calls the real update_memory_compression method and fails
+  after updating the row but before completing FTS;
   the original row survives, the connection is clean, and another writer commits.
 - Present but malformed or naive timestamps stop before scan/save with
-  force=true guidance and the exact parsing/arithmetic exception as cause.
+  force=true guidance and the expected parsing/arithmetic exception type as cause.
 - force=true bypasses that timestamp check; unrelated domain-shape errors
   retain their own exception rather than blaming updatedAt.
 - A successful capture commits a real SQLite write visible from another handle.
@@ -108,3 +109,21 @@ corrected here, along with the narrowed timestamp boundary and test refinements.
 This follow-up's seven changed Python payloads passed AST parsing and Ruff
 format/lint checks through stdin; their original API text matches Git blob
 hashes. Hosted runtime verification remains pending.
+
+## Capture assertions and baseline follow-up
+
+Claude review at 223d774 identified two capture assertions that accessed
+in_transaction on the ThreadLocalSqliteConnection proxy, which has no such
+property. They now inspect the registry's native connection instead.
+The method exists in sqlite_connection_registry.py; the proxy is unchanged.
+
+Three stale craftsmanship exemptions are removed: the observability imports
+in rebuild_profiles and sqlite_store_search, and try_curation's method size.
+Static AST inspection confirms the two imports are absent and the function
+spans 37 lines, below the baseline's 40-line method limit.
+Removing these records tightens the baseline; no new exemption is added.
+
+Current hosted setup failure:
+https://github.com/cdeust/Cortex/actions/runs/40665507420/job/122738926769
+The Ubuntu 26.04 runner again fails to load libxml2.so.2 before pytest starts.
+The corrected assertions and complete craftsmanship gate need hosted execution.
