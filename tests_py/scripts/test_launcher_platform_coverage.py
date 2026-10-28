@@ -89,7 +89,13 @@ def empty_env(uv: str, tmp_path_factory: pytest.TempPathFactory) -> Path:
     """An empty environment, so a dry run lists the whole closure."""
     path = tmp_path_factory.mktemp("env")
     subprocess.run([uv, "venv", "--quiet", "--no-config", str(path)], check=True)
-    return path / ("Scripts" if sys.platform == "win32" else "bin") / "python"
+    if sys.platform == "win32":
+        return path / "Scripts" / "python.exe"
+    return path / "bin" / "python"
+
+
+def test_empty_environment_has_a_python_executable(empty_env: Path) -> None:
+    assert empty_env.is_file(), empty_env
 
 
 @pytest.fixture(scope="module")
