@@ -156,68 +156,27 @@ def parse_tags(tags: Any) -> list:
     return tags if tags else []
 
 
-# source: ADR-0431
-LOW_SIGNAL_TAGS: frozenset[str] = frozenset(
-    {
-        "auto-captured",
-        "_backfill",
-        "imported",
-        "session-summary",
-        "tool-output",
-        "code-review",
-        "tool:edit",
-        "tool:bash",
-        "tool:read",
-        "tool:write",
-        "tool:grep",
-        "tool:glob",
-        "tool:search",
-        "tool:webfetch",
-        "tool:websearch",
-        "tool:notebookedit",
-        "stage-1",
-        "stage-2",
-        "stage-3",
-        "stage-4",
-        "stage-5",
-        "stage-6",
-        "stage-7",
-        "stage-8",
-        "stage-9",
-        "stage-10",
-        "stage-11",
-        "audit",
-        "automated",
-        "wip",
-        "progress",
-    }
-)
+# source: issue #706; capture_origin is written by the capture pipeline (ADR-0114).
+_CAPTURE_ORIGINS = frozenset({"local_action", "network"})
+
+
+def _is_system_capture(memory: dict) -> bool:
+    """Explicit origin wins; retain the old system source marker for legacy rows."""
+    origin = memory.get("capture_origin")
+    if origin == "deliberate":
+        return False
+    return origin in _CAPTURE_ORIGINS or memory.get("source") == "post_tool_capture"
 
 
 def filter_low_signal(results: list[dict]) -> tuple[list[dict], int]:
-    """Drop memories whose tags mark them as low-signal noise.
+    """Hide system captures by provenance, never by user-selectable tags.
 
-    Returns ``(kept_results, dropped_count)``. The dropped count is
-    surfaced in the response so callers see how much was filtered —
-    important for debugging the "why didn't I get the result I expected"
-    case.
-
-    Callers that explicitly want low-signal memories (debugging,
-    replay tooling) skip this filter via the ``include_low_signal``
-    input parameter on the recall handler.
+    Missing, unknown and legacy provenance is retained: tags cannot establish
+    whether the user deliberately wrote a memory. The caller surfaces the
+    number hidden and include_low_signal=True bypasses this filter.
     """
-    kept: list[dict] = []
-    dropped = 0
-    for r in results:
-        tags = r.get("tags", [])
-        if isinstance(tags, str):
-            tags = parse_tags(tags)
-        tag_set = {str(t).lower() for t in tags}
-        if tag_set & LOW_SIGNAL_TAGS:
-            dropped += 1
-            continue
-        kept.append(r)
-    return kept, dropped
+    kept = [r for r in results if not _is_system_capture(r)]
+    return kept, len(results) - len(kept)
 
 
 def filter_by_tags(
@@ -320,35 +279,36 @@ def inject_triggered_memories(
             mem = store.get_memory(mid)
             if not mem or not _injectable(mem):
                 continue
-            injected.append(
-                {
-                    "memory_id": mid,
-                    "content": mem["content"],
-                    "score": 0.9,
-                    "injected": True,
-                    "source": mem.get("source", ""),
-                    "heat": mem.get("heat", 1.0),
-                    "domain": mem.get("domain", ""),
-                    "tags": parse_tags(mem.get("tags", [])),
-                    "store_type": mem.get("store_type", "episodic"),
-                    "created_at": mem.get("created_at", ""),
-                    "importance": mem.get("importance", 0.5),
-                    "surprise": mem.get("surprise_score", 0.0),
-                    "recency_boost": 0.0,
-                }
-            )
+            injected.append(_trigger_result(mid, mem))
             existing_ids.add(mid)
     return injected + results if injected else results
+
+
+def _trigger_result(mid: int, mem: dict) -> dict:
+    """Preserve capture provenance on a prospective-memory injection."""
+    return {
+        "memory_id": mid,
+        "content": mem["content"],
+        "score": 0.9,
+        "injected": True,
+        "source": mem.get("source", ""),
+        "capture_origin": mem.get("capture_origin", "legacy"),
+        "heat": mem.get("heat", 1.0),
+        "domain": mem.get("domain", ""),
+        "tags": parse_tags(mem.get("tags", [])),
+        "store_type": mem.get("store_type", "episodic"),
+        "created_at": mem.get("created_at", ""),
+        "importance": mem.get("importance", 0.5),
+        "surprise": mem.get("surprise_score", 0.0),
+        "recency_boost": 0.0,
+    }
 
 
 def _injectable(mem: dict) -> bool:
     """Trigger injection must not bypass the low-signal discipline.
 
     source: ADR-0431"""
-    if mem.get("source") == "post_tool_capture":
-        return False
-    tags = {str(t).lower() for t in parse_tags(mem.get("tags", []))}
-    return not (tags & LOW_SIGNAL_TAGS)
+    return not _is_system_capture(mem)
 
 
 def build_enhancements(query: str, intent: str, tier: str, settings: Any) -> dict:

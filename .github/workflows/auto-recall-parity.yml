@@ -1,0 +1,68 @@
+name: Auto recall parity
+
+on:
+  pull_request:
+    paths:
+      - "mcp_server/**"
+      - "benchmarks/auto_recall_parity.py"
+      - "benchmarks/fixtures/auto_recall_paraphrases.json"
+      - "tests_py/handlers/test_recall_low_signal_filter.py"
+      - "tests_py/hooks/test_auto_recall_paraphrase.py"
+      - ".github/workflows/auto-recall-parity.yml"
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
+        with:
+          version: "0.11.3"
+      - name: Install locked CI dependencies
+        run: |
+          uv python install 3.12
+          uv sync --locked --managed-python --python 3.12 --extra dev --extra sqlite --extra codebase --extra postgresql
+      - name: Regression tests against the prior implementation
+        env:
+          BASE_SHA: 3aef5b590c839a0b2a46267a20477785490f691c # inspected pre-fix source
+        run: |
+          git worktree add --detach "$RUNNER_TEMP/recall-before" "$BASE_SHA"
+          for path in tests_py/handlers/test_recall_low_signal_filter.py tests_py/hooks/test_auto_recall_paraphrase.py; do
+            cp "$path" "$RUNNER_TEMP/recall-before/$path"
+          done
+          set +e
+          (cd "$RUNNER_TEMP/recall-before" && "$GITHUB_WORKSPACE/.venv/bin/python" -m pytest --tb=short -q -p no:randomly tests_py/handlers/test_recall_low_signal_filter.py tests_py/hooks/test_auto_recall_paraphrase.py) 2>&1 | tee "$RUNNER_TEMP/recall-before-tests.txt"
+          status=${PIPESTATUS[0]}
+          set -e
+          # pytest's test-failure exit, never an import/collection/usage error.
+          test "$status" -eq 1
+      - name: Regression tests against proposed implementation
+        env:
+          CORTEX_RERANKER_OFFLINE: "1"
+        run: |
+          uv run --no-sync pytest --tb=short -q -p no:randomly tests_py/handlers/test_recall_low_signal_filter.py tests_py/handlers/test_inject_triggered_memories.py tests_py/hooks/test_auto_recall_paraphrase.py tests_py/hooks/test_sqlite_hook_scope.py tests_py/hooks/test_sqlite_hook_paths.py
+      - name: Measure prior hook and tool gap
+        run: |
+          uv run --no-sync python benchmarks/auto_recall_parity.py --codebase "$RUNNER_TEMP/recall-before" --report "$RUNNER_TEMP/recall-before.json" --expect-gap
+      - name: Measure proposed hook and tool parity
+        run: |
+          uv run --no-sync python benchmarks/auto_recall_parity.py --codebase "$GITHUB_WORKSPACE" --report "$RUNNER_TEMP/recall-after.json"
+      - name: Preserve raw comparison
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: auto-recall-parity
+          path: |
+            ${{ runner.temp }}/recall-before-tests.txt
+            ${{ runner.temp }}/recall-before.json
+            ${{ runner.temp }}/recall-after.json
+          if-no-files-found: error

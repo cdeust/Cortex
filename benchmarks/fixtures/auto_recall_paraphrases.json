@@ -1,0 +1,122 @@
+[
+  {
+    "memory": "CASE_00: The pantry contains espresso beans.",
+    "query": "Which stimulating drink can we brew before work?"
+  },
+  {
+    "memory": "CASE_01: Nightly database backups are stored in the encrypted offsite vault.",
+    "query": "Where should we look to recover yesterday's records after disk loss?"
+  },
+  {
+    "memory": "CASE_02: The garden roses need watering twice a week.",
+    "query": "How often should the flowering shrubs receive irrigation?"
+  },
+  {
+    "memory": "CASE_03: The front door spare key is hidden inside the blue ceramic pot.",
+    "query": "Where is the emergency house entry token?"
+  },
+  {
+    "memory": "CASE_04: The bicycle rear tire uses a presta valve.",
+    "query": "Which pump adapter fits the back wheel of my pedal vehicle?"
+  },
+  {
+    "memory": "CASE_05: Our payroll is processed on the final Friday of each month.",
+    "query": "When do employees receive their salary?"
+  },
+  {
+    "memory": "CASE_06: The airport shuttle departs from platform seven.",
+    "query": "Where should passengers board the bus to catch their flight?"
+  },
+  {
+    "memory": "CASE_07: The sourdough starter lives on the refrigerator top shelf.",
+    "query": "Where did we put the bread fermentation culture?"
+  },
+  {
+    "memory": "CASE_08: The production API authenticates clients using short lived signed tokens.",
+    "query": "How do external applications prove their identity to the live service?"
+  },
+  {
+    "memory": "CASE_09: The living room thermostat is set to nineteen degrees overnight.",
+    "query": "What temperature does the lounge heating maintain while we sleep?"
+  },
+  {
+    "memory": "CASE_10: The cat receives her medicine mixed into the evening wet food.",
+    "query": "How should we administer the feline prescription at supper?"
+  },
+  {
+    "memory": "CASE_11: The museum admission is free for children younger than twelve.",
+    "query": "Does an eight year old need to pay to enter the gallery?"
+  },
+  {
+    "memory": "CASE_12: The server certificate expires in November and renews through ACME.",
+    "query": "How is the web endpoint encryption credential replaced?"
+  },
+  {
+    "memory": "CASE_13: The hiking emergency beacon is in the red backpack pocket.",
+    "query": "Where can walkers find the distress transmitter?"
+  },
+  {
+    "memory": "CASE_14: The accountant needs receipts uploaded before the fifth of each month.",
+    "query": "What is the deadline for sending purchase evidence to bookkeeping?"
+  },
+  {
+    "memory": "CASE_15: The train to the coast leaves at six thirty from the central station.",
+    "query": "When does the seaside railway journey begin?"
+  },
+  {
+    "memory": "CASE_16: The washing machine wool cycle runs with cold water and no spin.",
+    "query": "Which laundry setting protects knitted sweaters?"
+  },
+  {
+    "memory": "CASE_17: The workshop fire extinguisher hangs beside the main exit.",
+    "query": "Where is the equipment for putting out a blaze in the tool room?"
+  },
+  {
+    "memory": "CASE_18: The library loans novels for three weeks.",
+    "query": "How long may readers keep borrowed fiction?"
+  },
+  {
+    "memory": "CASE_19: The vegetarian lasagna uses lentils instead of minced beef.",
+    "query": "What replaces the meat in our layered pasta recipe?"
+  },
+  {
+    "memory": "CASE_20: The incident commander rotates among engineers every Monday.",
+    "query": "When does responsibility for coordinating outages change hands?"
+  },
+  {
+    "memory": "CASE_21: The printer paper supply is in the cupboard under the stairs.",
+    "query": "Where can I find blank sheets for the office copier?"
+  },
+  {
+    "memory": "CASE_22: The violin lesson takes place on Wednesday at four in the afternoon.",
+    "query": "When is the weekly bowed string instrument tuition?"
+  },
+  {
+    "memory": "CASE_23: The rainwater tank feeds the greenhouse drip irrigation system.",
+    "query": "What supplies moisture to the plants in the glass growing house?"
+  },
+  {
+    "memory": "CASE_24: The release pipeline requires a signed artifact digest before publication.",
+    "query": "What proof must exist before distributing a new software version?"
+  },
+  {
+    "memory": "CASE_25: The dentist appointment is booked for the second Tuesday in December.",
+    "query": "When is the next visit for checking our teeth?"
+  },
+  {
+    "memory": "CASE_26: The telescope eyepieces are packed in the padded black case.",
+    "query": "Where are the interchangeable lenses for observing stars?"
+  },
+  {
+    "memory": "CASE_27: The guest wireless network password changes at the start of each quarter.",
+    "query": "How frequently is visitor internet access renewed?"
+  },
+  {
+    "memory": "CASE_28: The car insurance renewal notice arrives by postal mail in February.",
+    "query": "When and how do we receive the vehicle policy extension reminder?"
+  },
+  {
+    "memory": "CASE_29: The swimming pool closes during thunderstorms.",
+    "query": "Under which weather conditions is access to the aquatic facility suspended?"
+  }
+]

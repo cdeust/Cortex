@@ -38,10 +38,10 @@ class TestInjectionFiltering:
         out = inject_triggered_memories([], "ship the deploy", store)
         assert out == []
 
-    def test_low_signal_tagged_memories_not_injected(self):
+    def test_user_capture_tag_without_provenance_is_injected(self):
         store = _store([_trigger()], {1: _mem(tags=["auto-captured"])})
         out = inject_triggered_memories([], "ship the deploy", store)
-        assert out == []
+        assert [m["memory_id"] for m in out] == [1]
 
     def test_clean_memory_injected_with_flag(self):
         store = _store([_trigger()], {1: _mem()})

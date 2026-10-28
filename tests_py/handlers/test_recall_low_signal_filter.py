@@ -1,159 +1,73 @@
-"""Tests for the low-signal filter on the recall path.
-
-Spike 2026-05-13 found that recall results for design-decision queries
-were dominated by ``# Tool: Edit`` auto-captures from unrelated repos.
-The filter drops memories tagged ``auto-captured`` / ``tool:edit`` /
-``_backfill`` / ``stage-N`` etc. unless the caller opts in.
-"""
+"""Issue #706: capture provenance, rather than arbitrary tags, controls hiding."""
 
 from __future__ import annotations
 
-from mcp_server.handlers.recall_helpers import (
-    LOW_SIGNAL_TAGS,
-    filter_low_signal,
-)
+import pytest
+
+from mcp_server.handlers.recall_helpers import filter_low_signal, _injectable
 
 
-def _mem(content: str, *tags: str) -> dict:
-    """Build a minimal result dict that matches recall's output shape."""
-    return {
-        "memory_id": id(content),
-        "content": content,
-        "score": 0.9,
-        "tags": list(tags),
-    }
+@pytest.mark.parametrize("tags", [
+    ["audit"], ["automated"], ["stage-3"], ["tool:edit"],
+    ["auto-captured", "_backfill"], '["audit", "stage-11"]', [],
+])
+@pytest.mark.parametrize("origin", ["deliberate", "legacy", "unknown", None])
+def test_user_tags_never_hide_memory(tags, origin):
+    memory = {"memory_id": 1, "tags": tags}
+    if origin is not None:
+        memory["capture_origin"] = origin
+    assert filter_low_signal([memory]) == ([memory], 0)
+    assert _injectable(memory)
 
 
-# ── Filter behaviour ──────────────────────────────────────────────────
+@pytest.mark.parametrize("origin", ["local_action", "network"])
+def test_capture_marker_hides_even_without_tags(origin):
+    captured = {"memory_id": 1, "capture_origin": origin}
+    deliberate = {"memory_id": 2, "capture_origin": "deliberate", "tags": ["audit"]}
+    assert filter_low_signal([captured, deliberate]) == ([deliberate], 1)
+    assert not _injectable(captured)
 
 
-def test_tool_edit_capture_is_dropped() -> None:
-    results = [_mem("# Tool: Edit\nfile.py changed", "auto-captured", "tool:edit")]
-    kept, dropped = filter_low_signal(results)
-    assert kept == []
-    assert dropped == 1
+@pytest.mark.parametrize("tag", ["audit", "automated", "stage-3"])
+def test_default_tool_recall_preserves_deliberate_tagged_memory(tag):
+    import asyncio
+    from mcp_server.handlers.remember import handler as remember
+    from mcp_server.handlers.recall import handler as recall
+
+    written = asyncio.run(remember({
+        "content": "paraphrase706 deliberate turbine maintenance decision",
+        "tags": [tag], "force": True,
+    }))
+    result = asyncio.run(recall({"query": "paraphrase706 turbine", "min_heat": 0}))
+    assert written["memory_id"] in [m["memory_id"] for m in result["memories"]]
 
 
-def test_backfill_import_is_dropped() -> None:
-    results = [_mem("Some bulk-imported note", "imported", "_backfill")]
-    kept, dropped = filter_low_signal(results)
-    assert kept == []
-    assert dropped == 1
+def test_default_tool_reports_hidden_captures_and_opt_in_labels_them():
+    import asyncio
+    from mcp_server.handlers.remember import handler as remember
+    from mcp_server.handlers.recall import handler as recall
+
+    written = asyncio.run(remember({
+        "content": "capture706 Bash failed because the database socket was absent",
+        "origin_tool": "Bash", "force": True,
+    }))
+    default = asyncio.run(recall({
+        "query": "capture706 database socket", "min_heat": 0,
+    }))
+    assert written["memory_id"] not in [m["memory_id"] for m in default["memories"]]
+    assert default["low_signal_dropped"] >= 1
+    included = asyncio.run(recall({
+        "query": "capture706 database socket", "min_heat": 0,
+        "include_low_signal": True,
+    }))
+    match = next(
+        m for m in included["memories"] if m["memory_id"] == written["memory_id"]
+    )
+    assert match["capture_origin"] == "local_action"
+    assert included["low_signal_dropped"] == 0
 
 
-def test_stage_report_is_dropped() -> None:
-    results = [_mem("stage 3 research verdict", "stage-3", "research")]
-    kept, dropped = filter_low_signal(results)
-    assert kept == []
-    assert dropped == 1
-
-
-def test_curated_lesson_is_kept() -> None:
-    """A lesson memory tagged with knowledge-shaped tags must survive."""
-    results = [_mem("The bug was X; the fix was Y.", "lesson", "bug-fix")]
-    kept, dropped = filter_low_signal(results)
-    assert len(kept) == 1
-    assert dropped == 0
-
-
-def test_decision_record_is_kept() -> None:
-    results = [_mem("Decision: adopt pgvector for ANN.", "decision", "architecture")]
-    kept, dropped = filter_low_signal(results)
-    assert len(kept) == 1
-    assert dropped == 0
-
-
-def test_convention_memory_is_kept() -> None:
-    results = [_mem("Always use slugify before .md append.", "convention", "rule")]
-    kept, dropped = filter_low_signal(results)
-    assert len(kept) == 1
-    assert dropped == 0
-
-
-# ── Mixed-batch realism: spike scenario ───────────────────────────────
-
-
-def test_filter_clears_tool_noise_so_lesson_floats_up() -> None:
-    """Models the exact spike result: 4 tool-output captures + 1 lesson.
-    Filtering must surface the lesson as the only kept hit."""
-    results = [
-        _mem("# Tool: Edit\nfile1.py changed", "auto-captured", "tool:edit"),
-        _mem("# Tool: Edit\nfile2.py changed", "auto-captured", "tool:edit"),
-        _mem("# Tool: Bash\ngit status", "auto-captured", "tool:bash"),
-        _mem(
-            "Decision: 001-zero-dependencies — use Node built-ins only.",
-            "decision",
-            "adr",
-        ),
-        _mem("# Tool: Read\nopened file", "auto-captured", "tool:read"),
-    ]
-    kept, dropped = filter_low_signal(results)
-    assert len(kept) == 1
-    assert dropped == 4
-    assert "Decision: 001-zero-dependencies" in kept[0]["content"]
-
-
-# ── String-encoded tags (PG returns tags as JSON-encoded string) ──────
-
-
-def test_tags_as_json_string_still_filtered() -> None:
-    """PG store can serialize tags as a JSON string; the filter must
-    parse and apply correctly either way."""
-    results = [
-        {
-            "memory_id": 1,
-            "content": "tool capture",
-            "tags": '["auto-captured", "tool:edit"]',
-        }
-    ]
-    kept, dropped = filter_low_signal(results)
-    assert kept == []
-    assert dropped == 1
-
-
-def test_empty_tags_kept() -> None:
-    """A memory with no tags at all is not low-signal."""
-    results = [{"memory_id": 1, "content": "untagged memory", "tags": []}]
-    kept, dropped = filter_low_signal(results)
-    assert len(kept) == 1
-    assert dropped == 0
-
-
-def test_missing_tags_key_kept() -> None:
-    """Defensive: a result dict that's missing the ``tags`` key is kept."""
-    results = [{"memory_id": 1, "content": "untagged memory"}]
-    kept, dropped = filter_low_signal(results)
-    assert len(kept) == 1
-
-
-# ── Set membership invariants ─────────────────────────────────────────
-
-
-def test_low_signal_tags_covers_known_polluters() -> None:
-    """Pin the canonical set so a refactor can't silently shrink it."""
-    must_include = {
-        "auto-captured",
-        "tool:edit",
-        "tool:bash",
-        "_backfill",
-        "imported",
-        "session-summary",
-        "stage-1",
-        "stage-11",
-    }
-    assert must_include.issubset(LOW_SIGNAL_TAGS)
-
-
-def test_low_signal_tags_does_not_include_knowledge_signals() -> None:
-    """Pin the negative: knowledge-shaped tags must NOT be in the filter."""
-    must_exclude = {
-        "decision",
-        "adr",
-        "lesson",
-        "convention",
-        "architecture",
-        "design",
-        "rule",
-        "standard",
-    }
-    assert not (must_exclude & LOW_SIGNAL_TAGS)
+def test_legacy_system_source_marker_and_deliberate_override():
+    legacy = {"source": "post_tool_capture"}
+    deliberate = {"source": "post_tool_capture", "capture_origin": "deliberate"}
+    assert filter_low_signal([legacy, deliberate]) == ([deliberate], 1)

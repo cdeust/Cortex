@@ -10,9 +10,9 @@ installed, every conversation has memory context automatically.
 
 Strategy:
   1. Receive user message text from stdin JSON
-  2. Run a fast FTS query — PG plainto_tsquery, or SQLite FTS5 through
-     the store abstraction on the zero-config backend — plus heat filter
-     (no embedding load either way)
+  2. Merge project-scoped FTS and hot candidate pools, then reuse recall's
+     cached FlashRank reranker (no embedding load or network fetch).
+     Missing cached weights retain lexical retrieval with a degradation log.
   3. If relevant memories found, format as compact context block
   4. Exit 0 → stdout injected into Claude's context
   5. If nothing found, exit 1 → no injection, no noise
@@ -26,7 +26,7 @@ Add to ``~/.claude/settings.json`` under hooks::
             "UserPromptSubmit": [{
                 "type": "command",
                 "command": "python3 -m mcp_server.hooks.auto_recall",
-                "timeout": 3
+                "timeout": 5
             }]
         }
     }
@@ -42,6 +42,7 @@ import sys
 from datetime import datetime, timezone
 from typing import Any
 
+from mcp_server.hooks.auto_recall_ranking import candidate_limit, rank_memories
 from mcp_server.hooks.output_streams import use_utf8_output
 from mcp_server.hooks.stdin_event import read_event_text
 from mcp_server.handlers.injection_receipts import (
@@ -128,17 +129,10 @@ def _connect():
 
 
 def _recall_memories(conn, query: str, project_root: str | None = None) -> list[dict]:
-    """Fast FTS-based recall against PG. No embedding model needed.
+    """Scoped lexical discovery, then cached cross-encoder reranking.
 
-    Uses plainto_tsquery for natural language matching against the
-    content_tsv tsvector column. Combined with heat filter to surface
-    important memories.
-
-    Each result keeps the memory ``id`` — the injection receipt (T2)
-    records exactly which memories entered the context. The project
-    predicate runs inside the query, before ORDER BY/LIMIT: pushed to the
-    output it would let foreign-project rows outrank and starve the
-    project's own rows out of the LIMIT window (issue #604 follow-up).
+    The project predicate precedes LIMIT so foreign rows cannot starve
+    the eligible pool (issue #604). The hot pool adds paraphrase candidates.
     """
     results = []
     ancestors = project_ancestors(project_root)
@@ -168,27 +162,34 @@ def _recall_memories(conn, query: str, project_root: str | None = None) -> list[
             LIMIT %s
             """
             ),
-            (query[:200], _MIN_HEAT, ancestors, _MAX_MEMORIES + 2),
+            (query, _MIN_HEAT, ancestors, candidate_limit(_MAX_MEMORIES)),
         ).fetchall()
 
-        for r in rows:
-            results.append(
-                {
-                    "id": r["id"],
-                    "content": r.get("content", ""),
-                    "heat": r.get("heat", 0),
-                    "domain": r.get("domain", ""),
-                    "agent": r.get("agent_context", ""),
-                    "protected": bool(r.get("is_protected")),
-                    "created_at": r.get("created_at"),
-                    "source_attribution": r.get("source_attribution", ""),
-                    "is_stale": bool(r.get("is_stale")),
-                }
-            )
+        results = [
+            _sqlite_result_entry(r["id"], r, r.get("heat", 0)) for r in rows
+        ]
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"FTS query failed: {exc}")
 
-    return results[:_MAX_MEMORIES]
+    return rank_memories(
+        query, results, lambda: _pg_hot_candidates(conn, ancestors)
+    )[:_MAX_MEMORIES]
+
+
+def _pg_hot_candidates(conn, ancestors: list[str]) -> list[dict]:
+    """Scoped discovery without lexical overlap; predicates precede LIMIT."""
+    rows = conn.execute(
+        """
+        SELECT m.*, effective_heat(m, NOW()) AS heat
+        FROM memories m JOIN current_memories cm ON cm.id = m.id
+        WHERE effective_heat(m, NOW()) >= %s AND NOT m.is_benchmark
+          AND NOT m.is_stale
+          AND (m.is_global = TRUE OR m.directory_context = ANY(%s::TEXT[]))
+        ORDER BY heat DESC, m.created_at DESC, m.id DESC LIMIT %s
+        """,
+        (_MIN_HEAT, ancestors, candidate_limit(_MAX_MEMORIES)),
+    ).fetchall()
+    return [_sqlite_result_entry(m["id"], m, m["heat"]) for m in rows]
 
 
 # ── SQLite backend path (zero-config plugin default) ─────────────────────
@@ -248,12 +249,12 @@ def _recall_memories_sqlite(
     supersession chain heads and non-stale rows (current_memories join)
     and returns [] on any FTS5 error.
     """
-    fts_query = _fts_query_from_prompt(query[:200])
+    fts_query = _fts_query_from_prompt(query)
     if not fts_query:
         return []
     ancestors = project_ancestors(project_root)
     hits = store.search_fts(
-        fts_query, limit=_MAX_MEMORIES + 2, directory_ancestors=ancestors
+        fts_query, limit=candidate_limit(_MAX_MEMORIES), directory_ancestors=ancestors
     )
     results = []
     for memory_id, _score in hits:
@@ -264,9 +265,16 @@ def _recall_memories_sqlite(
         if heat < _MIN_HEAT:
             continue
         results.append(_sqlite_result_entry(memory_id, m, heat))
-    # source: ADR-0485
-    results.sort(key=lambda m: not m["protected"])
-    return results[:_MAX_MEMORIES]
+    return rank_memories(
+        query, results, lambda: [
+            _sqlite_result_entry(m["id"], m, float(m.get("heat") or 0.0))
+            for m in store.get_hot_memories(
+                min_heat=_MIN_HEAT, limit=candidate_limit(_MAX_MEMORIES),
+                directory_ancestors=ancestors,
+            )
+            if not m.get("is_stale")
+        ],
+    )[:_MAX_MEMORIES]
 
 
 def _process_event_sqlite(event: dict[str, Any], query: str) -> None:
