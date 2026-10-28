@@ -1,11 +1,13 @@
-"""Memory writers + idempotency helpers for ``ingest_document``.
+"""Resumable document memory writes using durable provenance rows.
 
-source: ADR-0409"""
+source: issue #714; ADR-0409 (existing per-memory commit boundary).
+"""
 
 from __future__ import annotations
 
 import hashlib
 import logging
+from dataclasses import dataclass
 from typing import Any
 
 from mcp_server.core.document_model import (
@@ -14,118 +16,172 @@ from mcp_server.core.document_model import (
     document_provenance_source_tag,
 )
 from mcp_server.core.document_normalizer import NormalizedDocument
+
 from mcp_server.observability import silent_failure
+from mcp_server.shared.redaction_gate import redact_text
 
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class DocumentMemoryContext:
+    """Composition-root dependencies for one source/version write.
+
+    source: issue #714
+    """
+
+    store: Any
+    provenance: DocumentProvenance
+    domain: str
+    directory: str
+
+
+@dataclass
+class _WriteProgress:
+    """Receipts consumed and produced by this attempt."""
+
+    rows: list[dict[str, Any]]
+    result: dict[str, Any]
+
+
 def content_version(raw: str) -> str:
-    """Stable version token for a document's bytes: a truncated SHA-256 of
-        its text.
+    """Stable version token for the document text.
 
-        §12 note: the ``"utf-8"`` → ``"UTF-8"`` mutant is EQUIVALENT — Python codec
-        names are case-insensitive, so both select the identical codec.
-
-    source: ADR-0409"""
+    source: ADR-0409
+    """
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
-def _memory_tags(mem: dict) -> list:
-    # §12 note: mutating the ``get`` default ([] → None/absent) is EQUIVALENT —
-    # the isinstance guard maps any non-list (including None) back to [], so a
-    # tagless mem yields [] regardless of the default.
-    raw = mem.get("tags", [])
-    return raw if isinstance(raw, list) else []
+def _existing_components(
+    store: Any, normalized: NormalizedDocument, prov: DocumentProvenance
+) -> list[dict[str, Any]]:
+    """Read durable receipts before writing; lookup failure must prevent duplicates."""
+    tag = redact_text(document_provenance_dedup_tag(prov))
+    # source: issue #714 — one summary + all sections + one overflow sentinel.
+    limit = len(normalized.section_memories) + 2
+    rows = store.get_memories_by_tag(tag, limit=limit, heads_only=False)
+    if len(rows) >= limit:
+        raise ValueError(
+            "document has excess component rows; refusing ambiguous resume"
+        )
+    # Stable order assigns identical section occurrences the same receipts on retry.
+    return sorted(
+        (
+            row
+            for row in rows
+            if tag in row.get("tags", []) and row.get("id") is not None
+        ),
+        key=lambda row: row["id"],
+    )
 
 
-def already_ingested(store: Any, prov: DocumentProvenance) -> int | None:
-    """Return the summary-memory id from a prior ingest of this exact
-    ``(source, version)``, or None.
-
-    Postcondition: never raises. A store without ``get_memories_by_tag``
-    (e.g. the SQLite fallback) degrades to None ("always re-ingest") rather
-    than erroring — the same tag-query limitation ``ingest_docs_content``
-    already documents, not one this handler introduces."""
-    tag = document_provenance_dedup_tag(prov)
-    try:
-        # ADR-1100 heads_only=False: duplicate prevention must still see a
-        # superseded carrier, or a retracted text is written back as a head.
-        mems = store.get_memories_by_tag(tag, limit=5, heads_only=False)
-    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
-        silent_failure.note("ingest_document.already_ingested", exc)
-        return None
-    for mem in mems:
-        if tag in _memory_tags(mem):
-            return mem.get("id")
+def _take_existing(rows: list[dict[str, Any]], role: str, content: str) -> int | None:
+    """Consume one matching row, preserving repeated identical section occurrences."""
+    content = redact_text(content)
+    for index, row in enumerate(rows):
+        if role in row.get("tags", []) and row.get("content") == content:
+            return rows.pop(index)["id"]
     return None
 
 
-def _provenance_tags(prov: DocumentProvenance, extra: list[str]) -> list[str]:
-    return [
-        "document",
-        "ingest",
-        prov.source_kind,
-        document_provenance_dedup_tag(prov),
-        document_provenance_source_tag(prov),
-        *extra,
-    ]
+def _record(content: str, role: str, context: DocumentMemoryContext) -> dict[str, Any]:
+    """Keep the existing summary/section storage policy and provenance.
+
+    source: ADR-0409
+    """
+    prov = context.provenance
+    summary = role == "summary"
+    return {
+        "content": redact_text(content),
+        "tags": [
+            "document",
+            "ingest",
+            prov.source_kind,
+            document_provenance_dedup_tag(prov),
+            document_provenance_source_tag(prov),
+            role,
+        ],
+        "source": f"ingest_document:{prov.source}",
+        "domain": context.domain,
+        "directory_context": context.directory,
+        "importance": 0.8 if summary else 0.5,
+        "heat": 0.9 if summary else 0.6,
+        "confidence": 0.9,
+        "is_protected": summary,
+        "write_class": "mechanical",
+    }
+
+
+def _write_component(
+    context: DocumentMemoryContext,
+    progress: _WriteProgress,
+    record: dict[str, Any],
+    component: str,
+) -> int | None:
+    """Reuse a committed row or attempt one insert, exposing its failure."""
+    result = progress.result
+    role = "summary" if component == "summary" else "section"
+    memory_id = _take_existing(progress.rows, role, record["content"])
+    if memory_id is not None:
+        result["reused_components"].append(component)
+    else:
+        try:
+            memory_id = context.store.insert_memory(record)
+            if memory_id is None:
+                raise ValueError("insert returned no memory id")
+        except Exception as exc:  # noqa: BLE001 — storage boundary; public failure receipt
+            result["failures"][component] = str(exc)
+            logger.warning("ingest_document %s insert failed: %s", component, exc)
+            return None
+    result["completed_components"].append(component)
+    return memory_id
 
 
 def write_document_memories(
-    store: Any,
+    context: DocumentMemoryContext,
     normalized: NormalizedDocument,
-    prov: DocumentProvenance,
-    domain: str,
-    directory_context: str,
 ) -> dict[str, Any]:
-    """Persist the summary memory + one memory per non-empty section.
+    """Resume missing components from durable rows, including legacy partial ingests.
 
-    Precondition:  the caller has already confirmed this (source, version)
-                   was not previously ingested (``already_ingested`` is None).
-    Postcondition: writes exactly one protected summary memory and one
-                   memory per ``normalized.section_memories`` entry, each
-                   carrying the provenance tags (dedup + source + kind).
-                   Returns ``{summary_memory_id, section_memory_ids}``. A
-                   failed individual insert is logged and skipped, never
-                   silently swallowed without a signal."""
-    summary_record = {
-        "content": normalized.summary,
-        "tags": _provenance_tags(prov, ["summary"]),
-        "source": f"ingest_document:{prov.source}",
-        "domain": domain,
-        "directory_context": directory_context,
-        "importance": 0.8,
-        "heat": 0.9,
-        "confidence": 0.9,
-        "is_protected": True,
-        # M-D2 (7.4): bulk document-ingestion bookkeeping, not authored prose.
-        "write_class": "mechanical",
+    Wiki and individual memories commit independently. No process-local completion
+    marker is authoritative. A retry consumes existing rows once per expected
+    occurrence; a failed receipt lookup writes nothing. Intended for sequential
+    retries, not a distributed concurrent-ingestion uniqueness guarantee.
+    source: issue #714
+    """
+    expected = [
+        "summary",
+        *(f"section:{index}" for index in range(len(normalized.section_memories))),
+    ]
+    result: dict[str, Any] = {
+        "summary_memory_id": None,
+        "section_memory_ids": [],
+        "expected_components": expected,
+        "completed_components": [],
+        "reused_components": [],
+        "failures": {},
     }
-    summary_id: int | None = None
     try:
-        summary_id = store.insert_memory(summary_record)
-    except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
-        logger.warning("ingest_document summary insert failed: %s", exc)
+        rows = _existing_components(context.store, normalized, context.provenance)
+    except Exception as exc:  # noqa: BLE001 — storage boundary; no duplicate-prone fallback
+        silent_failure.note("ingest_document.memory_lookup", exc)
+        result["failures"]["memory_lookup"] = str(exc)
+        return result
+    _write_missing_memories(context, normalized, _WriteProgress(rows, result))
+    return result
 
-    section_ids: list[int] = []
-    for mem in normalized.section_memories:
-        record = {
-            "content": mem.content,
-            "tags": _provenance_tags(prov, ["section"]),
-            "source": f"ingest_document:{prov.source}",
-            "domain": domain,
-            "directory_context": directory_context,
-            "importance": 0.5,
-            "heat": 0.6,
-            "confidence": 0.9,
-            "is_protected": False,
-            "write_class": "mechanical",
-        }
-        try:
-            section_ids.append(store.insert_memory(record))
-        except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
-            logger.warning(
-                "ingest_document section insert failed (%s): %s", mem.heading, exc
-            )
 
-    return {"summary_memory_id": summary_id, "section_memory_ids": section_ids}
+def _write_missing_memories(
+    context: DocumentMemoryContext,
+    normalized: NormalizedDocument,
+    progress: _WriteProgress,
+) -> None:
+    """Attempt each independent memory boundary and collect its durable receipt."""
+    result = progress.result
+    record = _record(normalized.summary, "summary", context)
+    result["summary_memory_id"] = _write_component(context, progress, record, "summary")
+    for index, memory in enumerate(normalized.section_memories):
+        record = _record(memory.content, "section", context)
+        memory_id = _write_component(context, progress, record, f"section:{index}")
+        if memory_id is not None:
+            result["section_memory_ids"].append(memory_id)

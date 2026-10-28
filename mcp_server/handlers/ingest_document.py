@@ -18,7 +18,7 @@ from mcp_server.core.docx_parser import parse_docx_xml
 from mcp_server.core.document_normalizer import NormalizedDocument, normalize_document
 from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
 from mcp_server.handlers.ingest_document_writers import (
-    already_ingested,
+    DocumentMemoryContext,
     content_version,
     write_document_memories,
 )
@@ -29,6 +29,9 @@ from mcp_server.infrastructure.document_reader import (
     read_confluence_export,
     read_docx_xml,
 )
+from mcp_server.shared.redaction_gate import redact_text
+from mcp_server.shared.wiki_frontmatter_validation import normalize_frontmatter
+from mcp_server.infrastructure.wiki_store import read_page
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 
@@ -49,7 +52,10 @@ schema = {
         "provenance (source path + content version) so documents ride the "
         "same staleness/validation path as code references. Embedded images "
         "are skipped with an explicit notice (no OCR). Re-ingesting the same "
-        "document version is idempotent (no duplicate writes). Malformed "
+        "document version resumes missing components without duplicating successful "
+        "writes. ingested is true only when wiki, summary and every section "
+        "are complete; partial results include expected_components, "
+        "completed_components and failures. Malformed "
         "zip/XML fails loudly, writing nothing. Distinct from `ingest_prd` "
         "(markdown PRDs with decision/requirement extraction), "
         "`ingest_codebase` (code symbols), and `wiki_write` (manual single "
@@ -143,15 +149,10 @@ def _read_and_parse(path: Path, kind: str, title: str) -> tuple[ParsedDocument, 
 
 
 async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Ingest a .docx or Confluence export into Cortex.
+    """Parse before writing, then report durable component completeness.
 
-        Postcondition: on success writes exactly one wiki page + one summary
-        memory + one memory per section, all provenance-stamped, and returns
-        ``ingested: True``. A repeat ingest of the same (source, version) writes
-        nothing and returns ``idempotent_skip: True``. A read/parse failure
-        returns ``ingested: False`` with a reason and writes NOTHING.
-
-    source: ADR-0408"""
+    source: issue #714; ADR-0408
+    """
     args = args or {}
     raw_path = str(args.get("path") or "").strip()
     if not raw_path:
@@ -181,76 +182,93 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         source=str(path), version=content_version(raw), source_kind=kind
     )
     domain = (str(args.get("domain") or "").strip()) or "documents"
-    return await _persist(path, kind, parsed, prov, domain)
+    return await _persist(path, parsed, prov, domain)
 
 
-def _skip_response(
-    existing: int,
-    parsed: ParsedDocument,
-    prov: DocumentProvenance,
-    normalized: NormalizedDocument,
-) -> dict[str, Any]:
-    """The response for a re-ingest of an already-stored (source, version)."""
-    return {
-        "ingested": True,
-        "idempotent_skip": True,
-        "reason": "already ingested at this version",
-        "summary_memory_id": existing,
-        "title": parsed.title,
-        "version": prov.version,
-        "images_skipped": normalized.image_count,
-        "notices": normalized.notices,
-    }
+async def _ensure_wiki(
+    normalized: NormalizedDocument, kind: str
+) -> tuple[bool, bool, str | None]:
+    """Check the owned page bytes; rewrite only a missing or different page.
+
+    Pointer memories/citations remain wiki_write's best-effort side channels.
+    source: issue #714; infrastructure/wiki_store.py::write_page
+    """
+    try:
+        current = read_page(WIKI_ROOT, normalized.wiki_rel_path)
+        if current == redact_text(normalize_frontmatter(normalized.wiki_markdown)):
+            return True, True, None
+        page = await write_governed_page(
+            WIKI_ROOT,
+            normalized.wiki_rel_path,
+            normalized.wiki_markdown,
+            mode="replace",
+            tags=["document", "ingest", kind],
+        )
+        if page.get("error"):
+            logger.warning("ingest_document wiki write failed: %s", page)
+            return False, False, str(page["error"])
+        return True, False, None
+    except Exception as exc:  # noqa: BLE001 — wiki boundary; public failure receipt
+        logger.warning("ingest_document wiki write failed: %s", exc)
+        return False, False, str(exc)
 
 
 async def _persist(
     path: Path,
-    kind: str,
     parsed: ParsedDocument,
     prov: DocumentProvenance,
     domain: str,
 ) -> dict[str, Any]:
-    """Write the wiki page + memories for a freshly-parsed document, or skip
-    idempotently if this (source, version) was already ingested.
+    """Reconcile each independently committed component on every request.
 
-    Postcondition: on a first ingest, exactly one wiki page + one summary
-    memory + one memory per section are written (all provenance-stamped) and a
-    full response is returned; a repeat returns an idempotent-skip response and
-    writes nothing. A wiki-write failure sets ``wiki_path`` to None and is
-    logged (never silent) but does not abort the memory writes."""
+    source: issue #714
+    """
+    kind = prov.source_kind
     normalized = normalize_document(parsed, prov)
-    store = _get_store()
-    existing = already_ingested(store, prov)
-    if existing is not None:
-        return _skip_response(existing, parsed, prov, normalized)
-
-    page = await write_governed_page(
-        WIKI_ROOT,
-        normalized.wiki_rel_path,
-        normalized.wiki_markdown,
-        mode="replace",
-        tags=["document", "ingest", kind],
+    wiki = await _ensure_wiki(normalized, kind)
+    context = DocumentMemoryContext(
+        _get_store(), prov, domain, str(path.resolve().parent)
     )
-    wiki_path = (
-        None
-        if isinstance(page, dict) and page.get("error")
-        else normalized.wiki_rel_path
+    written = write_document_memories(context, normalized)
+    result = _ingestion_result(normalized, written, wiki)
+    result.update(
+        title=parsed.title, source=prov.source, source_kind=kind, version=prov.version
     )
-    if wiki_path is None:
-        logger.warning("ingest_document wiki write failed: %s", page)
+    return result
 
-    directory = str(path.resolve().parent)
-    written = write_document_memories(store, normalized, prov, domain, directory)
+
+def _ingestion_result(
+    normalized: NormalizedDocument,
+    written: dict[str, Any],
+    wiki: tuple[bool, bool, str | None],
+) -> dict[str, Any]:
+    """Expose expected, completed and failed components; never overstate success."""
+    wiki_ok, wiki_reused, wiki_error = wiki
+    expected = ["wiki", *written["expected_components"]]
+    completed = (["wiki"] if wiki_ok else []) + written["completed_components"]
+    failures = dict(written["failures"])
+    if wiki_error is not None:
+        failures["wiki"] = wiki_error
+    complete = completed == expected and not failures
+    skipped = (
+        complete
+        and wiki_reused
+        and (written["reused_components"] == written["expected_components"])
+    )
     return {
-        "ingested": True,
-        "idempotent_skip": False,
-        "title": parsed.title,
-        "source": prov.source,
-        "source_kind": kind,
-        "version": prov.version,
-        "wiki_path": wiki_path,
+        "ingested": complete,
+        "status": "complete" if complete else "partial",
+        "idempotent_skip": skipped,
+        "reason": "already ingested at this version"
+        if skipped
+        else ("complete" if complete else "document_ingestion_incomplete"),
+        "wiki_path": normalized.wiki_rel_path if wiki_ok else None,
         "summary_memory_id": written["summary_memory_id"],
         "section_count": len(written["section_memory_ids"]),
+        "section_memory_ids": written["section_memory_ids"],
+        "expected_components": expected,
+        "completed_components": completed,
+        "failures": failures,
         "images_skipped": normalized.image_count,
         "notices": normalized.notices,
     }

@@ -16,6 +16,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Document ingestion reports partial wiki/summary/section writes with component
+  receipts and failure reasons. Same-version retries resume missing components
+  from durable rows and page content, including stored summaries with missing
+  sections, without duplicating successful writes (#714).
+
 - Owner @claude mentions inherit the official action's tag-mode workspace edit
   approval instead of overriding it with auto mode (#822). Requests on the same
   thread run one at a time with up to 100 pending requests retained; automatic

@@ -4,11 +4,10 @@ from __future__ import annotations
 
 from mcp_server.core.document_model import (
     DocumentProvenance,
-    document_provenance_dedup_tag,
 )
 from mcp_server.core.document_normalizer import NormalizedDocument, SectionMemory
 from mcp_server.handlers.ingest_document_writers import (
-    already_ingested,
+    DocumentMemoryContext,
     content_version,
     write_document_memories,
 )
@@ -59,49 +58,12 @@ class TestContentVersion:
         assert len(v) == 16 and all(c in "0123456789abcdef" for c in v)
 
 
-class TestAlreadyIngested:
-    def test_none_when_never_ingested(self):
-        assert already_ingested(_FakeStore(), _PROV) is None
-
-    def test_returns_id_when_version_tag_present(self):
-        tag = document_provenance_dedup_tag(_PROV)
-        store = _FakeStore(existing_by_tag={tag: [{"id": 7, "tags": [tag]}]})
-        assert already_ingested(store, _PROV) == 7
-
-    def test_new_version_is_not_a_hit(self):
-        old = DocumentProvenance("/d.docx", "v0", "docx")
-        store = _FakeStore(
-            existing_by_tag={
-                document_provenance_dedup_tag(old): [
-                    {"id": 7, "tags": [document_provenance_dedup_tag(old)]}
-                ]
-            }
-        )
-        assert already_ingested(store, _PROV) is None
-
-    def test_degrades_when_store_lacks_tag_query(self):
-        class _NoTag:
-            pass
-
-        assert already_ingested(_NoTag(), _PROV) is None
-
-    def test_queries_the_dedup_tag_with_bounded_limit(self):
-        store = _FakeStore()
-        already_ingested(store, _PROV)
-        assert store.last_tag_query == (document_provenance_dedup_tag(_PROV), 5)
-
-    def test_ignores_rows_that_lack_the_dedup_tag(self):
-        # A tag-query hit whose row does not actually carry the dedup tag is
-        # not a match (guards the in-row tag re-check).
-        tag = document_provenance_dedup_tag(_PROV)
-        store = _FakeStore(existing_by_tag={tag: [{"id": 9, "tags": ["unrelated"]}]})
-        assert already_ingested(store, _PROV) is None
-
-
 class TestWriteDocumentMemories:
     def test_summary_record_is_exact(self):
         store = _FakeStore()
-        out = write_document_memories(store, _normalized(), _PROV, "dom", "/dir")
+        out = write_document_memories(
+            DocumentMemoryContext(store, _PROV, "dom", "/dir"), _normalized()
+        )
         summary = {k: v for k, v in store.memories[0].items() if k != "id"}
         assert summary == {
             "content": "Document ingested: 'D'.",
@@ -126,7 +88,9 @@ class TestWriteDocumentMemories:
 
     def test_section_record_is_exact(self):
         store = _FakeStore()
-        out = write_document_memories(store, _normalized(), _PROV, "dom", "/dir")
+        out = write_document_memories(
+            DocumentMemoryContext(store, _PROV, "dom", "/dir"), _normalized()
+        )
         section = {k: v for k, v in store.memories[1].items() if k != "id"}
         assert section == {
             "content": "[Intro]\n\nbody",
@@ -152,7 +116,9 @@ class TestWriteDocumentMemories:
     def test_summary_and_section_have_distinct_importance_heat(self):
         # Guards against the summary/section field values being swapped.
         store = _FakeStore()
-        write_document_memories(store, _normalized(), _PROV, "dom", "/dir")
+        write_document_memories(
+            DocumentMemoryContext(store, _PROV, "dom", "/dir"), _normalized()
+        )
         assert store.memories[0]["importance"] == 0.8
         assert store.memories[1]["importance"] == 0.5
         assert store.memories[0]["is_protected"] is True
@@ -160,11 +126,65 @@ class TestWriteDocumentMemories:
 
     def test_insert_failure_survived_and_logged_with_exact_messages(self, caplog):
         store = _FakeStore(fail_inserts=True)
-        out = write_document_memories(store, _normalized(), _PROV, "dom", "/dir")
+        out = write_document_memories(
+            DocumentMemoryContext(store, _PROV, "dom", "/dir"), _normalized()
+        )
         assert out["summary_memory_id"] is None
         assert out["section_memory_ids"] == []
+        assert out["failures"] == {"summary": "db down", "section:0": "db down"}
+        assert out["completed_components"] == []
         # Exact formatted messages — the failing exception text AND the section
         # heading must reach the log (guards the log-arg wiring).
         msgs = [r.getMessage() for r in caplog.records]
         assert "ingest_document summary insert failed: db down" in msgs
-        assert "ingest_document section insert failed (Intro): db down" in msgs
+        assert "ingest_document section:0 insert failed: db down" in msgs
+
+
+def test_section_only_receipt_does_not_skip_summary():
+    from tests_py.handlers.test_ingest_document import _FakeStore as Store
+
+    store = Store()
+    tag = "doc-ingest:docx:/d.docx@v1"
+    section_id = store.insert_memory(
+        {"content": "[Intro]\n\nbody", "tags": [tag, "section"]}
+    )
+    result = write_document_memories(
+        DocumentMemoryContext(store, _PROV, "dom", "/dir"), _normalized()
+    )
+    assert result["summary_memory_id"] != section_id
+    assert result["section_memory_ids"] == [section_id]
+    assert result["completed_components"] == ["summary", "section:0"]
+    assert len(store.memories) == 2
+
+
+def test_missing_id_returned_by_store_is_failure():
+    class Store(_FakeStore):
+        def insert_memory(self, record):
+            return None
+
+    result = write_document_memories(
+        DocumentMemoryContext(Store(), _PROV, "dom", "/dir"), _normalized()
+    )
+    assert result["completed_components"] == []
+    assert result["failures"] == {
+        "summary": "insert returned no memory id",
+        "section:0": "insert returned no memory id",
+    }
+
+
+def test_receipt_scan_rechecks_tags_roles_content_and_ids():
+    tag = "doc-ingest:docx:/d.docx@v1"
+    invalid_rows = [
+        {"id": 7, "tags": ["unrelated"], "content": "Document ingested: 'D'."},
+        {"id": None, "tags": [tag, "summary"], "content": "Document ingested: 'D'."},
+        {"id": 7, "tags": [tag, "section"], "content": "different section"},
+    ]
+    for invalid in invalid_rows:
+        store = _FakeStore(existing_by_tag={tag: [invalid]})
+        result = write_document_memories(
+            DocumentMemoryContext(store, _PROV, "dom", "/dir"), _normalized()
+        )
+        assert len(store.memories) == 2
+        assert result["completed_components"] == ["summary", "section:0"]
+        assert result["failures"] == {}
+        assert store.last_tag_query == (tag, 3)
