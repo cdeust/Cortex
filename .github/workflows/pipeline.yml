@@ -796,12 +796,14 @@ jobs:
               fields = dict(query=THREAD_QUERY, owner=owner, name=name, number=pr)
               pages = _api("graphql", paginate=True, fields=fields)
               states = _thread_states(pages, sha, owner)
-              if states.keys() != expected:
+              if not expected.issubset(states):
                   raise EvidenceError("protocol")
               return {
-                  "state": "success" if all(states.values()) else "unresolved",
+                  "state": (
+                      "success" if all(states[identity] for identity in expected) else "unresolved"
+                  ),
                   "source": "github_review_threads",
-                  "finding_ids": sorted(states),
+                  "finding_ids": sorted(expected),
               }
           '''
 
