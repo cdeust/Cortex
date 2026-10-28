@@ -3,6 +3,8 @@
 import hashlib
 import json
 
+from ci_codex_review_resume import PREREQUISITES
+
 HOLDS = {"hold", "do-not-merge", "autopilot:hold"}
 
 
@@ -15,33 +17,40 @@ def fingerprint(item: dict) -> str:
     return hashlib.sha256(json.dumps(item, sort_keys=True).encode()).hexdigest()
 
 
-def candidates(pulls: list[dict], issues: list[dict]) -> list[dict]:
-    result = []
-    for pull in pulls:
-        if pull["isDraft"] or pull["isCrossRepository"] or held(pull):
-            continue
-        checks = pull["statusCheckRollup"]
-        if any(
-            row.get("status") in ("QUEUED", "IN_PROGRESS", "PENDING")
-            or row.get("state") in ("PENDING", "EXPECTED")
-            for row in checks
-        ):
-            continue
-        indexed = {row.get("name", row.get("context")): row for row in checks}
-        if (
-            indexed.get("merge pending review", {}).get("conclusion") == "SUCCESS"
-            and "merge" not in indexed
-        ):
-            continue
-        ready = indexed.get("merge", {}).get("conclusion") == "SUCCESS"
-        result.append(
-            {
-                "kind": "merge" if ready else "pull",
-                "number": pull["number"],
-                "sha": pull["headRefOid"],
-                "fingerprint": fingerprint(pull),
-            }
+def pull_candidate(pull):
+    if pull["isDraft"] or pull["isCrossRepository"] or held(pull):
+        return None
+    checks = pull["statusCheckRollup"]
+    if any(
+        row.get("status")
+        in ("QUEUED", "IN_PROGRESS", "PENDING", "REQUESTED", "WAITING")
+        or row.get("state") in ("PENDING", "EXPECTED")
+        for row in checks
+    ):
+        return None
+    indexed = {row.get("name", row.get("context")): row for row in checks}
+    ready = indexed.get("merge", {}).get("conclusion") == "SUCCESS"
+    waiting = review_wait(indexed)
+    if (
+        indexed.get("merge pending review", {}).get("conclusion") == "SUCCESS"
+        and "merge" not in indexed
+        and not waiting
+        and all(
+            row.get("conclusion") in ("SUCCESS", "SKIPPED", "NEUTRAL")
+            for row in indexed.values()
         )
+    ):
+        return None
+    return {
+        "kind": "merge" if ready else ("review_resume" if waiting else "pull"),
+        "number": pull["number"],
+        "sha": pull["headRefOid"],
+        "fingerprint": fingerprint(pull),
+    }
+
+
+def candidates(pulls: list[dict], issues: list[dict]) -> list[dict]:
+    result = [item for pull in pulls if (item := pull_candidate(pull)) is not None]
     for issue in issues:
         if issue.get("authorized") is True and not held(issue):
             result.append(
@@ -53,3 +62,23 @@ def candidates(pulls: list[dict], issues: list[dict]) -> list[dict]:
                 }
             )
     return result
+
+
+def review_wait(indexed: dict) -> bool:
+    """Only completed review/merge waits merit the more expensive evidence read."""
+    if not all(
+        indexed.get(name, {}).get("conclusion") == "SUCCESS" for name in PREREQUISITES
+    ):
+        return False
+    if any(
+        row.get("conclusion", row.get("state")) not in ("SUCCESS", "SKIPPED", "NEUTRAL")
+        for name, row in indexed.items()
+        if name not in ("review", "merge")
+    ):
+        return False
+    waiting = indexed.get("merge pending review", {}).get("conclusion") == "SUCCESS"
+    failed = any(
+        indexed.get(name, {}).get("conclusion") == "FAILURE"
+        for name in ("review", "merge")
+    )
+    return (waiting and "merge" not in indexed) or failed

@@ -40,3 +40,35 @@ class InstallerTests(unittest.TestCase):
             self.assertEqual(
                 config["EnvironmentVariables"]["ORCA_TERMINAL_HANDLE"], "term_fixture"
             )
+
+    def test_copy_installs_hash_verified_native_reader_dependency_closure(self):
+        import hashlib
+        import json
+        import subprocess
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            contract = root / "contract-source.md"
+            contract.write_text(
+                "## Contract — paste this into the delegation prompt\n"
+                "Fixture contract\n---\n\n## Orchestrator side"
+            )
+            installer.copy_runtime(SimpleNamespace(contract=contract), root)
+            manifest = json.loads((root / "installed-sha256.json").read_text())
+            for name in installer.RUNTIME:
+                self.assertEqual(
+                    hashlib.sha256((root / name).read_bytes()).hexdigest(),
+                    manifest[name],
+                )
+            code = (
+                "import sys;sys.path.insert(0,sys.argv[1]);"
+                "import ci_autopilot,ci_codex_review_event,ci_codex_review_comments;"
+                "print('trusted-runtime-imports-ok')"
+            )
+            done = subprocess.run(
+                [sys.executable, "-I", "-B", "-c", code, str(root)],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            self.assertEqual(done.stdout.strip(), "trusted-runtime-imports-ok")

@@ -1,45 +1,107 @@
-"""Authenticate issue revisions before local account-backed execution.
+"""Authenticate issue revisions using same-response author/editor identities.
 
-Source: native Codex security finding4384663989 and SECURITY.md trust boundary.
-Only owner-authored/edited requirements auto-authorize. Other authors need an
-owner comment binding the complete issue snapshot SHA256, not an unbound label.
+Sources: GitHub GraphQL Issue, IssueComment, User; native security finding
+4384663989. Owner identity and editor fields verified with GitHub on 2026-10-28.
+https://docs.github.com/en/graphql/reference/objects#issuecomment
 """
 
+from datetime import datetime
 import re
 
 from ci_autopilot_queue import fingerprint
 
+# source: owner approval protocol introduced by Cortex PR800.
 APPROVAL = re.compile(r"^<!-- cortex-autopilot:approve sha256=([0-9a-f]{64}) -->$")
-QUERY = """query($owner:String!, $name:String!, $endCursor:String) {
- repository(owner:$owner,name:$name) {
-  issues(first:100,after:$endCursor,states:OPEN) {
-   nodes { number title body author { login } editor { login }
-    labels(first:100) { nodes { name } }
-    comments(first:100) { totalCount nodes {
-      databaseId body updatedAt author { login }
-    } }
-   } pageInfo { hasNextPage endCursor }
-  }
- }
-}"""
+# source: GitHub GraphQL connections require first/last, bounded at 100 nodes.
+ACTOR = "login __typename ... on User { id } ... on Bot { id }"
+REVISION = (
+    "number title body lastEditedAt author { " + ACTOR + " } editor { " + ACTOR + " }"
+)
+COMMENTS = """comments(first:100,after:$commentCursor) {
+ totalCount nodes { databaseId body updatedAt lastEditedAt
+ author { ACTOR } editor { ACTOR } }
+ pageInfo { hasNextPage endCursor }
+}""".replace("ACTOR", ACTOR)
+QUERY = """query($owner:String!, $name:String!, $endCursor:String,
+ $commentCursor:String) {
+ repository(owner:$owner,name:$name) { owner { login id __typename }
+ issues(first:100,after:$endCursor,states:OPEN) {
+ nodes { REVISION labels(first:100) { nodes { name } } COMMENTS }
+ pageInfo { hasNextPage endCursor }
+ } }
+}""".replace("REVISION", REVISION).replace("COMMENTS", COMMENTS)
+COMMENT_QUERY = """query($owner:String!, $name:String!, $number:Int!,
+ $commentCursor:String) {
+ repository(owner:$owner,name:$name) { issue(number:$number) { REVISION COMMENTS } }
+}""".replace("REVISION", REVISION).replace("COMMENTS", COMMENTS)
 
 
 def actor(value):
     return value.get("login") if isinstance(value, dict) else None
 
 
+def identity(value):
+    return (
+        isinstance(value, dict)
+        and value.get("__typename") in ("User", "Bot")
+        and isinstance(value.get("id"), str)
+        and bool(value["id"])
+        and isinstance(value.get("login"), str)
+        and bool(value["login"])
+    )
+
+
+def same_actor(value, owner):
+    return identity(value) and value == owner
+
+
+def metadata(row):
+    if not identity(row.get("author")) or not {"editor", "lastEditedAt"} <= row.keys():
+        return False
+    editor, stamp = row["editor"], row["lastEditedAt"]
+    if editor is None:
+        return stamp is None
+    if not identity(editor) or not isinstance(stamp, str):
+        return False
+    try:
+        return datetime.fromisoformat(stamp.replace("Z", "+00:00")).tzinfo is not None
+    except ValueError:
+        return False
+
+
+def owned(row, owner):
+    return (
+        metadata(row)
+        and same_actor(row["author"], owner)
+        and (row["editor"] is None or same_actor(row["editor"], owner))
+    )
+
+
+def claims_owner(row, owner):
+    value = row.get("author")
+    return isinstance(value, dict) and (
+        value.get("login") == owner["login"] or value.get("id") == owner["id"]
+    )
+
+
 def authorize(issue, owner):
+    if not identity(owner) or owner["__typename"] != "User" or not metadata(issue):
+        return None
     comments = issue["comments"]
+    if any("author" not in row for row in comments):
+        return None
+    if any(
+        claims_owner(row, owner) and not owned(row, owner) for row in [issue, *comments]
+    ):
+        return None
     approvals = [
-        row
-        for row in comments
-        if actor(row["author"]) == owner and APPROVAL.fullmatch(row["body"])
+        row for row in comments if owned(row, owner) and APPROVAL.fullmatch(row["body"])
     ]
-    own = actor(issue["author"]) == owner and actor(issue["editor"]) in (None, owner)
+    own = owned(issue, owner)
     discussion = [
         row
         for row in comments
-        if row not in approvals and (not own or actor(row["author"]) == owner)
+        if row not in approvals and (not own or owned(row, owner))
     ]
     snapshot = {
         "number": issue["number"],
@@ -62,51 +124,85 @@ def authorize(issue, owner):
     }
 
 
-def intake(options, github):
+def cursor(page, seen):
+    more, end = page.get("hasNextPage"), page.get("endCursor")
+    if type(more) is not bool or (
+        more and (not isinstance(end, str) or not end or end in seen)
+    ):
+        raise RuntimeError("Issue pagination is unverifiable")
+    if more:
+        seen.add(end)
+    return end if more else None
+
+
+def comments(options, github, node):
+    connection, rows, seen = node["comments"], [], set()
+    expected = connection["totalCount"]
+    while True:
+        rows.extend(connection["nodes"])
+        next_cursor = cursor(connection["pageInfo"], seen)
+        if not next_cursor:
+            ids = [row.get("databaseId") for row in rows]
+            if (
+                len(rows) != expected
+                or len(set(ids)) != len(ids)
+                or any(type(value) is not int or value <= 0 for value in ids)
+            ):
+                raise RuntimeError("Issue comments are incomplete")
+            return rows
+        fresh = graphql(
+            options,
+            github,
+            COMMENT_QUERY,
+            number=node["number"],
+            commentCursor=next_cursor,
+        )["issue"]
+        if any(
+            fresh[key] != node[key]
+            for key in ("number", "title", "body", "author", "editor", "lastEditedAt")
+        ):
+            raise RuntimeError("Issue revision changed during pagination")
+        connection = fresh["comments"]
+        if connection["totalCount"] != expected:
+            raise RuntimeError("Issue comments changed during pagination")
+
+
+def graphql(options, github, query, **variables):
     owner, name = options.repository.split("/")
-    pages = github(
-        options,
-        "api",
-        "graphql",
-        "--paginate",
-        "--slurp",
-        "-f",
-        "query=" + QUERY,
-        "-F",
-        "owner=" + owner,
-        "-F",
-        "name=" + name,
-    )
-    result = []
-    for page in pages:
-        for node in page["data"]["repository"]["issues"]["nodes"]:
-            comments = node["comments"]
-            if comments["totalCount"] > len(comments["nodes"]):
-                comments = rest_comments(options, github, node["number"])
-            else:
-                comments = comments["nodes"]
-            issue = {**node, "comments": comments, "labels": node["labels"]["nodes"]}
-            approved = authorize(issue, owner)
+    args = ["api", "graphql", "-f", "query=" + query]
+    for key, value in {"owner": owner, "name": name, **variables}.items():
+        args += ["-F" if type(value) is int else "-f", f"{key}={value}"]
+    page = github(options, *args)
+    if not isinstance(page, dict) or page.get("errors"):
+        raise RuntimeError("Issue GraphQL failed")
+    return page["data"]["repository"]
+
+
+def intake(options, github):
+    owner = options.repository.split("/")[0]
+    result, expected_owner, seen, variables = [], None, set(), {}
+    while True:
+        repo = graphql(options, github, QUERY, **variables)
+        trusted = repo["owner"]
+        if (
+            not identity(trusted)
+            or trusted["login"] != owner
+            or trusted["__typename"] != "User"
+        ):
+            raise RuntimeError("Repository owner is unverifiable")
+        if expected_owner is not None and trusted != expected_owner:
+            raise RuntimeError("Repository owner changed")
+        expected_owner = trusted
+        for node in repo["issues"]["nodes"]:
+            item = {
+                **node,
+                "comments": comments(options, github, node),
+                "labels": node["labels"]["nodes"],
+            }
+            approved = authorize(item, trusted)
             if approved:
                 result.append(approved)
-    return result
-
-
-def rest_comments(options, github, number):
-    pages = github(
-        options,
-        "api",
-        "--paginate",
-        "--slurp",
-        f"repos/{options.repository}/issues/{number}/comments?per_page=100",
-    )
-    return [
-        {
-            "databaseId": row["id"],
-            "body": row["body"],
-            "updatedAt": row["updated_at"],
-            "author": row["user"],
-        }
-        for page in pages
-        for row in page
-    ]
+        end = cursor(repo["issues"]["pageInfo"], seen)
+        if end is None:
+            return result
+        variables = {"endCursor": end}

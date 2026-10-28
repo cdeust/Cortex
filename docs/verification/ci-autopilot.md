@@ -77,3 +77,57 @@ for that label in the current gui domain. No system daemon or sudo is used.
 - [Codex noninteractive authentication](https://learn.chatgpt.com/docs/non-interactive-mode)
 - Orca CLI version-matched orchestration and recovery guides, read 2026-10-27.
 - macOS launchd.plist(5): ProgramArguments, StartInterval and RunAtLoad.
+
+## Authenticated revisions and review reconciliation (2026-10-28)
+
+Issue intake obtains the repository owner's immutable GitHub User ID and each
+issue/comment's author, editor and lastEditedAt in GraphQL responses. Automatic
+owner requirements require the same owner identity at authorship and, when
+edited, at the last edit. Pristine content requires both editor and lastEditedAt
+to be null. Missing metadata on relevant owner content, a different editor or an inconsistent
+owner ID cannot authorize a worker. Unrelated deleted-author discussion does not
+block an otherwise authenticated owner request. An altered owner-authored comment blocks that issue,
+including when its approval marker has been removed. Other authors still need
+an authenticated owner approval of the exact current snapshot digest. Existing
+approvals using the earlier snapshot shape must be renewed for the new digest.
+
+Comment pagination stays in GraphQL so body and last-editor metadata belong to
+the same returned row. Incomplete/duplicate comments, repeated cursors, GraphQL
+errors, or an issue revision changing between pages fail closed. This is current
+GitHub edit attribution, not a cryptographic signature or a guarantee that all
+paginated rows form an atomic snapshot.
+
+The existing local polling loop also recognizes a completed review-only wait.
+Only PRs whose named test/environment/install prerequisites are green and whose
+other checks have no unrelated failures qualify for an authenticated evidence
+read. Drafts, holds, forks, active owners and pending checks remain excluded.
+A per-PR isolated Python subprocess reads the current native proof and invokes
+ci_codex_review_event.resume with the exact repository, PR and expected head.
+The existing coordinator rechecks the live head, workflow run, attempts, jobs and
+proof before requesting a selected job rerun. This local step does not synthesize
+a GitHub event, request another native review or invoke a model.
+
+Missing, running, failed or invalid review proof remains a wait; genuine current
+unresolved findings can enter the existing serialized repair path. When proof is
+clean but the native resumption policy returns no action, the helper reads the
+trusted latest run and effective attempt jobs. Only a completed review job's
+non-readiness failure, with all test prerequisites green and no unrelated
+failures, can request infrastructure repair. It reuses the native policy's
+readiness predicate and rechecks the run, head and proof before doing so. A waiting PR
+does not block other actionable work. Unchanged repair snapshots still cannot
+start another worker. Completed review waits are revisited because resolving a
+thread does not necessarily change the PR head or check fingerprint.
+
+The installer copies and hashes the native evidence/event modules alongside the
+dispatcher. It does not copy candidate sources. Installation and launchd enabling
+remain separate operations. This service configuration still handles one
+repository and one durable active dispatch; it does not create parallel workers
+for the other repositories. Keep the existing control worktree and user-retained
+terminals when reconciling an accepted completion.
+
+Primary field verification: a read-only GitHub GraphQL query on 2026-10-28
+returned cdeust/Cortex issue683's owner and author as User
+MDQ6VXNlcjMxNjc3Njc=, with editor=null and lastEditedAt=null.
+[GitHub IssueComment fields](https://docs.github.com/en/graphql/reference/objects#issuecomment)
+and [Issue fields](https://docs.github.com/en/graphql/reference/objects#issue)
+describe the attribution consumed here.
