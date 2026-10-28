@@ -9,8 +9,6 @@ on:
       - "tests_py/handlers/test_recall_low_signal_filter.py"
       - "tests_py/hooks/test_auto_recall_paraphrase.py"
       - ".github/workflows/auto-recall-parity.yml"
-  push:
-    branches: [main]
 
 permissions:
   contents: read
@@ -24,13 +22,21 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          version: "0.11.3"
+          python-version: "3.12"
+      - name: Create the environment
+        run: python -m venv .venv
       - name: Install locked CI dependencies
+        uses: ./.github/actions/uv-locked-install
+        with:
+          environment: ${{ github.workspace }}/.venv
+          set: --extra dev --extra sqlite --extra codebase --extra postgresql --group lint
+      - name: Check proposed source structure
         run: |
-          uv python install 3.12
-          uv sync --locked --managed-python --python 3.12 --extra dev --extra sqlite --extra codebase --extra postgresql
+          export PATH="$HOME/.local/bin:$PATH"
+          uv run --no-sync ruff check mcp_server benchmarks/auto_recall_parity.py tests_py/hooks/test_auto_recall_paraphrase.py tests_py/hooks/test_auto_recall_review.py
+          uv run --no-sync python scripts/check_craftsmanship.py --base origin/main
       - name: Regression tests against the prior implementation
         env:
           BASE_SHA: 3aef5b590c839a0b2a46267a20477785490f691c # inspected pre-fix source
@@ -49,7 +55,7 @@ jobs:
         env:
           CORTEX_RERANKER_OFFLINE: "1"
         run: |
-          uv run --no-sync pytest --tb=short -q -p no:randomly tests_py/handlers/test_recall_low_signal_filter.py tests_py/handlers/test_inject_triggered_memories.py tests_py/hooks/test_auto_recall_paraphrase.py tests_py/hooks/test_sqlite_hook_scope.py tests_py/hooks/test_sqlite_hook_paths.py
+          uv run --no-sync pytest --tb=short -q -p no:randomly tests_py/handlers/test_recall_low_signal_filter.py tests_py/handlers/test_inject_triggered_memories.py tests_py/hooks/test_auto_recall_paraphrase.py tests_py/hooks/test_auto_recall_review.py tests_py/hooks/test_sqlite_hook_scope.py tests_py/hooks/test_sqlite_hook_paths.py
       - name: Measure prior hook and tool gap
         run: |
           uv run --no-sync python benchmarks/auto_recall_parity.py --codebase "$RUNNER_TEMP/recall-before" --report "$RUNNER_TEMP/recall-before.json" --expect-gap

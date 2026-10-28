@@ -147,12 +147,17 @@ def _recall_memories(conn, query: str, project_root: str | None = None) -> list[
                    effective_heat(m, NOW()) AS heat,
                    m.domain, m.agent_context, m.is_protected,
                    m.created_at, m.source_attribution, m.is_stale,
+                   m.capture_origin, m.source,
                    ts_rank_cd(m.content_tsv, q) AS rank
             FROM memories m
                  JOIN current_memories cm ON cm.id = m.id,
                  plainto_tsquery('english', %s) q
             WHERE m.content_tsv @@ q
               AND effective_heat(m, NOW()) >= %s
+              AND NOT m.is_stale
+              AND (m.capture_origin = 'deliberate' OR
+                   (COALESCE(m.capture_origin, '') NOT IN ('local_action', 'network')
+                    AND COALESCE(m.source, '') <> 'post_tool_capture'))
               AND NOT m.is_benchmark
               AND m.superseded_by_id IS NULL
               AND (m.is_global = TRUE OR m.directory_context = ANY(%s::TEXT[]))
@@ -165,24 +170,27 @@ def _recall_memories(conn, query: str, project_root: str | None = None) -> list[
             (query, _MIN_HEAT, ancestors, candidate_limit(_MAX_MEMORIES)),
         ).fetchall()
 
-        results = [
-            _sqlite_result_entry(r["id"], r, r.get("heat", 0)) for r in rows
-        ]
+        results = [_sqlite_result_entry(r["id"], r, r.get("heat", 0)) for r in rows]
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"FTS query failed: {exc}")
 
-    return rank_memories(
-        query, results, lambda: _pg_hot_candidates(conn, ancestors)
-    )[:_MAX_MEMORIES]
+    return rank_memories(query, results, lambda: _pg_hot_candidates(conn, ancestors))[
+        :_MAX_MEMORIES
+    ]
 
 
 def _pg_hot_candidates(conn, ancestors: list[str]) -> list[dict]:
     """Scoped discovery without lexical overlap; predicates precede LIMIT."""
     rows = conn.execute(
         """
-        SELECT m.*, effective_heat(m, NOW()) AS heat
+        SELECT m.id, m.content, m.domain, m.agent_context, m.is_protected,
+               m.created_at, m.source_attribution, m.is_stale,
+               m.capture_origin, m.source, effective_heat(m, NOW()) AS heat
         FROM memories m JOIN current_memories cm ON cm.id = m.id
         WHERE effective_heat(m, NOW()) >= %s AND NOT m.is_benchmark
+          AND (m.capture_origin = 'deliberate' OR
+               (COALESCE(m.capture_origin, '') NOT IN ('local_action', 'network')
+                AND COALESCE(m.source, '') <> 'post_tool_capture'))
           AND NOT m.is_stale
           AND (m.is_global = TRUE OR m.directory_context = ANY(%s::TEXT[]))
         ORDER BY heat DESC, m.created_at DESC, m.id DESC LIMIT %s
@@ -232,29 +240,28 @@ def _sqlite_result_entry(memory_id: int, m: dict, heat: float) -> dict:
         "created_at": m.get("created_at"),
         "source_attribution": m.get("source_attribution", ""),
         "is_stale": bool(m.get("is_stale")),
+        "capture_origin": m.get("capture_origin"),
+        "source": m.get("source"),
     }
 
 
 def _recall_memories_sqlite(
     store, query: str, project_root: str | None = None
 ) -> list[dict]:
-    """FTS-based recall through the SQLite store — no embedding load.
-
-    Mirror of the PG ``_recall_memories`` contract: FTS prefilter +
-    heat floor, protected-first ordering, benchmark rows excluded. The
-    project predicate runs inside ``search_fts`` itself, before its own
-    LIMIT (issue #604 follow-up) -- a post-fetch filter here would let
-    foreign-project rows starve the project's own rows out of the
-    already-truncated pool. ``search_fts`` already restricts to
-    supersession chain heads and non-stale rows (current_memories join)
-    and returns [] on any FTS5 error.
+    """Scoped FTS and hot discovery before cached semantic ranking.
+    Store predicates exclude captures, stale rows and benchmarks before LIMIT.
+    Model failures retain protected-first lexical behavior (issue #706).
     """
     fts_query = _fts_query_from_prompt(query)
     if not fts_query:
         return []
     ancestors = project_ancestors(project_root)
     hits = store.search_fts(
-        fts_query, limit=candidate_limit(_MAX_MEMORIES), directory_ancestors=ancestors
+        fts_query,
+        limit=candidate_limit(_MAX_MEMORIES),
+        directory_ancestors=ancestors,
+        hook_only=True,
+        min_heat=_MIN_HEAT,
     )
     results = []
     for memory_id, _score in hits:
@@ -266,11 +273,15 @@ def _recall_memories_sqlite(
             continue
         results.append(_sqlite_result_entry(memory_id, m, heat))
     return rank_memories(
-        query, results, lambda: [
+        query,
+        results,
+        lambda: [
             _sqlite_result_entry(m["id"], m, float(m.get("heat") or 0.0))
             for m in store.get_hot_memories(
-                min_heat=_MIN_HEAT, limit=candidate_limit(_MAX_MEMORIES),
+                min_heat=_MIN_HEAT,
+                limit=candidate_limit(_MAX_MEMORIES),
                 directory_ancestors=ancestors,
+                hook_only=True,
             )
             if not m.get("is_stale")
         ],

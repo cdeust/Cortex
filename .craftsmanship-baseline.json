@@ -3649,11 +3649,6 @@
     },
     {
       "file": "mcp_server/handlers/recall.py",
-      "kind": "file-size",
-      "detail": "exceeds 300-line cap"
-    },
-    {
-      "file": "mcp_server/handlers/recall.py",
       "kind": "layer-violation",
       "detail": "mcp_server.observability"
     },
@@ -3671,11 +3666,6 @@
       "file": "mcp_server/handlers/recall_helpers.py",
       "kind": "layer-violation",
       "detail": "mcp_server.observability"
-    },
-    {
-      "file": "mcp_server/handlers/recall_helpers.py",
-      "kind": "method-size",
-      "detail": "inject_triggered_memories"
     },
     {
       "file": "mcp_server/handlers/recall_helpers.py",

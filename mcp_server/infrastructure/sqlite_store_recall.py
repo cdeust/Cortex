@@ -83,6 +83,7 @@ def _result(mid: int, row: Any, score: float) -> dict[str, Any]:
         "surprise_score": row["surprise_score"],
         # source: ADR-0616
         "capture_origin": row["capture_origin"],
+        "source": row["source"],
     }
 
 

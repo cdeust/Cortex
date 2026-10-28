@@ -171,7 +171,8 @@ def _is_system_capture(memory: dict) -> bool:
 def filter_low_signal(results: list[dict]) -> tuple[list[dict], int]:
     """Hide system captures by provenance, never by user-selectable tags.
 
-    Missing, unknown and legacy provenance is retained: tags cannot establish
+    Missing, unknown and legacy origins are retained unless the persisted source
+    is post_tool_capture. Tags cannot establish
     whether the user deliberately wrote a memory. The caller surfaces the
     number hidden and include_low_signal=True bypasses this filter.
     """

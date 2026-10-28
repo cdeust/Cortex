@@ -199,3 +199,45 @@ def get_raw_ce_score(
     except Exception as exc:  # noqa: BLE001 — source: ADR-0242
         silent_failure.note("reranker.raw_ce_score", exc)
         return None
+
+
+def rerank_for_injection(
+    query: str, candidates: list[tuple[int, float]], content_lookup: dict[int, str]
+) -> list[tuple[int, float]] | None:
+    """Return eligible blended scores, or None on inference failure.
+
+    Unlike tool recall, automatic injection must abstain for insufficient
+    context. Reuse ADR-0245's existing confidence gate per passage; this is
+    the existing engineering default, not a hook-calibrated probability.
+    The hosted negative-query benchmark records its behavior.
+    """
+    ranker = _ensure_reranker()
+    if ranker is None:
+        return None
+    if not candidates:
+        return []
+    try:
+        from flashrank import RerankRequest  # noqa: PLC0415 -- optional model dependency
+
+        passages = [
+            {"id": i, "text": content_lookup.get(mid, "")[:1200]}
+            for i, (mid, _) in enumerate(candidates)
+        ]
+        raw = ranker.rerank(RerankRequest(query=query, passages=passages))
+        count_reranked(len(passages))
+        ce_scores = {r["id"]: float(r["score"]) for r in raw}
+        if set(ce_scores) != set(range(len(candidates))):
+            raise ValueError("incomplete injection reranker response")
+        eligible = {
+            candidates[i][0]
+            for i, score in ce_scores.items()
+            if _compute_retrieval_confidence([score]) == 1.0
+        }
+        return [
+            pair
+            for pair in _blend_scores(candidates, ce_scores, alpha=0.70, adaptive=False)
+            if pair[0] in eligible
+        ]
+    except Exception as exc:  # noqa: BLE001 -- inference failure retains lexical recall
+        silent_failure.note("reranker.injection_call", exc)
+        return None

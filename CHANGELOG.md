@@ -16,6 +16,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Automatic recall reranks scoped candidates before cutting the injection,
+  rejects system captures before pool limits, and abstains when the existing
+  relevance gate rejects every candidate (#706). Default recall preserves
+  deliberate memories regardless of user tags and reports hidden captures.
+
 - Owner @claude mentions inherit the official action's tag-mode workspace edit
   approval instead of overriding it with auto mode (#822). Requests on the same
   thread run one at a time with up to 100 pending requests retained; automatic

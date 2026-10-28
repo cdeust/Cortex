@@ -15,6 +15,7 @@ from typing import Any
 
 import numpy as np
 
+from mcp_server.infrastructure.hook_capture_filter import HOOK_CAPTURE_FILTER
 from mcp_server.observability import silent_failure
 from mcp_server.shared.code_tokenize import expand_fts_query as _expand_fts_query
 from mcp_server.infrastructure.sqlite_scope_clause import directory_scope_clause
@@ -84,6 +85,8 @@ class SqliteSearchMixin:
         query: str,
         limit: int = 20,
         directory_ancestors: list[str] | None = None,
+        hook_only: bool = False,
+        min_heat: float = 0.0,
     ) -> list[tuple[int, float]]:
         """Full-text search via FTS5. Returns (memory_id, score) pairs.
 
@@ -97,16 +100,23 @@ class SqliteSearchMixin:
         scope_filter, scope_params = directory_scope_clause(
             directory_ancestors, column_prefix="m."
         )
+        hook_filter = ""
+        if hook_only:
+            hook_filter = (
+                "AND NOT COALESCE(m.is_benchmark, 0) AND m.heat_base >= ? "
+                f"AND {HOOK_CAPTURE_FILTER} "
+            )
+        hook_params = [min_heat] if hook_only else []
         try:
             rows = self._conn.execute(
                 "SELECT memories_fts.rowid AS rowid, memories_fts.rank AS rank "  # noqa: S608 — scope_filter is a fixed in-code fragment from directory_scope_clause; values are bound parameters (docs/ASSURANCE-CASE.md §5)
                 "FROM memories_fts "
                 "JOIN current_memories m ON m.id = memories_fts.rowid "
                 "WHERE memories_fts MATCH ? AND NOT m.is_stale "
-                f"{scope_filter}"
+                f"{scope_filter}{hook_filter}"
                 # source: ADR-1106 -- exact ties go to the newer memory.
                 "ORDER BY memories_fts.rank, m.created_at DESC, m.id DESC LIMIT ?",
-                (query, *scope_params, limit),
+                (query, *scope_params, *hook_params, limit),
             ).fetchall()
             return [(r["rowid"], -r["rank"]) for r in rows]
         except sqlite3.Error:

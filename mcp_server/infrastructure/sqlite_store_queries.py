@@ -7,6 +7,7 @@ import sqlite3
 from typing import Any, Iterator
 from mcp_server.infrastructure.sqlite_compat import PsycopgCompatConnection
 from mcp_server.infrastructure.sqlite_scope_clause import directory_scope_clause
+from mcp_server.infrastructure.hook_capture_filter import HOOK_CAPTURE_FILTER
 from mcp_server.observability import silent_failure
 
 
@@ -68,6 +69,7 @@ class SqliteQueryMixin:
         include_benchmarks: bool = False,
         heads_only: bool = True,
         directory_ancestors: list[str] | None = None,
+        hook_only: bool = False,
     ) -> list[dict[str, Any]]:
         """Mirror of PgQueryMixin.get_hot_memories — chain heads only by
         default (the current_memories view); heads_only=False is the
@@ -80,16 +82,18 @@ class SqliteQueryMixin:
         """
         src = "current_memories" if heads_only else "memories"
         scope_filter, scope_params = directory_scope_clause(directory_ancestors)
+        if hook_only:
+            scope_filter += f" AND NOT m.is_stale AND {HOOK_CAPTURE_FILTER} "
         if include_benchmarks:
             rows = self._conn.execute(
-                f"SELECT * FROM {src} WHERE heat_base >= ? {scope_filter}"  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
+                f"SELECT * FROM {src} m WHERE heat_base >= ? {scope_filter}"  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
                 # source: ADR-1106 -- exact ties go to the newer memory.
                 "ORDER BY heat_base DESC, id DESC LIMIT ?",
                 (min_heat, *scope_params, limit),
             ).fetchall()
         else:
             rows = self._conn.execute(
-                f"SELECT * FROM {src} WHERE heat_base >= ? "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
+                f"SELECT * FROM {src} m WHERE heat_base >= ? "  # noqa: S608 — identifier is the two-literal in-code ternary memories/current_memories; values are bound parameters (docs/ASSURANCE-CASE.md §5)
                 "AND NOT COALESCE(is_benchmark, 0) "
                 f"{scope_filter}"
                 # source: ADR-1106 -- exact ties go to the newer memory.

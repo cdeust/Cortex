@@ -18,7 +18,8 @@ from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 
 
 @pytest.fixture()
-def store(tmp_path):
+def store(tmp_path, monkeypatch):
+    monkeypatch.setattr("mcp_server.core.reranker_model._model_exists", lambda: False)
     s = SqliteMemoryStore(db_path=str(tmp_path / "memory.db"))
     yield s
     s.close()

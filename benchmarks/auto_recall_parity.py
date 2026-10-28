@@ -49,6 +49,7 @@ def seed(database: Path, corpus: list[dict]) -> dict:
 
     wire_composition_root()
     embeddings = get_embedding_engine()
+    embeddings.download_model()
     vectors = [embeddings.encode(case["memory"]) for case in corpus]
     if embeddings.mode != "neural":
         raise RuntimeError("parity measurement requires neural embeddings")
@@ -60,11 +61,16 @@ def seed(database: Path, corpus: list[dict]) -> dict:
         if not with_store._has_vec:
             raise RuntimeError("parity measurement requires sqlite-vec")
         for case, vector in zip(corpus, vectors, strict=True):
-            with_store.insert_memory({
-                "content": case["memory"], "embedding": vector, "heat": 0.8,
-                "capture_origin": "deliberate", "directory_context": "/corpus",
-                "tags": [],
-            })
+            with_store.insert_memory(
+                {
+                    "content": case["memory"],
+                    "embedding": vector,
+                    "heat": 0.8,
+                    "capture_origin": "deliberate",
+                    "directory_context": "/corpus",
+                    "tags": [],
+                }
+            )
     finally:
         with_store.close()
     return {
@@ -82,10 +88,14 @@ async def tool_query(database: Path, query: str) -> tuple[list[str], float]:
     recall._store = store
     started = time.perf_counter()
     try:
-        result = await recall._handler_impl({
-            "query": query, "max_results": 10, "min_heat": 0.15,
-            "directory": "/corpus",
-        })
+        result = await recall._handler_impl(
+            {
+                "query": query,
+                "max_results": 10,
+                "min_heat": 0.15,
+                "directory": "/corpus",
+            }
+        )
         return [m["content"] for m in result["memories"]], time.perf_counter() - started
     finally:
         recall._store = None
@@ -100,7 +110,11 @@ def hook_query(codebase: Path, database: Path, query: str) -> tuple[str, float, 
     result = subprocess.run(
         [sys.executable, "-m", "mcp_server.hooks.auto_recall"],
         input=json.dumps({"prompt": query, "cwd": "/corpus"}),
-        text=True, capture_output=True, env=env, cwd=codebase, check=True,
+        text=True,
+        capture_output=True,
+        env=env,
+        cwd=codebase,
+        check=True,
     )
     return result.stdout, time.perf_counter() - started, result.stderr
 
@@ -119,12 +133,42 @@ async def measure(codebase: Path, root: Path, corpus: list[dict]) -> list[dict]:
         marker = case["memory"].split(":")[0]
         rank = next((i + 1 for i, text in enumerate(tool) if marker in text), None)
         row = {
-            "case": index, "tool_rank": rank, "hook_hit": marker in hook,
-            "tool_seconds": tool_seconds, "hook_seconds": hook_seconds,
-            "hook_stdout": hook, "hook_stderr": diagnostics,
+            "case": index,
+            "tool_rank": rank,
+            "hook_hit": marker in hook,
+            "tool_seconds": tool_seconds,
+            "hook_seconds": hook_seconds,
+            "hook_stdout": hook,
+            "hook_stderr": diagnostics,
         }
         rows.append(row)
         print(json.dumps(row), flush=True)
+    return rows
+
+
+def measure_negatives(codebase: Path, root: Path) -> list[dict]:
+    """Record abstention on prompts outside the fixed fixture's subject matter."""
+    # source: explicit negative controls for the committed paraphrase fixture.
+    queries = (
+        "Describe the quark composition of a neutral kaon.",
+        "Explain the metre in an ancient Sumerian epic.",
+        "What is the conjugacy class structure of the monster group?",
+    )
+    rows = []
+    for query in queries:
+        target = root / "negative.db"
+        if target.exists():
+            target.unlink()
+        copy_database(root / "seed.db", target)
+        output, seconds, diagnostics = hook_query(codebase, target, query)
+        rows.append(
+            {
+                "query": query,
+                "hook_stdout": output,
+                "hook_stderr": diagnostics,
+                "hook_seconds": seconds,
+            }
+        )
     return rows
 
 
@@ -147,6 +191,20 @@ def summary(rows: list[dict], budget: float) -> dict:
     }
 
 
+def check_results(
+    results: dict, rows: list[dict], negatives: list[dict], expect_gap: bool
+) -> None:
+    """Require the hosted positive and negative retrieval controls."""
+    if expect_gap:
+        assert results["hook_hits_at_3"] < results["tool_hits_at_3"], results
+    else:
+        assert all(not row["hook_stdout"] for row in negatives), negatives
+        assert results["tool_hits_at_3"] > 0, results
+        assert results["hook_hits_at_3"] >= results["tool_hits_at_3"], results
+        assert all("auto recall degraded" not in r["hook_stderr"] for r in rows)
+    # Latency is reported, not used as a machine-load-dependent test verdict.
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--codebase", type=Path, required=True)
@@ -165,6 +223,7 @@ def main() -> None:
         os.environ["CORTEX_RERANKER_OFFLINE"] = "1"
         os.environ["HF_HUB_OFFLINE"] = "1"
         rows = asyncio.run(measure(codebase, root, corpus))
+        negatives = measure_negatives(codebase, root)
     manifest = json.loads((codebase / ".claude-plugin/plugin.json").read_text())
     budget = manifest["hooks"]["UserPromptSubmit"][0]["hooks"][0]["timeout"]
     results = summary(rows, budget)
@@ -174,17 +233,14 @@ def main() -> None:
     report = {
         "code_sha": revision,
         "fixture_sha256": hashlib.sha256(fixture.read_bytes()).hexdigest(),
-        "models": models, "summary": results, "rows": rows,
+        "negative_queries": negatives,
+        "models": models,
+        "summary": results,
+        "rows": rows,
     }
     args.report.write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(results, indent=2), flush=True)
-    if args.expect_gap:
-        assert results["hook_hits_at_3"] < results["tool_hits_at_3"], results
-    else:
-        assert results["tool_hits_at_3"] > 0, results
-        assert results["hook_hits_at_3"] >= results["tool_hits_at_3"], results
-        assert all("auto recall degraded" not in r["hook_stderr"] for r in rows)
-    # Latency is reported, not used as a machine-load-dependent test verdict.
+    check_results(results, rows, negatives, args.expect_gap)
 
 
 if __name__ == "__main__":

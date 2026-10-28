@@ -1,10 +1,7 @@
-"""Handler: recall -- PG recall + production enrichments.
+"""Recall retrieval and production enrichments.
 
-Composition root wiring infrastructure to core retrieval logic.
-
-Base retrieval uses pg_recall (intent-adaptive 5-signal fusion + FlashRank reranking).
-Production enrichments layer on top: prospective memory injection,
-co-activation Hebbian learning, neuro-symbolic rules, strategic ordering.
+Composition root for scoped fusion, reranking, prospective injection,
+Hebbian co-activation, rules and strategic ordering.
 """
 
 from __future__ import annotations
@@ -27,6 +24,7 @@ from mcp_server.core.tabular_encoding import (
     parse_format,
     reserved_budget,
 )
+from mcp_server.handlers.recall_by_id import fetch_by_id
 from mcp_server.handlers.recall_schema import schema  # noqa: F401
 from mcp_server.handlers.injection_receipts import emit_injection_receipt
 from mcp_server.handlers.recall_helpers import (
@@ -168,46 +166,6 @@ def _track_recall_replay(results: list[dict], store: Any) -> None:
         track_replay_event(mem_id, store)
 
 
-def _fetch_by_id(
-    memory_id: int, content_offset: int, fmt: str = "json"
-) -> dict[str, Any]:
-    """Fetch one memory by id — the retrieval path for truncated results.
-
-    ``content_offset`` pages through contents larger than the response
-    budget: the slice starts there, ``content_length`` carries the full
-    size, and ``bound_payload`` marks the slice ``truncated`` if it
-    still overflows. ``fmt`` is honored for a self-describing response, but a
-    single-item list rarely benefits from tabular encoding — the budget
-    re-check in ``encode_within_budget`` keeps whichever form fits.
-    """
-    stored = _get_store().get_memory(memory_id)
-    # Connection-rooted fetch must not disclose another agent's content or ID.
-    # Unlike search's existing agent boost, this new ID surface enforces scope.
-    root = root_agent_topic()
-    if stored is None or (root is not None and stored.get("agent_context") != root):
-        return encode_within_budget(
-            {"memories": [], "count": 0, "intent": "general"}, "memories", fmt
-        )
-    # Copy before mutating: truncation must never write back into
-    # whatever object the store handed us.
-    memory = {**stored}
-    content = memory.get("content") or ""
-    if content_offset > 0:
-        memory["content"] = content[content_offset:]
-    memory["content_length"] = len(content)
-    memory["content_offset"] = content_offset
-    resp = {"memories": [memory], "count": 1, "intent": "general"}
-    settings = get_memory_settings()
-    # Bound against the RESERVED budget so appending the self-describing
-    # ``format`` field below cannot push the payload past the host cap.
-    resp = bound_payload(
-        resp,
-        [ListTarget("memories", weight_key="score")],
-        reserved_budget(settings.MAX_RESPONSE_CHARS),
-    )
-    return encode_within_budget(resp, "memories", fmt, settings.MAX_RESPONSE_CHARS)
-
-
 async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Retrieve memories: pg_recall base + production enrichments."""
     if args and (args.get("memory_id") is None or args.get("exact_id")):
@@ -216,8 +174,11 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
             return bounded_exact(exact, args)
     fmt = parse_format(args.get("format") if args else None)
     if args and args.get("memory_id") is not None:
-        return _fetch_by_id(
-            int(args["memory_id"]), int(args.get("content_offset") or 0), fmt
+        return fetch_by_id(
+            _get_store(),
+            int(args["memory_id"]),
+            int(args.get("content_offset") or 0),
+            fmt,
         )
     if not args or not args.get("query"):
         # source: ADR-0430
