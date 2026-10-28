@@ -15,10 +15,15 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- Surface the named dedup, SQLite search, profile freshness, and hot-memory
-  read failures instead of returning successful fallbacks; doctor and
-  check_setup report process-local component failure counts and last errors
-  (#685).
+- Surface named dedup, SQLite recall-signal, profile freshness, and hot-memory
+  read failures to callers instead of continuing with partial results (#685).
+  Doctor and check_setup expose process-local historical fallback counts as
+  optional warnings; these lifetime counters do not block readiness.
+  Capture workers roll back unfinished SQLite writes when a handler raises.
+
+- Session registry POSIX `ps` probes report nonzero exits and invalid UTF-8
+  as named errors with the command and stderr; hooks log the actual cause
+  without starting a legacy consolidate worker (#682).
 
 - Share the launcher's first-launch backend policy with wheel hooks and direct
   MCP startup: a fresh unconfigured HOME records SQLite before settings bind;

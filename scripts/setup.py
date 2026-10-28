@@ -33,6 +33,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 import launcher_layout  # noqa: E402 — sibling module, resolvable only once SCRIPT_DIR is on sys.path
+import setup_sqlite  # noqa: E402 — sibling preflight, stdlib only
 import launcher_site  # noqa: E402 — sibling module, resolvable only once SCRIPT_DIR is on sys.path
 
 PROJECT_DIR = SCRIPT_DIR.parent
@@ -452,6 +453,7 @@ def main() -> None:
 
     check_python()
     if SKIP_POSTGRES:
+        setup_sqlite.check_sqlite_extension_loading(fail)
         ok(
             "SQLite backend (zero-config default) — no PostgreSQL install, "
             "no schema step (auto-creates on first use). Upgrade anytime: "

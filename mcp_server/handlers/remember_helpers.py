@@ -442,41 +442,33 @@ def try_curation(
     tags: list[str],
     heat: float,
 ) -> tuple[str, int | None]:
-    """Decide curation action: create, merge, or link."""
-    try:
-        if not embedding or force:
-            return "create", None
-        hits = store.search_vectors(embedding, top_k=3, min_heat=0.0)
+    """Decide create, merge, or link; search and merge failures propagate."""
+    if not embedding or force:
+        return "create", None
+    hits = store.search_vectors(embedding, top_k=3, min_heat=0.0)
+    # source: ADR-0438
+    rows = MemoryRows.read(store, [mid for mid, _d in hits]) if hits else MemoryRows({})
+    for cand_id, _d in hits:
+        cand = rows.get_memory(cand_id)
+        if not cand or not cand.get("embedding"):
+            continue
         # source: ADR-0438
-        rows = (
-            MemoryRows.read(store, [mid for mid, _d in hits])
-            if hits
-            else MemoryRows({})
+        if cand.get("superseded_by_id") is not None:
+            continue
+        sim = emb_engine.similarity(embedding, cand["embedding"])
+        overlap = (
+            curation.compute_textual_overlap(content, cand["content"])
+            > _TEXTUAL_OVERLAP_THRESHOLD
         )
-        for cand_id, _d in hits:
-            cand = rows.get_memory(cand_id)
-            if not cand or not cand.get("embedding"):
-                continue
+        action = curation.decide_curation_action(sim, overlap)
+        if action == "merge":
             # source: ADR-0438
-            if cand.get("superseded_by_id") is not None:
-                continue
-            sim = emb_engine.similarity(embedding, cand["embedding"])
-            overlap = (
-                curation.compute_textual_overlap(content, cand["content"])
-                > _TEXTUAL_OVERLAP_THRESHOLD
-            )
-            action = curation.decide_curation_action(sim, overlap)
-            if action == "merge":
-                # source: ADR-0438
-                if curation.detect_contradictions(content, [cand]):
-                    return "supersede", cand_id
-                _do_merge(cand, cand_id, content, embedding, heat, store, emb_engine)
-                return "merge", cand_id
-            if action == "link":
-                return "link", cand_id
-    except Exception as exc:  # noqa: BLE001 — record and propagate; dedup must complete before create
-        silent_failure.note("remember_helpers.curation_dedup", exc)
-        raise
+            if curation.detect_contradictions(content, [cand]):
+                return "supersede", cand_id
+            _do_merge(cand, cand_id, content, embedding, heat, store, emb_engine)
+            return "merge", cand_id
+        if action == "link":
+            return "link", cand_id
     return "create", None
 
 

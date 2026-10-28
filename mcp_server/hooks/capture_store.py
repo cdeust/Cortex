@@ -35,7 +35,12 @@ async def store(payload: dict[str, object]) -> dict[str, object]:
         raise RuntimeError(
             "capture dependencies unavailable; verify installation"
         ) from exc
-    result = await handler(payload)
+    from mcp_server.handlers.request_transaction import handler_transaction_scope  # noqa: PLC0415 — load the handler boundary only after an admitted payload arrives
+
+    # source: request_transaction.py / tool_error_handler.py — the resident
+    # capture loop needs the same unfinished-write cleanup as MCP tool calls.
+    with handler_transaction_scope():
+        result = await handler(payload)
     from mcp_server.core import telemetry  # noqa: PLC0415 — the worker's import test forbids mcp_server.core before a payload arrives
     from mcp_server.core.capture_health import CAPTURE_PROCESSED  # noqa: PLC0415 — same
 

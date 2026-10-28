@@ -14,7 +14,6 @@ from mcp_server.infrastructure.scanner import (
     group_by_project,
 )
 from mcp_server.handlers._tool_meta import DESTRUCTIVE
-from mcp_server.observability import silent_failure
 
 schema = {
     "title": "Rebuild profiles",
@@ -28,7 +27,9 @@ schema = {
         "install, after a major workflow change, or when `query_methodology` "
         "returns coldStart=true. Skipped automatically if profiles are <1h "
         "old unless force=true, which only bypasses that freshness check and "
-        "never replaces a profile. Transcripts on disk are a sliding window "
+        "never replaces a profile. Invalid or timezone-naive updatedAt values "
+        "raise an error; rerun with force=true to bypass invalid freshness "
+        "metadata. Transcripts on disk are a sliding window "
         "(Claude Code deletes old ones) while a stored profile accumulates "
         "one session per `record_session_end`, so a domain whose scan sees "
         "fewer sessions than its stored profile records is KEPT unchanged "
@@ -87,7 +88,7 @@ _PROFILE_FRESH_MS = 3600000
 
 
 def _check_skip(force: bool) -> dict | None:
-    """Return a skip response if profiles are recent and force is False."""
+    """Skip recent profiles; raise on unreadable or invalid freshness data."""
     if force:
         return None
     profiles = load_profiles()
@@ -108,9 +109,11 @@ def _check_skip(force: bool) -> dict | None:
                 "domains": list(profiles.get("domains", {}).keys()),
                 "updatedAt": updated_at,
             }
-    except Exception as exc:  # noqa: BLE001 — record and propagate; unknown freshness must not permit a rebuild
-        silent_failure.note("rebuild_profiles.freshness_check", exc)
-        raise
+    except (TypeError, ValueError, AttributeError) as exc:
+        raise ValueError(
+            f"Cannot determine profile freshness from updatedAt={updated_at!r}; "
+            "rerun rebuild_profiles with force=true."
+        ) from exc
     return None
 
 

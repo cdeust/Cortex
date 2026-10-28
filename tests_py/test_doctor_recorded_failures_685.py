@@ -31,8 +31,9 @@ def test_check_setup_exposes_repeated_failure_count_and_last_error(monkeypatch):
 
     result = asyncio.run(check_setup.handler())
 
-    assert result["ready"] is False
-    assert result["fixes_needed"] == 1
+    assert result["ready"] is True
+    assert result["fixes_needed"] == 0
+    assert result["checks"][0]["optional"] is True
     detail = result["checks"][0]["detail"]
     assert "fixture.component" in detail
     assert "2 failure(s)" in detail
@@ -40,13 +41,15 @@ def test_check_setup_exposes_repeated_failure_count_and_last_error(monkeypatch):
     assert silent_failure.status() == before
 
 
-def test_doctor_prints_failures_and_exits_nonzero(monkeypatch, capsys):
+def test_doctor_prints_historical_warning_without_blocking_readiness(
+    monkeypatch, capsys
+):
     silent_failure.note("fixture.component", RuntimeError("probe failed"))
     monkeypatch.setattr(doctor, "active_checks", lambda: [doctor.CHECKS[-1]])
 
-    assert doctor._run_full_check() == 1
+    assert doctor._run_full_check() == 0
     output = capsys.readouterr().out
-    assert "[FAIL]" in output
+    assert "[WARN]" in output
     assert "fixture.component" in output
     assert "RuntimeError: probe failed" in output
 

@@ -14,6 +14,7 @@ import sys
 import pytest
 
 from mcp_server.doctor import SQLITE_CHECKS, _sqlite_vector_search
+from tests_py._sqlite_vec import require_sqlite_vec
 
 
 @pytest.fixture
@@ -44,7 +45,22 @@ def test_names_missing_package_distinctly(sqlite_fallback_path, monkeypatch):
 
 
 def test_loaded_reports_ok(sqlite_fallback_path):
-    pytest.importorskip("sqlite_vec")
+    require_sqlite_vec()
     check = _sqlite_vector_search()
     assert check.ok is True
     assert "loaded" in check.detail
+
+
+def test_names_missing_extension_api(sqlite_fallback_path, monkeypatch):
+    import sqlite3
+    from types import SimpleNamespace
+
+    monkeypatch.setitem(sys.modules, "sqlite_vec", SimpleNamespace())
+    monkeypatch.setattr(sqlite3, "Connection", object)
+    check = _sqlite_vector_search()
+    assert check.ok is False
+    assert check.optional is False
+    assert "enable_load_extension" in check.detail
+    assert "Homebrew" in check.fix
+    assert "uv-managed" in check.fix
+    assert "python.org" not in check.fix

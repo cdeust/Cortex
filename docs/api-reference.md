@@ -54,8 +54,10 @@ Full rescan of session data to rebuild cognitive profiles. The transcripts on di
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `domain` | string | No | — | Rebuild only this domain |
-| `force` | boolean | No | `false` | Bypass the 1-hour freshness check only; never replaces a profile |
+| `force` | boolean | No | `false` | Bypass the 1-hour freshness check, including invalid timestamp metadata; never replaces a profile |
 | `replace_accumulated_profiles` | boolean | No | `false` | Destructive: replace a domain's stored profile with the smaller scan when the scan sees fewer sessions than the profile records |
+
+Invalid or timezone-naive `updatedAt` metadata raises an error before scanning. Rerun with `force=true` to bypass that freshness check; unreadable profile files still fail when the rebuild loads them.
 
 **Returns:** `domains`, `totalSessions`, `totalMemories`, `duration`, and `domainOutcomes`, one entry per scanned domain: `{domain, action, storedSessions, scannedSessions, resultingSessions}` where `action` is `created`, `rebuilt` (scan saw at least as many sessions), `kept` (scan saw fewer; stored profile unchanged) or `replaced` (scan saw fewer and `replace_accumulated_profiles` was set).
 

@@ -55,3 +55,17 @@ def test_sqlite_dedup_index_failure_does_not_authorize_create(store):
 
     with pytest.raises(sqlite3.Error, match="memories_vec"):
         try_curation("fixture", embedding, False, store, MagicMock(), [], 1.0)
+
+
+def test_vector_search_failure_is_not_hidden_below_curation(store):
+    assert store.has_vec, "CI installs sqlite-vec; vector coverage must run"
+    store._conn.execute("DROP TABLE memories_vec")
+    embedding = np.zeros(384, dtype=np.float32).tobytes()
+    with pytest.raises(sqlite3.Error, match="memories_vec"):
+        store.search_vectors(embedding)
+
+
+def test_misaligned_vector_buffer_raises(store):
+    assert store.has_vec, "CI installs sqlite-vec; vector coverage must run"
+    with pytest.raises(ValueError):
+        store.search_vectors(b"\x00\x00\x00")

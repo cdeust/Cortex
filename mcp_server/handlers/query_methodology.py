@@ -125,7 +125,7 @@ def _is_noise_memory(memory: dict) -> bool:
 def _get_hot_memories(
     domain: str, directory: str, limit: int = 10
 ) -> list[dict[str, Any]]:
-    """Retrieve hottest memories for this domain/directory context."""
+    """Retrieve hot memories; failures after opening the store propagate."""
     store = _try_get_memory_store()
     if store is None:
         return []

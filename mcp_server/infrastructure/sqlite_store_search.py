@@ -15,7 +15,6 @@ from typing import Any
 
 import numpy as np
 
-from mcp_server.observability import silent_failure
 from mcp_server.shared.code_tokenize import expand_fts_query as _expand_fts_query
 from mcp_server.infrastructure.sqlite_scope_clause import directory_scope_clause
 from mcp_server.shared.tie_groups import TieGroup, group_credit, ranked_credits
@@ -40,7 +39,7 @@ class SqliteSearchMixin:
         self, query_text: str, weight: float, k: int, pool: int
     ) -> tuple[list[tuple[int, float]], TieGroup | None]:
         """Rank-fuse the FTS5 pool by ``bm25``; a boundary group past the
-        pool comes back as a ``TieGroup`` (ADR-1109).
+        pool comes back as a ``TieGroup`` (ADR-1109). Query failures propagate.
 
         source: ADR-1109"""
         if not query_text or weight <= 0:
@@ -48,11 +47,7 @@ class SqliteSearchMixin:
         match = _expand_fts_query(query_text)
         if not match:
             return [], None
-        try:
-            return self._fts_pool(match, weight, k, pool)
-        except Exception as exc:  # noqa: BLE001 — record and propagate; partial fusion is not a search result
-            silent_failure.note("sqlite_store.rrf_fts_signal", exc)
-            raise
+        return self._fts_pool(match, weight, k, pool)
 
     def _fts_pool(
         self, match: str, weight: float, k: int, pool: int
@@ -120,6 +115,8 @@ class SqliteSearchMixin:
         heads_only: bool = False,
     ) -> list[tuple[int, float]]:
         """Vector KNN search via sqlite-vec. Returns (memory_id, distance).
+
+        Invalid embeddings and query failures propagate to the caller.
 
         source: ADR-0616"""
         if not self._has_vec:

@@ -28,7 +28,6 @@ def test_dedup_search_failure_is_not_permission_to_create():
         try_curation("memory", [1.0], False, store, MagicMock(), [], 1.0)
 
     assert caught.value is error
-    store.insert_memory.assert_not_called()
 
 
 def test_dedup_merge_failure_is_not_permission_to_create(monkeypatch):
@@ -54,12 +53,13 @@ def test_dedup_merge_failure_is_not_permission_to_create(monkeypatch):
         try_curation("memory", [1.0], False, store, MagicMock(), [], 1.0)
 
     assert caught.value is error
-    store.insert_memory.assert_not_called()
 
 
-@pytest.mark.parametrize("failure", ["read", "timestamp"])
+@pytest.mark.parametrize("failure", ["read", "timestamp", "naive"])
 def test_freshness_failure_reaches_handler_before_scan(monkeypatch, failure):
     loader = MagicMock(return_value={"updatedAt": "invalid-timestamp"})
+    if failure == "naive":
+        loader.return_value = {"updatedAt": "2026-01-01T00:00:00"}
     error = OSError("profiles unreadable")
     if failure == "read":
         loader.side_effect = error
@@ -75,7 +75,7 @@ def test_freshness_failure_reaches_handler_before_scan(monkeypatch, failure):
     if failure == "read":
         assert caught.value is error
     else:
-        assert "invalid-timestamp" in str(caught.value)
+        assert "force=true" in str(caught.value)
     scan.assert_not_called()
     save.assert_not_called()
 

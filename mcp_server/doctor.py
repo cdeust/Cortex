@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import sqlite3
 import sys
 import time
 from pathlib import Path
@@ -488,6 +489,15 @@ def _sqlite_vector_search() -> Check:
             "Restart Claude Code to let the launcher install it, or run: "
             "python3 scripts/launcher.py mcp_server --install-deps",
         )
+    if not hasattr(sqlite3.Connection, "enable_load_extension"):
+        return Check(
+            "SQLite vector search",
+            False,
+            "sqlite3.Connection.enable_load_extension is unavailable — "
+            "semantic recall falls back to full-text search only",
+            "Use Homebrew Python or a uv-managed Python built with loadable "
+            "SQLite extensions, then reinstall with that interpreter.",
+        )
     try:
         store = SqliteMemoryStore(db_path=get_memory_settings().SQLITE_FALLBACK_PATH)
         try:
@@ -510,13 +520,13 @@ def _sqlite_vector_search() -> Check:
         "was likely built without loadable-extension support (common on "
         "macOS system/Framework Python) — semantic recall falls back to "
         "full-text search only",
-        "Use a Python built with extension loading enabled (python.org "
-        "installer, pyenv, or Homebrew python), then reinstall.",
+        "Use a Python built with extension loading enabled (Homebrew or "
+        "uv-managed Python), then reinstall with that interpreter.",
     )
 
 
 def _recorded_failures() -> Check:
-    """Report failures recorded in this process, including earlier setup probes.
+    """Report historical fallback failures recorded in this process.
 
     A separate doctor process has its own counters; this is not a persistent
     health history. Source: issue #685, silent_failure.status contract.
@@ -530,9 +540,10 @@ def _recorded_failures() -> Check:
         "Recorded component failures",
         not failures,
         detail or "No failures recorded in this process",
-        "Resolve the reported component errors; counts cover this process lifetime."
+        "Inspect the reported fallbacks; lifetime counts do not show current health."
         if failures
         else "",
+        optional=True,
     )
 
 
@@ -548,7 +559,7 @@ CHECKS: list[Callable[[], Check]] = [
     _i10_config,
     _codebase_pipeline,  # optional — doesn't fail doctor
     _worktree_locations,  # optional — doesn't fail doctor
-    _recorded_failures,
+    _recorded_failures,  # historical warning, not a readiness verdict
 ]
 
 SQLITE_CHECKS: list[Callable[[], Check]] = [
@@ -560,7 +571,7 @@ SQLITE_CHECKS: list[Callable[[], Check]] = [
     _i10_config,
     _codebase_pipeline,  # optional — doesn't fail doctor
     _worktree_locations,  # optional — doesn't fail doctor
-    _recorded_failures,
+    _recorded_failures,  # historical warning, not a readiness verdict
 ]
 
 
