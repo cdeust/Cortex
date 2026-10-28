@@ -38,6 +38,10 @@ PG_VERSIONS = {  # source: ADR-1114
     "x86_64-unknown-linux-gnu": "18.6.1",
     "aarch64-unknown-linux-gnu": "18.6.1",
 }
+# The oldest glibc the Linux GNU 18.6.1 tree loads on: its bundled libstdc++.so.6
+# references GLIBC_2.36 (Ubuntu 22.04's 2.35 fails, Debian 12's 2.36 runs;
+# measured 2026-10-28). Older hosts are refused before the 40 MB download.
+GLIBC_FLOOR = (2, 36)  # source: ADR-1114
 # pgvector compiled by Cortex CI (.github/workflows/pgvector.yml) from this
 # upstream tag, refused unless it resolves to this commit.
 # source: ADR-1114 (pgvector/pgvector tag v0.8.7, 2026-10-01)
@@ -47,7 +51,8 @@ PGVECTOR_COMMIT = "f37c13f68b57d2c3472b2214fbcff699d6d34876"
 # The PostgreSQL tree the published pgvector archives were compiled against
 # (PGXS, every triple). They load unchanged into theseus 18.6.1, which packages
 # the same PostgreSQL 18.6 source: CREATE EXTENSION vector and a distance pass
-# on Ubuntu 24.04 and 26.04, aarch64 and x86_64 (measured 2026-10-28).
+# on Ubuntu 26.04 (aarch64, and x86_64 under emulation), Ubuntu 24.04 and
+# Debian 12 (aarch64), measured 2026-10-28.
 PGVECTOR_PG_VERSION = "18.6.0"  # source: ADR-1114
 # The release of this repository that holds the archives the workflow built.
 PGVECTOR_RELEASE = (
@@ -98,12 +103,26 @@ class UnsupportedError(AssetError):
     """This host has no pinned archive: the plugin keeps the SQLite store."""
 
 
-def triple(system: str, machine: str, libc: str) -> str:
-    """The target triple of ``platform.system()/machine()`` and the libc name."""
+def _glibc_at_least_floor(version: str) -> bool:
+    head = version.split(".")[: len(GLIBC_FLOOR)]
+    if len(head) < len(GLIBC_FLOOR) or not all(part.isdigit() for part in head):
+        return False
+    return tuple(int(part) for part in head) >= GLIBC_FLOOR
+
+
+def triple(system: str, machine: str, libc: str, libc_version: str) -> str:
+    """The target triple of ``platform.system()/machine()/libc_ver()``."""
     arch = _MACHINES.get(machine.lower())
     if system == "Darwin" and arch:
         name = f"{arch}-apple-darwin"
     elif system == "Linux" and arch and libc == "glibc":
+        if not _glibc_at_least_floor(libc_version):
+            floor = ".".join(map(str, GLIBC_FLOOR))
+            raise UnsupportedError(
+                f"glibc {libc_version or 'of unknown version'} is older than "
+                f"{floor}, which PostgreSQL {PG_VERSIONS[f'{arch}-unknown-linux-gnu']} "
+                "needs (its bundled libstdc++ requires GLIBC_2.36)"
+            )
         name = f"{arch}-unknown-linux-gnu"
     elif system == "Windows":
         raise UnsupportedError(
@@ -121,7 +140,8 @@ def triple(system: str, machine: str, libc: str) -> str:
 
 def host_triple() -> str:
     """The triple of the interpreter running this code (Rosetta reports x86_64)."""
-    return triple(platform.system(), platform.machine(), platform.libc_ver()[0])
+    libc, libc_version = platform.libc_ver()
+    return triple(platform.system(), platform.machine(), libc, libc_version)
 
 
 def tree(dist: Path, target: str) -> Path:

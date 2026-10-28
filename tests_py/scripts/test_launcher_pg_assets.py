@@ -28,18 +28,19 @@ def assets(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    ("system", "machine", "libc", "expected"),
+    ("system", "machine", "libc", "version", "expected"),
     [
-        ("Darwin", "arm64", "", "aarch64-apple-darwin"),
-        ("Darwin", "x86_64", "", "x86_64-apple-darwin"),
-        ("Linux", "x86_64", "glibc", "x86_64-unknown-linux-gnu"),
-        ("Linux", "aarch64", "glibc", "aarch64-unknown-linux-gnu"),
+        ("Darwin", "arm64", "", "", "aarch64-apple-darwin"),
+        ("Darwin", "x86_64", "", "", "x86_64-apple-darwin"),
+        ("Linux", "x86_64", "glibc", "2.39", "x86_64-unknown-linux-gnu"),
+        ("Linux", "aarch64", "glibc", "2.36", "aarch64-unknown-linux-gnu"),
+        ("Linux", "x86_64", "glibc", "2.43", "x86_64-unknown-linux-gnu"),
     ],
-)
+)  # source: glibc of Ubuntu 24.04 (2.39), Debian 12 (2.36), Ubuntu 26.04 (2.43)
 def test_each_supported_host_has_a_pinned_archive(
-    assets, system, machine, libc, expected
+    assets, system, machine, libc, version, expected
 ):
-    assert assets.triple(system, machine, libc) == expected
+    assert assets.triple(system, machine, libc, version) == expected
     assert expected in assets.SHA256
     assert expected in assets.PG_VERSIONS
 
@@ -61,20 +62,33 @@ def test_the_pgvector_release_names_the_tree_it_was_built_against(assets):
     assert assets.PGVECTOR_RELEASE == "pgvector-v0.8.7-pg18.6.0"
 
 
+def test_the_pgvector_build_uses_the_tree_the_release_was_built_against(assets):
+    # source: ADR-1114 (macOS still runs the 18.6.0 build tree; Linux moved on)
+    import pgvector_build
+
+    assert set(pgvector_build.BUILD_TREE_SHA256) == set(assets.SHA256)
+    for target, digest in pgvector_build.BUILD_TREE_SHA256.items():
+        same_tree = assets.PG_VERSIONS[target] == assets.PGVECTOR_PG_VERSION
+        assert (digest == assets.SHA256[target][0]) is same_tree, target
+
+
 @pytest.mark.parametrize(
-    ("system", "machine", "libc", "why"),
+    ("system", "machine", "libc", "version", "why"),
     [
-        ("Windows", "AMD64", "", "VCRUNTIME140"),
-        ("Linux", "x86_64", "", "no pinned"),  # musl: platform.libc_ver() is empty
-        ("Linux", "riscv64", "glibc", "no pinned"),
-        ("FreeBSD", "amd64", "", "no pinned"),
+        ("Windows", "AMD64", "", "", "VCRUNTIME140"),
+        ("Linux", "x86_64", "", "", "no pinned"),  # musl: platform.libc_ver() is empty
+        ("Linux", "riscv64", "glibc", "2.39", "no pinned"),
+        ("FreeBSD", "amd64", "", "", "no pinned"),
+        ("Linux", "x86_64", "glibc", "2.35", "glibc 2.35 is older than 2.36"),
+        ("Linux", "aarch64", "glibc", "2.34", "glibc 2.34 is older than 2.36"),
+        ("Linux", "x86_64", "glibc", "", "unknown version"),
     ],
-)
+)  # source: glibc of Ubuntu 22.04 (2.35) and RHEL 9 (2.34), ADR-1114
 def test_every_other_host_keeps_sqlite_with_the_reason(
-    assets, system, machine, libc, why
+    assets, system, machine, libc, version, why
 ):
     with pytest.raises(assets.UnsupportedError, match=why):
-        assets.triple(system, machine, libc)
+        assets.triple(system, machine, libc, version)
 
 
 def _archive(path: Path, top: str, files: dict[str, bytes], link: tuple = ()) -> str:
@@ -90,17 +104,19 @@ def _archive(path: Path, top: str, files: dict[str, bytes], link: tuple = ()) ->
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _serve(monkeypatch, assets, tmp_path, pg_files, vector_files, link=()):
-    top = f"postgresql-{assets.PG_VERSIONS[_TARGET]}-{_TARGET}"
+def _serve(
+    monkeypatch, assets, tmp_path, pg_files, vector_files, link=(), target=_TARGET
+):
+    top = f"postgresql-{assets.PG_VERSIONS[target]}-{target}"
     pg_name = f"{top}.tar.gz"
-    vector_name = f"pgvector-{_TARGET}-pg18.tar.gz"
+    vector_name = f"pgvector-{target}-pg18.tar.gz"
     pg_sha = _archive(tmp_path / pg_name, top, pg_files, link)
     vector_sha = _archive(
-        tmp_path / vector_name, f"pgvector-{_TARGET}-pg18", vector_files
+        tmp_path / vector_name, f"pgvector-{target}-pg18", vector_files
     )
     monkeypatch.setattr(assets, "PG_URL", tmp_path.as_uri() + "/{name}")
     monkeypatch.setattr(assets, "VECTOR_URL", tmp_path.as_uri() + "/{name}")
-    monkeypatch.setitem(assets.SHA256, _TARGET, (pg_sha, vector_sha))
+    monkeypatch.setitem(assets.SHA256, target, (pg_sha, vector_sha))
 
 
 _PG = {
@@ -112,6 +128,19 @@ _VECTOR = {
     "lib/vector.dylib": b"v",
     "share/extension/vector.control": b"c",
 }  # source: scripts/pgvector_build.py layout (lib/, share/extension/)
+
+
+def test_a_linux_install_fetches_and_names_its_own_release(
+    assets, monkeypatch, tmp_path
+):
+    # Only the archive named after PG_VERSIONS[linux] (18.6.1) is served: a
+    # shared or wrong version in the download name or the tree path fails here.
+    linux = "x86_64-unknown-linux-gnu"
+    (tmp_path / "srv").mkdir()
+    _serve(monkeypatch, assets, tmp_path / "srv", _PG, _VECTOR, target=linux)
+    tree = assets.install(tmp_path / "dist", linux)
+    assert tree.name == "postgresql-18.6.1-x86_64-unknown-linux-gnu"
+    assert assets.is_installed(tmp_path / "dist", linux)
 
 
 def test_install_overlays_pgvector_and_stamps_the_tree_last(
