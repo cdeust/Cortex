@@ -84,12 +84,21 @@ Issue intake obtains the repository owner's immutable GitHub User ID and each
 issue/comment's author, editor and lastEditedAt in GraphQL responses. Automatic
 owner requirements require the same owner identity at authorship and, when
 edited, at the last edit. Pristine content requires both editor and lastEditedAt
-to be null. Missing metadata on relevant owner content, a different editor or an inconsistent
-owner ID cannot authorize a worker. Unrelated deleted-author discussion does not
-block an otherwise authenticated owner request. An altered owner-authored comment blocks that issue,
+to be null. Missing metadata on relevant owner content, a different editor or an
+inconsistent owner ID cannot authorize a worker. Unrelated deleted-author
+discussion does not block an otherwise authenticated owner request. An altered
+owner-authored comment blocks that issue,
 including when its approval marker has been removed. Other authors still need
 an authenticated owner approval of the exact current snapshot digest. Existing
 approvals using the earlier snapshot shape must be renewed for the new digest.
+
+Title ownership is checked separately because body-edit metadata does not prove
+who last changed the title. The same query reads the latest filtered
+RenamedTitleEvent. An owner-authored issue requires either a complete empty
+rename history or a latest event whose immutable actor identity is the owner
+and whose currentTitle matches the returned issue title. Incomplete history,
+foreign rename actors and title provenance changing between pages are rejected.
+External issues retain explicit owner approval of the exact snapshot title.
 
 Comment pagination stays in GraphQL so body and last-editor metadata belong to
 the same returned row. Incomplete/duplicate comments, repeated cursors, GraphQL
@@ -101,22 +110,27 @@ The existing local polling loop also recognizes a completed review-only wait.
 Only PRs whose named test/environment/install prerequisites are green and whose
 other checks have no unrelated failures qualify for an authenticated evidence
 read. Drafts, holds, forks, active owners and pending checks remain excluded.
-A per-PR isolated Python subprocess reads the current native proof and invokes
-ci_codex_review_event.resume with the exact repository, PR and expected head.
-The existing coordinator rechecks the live head, workflow run, attempts, jobs and
-proof before requesting a selected job rerun. This local step does not synthesize
-a GitHub event, request another native review or invoke a model.
+A per-PR isolated Python subprocess reads the current native proof and classifies
+repair or wait for the exact repository, PR and expected head. GitHub's workflow
+is the sole issuer of native gate reruns; the local helper never calls resume or
+POST. It reuses the existing coordinator's read-only run/job/proof policy. This
+avoids a race between the local dispatcher and GitHub's per-PR concurrency group.
 
 Missing, running, failed or invalid review proof remains a wait; genuine current
 unresolved findings can enter the existing serialized repair path. When proof is
-clean but the native resumption policy returns no action, the helper reads the
-trusted latest run and effective attempt jobs. Only a completed review job's
+clean, the helper reads the trusted latest run and effective attempt jobs. A
+ready native gate waits for the GitHub workflow. Only a completed review job's
 non-readiness failure, with all test prerequisites green and no unrelated
 failures, can request infrastructure repair. It reuses the native policy's
-readiness predicate and rechecks the run, head and proof before doing so. A waiting PR
-does not block other actionable work. Unchanged repair snapshots still cannot
+readiness predicate and rechecks the run, head and proof before doing so. A
+waiting PR does not block other actionable work. Unchanged repair snapshots cannot
 start another worker. Completed review waits are revisited because resolving a
 thread does not necessarily change the PR head or check fingerprint.
+
+Known evidence errors carry fixed api, protocol, environment or eligibility
+categories in JSON. The dispatcher logs the category and PR, preserving useful
+diagnostics without copying raw child stderr or exception text. Unknown program
+errors still surface as failures rather than authorizing a repair.
 
 The installer copies and hashes the native evidence/event modules alongside the
 dispatcher. It does not copy candidate sources. Installation and launchd enabling
@@ -131,3 +145,11 @@ MDQ6VXNlcjMxNjc3Njc=, with editor=null and lastEditedAt=null.
 [GitHub IssueComment fields](https://docs.github.com/en/graphql/reference/objects#issuecomment)
 and [Issue fields](https://docs.github.com/en/graphql/reference/objects#issue)
 describe the attribution consumed here.
+
+A read-only probe of [VS Code issue334398](https://github.com/microsoft/vscode/issues/334398)
+found a recorded title rename with editor=null and lastEditedAt=null. This proves
+that body attribution alone does not cover the title; the observed rename actor
+was the original author, not a reproduced foreign-writer attack.
+[RenamedTitleEvent fields](https://docs.github.com/en/graphql/reference/objects#renamedtitleevent)
+provide the separate attribution. On official claude-code-action issue1445,
+last:1 selected the current title from two rename events while first:1 did not.

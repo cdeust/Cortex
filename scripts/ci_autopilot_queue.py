@@ -1,4 +1,4 @@
-"""Queue policy: owner request2026-10-27, serial Codex repairs and protected merge."""
+"""Queue policy: owner request 2026-10-27, serial Codex repairs and protected merge."""
 
 import hashlib
 import json

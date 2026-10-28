@@ -68,7 +68,15 @@ class IssuePages(unittest.TestCase):
         self.assertEqual(self.call(initial, following)[0], [])
 
     def test_changed_issue_or_count_or_graphql_error_fails_closed(self):
-        for corruption in ("body", "count", "errors", "cursor", "owner", "duplicate"):
+        causes = {
+            "body": "Issue revision changed during pagination",
+            "count": "Issue comments changed during pagination",
+            "errors": "Issue GraphQL failed",
+            "cursor": "Issue pagination is unverifiable",
+            "owner": "Repository owner is unverifiable",
+            "duplicate": "Issue comments are incomplete",
+        }
+        for corruption, cause in causes.items():
             initial, following = pages()
             node = following["data"]["repository"]["issue"]
             if corruption == "body":
@@ -86,8 +94,47 @@ class IssuePages(unittest.TestCase):
                     "hasNextPage": True,
                     "endCursor": "cursor1",
                 }
-            with self.subTest(corruption=corruption), self.assertRaises(RuntimeError):
+            with (
+                self.subTest(corruption=corruption),
+                self.assertRaisesRegex(RuntimeError, cause),
+            ):
                 self.call(initial, following)
+
+    def test_author_editor_time_and_title_evidence_drift_fail_before_authorization(
+        self,
+    ):
+        from test_ci_autopilot_issue_titles import rename
+
+        for field in ("author", "editor", "lastEditedAt", "titleEvents"):
+            initial, following = pages()
+            first = initial["data"]["repository"]["issues"]["nodes"][0]
+            later = following["data"]["repository"]["issue"]
+            if field == "author":
+                later[field] = issue("outsider")["author"]
+            elif field == "editor":
+                later.update(
+                    editor=issue("outsider")["author"],
+                    lastEditedAt="2026-10-28T00:00:00Z",
+                )
+            elif field == "lastEditedAt":
+                for node in (first, later):
+                    node.update(editor=OWNER, lastEditedAt="2026-10-28T00:00:00Z")
+                later[field] = "2026-10-28T01:00:00Z"
+            else:
+                rename(later, issue("outsider")["author"])
+            with (
+                self.subTest(field=field),
+                self.assertRaisesRegex(
+                    RuntimeError, "Issue revision changed during pagination"
+                ),
+            ):
+                self.call(initial, following)
+
+    def test_truncated_last_comment_page_fails_with_incomplete_cause(self):
+        initial, following = pages()
+        following["data"]["repository"]["issue"]["comments"]["nodes"] = []
+        with self.assertRaisesRegex(RuntimeError, "Issue comments are incomplete"):
+            self.call(initial, following)
 
     def test_issue_cursor_is_separate_from_nested_comment_cursor(self):
         initial, _ = pages()

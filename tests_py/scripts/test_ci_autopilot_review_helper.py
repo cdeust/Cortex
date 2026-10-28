@@ -1,4 +1,4 @@
-"""Trusted current-head proof controls local review resumption."""
+"""Trusted current-head proof controls repair classification without rerun POSTs."""
 
 import json
 import os
@@ -24,16 +24,18 @@ class ProofDecision(unittest.TestCase):
         )
         self.reader = SimpleNamespace(_fetch=Mock())
 
-    def test_only_successful_current_authenticated_proof_can_resume(self):
+    def test_clean_proof_without_a_completed_run_waits_without_local_resume(self):
         self.reader._fetch.return_value = {
             "sha": self.args.sha,
             "reviews_complete": True,
             "state": "success",
             "reason": "reviews_complete",
         }
-        self.assertEqual(check(self.args, self.event, self.reader)["action"], "merge")
-        self.event.resume.assert_called_once_with(
-            "cdeust/Cortex", {"number": 12, "sha": self.args.sha, "run_id": None}
+        self.event.source.latest.return_value = None
+        self.assertEqual(check(self.args, self.event, self.reader), {"action": "none"})
+        self.event.resume.assert_not_called()
+        self.event.source.latest.assert_called_once_with(
+            "cdeust/Cortex", self.args.sha, 12
         )
 
     def test_pending_failed_protocol_or_stale_proof_never_resumes_or_repairs(self):
@@ -47,6 +49,7 @@ class ProofDecision(unittest.TestCase):
             expected = {"action": "none"}
             if reason == "protocol":
                 expected["reason"] = "evidence_unverifiable"
+                expected["category"] = "protocol"
             self.assertEqual(check(self.args, self.event, self.reader), expected)
         self.reader._fetch.return_value = {
             "sha": "b" * 40,
@@ -105,7 +108,14 @@ class ProofDecision(unittest.TestCase):
             self.assertEqual(helper.main(), 0)
         resume.assert_not_called()
         result = json.loads(output.getvalue())
-        self.assertEqual(result, {"action": "none", "reason": "evidence_unverifiable"})
+        self.assertEqual(
+            result,
+            {
+                "action": "none",
+                "reason": "evidence_unverifiable",
+                "category": "protocol",
+            },
+        )
         return output.getvalue()
 
     def test_unverifiable_proof_does_not_starve_a_later_authorized_issue(self):

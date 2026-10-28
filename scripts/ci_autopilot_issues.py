@@ -12,16 +12,30 @@ from ci_autopilot_queue import fingerprint
 
 # source: owner approval protocol introduced by Cortex PR800.
 APPROVAL = re.compile(r"^<!-- cortex-autopilot:approve sha256=([0-9a-f]{64}) -->$")
-# source: GitHub GraphQL connections require first/last, bounded at 100 nodes.
+# source: GitHub GraphQL Actor interface and User/Bot immutable Node IDs.
 ACTOR = "login __typename ... on User { id } ... on Bot { id }"
+# source: RenamedTitleEvent actor/currentTitle; vscode issue334398 shows body
+# editor=null after a title rename. last:1 selects the latest filtered event.
+TITLE = """titleEvents:timelineItems(last:1,itemTypes:[RENAMED_TITLE_EVENT]) {
+ totalCount pageInfo { hasNextPage } nodes { __typename
+ ... on RenamedTitleEvent { id currentTitle actor { ACTOR } } }
+}""".replace("ACTOR", ACTOR)
+# source: Issue comment-edit attribution and separate RenamedTitleEvent fields.
 REVISION = (
-    "number title body lastEditedAt author { " + ACTOR + " } editor { " + ACTOR + " }"
+    "number title body lastEditedAt author { "
+    + ACTOR
+    + " } editor { "
+    + ACTOR
+    + " } "
+    + TITLE
 )
+# source: GitHub GraphQL connections require first/last, bounded at 100 nodes.
 COMMENTS = """comments(first:100,after:$commentCursor) {
  totalCount nodes { databaseId body updatedAt lastEditedAt
  author { ACTOR } editor { ACTOR } }
  pageInfo { hasNextPage endCursor }
 }""".replace("ACTOR", ACTOR)
+# source: Repository.owner identity and paginated open Issue connection.
 QUERY = """query($owner:String!, $name:String!, $endCursor:String,
  $commentCursor:String) {
  repository(owner:$owner,name:$name) { owner { login id __typename }
@@ -30,6 +44,7 @@ QUERY = """query($owner:String!, $name:String!, $endCursor:String,
  pageInfo { hasNextPage endCursor }
  } }
 }""".replace("REVISION", REVISION).replace("COMMENTS", COMMENTS)
+# source: Issue revision and comment provenance share each GraphQL response.
 COMMENT_QUERY = """query($owner:String!, $name:String!, $number:Int!,
  $commentCursor:String) {
  repository(owner:$owner,name:$name) { issue(number:$number) { REVISION COMMENTS } }
@@ -84,15 +99,51 @@ def claims_owner(row, owner):
     )
 
 
+def title_owned(issue, owner):
+    history = issue.get("titleEvents")
+    if not isinstance(history, dict):
+        return False
+    count, rows, page = (
+        history.get("totalCount"),
+        history.get("nodes"),
+        history.get("pageInfo"),
+    )
+    if (
+        type(count) is not int
+        or count < 0
+        or not isinstance(rows, list)
+        or not isinstance(page, dict)
+        or page.get("hasNextPage") is not False
+        or len(rows) != (0 if count == 0 else 1)
+    ):
+        return False
+    if count == 0:
+        return True
+    latest = rows[0]
+    return (
+        isinstance(latest, dict)
+        and latest.get("__typename") == "RenamedTitleEvent"
+        and isinstance(latest.get("id"), str)
+        and bool(latest["id"])
+        and latest.get("currentTitle") == issue["title"]
+        and same_actor(latest.get("actor"), owner)
+    )
+
+
+def owner_inputs(issue, owner):
+    return all(
+        not claims_owner(row, owner) or owned(row, owner)
+        for row in [issue, *issue["comments"]]
+    ) and (not claims_owner(issue, owner) or title_owned(issue, owner))
+
+
 def authorize(issue, owner):
     if not identity(owner) or owner["__typename"] != "User" or not metadata(issue):
         return None
     comments = issue["comments"]
     if any("author" not in row for row in comments):
         return None
-    if any(
-        claims_owner(row, owner) and not owned(row, owner) for row in [issue, *comments]
-    ):
+    if not owner_inputs(issue, owner):
         return None
     approvals = [
         row for row in comments if owned(row, owner) and APPROVAL.fullmatch(row["body"])
@@ -159,7 +210,15 @@ def comments(options, github, node):
         )["issue"]
         if any(
             fresh[key] != node[key]
-            for key in ("number", "title", "body", "author", "editor", "lastEditedAt")
+            for key in (
+                "number",
+                "title",
+                "body",
+                "author",
+                "editor",
+                "lastEditedAt",
+                "titleEvents",
+            )
         ):
             raise RuntimeError("Issue revision changed during pagination")
         connection = fresh["comments"]

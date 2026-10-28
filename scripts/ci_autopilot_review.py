@@ -1,8 +1,8 @@
-"""Resume trusted review-only gates locally without extra model calls.
+"""Classify local repairs while GitHub alone issues native gate reruns.
 
-Source: ci_codex_review_event.resume and resumption_plan are the existing
-server-revalidated contracts. This helper neither fabricates events nor
-executes candidate code. Python -I isolates the per-PR EXPECTED_PR binding.
+Source: ci_codex_review_event_source and resumption_plan are existing trusted
+read-only contracts. Cortex PR816 Claude review6458968789 identified a race
+between local and hosted rerun issuers. Python -I isolates EXPECTED_PR.
 """
 
 import json
@@ -36,8 +36,6 @@ def reconcile(options, item):
     if not isinstance(result, dict) or result.get("action") not in (
         "none",
         "repair",
-        "review",
-        "merge",
     ):
         raise RuntimeError("Review reconciliation returned invalid evidence")
     diagnostic(options, item, result)
@@ -48,9 +46,27 @@ def diagnostic(options, item, result):
     reason = result.get("reason")
     target = f"{options.repository}#{item['number']}"
     if reason == "evidence_unverifiable":
-        print(f"autopilot review: unverifiable proof {target}", file=sys.stderr)
+        category = result.get("category")
+        if category not in ("api", "protocol", "environment", "eligibility"):
+            category = "protocol"
+        print(
+            f"autopilot review: {category} evidence unavailable {target}",
+            file=sys.stderr,
+        )
     elif reason == "review_infrastructure":
         print(f"autopilot review: infrastructure repair {target}", file=sys.stderr)
+
+
+def unavailable(reason):
+    if reason in ("api", "environment"):
+        category = reason
+    elif reason == "arguments":
+        category = "environment"
+    elif reason in ("head_moved", "pr_eligibility"):
+        category = "eligibility"
+    else:
+        category = "protocol"
+    return {"action": "none", "reason": "evidence_unverifiable", "category": category}
 
 
 def check(args, event, reader):
@@ -67,7 +83,7 @@ def check(args, event, reader):
         "review_unresolved",
         "reviews_complete",
     ):
-        return {"action": "none", "reason": "evidence_unverifiable"}
+        return unavailable(proof.get("reason"))
     if (
         proof.get("reviews_complete") is True
         and proof.get("reason") == "review_unresolved"
@@ -77,14 +93,8 @@ def check(args, event, reader):
         return {"action": "repair"}
     if proof.get("state") != "success" or proof.get("reviews_complete") is not True:
         return {"action": "none"}
-    result = event.resume(
-        args.repo, {"number": args.pr, "sha": args.sha, "run_id": None}
-    )
-    return (
-        repair_after_noop(args, event, reader, proof)
-        if result["action"] == "none"
-        else result
-    )
+    # A ready native plan waits for GitHub's serialized rerun issuer.
+    return repair_after_noop(args, event, reader, proof)
 
 
 def infrastructure_failure(indexed, policy):
@@ -140,9 +150,13 @@ def main():
             raise reader.EvidenceError("environment")
         print(json.dumps(check(args, event, reader)))
         return 0
-    except reader.runtime.EvidenceError:
-        print("autopilot review: unverifiable evidence", file=sys.stderr)
-        print(json.dumps({"action": "none", "reason": "evidence_unverifiable"}))
+    except reader.runtime.EvidenceError as exc:
+        result = unavailable(str(exc))
+        print(
+            f"autopilot review: {result['category']} evidence unavailable",
+            file=sys.stderr,
+        )
+        print(json.dumps(result))
         return 0
 
 

@@ -83,3 +83,12 @@ class LastEditorTrust(unittest.TestCase):
         row["author"] = None
         changed["comments"] = [row]
         self.assertEqual(authorize(changed, OWNER), original)
+
+    def test_owner_comment_login_and_immutable_id_must_match_in_both_directions(self):
+        for author in ({**OWNER, "id": "U_other"}, {**OWNER, "login": "outsider"}):
+            item = issue()
+            row = comment("owner", "new authenticated requirements")
+            row["author"] = author
+            item["comments"] = [row]
+            with self.subTest(author=author):
+                self.assertIsNone(authorize(item, OWNER))

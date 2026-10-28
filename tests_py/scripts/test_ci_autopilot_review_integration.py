@@ -27,20 +27,10 @@ class TrustedReviewIntegration(unittest.TestCase):
             result = check(args, target, reader)
         return result, post.call_args_list
 
-    def test_actual_clean_reader_and_job_policy_rerun_only_waiting_merge_job(self):
+    def test_actual_clean_reader_leaves_gate_rerun_to_github_workflow(self):
         result, posts = self.invoke(Server())
-        self.assertEqual(result, {"action": "merge", "job_id": 21})
-        self.assertEqual(
-            posts[0].args[0],
-            [
-                "gh",
-                "api",
-                "--method",
-                "POST",
-                "repos/cdeust/Cortex/actions/jobs/21/rerun",
-            ],
-        )
-        self.assertEqual(len(posts), 1)
+        self.assertEqual(result, {"action": "none"})
+        self.assertEqual(posts, [])
 
     def test_human_edited_original_bot_summary_never_reruns_or_repairs(self):
         server = Server()
@@ -50,7 +40,14 @@ class TrustedReviewIntegration(unittest.TestCase):
             lastEditedAt="2026-10-28T00:00:00Z",
         )
         result, posts = self.invoke(server)
-        self.assertEqual(result, {"action": "none", "reason": "evidence_unverifiable"})
+        self.assertEqual(
+            result,
+            {
+                "action": "none",
+                "reason": "evidence_unverifiable",
+                "category": "protocol",
+            },
+        )
         self.assertEqual(posts, [])
 
     def test_pending_workflow_attempt_is_not_rerun_even_after_clean_review(self):
@@ -73,7 +70,9 @@ class TrustedReviewIntegration(unittest.TestCase):
         )
         self.assertEqual(posts, [])
 
-    def test_exact_readiness_failure_reuses_native_policy_without_repair(self):
+    def test_exact_readiness_failure_waits_for_github_without_local_rerun_or_repair(
+        self,
+    ):
         from ci_codex_review_resume import READINESS
 
         server = Server()
@@ -83,8 +82,8 @@ class TrustedReviewIntegration(unittest.TestCase):
             steps=[{"name": READINESS[0], "conclusion": "failure"}],
         )
         result, posts = self.invoke(server)
-        self.assertEqual(result, {"action": "review", "job_id": review["id"]})
-        self.assertEqual(len(posts), 1)
+        self.assertEqual(result, {"action": "none"})
+        self.assertEqual(posts, [])
 
     def test_unrelated_build_failure_never_enters_review_infrastructure_repair(self):
         server = Server()

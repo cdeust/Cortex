@@ -19,6 +19,11 @@ def issue(author="owner"):
         "editor": None,
         "lastEditedAt": None,
         "labels": [],
+        "titleEvents": {
+            "totalCount": 0,
+            "nodes": [],
+            "pageInfo": {"hasNextPage": False},
+        },
         "comments": [],
     }
 
@@ -45,7 +50,8 @@ class IssueTrust(unittest.TestCase):
     def test_owner_requests_are_automatic_but_foreign_edits_are_not(self):
         item = issue()
         self.assertIsNotNone(authorize(item, OWNER))
-        item["editor"] = {"login": "outsider"}
+        item["editor"] = issue("outsider")["author"]
+        item["lastEditedAt"] = "2026-10-28T00:00:00Z"
         self.assertIsNone(authorize(item, OWNER))
 
     def test_outsider_comment_cannot_wake_an_owner_issue(self):

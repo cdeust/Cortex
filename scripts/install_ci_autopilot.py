@@ -2,7 +2,7 @@
 """Install the local Codex dispatcher as a per-user macOS launchd service.
 
 source: launchd.plist(5), ProgramArguments/StartInterval/RunAtLoad.
-Owner request2026-10-27.
+Owner request 2026-10-27.
 """
 
 import argparse

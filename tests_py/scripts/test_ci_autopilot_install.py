@@ -53,13 +53,19 @@ class InstallerTests(unittest.TestCase):
                 "## Contract — paste this into the delegation prompt\n"
                 "Fixture contract\n---\n\n## Orchestrator side"
             )
+            source = Path(installer.__file__).resolve().parent
+            expected = {
+                name: hashlib.sha256((source / name).read_bytes()).hexdigest()
+                for name in installer.RUNTIME
+            }
             installer.copy_runtime(SimpleNamespace(contract=contract), root)
             manifest = json.loads((root / "installed-sha256.json").read_text())
             for name in installer.RUNTIME:
                 self.assertEqual(
                     hashlib.sha256((root / name).read_bytes()).hexdigest(),
-                    manifest[name],
+                    expected[name],
                 )
+                self.assertEqual(manifest[name], expected[name])
             code = (
                 "import sys;sys.path.insert(0,sys.argv[1]);"
                 "import ci_autopilot,ci_codex_review_event,ci_codex_review_comments;"

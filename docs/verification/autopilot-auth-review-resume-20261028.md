@@ -4,6 +4,10 @@ Base: Cortex main a928391654d045509ae7b23fdf080dbf92301009 (PR815).
 Scope: local dispatcher, issue intake, trusted runtime installation and tests.
 No installed runtime, launchd service, user terminal or control worktree changed.
 
+This records the earlier 7d85d7db implementation and its tests. The subsequent
+PR816 Claude-review follow-up reserves all native gate reruns for GitHub; see
+autopilot-claude-review-20261028.md for the current local classification behavior.
+
 ## Security evidence
 
 Original ci_autopilot_issues.authorize accepted both an owner-authored approval
