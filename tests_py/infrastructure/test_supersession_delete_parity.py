@@ -31,7 +31,9 @@ def store(request):
         try:
             if request.param == "pg":
                 backend._conn.rollback()
-                backend._conn.execute("DELETE FROM memories WHERE domain = %s", (_DOMAIN,))
+                backend._conn.execute(
+                    "DELETE FROM memories WHERE domain = %s", (_DOMAIN,)
+                )
                 backend._conn.commit()
         finally:
             backend.close()
