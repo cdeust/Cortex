@@ -209,3 +209,34 @@ shared module dependency direction. Hosted unit and parity results on the new
 commit remain required. The previously measured 2-versus-28 paraphrase deficit
 and positive/negative score overlap are unresolved; this correction only
 unblocks the next hosted experiment and does not establish issue #706 acceptance.
+
+
+## Hosted signal comparison after 7a4424d8
+
+Hosted [parity run 40743111482](https://github.com/cdeust/Cortex/actions/runs/40743111482)
+again measured 2 hook hits at three versus 28 tool hits at three, with 30 tool
+hits at ten. Mean hook latency was 0.7047040609333332 seconds; the maximum was
+0.7507068599999798 seconds, and no query exceeded the configured five-second
+budget. These are observations on that runner, not latency guarantees.
+
+[Artifact 12841005532](https://github.com/cdeust/Cortex/actions/runs/40743111482/artifacts/12841005532)
+contains the raw pair scores. Cross-encoder-only ordering places the certificate
+target at rank 30 and the bookkeeping target at rank 5. The bread-culture target
+scores 0.00001264155980607029, while the unrelated kaon query's highest passage
+scores 0.000014890589227434248. An absolute raw-score cutoff cannot keep that
+positive while rejecting every kaon passage. Ranking and candidate discovery
+must be evaluated as well as abstention; lowering the cutoff alone is not an
+acceptance result.
+
+The next hosted report adds embedding_cosine and embedding_rank to every
+positive and negative query/passage pair. It uses the same scalar encoder as
+fixture seeding and explicit recall, and the cosine implementation already used
+by recall_pipeline.familiarity_triage. Missing vectors or a fallback encoder
+fail this diagnostic explicitly. Existing model/revision and fixture identities
+remain in the report. Encoding occurs after the timed hook/tool observations,
+so this diagnostic does not change their measured windows.
+
+This is an evidence collection change only. Production retrieval, the relevance
+floor, trust predicates, fixture, and positive/negative acceptance assertions
+are unchanged. No embedding cutoff is selected from unmeasured assumptions.
+Hosted results for this change are pending; issue #706 remains unresolved.

@@ -6,7 +6,18 @@ It uses the same cached model and passage truncation as the injection path.
 
 from __future__ import annotations
 
+from mcp_server.core.hopfield import cosine_similarity
 from mcp_server.core.reranker import get_raw_ce_score
+from mcp_server.infrastructure.embedding_engine import get_embedding_engine
+
+
+def _neural_vector(text: str) -> bytes:
+    """Use the preflighted tool encoder; refuse missing or fallback vectors."""
+    engine = get_embedding_engine()
+    vector = engine.encode(text)
+    if vector is None or engine.mode != "neural":
+        raise RuntimeError("parity score measurement requires neural embeddings")
+    return vector
 
 
 def measure_scores(corpus: list[dict], negatives: list[dict]) -> list[dict]:
@@ -19,8 +30,13 @@ def measure_scores(corpus: list[dict], negatives: list[dict]) -> list[dict]:
     queries = [
         {"query": case["query"], "expected": case["memory"]} for case in corpus
     ] + [{"query": row["query"], "expected": None} for row in negatives]
+    # source: recall_pipeline.familiarity_triage uses this encoder's bytes
+    # with hopfield.cosine_similarity (ADR-0235). Measure the existing signal,
+    # without introducing a cosine threshold or changing injection decisions.
+    vectors = {case["memory"]: _neural_vector(case["memory"]) for case in corpus}
     report = []
     for case in queries:
+        query_vector = _neural_vector(case["query"])
         scores = []
         for passage in corpus:
             score = get_raw_ce_score(case["query"], passage["memory"])
@@ -31,8 +47,16 @@ def measure_scores(corpus: list[dict], negatives: list[dict]) -> list[dict]:
                     "memory": passage["memory"],
                     "expected": passage["memory"] == case["expected"],
                     "raw_ce_score": score,
+                    "embedding_cosine": cosine_similarity(
+                        query_vector, vectors[passage["memory"]]
+                    ),
                 }
             )
+        embedding_order = sorted(
+            scores, key=lambda row: row["embedding_cosine"], reverse=True
+        )
+        for rank, passage in enumerate(embedding_order, start=1):
+            passage["embedding_rank"] = rank
         report.append(
             {
                 **case,
