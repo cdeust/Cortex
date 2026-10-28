@@ -168,6 +168,35 @@ separate **cortex-viz** MCP (reads this same store read-only).
   branches, all under `/private/tmp/cortex-green-*`) had to be removed by hand.
   `scripts/spawn-agent.sh` and `benchmarks/lib/bench_regression.sh` follow this.
 
+## CI failure ladder for bots (claude.yml mentions, the hourly routine, any agent on a PR)
+
+A red check on a PR ends in a fix, a merge, a separate fix PR, or a posted diff. It never
+ends in "I can't". Climb in order:
+
+1. Read the evidence first: `gh run view <run> --json jobs`, then
+   `gh run view --job <id> --log`; note the `Runner Image` line and the first error of the
+   failed step. `--log-failed` alone is not enough.
+2. Decide whether the PR caused it:
+   `git diff origin/main...HEAD -- scripts .github ci.json pyproject.toml uv.lock`. An empty
+   diff and a failure before any test ran (install, initdb, loader error) means
+   infrastructure, not the PR.
+3. Infrastructure and main already has a fix
+   (`git log --oneline origin/main --not HEAD -- scripts .github ci.json` is non-empty, or
+   the same error is absent from the latest main Pipeline run): `git merge origin/main` into
+   the PR branch (never rebase, never force-push), push, and comment with the fix commit
+   sha. This is the exit the 2026-10-28 incident missed.
+4. Infrastructure, no fix on main, and the fix lives outside `.github/workflows` (scripts/,
+   `ci.json`, dependencies): open a separate branch `fix/ci-<slug>` from `origin/main` with
+   the root-cause fix and its tests, open a PR against main, and link it from the original
+   PR. Never pin `runs-on` to an older image (owner decision 2026-10-28, PR #823).
+5. Only when the fix requires editing `.github/workflows` (the App token has no workflow
+   write access, upstream FAQ): post a comment with the exact proposed diff and the
+   evidence, apply the `autopilot:hold` label if you can, and move on. "I can't make any of
+   these" with no diff and no merge attempt is not an allowed ending.
+6. Caused by the PR: fix the root cause in the PR branch, run the check's exact command from
+   the workflow, push, and comment with the diagnosis and sha. No claim of green without a
+   run id.
+
 ## Scientific Implementation Standard (Zetetic Principle)
 
 Every change to the retrieval or memory system:

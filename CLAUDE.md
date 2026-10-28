@@ -28,3 +28,6 @@ the zetetic implementation standard). Read it before any non-trivial change.
   Codex), never outside the repo.
 - No source, no implementation; benchmark before commit; no silent fallbacks or
   compatibility shims.
+- CI red on a PR: follow the CI failure ladder in `docs/agent-guidance.md` (evidence →
+  PR-caused? → merge main if main has the fix → separate fix PR → workflows-only hold).
+  Never stop at "I can't".

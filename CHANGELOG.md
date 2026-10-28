@@ -21,6 +21,10 @@ adheres to [Semantic Versioning](https://semver.org/).
   thread run one at a time with up to 100 pending requests retained; automatic
   reviews keep their separate permission mode.
 
+- CI failure ladder for bots in `docs/agent-guidance.md` and `CLAUDE.md`: evidence
+  first, merge main when it already carries the fix, separate fix PR otherwise, hold
+  only for workflow-file edits (#PRNUM).
+
 - The managed PostgreSQL server starts on Ubuntu 25.10 and 26.04, which ship
   no `libxml2.so.2`: Linux GNU now runs theseus 18.6.1, which bundles its
   runtime libraries (about 40 MB instead of 12 MB); macOS keeps 18.6.0. The
