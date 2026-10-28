@@ -35,17 +35,32 @@ def test_source_hash_refresh_preserves_replay_metadata(store, monkeypatch, tmp_p
     )
     store._conn.commit()
     before = store.get_memory(memory_id)
+    before_vector = _stored_embedding(store, memory_id, before)
     replay_id, _, _ = asyncio.run(
         codebase_analyze._store_file(
             tmp_path, "sample.py", second, "source-refresh", store
         )
     )
     after = store.get_memory(memory_id)
+    after_vector = _stored_embedding(store, memory_id, after)
     store._conn.rollback()
     assert replay_id == memory_id
     assert load_existing_hashes(store)["sample.py"] == (memory_id, second.content_hash)
-    for key in ("heat_base", "importance", "heat_base_set_at", "content", "embedding"):
+    for key in ("heat_base", "importance", "heat_base_set_at", "content"):
         assert after[key] == before[key]
+    assert after_vector == before_vector
+
+
+def _stored_embedding(store, memory_id: int, row: dict):
+    """SQLite keeps the vector in ``memories_vec``, not on the ``get_memory`` row."""
+    if not isinstance(store, SqliteMemoryStore):
+        return row["embedding"]
+    vec = None
+    if store._has_vec:
+        vec = store._conn.execute(
+            "SELECT embedding FROM memories_vec WHERE rowid = ?", (memory_id,)
+        ).fetchone()
+    return (None if vec is None else bytes(vec["embedding"]), row["embedding_model"])
 
 
 def test_deliberate_bulk_replay_is_refused_before_curation(store, monkeypatch):
