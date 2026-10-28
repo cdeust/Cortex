@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pytest
 
+from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 from tests_py.conftest import _USE_PG
 
@@ -27,10 +28,13 @@ def store(request):
     try:
         yield backend
     finally:
-        if request.param == "pg":
-            backend._conn.execute("DELETE FROM memories WHERE domain = %s", (_DOMAIN,))
-            backend._conn.commit()
-        backend.close()
+        try:
+            if request.param == "pg":
+                backend._conn.rollback()
+                backend._conn.execute("DELETE FROM memories WHERE domain = %s", (_DOMAIN,))
+                backend._conn.commit()
+        finally:
+            backend.close()
 
 
 def _version(content):
@@ -83,7 +87,9 @@ def test_erasing_head_restores_predecessor(store):
     assert _heads(store) == {old}
 
 
-def test_delete_rolls_back_the_link_changes(store):
+def test_delete_rolls_back_the_link_changes(store, monkeypatch):
+    # source: ADR-0545; transaction reads must use the connection doing the delete.
+    monkeypatch.setattr(get_memory_settings(), "POOL_DISABLED", True)
     old, head = _pair(store)
     store._conn.execute("BEGIN")
     store._conn.execute("DELETE FROM memories WHERE id = %s", (head,))
@@ -143,5 +149,10 @@ def test_reopening_sqlite_repairs_legacy_links_and_preserves_valid_edges(tmp_pat
             assert backend.get_memory(valid_old)["superseded_by_id"] == valid_head
             assert backend.get_memory(valid_head)["supersedes_id"] == valid_old
             assert _heads(backend) == {old, valid_head, orphan_backlink}
+            trigger = backend._conn.execute(
+                "SELECT name FROM sqlite_master "
+                "WHERE type = 'trigger' AND name = 'trg_memories_supersession_delete'"
+            ).fetchone()
+            assert trigger is not None
         finally:
             backend.close()

@@ -89,8 +89,7 @@ BEGIN
 END
 """
 
-# Repair legacy dangling references without changing any valid chain edge.
-# source: ADR-9852
+# source: ADR-9852; repair missing targets while preserving valid chain edges.
 SUPERSESSION_REPAIRS: tuple[str, ...] = (
     "UPDATE memories SET superseded_by_id = NULL "
     "WHERE superseded_by_id IS NOT NULL AND NOT EXISTS "
@@ -99,7 +98,6 @@ SUPERSESSION_REPAIRS: tuple[str, ...] = (
     "WHERE supersedes_id IS NOT NULL AND NOT EXISTS "
     "(SELECT 1 FROM memories AS target WHERE target.id = memories.supersedes_id)",
 )
-
 
 HOMEOSTATIC_STATE_DDL = """
 -- source: ADR-0602
