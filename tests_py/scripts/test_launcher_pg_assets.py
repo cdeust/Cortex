@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import sys
 import tarfile
 from pathlib import Path
 
@@ -62,14 +63,25 @@ def test_the_pgvector_release_names_the_tree_it_was_built_against(assets):
     assert assets.PGVECTOR_RELEASE == "pgvector-v0.8.7-pg18.6.0"
 
 
-def test_the_pgvector_build_uses_the_tree_the_release_was_built_against(assets):
+def test_the_pgvector_build_uses_the_tree_the_release_was_built_against(
+    assets, monkeypatch
+):
     # source: ADR-1114 (macOS still runs the 18.6.0 build tree; Linux moved on)
+    monkeypatch.setattr(sys, "path", [*sys.path])  # its import edits sys.path
     import pgvector_build
 
     assert set(pgvector_build.BUILD_TREE_SHA256) == set(assets.SHA256)
     for target, digest in pgvector_build.BUILD_TREE_SHA256.items():
         same_tree = assets.PG_VERSIONS[target] == assets.PGVECTOR_PG_VERSION
         assert (digest == assets.SHA256[target][0]) is same_tree, target
+    # source: the 18.6.0 Linux pins of launcher_pg_assets.py before 2026-10-28,
+    # equal to the theseus 18.6.0 release digests
+    assert pgvector_build.BUILD_TREE_SHA256["x86_64-unknown-linux-gnu"] == (
+        "bb3d09f876b2383e25a8c9ce09e32d185a03656a23d074f5195542b1b1b3ca61"
+    )
+    assert pgvector_build.BUILD_TREE_SHA256["aarch64-unknown-linux-gnu"] == (
+        "5d2b5e8be9e96bfc3d7f22090057a836ec36d5d092542d8d3b93cc145cf4ee13"
+    )
 
 
 @pytest.mark.parametrize(
@@ -81,7 +93,7 @@ def test_the_pgvector_build_uses_the_tree_the_release_was_built_against(assets):
         ("FreeBSD", "amd64", "", "", "no pinned"),
         ("Linux", "x86_64", "glibc", "2.35", "glibc 2.35 is older than 2.36"),
         ("Linux", "aarch64", "glibc", "2.34", "glibc 2.34 is older than 2.36"),
-        ("Linux", "x86_64", "glibc", "", "unknown version"),
+        ("Linux", "x86_64", "glibc", "", "glibc version is unknown"),
     ],
 )  # source: glibc of Ubuntu 22.04 (2.35) and RHEL 9 (2.34), ADR-1114
 def test_every_other_host_keeps_sqlite_with_the_reason(

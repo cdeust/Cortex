@@ -41,7 +41,7 @@ import launcher_pg_assets as assets  # noqa: E402
 UPSTREAM = "https://github.com/pgvector/pgvector.git"  # source: ADR-1114
 # source: theseus 18.6.0 linux gnu bin/postgres requires GLIBC_2.34 at most
 # (objdump -T, measured 2026-10-17, ~/.claude/fleet/state/cortex-748.md step2)
-GLIBC_FLOOR = (2, 34)
+BUILD_TREE_GLIBC_MAX = (2, 34)
 _ARGC = 3  # source: this module's usage line (script, triple, work dir)
 # source: ADR-1114 (the extension Cortex creates, its version, one distance)
 _PROBE = (
@@ -152,7 +152,7 @@ def check_glibc(lib: Path) -> None:
     """No symbol version above the tree's own glibc floor (Linux only)."""
     found = re.findall(r"GLIBC_(\d+)\.(\d+)", _run(["objdump", "-T", str(lib)]))
     highest = max(((int(a), int(b)) for a, b in found), default=(0, 0))
-    if highest > GLIBC_FLOOR:
+    if highest > BUILD_TREE_GLIBC_MAX:
         raise SystemExit(f"{lib.name} needs GLIBC_{highest[0]}.{highest[1]} > floor")
 
 

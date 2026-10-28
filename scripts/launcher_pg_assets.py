@@ -110,20 +110,28 @@ def _glibc_at_least_floor(version: str) -> bool:
     return tuple(int(part) for part in head) >= GLIBC_FLOOR
 
 
+def _glibc_refusal(version: str, pg_version: str) -> str:
+    floor = ".".join(map(str, GLIBC_FLOOR))
+    if not version:
+        return (
+            f"the glibc version is unknown here, and PostgreSQL {pg_version} "
+            f"needs glibc {floor} (GLIBC_{floor})"
+        )
+    return (
+        f"glibc {version} is older than {floor}, which PostgreSQL {pg_version} "
+        f"needs (GLIBC_{floor})"
+    )
+
+
 def triple(system: str, machine: str, libc: str, libc_version: str) -> str:
     """The target triple of ``platform.system()/machine()/libc_ver()``."""
     arch = _MACHINES.get(machine.lower())
     if system == "Darwin" and arch:
         name = f"{arch}-apple-darwin"
     elif system == "Linux" and arch and libc == "glibc":
-        if not _glibc_at_least_floor(libc_version):
-            floor = ".".join(map(str, GLIBC_FLOOR))
-            raise UnsupportedError(
-                f"glibc {libc_version or 'of unknown version'} is older than "
-                f"{floor}, which PostgreSQL {PG_VERSIONS[f'{arch}-unknown-linux-gnu']} "
-                "needs (its bundled libstdc++ requires GLIBC_2.36)"
-            )
         name = f"{arch}-unknown-linux-gnu"
+        if not _glibc_at_least_floor(libc_version):
+            raise UnsupportedError(_glibc_refusal(libc_version, PG_VERSIONS[name]))
     elif system == "Windows":
         raise UnsupportedError(
             "native Windows: the server lifecycle uses POSIX flock, and the "
