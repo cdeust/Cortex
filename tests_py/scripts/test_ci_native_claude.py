@@ -12,7 +12,7 @@ MENTIONS = ROOT / ".github/workflows/claude.yml"
 
 
 class NativeClaudeTrustTests(unittest.TestCase):
-    def test_automatic_review_can_read_and_publish_without_interactive_approval(self):
+    def test_automatic_review_prompt_requires_github_comments(self):
         # Upstream docs/solutions.md: Basic Example (No Tracking).
         workflow = yaml.safe_load(REVIEW.read_text())
         invocation = next(
@@ -98,12 +98,13 @@ class NativeClaudeTrustTests(unittest.TestCase):
     def test_owner_mentions_serialize_branch_writes(self):
         workflow = yaml.safe_load(MENTIONS.read_text())
         mention = workflow["jobs"]["claude"]
-        # source: GitHub Actions concurrency serializes owner requests per thread.
+        # source: https://docs.github.com/en/actions/using-jobs/using-concurrency
         self.assertEqual(
             mention["concurrency"],
             {
                 "group": "claude-mentions-${{ github.event.issue.number }}",
                 "cancel-in-progress": False,
+                "queue": "max",
             },
         )
 

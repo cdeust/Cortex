@@ -136,7 +136,7 @@ def provision(paths: managed_pg.PgPaths, dist: Path) -> None:
             managed_pg.detach()
         record = {
             "state": "ready",
-            "version": launcher_pg_assets.PG_VERSION,
+            "version": launcher_pg_assets.PG_VERSIONS[target],
             "target": target,
         }
         managed_pg.write_json(paths.provisioned, record)
@@ -206,8 +206,13 @@ def setup_step(data_dir: str, say) -> StepOutcome:
         provision(paths, Path(data_dir) / "pg" / "dist")
     except launcher_pg_assets.UnsupportedError as exc:
         cause = f"managed PostgreSQL unavailable here ({exc})"
+        if managed:  # the store stays on the managed server: Setup fails
+            managed_pg.write_json(
+                paths.provisioned, {"state": "failed", "error": cause}
+            )
+            return StepOutcome(failed=str(exc))
         say(f"{cause}; memories stay in SQLite")
-        return StepOutcome(failed=str(exc)) if managed else StepOutcome(fallback=cause)
+        return StepOutcome(fallback=cause)
     except Exception as exc:  # noqa: BLE001 — every failure is printed with its cause; selection decides fatality
         cause = f"managed PostgreSQL did not start: {type(exc).__name__}: {exc}"
         managed_pg.write_json(paths.provisioned, {"state": "failed", "error": cause})

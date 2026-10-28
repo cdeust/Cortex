@@ -25,17 +25,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# The hosted Ubuntu runner must use binaries linked for its distribution.
-# Job122751526077: the pinned archive requires the absent libxml2.so.2.
-# Sources: https://packages.ubuntu.com/source/resolute/pgvector
-# https://www.postgresql.org/download/linux/ubuntu/
-if [[ "${GITHUB_ACTIONS:-}" == true && "$(uname -s)" == Linux ]]; then
-  sudo apt-get update
-  sudo apt-get install --no-install-recommends -y postgresql-18 postgresql-18-pgvector
-  # Ubuntu postgresql-18 installs its server programs in this versioned directory.
-  pg_bin="/usr/lib/postgresql/18/bin"
-else
-  python - "$repo" "$work" <<'PY'
+python - "$repo" "$work" <<'PY'
 import fcntl
 import sys
 from pathlib import Path
@@ -49,8 +39,7 @@ with (work / "install.lock").open("w") as lock:
     tree = launcher_pg_assets.install(work / "dist", launcher_pg_assets.host_triple())
 (work / "bin-path").write_text(str(tree / "bin"), encoding="utf-8")
 PY
-  pg_bin="$(cat "$work/bin-path")"
-fi
+pg_bin="$(cat "$work/bin-path")"
 "$pg_bin/initdb" -D "$work/cluster" -U cortex --auth=trust --no-locale -E UTF8
 mkdir "$work/socket"
 # No TCP listener; only this private directory exposes the test database.
