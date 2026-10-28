@@ -1,5 +1,7 @@
 # Native discovery review corrections, 2026-10-28
 
+Historical receipt. Current behavior, hashes and tests are recorded in native-check-groups-cortex-20261028.md.
+
 Native Claude reviews on Cortex816 comment6458968789 and Codebase466 comment6458952553 identified redundant per-PR REST work, a prerequisite filter that excluded legitimate readiness repair, and missing CLI boundary evidence.
 
 Discovery now requests paginated PR/head/statusCheckRollup data with one GraphQL query. Drafts, forks, holds, active native gate checks and completed checks with no relevant review wait are eliminated before per-PR REST reads. GraphQL connection pages use the documented maximum of 100 nodes. Truncated status contexts conservatively proceed to full proof. The rollup is an optimization; existing authenticated _plan remains the only rerun authorizer, including readiness repair after failed tests. latest() performs the live PR read once. A repository concurrency group serializes discovery.

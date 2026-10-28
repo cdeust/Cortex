@@ -123,6 +123,38 @@ def _possible_wait(repo, row):
         raise EvidenceError("protocol") from exc
 
 
+def _group_checks(checks):
+    grouped = {}
+    for item in checks:
+        if item.get("__typename") == "CheckRun":
+            grouped.setdefault(item["name"], []).append(item)
+    return grouped
+
+
+def _gate_wait(grouped):
+    gates = [
+        grouped.get(name, []) for name in ("review", "merge", "merge pending review")
+    ]
+    if any(len(items) > 1 for items in gates):
+        return True  # Ambiguous suites are hints for full proof, never a veto.
+    if any(
+        item.get("status")
+        in ("QUEUED", "IN_PROGRESS", "PENDING", "REQUESTED", "WAITING")
+        for items in gates
+        for item in items
+    ):
+        return False
+    review, merge, pending = gates
+    if any(item.get("conclusion") == "FAILURE" for item in review):
+        return True  # Readiness repair permits failed test jobs.
+    failed_merge = any(item.get("conclusion") == "FAILURE" for item in merge)
+    return failed_merge or (
+        not merge
+        and any(item.get("conclusion") == "SUCCESS" for item in pending)
+        and any(item.get("conclusion") == "SUCCESS" for item in review)
+    )
+
+
 def _rollup_wait(rollup):
     try:
         if rollup is None:
@@ -134,28 +166,9 @@ def _rollup_wait(rollup):
             or type(contexts["pageInfo"]["hasNextPage"]) is not bool
         ):
             raise EvidenceError("protocol")
-        indexed = {item.get("name", item.get("context")): item for item in checks}
-        gates = [
-            item
-            for name, item in indexed.items()
-            if name in ("review", "merge", "merge pending review")
-        ]
-        if any(
-            item.get("status")
-            in ("QUEUED", "IN_PROGRESS", "PENDING", "REQUESTED", "WAITING")
-            or item.get("state") in ("PENDING", "EXPECTED")
-            for item in gates
-        ):
-            return False
         if contexts["pageInfo"]["hasNextPage"]:
-            return True  # A truncated optimization cannot veto a real repair path.
-        if indexed.get("review", {}).get("conclusion") == "FAILURE":
-            return True  # Readiness repair deliberately permits failed test jobs.
-        return indexed.get("merge", {}).get("conclusion") == "FAILURE" or (
-            "merge" not in indexed
-            and indexed.get("merge pending review", {}).get("conclusion") == "SUCCESS"
-            and indexed.get("review", {}).get("conclusion") == "SUCCESS"
-        )
+            return True  # Incomplete optimization cannot veto actual full policy.
+        return _gate_wait(_group_checks(checks))
     except (KeyError, TypeError, AttributeError) as exc:
         raise EvidenceError("protocol") from exc
 
