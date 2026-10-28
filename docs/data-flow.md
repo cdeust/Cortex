@@ -277,8 +277,9 @@ Before encoding, `remember` checks hardened, redacted content against current, n
 non-benchmark memories in the same domain, directory, agent, source, write class, capture
 origin and global/team scope. An exact replay returns `stored: false`,
 `reason: exact_duplicate` and the existing `memory_id`. The insertion transaction repeats
-the lookup under a SQLite write lock or PostgreSQL advisory lock. Explicit supersession
-and path-identified block replicas retain their separate write contracts.
+the lookup under a SQLite write lock or PostgreSQL advisory lock. Explicit corrections
+and curation-selected supersessions use the separate atomic supersession path.
+Path-identified block replicas retain their separate identity contract.
 
 Consolidation reports `exact_duplicates.superseded_total`, preserving duplicate rows and
 protection flags. Benchmark memories and block replicas are excluded. This byte-exact pass

@@ -190,8 +190,9 @@ remember({ content: "Keep session state in Redis so TTL expiry is handled consis
 // → { stored: true, action: "stored" }
 ```
 
-Deliberate writes can be refused as exact replays; novelty alone does not reject them. Unattended capture is, which is
-what keeps automatic capture from burying the memories you meant to keep.
+Deliberate writes can be refused as exact replays; novelty alone does not reject them.
+Unattended capture must also pass the novelty check, which keeps automatic capture from
+burying the memories you meant to keep.
 
 ### Whether it can be checked
 

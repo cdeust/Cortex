@@ -29,6 +29,7 @@ from mcp_server.handlers.codebase_analyze_helpers import (
     load_existing_hashes,
     mark_stale,
     persist_entities,
+    refresh_source_hash,
 )
 from mcp_server.handlers.remember import handler as remember_handler
 from mcp_server.handlers.remember_bulk import store_prepared
@@ -275,7 +276,10 @@ def _finish_file(store: MemoryStore, analysis: Any, result: dict, domain: str) -
         not result.get("stored") and result.get("reason") != "exact_duplicate"
     ):
         return None, 0, 0
-    _set_memory_metadata(store, memory_id)
+    if result.get("reason") == "exact_duplicate":
+        refresh_source_hash(store, memory_id, analysis.content_hash)
+    else:
+        _set_memory_metadata(store, memory_id)
     ents, rels = persist_entities(store, analysis, memory_id, domain or "code")
     return memory_id, ents, rels
 

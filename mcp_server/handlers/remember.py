@@ -236,6 +236,12 @@ async def _handler_impl(
     """Store a memory, optionally continuing an explicitly prepared internal write."""
     if prepared_encoding is not None:
         prepared = prepared_encoding.checked()
+        if isinstance(prepared, PreparedWrite) and prepared.supersedes_id is None:
+            duplicate_id = find_exact(
+                prepared.request.store, _exact_record(args or {}, prepared.request)
+            )
+            if duplicate_id is not None:
+                return duplicate_response(duplicate_id)
     else:
         prepared = prepare_write(args)
     if isinstance(prepared, dict):
@@ -339,6 +345,9 @@ async def _handler_impl(
                 "reason": "block-replica-refreshed",
             }
 
+        duplicate_id = find_exact(store, _exact_record(args or {}, request))
+        if duplicate_id is not None:
+            return duplicate_response(duplicate_id)
         action, mid = try_curation(
             content, embedding, force, store, emb_engine, tags, mod["heat"]
         )

@@ -52,7 +52,7 @@ schema = {
             "reason": {
                 "type": "string",
                 "description": (
-                    "Human-readable explanation of the gate decision (e.g. 'low "
+                    "Reason code or diagnostic explanation of the decision (e.g. 'low "
                     "surprise', 'high entity overlap', 'exact_duplicate')."
                 ),
             },
@@ -285,8 +285,8 @@ schema = {
                     "superseded_by_id is compare-and-set to it, and recall "
                     "demotes the old version. Rejected when the target is "
                     "missing or already superseded — an existing version "
-                    "chain is never forked silently. Bypasses automatic "
-                    "curation (the intent is explicit); the write gate "
+                    "chain is never forked silently. Bypasses exact replay refusal "
+                    "and automatic curation (the intent is explicit); the write gate "
                     "still applies unless force=true."
                 ),
                 "examples": [4255039],

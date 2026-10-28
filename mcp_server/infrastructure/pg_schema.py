@@ -1972,9 +1972,6 @@ def get_all_ddl() -> list[LiteralString]:
         # source: ADR-0537
         CURRENT_MEMORIES_VIEW_DDL,
         INDEXES_DDL,
-        # source: issue #707 -- expression index follows content updates too.
-        "CREATE INDEX IF NOT EXISTS idx_memories_exact_content ON memories "
-        "(md5(content)) WHERE superseded_by_id IS NULL;",
         # source: ADR-0537
         EFFECTIVE_STAGE_FN,
         ALPHA_INTEGRAL_FN,

@@ -1,8 +1,10 @@
-"""Exact UTF-8 candidate hashing for SQLite lookups.
+"""UTF-8 MD5 compatibility function for SQLite connections.
 
-The digest selects candidates; byte equality remains mandatory because MD5
-is not collision resistant. This is an index key, never a security primitive.
-PostgreSQL hashes both operands on the server, so server encoding is not assumed.
+Exact replay lookup uses SQLite's native content index without this function.
+
+The function supports callers of the connection's md5() compatibility function.
+It is never a security primitive. PostgreSQL exact lookup hashes both operands
+on the server and verifies full text, without assuming UTF-8 server encoding.
 source: https://www.postgresql.org/docs/current/functions-string.html
 """
 

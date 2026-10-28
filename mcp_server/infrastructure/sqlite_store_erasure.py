@@ -23,6 +23,10 @@ from mcp_server.infrastructure.memory_erasure import (
     erase_pages,
 )
 from mcp_server.shared.wiki_pointer import is_pointer_source
+from mcp_server.infrastructure.memory_exact_erasure import (
+    retained_copy_rows,
+    merge_erasure_report,
+)
 
 _CONCEPT_GROUNDING = (
     "UPDATE wiki.concepts SET grounding_memory_ids = ("
@@ -53,14 +57,16 @@ class SqliteErasureMixin:
         Raises (and erases nothing) if any statement before the commit fails;
         a WAL truncation that fails after it is reported as residue."""
         report = ErasureReport()
-        row = self._conn.execute(
-            "SELECT source FROM memories WHERE id = %s", (memory_id,)
-        ).fetchone()
-        if row is None:
-            return report
         secure = enable_fts_secure_delete(self._conn)
         try:
-            self._erase_rows(memory_id, row["source"], report)
+            # Hold the write lock while selecting and erasing retained copies.
+            if not self._connection_registry.connection().in_transaction:
+                self._conn.execute("BEGIN IMMEDIATE")
+            rows = retained_copy_rows(self._conn, memory_id, True)
+            for row in rows:
+                copy = ErasureReport()
+                self._erase_rows(row["id"], row["source"], copy)
+                merge_erasure_report(report, copy)
             report.fts_method = self._purge_fts(secure)
         except BaseException:
             self._conn.rollback()

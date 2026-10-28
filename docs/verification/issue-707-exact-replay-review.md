@@ -54,3 +54,55 @@ replays both old failures, records a clean single-process 100000-row collapse
 measurement before and after, and runs final-head regression tests on both stores.
 The final unit, regression, security and native review results are pending at publication.
 No passing runtime, performance improvement, or complete-mutation claim is made here.
+
+## Follow-up for reviewed head e7c2079
+
+The unit job at
+https://github.com/cdeust/Cortex/actions/runs/40694230112/job/122836728366
+stopped during collection:
+
+```text
+ERROR collecting tests_py/infrastructure/test_capture_origin_legacy_backfill.py
+_POST_MIGRATION_INDEXES = [ddl.split()[5] for ddl in POST_MIGRATION_INDEXES_DDL]
+IndexError: list index out of range
+1 error in 30.80s
+```
+
+Both evidence jobs stopped at the craftsmanship gate:
+
+```text
+Craftsmanship gate: NEW violations (not in the base-ref baseline):
+  - [method-size] mcp_server/infrastructure/pg_schema.py: get_all_ddl
+```
+
+This follow-up separates SQLite index repairs from CREATE-only index declarations
+and moves PostgreSQL's exact-content index build outside the schema transaction,
+using concurrent creation and recovery of an interrupted invalid index. The
+schema statement list returns to its prior size.
+
+The native source-hash finding is
+https://github.com/cdeust/Cortex/pull/827#discussion_r4400997881.
+Reusing a codebase memory now replaces its hash tag while preserving its heat,
+importance and heat timestamp. Prepared deliberate writes repeat exact lookup
+before continuation and curation.
+
+Backend store mixins own exact insertion and consolidation. The shared predicates
+use identical text and all eight scope fields for candidate discovery and locked
+lookup. PostgreSQL acquires the insertion advisory lock per candidate group and
+locks only that group's rows; an unrelated write transaction can remain open.
+SQLite uses ordinary SELECT and UPDATE statements without MATERIALIZED, UPDATE
+FROM or RETURNING. Hard forget includes retained byte-identical copies connected
+by supersession edges in the same scope and aggregates their erasure receipts.
+
+The updated hosted evidence workflow applies the new regression file to e7c2079
+and requires external failures for all six reviewed behaviors, then runs the
+same tests on the final head. It preserves both before reports and the after
+report in its job log. The separate original-head reproduction and 100000-row
+measurement remain in place. Worktrees created by these jobs live below the
+runner checkout's .claude/worktrees directory.
+
+The follow-up was prepared as GitHub API text in memory. Python AST parsing,
+Ruff 0.15.20 through stdin on all 28 changed Python sources, a comparison of
+function spans, and inspection of
+the proposed diff are static checks only. Final-head hosted unit, evidence,
+security and native review results remain pending at publication.
