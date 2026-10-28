@@ -1,4 +1,4 @@
-"""Regression for native Codex finding4392874807: PR-controlled reviewer config."""
+"""Regression guards for native Claude configuration, authority and edit mode."""
 
 import shlex
 import unittest
@@ -82,33 +82,41 @@ class NativeClaudeTrustTests(unittest.TestCase):
             if "claude-code-action@" in step.get("uses", "")
         )
         args = shlex.split(invocation["with"]["claude_args"])
-        self.assertNotIn("--permission-mode", args)
-        # Blanket Edit/Write would extend writes beyond the workspace.
-        for flag in ("--allowedTools", "--allowed-tools"):
-            if flag in args:
-                approved = args[args.index(flag) + 1].split(",")
-                self.assertFalse({"Edit", "MultiEdit", "Write"} & set(approved))
+        self.assertEqual(
+            invocation["uses"],
+            "anthropics/claude-code-action@8041f1d17e0e7d2f2cfe35002962e9f26237c0bb",
+        )
+        self.assertEqual(
+            set(invocation["with"]), {"claude_code_oauth_token", "claude_args"}
+        )
+        self.assertEqual(args, ["--strict-mcp-config", "--model", "claude-opus-5-5"])
         self.assertEqual(mention["permissions"]["contents"], "write")
-        self.assertIn(
-            "github.event.sender.login == github.repository_owner", mention["if"]
+        # Pin both branches and the outer sender gate, including their grouping.
+        expected = (
+            "github.event.sender.login == github.repository_owner "
+            "&& ((github.event_name == 'issue_comment' "
+            "&& contains(github.event.comment.body, '@claude') "
+            "&& github.event.issue.user.login == github.repository_owner "
+            "&& github.event.comment.user.login != 'claude[bot]' "
+            "&& github.event.comment.user.type != 'Bot') "
+            "|| (github.event_name == 'issues' "
+            "&& github.event.issue.user.login == github.repository_owner "
+            "&& (contains(github.event.issue.body, '@claude') "
+            "|| contains(github.event.issue.title, '@claude'))))"
         )
-        self.assertIn(
-            "github.event.issue.user.login == github.repository_owner", mention["if"]
-        )
+        self.assertEqual(" ".join(mention["if"].split()), expected)
 
-    def test_automatic_review_cannot_write_repository_contents(self):
+    def test_automatic_review_retains_auto_permission_mode(self):
         workflow = yaml.safe_load(REVIEW.read_text())
         review = workflow["jobs"]["review"]
-        self.assertEqual(review["permissions"]["contents"], "read")
         invocation = next(
             step
             for step in review["steps"]
             if "claude-code-action@" in step.get("uses", "")
         )
         args = shlex.split(invocation["with"]["claude_args"])
-        approved = args[args.index("--allowedTools") + 1].split(",")
-        for tool in approved:
-            self.assertNotRegex(tool, r"^(Edit|MultiEdit|Write)$|^Bash\(git[ :]")
+        self.assertIn("--permission-mode", args)
+        self.assertEqual(args[args.index("--permission-mode") + 1], "auto")
 
     def test_automatic_review_uses_upstream_app_supported_event(self):
         workflow = yaml.safe_load(REVIEW.read_text())

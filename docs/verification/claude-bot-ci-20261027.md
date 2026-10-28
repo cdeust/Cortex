@@ -16,6 +16,7 @@ The [README](https://github.com/anthropics/claude-code-action/blob/8041f1d17e0e7
 - Retain the official review command, five agents, permission mode and model. Restore the existing allowlist for Claude, Codex and Dependabot actors.
 - Install bubblewrap while retaining subprocess environment scrubbing. [Run 40553919216](https://github.com/cdeust/Cortex/actions/runs/40553919216) failed before the review because bubblewrap was absent.
 - Preserve owner-only mention invocation on owner-authored threads, addressing native findings 4389808387 and 4390480666.
+- Owner mentions inherit tag mode's acceptEdits; only automatic reviews retain auto permission mode. This qualifies the shared permission-mode sentence in ADR-1117's Official workflow layout.
 
 ## Gate migration and bootstrap
 
@@ -56,3 +57,11 @@ Both runs passed the actor check (`Permission level retrieved: admin`, `Verified
 The mention job no longer sets a permission mode. The action's acceptEdits mode allows edits only in the workspace. Its allowlist adds `git add`, `git commit`, `git rm` and the `git-push.sh` wrapper, which accepts only origin and no flags. Edit and Write are not added to `--allowedTools`; the upstream comment says that would allow writes anywhere on the runner. The review job keeps `contents: read` and its scoped `gh pr` allowlist. The mention trigger still requires an owner sender on an owner-authored thread, and the action also checks write permission. The new regression test fails before the change and passes after it. actionlint passes.
 
 The end-to-end check needs this workflow on main. An owner `@claude` fix request must then produce a claude[bot] commit on the PR branch, and the run log must show `permission_denials_count` 0.
+
+## Follow-up review evidence (2026-10-28)
+
+The mention regression now pins the exact action SHA, input keys, argument tokens and complete normalized owner predicate. This catches equals-form flags, additional permission/settings flags, wildcard tool grants and a prompt input that would change mode. The separate automatic-review regression asserts auto permission mode; existing exact permission and tool-set tests cover the review allowlist.
+
+The security review's PR-head settings premise was checked against [run.ts at the pinned action SHA](https://github.com/anthropics/claude-code-action/blob/8041f1d17e0e7d2f2cfe35002962e9f26237c0bb/src/entrypoints/run.ts): after tag preparation, PR runs restore configuration from the base before starting Claude. [parse-sdk-options.ts](https://github.com/anthropics/claude-code-action/blob/8041f1d17e0e7d2f2cfe35002962e9f26237c0bb/base-action/src/parse-sdk-options.ts) loads user, project and local settings by default. Trusted base settings allow pytest and uv commands. Combined with workspace edits, those permissions permit repository code execution on the runner with an App token capable of pushing. acceptEdits limits file-edit approval; it does not sandbox test execution or cap the App token. This capability is restricted to the existing owner-on-owner trigger. The workflow does not add blanket tool grants.
+
+[Hosted unit job 122685766069](https://github.com/cdeust/Cortex/actions/runs/40649407965/job/122685766069) at 835b9c200dcc698dc1ff5bfc5a108ed9582b2464 failed before pytest: bundled PostgreSQL 18.6.0 could not load libxml2.so.2. That run provides no test result for these guards. The follow-up changes have only static text verification until hosted CI executes them; no local candidate code was executed.

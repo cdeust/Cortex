@@ -50,7 +50,8 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # No --permission-mode: tag mode's acceptEdits allows edits only in
-          # the workspace; a later value replaces it (upstream tag/index.ts).
+          # the workspace (src/modes/tag/index.ts at the pinned action SHA).
+          # Last value wins: upstream base-action/src/parse-sdk-options.ts.
           claude_args: |
             --strict-mcp-config
             --model "claude-opus-5-5"
