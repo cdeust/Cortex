@@ -1,6 +1,6 @@
 {
   "unit": "command -v uv >/dev/null || pipx install uv==0.11.3; export PATH=\"$HOME/.local/bin:$PATH\"; uv python install 3.12 && uv sync --locked --managed-python --python 3.12 --extra dev --extra sqlite --extra codebase --extra postgresql && uv pip install pip && CORTEX_RERANKER_OFFLINE=1 uv run --no-sync bash scripts/ci_unit.sh",
-  "regression": "command -v uv >/dev/null || pipx install uv==0.11.3; export PATH=\"$HOME/.local/bin:$PATH\"; uv python install 3.12 && uv sync --locked --managed-python --python 3.12 --extra dev --extra sqlite --extra codebase && uv pip install pip && CORTEX_MEMORY_STORE_BACKEND=sqlite CORTEX_RERANKER_OFFLINE=1 uv run --no-sync pytest --tb=short -q -p no:randomly tests_py/integration",
+  "regression": "npm ci --prefix .github/mcpb --ignore-scripts && node --test .github/mcpb/test-forge-security.cjs && ( command -v uv >/dev/null || pipx install uv==0.11.3; export PATH=\"$HOME/.local/bin:$PATH\"; uv python install 3.12 && uv sync --locked --managed-python --python 3.12 --extra dev --extra sqlite --extra codebase && uv pip install pip && CORTEX_MEMORY_STORE_BACKEND=sqlite CORTEX_RERANKER_OFFLINE=1 uv run --no-sync pytest --tb=short -q -p no:randomly tests_py/integration )",
   "e2e": "bash scripts/docker_smoke.sh",
   "environment": "PY=\"$(command -v python3 || command -v python)\" && \"$PY\" scripts/ci_environment.py --work \"$CI_WORK/environment\"",
   "install": "PY=\"$(command -v python3 || command -v python)\" && \"$PY\" scripts/ci_install.py --work \"$CI_WORK/install-runtime\" --settle-seconds 1500",

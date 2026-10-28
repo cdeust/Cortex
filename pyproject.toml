@@ -29,7 +29,9 @@ dependencies = [
     "cryptography<49 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
     # source: ADR-1092 platform-bounds below; uv 0.11.3/0.13.5 resolution
     # on 2026-10-25 requires this complementary marker at the same level.
-    "cryptography>=49 ; sys_platform != 'darwin' or platform_machine != 'x86_64'",
+    # source: https://cryptography.io/en/latest/changelog/#v50-0-2
+    # Its OpenSSL 4.0.3 wheels include the 2026-09-29 security fixes.
+    "cryptography>=50.0.2 ; sys_platform != 'darwin' or platform_machine != 'x86_64'",
     # source: ADR-0874
     #
     #
@@ -233,6 +235,11 @@ exclude = [
 [tool.uv]
 constraint-dependencies = [
     "onnxruntime<1.24 ; python_full_version < '3.11'",
+    # source: https://github.com/advisories/GHSA-v4x8-3wr5-3wq8
+    "filelock>=4.2.1",
+    # source: https://github.com/advisories/GHSA-xmj3-9gf7-h52w
+    # PyTorch 2.11 on pre-macOS 14 Apple Silicon requires setuptools<82.
+    "setuptools>=84.1.0 ; sys_platform != 'darwin' or platform_machine != 'arm64' or platform_release >= '23'",
 ]
 
 # source: ADR-0874
@@ -739,9 +746,10 @@ platform-bounds = [
     "numpy<2 ; sys_platform == 'darwin' and platform_machine == 'x86_64' and python_full_version < '3.13'",
     "numpy>=2 ; sys_platform != 'darwin' or platform_machine != 'x86_64' or python_full_version >= '3.13'",
     "transformers<5 ; sys_platform == 'darwin' and platform_machine == 'x86_64' and python_full_version < '3.13'",
-    "transformers>=5 ; sys_platform != 'darwin' or platform_machine != 'x86_64' or python_full_version >= '3.13'",
+    # source: https://github.com/huggingface/transformers/commit/cbc1651a032b923da7f4b44b3d0e6f68e6ba6b55
+    "transformers>=5.21.0 ; sys_platform != 'darwin' or platform_machine != 'x86_64' or python_full_version >= '3.13'",
     "cryptography<49 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
-    "cryptography>=49 ; sys_platform != 'darwin' or platform_machine != 'x86_64'",
+    "cryptography>=50.0.2 ; sys_platform != 'darwin' or platform_machine != 'x86_64'",
 ]
 
 [tool.mutmut]
