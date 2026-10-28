@@ -115,8 +115,19 @@ class NativeClaudeTrustTests(unittest.TestCase):
             if "claude-code-action@" in step.get("uses", "")
         )
         args = shlex.split(invocation["with"]["claude_args"])
-        self.assertIn("--permission-mode", args)
-        self.assertEqual(args[args.index("--permission-mode") + 1], "auto")
+        self.assertEqual(
+            args,
+            [
+                "--strict-mcp-config",
+                "--permission-mode",
+                "auto",
+                "--allowedTools",
+                "mcp__github_inline_comment__create_inline_comment,"
+                "Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)",
+                "--model",
+                "claude-opus-5-5",
+            ],
+        )
 
     def test_automatic_review_uses_upstream_app_supported_event(self):
         workflow = yaml.safe_load(REVIEW.read_text())
