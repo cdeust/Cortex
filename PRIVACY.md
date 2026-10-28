@@ -232,6 +232,13 @@ memories over time; this is a local maintenance operation, not a transfer.
   including any left by soft deletes or still shared between memories.
 - For PostgreSQL, manage retention directly in your database.
 
+### Exact duplicate consolidation
+
+Consolidation retains superseded duplicate rows. Hard forgetting a memory also erases
+its byte-identical retained copies connected by supersession edges within the same write
+scope, in the same transaction. Independent memories and other scopes remain separate.
+Soft forgetting and backups retain their existing behavior.
+
 ## Contact
 
 Questions about this policy: **admin@ai-architect.tools** ·

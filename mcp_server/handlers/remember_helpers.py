@@ -44,6 +44,8 @@ from mcp_server.handlers.remember_response import build_response
 from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.infrastructure.memory_exact import insert_exact
+from mcp_server.handlers.remember_response import duplicate_response
 from mcp_server.observability import silent_failure
 from mcp_server.core import capture_origin
 from mcp_server.core import knowledge_graph, source_monitoring, habituation
@@ -669,6 +671,19 @@ def _grade_content_best_effort(content: str, *, directory: str) -> _GradeContext
     )
 
 
+def _persist_record(
+    store: MemoryStore, record: dict[str, Any], action: str, merged_id: int | None
+) -> tuple[int | dict[str, Any], int | None]:
+    """Keep supersession atomic; exact replays never reach post-store enrichment."""
+    if action == "supersede" and merged_id is not None:
+        mem_id, head = store.supersede_atomic(record, merged_id)
+        if mem_id is None:
+            return _build_supersede_conflict(merged_id, head), head
+        return mem_id, head
+    mem_id, inserted = insert_exact(store, record)
+    return (mem_id if inserted else duplicate_response(mem_id)), None
+
+
 def insert_and_post_process(
     content: str,
     embedding: Any,
@@ -740,18 +755,10 @@ def insert_and_post_process(
     record["write_class"] = write_class
     # source: ADR-0438
     record["capture_origin"] = origin
-    superseded_head: int | None = None
-    if action == "supersede" and merged_id is not None:
-        # Atomic insert + supersession edge (biomimetic reconsolidation): the
-        # new row and the head's back-pointer commit as ONE transaction, so a
-        # lost compare-and-set rolls the insert back — never an orphaned,
-        # disconnected row. On a race the write rebases onto the current head;
-        # only pathological contention returns a conflict (nothing committed).
-        mem_id, superseded_head = store.supersede_atomic(record, merged_id)
-        if mem_id is None:
-            return _build_supersede_conflict(merged_id, superseded_head)
-    else:
-        mem_id = store.insert_memory(record)
+    persisted, superseded_head = _persist_record(store, record, action, merged_id)
+    if isinstance(persisted, dict):
+        return persisted
+    mem_id = persisted
     tids, tagged, slot = _run_post_store(
         mem_id,
         content,

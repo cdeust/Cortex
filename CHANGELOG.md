@@ -16,6 +16,14 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Exact remember replays return the existing id within the same write scope;
+  explicit corrections still post supersession edges. Consolidation retains
+  and supersedes legacy copies, preserves protection flags, and excludes
+  benchmark rows and block replicas (#707). The new counter is
+  `exact_duplicates.superseded_total`. SQLite writers need no registered `md5()`.
+  Replays refresh source hashes without resetting heat, and identical deliberate
+  batch items are refused before curation. Hard forget erases retained exact twins.
+
 - Surface named dedup, SQLite recall-signal, profile freshness, and hot-memory
   read failures to callers instead of continuing with partial results (#685).
   Doctor and check_setup expose process-local historical fallback counts as

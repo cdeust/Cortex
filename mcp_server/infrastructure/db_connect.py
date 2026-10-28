@@ -20,6 +20,7 @@ import sqlite3
 from typing import TYPE_CHECKING, Any
 
 from mcp_server.infrastructure.sqlite_gated_connection import GatedConnection
+from mcp_server.shared.content_digest import content_digest
 
 if TYPE_CHECKING:
     import psycopg
@@ -35,7 +36,9 @@ def _refuse_factory(kwargs: dict[str, Any], name: str) -> None:
 def sqlite_connect(target: str, **kwargs: Any) -> GatedConnection:
     """``sqlite3.connect`` returning a :class:`GatedConnection`."""
     _refuse_factory(kwargs, "factory")
-    return sqlite3.connect(target, factory=GatedConnection, **kwargs)  # type: ignore[return-value]
+    connection = sqlite3.connect(target, factory=GatedConnection, **kwargs)
+    connection.create_function("md5", 1, content_digest, deterministic=True)
+    return connection  # type: ignore[return-value]
 
 
 def pg_connect(url: str, **kwargs: Any) -> "psycopg.Connection[DictRow]":

@@ -122,3 +122,13 @@ def build_merge_response(
         ),
         "reason": "merged_with_existing",
     }
+
+
+def duplicate_response(memory_id: int) -> dict[str, Any]:
+    """A replay neither inserts nor updates tags, heat, provenance or wiki pages."""
+    return {
+        "stored": False,
+        "action": "rejected",
+        "reason": "exact_duplicate",
+        "memory_id": memory_id,
+    }

@@ -44,6 +44,7 @@ from mcp_server.infrastructure.pg_store_consolidation_stage import (
 )
 from mcp_server.infrastructure.pg_store_cls import PgClsMixin
 from mcp_server.infrastructure.pg_store_erasure import PgErasureMixin
+from mcp_server.infrastructure.pg_store_exact import PgExactMixin
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,7 @@ __all__ = [
 
 
 class PgMemoryStore(
+    PgExactMixin,
     PgSchemaMixin,
     PgDdlMixin,
     PgSerializeMixin,

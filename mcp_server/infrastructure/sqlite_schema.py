@@ -355,7 +355,12 @@ INDEXES_DDL: list[str] = [
 
 # Indexes over columns that MIGRATIONS adds (is_global, superseded_by_id):
 # created after the migrations, without a catch, so a failure is loud.
+# source: issue #707 hosted unit job 122836728366: keep index lists CREATE-only.
+POST_MIGRATION_REPAIRS_DDL = ["DROP INDEX IF EXISTS idx_memories_exact_content"]
+
 POST_MIGRATION_INDEXES_DDL: list[str] = [
+    "CREATE INDEX IF NOT EXISTS idx_memories_exact_text ON memories "
+    "(content) WHERE superseded_by_id IS NULL",
     # source: ADR-9852 — delete-trigger lookups match PostgreSQL chain indexes.
     "CREATE INDEX IF NOT EXISTS idx_memories_superseded_by ON memories "
     "(superseded_by_id) WHERE superseded_by_id IS NOT NULL",
