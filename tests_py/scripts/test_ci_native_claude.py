@@ -76,7 +76,12 @@ class NativeClaudeTrustTests(unittest.TestCase):
             "anthropics/claude-code-action@8041f1d17e0e7d2f2cfe35002962e9f26237c0bb",
         )
         self.assertEqual(
-            set(invocation["with"]), {"claude_code_oauth_token", "claude_args"}
+            set(invocation["with"]),
+            {"claude_code_oauth_token", "include_comments_by_actor", "claude_args"},
+        )
+        self.assertEqual(
+            invocation["with"]["include_comments_by_actor"],
+            "${{ github.repository_owner }}",
         )
         self.assertEqual(args, ["--strict-mcp-config", "--model", "claude-opus-5-5"])
         self.assertEqual(mention["permissions"]["contents"], "write")
@@ -98,7 +103,7 @@ class NativeClaudeTrustTests(unittest.TestCase):
     def test_owner_mentions_serialize_branch_writes(self):
         workflow = yaml.safe_load(MENTIONS.read_text())
         mention = workflow["jobs"]["claude"]
-        # source: https://docs.github.com/en/actions/using-jobs/using-concurrency
+        # source: https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency
         self.assertEqual(
             mention["concurrency"],
             {
