@@ -1,6 +1,6 @@
 """Deletion preserves surviving versions on both stores (issue #699).
 
-source: ADR-9852; PostgreSQL's existing ON DELETE SET NULL contract.
+source: ADR-9852 -- PostgreSQL's existing ON DELETE SET NULL contract.
 The unit CI provisions PostgreSQL; the SQLite leg always runs.
 """
 
@@ -90,7 +90,7 @@ def test_erasing_head_restores_predecessor(store):
 
 
 def test_delete_rolls_back_the_link_changes(store, monkeypatch):
-    # source: ADR-0545; transaction reads must use the connection doing the delete.
+    # source: ADR-0545 -- transaction reads must use the connection doing the delete.
     monkeypatch.setattr(get_memory_settings(), "POOL_DISABLED", True)
     old, head = _pair(store)
     store._conn.execute("BEGIN")

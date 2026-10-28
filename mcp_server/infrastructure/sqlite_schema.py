@@ -79,7 +79,7 @@ CREATE VIEW IF NOT EXISTS current_memories AS
     SELECT * FROM memories WHERE superseded_by_id IS NULL
 """
 
-# source: ADR-9852; mirrors pg_schema.py's ON DELETE SET NULL links.
+# source: ADR-9852 -- mirrors pg_schema.py's ON DELETE SET NULL links.
 SUPERSESSION_DELETE_TRIGGER_DDL = """
 CREATE TRIGGER IF NOT EXISTS trg_memories_supersession_delete
 AFTER DELETE ON memories
@@ -89,7 +89,7 @@ BEGIN
 END
 """
 
-# source: ADR-9852; repair missing targets while preserving valid chain edges.
+# source: ADR-9852 -- repair missing targets while preserving valid chain edges.
 SUPERSESSION_REPAIRS: tuple[str, ...] = (
     "UPDATE memories SET superseded_by_id = NULL "
     "WHERE superseded_by_id IS NOT NULL AND NOT EXISTS "
