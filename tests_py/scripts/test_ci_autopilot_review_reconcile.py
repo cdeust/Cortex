@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 import ci_autopilot as runtime
 from ci_autopilot_queue import candidates
 from ci_codex_review_resume import PREREQUISITES
-from test_ci_autopilot import pull
+from tests_py.scripts.test_ci_autopilot import pull
 
 
 def waiting():

@@ -4,7 +4,7 @@ import copy
 from types import SimpleNamespace
 import unittest
 
-from test_ci_autopilot_issues import OWNER, comment, issue
+from tests_py.scripts.test_ci_autopilot_issues import OWNER, comment, issue
 from ci_autopilot_issues import intake
 
 
@@ -103,7 +103,7 @@ class IssuePages(unittest.TestCase):
     def test_author_editor_time_and_title_evidence_drift_fail_before_authorization(
         self,
     ):
-        from test_ci_autopilot_issue_titles import rename
+        from tests_py.scripts.test_ci_autopilot_issue_titles import rename
 
         for field in ("author", "editor", "lastEditedAt", "titleEvents"):
             initial, following = pages()

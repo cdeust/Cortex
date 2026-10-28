@@ -7,7 +7,7 @@ has a RenamedTitleEvent with editor=null,lastEditedAt=null (2026-10-28 probe).
 import copy
 import unittest
 
-from test_ci_autopilot_issues import OWNER, authorize, issue
+from tests_py.scripts.test_ci_autopilot_issues import OWNER, authorize, issue
 
 
 def rename(item, actor=OWNER):

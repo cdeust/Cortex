@@ -3,7 +3,13 @@
 import copy
 import unittest
 
-from test_ci_autopilot_issues import OWNER, authorize, comment, fingerprint, issue
+from tests_py.scripts.test_ci_autopilot_issues import (
+    OWNER,
+    authorize,
+    comment,
+    fingerprint,
+    issue,
+)
 
 
 class LastEditorTrust(unittest.TestCase):

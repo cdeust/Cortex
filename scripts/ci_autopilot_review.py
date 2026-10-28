@@ -1,8 +1,9 @@
 """Classify local repairs while GitHub alone issues native gate reruns.
 
 Source: ci_codex_review_event_source and resumption_plan are existing trusted
-read-only contracts. Cortex PR816 Claude review6458968789 identified a race
-between local and hosted rerun issuers. Python -I isolates EXPECTED_PR.
+read-only contracts. Cortex PR #816 Claude reviews 6458968789 and 6459888424
+identified rerun races and per-PR helper failures. The child environment binds
+EXPECTED_PR; Python -I ignores PYTHON* variables and the user site.
 """
 
 import json
@@ -12,8 +13,8 @@ import subprocess
 import sys
 
 
-def reconcile(options, item):
-    done = subprocess.run(
+def invoke_child(options, item):
+    return subprocess.run(
         [
             sys.executable,
             "-I",
@@ -30,14 +31,57 @@ def reconcile(options, item):
         env={**os.environ, "EXPECTED_PR": str(item["number"])},
         capture_output=True,
         text=True,
-        check=True,
+        check=False,
     )
-    result = json.loads(done.stdout)
+
+
+def helper_failure(category, exit_code=None):
+    result = {"action": "none", "reason": "helper_failure", "category": category}
+    if exit_code is not None:
+        result["exit_code"] = exit_code
+    return result
+
+
+def decode_result(output):
+    try:
+        result = json.loads(output)
+    except json.JSONDecodeError:
+        return helper_failure("protocol")
     if not isinstance(result, dict) or result.get("action") not in (
         "none",
         "repair",
     ):
-        raise RuntimeError("Review reconciliation returned invalid evidence")
+        return helper_failure("protocol")
+    if result.get("reason") not in (
+        None,
+        "evidence_unverifiable",
+        "review_infrastructure",
+    ):
+        return helper_failure("protocol")
+    if (
+        result.get("reason") == "evidence_unverifiable" and result["action"] != "none"
+    ) or (
+        result.get("reason") == "review_infrastructure" and result["action"] != "repair"
+    ):
+        return helper_failure("protocol")
+    if ("category" in result or result.get("reason") == "evidence_unverifiable") and (
+        result.get("category") not in ("api", "protocol", "environment", "eligibility")
+    ):
+        return helper_failure("protocol")
+    return result
+
+
+def reconcile(options, item):
+    try:
+        done = invoke_child(options, item)
+    except OSError:
+        result = helper_failure("environment")
+    else:
+        result = (
+            helper_failure("environment", done.returncode)
+            if done.returncode
+            else decode_result(done.stdout)
+        )
     diagnostic(options, item, result)
     return result
 
@@ -48,13 +92,19 @@ def diagnostic(options, item, result):
     if reason == "evidence_unverifiable":
         category = result.get("category")
         if category not in ("api", "protocol", "environment", "eligibility"):
-            category = "protocol"
+            raise RuntimeError("Review helper diagnostic contract is invalid")
         print(
             f"autopilot review: {category} evidence unavailable {target}",
             file=sys.stderr,
         )
     elif reason == "review_infrastructure":
         print(f"autopilot review: infrastructure repair {target}", file=sys.stderr)
+    elif reason == "helper_failure":
+        code = f" exit_code={result['exit_code']}" if "exit_code" in result else ""
+        print(
+            f"autopilot review: helper_failure {result['category']}{code} {target}",
+            file=sys.stderr,
+        )
 
 
 def unavailable(reason):

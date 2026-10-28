@@ -71,6 +71,8 @@ class InstalledHelper(unittest.TestCase):
             )
             gh.chmod(0o700)
             env = {**os.environ, "EXPECTED_PR": "797", "PATH": str(root)}
+            env.pop("GH_TOKEN", None)
+            env.pop("GITHUB_TOKEN", None)
             done = subprocess.run(
                 command, env=env, text=True, capture_output=True, check=True
             )
