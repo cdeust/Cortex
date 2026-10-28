@@ -67,5 +67,7 @@ def test_vector_search_failure_is_not_hidden_below_curation(store):
 
 def test_misaligned_vector_buffer_raises(store):
     assert store.has_vec, "CI installs sqlite-vec; vector coverage must run"
-    with pytest.raises(ValueError):
+    with pytest.raises(
+        ValueError, match="buffer size must be a multiple of element size"
+    ):
         store.search_vectors(b"\x00\x00\x00")

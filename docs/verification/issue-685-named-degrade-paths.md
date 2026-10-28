@@ -20,13 +20,17 @@ Symptom: dependency failures returned successful-looking fallback results.
 Goal: named failures reach callers, while historical fallback counters are readable.
 Scope: direct search_fts, store-open caching in _try_get_memory_store,
 _get_fired_triggers, other fallback families, ranking algorithms, and
-transaction atomicity across already committed merge steps remain outside #685.
+transaction atomicity across already committed merge steps, and the existing
+file_io.read_json policy (log unreadable/corrupt profiles and treat them as
+absent) remain outside #685.
 The capture boundary rolls back unfinished writes; it does not undo prior commits.
 
 The fallback recorder retains its ADR-0640 contract. Propagating paths no longer
 call silent_failure.note or increment its fallback metric; existing handler
-instrumentation reports tool errors. Tests assert these paths do not add
-fallback entries. Historical counters never reset in production and do not
+instrumentation reports tool errors. The s110 regressions check the named
+freshness, dedup, and recall-signal counters; #685 handler tests also check
+that injected failures leave fallback history empty. Historical counters never
+reset in production and do not
 establish current health, so their diagnostic check is optional.
 A separate doctor process has its own history.
 
@@ -47,23 +51,29 @@ The four failures asserted superseded fallback behavior:
 Those assertions now require visible errors. Additional hosted regression gates:
 - The public remember handler's first vector lookup succeeds and its second
   (curation) lookup fails; the original error escapes, the insert boundary is
-  untouched, and the real SQLite row count is unchanged.
+  untouched (assert_not_called is the no-insert guard).
 - Direct search_vectors raises for a missing index and a misaligned buffer.
 - A real capture merge fails after updating the row but before completing FTS;
   the original row survives, the connection is clean, and another writer commits.
-- Malformed and naive timestamps stop before scan/save with force=true guidance.
+- Present but malformed or naive timestamps stop before scan/save with
+  force=true guidance and the exact parsing/arithmetic exception as cause.
+- force=true bypasses that timestamp check; unrelated domain-shape errors
+  retain their own exception rather than blaming updatedAt.
+- A successful capture commits a real SQLite write visible from another handle.
 - Both backend diagnostic lists expose lifetime history without blocking readiness.
 - Hot-memory read failures reach the public handler across selection paths.
 
 The missing-index try_curation test bypasses remember's earlier novelty lookup.
 In the full remember handler a broken index can fail at that earlier lookup;
 the second-call test isolates the later dedup boundary. Vector recall failures
-and unreadable-profile failures already propagated on the inspected base.
+already propagated on the inspected base. The former injected load_profiles
+OSError case did not model real reads: file_io.read_json logs failures and
+returns None, so corrupt index/domain files are treated as absent.
 
 Candidate sources remain GitHub API data only. No candidate source was checked
 out, written to a local file, imported, or executed on the Mac.
-All 15 changed Python payloads passed AST parsing and trusted Ruff format/lint
-checks through stdin before publication.
+The previous 7018173 revision's 15 changed Python payloads passed AST parsing
+and trusted Ruff format/lint checks through stdin before publication.
 The GitHub-hosted Pipeline executes ci.json's unit command and the regression,
 e2e, environment, and install jobs. No passing result for this revision is
 claimed before those jobs finish; the dispatcher owns subsequent CI events.
@@ -74,3 +84,27 @@ Preserve both histories with PR head first and main second:
 main `36b6164b85e9e3256ff3993b96571582588c1001` adds #818, #820 and #821.
 The combined doctor and changelog preserve those fixes and #685.
 All other main changes use their exact Git blob receipts.
+
+## Hosted execution blocker on 7018173
+
+Unit job: https://github.com/cdeust/Cortex/actions/runs/40653908988/job/122700281893
+
+The runner was Ubuntu 26.04.1, image ubuntu26/20261012.163.
+It failed before pytest while initializing the pinned PostgreSQL 18.6.0 archive:
+`postgres: error while loading shared libraries: libxml2.so.2: cannot open shared object file`.
+
+Ubuntu 26 provides [libxml2-16](https://packages.ubuntu.com/search?keywords=xml2&suite=resolute);
+[Ubuntu's security package table](https://ubuntu.com/security/notices/USN-8787-1)
+also identifies libxml2-16 for 26.04 and libxml2 for 24.04.
+The failure is binary/runtime compatibility, not a pytest result.
+A compatible PostgreSQL artifact or CI environment is required before this
+revision's runtime behavior can be verified. No CI threshold or test is bypassed.
+
+Codex code/security review on 7018173 completed without findings.
+Claude re-review [6463844274](https://github.com/cdeust/Cortex/pull/819#issuecomment-6463844274)
+reported no blocking findings and identified the read_json documentation mistake
+corrected here, along with the narrowed timestamp boundary and test refinements.
+
+This follow-up's seven changed Python payloads passed AST parsing and Ruff
+format/lint checks through stdin; their original API text matches Git blob
+hashes. Hosted runtime verification remains pending.

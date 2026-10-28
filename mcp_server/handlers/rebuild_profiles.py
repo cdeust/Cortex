@@ -27,8 +27,8 @@ schema = {
         "install, after a major workflow change, or when `query_methodology` "
         "returns coldStart=true. Skipped automatically if profiles are <1h "
         "old unless force=true, which only bypasses that freshness check and "
-        "never replaces a profile. Invalid or timezone-naive updatedAt values "
-        "raise an error; rerun with force=true to bypass invalid freshness "
+        "never replaces a profile. A present but unparseable or timezone-naive "
+        "updatedAt raises an error; rerun with force=true to bypass freshness "
         "metadata. Transcripts on disk are a sliding window "
         "(Claude Code deletes old ones) while a stored profile accumulates "
         "one session per `record_session_end`, so a domain whose scan sees "
@@ -88,7 +88,7 @@ _PROFILE_FRESH_MS = 3600000
 
 
 def _check_skip(force: bool) -> dict | None:
-    """Skip recent profiles; raise on unreadable or invalid freshness data."""
+    """Skip recent profiles; reject a present but unusable freshness timestamp."""
     if force:
         return None
     profiles = load_profiles()
@@ -100,20 +100,20 @@ def _check_skip(force: bool) -> dict | None:
             datetime.now(timezone.utc)
             - datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
         ).total_seconds() * 1000
-        if age_ms < _PROFILE_FRESH_MS and len(profiles.get("domains", {})) > 0:
-            return {
-                "skipped": True,
-                "reason": (
-                    "Profiles updated less than 1 hour ago. Use force=true to override."
-                ),
-                "domains": list(profiles.get("domains", {}).keys()),
-                "updatedAt": updated_at,
-            }
     except (TypeError, ValueError, AttributeError) as exc:
         raise ValueError(
             f"Cannot determine profile freshness from updatedAt={updated_at!r}; "
             "rerun rebuild_profiles with force=true."
         ) from exc
+    if age_ms < _PROFILE_FRESH_MS and len(profiles.get("domains", {})) > 0:
+        return {
+            "skipped": True,
+            "reason": (
+                "Profiles updated less than 1 hour ago. Use force=true to override."
+            ),
+            "domains": list(profiles.get("domains", {}).keys()),
+            "updatedAt": updated_at,
+        }
     return None
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 import pytest
@@ -28,6 +29,7 @@ def test_dedup_search_failure_is_not_permission_to_create():
         try_curation("memory", [1.0], False, store, MagicMock(), [], 1.0)
 
     assert caught.value is error
+    assert silent_failure.status() == {}
 
 
 def test_dedup_merge_failure_is_not_permission_to_create(monkeypatch):
@@ -53,31 +55,56 @@ def test_dedup_merge_failure_is_not_permission_to_create(monkeypatch):
         try_curation("memory", [1.0], False, store, MagicMock(), [], 1.0)
 
     assert caught.value is error
+    assert silent_failure.status() == {}
 
 
-@pytest.mark.parametrize("failure", ["read", "timestamp", "naive"])
-def test_freshness_failure_reaches_handler_before_scan(monkeypatch, failure):
-    loader = MagicMock(return_value={"updatedAt": "invalid-timestamp"})
-    if failure == "naive":
-        loader.return_value = {"updatedAt": "2026-01-01T00:00:00"}
-    error = OSError("profiles unreadable")
-    if failure == "read":
-        loader.side_effect = error
+@pytest.mark.parametrize(
+    ("updated_at", "cause_type"),
+    [("invalid-timestamp", ValueError), ("2026-01-01T00:00:00", TypeError)],
+)
+def test_freshness_failure_reaches_handler_before_scan(
+    monkeypatch, updated_at, cause_type
+):
+    loader = MagicMock(return_value={"updatedAt": updated_at})
     monkeypatch.setattr(rebuild_profiles, "load_profiles", loader)
     scan = MagicMock()
     save = MagicMock()
     monkeypatch.setattr(rebuild_profiles, "discover_all_memories", scan)
     monkeypatch.setattr(rebuild_profiles, "save_profiles", save)
 
-    with pytest.raises((OSError, ValueError)) as caught:
+    with pytest.raises(ValueError, match="force=true") as caught:
         asyncio.run(rebuild_profiles.handler({}))
 
-    if failure == "read":
-        assert caught.value is error
-    else:
-        assert "force=true" in str(caught.value)
+    assert type(caught.value.__cause__) is cause_type
+    assert silent_failure.status() == {}
     scan.assert_not_called()
     save.assert_not_called()
+
+
+@pytest.mark.parametrize("updated_at", ["invalid-timestamp", "2026-01-01T00:00:00"])
+def test_force_bypasses_invalid_freshness_without_loading(monkeypatch, updated_at):
+    loader = MagicMock(return_value={"updatedAt": updated_at})
+    monkeypatch.setattr(rebuild_profiles, "load_profiles", loader)
+
+    assert rebuild_profiles._check_skip(force=True) is None
+    loader.assert_not_called()
+
+
+def test_invalid_domains_is_not_misreported_as_timestamp_failure(monkeypatch):
+    now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    clock = MagicMock(wraps=datetime)
+    clock.now.return_value = now
+    monkeypatch.setattr(rebuild_profiles, "datetime", clock)
+    monkeypatch.setattr(
+        rebuild_profiles,
+        "load_profiles",
+        lambda: {"updatedAt": now.isoformat(), "domains": "invalid"},
+    )
+
+    with pytest.raises(AttributeError, match="keys") as caught:
+        rebuild_profiles._check_skip(force=False)
+
+    assert caught.value.__cause__ is None
 
 
 @pytest.mark.parametrize(
@@ -111,3 +138,4 @@ def test_hot_memory_read_failure_reaches_tool_handler(
         asyncio.run(query_methodology.handler({"cwd": directory}))
 
     assert caught.value is error
+    assert silent_failure.status() == {}

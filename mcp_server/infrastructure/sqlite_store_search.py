@@ -116,7 +116,8 @@ class SqliteSearchMixin:
     ) -> list[tuple[int, float]]:
         """Vector KNN search via sqlite-vec. Returns (memory_id, distance).
 
-        Invalid embeddings and query failures propagate to the caller.
+        Query failures and malformed embedding buffers propagate. Returns []
+        when sqlite-vec is unavailable or the embedding is None.
 
         source: ADR-0616"""
         if not self._has_vec:

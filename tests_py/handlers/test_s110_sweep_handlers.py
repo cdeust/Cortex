@@ -1,8 +1,8 @@
 """S110 sweep (issue #197, first family): handler-layer try/except/pass sites.
 
-Each test forces the guarded operation to fail and asserts the
-now-visible ``silent_failure`` signal AND that the pre-existing fallback
-behaviour is unchanged.
+Tests force the guarded operation to fail and assert its fallback signal.
+The #685 freshness and curation paths now propagate failures instead, and their
+regressions require exceptions without a fallback counter entry.
 """
 
 from __future__ import annotations

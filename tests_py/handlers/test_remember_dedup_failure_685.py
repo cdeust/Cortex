@@ -36,7 +36,6 @@ def test_second_vector_search_failure_stops_remember_before_insert(monkeypatch):
         monkeypatch.setattr(remember, "apply_modulations", lambda *_args: {"heat": 1.0})
         insert = MagicMock()
         monkeypatch.setattr(remember, "insert_and_post_process", insert)
-        before = store._conn.execute("SELECT COUNT(*) FROM memories").fetchone()[0]
 
         with pytest.raises(RuntimeError, match="dedup search unavailable") as caught:
             asyncio.run(
@@ -54,8 +53,5 @@ def test_second_vector_search_failure_stops_remember_before_insert(monkeypatch):
         assert calls[0]["heads_only"] is True
         assert "heads_only" not in calls[1]
         insert.assert_not_called()
-        assert (
-            store._conn.execute("SELECT COUNT(*) FROM memories").fetchone()[0] == before
-        )
     finally:
         store.close()
