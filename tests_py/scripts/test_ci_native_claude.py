@@ -1,4 +1,4 @@
-"""Regression for native Codex finding4392874807: PR-controlled reviewer config."""
+"""Regression guards for native Claude configuration, authority and edit mode."""
 
 import shlex
 import unittest
@@ -12,24 +12,13 @@ MENTIONS = ROOT / ".github/workflows/claude.yml"
 
 
 class NativeClaudeTrustTests(unittest.TestCase):
-    def test_automatic_review_can_read_and_publish_without_interactive_approval(self):
+    def test_automatic_review_prompt_requires_github_comments(self):
         # Upstream docs/solutions.md: Basic Example (No Tracking).
         workflow = yaml.safe_load(REVIEW.read_text())
         invocation = next(
             step
             for step in workflow["jobs"]["review"]["steps"]
             if "claude-code-action@" in step.get("uses", "")
-        )
-        args = shlex.split(invocation["with"]["claude_args"])
-        approved = set(args[args.index("--allowedTools") + 1].split(","))
-        self.assertEqual(
-            approved,
-            {
-                "mcp__github_inline_comment__create_inline_comment",
-                "Bash(gh pr comment:*)",
-                "Bash(gh pr diff:*)",
-                "Bash(gh pr view:*)",
-            },
         )
         self.assertIn("Only post GitHub comments", invocation["with"]["prompt"])
 
@@ -68,6 +57,95 @@ class NativeClaudeTrustTests(unittest.TestCase):
             if step.get("uses", "").startswith("actions/checkout@")
         )
         self.assertFalse(checkout["with"]["persist-credentials"])
+
+    def test_owner_mentions_inherit_tag_mode_accept_edits(self):
+        # Upstream src/modes/tag/index.ts:159-214 grants workspace edits only
+        # through --permission-mode acceptEdits; base-action parse-sdk-options.ts
+        # keeps the last --permission-mode, so any workflow value replaces it.
+        # Runs 40645284158 and 40645479186 were refused every Edit and Write.
+        workflow = yaml.safe_load(MENTIONS.read_text())
+        mention = workflow["jobs"]["claude"]
+        invocation = next(
+            step
+            for step in mention["steps"]
+            if "claude-code-action@" in step.get("uses", "")
+        )
+        args = shlex.split(invocation["with"]["claude_args"])
+        self.assertEqual(
+            invocation["uses"],
+            "anthropics/claude-code-action@8041f1d17e0e7d2f2cfe35002962e9f26237c0bb",
+        )
+        self.assertEqual(
+            set(invocation["with"]),
+            {"claude_code_oauth_token", "include_comments_by_actor", "claude_args"},
+        )
+        self.assertEqual(
+            invocation["with"]["include_comments_by_actor"],
+            "${{ github.repository_owner }}",
+        )
+        self.assertEqual(args, ["--strict-mcp-config", "--model", "claude-opus-5-5"])
+        self.assertEqual(mention["permissions"]["contents"], "write")
+        # Pin both branches and the outer sender gate, including their grouping.
+        expected = (
+            "github.event.sender.login == github.repository_owner "
+            "&& ((github.event_name == 'issue_comment' "
+            "&& contains(github.event.comment.body, '@claude') "
+            "&& github.event.issue.user.login == github.repository_owner "
+            "&& github.event.comment.user.login != 'claude[bot]' "
+            "&& github.event.comment.user.type != 'Bot') "
+            "|| (github.event_name == 'issues' "
+            "&& github.event.issue.user.login == github.repository_owner "
+            "&& (contains(github.event.issue.body, '@claude') "
+            "|| contains(github.event.issue.title, '@claude'))))"
+        )
+        self.assertEqual(" ".join(mention["if"].split()), expected)
+
+    def test_owner_mentions_serialize_branch_writes(self):
+        workflow = yaml.safe_load(MENTIONS.read_text())
+        mention = workflow["jobs"]["claude"]
+        # source: https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency
+        self.assertEqual(
+            mention["concurrency"],
+            {
+                "group": "claude-mentions-${{ github.event.issue.number }}",
+                "cancel-in-progress": False,
+                "queue": "max",
+            },
+        )
+
+    def test_automatic_review_pins_complete_invocation(self):
+        # source: .github/workflows/claude-review.yml and upstream docs/solutions.md.
+        workflow = yaml.safe_load(REVIEW.read_text())
+        review = workflow["jobs"]["review"]
+        invocation = next(
+            step
+            for step in review["steps"]
+            if "claude-code-action@" in step.get("uses", "")
+        )
+        self.assertEqual(
+            set(invocation["with"]),
+            {
+                "claude_code_oauth_token",
+                "track_progress",
+                "allowed_bots",
+                "prompt",
+                "claude_args",
+            },
+        )
+        args = shlex.split(invocation["with"]["claude_args"])
+        self.assertEqual(
+            args,
+            [
+                "--strict-mcp-config",
+                "--permission-mode",
+                "auto",
+                "--allowedTools",
+                "mcp__github_inline_comment__create_inline_comment,"
+                "Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)",
+                "--model",
+                "claude-opus-5-5",
+            ],
+        )
 
     def test_automatic_review_uses_upstream_app_supported_event(self):
         workflow = yaml.safe_load(REVIEW.read_text())

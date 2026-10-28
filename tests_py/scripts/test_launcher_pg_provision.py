@@ -119,6 +119,28 @@ def test_an_unsupported_host_keeps_sqlite_and_writes_nothing(setup_step, monkeyp
     assert "native Windows" in said[-1]
 
 
+def test_a_managed_store_on_an_unsupported_host_fails_setup_and_says_so(
+    setup_step, monkeypatch
+):
+    # source: ADR-1114 (glibc < 2.36 refused; a managed store fails Setup, D3)
+    run, marker, root, said = setup_step
+    import launcher_pg_assets
+    from mcp_server.infrastructure.backend_marker import write_backend_marker
+
+    root.mkdir(parents=True)
+    write_backend_marker("managed", "t", marker, root=str(root))
+
+    def old_glibc():
+        raise launcher_pg_assets.UnsupportedError("glibc 2.35 is older than 2.36")
+
+    monkeypatch.setattr(launcher_pg_assets, "host_triple", old_glibc)
+    outcome = run(Path("/nowhere"))
+    assert "glibc 2.35" in outcome.failed and outcome.fallback == ""
+    assert json.loads(marker.read_text())["backend"] == "managed"  # untouched
+    assert json.loads((root / "provisioned.json").read_text())["state"] == "failed"
+    assert not any("stay in SQLite" in line for line in said)
+
+
 def test_after_a_failed_setup_the_store_stays_eligible_for_the_next_one(
     setup_step, tmp_path
 ):

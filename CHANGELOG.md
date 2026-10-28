@@ -8,8 +8,9 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Removed
 
-- Claude repair actions are removed following the owner decision; Claude
-  review returns review-only under ADR-1116 (see Added).
+- The former Claude repair actions are removed following the owner decision.
+  Automatic Claude review remains review-only; owner mentions retain the
+  separate implementation workflow described below and in ADR-1117.
 - Duplicate legacy CI workflows are retired. Pipeline, required CodeQL and the
   protected merge resolver remain active.
 
@@ -23,6 +24,20 @@ adheres to [Semantic Versioning](https://semver.org/).
   A broken SQLite vector index now rejects captures at the novelty lookup;
   failed captures are not retried by the resident capture worker.
 
+- Owner @claude mentions inherit the official action's tag-mode workspace edit
+  approval instead of overriding it with auto mode (#822). Requests on the same
+  thread run one at a time with up to 100 pending requests retained; automatic
+  reviews keep their separate permission mode.
+
+- The managed PostgreSQL server starts on Ubuntu 25.10 and 26.04, which ship
+  no `libxml2.so.2`: Linux GNU now runs theseus 18.6.1, which bundles its
+  runtime libraries (about 40 MB instead of 12 MB); macOS keeps 18.6.0. The
+  published pgvector 0.8.7 archives load into it unchanged. 18.6.1 needs
+  glibc 2.36, so Ubuntu 22.04 and RHEL 9 no longer get the managed server:
+  Setup refuses them before the download, a new store stays on SQLite with
+  that reason shown, a store already on it makes Setup fail with that cause
+  (ADR-1114, owner decision 2026-10-28;
+  Pipeline run 40649407965 failed on an ubuntu-latest runner on 26.04).
 - Session registry POSIX `ps` probes report nonzero exits and invalid UTF-8
   as named errors with the command and stderr; hooks log the actual cause
   without starting a legacy consolidate worker (#682).

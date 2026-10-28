@@ -44,15 +44,16 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     ("infrastructure/pg_store_heat.py", 49),
     # PostgreSQL batched writer.
     ("infrastructure/pg_store_heat.py", 143),
+    # SQLite sites shifted by schema setup imports and statements in ADR-9852.
     # SQLite anchor transfer.
-    ("infrastructure/sqlite_store.py", 505),
+    ("infrastructure/sqlite_store.py", 511),
     # SQLite single-row writer.
-    ("infrastructure/sqlite_store.py", 532),
+    ("infrastructure/sqlite_store.py", 538),
     # SQLite batched writer.
-    ("infrastructure/sqlite_store.py", 609),
+    ("infrastructure/sqlite_store.py", 615),
     # Homeostatic fold, one per backend dialect (issue #736).
     ("infrastructure/pg_store_heat.py", 66),
-    ("infrastructure/sqlite_store.py", 546),
+    ("infrastructure/sqlite_store.py", 552),
     # Anchor pin.
     ("handlers/anchor.py", 145),
     # Atomic cue boost: the project-scoped file cues moved from the hook in

@@ -34,6 +34,8 @@ from mcp_server.infrastructure.sqlite_schema import (
     MEMORIES_VEC_DDL,
     MIGRATIONS,
     POST_MIGRATION_INDEXES_DDL,
+    SUPERSESSION_DELETE_TRIGGER_DDL,
+    SUPERSESSION_REPAIRS,
     get_all_ddl,
 )
 from mcp_server.infrastructure.sqlite_store_auxiliary import SqliteAuxiliaryMixin
@@ -148,6 +150,10 @@ class SqliteMemoryStore(
         # Indexes over migrated columns (ADR-1109).
         for ddl in POST_MIGRATION_INDEXES_DDL:
             self._conn.execute(ddl)
+        # source: ADR-9852 — columns and indexes must exist before the repair.
+        self._conn.execute(SUPERSESSION_DELETE_TRIGGER_DDL)
+        for repair in SUPERSESSION_REPAIRS:
+            self._conn.execute(repair)
         # source: ADR-0605
         self._conn.execute(CURRENT_MEMORIES_VIEW_DDL)
         self._conn.commit()
