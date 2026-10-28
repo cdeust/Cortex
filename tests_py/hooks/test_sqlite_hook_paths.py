@@ -120,14 +120,18 @@ def test_sqlite_context_prints_banner_and_receipt(store, tmp_path, monkeypatch, 
     store.insert_memory(
         {
             "content": "sqlite-first install decision",
-            "heat": 1.0,
+            "capture_origin": "deliberate", "heat": 1.0,
             "is_protected": True,
             "tags": ["_anchor"],
             "directory_context": "/repo",
         }
     )
     store.insert_memory(
-        {"content": "hot working memory", "heat": 0.9, "directory_context": "/repo"}
+        {
+            "content": "hot working memory",
+            "capture_origin": "deliberate", "heat": 0.9,
+            "directory_context": "/repo",
+        }
     )
     monkeypatch.setattr(
         "mcp_server.infrastructure.memory_store.get_shared_store", lambda: store
@@ -180,21 +184,21 @@ class TestRecallMemoriesSqlite:
         store.insert_memory(
             {
                 "content": "the resolver fix used topological sort",
-                "heat": 0.8,
+                "capture_origin": "deliberate", "heat": 0.8,
                 "directory_context": "/repo",
             }
         )
         store.insert_memory(
             {
                 "content": "cold resolver note",
-                "heat": 0.01,
+                "capture_origin": "deliberate", "heat": 0.01,
                 "directory_context": "/repo",
             }
         )
         store.insert_memory(
             {
                 "content": "unrelated grocery list",
-                "heat": 0.9,
+                "capture_origin": "deliberate", "heat": 0.9,
                 "directory_context": "/repo",
             }
         )
@@ -210,7 +214,7 @@ class TestRecallMemoriesSqlite:
         store.insert_memory(
             {
                 "content": "resolver benchmark row",
-                "heat": 0.9,
+                "capture_origin": "deliberate", "heat": 0.9,
                 "is_benchmark": True,
                 "directory_context": "/repo",
             }
@@ -218,14 +222,14 @@ class TestRecallMemoriesSqlite:
         store.insert_memory(
             {
                 "content": "resolver ordinary note",
-                "heat": 0.9,
+                "capture_origin": "deliberate", "heat": 0.9,
                 "directory_context": "/repo",
             }
         )
         store.insert_memory(
             {
                 "content": "resolver protected decision",
-                "heat": 0.5,
+                "capture_origin": "deliberate", "heat": 0.5,
                 "is_protected": True,
                 "directory_context": "/repo",
             }
@@ -239,7 +243,11 @@ class TestRecallMemoriesSqlite:
 
     def test_hostile_fts_input_degrades_to_empty(self, store):
         store.insert_memory(
-            {"content": "resolver note", "heat": 0.9, "directory_context": "/repo"}
+            {
+                "content": "resolver note",
+                "capture_origin": "deliberate", "heat": 0.9,
+                "directory_context": "/repo",
+            }
         )
         # FTS5 syntax characters must not raise (search_fts catches them).
         assert (
@@ -252,7 +260,7 @@ def test_process_event_sqlite_injects_and_exits_zero(store, monkeypatch, capsys)
     store.insert_memory(
         {
             "content": "the deploy script is resumable by design",
-            "heat": 0.9,
+            "capture_origin": "deliberate", "heat": 0.9,
             "directory_context": "/repo",
         }
     )

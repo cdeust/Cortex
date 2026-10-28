@@ -8,18 +8,14 @@ from __future__ import annotations
 # source: ADR-0114
 
 
-ORIGIN_DELIBERATE = "deliberate"
-ORIGIN_LOCAL_ACTION = "local_action"
-ORIGIN_NETWORK = "network"
-ORIGIN_UNKNOWN = "unknown"
-ORIGIN_LEGACY = "legacy"
-
-ALL_ORIGINS: tuple[str, ...] = (
+from mcp_server.shared.capture_origin import (
+    ALL_ORIGINS as ALL_ORIGINS,
     ORIGIN_DELIBERATE,
+    ORIGIN_LEGACY as ORIGIN_LEGACY,
     ORIGIN_LOCAL_ACTION,
     ORIGIN_NETWORK,
     ORIGIN_UNKNOWN,
-    ORIGIN_LEGACY,
+    TRUSTED_ORIGINS_AT_READ,
 )
 
 # source: ADR-0114
@@ -51,12 +47,6 @@ _ORIGINS_ALLOWED_CONTENT_BYPASS: frozenset[str] = frozenset(
     {ORIGIN_DELIBERATE, ORIGIN_LOCAL_ACTION}
 )
 
-# source: ADR-0114
-
-
-_ORIGINS_TRUSTED_AT_READ: frozenset[str] = frozenset(
-    {ORIGIN_DELIBERATE, ORIGIN_LOCAL_ACTION, ORIGIN_LEGACY}
-)
 
 
 def classify_capture_origin(tool_name: str) -> str:
@@ -97,18 +87,18 @@ def is_trusted_at_read(origin: str) -> bool:
     """Whether ``origin`` keeps full ranking weight and may earn heat.
 
     Pre: ``origin`` is any string.
-    Post: True exactly for ``_ORIGINS_TRUSTED_AT_READ``; False otherwise,
+    Post: True exactly for ``TRUSTED_ORIGINS_AT_READ``; False otherwise,
     including for ``ORIGIN_UNKNOWN`` and unrecognised values.
 
     source: ADR-0114"""
-    return origin in _ORIGINS_TRUSTED_AT_READ
+    return origin in TRUSTED_ORIGINS_AT_READ
 
 
 def trust_factor(origin: str, untrusted_factor: float) -> float:
     """Ranking multiplier for content captured through ``origin``.
 
     source: ADR-0114"""
-    return 1.0 if origin in _ORIGINS_TRUSTED_AT_READ else untrusted_factor
+    return 1.0 if origin in TRUSTED_ORIGINS_AT_READ else untrusted_factor
 
 
 def trusted_origins_at_read() -> tuple[str, ...]:
@@ -116,4 +106,4 @@ def trusted_origins_at_read() -> tuple[str, ...]:
     server-side.
 
     source: ADR-0114"""
-    return tuple(sorted(_ORIGINS_TRUSTED_AT_READ))
+    return tuple(sorted(TRUSTED_ORIGINS_AT_READ))

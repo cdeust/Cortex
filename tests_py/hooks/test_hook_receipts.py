@@ -93,11 +93,13 @@ def _seed(
     team_decision: bool = False,
 ) -> int:
     row = conn.execute(
-        "INSERT INTO memories (content, heat_base, heat_base_set_at, "
+        "INSERT INTO memories (capture_origin, "
+        "content, heat_base, heat_base_set_at, "
         "is_benchmark, plasticity, no_decay, is_protected, is_global, "
         "agent_context, tags, superseded_by_id, directory_context, "
         "is_team_decision) "
-        "VALUES (%s, %s, NOW(), FALSE, 1.0, FALSE, %s, %s, %s, %s::jsonb, %s, "
+        "VALUES ('deliberate', "
+        "%s, %s, NOW(), FALSE, 1.0, FALSE, %s, %s, %s, %s::jsonb, %s, "
         "%s, %s) RETURNING id",
         (
             content,

@@ -20,7 +20,7 @@ def test_paraphrase_reaches_reranker_before_top_three_cut(store, monkeypatch):
     target = store.insert_memory(
         {
             "content": "The pantry contains espresso beans.",
-            "heat": 0.8,
+            "capture_origin": "deliberate", "heat": 0.8,
             "directory_context": "/repo",
         }
     )
@@ -28,7 +28,7 @@ def test_paraphrase_reaches_reranker_before_top_three_cut(store, monkeypatch):
         store.insert_memory(
             {
                 "content": f"Morning beverage query logging record {index}",
-                "heat": 0.9,
+                "capture_origin": "deliberate", "heat": 0.9,
                 "directory_context": "/repo",
             }
         )
@@ -53,7 +53,7 @@ def test_missing_model_does_not_inject_heat_only_candidates(store, monkeypatch):
     store.insert_memory(
         {
             "content": "The pantry contains espresso beans.",
-            "heat": 0.8,
+            "capture_origin": "deliberate", "heat": 0.8,
             "directory_context": "/repo",
         }
     )
@@ -65,7 +65,7 @@ def test_rerank_failure_does_not_inject_heat_only_candidates(store, monkeypatch)
     store.insert_memory(
         {
             "content": "The pantry contains espresso beans.",
-            "heat": 0.8,
+            "capture_origin": "deliberate", "heat": 0.8,
             "directory_context": "/repo",
         }
     )
@@ -83,7 +83,7 @@ def test_hot_pool_failure_preserves_lexical_recall(store, monkeypatch):
     target = store.insert_memory(
         {
             "content": "espresso beans for the pantry",
-            "heat": 0.8,
+            "capture_origin": "deliberate", "heat": 0.8,
             "directory_context": "/repo",
         }
     )

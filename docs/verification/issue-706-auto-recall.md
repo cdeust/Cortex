@@ -188,3 +188,24 @@ predicates, SQLite prompt bounding and imported provenance.
 
 These changes address trust and fallback defects; they do not establish
 paraphrase parity. All executable verification remains on hosted CI.
+
+## Hosted gate corrections after b8cbc97
+
+The unit job [122890249146](https://github.com/cdeust/Cortex/actions/runs/40709377205/job/122890249146)
+reported 12 failed, 11215 passed and 26 skipped. The failing automatic-injection
+fixtures omitted capture_origin, so their rows defaulted to unknown and the
+new allowlist excluded them. Those fixture INSERTs now explicitly identify
+test-authored deliberate memories; assertions and production trust defaults
+are unchanged.
+
+The parity job [122890141226](https://github.com/cdeust/Cortex/actions/runs/40709377172/job/122890141226)
+stopped at the infrastructure-to-core import in hook_capture_filter.py.
+Origin constants and the existing read-trust set now live in shared, consumed
+by both core policy functions and the infrastructure SQL predicate. The trust
+truth table and explicit-recall behavior remain unchanged.
+
+Static validation parses every changed Python source as data and checks the
+shared module dependency direction. Hosted unit and parity results on the new
+commit remain required. The previously measured 2-versus-28 paraphrase deficit
+and positive/negative score overlap are unresolved; this correction only
+unblocks the next hosted experiment and does not establish issue #706 acceptance.

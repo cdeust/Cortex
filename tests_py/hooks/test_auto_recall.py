@@ -84,9 +84,11 @@ def _seeded_db():
         ]
         for content, heat_base, is_benchmark in rows:
             conn.execute(
-                "INSERT INTO memories (content, heat_base, heat_base_set_at, "
+                "INSERT INTO memories (capture_origin, "
+                "content, heat_base, heat_base_set_at, "
                 "is_benchmark, plasticity, no_decay, directory_context) "
-                "VALUES (%s, %s, NOW(), %s, 1.0, FALSE, %s)",
+                "VALUES ('deliberate', "
+                "%s, %s, NOW(), %s, 1.0, FALSE, %s)",
                 (content, heat_base, is_benchmark, _SEEDED_CWD),
             )
     finally:

@@ -79,14 +79,14 @@ class TestRecallMemoriesSqliteScope:
         store.insert_memory(
             {
                 "content": "scopeword belongs to another project",
-                "heat": 0.9,
+                "capture_origin": "deliberate", "heat": 0.9,
                 "directory_context": "/other/project",
             }
         )
         store.insert_memory(
             {
                 "content": "scopeword is a global decision",
-                "heat": 0.9,
+                "capture_origin": "deliberate", "heat": 0.9,
                 "is_global": True,
                 "directory_context": "",
             }
@@ -94,14 +94,14 @@ class TestRecallMemoriesSqliteScope:
         store.insert_memory(
             {
                 "content": "scopeword lives at an ancestor of the session cwd",
-                "heat": 0.9,
+                "capture_origin": "deliberate", "heat": 0.9,
                 "directory_context": "/repo",
             }
         )
         store.insert_memory(
             {
                 "content": "scopeword has an empty directory_context",
-                "heat": 0.9,
+                "capture_origin": "deliberate", "heat": 0.9,
                 "directory_context": "",
             }
         )
@@ -127,7 +127,7 @@ def test_process_event_sqlite_without_project_root_restricts_to_globals(
     store.insert_memory(
         {
             "content": "the deploy script is resumable by design",
-            "heat": 0.9,
+            "capture_origin": "deliberate", "heat": 0.9,
             "directory_context": "/repo",
         }
     )
@@ -163,7 +163,7 @@ def _seed_starvation_store(store) -> None:
     store.insert_memory(
         {
             "content": "scopeword the project's own decision",
-            "heat": 0.5,
+            "capture_origin": "deliberate", "heat": 0.5,
             "directory_context": "/repo",
         }
     )
@@ -171,7 +171,7 @@ def _seed_starvation_store(store) -> None:
         store.insert_memory(
             {
                 "content": f"scopeword foreign row {i}",
-                "heat": 0.99,
+                "capture_origin": "deliberate", "heat": 0.99,
                 "directory_context": f"/other/project-{i}",
             }
         )

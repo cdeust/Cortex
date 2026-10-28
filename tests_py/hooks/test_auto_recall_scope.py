@@ -92,9 +92,11 @@ def _scope_seeded_db():
         ]
         for content, directory_context, is_global in rows:
             conn.execute(
-                "INSERT INTO memories (content, heat_base, heat_base_set_at, "
+                "INSERT INTO memories (capture_origin, "
+                "content, heat_base, heat_base_set_at, "
                 "is_benchmark, plasticity, no_decay, directory_context, is_global) "
-                "VALUES (%s, 0.9, NOW(), FALSE, 1.0, FALSE, %s, %s)",
+                "VALUES ('deliberate', "
+                "%s, 0.9, NOW(), FALSE, 1.0, FALSE, %s, %s)",
                 (content, directory_context, is_global),
             )
     finally:
@@ -153,16 +155,20 @@ def _starvation_seeded_db():
     try:
         conn.execute("DELETE FROM memories WHERE content LIKE %s", ("STARVETEST%",))
         conn.execute(
-            "INSERT INTO memories (content, heat_base, heat_base_set_at, "
+            "INSERT INTO memories (capture_origin, "
+            "content, heat_base, heat_base_set_at, "
             "is_benchmark, plasticity, no_decay, directory_context, is_global) "
-            "VALUES (%s, 0.5, NOW(), FALSE, 1.0, FALSE, %s, FALSE)",
+            "VALUES ('deliberate', "
+            "%s, 0.5, NOW(), FALSE, 1.0, FALSE, %s, FALSE)",
             ("STARVETEST the project's own decision", _SEEDED_CWD),
         )
         for i in range(_FOREIGN_ROW_COUNT):
             conn.execute(
-                "INSERT INTO memories (content, heat_base, heat_base_set_at, "
+                "INSERT INTO memories (capture_origin, "
+                "content, heat_base, heat_base_set_at, "
                 "is_benchmark, plasticity, no_decay, directory_context, is_global) "
-                "VALUES (%s, 0.99, NOW(), FALSE, 1.0, FALSE, %s, FALSE)",
+                "VALUES ('deliberate', "
+                "%s, 0.99, NOW(), FALSE, 1.0, FALSE, %s, FALSE)",
                 (f"STARVETEST foreign row {i}", f"/other/project-{i}"),
             )
     finally:
