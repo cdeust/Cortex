@@ -61,9 +61,10 @@ def _run(argv: list[str], **kwargs) -> str:
 
 def postgres_tree(target: str, work: Path) -> Path:
     """The pinned PostgreSQL tree of ``target``, downloaded and verified."""
-    name = f"postgresql-{assets.PG_VERSION}-{target}.tar.gz"
+    version = assets.PG_VERSIONS[target]
+    name = f"postgresql-{version}-{target}.tar.gz"
     archive = work / name
-    url = assets.PG_URL.format(version=assets.PG_VERSION, name=name)
+    url = assets.PG_URL.format(version=version, name=name)
     assets._download(url, archive, assets.SHA256[target][0])
     return assets._extract(archive, work / "pg")
 

@@ -27,21 +27,39 @@ import tarfile
 import urllib.request
 from pathlib import Path
 
-PG_VERSION = "18.6.0"  # source: ADR-1114 (theseus-rs/postgresql-binaries release)
+# The theseus-rs/postgresql-binaries release each triple runs. Linux GNU runs
+# 18.6.1, the first release that bundles its runtime libraries (theseus commit
+# 78f15cec): 18.6.0 needs the host's libxml2.so.2, which Ubuntu 25.10 and 26.04
+# do not ship, and 18.6.1's bundled libstdc++ needs glibc 2.36. macOS keeps
+# 18.6.0, whose only host library is the system libxml2 (13 MB, not 90 MB).
+PG_VERSIONS = {  # source: ADR-1114
+    "aarch64-apple-darwin": "18.6.0",
+    "x86_64-apple-darwin": "18.6.0",
+    "x86_64-unknown-linux-gnu": "18.6.1",
+    "aarch64-unknown-linux-gnu": "18.6.1",
+}
 # pgvector compiled by Cortex CI (.github/workflows/pgvector.yml) from this
 # upstream tag, refused unless it resolves to this commit.
 # source: ADR-1114 (pgvector/pgvector tag v0.8.7, 2026-10-01)
 PGVECTOR_VERSION = "0.8.7"
 # source: ADR-1114 (gh api repos/pgvector/pgvector/git/refs/tags/v0.8.7)
 PGVECTOR_COMMIT = "f37c13f68b57d2c3472b2214fbcff699d6d34876"
+# The PostgreSQL tree the published pgvector archives were compiled against
+# (PGXS, every triple). They load unchanged into theseus 18.6.1, which packages
+# the same PostgreSQL 18.6 source: CREATE EXTENSION vector and a distance pass
+# on Ubuntu 24.04 and 26.04, aarch64 and x86_64 (measured 2026-10-28).
+PGVECTOR_PG_VERSION = "18.6.0"  # source: ADR-1114
 # The release of this repository that holds the archives the workflow built.
-PGVECTOR_RELEASE = f"pgvector-v{PGVECTOR_VERSION}-pg{PG_VERSION}"  # source: ADR-1114
+PGVECTOR_RELEASE = (
+    f"pgvector-v{PGVECTOR_VERSION}-pg{PGVECTOR_PG_VERSION}"  # source: ADR-1114
+)
 # source: ADR-1114 (release download URLs: theseus, and this repository)
 PG_URL = "https://github.com/theseus-rs/postgresql-binaries/releases/download/{version}/{name}"
 VECTOR_URL = "https://github.com/cdeust/Cortex/releases/download/{tag}/{name}"
-# Per Rust target triple, the PostgreSQL then the pgvector archive digest,
-# measured 2026-10-17 and equal to the digests both releases publish (pgvector:
+# Per Rust target triple, the PostgreSQL (release PG_VERSIONS names) then the
+# pgvector archive digest, equal to the digests both releases publish (pgvector:
 # workflow run 39017072528, `gh attestation verify` passes for each archive).
+# Measured 2026-10-17; the two Linux PostgreSQL digests (18.6.1) 2026-10-28.
 SHA256 = {  # source: ADR-1114
     "aarch64-apple-darwin": (
         "a257bcdb8aa3301a13d6a5bcec48f8c9517045b7cbae71e50788b2615539e95b",
@@ -52,11 +70,11 @@ SHA256 = {  # source: ADR-1114
         "f47275763f0d130c5c7a09795fdd656ba2ceac5dbfc3ee367117c5d7b50a89f7",
     ),
     "x86_64-unknown-linux-gnu": (
-        "bb3d09f876b2383e25a8c9ce09e32d185a03656a23d074f5195542b1b1b3ca61",
+        "e84b02dd8d0ce5879fb697330a789231c8b8f8d958dae3ad4d90fecc710b1315",
         "8ed6b93ad7d795099e40fed9013e6bb0bd89b3efd2d178445985076f6c021971",
     ),
     "aarch64-unknown-linux-gnu": (
-        "5d2b5e8be9e96bfc3d7f22090057a836ec36d5d092542d8d3b93cc145cf4ee13",
+        "1ab47fa2f06ff70454309ad02e5d89c46488300d43977231481fd6b160b9d556",
         "ceba223254ee2e54ceb148d720a6627f03d0f7c8aeabcb0799c1835cefbbeda0",
     ),
 }
@@ -107,7 +125,7 @@ def host_triple() -> str:
 
 
 def tree(dist: Path, target: str) -> Path:
-    return dist / f"postgresql-{PG_VERSION}-{target}"
+    return dist / f"postgresql-{PG_VERSIONS[target]}-{target}"
 
 
 def is_installed(dist: Path, target: str) -> bool:
@@ -192,12 +210,13 @@ def install(dist: Path, target: str) -> Path:
     scratch.mkdir(parents=True)
     try:
         pg_sha, vector_sha = SHA256[target]
+        version = PG_VERSIONS[target]
         pg_name, vector_name = (
-            f"postgresql-{PG_VERSION}-{target}.tar.gz",
+            f"postgresql-{version}-{target}.tar.gz",
             f"pgvector-{target}-pg18.tar.gz",
         )
         _download(
-            PG_URL.format(version=PG_VERSION, name=pg_name), scratch / pg_name, pg_sha
+            PG_URL.format(version=version, name=pg_name), scratch / pg_name, pg_sha
         )
         _download(
             VECTOR_URL.format(tag=PGVECTOR_RELEASE, name=vector_name),

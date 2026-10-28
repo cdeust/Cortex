@@ -41,6 +41,24 @@ def test_each_supported_host_has_a_pinned_archive(
 ):
     assert assets.triple(system, machine, libc) == expected
     assert expected in assets.SHA256
+    assert expected in assets.PG_VERSIONS
+
+
+def test_linux_runs_the_release_that_bundles_its_libraries(assets):
+    # source: ADR-1114 (theseus 18.6.0 linux-gnu needs the host's libxml2.so.2,
+    # absent on Ubuntu 25.10/26.04; 18.6.1 bundles it; macOS keeps 18.6.0)
+    assert assets.PG_VERSIONS == {
+        "aarch64-apple-darwin": "18.6.0",
+        "x86_64-apple-darwin": "18.6.0",
+        "x86_64-unknown-linux-gnu": "18.6.1",
+        "aarch64-unknown-linux-gnu": "18.6.1",
+    }
+    assert set(assets.PG_VERSIONS) == set(assets.SHA256)
+
+
+def test_the_pgvector_release_names_the_tree_it_was_built_against(assets):
+    # source: ADR-1114 (published once; a PostgreSQL pin move does not rename it)
+    assert assets.PGVECTOR_RELEASE == "pgvector-v0.8.7-pg18.6.0"
 
 
 @pytest.mark.parametrize(
@@ -73,11 +91,10 @@ def _archive(path: Path, top: str, files: dict[str, bytes], link: tuple = ()) ->
 
 
 def _serve(monkeypatch, assets, tmp_path, pg_files, vector_files, link=()):
-    pg_name = f"postgresql-{assets.PG_VERSION}-{_TARGET}.tar.gz"
+    top = f"postgresql-{assets.PG_VERSIONS[_TARGET]}-{_TARGET}"
+    pg_name = f"{top}.tar.gz"
     vector_name = f"pgvector-{_TARGET}-pg18.tar.gz"
-    pg_sha = _archive(
-        tmp_path / pg_name, f"postgresql-{assets.PG_VERSION}-{_TARGET}", pg_files, link
-    )
+    pg_sha = _archive(tmp_path / pg_name, top, pg_files, link)
     vector_sha = _archive(
         tmp_path / vector_name, f"pgvector-{_TARGET}-pg18", vector_files
     )

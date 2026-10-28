@@ -136,7 +136,7 @@ def provision(paths: managed_pg.PgPaths, dist: Path) -> None:
             managed_pg.detach()
         record = {
             "state": "ready",
-            "version": launcher_pg_assets.PG_VERSION,
+            "version": launcher_pg_assets.PG_VERSIONS[target],
             "target": target,
         }
         managed_pg.write_json(paths.provisioned, record)
