@@ -80,3 +80,22 @@ def test_reader_redacts_secrets_and_sorts_components(monkeypatch):
     assert check.detail.startswith("a.component: 1 failure(s), ordinary failure; ")
     assert "z.component: 2 failure(s)" in check.detail
     assert failures["z.component"]["last_error"] == "password=fixture-secret"
+
+
+@pytest.mark.parametrize("port", ["5432", "5432;", "invalid", "99999"])
+def test_reader_redacts_url_errors_before_joining_components(monkeypatch, port):
+    failures = {
+        "a.component": {
+            "count": 1,
+            "last_error": f"connect postgresql://u:fixture-secret@db:{port}",
+        },
+        "z.component": {"count": 2, "last_error": "ordinary failure"},
+    }
+    monkeypatch.setattr(silent_failure, "status", lambda: failures)
+
+    check = doctor._recorded_failures()
+
+    assert check.optional and not check.ok
+    assert "fixture-secret" not in check.detail
+    assert f"postgresql://u:***@db:{port}; z.component" in check.detail
+    assert "z.component: 2 failure(s), ordinary failure" in check.detail

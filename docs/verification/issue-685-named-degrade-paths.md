@@ -140,9 +140,26 @@ The doctor vector check now delegates its store probe to a helper, preserving
 package/interpreter diagnostics and store closure while bringing both functions
 under METHOD_LINE_LIMIT. The existing vector-check tests are the hosted behavior
 gate. Fallback diagnostic output uses the existing redact_text boundary from
-doctor_mcp; a regression checks secret removal, component ordering, counts and
-history preservation. The failed-capture regression now requires the original
+shared.redaction_gate; a regression checks secret removal, component ordering, counts and
+an unchanged input dictionary. The failed-capture regression now requires the original
 connection to survive rollback, so replacing it cannot satisfy the assertion.
 
 Sources were edited as API data only. Static syntax and method-span checks are
 pre-publication checks, not runtime proof. The dispatcher owns hosted CI follow-up.
+
+## Review correction after 470e714
+
+The capture boundary imports sqlite_request_scope directly from infrastructure.
+The handler wrapper delegates to this same scope; hooks no longer import handlers.
+
+Each fallback entry is redacted before the diagnostic separator is added.
+URL masking preserves the host/port text instead of reading parsed.port, whose
+validation can raise for malformed diagnostic URLs. Regression cases cover
+ordinary ports, punctuation, nonnumeric ports, out-of-range ports, IPv6 and
+the full redaction gate. These are hosted test gates, not local runtime results.
+
+Hosted unit job 122749285045 on run 40668551950 failed before pytest:
+`postgres: error while loading shared libraries: libxml2.so.2: cannot open shared object file`.
+CI link: https://github.com/cdeust/Cortex/actions/runs/40668551950/job/122749285045.
+Hosted verification remains blocked until the PostgreSQL artifact and runner
+runtime are compatible; no checks or thresholds are disabled by this correction.

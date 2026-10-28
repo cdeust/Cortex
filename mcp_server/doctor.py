@@ -539,13 +539,13 @@ def _recorded_failures() -> Check:
     """
     failures = silent_failure.status()
     detail = "; ".join(
-        f"{component}: {entry['count']} failure(s), {entry['last_error']}"
+        redact_text(f"{component}: {entry['count']} failure(s), {entry['last_error']}")
         for component, entry in sorted(failures.items())
     )
     return Check(
         "Recorded component failures",
         not failures,
-        redact_text(detail) or "No failures recorded in this process",
+        detail or "No failures recorded in this process",
         "Inspect the reported fallbacks; lifetime counts do not show current health."
         if failures
         else "",
