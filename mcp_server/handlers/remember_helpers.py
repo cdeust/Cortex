@@ -44,7 +44,8 @@ from mcp_server.handlers.remember_response import build_response
 from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
-from mcp_server.infrastructure.memory_exact import insert_exact, duplicate_response
+from mcp_server.infrastructure.memory_exact import insert_exact
+from mcp_server.handlers.remember_response import duplicate_response
 from mcp_server.observability import silent_failure
 from mcp_server.core import capture_origin
 from mcp_server.core import knowledge_graph, source_monitoring, habituation

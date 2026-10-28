@@ -48,7 +48,8 @@ schema = {
     "description": (
         # source: ADR-0341
         "Run scheduled memory-system maintenance cycles: thermodynamic "
-        "heat decay, full-text → gist → tag compression, "
+        "heat decay, scoped exact-replay consolidation (exact_duplicates counters), "
+        "full-text → gist → tag compression, "
         "episodic→semantic CLS transfer, synaptic plasticity LTP/LTD, "
         "microglial pruning of orphan edges, homeostatic scaling, cascade "
         "stage advancement, and optional deep-sleep replay. Each cycle is "

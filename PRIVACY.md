@@ -236,3 +236,11 @@ memories over time; this is a local maintenance operation, not a transfer.
 
 Questions about this policy: **admin@ai-architect.tools** ·
 issues: https://github.com/cdeust/Cortex/issues
+
+
+### Exact duplicate consolidation
+
+Consolidation retains superseded duplicate rows. Forgetting one survivor does not erase
+other rows that contain the same text. Deleting that head can expose its predecessors
+again through the supersession deletion contract. Use a hard delete on every retained
+copy when removing the text from the store; backups remain a separate responsibility.

@@ -173,13 +173,15 @@ happens when a decision changes, and what can fade over time.
 
 ### What gets in
 
-A write passes a local novelty check (the implementation calls it a predictive-coding gate) against
-what is already stored. Exact content replays in the same source and visibility scope are
-refused with `reason: "exact_duplicate"` and the existing memory id, including automatic
-capture and forced writes. A content hash selects candidates; exact text equality confirms
-the match. State replicas retain their path identity. Consolidation supersedes
-existing exact duplicates while preserving their rows.
-Near-duplicate curation depends on the configured similarity gate; deliberate writes bypass
+The `remember` handler and automatic capture check for exact replays after hardening
+and redaction. Matching domain, directory, agent topic, source, write class, capture origin,
+and global/team flags produce `reason: "exact_duplicate"` with the existing memory id.
+Forced writes retain this check; explicit `supersedes_id` corrections retain their atomic
+supersession path. Benchmark rows are isolated, and `memory-replica` block replicas keep
+their path identity. Direct store inserts do not use this handler check.
+Consolidation supersedes existing exact duplicates within that scope and preserves their rows
+and protection flags. This differs from the optional normalized-text maintenance pass.
+Near-duplicate curation uses the thresholds in `core/curation.py`; deliberate writes bypass
 the novelty threshold and can be stored separately when curation does not merge them.
 
 ```js
@@ -188,7 +190,7 @@ remember({ content: "Keep session state in Redis so TTL expiry is handled consis
 // → { stored: true, action: "stored" }
 ```
 
-Deliberate writes are never rejected for being unsurprising. Unattended capture is, which is
+Deliberate writes can be refused as exact replays; novelty alone does not reject them. Unattended capture is, which is
 what keeps automatic capture from burying the memories you meant to keep.
 
 ### Whether it can be checked

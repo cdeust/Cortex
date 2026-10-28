@@ -1,8 +1,9 @@
-"""Exact UTF-8 content identity, compatible with PostgreSQL md5(text).
+"""Exact UTF-8 candidate hashing for SQLite lookups.
 
 The digest selects candidates; byte equality remains mandatory because MD5
 is not collision resistant. This is an index key, never a security primitive.
-source: https://www.postgresql.org/docs/current/functions-binarystring.html
+PostgreSQL hashes both operands on the server, so server encoding is not assumed.
+source: https://www.postgresql.org/docs/current/functions-string.html
 """
 
 from __future__ import annotations

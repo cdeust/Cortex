@@ -16,6 +16,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Exact remember replays return the existing id within the same write scope;
+  explicit corrections still post supersession edges. Consolidation retains
+  and supersedes legacy copies, preserves protection flags, and excludes
+  benchmark rows and block replicas (#707). SQLite indexing permits raw writers.
+
 - Owner @claude mentions inherit the official action's tag-mode workspace edit
   approval instead of overriding it with auto mode (#822). Requests on the same
   thread run one at a time with up to 100 pending requests retained; automatic

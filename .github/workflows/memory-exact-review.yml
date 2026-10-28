@@ -1,0 +1,81 @@
+# source: PR #827 hosted unit job 122814815963; ci.json and scripts/ci_unit.sh.
+name: Exact replay regression evidence
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "mcp_server/infrastructure/memory_exact.py"
+      - "tests_py/handlers/test_issue_707*"
+      - ".github/workflows/memory-exact-review.yml"
+permissions:
+  contents: read
+jobs:
+  before-and-after:
+    runs-on: ubuntu-latest
+    env:
+      CORTEX_RERANKER_OFFLINE: "1"
+      BEFORE_SHA: 53261c9e21c15f02df8d6273283ca3881270442f
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Create the unit environment
+        run: python -m venv .venv
+      - name: Install the locked test environment
+        uses: ./.github/actions/uv-locked-install
+        with:
+          environment: ${{ github.workspace }}/.venv
+          set: --extra dev --extra sqlite --extra codebase --extra postgresql --group lint
+      - name: Check final Python sources
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          git diff --name-only origin/main...HEAD -- '*.py' | xargs uv run --no-sync ruff check
+          git diff --name-only origin/main...HEAD -- '*.py' | xargs uv run --no-sync ruff format --check
+          uv run --no-sync python scripts/check_craftsmanship.py --base origin/main
+          uv run --no-sync python scripts/check_project_wiki.py
+      - name: Reproduce old failures and measure the old collapse
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          export UV_PROJECT_ENVIRONMENT="$GITHUB_WORKSPACE/.venv"
+          baseline="$RUNNER_TEMP/issue-707-before"
+          git worktree add --detach "$baseline" "$BEFORE_SHA"
+          cp tests_py/handlers/test_issue_707_benchmark.py "$baseline/tests_py/handlers/"
+          cd "$baseline"
+          set +e
+          uv run --no-sync bash scripts/ci_unit.sh tests_py/handlers/test_memory_portability.py tests_py/handlers/test_remember_supersede.py tests_py/handlers/test_issue_707_benchmark.py -s --junitxml="$RUNNER_TEMP/before.xml"
+          status=$?
+          set -e
+          test "$status" -eq 1
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          root = ET.parse(Path(os.environ["RUNNER_TEMP"]) / "before.xml")
+          failures = [
+              case.attrib["name"] for case in root.findall(".//testcase")
+              if case.find("failure") is not None
+          ]
+          assert len(failures) == 2, failures
+          assert any("test_a_secret_stored_before_the_gate" in name for name in failures)
+          assert any("test_human_edit_never_lost_forced_duplicate" in name for name in failures)
+          assert not root.findall(".//error")
+          print("BEFORE: both known regressions reproduced; benchmark measurements above.")
+          PY
+      - name: Verify the final head and measure its collapse
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          uv run --no-sync bash scripts/ci_unit.sh tests_py/handlers/test_memory_portability.py tests_py/handlers/test_remember_supersede.py tests_py/handlers/test_issue_707_exact_duplicates.py tests_py/handlers/test_issue_707_review_regressions.py tests_py/handlers/test_issue_707_benchmark.py -s --junitxml="$RUNNER_TEMP/after.xml"
+      - name: Preserve hosted receipts
+        if: always()
+        run: |
+          for report in "$RUNNER_TEMP/before.xml" "$RUNNER_TEMP/after.xml"; do
+            if [ -f "$report" ]; then
+              cat "$report"
+            fi
+          done

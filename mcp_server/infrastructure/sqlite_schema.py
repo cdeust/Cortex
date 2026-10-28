@@ -79,6 +79,26 @@ CREATE VIEW IF NOT EXISTS current_memories AS
     SELECT * FROM memories WHERE superseded_by_id IS NULL
 """
 
+# source: ADR-9852 -- mirrors pg_schema.py's ON DELETE SET NULL links.
+SUPERSESSION_DELETE_TRIGGER_DDL = """
+CREATE TRIGGER IF NOT EXISTS trg_memories_supersession_delete
+AFTER DELETE ON memories
+BEGIN
+    UPDATE memories SET superseded_by_id = NULL WHERE superseded_by_id = OLD.id;
+    UPDATE memories SET supersedes_id = NULL WHERE supersedes_id = OLD.id;
+END
+"""
+
+# source: ADR-9852 -- repair missing targets while preserving valid chain edges.
+SUPERSESSION_REPAIRS: tuple[str, ...] = (
+    "UPDATE memories SET superseded_by_id = NULL "
+    "WHERE superseded_by_id IS NOT NULL AND NOT EXISTS "
+    "(SELECT 1 FROM memories AS target WHERE target.id = memories.superseded_by_id)",
+    "UPDATE memories SET supersedes_id = NULL "
+    "WHERE supersedes_id IS NOT NULL AND NOT EXISTS "
+    "(SELECT 1 FROM memories AS target WHERE target.id = memories.supersedes_id)",
+)
+
 HOMEOSTATIC_STATE_DDL = """
 -- source: ADR-0602
 CREATE TABLE IF NOT EXISTS homeostatic_state (
@@ -336,9 +356,15 @@ INDEXES_DDL: list[str] = [
 # Indexes over columns that MIGRATIONS adds (is_global, superseded_by_id):
 # created after the migrations, without a catch, so a failure is loud.
 POST_MIGRATION_INDEXES_DDL: list[str] = [
-    # source: issue #707 -- hash candidates still require exact content equality.
-    "CREATE INDEX IF NOT EXISTS idx_memories_exact_content ON memories "
-    "(md5(content)) WHERE superseded_by_id IS NULL",
+    # source: issue #707 hosted unit job 122814815963: raw writers lack md5.
+    "DROP INDEX IF EXISTS idx_memories_exact_content",
+    "CREATE INDEX IF NOT EXISTS idx_memories_exact_text ON memories "
+    "(content) WHERE superseded_by_id IS NULL",
+    # source: ADR-9852 — delete-trigger lookups match PostgreSQL chain indexes.
+    "CREATE INDEX IF NOT EXISTS idx_memories_superseded_by ON memories "
+    "(superseded_by_id) WHERE superseded_by_id IS NOT NULL",
+    "CREATE INDEX IF NOT EXISTS idx_memories_supersedes ON memories "
+    "(supersedes_id) WHERE supersedes_id IS NOT NULL",
     # source: ADR-1109 -- a tie group past the recall pool is counted per
     # (capture_origin, agent_context) pair and filled with one ordered seek
     # per pair from these covering indexes: the group's equality column,

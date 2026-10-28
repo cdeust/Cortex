@@ -48,7 +48,8 @@ from mcp_server.infrastructure.memory_config import (
 )
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.profile_store import load_profiles
-from mcp_server.infrastructure.memory_exact import find_exact, duplicate_response
+from mcp_server.infrastructure.memory_exact import find_exact
+from mcp_server.handlers.remember_response import duplicate_response
 from mcp_server.shared.domain_mapping import resolve_cwd, resolve_domain as resolve_hint
 from mcp_server.shared.wiki_page_candidate import PageCandidate
 from mcp_server.shared.content_hardening import harden_content
@@ -186,7 +187,7 @@ def _exact_record(args: dict[str, Any], request: GateRequest) -> dict[str, Any]:
     return {
         "content": request.content,
         "tags": request.tags,
-        "domain": options.domain,
+        "domain": (options.domain or "").lower().strip(),
         "directory_context": args.get("directory", ""),
         "agent_context": args.get("agent_topic", ""),
         "source": args.get("source", "user"),
@@ -216,9 +217,10 @@ def prepare_write(args: dict[str, Any] | None) -> PreparedWrite | dict:
     if rejection is not None:
         return rejection
     request = _prepare_request(args, store, write_class)
-    duplicate_id = find_exact(store, _exact_record(args, request))
-    if duplicate_id is not None:
-        return duplicate_response(duplicate_id)
+    if supersedes_id is None:
+        duplicate_id = find_exact(store, _exact_record(args, request))
+        if duplicate_id is not None:
+            return duplicate_response(duplicate_id)
     observed = prepare_gate(request, observe_gate)
     if observed is not None:
         rejection = bound_rejection(request, observed)

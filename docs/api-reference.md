@@ -586,3 +586,14 @@ The server uses a typed error hierarchy:
 | `StorageError` | Filesystem/database persistence failures |
 | `AnalysisError` | Core analysis failures |
 | `McpConnectionError` | MCP client connection failures |
+
+
+### Exact replay responses
+
+`remember` returns `{stored: false, action: "rejected", reason: "exact_duplicate",
+memory_id: existing_id}` for an exact replay in the same write scope, including a forced
+write. An explicit `supersedes_id` correction still posts its atomic supersession edge.
+Automatic capture uses the same check. Benchmark rows cannot reject a production write.
+
+`consolidate` reports the number of retained duplicate rows it superseded in
+`exact_duplicates.superseded_total`. A duplicate-free pass takes no table write lock.

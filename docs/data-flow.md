@@ -269,3 +269,17 @@ verification → implementation → HOR* → audit* → push/PR
 ```
 
 Each stage calls the ai-architect MCP server via `mcp_client_pool`, collects findings, and feeds them forward. Cognitive context from the methodology profile is injected into the strategy and PRD stages.
+
+
+### Exact replay identity
+
+Before encoding, `remember` checks hardened, redacted content against current, non-stale,
+non-benchmark memories in the same domain, directory, agent, source, write class, capture
+origin and global/team scope. An exact replay returns `stored: false`,
+`reason: exact_duplicate` and the existing `memory_id`. The insertion transaction repeats
+the lookup under a SQLite write lock or PostgreSQL advisory lock. Explicit supersession
+and path-identified block replicas retain their separate write contracts.
+
+Consolidation reports `exact_duplicates.superseded_total`, preserving duplicate rows and
+protection flags. Benchmark memories and block replicas are excluded. This byte-exact pass
+is separate from the optional normalized-text pass in `memory_dedup_exact_pass.py`.

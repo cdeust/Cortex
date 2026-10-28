@@ -271,7 +271,9 @@ def _file_args(root: Path, rel_path: str, analysis: Any, domain: str) -> dict:
 
 def _finish_file(store: MemoryStore, analysis: Any, result: dict, domain: str) -> tuple:
     memory_id = result.get("memory_id")
-    if not result.get("stored") or not memory_id:
+    if not memory_id or (
+        not result.get("stored") and result.get("reason") != "exact_duplicate"
+    ):
         return None, 0, 0
     _set_memory_metadata(store, memory_id)
     ents, rels = persist_entities(store, analysis, memory_id, domain or "code")
