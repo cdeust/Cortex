@@ -8,6 +8,7 @@ on:
       - "benchmarks/auto_recall_scores.py"
       - "benchmarks/fixtures/auto_recall_paraphrases.json"
       - "tests_py/handlers/test_recall_low_signal_filter.py"
+      - "tests_py/handlers/test_inject_triggered_memories.py"
       - "tests_py/hooks/test_auto_recall*.py"
       - "tests_py/hooks/test_sqlite_hook_*.py"
       - ".github/workflows/auto-recall-parity.yml"
@@ -57,7 +58,7 @@ jobs:
         env:
           CORTEX_RERANKER_OFFLINE: "1"
         run: |
-          uv run --no-sync pytest --tb=short -q -p no:randomly tests_py/handlers/test_recall_low_signal_filter.py tests_py/handlers/test_inject_triggered_memories.py tests_py/hooks/test_auto_recall_paraphrase.py tests_py/hooks/test_auto_recall_review.py tests_py/hooks/test_auto_recall_pg_query.py tests_py/hooks/test_sqlite_hook_scope.py tests_py/hooks/test_sqlite_hook_paths.py
+          uv run --no-sync pytest --tb=short -q -p no:randomly tests_py/handlers/test_recall_low_signal_filter.py tests_py/handlers/test_inject_triggered_memories.py tests_py/hooks/test_auto_recall_paraphrase.py tests_py/hooks/test_auto_recall_review.py tests_py/hooks/test_auto_recall_trust.py tests_py/hooks/test_auto_recall_pg_query.py tests_py/hooks/test_sqlite_hook_scope.py tests_py/hooks/test_sqlite_hook_paths.py
       - name: Measure prior hook and tool gap
         run: |
           uv run --no-sync python benchmarks/auto_recall_parity.py --codebase "$RUNNER_TEMP/recall-before" --report "$RUNNER_TEMP/recall-before.json" --expect-gap

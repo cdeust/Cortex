@@ -42,6 +42,7 @@ import sys
 from datetime import datetime, timezone
 from typing import Any
 
+from mcp_server.infrastructure.hook_capture_filter import HOOK_CAPTURE_FILTER
 from mcp_server.hooks.auto_recall_ranking import candidate_limit, rank_memories
 from mcp_server.hooks.output_streams import use_utf8_output
 from mcp_server.hooks.stdin_event import read_event_text
@@ -67,6 +68,8 @@ _MAX_INJECTION_CHARS = 800  # Keep compact — don't flood context
 # source: ADR-0485
 _MIN_FTS_TERM_CHARS = 2
 _MAX_MEMORY_CHARS = 200
+# source: pre-fix ADR-0485 hook lexical discovery bound, restored in PR #826.
+_MAX_LEXICAL_QUERY_CHARS = 200
 
 # Skip recall for meta/system messages
 _SKIP_PATTERNS = re.compile(
@@ -142,7 +145,7 @@ def _recall_memories(conn, query: str, project_root: str | None = None) -> list[
         rows = conn.execute(
             (
                 # source: ADR-0485
-                """
+                f"""
             SELECT m.id, m.content,
                    effective_heat(m, NOW()) AS heat,
                    m.domain, m.agent_context, m.is_protected,
@@ -155,9 +158,7 @@ def _recall_memories(conn, query: str, project_root: str | None = None) -> list[
             WHERE m.content_tsv @@ q
               AND effective_heat(m, NOW()) >= %s
               AND NOT m.is_stale
-              AND (m.capture_origin = 'deliberate' OR
-                   (COALESCE(m.capture_origin, '') NOT IN ('local_action', 'network')
-                    AND COALESCE(m.source, '') <> 'post_tool_capture'))
+              AND {HOOK_CAPTURE_FILTER}
               AND NOT m.is_benchmark
               AND m.superseded_by_id IS NULL
               AND (m.is_global = TRUE OR m.directory_context = ANY(%s::TEXT[]))
@@ -165,9 +166,12 @@ def _recall_memories(conn, query: str, project_root: str | None = None) -> list[
             ORDER BY m.is_protected DESC, rank DESC, effective_heat(m, NOW()) DESC,
                      m.created_at DESC, m.id DESC
             LIMIT %s
-            """
+            """  # noqa: S608 -- internal origin enums; all user values are bound
             ),
-            (query[:200], _MIN_HEAT, ancestors, candidate_limit(_MAX_MEMORIES)),
+            (
+                query[:_MAX_LEXICAL_QUERY_CHARS], _MIN_HEAT,
+                ancestors, candidate_limit(_MAX_MEMORIES),
+            ),
         ).fetchall()
 
         results = [_sqlite_result_entry(r["id"], r, r.get("heat", 0)) for r in rows]
@@ -182,19 +186,17 @@ def _recall_memories(conn, query: str, project_root: str | None = None) -> list[
 def _pg_hot_candidates(conn, ancestors: list[str]) -> list[dict]:
     """Scoped discovery without lexical overlap; predicates precede LIMIT."""
     rows = conn.execute(
-        """
+        f"""
         SELECT m.id, m.content, m.domain, m.agent_context, m.is_protected,
                m.created_at, m.source_attribution, m.is_stale,
                m.capture_origin, m.source, effective_heat(m, NOW()) AS heat
         FROM memories m JOIN current_memories cm ON cm.id = m.id
         WHERE effective_heat(m, NOW()) >= %s AND NOT m.is_benchmark
-          AND (m.capture_origin = 'deliberate' OR
-               (COALESCE(m.capture_origin, '') NOT IN ('local_action', 'network')
-                AND COALESCE(m.source, '') <> 'post_tool_capture'))
+          AND {HOOK_CAPTURE_FILTER}
           AND NOT m.is_stale
           AND (m.is_global = TRUE OR m.directory_context = ANY(%s::TEXT[]))
         ORDER BY heat DESC, m.created_at DESC, m.id DESC LIMIT %s
-        """,
+        """,  # noqa: S608 -- internal origin enums; all user values are bound
         (_MIN_HEAT, ancestors, candidate_limit(_MAX_MEMORIES)),
     ).fetchall()
     return [_sqlite_result_entry(m["id"], m, m["heat"]) for m in rows]
@@ -252,7 +254,7 @@ def _recall_memories_sqlite(
     Store predicates exclude captures, stale rows and benchmarks before LIMIT.
     Model failures retain protected-first lexical behavior (issue #706).
     """
-    fts_query = _fts_query_from_prompt(query)
+    fts_query = _fts_query_from_prompt(query[:_MAX_LEXICAL_QUERY_CHARS])
     if not fts_query:
         return []
     ancestors = project_ancestors(project_root)

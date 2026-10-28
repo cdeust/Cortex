@@ -293,7 +293,7 @@ def _trigger_result(mid: int, mem: dict) -> dict:
         "score": 0.9,
         "injected": True,
         "source": mem.get("source", ""),
-        "capture_origin": mem.get("capture_origin", "legacy"),
+        "capture_origin": mem.get("capture_origin") or "unknown",
         "heat": mem.get("heat", 1.0),
         "domain": mem.get("domain", ""),
         "tags": parse_tags(mem.get("tags", [])),

@@ -1,10 +1,25 @@
-"""SQL counterpart of recall_helpers._is_system_capture (issue #706).
+"""Automatic injection permits trusted, non-capture provenance only.
 
 Only internal SQL fragments are exposed; user values remain bound parameters.
-An explicit deliberate origin overrides the legacy system source marker.
+Default tool recall has a separate visibility policy: unknown memories remain
+available to explicit recall, but cannot silently become automatic context.
 """
 
-# source: issue #706, ADR-0114; same provenance rule as default recall.
-HOOK_CAPTURE_FILTER = """(m.capture_origin = 'deliberate' OR
-    (COALESCE(m.capture_origin, '') NOT IN ('local_action', 'network')
-     AND COALESCE(m.source, '') <> 'post_tool_capture'))"""
+from mcp_server.core.capture_origin import (
+    ORIGIN_DELIBERATE,
+    ORIGIN_LOCAL_ACTION,
+    trusted_origins_at_read,
+)
+
+# source: ADR-0114 read-trust allowlist and issue #706 capture exclusion.
+# These values are repository-owned origin enums, never caller-provided SQL.
+_HOOK_ORIGINS = tuple(
+    origin for origin in trusted_origins_at_read()
+    if origin != ORIGIN_LOCAL_ACTION
+)
+_ORIGIN_SQL = ", ".join(repr(origin) for origin in _HOOK_ORIGINS)
+HOOK_CAPTURE_FILTER = (
+    f"(m.capture_origin = '{ORIGIN_DELIBERATE}' OR "
+    f"(m.capture_origin IN ({_ORIGIN_SQL}) "
+    "AND COALESCE(m.source, '') <> 'post_tool_capture'))"
+)

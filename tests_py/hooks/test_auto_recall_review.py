@@ -29,7 +29,9 @@ def seed(store, **values):
     )
 
 
-@pytest.mark.parametrize("noise", ["network", "local_action", "legacy", "stale"])
+@pytest.mark.parametrize(
+    "noise", ["network", "local_action", "legacy", "unknown", "future", "stale"]
+)
 def test_ineligible_rows_do_not_spend_either_pool_limit(store, noise):
     target = seed(store)
     # source: candidate_limit(_MAX_MEMORIES) + one row crosses the real pool cap.

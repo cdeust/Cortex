@@ -12,7 +12,9 @@ header and every record, and fails the whole file on the first violation
   exported with ``include_global`` may come from another directory;
 - each record is then moved to the target root, and the flags that change
   how a memory is shared or kept (``is_global``, ``is_protected``,
-  ``is_team_decision``) are turned off unless the caller trusts them.
+  ``is_team_decision``) are turned off unless the caller trusts them;
+- capture provenance is reset to unknown unless the caller explicitly trusts
+  the exported metadata.
 
 source: ADR-1113 (review of PR #775, B2)"""
 
@@ -23,6 +25,8 @@ import os
 import posixpath
 from datetime import datetime
 from typing import Any
+
+from mcp_server.core.capture_origin import ORIGIN_UNKNOWN
 
 # source: ADR-1113 — the exported types of EXPORT_FIELDS
 _TEXT = (
@@ -123,5 +127,9 @@ def checked_records(
         data["directory_context"] = target.rstrip("/") + relative or "/"
         for flag in _FLAGS:
             data[flag] = bool(record.get(flag)) and trust_flags
+        # source: ADR-0114 and PR #826 security review: export metadata is
+        # caller-controlled; only an explicit trust opt-in preserves origin.
+        if not trust_flags:
+            data["capture_origin"] = ORIGIN_UNKNOWN
         out.append(data)
     return out

@@ -159,3 +159,32 @@ The positive/negative parity assertions and the existing abstention policy
 remain unchanged. The next hosted run must finish raw-score measurement before
 a calibrated policy can be selected. The earlier 2-versus-28 retrieval failure
 is unresolved; syntax and structural text checks do not establish parity.
+
+
+## PR 826 trust correction after 6245dff
+
+Hosted [run 40701184713](https://github.com/cdeust/Cortex/actions/runs/40701184713)
+completed the model preflight and measured 2 hook hits against 28 tool hits.
+Artifact 12821218436 preserves the raw scores. The correct bread-culture
+passage scores 0.000015304052794817835, below the unrelated kaon control's
+highest score, 0.000017647756976657547. A lower absolute per-passage cutoff
+alone cannot retain that positive and reject that negative. The current
+injection policy and the positive/negative parity gates remain unchanged;
+the retrieval-quality failure is unresolved.
+
+The automatic hook now builds its origin predicate once from ADR-0114's
+read-trust allowlist, excluding local tool captures. Explicit deliberate
+origin still overrides the historical post_tool_capture source marker.
+Unknown, null, empty and future origins cannot enter either backend's
+automatic lexical or hot pool. This is deliberately stricter than explicit
+tool recall's visibility policy, which continues to expose unknown memories.
+
+Untrusted imports now become unknown-origin records unless trust_flags is
+explicitly enabled. Trigger result projection also labels absent provenance
+unknown instead of inventing legacy trust. Both backend lexical searches use
+the original 200-character bound, while semantic ranking receives the full
+prompt. The hosted trust tests cover the origin/source matrix, both PG SQL
+predicates, SQLite prompt bounding and imported provenance.
+
+These changes address trust and fallback defects; they do not establish
+paraphrase parity. All executable verification remains on hosted CI.
