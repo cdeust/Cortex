@@ -114,6 +114,16 @@ class NativeClaudeTrustTests(unittest.TestCase):
             for step in review["steps"]
             if "claude-code-action@" in step.get("uses", "")
         )
+        self.assertEqual(
+            set(invocation["with"]),
+            {
+                "claude_code_oauth_token",
+                "track_progress",
+                "allowed_bots",
+                "prompt",
+                "claude_args",
+            },
+        )
         args = shlex.split(invocation["with"]["claude_args"])
         self.assertEqual(
             args,
