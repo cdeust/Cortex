@@ -64,6 +64,8 @@ def runtime_arguments(options, root):
         str(root / "state.json"),
         "--brief",
         str(root / "codex-worker.md"),
+        "--interval",
+        str(options.interval),
         "--status-comments",
     ]
 

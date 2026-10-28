@@ -9,30 +9,65 @@ EXPECTED_PR; Python -I ignores PYTHON* variables and the user site.
 import json
 import os
 from pathlib import Path
+import signal
 import subprocess
 import sys
 
+# source: existing launchd StartInterval=60, verified 2026-10-28; operational default.
+DEFAULT_INTERVAL = 60
+
+
+def child_command(options, item):
+    return [
+        sys.executable,
+        "-I",
+        "-B",
+        str(Path(__file__).resolve()),
+        "--repo",
+        options.repository,
+        "--pr",
+        str(item["number"]),
+        "--sha",
+        item["sha"],
+    ]
+
+
+def close_child_pipes(child):
+    child.stdout.close()
+    child.stderr.close()
+
+
+def stop_child_group(child, budget):
+    # Popen creates this private session; never signal the caller's process group.
+    try:
+        os.killpg(child.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    close_child_pipes(child)
+    child.wait(timeout=budget)
+
 
 def invoke_child(options, item):
-    return subprocess.run(
-        [
-            sys.executable,
-            "-I",
-            "-B",
-            str(Path(__file__).resolve()),
-            "--repo",
-            options.repository,
-            "--pr",
-            str(item["number"]),
-            "--sha",
-            item["sha"],
-        ],
+    budget = getattr(options, "interval", DEFAULT_INTERVAL)
+    if type(budget) is not int or budget <= 0:
+        raise ValueError("Helper interval must be a positive integer")
+    child = subprocess.Popen(
+        child_command(options, item),
         cwd=options.repo,
         env={**os.environ, "EXPECTED_PR": str(item["number"])},
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
-        check=False,
+        start_new_session=True,
     )
+    try:
+        output, error = child.communicate(timeout=budget)
+    except BaseException:
+        stop_child_group(child, budget)
+        raise
+    else:
+        close_child_pipes(child)
+    return subprocess.CompletedProcess(child.args, child.returncode, output, error)
 
 
 def helper_failure(category, exit_code=None):
@@ -56,12 +91,14 @@ def decode_result(output):
         None,
         "evidence_unverifiable",
         "review_infrastructure",
+        "merge_infrastructure",
     ):
         return helper_failure("protocol")
     if (
         result.get("reason") == "evidence_unverifiable" and result["action"] != "none"
     ) or (
-        result.get("reason") == "review_infrastructure" and result["action"] != "repair"
+        result.get("reason") in ("review_infrastructure", "merge_infrastructure")
+        and result["action"] != "repair"
     ):
         return helper_failure("protocol")
     if ("category" in result or result.get("reason") == "evidence_unverifiable") and (
@@ -74,6 +111,9 @@ def decode_result(output):
 def reconcile(options, item):
     try:
         done = invoke_child(options, item)
+    except subprocess.TimeoutExpired as exc:
+        result = helper_failure("environment")
+        result["timeout_seconds"] = exc.timeout
     except OSError:
         result = helper_failure("environment")
     else:
@@ -97,10 +137,12 @@ def diagnostic(options, item, result):
             f"autopilot review: {category} evidence unavailable {target}",
             file=sys.stderr,
         )
-    elif reason == "review_infrastructure":
+    elif reason in ("review_infrastructure", "merge_infrastructure"):
         print(f"autopilot review: infrastructure repair {target}", file=sys.stderr)
     elif reason == "helper_failure":
         code = f" exit_code={result['exit_code']}" if "exit_code" in result else ""
+        if "timeout_seconds" in result:
+            code += f" timeout_seconds={result['timeout_seconds']}"
         print(
             f"autopilot review: helper_failure {result['category']}{code} {target}",
             file=sys.stderr,
@@ -150,31 +192,38 @@ def check(args, event, reader):
 def infrastructure_failure(indexed, policy):
     if indexed is None or not policy._repair_dependencies(indexed):
         return False
-    review = indexed.get("review", {})
+    if not all(policy._success(indexed.get(name, {})) for name in policy.PREREQUISITES):
+        return False
+    if not all(
+        policy._success(job) or job.get("conclusion") == "skipped"
+        for name, job in indexed.items()
+        if name not in ("review", "merge")
+    ):
+        return False
+    review, merge = indexed.get("review", {}), indexed.get("merge", {})
     return (
         review.get("conclusion") == "failure"
         and not policy._waited(review, policy.READINESS)
-        and all(policy._success(indexed.get(name, {})) for name in policy.PREREQUISITES)
-        and all(
-            policy._success(job) or job.get("conclusion") == "skipped"
-            for name, job in indexed.items()
-            if name not in ("review", "merge")
-        )
+    ) or (
+        policy._success(review)
+        and merge.get("conclusion") == "failure"
+        and not policy._waited(merge, policy.MERGE)
     )
 
 
 def repair_after_noop(args, event, reader, proof):
-    # -I's entry point binds the trusted sibling directory before this import.
+    # main() explicitly inserts the reviewed sibling directory before this import.
     import ci_codex_review_resume as policy  # noqa: PLC0415
 
     run = event.source.latest(args.repo, args.sha, args.pr)
     if run is None:
         return {"action": "none"}
     jobs = event._jobs(args.repo, run)
+    indexed = policy._index(jobs)
     if (
         not policy._complete_inputs(run, jobs, proof, args.sha)
         or event._plan(run, jobs, proof, args.sha)["action"] != "none"
-        or not infrastructure_failure(policy._index(jobs), policy)
+        or not infrastructure_failure(indexed, policy)
     ):
         return {"action": "none"}
     current = event.source.latest(args.repo, args.sha, args.pr)
@@ -185,7 +234,12 @@ def repair_after_noop(args, event, reader, proof):
         or reader._fetch(args) != proof
     ):
         return {"action": "none"}
-    return {"action": "repair", "reason": "review_infrastructure"}
+    reason = (
+        "merge_infrastructure"
+        if policy._success(indexed["review"])
+        else "review_infrastructure"
+    )
+    return {"action": "repair", "reason": reason}
 
 
 def main():

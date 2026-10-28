@@ -6,15 +6,16 @@ Follow-up review: https://github.com/cdeust/Cortex/pull/816#issuecomment-6459888
 
 ## Collection failure
 
-The earlier standard-library unittest run did not reproduce the CI import mode.
-Actual pytest with --import-mode=importlib reproduced four collection errors:
+The earlier standard-library unittest run did not establish pytest collection.
+An explicit additional pytest --import-mode=importlib stress probe reproduced
+four collection errors:
 issue editors/pages/titles imported test_ci_autopilot_issues as a bare peer, and
 review reconciliation imported test_ci_autopilot as a bare peer. The nested
 rename-fixture import had the same defect. All five now use tests_py.scripts.*.
 No test-directory sys.path workaround was introduced.
 
-The read-only existing toolchain was Python 3.13.7 with pytest 9.1.1. Reproduction
-and final command, run from the registered PR worktree:
+The read-only existing toolchain was Python 3.13.7 with pytest 9.1.1. The command
+below was an additional importlib probe, not the configured CI import mode:
 
 ```sh
 /Users/cdeust/Developments/anthropic-partnership/Cortex/.venv/bin/python -B -m pytest --import-mode=importlib --noconftest -o addopts='' -p no:cacheprovider tests_py/scripts/test_ci_*.py -q --tb=short
@@ -25,6 +26,12 @@ The four original modules failed collection before the fix. After all changes,
 also passed all 304 tests in 8.12 seconds. The focused autopilot pytest suite
 passed 77 tests and 51 subtests. --noconftest avoids production database setup;
 this is the CI-script subset, not the full Cortex application suite.
+
+Configuration verification during the later merge/timeout follow-up found
+pytest importmode=prepend, empty project addopts and no --import-mode in ci.json.
+The fully qualified imports are checked under both the configured default and
+the explicit extra importlib probe. The earlier wording must not be read as a
+claim that hosted CI selects importlib.
 
 ## Per-PR failures
 

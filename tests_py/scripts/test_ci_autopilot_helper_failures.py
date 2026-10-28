@@ -50,7 +50,7 @@ class HelperFailures(unittest.TestCase):
         with (
             patch.object(runtime, "snapshot", return_value=items),
             patch.object(runtime, "workers", return_value=workers),
-            patch.object(helper.subprocess, "run", side_effect=process),
+            patch.object(helper, "invoke_child", side_effect=process),
             patch.object(
                 runtime, "launch", return_value={"state": "started"}
             ) as launch,

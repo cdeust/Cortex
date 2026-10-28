@@ -119,9 +119,10 @@ avoids a race between the local dispatcher and GitHub's per-PR concurrency group
 Missing, running, failed or invalid review proof remains a wait; genuine current
 unresolved findings can enter the existing serialized repair path. When proof is
 clean, the helper reads the trusted latest run and effective attempt jobs. A
-ready native gate waits for the GitHub workflow. Only a completed review job's
-non-readiness failure, with all test prerequisites green and no unrelated
-failures, can request infrastructure repair. It reuses the native policy's
+ready native gate waits for the GitHub workflow. A completed review job's
+non-readiness failure, or a completed merge job's non-readiness failure after
+a successful review, can request infrastructure repair. Both require green
+test prerequisites and no unrelated failures. It reuses the native policy's
 readiness predicate and rechecks the run, head and proof before doing so. A
 waiting PR does not block other actionable work. Unchanged repair snapshots cannot
 start another worker. Completed review waits are revisited because resolving a
@@ -138,6 +139,16 @@ remain separate operations. This service configuration still handles one
 repository and one durable active dispatch; it does not create parallel workers
 for the other repositories. Keep the existing control worktree and user-retained
 terminals when reconciling an accepted completion.
+
+The installer passes its polling interval both as launchd StartInterval and as
+the dispatcher's --interval. Values must be positive integers. The optional CLI
+flag defaults to the existing 60-second service interval, preserving earlier
+--inspect commands. Each helper runs in its own POSIX session. Its nominal
+communication budget is one configured interval; on failure or timeout only
+that owned group is terminated, its pipes are closed and its leader wait is
+bounded separately by one interval. This is not a guarantee of 60 seconds total:
+exceptional cleanup has its own bounded budget. Other user sessions are not
+signalled, and the installed service is not altered by source validation.
 
 Primary field verification: a read-only GitHub GraphQL query on 2026-10-28
 returned cdeust/Cortex issue683's owner and author as User

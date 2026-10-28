@@ -10,6 +10,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 import install_ci_autopilot as installer  # noqa: E402
+from ci_autopilot_review import DEFAULT_INTERVAL  # noqa: E402
 
 
 class InstallerTests(unittest.TestCase):
@@ -22,7 +23,7 @@ class InstallerTests(unittest.TestCase):
                 runtime=root / "runtime",
                 repo=root,
                 control=root,
-                interval=60,
+                interval=DEFAULT_INTERVAL + 1,
                 enable=False,
                 coordinator_terminal="term_fixture",
             )
@@ -39,6 +40,11 @@ class InstallerTests(unittest.TestCase):
             )
             self.assertEqual(
                 config["EnvironmentVariables"]["ORCA_TERMINAL_HANDLE"], "term_fixture"
+            )
+            argv = config["ProgramArguments"]
+            self.assertEqual(config["StartInterval"], options.interval)
+            self.assertEqual(
+                argv[argv.index("--interval") + 1], str(config["StartInterval"])
             )
 
     def test_copy_installs_hash_verified_native_reader_dependency_closure(self):

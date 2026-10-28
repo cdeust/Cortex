@@ -73,7 +73,7 @@ class Diagnostics(unittest.TestCase):
         options = SimpleNamespace(repository="cdeust/Cortex", repo=Path.cwd())
         diagnostic = io.StringIO()
         with (
-            patch.object(helper.subprocess, "run", return_value=done),
+            patch.object(helper, "invoke_child", return_value=done),
             patch("sys.stderr", diagnostic),
         ):
             self.assertEqual(

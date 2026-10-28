@@ -80,11 +80,16 @@ class ProofDecision(unittest.TestCase):
         before = dict(os.environ)
         options = SimpleNamespace(repository="cdeust/Cortex", repo=Path.cwd())
         item = {"number": 12, "sha": "a" * 40}
-        done = subprocess.CompletedProcess([], 0, json.dumps({"action": "none"}), "")
-        with patch("ci_autopilot_review.subprocess.run", return_value=done) as run:
+        done = Mock(returncode=0)
+        done.communicate.return_value = (json.dumps({"action": "none"}), "")
+        with patch("ci_autopilot_review.subprocess.Popen", return_value=done) as run:
             self.assertEqual(reconcile(options, item), {"action": "none"})
         self.assertEqual(run.call_args.kwargs["env"]["EXPECTED_PR"], "12")
         self.assertIn("-I", run.call_args.args[0])
+        self.assertTrue(run.call_args.kwargs["start_new_session"])
+        done.communicate.assert_called_once_with(
+            timeout=60
+        )  # source: existing daemon interval.
         self.assertEqual(dict(os.environ), before)
 
     def unverifiable_output(self):
@@ -137,7 +142,7 @@ class ProofDecision(unittest.TestCase):
         done = subprocess.CompletedProcess([], 0, output, "")
         with (
             patch.object(runtime, "snapshot", return_value=[wait, issue]),
-            patch.object(helper.subprocess, "run", return_value=done),
+            patch.object(helper, "invoke_child", return_value=done),
             patch.object(
                 runtime, "launch", return_value={"state": "started"}
             ) as launch,
