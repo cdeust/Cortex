@@ -15,7 +15,6 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ci_codex_review_event as events  # noqa: E402
-from ci_codex_review_resume import PREREQUISITES, _success  # noqa: E402
 from ci_codex_reviews import EvidenceError, REPO_PATTERN, SHA_PATTERN  # noqa: E402
 
 
@@ -24,57 +23,154 @@ def _diagnostic(number, category):
     print(f"codex reconcile: pr={identity} {category}", file=sys.stderr)
 
 
-def _rows(pages):
-    if (
-        not isinstance(pages, list)
-        or not pages
-        or any(not isinstance(page, list) for page in pages)
-    ):
+# source: GitHub GraphQL connections allow at most 100 nodes per page.
+# https://docs.github.com/en/graphql/guides/using-pagination-in-the-graphql-api
+DISCOVERY_QUERY = """
+query($owner: String!, $name: String!, $endCursor: String) {
+  repository(owner:$owner, name:$name) {
+    nameWithOwner
+    pullRequests(first:100, after:$endCursor, states:OPEN) {
+      pageInfo { hasNextPage endCursor }
+      nodes {
+        number title isDraft isCrossRepository headRefOid
+        headRepository { nameWithOwner }
+        labels(first:100) { nodes { name } }
+        commits(last:1) { nodes { commit {
+          oid statusCheckRollup { contexts(first:100) {
+            pageInfo { hasNextPage }
+            nodes {
+              __typename
+              ... on CheckRun { name status conclusion }
+              ... on StatusContext { context state }
+            }
+          } }
+        } } }
+      }
+    }
+  }
+}
+"""
+
+
+def _page_nodes(page, repo, expected_more, cursors):
+    try:
+        repository = page["data"]["repository"]
+        connection = repository["pullRequests"]
+        nodes, info = connection["nodes"], connection["pageInfo"]
+        more = info["hasNextPage"]
+        cursor = info["endCursor"]
+        valid = (
+            not page.get("errors")
+            and repository["nameWithOwner"].casefold() == repo.casefold()
+            and isinstance(nodes, list)
+            and type(more) is bool
+            and more == expected_more
+        )
+        if more:
+            valid = (
+                valid
+                and isinstance(cursor, str)
+                and bool(cursor)
+                and cursor not in cursors
+            )
+            cursors.add(cursor)
+        if not valid:
+            raise EvidenceError("protocol")
+    except (KeyError, TypeError, AttributeError) as exc:
+        raise EvidenceError("protocol") from exc
+    return nodes
+
+
+def _rows(pages, repo):
+    if not isinstance(pages, list) or not pages:
         raise EvidenceError("protocol")
-    unique, rejected = {}, set()
-    for row in (item for page in pages for item in page):
-        try:
-            number = events.source.positive(row.get("number"))
-        except (AttributeError, EvidenceError):
-            _diagnostic(None, "protocol")
-            continue
-        if number in unique or number in rejected:
-            unique.pop(number, None)
-            rejected.add(number)
-            _diagnostic(number, "protocol")
-        else:
-            unique[number] = row
+    unique, rejected, cursors = {}, set(), set()
+    for index, page in enumerate(pages):
+        nodes = _page_nodes(page, repo, index < len(pages) - 1, cursors)
+        for row in nodes:
+            try:
+                number = events.source.positive(row.get("number"))
+            except (AttributeError, EvidenceError):
+                _diagnostic(None, "protocol")
+                continue
+            if number in unique or number in rejected:
+                unique.pop(number, None)
+                rejected.add(number)
+                _diagnostic(number, "protocol")
+            else:
+                unique[number] = row
     return unique.values()
+
+
+def _possible_wait(repo, row):
+    # A cheap superset only: the existing full-proof plan remains the authorizer.
+    try:
+        if row["isDraft"] is not False or row["isCrossRepository"] is not False:
+            return False
+        if row["headRepository"]["nameWithOwner"].casefold() != repo.casefold():
+            return False
+        if "do not merge" in row["title"].casefold() or any(
+            item["name"].casefold() in ("hold", "do-not-merge")
+            for item in row["labels"]["nodes"]
+        ):
+            return False
+        commits = row["commits"]["nodes"]
+        if len(commits) != 1 or commits[0]["commit"]["oid"] != row["headRefOid"]:
+            raise EvidenceError("protocol")
+        rollup = commits[0]["commit"]["statusCheckRollup"]
+        return _rollup_wait(rollup)
+    except (KeyError, TypeError, AttributeError) as exc:
+        raise EvidenceError("protocol") from exc
+
+
+def _rollup_wait(rollup):
+    try:
+        if rollup is None:
+            return False
+        contexts = rollup["contexts"]
+        checks = contexts["nodes"]
+        if (
+            not isinstance(checks, list)
+            or type(contexts["pageInfo"]["hasNextPage"]) is not bool
+        ):
+            raise EvidenceError("protocol")
+        indexed = {item.get("name", item.get("context")): item for item in checks}
+        gates = [
+            item
+            for name, item in indexed.items()
+            if name in ("review", "merge", "merge pending review")
+        ]
+        if any(
+            item.get("status")
+            in ("QUEUED", "IN_PROGRESS", "PENDING", "REQUESTED", "WAITING")
+            or item.get("state") in ("PENDING", "EXPECTED")
+            for item in gates
+        ):
+            return False
+        if contexts["pageInfo"]["hasNextPage"]:
+            return True  # A truncated optimization cannot veto a real repair path.
+        if indexed.get("review", {}).get("conclusion") == "FAILURE":
+            return True  # Readiness repair deliberately permits failed test jobs.
+        return indexed.get("merge", {}).get("conclusion") == "FAILURE" or (
+            "merge" not in indexed
+            and indexed.get("merge pending review", {}).get("conclusion") == "SUCCESS"
+            and indexed.get("review", {}).get("conclusion") == "SUCCESS"
+        )
+    except (KeyError, TypeError, AttributeError) as exc:
+        raise EvidenceError("protocol") from exc
 
 
 def _candidate(repo, row):
     number = events.source.positive(row["number"])
-    if row.get("state") != "open" or row.get("draft") is not False:
+    if not _possible_wait(repo, row):
         return None
-    head = row.get("head")
-    if not isinstance(head, dict):
-        raise EvidenceError("protocol")
-    repository = head.get("repo")
-    if not isinstance(repository, dict) or not isinstance(
-        repository.get("full_name"), str
-    ):
-        return None
-    if repository["full_name"].casefold() != repo.casefold():
-        return None
-    sha = head.get("sha")
+    sha = row.get("headRefOid")
     if not isinstance(sha, str) or SHA_PATTERN.fullmatch(sha) is None:
         raise EvidenceError("protocol")
-    if events.source.live_pr(repo, number, sha) is None:
-        return None
     run = events.source.latest(repo, sha, number)
     if run is None:
         return None
     jobs = events._jobs(repo, run)
-    indexed = {job["name"]: job for job in jobs}
-    if any(job["status"] != "completed" for job in jobs) or not all(
-        _success(indexed.get(name, {})) for name in PREREQUISITES
-    ):
-        return None
     proof = events._proof(repo, number, run, jobs)
     if proof.get("reason") == "api":
         raise EvidenceError("api")
@@ -83,19 +179,20 @@ def _candidate(repo, row):
 
 
 def discover(repo):
-    # per_page=100 is the documented REST maximum; gh follows every Link page.
+    owner, name = repo.split("/")
     pages = events.source._api(
-        f"repos/{repo}/pulls?state=open&per_page=100", paginate=True
+        "graphql",
+        paginate=True,
+        fields={"query": DISCOVERY_QUERY, "owner": owner, "name": name},
     )
     selected = []
-    for row in _rows(pages):
+    for row in _rows(pages, repo):
         try:
             candidate = _candidate(repo, row)
-        except OSError:
-            _diagnostic(row["number"], "api")
-            continue
         except EvidenceError as exc:
-            _diagnostic(row["number"], "api" if str(exc) == "api" else "protocol")
+            if str(exc) == "api":
+                raise
+            _diagnostic(row["number"], "protocol")
             continue
         if candidate is not None:
             selected.append(candidate)
@@ -120,6 +217,17 @@ def _trigger(flags):
     return {"number": number, "sha": sha, "run_id": None}
 
 
+def _outputs(result):
+    path = os.environ.get("GITHUB_OUTPUT")
+    if not path:
+        raise EvidenceError("output")
+    try:
+        with Path(path).open("a", encoding="utf-8") as output:
+            output.write("prs=" + json.dumps(result) + "\n")
+    except OSError as exc:
+        raise EvidenceError("output") from exc
+
+
 def main(argv=None):
     try:
         flags = sys.argv[1:] if argv is None else argv
@@ -130,18 +238,11 @@ def main(argv=None):
             raise EvidenceError("environment")
         if flags == ["--list"]:
             result = discover(repo)
-            path = os.environ.get("GITHUB_OUTPUT")
-            if not path:
-                raise EvidenceError("output")
-            with Path(path).open("a", encoding="utf-8") as output:
-                output.write("prs=" + json.dumps(result) + "\n")
+            _outputs(result)
         else:
             result = events.resume(repo, _trigger(flags))
         print(json.dumps(result, sort_keys=True))
         return 0
-    except OSError:
-        print("codex reconcile: api", file=sys.stderr)
-        return 1
     except EvidenceError as exc:
         print(f"codex reconcile: {exc}", file=sys.stderr)
         return 1

@@ -236,8 +236,11 @@ exclude = [
 constraint-dependencies = [
     "onnxruntime<1.24 ; python_full_version < '3.11'",
     # source: https://github.com/advisories/GHSA-v4x8-3wr5-3wq8
+    # source: https://github.com/advisories/GHSA-567q-5qvw-pf92
+    # source: https://github.com/advisories/GHSA-9vhv-jxww-xfm5
     "filelock>=4.2.1",
     # source: https://github.com/advisories/GHSA-xmj3-9gf7-h52w
+    # source: https://github.com/advisories/GHSA-h35f-9h28-mq5c
     # PyTorch 2.11 on pre-macOS 14 Apple Silicon requires setuptools<82.
     "setuptools>=84.1.0 ; sys_platform != 'darwin' or platform_machine != 'arm64' or platform_release >= '23'",
 ]

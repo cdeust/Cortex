@@ -72,6 +72,9 @@ jobs:
         run: python3 -B scripts/ci_codex_review_event.py
 
   reconcile-identify:
+    concurrency:
+      group: codex-review-discovery-${{ github.repository }}
+      cancel-in-progress: false
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:

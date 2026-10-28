@@ -1,7 +1,7 @@
-# Native gate reconciliation consumer verification
+# Native reconciliation integration, 2026-10-28
 
-Canonical source: https://github.com/cdeust/zetetic-team-subagents/pull/200 at ddbc41266a9d6c031a5c5891eead745138265e9f. Helper SHA256: 2ea7d95920ef289219ee1796ce7de38e68233464c81d74d3b8fa81fd2108a9a8. Codex.yml SHA256: db5b3aa7b0ba336cc690332ae6a89e16b2a94900c65898925315029564b1c1fb. Production files match those canonical bytes.
+Canonical source: https://github.com/cdeust/zetetic-team-subagents/pull/201 at aaf31d377e0b17731b54211883654a6553e2f42a. Production helper SHA256: 013cbb5510abd2999cff40102c12f93fbe95a6f8264295b2422be65a525e0029. Codex.yml SHA256: 618af59bff999194ff3950df13587eea8b8b1354aa059a971e9dfeb51078b6d1. Both consumer files match those bytes.
 
-The fallback reads trusted default-branch code, checks current native proof and reuses exact gate-resumption policy. Its five-minute schedule and manual workflow dispatch are supported Actions events. It invokes no models, uses the existing PR concurrency group and adds no merge gate. Ordinary native-summary events keep their existing path. GitHub schedules can be delayed. Source: https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule .
+The GraphQL prefilter avoids per-PR REST reads for irrelevant candidates. Existing authenticated full proof remains the only rerun authorizer. API failures stop discovery; protocol failures are isolated per PR. Discovery and rerun jobs have their respective concurrency groups. No model calls or merge gates are added.
 
-Cortex: 277 local CI contracts passed after integration. The parser-only followup passed its focused contracts; actionlint and shell syntax checks passed. Hosted scheduled acceptance must follow installation on main. No bot event or review was fabricated.
+Cortex: 301 local CI Python contracts pass after integration. Actionlint and source/craftsmanship checks pass. Cortex uses its actual project scanner; test imports differ only for its tests_py/scripts layout. The detailed receipt records failed-test readiness repair and external-check regressions. Hosted fallback acceptance follows installation on main.
