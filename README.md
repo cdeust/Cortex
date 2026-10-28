@@ -174,8 +174,13 @@ happens when a decision changes, and what can fade over time.
 ### What gets in
 
 A write passes a local novelty check (the implementation calls it a predictive-coding gate) against
-what is already stored. Novel content is written; a near-duplicate is merged into the memory it
-restates rather than filed beside it.
+what is already stored. Exact content replays in the same source and visibility scope are
+refused with `reason: "exact_duplicate"` and the existing memory id, including automatic
+capture and forced writes. A content hash selects candidates; exact text equality confirms
+the match. State replicas retain their path identity. Consolidation supersedes
+existing exact duplicates while preserving their rows.
+Near-duplicate curation depends on the configured similarity gate; deliberate writes bypass
+the novelty threshold and can be stored separately when curation does not merge them.
 
 ```js
 // Illustrative project decision:

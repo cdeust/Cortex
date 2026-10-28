@@ -336,6 +336,9 @@ INDEXES_DDL: list[str] = [
 # Indexes over columns that MIGRATIONS adds (is_global, superseded_by_id):
 # created after the migrations, without a catch, so a failure is loud.
 POST_MIGRATION_INDEXES_DDL: list[str] = [
+    # source: issue #707 -- hash candidates still require exact content equality.
+    "CREATE INDEX IF NOT EXISTS idx_memories_exact_content ON memories "
+    "(md5(content)) WHERE superseded_by_id IS NULL",
     # source: ADR-1109 -- a tie group past the recall pool is counted per
     # (capture_origin, agent_context) pair and filled with one ordered seek
     # per pair from these covering indexes: the group's equality column,
