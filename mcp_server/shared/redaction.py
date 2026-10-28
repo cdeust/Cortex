@@ -60,14 +60,10 @@ def redact_url(url: str) -> str:
         user = parsed.username or ""
         # source: ADR-0663
 
-        raw_host = parsed.hostname or ""
-        host = f"[{raw_host}]" if ":" in raw_host else raw_host
-        port = parsed.port
-
-        if port is not None:
-            netloc = f"{user}:{_PASSWORD_MASK}@{host}:{port}"
-        else:
-            netloc = f"{user}:{_PASSWORD_MASK}@{host}"
+        # source: urllib.parse authority grammar — the last @ ends userinfo.
+        # Preserve the host/port verbatim: diagnostic URLs can have invalid ports.
+        host_port = parsed.netloc.rpartition("@")[2]
+        netloc = f"{user}:{_PASSWORD_MASK}@{host_port}"
 
         userinfo_changed = True
     else:

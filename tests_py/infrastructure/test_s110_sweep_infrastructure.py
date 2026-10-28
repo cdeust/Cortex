@@ -100,13 +100,11 @@ class TestSqliteVecIndexSignals:
         assert any("sqlite_store.vec_index_delete" in r.message for r in caplog.records)
         _assert_noted("sqlite_store.vec_index_delete", "poisoned: memories_vec")
 
-    def test_rrf_fts_signal_failure_degrades_and_is_logged(self, caplog, sqlite_store):
+    def test_rrf_fts_signal_failure_raises(self, sqlite_store):
         sqlite_store._conn = _VecPoisonConn(sqlite_store._conn, "memories_fts")
-        with caplog.at_level("WARNING", logger=WARN_LOGGER):
-            credits, group = sqlite_store._signal_fts("hello world", 1.0, 60, 10)
-        assert credits == [] and group is None
-        assert any("sqlite_store.rrf_fts_signal" in r.message for r in caplog.records)
-        _assert_noted("sqlite_store.rrf_fts_signal", "poisoned: memories_fts")
+        with pytest.raises(RuntimeError, match="poisoned: memories_fts"):
+            sqlite_store._signal_fts("hello world", 1.0, 60, 10)
+        assert "sqlite_store.rrf_fts_signal" not in silent_failure.status()
 
     def test_rrf_vector_signal_failure_raises(self, sqlite_store):
         """ADR-1109: a vector-signal failure raises instead of silently

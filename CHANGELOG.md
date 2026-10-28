@@ -24,6 +24,14 @@ adheres to [Semantic Versioning](https://semver.org/).
   Replays refresh source hashes without resetting heat, and identical deliberate
   batch items are refused before curation. Hard forget erases retained exact twins.
 
+- Surface named dedup, SQLite recall-signal, profile freshness, and hot-memory
+  read failures to callers instead of continuing with partial results (#685).
+  Doctor and check_setup expose process-local historical fallback counts as
+  optional warnings; these lifetime counters do not block readiness.
+  Capture workers roll back unfinished SQLite writes when a handler raises.
+  A broken SQLite vector index now rejects captures at the novelty lookup;
+  failed captures are not retried by the resident capture worker.
+
 - Owner @claude mentions inherit the official action's tag-mode workspace edit
   approval instead of overriding it with auto mode (#822). Requests on the same
   thread run one at a time with up to 100 pending requests retained; automatic

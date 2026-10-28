@@ -14,7 +14,6 @@ from mcp_server.infrastructure.scanner import (
     group_by_project,
 )
 from mcp_server.handlers._tool_meta import DESTRUCTIVE
-from mcp_server.observability import silent_failure
 
 schema = {
     "title": "Rebuild profiles",
@@ -28,7 +27,9 @@ schema = {
         "install, after a major workflow change, or when `query_methodology` "
         "returns coldStart=true. Skipped automatically if profiles are <1h "
         "old unless force=true, which only bypasses that freshness check and "
-        "never replaces a profile. Transcripts on disk are a sliding window "
+        "never replaces a profile. A present but unparseable or timezone-naive "
+        "updatedAt raises an error; rerun with force=true to bypass freshness "
+        "metadata. Transcripts on disk are a sliding window "
         "(Claude Code deletes old ones) while a stored profile accumulates "
         "one session per `record_session_end`, so a domain whose scan sees "
         "fewer sessions than its stored profile records is KEPT unchanged "
@@ -87,7 +88,7 @@ _PROFILE_FRESH_MS = 3600000
 
 
 def _check_skip(force: bool) -> dict | None:
-    """Return a skip response if profiles are recent and force is False."""
+    """Skip recent profiles; reject a present but unusable freshness timestamp."""
     if force:
         return None
     profiles = load_profiles()
@@ -99,17 +100,20 @@ def _check_skip(force: bool) -> dict | None:
             datetime.now(timezone.utc)
             - datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
         ).total_seconds() * 1000
-        if age_ms < _PROFILE_FRESH_MS and len(profiles.get("domains", {})) > 0:
-            return {
-                "skipped": True,
-                "reason": (
-                    "Profiles updated less than 1 hour ago. Use force=true to override."
-                ),
-                "domains": list(profiles.get("domains", {}).keys()),
-                "updatedAt": updated_at,
-            }
-    except Exception as exc:  # noqa: BLE001 — freshness check failure degrades to a rebuild
-        silent_failure.note("rebuild_profiles.freshness_check", exc)
+    except (TypeError, ValueError, AttributeError) as exc:
+        raise ValueError(
+            f"Cannot determine profile freshness from updatedAt={updated_at!r}; "
+            "rerun rebuild_profiles with force=true."
+        ) from exc
+    if age_ms < _PROFILE_FRESH_MS and len(profiles.get("domains", {})) > 0:
+        return {
+            "skipped": True,
+            "reason": (
+                "Profiles updated less than 1 hour ago. Use force=true to override."
+            ),
+            "domains": list(profiles.get("domains", {}).keys()),
+            "updatedAt": updated_at,
+        }
     return None
 
 

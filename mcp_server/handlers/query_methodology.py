@@ -125,37 +125,33 @@ def _is_noise_memory(memory: dict) -> bool:
 def _get_hot_memories(
     domain: str, directory: str, limit: int = 10
 ) -> list[dict[str, Any]]:
-    """Retrieve hottest memories for this domain/directory context."""
+    """Retrieve hot memories; failures after opening the store propagate."""
     store = _try_get_memory_store()
     if store is None:
         return []
 
-    try:
-        if domain:
-            mems = store.get_memories_for_domain(domain, min_heat=0.1, limit=limit)
-        elif directory:
-            mems = store.get_memories_for_directory(directory, min_heat=0.1)[:limit]
-        else:
-            mems = store.get_hot_memories(min_heat=0.3, limit=limit)
+    if domain:
+        mems = store.get_memories_for_domain(domain, min_heat=0.1, limit=limit)
+    elif directory:
+        mems = store.get_memories_for_directory(directory, min_heat=0.1)[:limit]
+    else:
+        mems = store.get_hot_memories(min_heat=0.3, limit=limit)
 
-        return [
-            {
-                # id ships so items truncated by the response budget stay
-                # retrievable in full via recall(memory_id=...).
-                "id": m.get("id"),
-                "content": m["content"],
-                "heat": round(m.get("heat", 0), 4),
-                "domain": m.get("domain", ""),
-                "tags": _normalize_tags(m.get("tags", [])),
-                "importance": m.get("importance", 0.5),
-                "created_at": m.get("created_at", ""),
-            }
-            for m in mems
-            if not _is_noise_memory(m)
-        ]
-    except Exception as e:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
-        logger.debug("Failed to retrieve hot memories: %s", e)
-        return []
+    return [
+        {
+            # id ships so items truncated by the response budget stay
+            # retrievable in full via recall(memory_id=...).
+            "id": m.get("id"),
+            "content": m["content"],
+            "heat": round(m.get("heat", 0), 4),
+            "domain": m.get("domain", ""),
+            "tags": _normalize_tags(m.get("tags", [])),
+            "importance": m.get("importance", 0.5),
+            "created_at": m.get("created_at", ""),
+        }
+        for m in mems
+        if not _is_noise_memory(m)
+    ]
 
 
 def _get_fired_triggers(directory: str, first_message: str) -> list[dict[str, Any]]:
