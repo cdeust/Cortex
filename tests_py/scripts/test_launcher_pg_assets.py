@@ -119,15 +119,20 @@ def _archive(path: Path, top: str, files: dict[str, bytes], link: tuple = ()) ->
 def _serve(
     monkeypatch, assets, tmp_path, pg_files, vector_files, link=(), target=_TARGET
 ):
-    top = f"postgresql-{assets.PG_VERSIONS[target]}-{target}"
+    # Served under the release directories the real URLs name ({version},
+    # {tag}): a wrong version or release in a download URL finds no archive.
+    version, tag = assets.PG_VERSIONS[target], assets.PGVECTOR_RELEASE
+    (tmp_path / version).mkdir(exist_ok=True)
+    (tmp_path / tag).mkdir(exist_ok=True)
+    top = f"postgresql-{version}-{target}"
     pg_name = f"{top}.tar.gz"
     vector_name = f"pgvector-{target}-pg18.tar.gz"
-    pg_sha = _archive(tmp_path / pg_name, top, pg_files, link)
+    pg_sha = _archive(tmp_path / version / pg_name, top, pg_files, link)
     vector_sha = _archive(
-        tmp_path / vector_name, f"pgvector-{target}-pg18", vector_files
+        tmp_path / tag / vector_name, f"pgvector-{target}-pg18", vector_files
     )
-    monkeypatch.setattr(assets, "PG_URL", tmp_path.as_uri() + "/{name}")
-    monkeypatch.setattr(assets, "VECTOR_URL", tmp_path.as_uri() + "/{name}")
+    monkeypatch.setattr(assets, "PG_URL", tmp_path.as_uri() + "/{version}/{name}")
+    monkeypatch.setattr(assets, "VECTOR_URL", tmp_path.as_uri() + "/{tag}/{name}")
     monkeypatch.setitem(assets.SHA256, target, (pg_sha, vector_sha))
 
 
