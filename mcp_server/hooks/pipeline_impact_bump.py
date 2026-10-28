@@ -25,6 +25,7 @@ from mcp_server.hooks.output_streams import use_utf8_output
 from mcp_server.hooks.stdin_event import read_event_text
 from mcp_server.shared.hook_state_paths import cooldown_path
 from mcp_server.shared.project_scope import resolve_project_root
+from mcp_server.shared import gated_files
 
 _LOG_PREFIX = "[pipeline-impact-bump]"
 _COOLDOWN_SECONDS = 30
@@ -67,8 +68,7 @@ def _update_cooldown(file_path: str) -> None:
             # Prune oldest entries.
             sorted_items = sorted(data.items(), key=lambda x: x[1], reverse=True)
             data = dict(sorted_items[:_MAX_COOLDOWN_ENTRIES])
-        _COOLDOWN_FILE.parent.mkdir(parents=True, exist_ok=True)
-        _COOLDOWN_FILE.write_text(json.dumps(data))
+        gated_files.write_json(_COOLDOWN_FILE, data)
     except (OSError, ValueError, TypeError):
         # Cooldown cache is disposable: a failed write only means the next
         # run skips the cooldown, which is safe.

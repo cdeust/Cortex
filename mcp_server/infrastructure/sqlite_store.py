@@ -38,6 +38,7 @@ from mcp_server.infrastructure.sqlite_schema import (
 )
 from mcp_server.infrastructure.sqlite_store_auxiliary import SqliteAuxiliaryMixin
 from mcp_server.infrastructure.sqlite_store_entities import SqliteEntityMixin
+from mcp_server.infrastructure.sqlite_store_erasure import SqliteErasureMixin
 from mcp_server.infrastructure.sqlite_store_entity_merge import (
     SqliteEntityMergeMixin,
 )
@@ -57,6 +58,7 @@ from mcp_server.infrastructure.sqlite_store_spread import SqliteSpreadActivation
 from mcp_server.infrastructure.sqlite_store_stats import SqliteStatsMixin
 from mcp_server.observability import silent_failure
 from mcp_server.shared.code_tokenize import augment_content
+from mcp_server.shared.redaction_gate import redact_text
 from mcp_server.infrastructure.embedding_engine import current_embedding_mode
 from mcp_server.infrastructure.team_scope_backfill import (
     TEAM_DECISION_BACKFILL_SQLITE,
@@ -74,7 +76,7 @@ def _fts_augment(content: str) -> str:
 
     source: ADR-0605"""
 
-    return augment_content(content or "")
+    return augment_content(redact_text(content or ""))  # source: ADR-1110
 
 
 _json_codec_registered = False
@@ -101,6 +103,7 @@ _CHAIN_HEAD_MAX_DEPTH = 100_000
 
 class SqliteMemoryStore(
     SqliteEntityMixin,
+    SqliteErasureMixin,
     SqliteEntityMergeMixin,
     SqliteRelationshipMixin,
     SqliteQueryMixin,

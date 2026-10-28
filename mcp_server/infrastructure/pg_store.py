@@ -43,6 +43,7 @@ from mcp_server.infrastructure.pg_store_consolidation_stage import (
     PgConsolidationStageMixin,
 )
 from mcp_server.infrastructure.pg_store_cls import PgClsMixin
+from mcp_server.infrastructure.pg_store_erasure import PgErasureMixin
 
 logger = logging.getLogger(__name__)
 
@@ -81,17 +82,22 @@ class PgMemoryStore(
     PgArchiveMixin,
     PgEngramMixin,
     PgCorticalSchemaMixin,
+    PgErasureMixin,
 ):
     """PostgreSQL + pgvector storage engine for Cortex memory system."""
 
     def __init__(self, database_url: str | None = None) -> None:
         self._url = database_url or _get_database_url()
         self._conn = self._create_connection()
-        self._init_schema()
-        # source: ADR-0538
-        self._deallocate_all()
-        # source: ADR-1105 — after _init_schema, which creates the extension.
-        self._prepare_connection(self._conn)
+        try:
+            self._init_schema()
+            # source: ADR-0538
+            self._deallocate_all()
+            # source: ADR-1105 — after _init_schema, which creates the extension.
+            self._prepare_connection(self._conn)
+        except Exception:
+            self._conn.close()
+            raise
         # source: ADR-0538
         self._interactive_pool: ConnectionPool[psycopg.Connection[DictRow]] | None = (
             None

@@ -60,7 +60,6 @@ def test_entry_main_decodes_the_event_as_utf8(monkeypatch) -> None:
     seen: list[list[str]] = []
     monkeypatch.setattr(sys, "argv", ["hypermnesia-mcp-hook", "preemptive_context"])
     monkeypatch.setattr(entry, "prepare_environment", lambda environ: None)
-    monkeypatch.setattr(entry, "resolve_auto_backend", lambda environ: None)
     monkeypatch.setattr(
         entry, "run_all", lambda module, payloads, name: seen.append(payloads) or 0
     )

@@ -9,6 +9,7 @@ import os
 import sys
 from pathlib import Path
 from typing import Any
+from mcp_server.shared import gated_files
 
 
 def read_json(file_path: str | Path) -> Any | None:
@@ -28,13 +29,9 @@ def write_json(file_path: str | Path, data: Any) -> None:
     source: ADR-0526"""
     p = Path(file_path)
     ensure_dir(p.parent)
-    tmp = p.with_suffix(f"{p.suffix}.tmp-{os.getpid()}")
-    # source: ADR-1084 (acknowledge lifecycle effects only after persistence).
-    with tmp.open("w", encoding="utf-8") as stream:
-        json.dump(data, stream, indent=2, ensure_ascii=False)
-        stream.flush()
-        os.fsync(stream.fileno())
-    os.replace(tmp, p)
+    # source: ADR-1084 (acknowledge lifecycle effects only after persistence),
+    # ADR-1110 (redacted).
+    gated_files.write_json(p, data, indent=2, ensure_ascii=False)
     _sync_directory(p.parent)
 
 

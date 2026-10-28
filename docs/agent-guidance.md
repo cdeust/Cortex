@@ -12,7 +12,7 @@ are loaded on demand by the host's skills and agents.
 # Cortex — Persistent Memory MCP Server
 
 Persistent memory and cognitive profiling MCP server for Claude Code.
-Python 3.10+, FastMCP, Pydantic, numpy. Storage: SQLite by default
+Python 3.11+, FastMCP, Pydantic, numpy. Storage: SQLite by default
 (plugin installs, `.mcpb`/Cowork sandboxed launches) or
 PostgreSQL+pgvector as the opt-in upgrade (`install-plugin.sh
 --postgres`, CLI/dev mode, team databases) — see `PRIVACY.md` for the
@@ -34,7 +34,8 @@ coding write gates, causal graphs, and intent-aware retrieval.
   resolving from the `pyproject.toml` ranges instead gives you versions CI never
   had (issue #253).
 - Environment preflight: `python -m mcp_server.doctor` (backend-aware check list, fix message per check)
-- Tests: `pytest` (full suite — current count: `assets/badge-tests.svg`, or run `pytest --collect-only -q`) · `pytest tests_py/core/` (one layer) · `pytest --cov=mcp_server --cov-report=term-missing`- Lint BEFORE every commit: `ruff check && ruff format --check` — the CI enforces **both**; passing only `ruff check` is not enough.
+- Tests: `pytest` (full suite, current count: `assets/badge-tests.svg`, or run `pytest --collect-only -q`) · `pytest tests_py/core/` (one layer) · `pytest --cov=mcp_server --cov-report=term-missing`.
+- Lint before every commit: `ruff check && ruff format --check`. Run both commands locally.
 - Type gate (pyright, zero-diagnostic): resolve its environment from `uv.lock`
   (`uv sync --no-default-groups --extra … --group typecheck`), never from the
   `pyproject.toml` ranges — a range-resolved env reads a different type surface

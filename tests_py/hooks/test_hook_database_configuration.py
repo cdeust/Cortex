@@ -13,16 +13,16 @@ from mcp_server.infrastructure.memory_config import get_memory_settings
 
 @pytest.fixture
 def postgres_connection_factory(monkeypatch):
-    """Model the optional driver boundary without importing the driver."""
+    """Model the optional driver boundary without importing the driver: the
+    hook probes ``psycopg`` for availability, then connects through the gated
+    factory ``db_connect.pg_connect`` (ADR-1110)."""
+    from mcp_server.infrastructure import db_connect
+
     driver = ModuleType("psycopg")
-    rows = ModuleType("psycopg.rows")
-    factory = MagicMock()
-    driver.Connection = factory
     driver.Error = RuntimeError
-    rows.DictRow = dict
-    rows.dict_row = MagicMock()
     monkeypatch.setitem(sys.modules, "psycopg", driver)
-    monkeypatch.setitem(sys.modules, "psycopg.rows", rows)
+    factory = MagicMock()
+    monkeypatch.setattr(db_connect, "pg_connect", factory)
     return factory
 
 
@@ -48,9 +48,9 @@ def test_direct_briefing_uses_settings_url_and_canonical_precedence(
     connection = MagicMock()
     try:
         factory = postgres_connection_factory
-        factory.__getitem__.return_value.connect.return_value = connection
+        factory.return_value = connection
         assert _connect() is connection
-        assert factory.__getitem__.return_value.connect.call_args.args[0] == (
+        assert factory.call_args.args[0] == (
             canonical or "postgresql:///briefing_alias_test"
         )
     finally:

@@ -1,0 +1,11 @@
+{
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "node": "v26.11.1",
+  "npm": "11.20.0",
+  "command": "isolated node_modules/.bin/claude --version",
+  "exit_code": 0,
+  "stdout": "2.1.306 (Claude Code)",
+  "stderr": "",
+  "cli_entry_sha256": "b5d795b7760032d79954b55a9cd1876dcf3a8dc9608fd6bb9f618593f69fd44b"
+}

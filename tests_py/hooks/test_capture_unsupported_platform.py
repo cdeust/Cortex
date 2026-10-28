@@ -30,7 +30,6 @@ CONTENT = (
     "3 failed, 41 passed: the capture worker refused a Windows interpreter "
     "and nothing was stored for two weeks of editing sessions."
 )
-STREAM = mock.sentinel.stream  # popen_options only forwards it
 EXPECTED = {
     "content": CONTENT,
     "tags": ["auto-captured"],
@@ -84,7 +83,7 @@ class TestCapability(unittest.TestCase):
 
 def _options(platform):
     return capture_dispatch.popen_options(
-        STREAM, detached_spawn.platform_options(platform, None)
+        detached_spawn.platform_options(platform, None)
     )
 
 
@@ -96,14 +95,14 @@ class TestPopenOptions(unittest.TestCase):
         for ignored_or_unsupported in ("start_new_session", "pass_fds"):
             self.assertNotIn(ignored_or_unsupported, options)
 
-    def test_every_platform_closes_stdin_logs_output_and_inherits_the_environment(self):
+    def test_every_platform_closes_fds_and_inherits_the_environment(self):
         for name in ("win32", "linux", "darwin", "freebsd14"):
             options = _options(name)
             self.assertTrue(options["close_fds"])
-            self.assertIs(options["stdin"], subprocess.DEVNULL)
-            self.assertIs(options["stdout"], STREAM)
-            self.assertIs(options["stderr"], STREAM)
             self.assertEqual(options["env"], dict(os.environ))
+            # stdio is wired by log_relay.spawn_logged, never a raw log file
+            for stdio in ("stdin", "stdout", "stderr"):
+                self.assertNotIn(stdio, options)
 
     def test_posix_detaches_through_a_new_session(self):
         for name in ("linux", "darwin", "freebsd14"):
@@ -138,22 +137,31 @@ class TestHookOnUnsupportedPlatform(unittest.TestCase):
         spool = capture_spool.spool_directory(self.root)
         files = capture_spool.pending(spool)
         self.assertEqual([capture_spool.read(f) for f in files], [EXPECTED])
-        popen.assert_called_once()
-        command = popen.call_args.args[0]
+        self._assert_drainer_spawned_through_the_relay(popen)
+
+    def _assert_drainer_spawned_through_the_relay(self, popen):
+        """Two processes: the redaction relay, then the drainer (ADR-1110)."""
+        self.assertEqual(popen.call_count, 2)
+        relay_call, child_call = popen.call_args_list
+        log = self.root / ".capture-worker" / "drain.log"
+        self.assertEqual(
+            relay_call.args[0][-3:],
+            ["mcp_server.infrastructure.log_relay", str(log), oct(0o600)],
+        )
         # issue #667: through the launcher (deps isolation), never a bare -m
         self.assertEqual(
-            command,
+            child_call.args[0],
             [sys.executable, str(launcher_path()), "mcp_server.hooks.capture_drain"],
         )
-        stream = popen.call_args.kwargs["stdout"]
-        self.assertEqual(
-            popen.call_args.kwargs,
-            capture_dispatch.popen_options(
-                stream, detached_spawn.platform_options("win32", None)
-            ),
+        expected = capture_dispatch.popen_options(
+            detached_spawn.platform_options("win32", None)
         )
-        self.assertTrue(stream.closed)
-        self.assertTrue((self.root / ".capture-worker" / "drain.log").exists())
+        relay_stdin = popen.return_value.stdin
+        stdio = {"stdin": subprocess.DEVNULL, "stdout": relay_stdin}
+        stdio["stderr"] = subprocess.STDOUT
+        self.assertEqual(child_call.kwargs, {**stdio, **expected})
+        relay_stdin.close.assert_called_once()  # the hook keeps no copy
+        self.assertFalse(log.exists())  # only the relay writes the log
 
     def test_a_stalled_backlog_is_reported_and_the_capture_still_queues(self):
         spool = capture_spool.spool_directory(self.root)

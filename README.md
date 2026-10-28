@@ -5,9 +5,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/cdeust/Cortex/actions/workflows/ci.yml"><img src="https://github.com/cdeust/Cortex/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/cdeust/Cortex/actions/workflows/pipeline.yml"><img src="https://github.com/cdeust/Cortex/actions/workflows/pipeline.yml/badge.svg" alt="Pipeline"></a>
   <a href="LICENSE"><img src="assets/badge-license.svg" alt="License: MIT"></a>
-  <img src="assets/badge-python.svg" alt="Python 3.10+">
+  <img src="assets/badge-python.svg" alt="Python 3.11+">
   <img src="assets/badge-tests.svg" alt="tests passing">
   <img src="assets/badge-references.svg" alt="97 referenced papers">
   <img src="assets/badge-version.svg" alt="Version 4.23.5">
@@ -107,14 +107,24 @@ the same one, once done) shows `Cortex ready: <store>, <n> memories; <how recall
 everything before the first session; only with it does that session start ready. To work
 without Cortex, offline or not, run `claude plugin disable hypermnesia-mcp@cortex-plugins`.
 
-The first use creates a local SQLite store under `~/.claude/methodology/`. Models are downloaded
+On macOS and Linux (glibc), `claude --init-only` on a fresh install also gives the plugin its own
+PostgreSQL server with pgvector and pg_trgm: pinned, sha256-checked binaries (about 13 MB; pgvector is
+compiled by Cortex's CI, with build provenance attested) on 127.0.0.1, with no Homebrew or system
+PostgreSQL needed. Its data lives in `~/.claude/methodology/managed-pg/`, so uninstalling the plugin
+never deletes your memories. It becomes the store only after it has started and its schema exists;
+if it cannot start (a Linux distribution without `libxml2.so.2` or OpenSSL 3, for example) the SQLite
+store is used, as it is on Windows, and the session start says why (`SQLite fallback: ...`). The Codex
+plugin on the same account attaches to the same server. An existing SQLite store is not moved
+(ADR-1114).
+
+Otherwise the first use creates a local SQLite store under `~/.claude/methodology/`. Models are downloaded
 once when needed and then run offline. The embedding and reranking model files are both fetched
 on first use. Optional integrations, remote PostgreSQL, and OTLP telemetry use the network only
 when explicitly configured. [PRIVACY.md](PRIVACY.md) lists the exact scope.
 
 An existing PostgreSQL setup is kept: a configured `database_url` option (or `DATABASE_URL`),
-or the backend marker `install-plugin.sh --postgres` writes, always wins over the SQLite
-default. An install that ran before on the local `cortex` database with nothing configured
+or the backend marker `install-plugin.sh --postgres` writes, always wins over the plugin's own
+server and the SQLite default. An install that ran before on the local `cortex` database with nothing configured
 keeps it: on its first launch Cortex moves to SQLite only when nothing listens on
 localhost:5432 and no `PG*` variable configures PostgreSQL, records the choice, and prints it. A fresh install never connects to a database nothing configured.
 
@@ -298,7 +308,8 @@ and BEAM results, the ablations and the floor gates are in [benchmarks/](benchma
 
 ## Storage
 
-SQLite by default. PostgreSQL is one configuration field, worth it for very large stores or a
+SQLite by default, or the plugin's own PostgreSQL server on a fresh macOS or Linux install (see
+Install). Your own PostgreSQL is one configuration field, worth it for very large stores or a
 database shared across a team.
 
 ```bash

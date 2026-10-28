@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
-import launcher_backend  # noqa: E402
+from mcp_server.infrastructure import backend_resolution as launcher_backend  # noqa: E402
 
 _MARKER = "backend.json"
 

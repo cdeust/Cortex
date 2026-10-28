@@ -15,7 +15,8 @@ from pathlib import Path
 from mcp_server.doctor_pgvector import pgvector_iterative_scan
 from mcp_server.hooks.output_streams import use_utf8_output
 from mcp_server.shared.platform import home_dir, python_executable
-from mcp_server.shared.redaction import redact_url, scrub_secrets
+from mcp_server.shared.redaction import redact_url
+from mcp_server.shared.redaction_gate import redact_text
 
 
 @dataclass
@@ -100,7 +101,7 @@ def _check_python_interpreter() -> McpCheck:
             ok=False,
             detail="no python found on PATH",
             attempted="which python3 / python / py",
-            fix="Install Python 3.10+ and ensure `python3` is on PATH. "
+            fix="Install Python 3.11+ and ensure `python3` is on PATH. "
             "On Windows: `py -3` or add Python to PATH. "
             "On Linux: `apt install python3` / `dnf install python3`.",
         )
@@ -361,7 +362,7 @@ def _check_launcher_smoke(install_path: str | None) -> McpCheck:
         attempted=attempted,
         error=stderr.strip() or (proc.stdout or "").strip() or "no output",
         fix="Run the command above by hand to see the full error. "
-        "Common causes: corrupt install, python version <3.10, "
+        "Common causes: corrupt install, python version <3.11, "
         "missing stdlib modules.",
     )
 
@@ -403,7 +404,9 @@ def _check_pg_reachable() -> McpCheck:
             fix="Set DATABASE_URL first.",
         )
     try:
-        import psycopg  # noqa: PLC0415 — source: ADR-0323
+        import psycopg  # noqa: PLC0415, F401 — source: ADR-0323 (availability probe)
+
+        from mcp_server.infrastructure.db_connect import pg_connect  # noqa: PLC0415 — source: ADR-1110
     except ImportError as exc:
         return McpCheck(
             name="postgresql reachable",
@@ -414,7 +417,7 @@ def _check_pg_reachable() -> McpCheck:
         )
     attempted = f"psycopg.connect({redact_url(url)!r}); cur.execute('SELECT 1')"
     try:
-        with psycopg.connect(url, connect_timeout=5) as conn:
+        with pg_connect(url, connect_timeout=5) as conn:
             row = conn.execute("SELECT 1").fetchone()
     except Exception as exc:  # noqa: BLE001 — source: ADR-0323
         # source: ADR-0323
@@ -424,7 +427,7 @@ def _check_pg_reachable() -> McpCheck:
             ok=False,
             detail="connection failed",
             attempted=attempted,
-            error=scrub_secrets(f"{type(exc).__name__}: {exc}"),
+            error=redact_text(f"{type(exc).__name__}: {exc}"),
             fix="Check that PostgreSQL is running and the DSN is correct. "
             "macOS Homebrew: `brew services start postgresql@17`. "
             "Verify with: `psql \"$DATABASE_URL\" -c 'SELECT 1'`.",
@@ -457,7 +460,9 @@ def _check_pg_extensions() -> McpCheck:
             detail="DATABASE_URL not set",
         )
     try:
-        import psycopg  # noqa: PLC0415 — source: ADR-0323
+        import psycopg  # noqa: PLC0415, F401 — source: ADR-0323 (availability probe)
+
+        from mcp_server.infrastructure.db_connect import pg_connect  # noqa: PLC0415 — source: ADR-1110
     except ImportError as exc:
         return McpCheck(
             name="postgresql extensions",
@@ -467,7 +472,7 @@ def _check_pg_extensions() -> McpCheck:
         )
     attempted = "SELECT extname FROM pg_extension"
     try:
-        with psycopg.connect(url, connect_timeout=5) as conn:
+        with pg_connect(url, connect_timeout=5) as conn:
             rows = conn.execute(attempted).fetchall()
     except Exception as exc:  # noqa: BLE001 — source: ADR-0323
         # source: ADR-0323
@@ -477,9 +482,9 @@ def _check_pg_extensions() -> McpCheck:
             ok=False,
             detail="query failed",
             attempted=attempted,
-            error=scrub_secrets(f"{type(exc).__name__}: {exc}"),
+            error=redact_text(f"{type(exc).__name__}: {exc}"),
         )
-    names = sorted({r[0] for r in rows})
+    names = sorted({r["extname"] for r in rows})
     missing = sorted({"vector", "pg_trgm"} - set(names))
     if missing:
         return McpCheck(

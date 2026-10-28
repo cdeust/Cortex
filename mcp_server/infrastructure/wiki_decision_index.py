@@ -8,7 +8,6 @@ from __future__ import annotations
 import re
 import json
 import os
-import tempfile
 import hashlib
 import stat
 from pathlib import Path
@@ -18,6 +17,7 @@ from mcp_server.shared.wiki_decision_ids import (
     parse_decision_id,
     parse_decision_filename,
 )
+from mcp_server.shared import gated_files
 
 _NUMERIC_PREFIX = re.compile(r"[0-9]+(?:-|\.)")
 
@@ -85,10 +85,10 @@ def quarantine_malformed_decisions(
     if apply:
         for source, destination in moves.items():
             target = safe_join(base, destination)
-            target.parent.mkdir(parents=True, exist_ok=True)
-            # source: ADR-0624
-            with target.open("xb") as output:
-                output.write(safe_join(base, source).read_bytes())
+            # source: ADR-0624 — exclusive create, like open("xb")
+            gated_files.write_bytes(
+                target, safe_join(base, source).read_bytes(), exclusive=True
+            )
             safe_join(base, source).unlink()
     return moves
 
@@ -118,17 +118,8 @@ def _directory_inventory(root: Path) -> dict[str, list[int]]:
 
 
 def _atomic_json(target: Path, payload: object) -> bytes:
-    target.parent.mkdir(parents=True, exist_ok=True)
-    data = (json.dumps(payload, sort_keys=True, indent=2) + "\n").encode("utf-8")
-    descriptor, name = tempfile.mkstemp(prefix=".decision-index-", dir=target.parent)
-    temporary = Path(name)
-    try:
-        with os.fdopen(descriptor, "wb") as stream:
-            stream.write(data)
-        temporary.replace(target)
-    finally:
-        temporary.unlink(missing_ok=True)
-    return data
+    text = json.dumps(payload, sort_keys=True, indent=2) + "\n"
+    return gated_files.write_text(target, text, mode=0o600)
 
 
 def write_decision_index(root: Path | str) -> dict[str, str]:

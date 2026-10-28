@@ -8,7 +8,7 @@ version = "4.23.5"
 description = "Scientifically-grounded memory system based on computational neuroscience research"
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [
     { name = "Clement Deust", email = "admin@ai-architect.tools" },
 ]
@@ -21,10 +21,17 @@ classifiers = [
     "Topic :: Software Development :: Libraries",
 ]
 dependencies = [
+    # source: https://github.com/advisories/GHSA-5x8w-8jj5-q52h
+    "Pillow>=13.0.0",
     # source: ADR-1092
     # macOS Intel wheels stop at cryptography 48.
     # uvx resolves published metadata without the lock-shaping platform group.
     "cryptography<49 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    # source: ADR-1092 platform-bounds below; uv 0.11.3/0.13.5 resolution
+    # on 2026-10-25 requires this complementary marker at the same level.
+    # source: https://cryptography.io/en/latest/changelog/#v50-0-2
+    # Its OpenSSL 4.0.3 wheels include the 2026-09-29 security fixes.
+    "cryptography>=50.0.2 ; sys_platform != 'darwin' or platform_machine != 'x86_64'",
     # source: ADR-0874
     #
     #
@@ -125,7 +132,7 @@ codebase = [
     #
     #
     #
-    "tree-sitter-language-pack>=1.12.5,<1.22",
+    "tree-sitter-language-pack>=1.12.5,<1.23",
     "networkx>=3.0",
     # source: ADR-0874
     #
@@ -141,7 +148,7 @@ viz-tile = [
     "pyarrow>=15.0",             # Arrow IPC for the quadtree endpoint
     "pandas>=2.2",               # Datashader's native frame format
     "cachetools>=5.0",           # L1 in-memory tile LRU
-    "Pillow>=10.0",              # PNG encode
+    "Pillow>=13.0.0",            # PNG encode
 ]
 benchmarks = [
     "datasets>=2.14.0",          # HuggingFace dataset loader (BEAM, LoCoMo, LongMemEval)
@@ -228,6 +235,14 @@ exclude = [
 [tool.uv]
 constraint-dependencies = [
     "onnxruntime<1.24 ; python_full_version < '3.11'",
+    # source: https://github.com/advisories/GHSA-v4x8-3wr5-3wq8
+    # source: https://github.com/advisories/GHSA-567q-5qvw-pf92
+    # source: https://github.com/advisories/GHSA-9vhv-jxww-xfm5
+    "filelock>=4.2.1",
+    # source: https://github.com/advisories/GHSA-xmj3-9gf7-h52w
+    # source: https://github.com/advisories/GHSA-h35f-9h28-mq5c
+    # PyTorch 2.11 on pre-macOS 14 Apple Silicon requires setuptools<82.
+    "setuptools>=84.1.0 ; sys_platform != 'darwin' or platform_machine != 'arm64' or platform_release >= '23'",
 ]
 
 # source: ADR-0874
@@ -623,6 +638,9 @@ markers = [
 
 [tool.coverage.run]
 source = ["mcp_server"]
+# source: https://pytest-cov.readthedocs.io/en/latest/subprocess-support.html
+# pytest-cov 7 requires coverage.py to instrument Python subprocesses.
+patch = ["subprocess"]
 
 [tool.coverage.report]
 show_missing = true
@@ -641,7 +659,7 @@ dev = [
 #
 #
 lint = [
-    "ruff==0.16.10",
+    "ruff==0.17.1",
 ]
 typecheck = [
     "pyright==1.1.414",
@@ -731,9 +749,10 @@ platform-bounds = [
     "numpy<2 ; sys_platform == 'darwin' and platform_machine == 'x86_64' and python_full_version < '3.13'",
     "numpy>=2 ; sys_platform != 'darwin' or platform_machine != 'x86_64' or python_full_version >= '3.13'",
     "transformers<5 ; sys_platform == 'darwin' and platform_machine == 'x86_64' and python_full_version < '3.13'",
-    "transformers>=5 ; sys_platform != 'darwin' or platform_machine != 'x86_64' or python_full_version >= '3.13'",
+    # source: https://github.com/huggingface/transformers/commit/cbc1651a032b923da7f4b44b3d0e6f68e6ba6b55
+    "transformers>=5.21.0 ; sys_platform != 'darwin' or platform_machine != 'x86_64' or python_full_version >= '3.13'",
     "cryptography<49 ; sys_platform == 'darwin' and platform_machine == 'x86_64'",
-    "cryptography>=49 ; sys_platform != 'darwin' or platform_machine != 'x86_64'",
+    "cryptography>=50.0.2 ; sys_platform != 'darwin' or platform_machine != 'x86_64'",
 ]
 
 [tool.mutmut]

@@ -40,7 +40,6 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-import subprocess
 import sys
 from datetime import datetime, timezone
 from typing import Any
@@ -71,7 +70,8 @@ try:
     from mcp_server.infrastructure.transcript_activity import transcript_activity
     from mcp_server.shared.categorizer import categorize
     from mcp_server.shared import detached_spawn
-    from mcp_server.shared.log_rotation import methodology_log_path, open_rotating_log
+    from mcp_server.infrastructure.log_relay import spawn_logged
+    from mcp_server.shared.log_rotation import methodology_log_path
     from mcp_server.shared.project_ids import (
         cwd_to_project_id,
         domain_id_from_label,
@@ -172,14 +172,8 @@ def _spawn_consolidation(turn_count: int = 0) -> None:
             "mcp_server.hooks.session_lifecycle", _CONSOLIDATE_FLAG, mode
         )
         log_path = methodology_log_path("consolidate.log")
-        with open_rotating_log(log_path) as log:
-            subprocess.Popen(  # noqa: S603 — cmd built from trusted sources
-                cmd,
-                stdin=subprocess.DEVNULL,
-                stdout=log,
-                stderr=subprocess.STDOUT,
-                **detached_spawn.options(),
-            )
+        # source: ADR-1110 — the child's output reaches the log only redacted
+        spawn_logged(cmd, log_path, **detached_spawn.options())
         _log(f"consolidation spawned (mode={mode}) -> {log_path}")
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"consolidation spawn failed (non-fatal): {exc}")

@@ -12,9 +12,9 @@ source: docs/adr/ADR-1104-zero-ops-plugin-install.md
 
 from __future__ import annotations
 
-import json
 import os
 from pathlib import Path
+from mcp_server.shared import gated_files
 
 STATUS_ENV = "CORTEX_SEMANTIC_STATUS_FILE"  # source: scripts/launcher_ml.py STATUS_ENV
 
@@ -25,7 +25,7 @@ def _record(outcome: dict) -> None:
         raise RuntimeError(
             f"{STATUS_ENV} is unset: run this through scripts/launcher.py"
         )
-    Path(path).write_text(json.dumps(outcome), encoding="utf-8")
+    gated_files.write_json(Path(path), outcome)
 
 
 def main() -> None:

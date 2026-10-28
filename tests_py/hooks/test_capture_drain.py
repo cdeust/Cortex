@@ -15,6 +15,8 @@ import sys
 import tempfile
 import time
 import unittest
+
+from mcp_server.shared.process_liveness import pid_alive
 from pathlib import Path
 from unittest import mock
 
@@ -189,12 +191,18 @@ class TestDrain(_Spool):
 
 # The intermediate process plays the hook: it starts the drainer through the
 # production ``spawn_drainer`` (real platform options: Windows creationflags on the
-# Windows leg), handing it its own stderr pipe, and exits at once.
+# Windows leg; output through the redaction relay into the drain log, ADR-1110),
+# and exits at once.
 HOOK = (
     "import sys\n"
+    "from pathlib import Path\n"
     "from mcp_server.hooks.capture_dispatch import spawn_drainer\n"
-    "spawn_drainer(sys.stderr.buffer)\n"
+    "spawned = spawn_drainer(Path(sys.argv[1]))\n"
+    "print(spawned.child.pid, spawned.relay.pid)\n"
 )
+# source: ADR-1110 — upper bound for a detached drainer to store one line; the
+# test returns as soon as the effect is observed.
+DRAIN_DEADLINE_S = 120.0
 
 
 class TestDetachedDrainer(unittest.TestCase):
@@ -217,18 +225,23 @@ class TestDetachedDrainer(unittest.TestCase):
             "sys.argv = sys.argv[1:]\n"
             "runpy.run_module(sys.argv[0], run_name='__main__', alter_sys=True)\n"
         )
+        log = capture_spool.log_path(spool)
         hook = subprocess.Popen(
-            [sys.executable, "-c", HOOK],
+            [sys.executable, "-c", HOOK, str(log)],
+            stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             cwd=repo_root,
             env={**os.environ, "CLAUDE_PLUGIN_ROOT": str(plugin_root)},
         )
-        self.assertEqual(hook.wait(), 0)  # the parent is gone ...
-        assert hook.stderr is not None
-        # ... EOF on the pipe arrives only when the drainer, the last holder of its
-        # write end, has exited: no delay decides anything.
-        diagnostics = hook.stderr.read()
-        hook.stderr.close()
+        out, diagnostics = hook.communicate()
+        self.assertEqual(hook.returncode, 0, diagnostics)  # the parent is gone ...
+        pids = [int(p) for p in out.split()]
+        deadline = time.monotonic() + DRAIN_DEADLINE_S
+        # the relay exits last: at end of input, once the drainer has exited
+        while time.monotonic() < deadline and any(pid_alive(p) for p in pids):
+            time.sleep(0.1)
+        self.assertFalse(any(pid_alive(p) for p in pids), "drainer or relay hung")
+        # ... and the detached drainer still stored the line
         self.assertEqual(capture_spool.pending(spool), [], diagnostics)
         self.assertEqual(_stored_rows(), before + 1, diagnostics)
 

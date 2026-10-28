@@ -5,6 +5,7 @@ source: ADR-0663"""
 from __future__ import annotations
 
 import re
+import string
 import urllib.parse
 
 # ── Constants ─────────────────────────────────────────────────────────────
@@ -133,7 +134,7 @@ def _selfcheck() -> None:
 _selfcheck()
 
 
-# ── scrub_secrets ──────────────────────────────────────────────────────────
+# ── redact_shapes ──────────────────────────────────────────────────────────
 
 # source: ADR-0663
 
@@ -154,7 +155,8 @@ _RE_BEARER_TOKEN = re.compile(r"\bbearer\s+([A-Za-z0-9\-_\.+/=]{8,})", re.IGNORE
 _RE_KV_SECRET = re.compile(
     r"(?i)\b(password|token|api[_\-]?key|secret[_\-]?key?|private[_\-]?key)"
     r"\s*[:=]\s*"
-    r"(['\"]?)([^\s'\"]{4,})\2",
+    # source: ADR-1110 — a value the gitleaks pass already replaced is kept
+    r"(['\"]?)(?!\[REDACTED)([^\s'\"]{4,})\2",
 )
 
 # source: ADR-0663
@@ -168,12 +170,53 @@ _RE_PEM_PRIVATE = re.compile(
 # source: ADR-0663
 
 
-_RE_EMBEDDED_URL = re.compile(
-    r"[a-zA-Z][a-zA-Z0-9+\-.]*://[^\s\"'<>]+",
-)
+# A URL is a scheme (a letter, then letters, digits, ``+``, ``-``, ``.``),
+# ``://`` and a body up to whitespace, a quote or an angle bracket (RFC 3986
+# §3.1). Matched by anchoring on ``://`` and walking back over the scheme, so
+# every character is visited a bounded number of times: the equivalent regex
+# ``[a-zA-Z][a-zA-Z0-9+\-.]*://[^\s"'<>]+`` retries from each letter of a long
+# letter run and took 8 s on 100 KB of ``a`` (review of PR #775, N2).
+# source: ADR-0663 (scheme grammar: RFC 3986 §3.1)
+_SCHEME_FIRST = frozenset(string.ascii_letters)
+_SCHEME_CHARS = _SCHEME_FIRST | frozenset(string.digits + "+-.")
+_URL_BODY = re.compile(r"[^\s\"'<>]+")
 
 
-def scrub_secrets(text: str) -> str:
+def _scheme_start(text: str, sep: int, floor: int) -> int | None:
+    """Leftmost start of a scheme ending at ``sep``, not before ``floor``."""
+    start = sep
+    while start > floor and text[start - 1] in _SCHEME_CHARS:
+        start -= 1
+    while start < sep and text[start] not in _SCHEME_FIRST:
+        start += 1
+    return start if start < sep else None
+
+
+def _embedded_urls(text: str):
+    """Yield ``(start, end)`` of each URL, leftmost first, non-overlapping."""
+    floor = 0
+    sep = text.find("://")
+    while sep != -1:
+        start = _scheme_start(text, sep, floor)
+        body = _URL_BODY.match(text, sep + 3)
+        if start is not None and body is not None:
+            yield start, body.end()
+            floor = body.end()
+            sep = text.find("://", floor)
+        else:
+            sep = text.find("://", sep + 1)
+
+
+def _redact_embedded_urls(text: str) -> str:
+    out, last = [], 0
+    for start, end in _embedded_urls(text):
+        out += (text[last:start], redact_url(text[start:end]))
+        last = end
+    out.append(text[last:])
+    return "".join(out)
+
+
+def redact_shapes(text: str) -> str:
     """Replace recognized secret shapes in ``text`` with ``[REDACTED]``.
 
     source: ADR-0663
@@ -210,7 +253,4 @@ def scrub_secrets(text: str) -> str:
     text = _RE_KV_SECRET.sub(lambda m: f"{m.group(1)}={_REDACTED}", text)
 
     # 5. Embedded URL passwords: find URL-shaped substrings and redact each.
-    def _redact_url_match(m: re.Match) -> str:
-        return redact_url(m.group(0))
-
-    return _RE_EMBEDDED_URL.sub(_redact_url_match, text)
+    return _redact_embedded_urls(text)

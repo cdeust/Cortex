@@ -161,7 +161,7 @@ def _create_db(host: str, port: str, dbname: str) -> tuple[bool, str]:
 
 # source: ADR-1105 — the loaded pgvector library must define
 # hnsw.iterative_scan (0.8.0+); the store refuses to start otherwise.
-_ITERATIVE_SCAN_CHECK = (
+ITERATIVE_SCAN_CHECK = (
     "DO $$ BEGIN PERFORM '[1]'::vector; "
     "IF current_setting('hnsw.iterative_scan', true) IS NULL THEN "
     "RAISE EXCEPTION 'Cortex needs hnsw.iterative_scan (pgvector >= 0.8.0); "
@@ -186,7 +186,7 @@ def _create_extensions(host: str, port: str, dbname: str) -> tuple[bool, str]:
                 dbname,
                 "-c",
                 "CREATE EXTENSION IF NOT EXISTS vector; "
-                "CREATE EXTENSION IF NOT EXISTS pg_trgm; " + _ITERATIVE_SCAN_CHECK,
+                "CREATE EXTENSION IF NOT EXISTS pg_trgm; " + ITERATIVE_SCAN_CHECK,
             ],
             capture_output=True,
             timeout=10,
@@ -202,7 +202,13 @@ def _create_extensions(host: str, port: str, dbname: str) -> tuple[bool, str]:
 def _init_schema(database_url: str) -> tuple[bool, str]:
     """Run full schema initialization via psycopg.
 
-    source: ADR-0784"""
+    Every statement runs; any that fails makes the result ``(False, ...)``
+    naming each failure: a schema with a missing table or index is not ready
+    (owner rule: no silent degradation; the earlier code logged warnings and
+    returned ready).
+
+    source: ADR-0784
+    source: ADR-1114"""
     try:
         import psycopg  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
         from psycopg.rows import dict_row  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
@@ -213,14 +219,14 @@ def _init_schema(database_url: str) -> tuple[bool, str]:
         for ddl in get_all_ddl():
             try:
                 conn.execute(ddl)
-            except Exception as stmt_err:  # noqa: BLE001 — per-statement DDL isolation — failure is reported in the schema-warnings list
+            except Exception as stmt_err:  # noqa: BLE001 — per-statement DDL isolation — every failure is collected and fails the result below
                 first_line = ddl.strip().split("\n")[0][:60]
                 errors.append(f"{first_line}: {stmt_err}")
         conn.close()
         if errors:
-            _log(f"Schema warnings ({len(errors)} statements had issues):")
-            for e in errors[:5]:
-                _log(f"  {e}")
+            return False, f"{len(errors)} schema statements failed: " + "; ".join(
+                errors
+            )
         return True, ""
     except ImportError:
         return False, "psycopg not installed (run: pip install psycopg[binary])"

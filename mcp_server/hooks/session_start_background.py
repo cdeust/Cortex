@@ -4,14 +4,14 @@ source: ADR-0498"""
 
 from __future__ import annotations
 
-import subprocess
 from collections.abc import Callable
 
 from mcp_server.hooks.launcher_command import launcher_child_command
 from mcp_server.hooks.session_start_common import _log
 from mcp_server.shared import detached_spawn
 from mcp_server.shared.injection_markers import session_id_from_transcript
-from mcp_server.shared.log_rotation import methodology_log_path, open_rotating_log
+from mcp_server.infrastructure.log_relay import spawn_logged
+from mcp_server.shared.log_rotation import methodology_log_path
 
 
 def _auto_wire_pipeline(project_root: str | None) -> None:
@@ -95,14 +95,8 @@ def _spawn_reanalysis(project_root: str) -> None:
 
     # Rotate before spawn; the inherited fd stays open for the worker.
     log_path = methodology_log_path("pipeline_reanalyze.log")
-    with open_rotating_log(log_path) as log:
-        subprocess.Popen(  # noqa: S603 — cmd built from trusted sources
-            cmd,
-            stdin=subprocess.DEVNULL,
-            stdout=log,
-            stderr=subprocess.STDOUT,
-            **detached_spawn.options(),
-        )
+    # source: ADR-1110 — the child's output reaches the log only redacted
+    spawn_logged(cmd, log_path, **detached_spawn.options())
     _log(f"background pipeline reanalysis spawned → {log_path}")
 
 

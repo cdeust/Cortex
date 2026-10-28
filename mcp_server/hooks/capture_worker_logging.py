@@ -8,6 +8,8 @@ import stat
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
+from mcp_server.shared.redaction_gate import RedactingFilter
+
 # source: ADR-0488
 LOG_BYTES = 196_000 * 30
 
@@ -30,6 +32,8 @@ def configure(runtime: Path) -> None:
     handler = RotatingFileHandler(
         path, maxBytes=LOG_BYTES, backupCount=1, encoding="utf-8"
     )
+    # source: ADR-1110 — every record is redacted before the handler writes
+    handler.addFilter(RedactingFilter())
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
     logger.addHandler(handler)

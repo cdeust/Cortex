@@ -8,17 +8,17 @@ newer bash ran the tool on no tests (issue #690 sibling search).
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
+from mcp_server.shared.platform import resolve_bash
 
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "mutation_check.sh"
 BASHES = sorted(
     {
         path
-        for path in ("/bin/bash", shutil.which("bash"))
+        for path in ("/bin/bash", resolve_bash())
         if path and os.access(path, os.X_OK)
     }
 )

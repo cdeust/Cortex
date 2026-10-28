@@ -6,8 +6,147 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Removed
+
+- Claude repair actions are removed following the owner decision; Claude
+  review returns review-only under ADR-1116 (see Added).
+- Duplicate legacy CI workflows are retired. Pipeline, required CodeQL and the
+  protected merge resolver remain active.
+
+### Fixed
+
+- Share the launcher's first-launch backend policy with wheel hooks and direct
+  MCP startup: a fresh unconfigured HOME records SQLite before settings bind;
+  explicit URLs and managed PostgreSQL keep their existing precedence (#703, #704).
+- Stop installing the optional code-intelligence server during hook discovery;
+  installation remains in explicit `scripts/setup.sh` and is disclosed in
+  `PRIVACY.md` (#705).
+
+- The `merge` job of `.github/workflows/pipeline.yml` sets `GH_REPO: ${{ github.repository }}` on its `gh pr merge` step: the job runs without a checkout, so gh could not infer the repository and failed with `fatal: not a git repository` after every stage was green (session-optimizer #65, run 39756969927, 2026-10-22).
+
+- CI requires completed native Codex code and security reviews on the current
+  head. Unresolved findings block protected integration. Partial reruns retain
+  successful prerequisites and supersede obsolete skipped matrix placeholders.
+
 ### Added
 
+- Claude PR reviews use Anthropic's official direct PR workflow and its five
+  upstream reviewer agents (ADR-1117). Reviewer configuration loads from trusted
+  main; PR content is read through GitHub. This replaces ADR-1116's custom
+  workflow_run marker protocol. Codex retains its native review checks.
+  Evidence: `docs/verification/claude-bot-ci-20261027.md`.
+
+- **The single CI pipeline, run by the Claude bot (ADR-1115).**
+  `.github/workflows/pipeline.yml` runs contract, unit (the SQLite-backed
+  pytest suite, 90 % of lines from `coverage.xml`), regression
+  (`tests_py/integration`), e2e (`scripts/docker_smoke.sh`), environment
+  (`cortex-doctor` after a `pip install .` into a fresh venv on ubuntu, macOS
+  and Windows, bare runner plus the pinned Claude Code CLI 2.1.296) and
+  install (`scripts/install_e2e/run.py` on the three OS, the Windows leg new),
+  then the bot's review and fix, then a squash auto-merge that fails
+  explicitly instead of skipping; the release tag on push to main keeps
+  ADR-0802's gate with `canonical_version`. The commands live in `ci.json`.
+  `claude-review.yml` is retired (the pipeline's review job replaces it);
+  `ci.yml` and the other workflows are untouched. Red on day one: coverage
+  82 % under the 90 % floor, and the Windows install leg.
+
+### Security
+
+- Pillow now requires version 13.0.0 or newer to address the advisories affecting
+  12.3.0, including GHSA-5x8w-8jj5-q52h. Pillow 13 requires Python 3.11+, so
+  Python 3.10 users must upgrade. The plugin bootstrap selects its managed
+  Python on older interpreters; direct package installations require 3.11+.
+
+- The Claude Code workflows are aligned with the documented Claude Code GitHub Actions setup (https://code.claude.com/docs/en/github-actions, "Run a skill" and "Respond to @claude mentions"): the PR review runs the code-review plugin skill with `--comment` under read-only review permissions, and no checkout names the PR head ref, which clears CodeQL `actions/untrusted-checkout`.
+- The Claude Code PR review no longer checks out PR code in a privileged workflow (CodeQL `actions/untrusted-checkout/high`, `actions/untrusted-checkout-toctou/high`): the review job moves to `.github/workflows/claude-review.yml`, triggered by `pull_request` only, and `.github/workflows/claude.yml` keeps only the `@claude` job on its comment, review and issue triggers, with no PR head checkout.
+- **Personal data is stored owner-only (ADR-1112).** The 2026-10-21 audit
+  (E18) measured `memory.db`, logs and telemetry at 0644/0664 in 0755/0775
+  directories. Under `~/.claude/methodology`, the capture worker directory,
+  `brain-index.json` and the cache root (`~/.cache/cortex`, which now follows a
+  relocated `CORTEX_CLAUDE_DIR` like the rest of Cortex's data), files are now created 0600 and
+  directories 0700 (the SQLite database before SQLite opens it, so its WAL and
+  shared-memory files follow); existing installs are tightened once at server
+  or session start (directories 0700, files lose group/other bits, symlinks
+  untouched), and on Windows the roots get a user-only inherited ACL. Files
+  written into a user's repository keep the umask.
+- **A hard `forget` erases every stored copy of the memory (ADR-1111).** The
+  2026-10-21 audit (E15) found the full original text left in
+  `memory_archives` after a hard forget. `store.erase_memory` now deletes, in
+  one transaction on both backends, the row with its FTS and vector entries,
+  its archives, the wiki claims, drafts, citations and compiled page derived
+  from it, the reminders and rules mined from it, its receipts and stage
+  history, and the text entities only it referenced; page files compiled or
+  promoted from it are removed and the wiki index rebuilt. A failing step
+  rolls everything back and raises (the old handler logged a failed claim
+  deletion and deleted the row anyway). SQLite runs with `secure_delete`, FTS5
+  `secure-delete` and a WAL truncation, so the bytes leave the file too. The
+  result reports what was erased.
+- **One redaction gate on every write into storage (ADR-1110).** The 2026-10-21
+  audit (E16) found the secret scrubber on the capture hook only, missing
+  GitHub, Anthropic and OpenAI keys and JWTs, while `remember`, session import
+  and session end stored text unfiltered. Now:
+  - the detector is the gitleaks 8.30.1 default rule set, vendored byte-identical
+    under `third_party/gitleaks/v8.30.1/` (sha256-pinned, MIT, in the release
+    SBOM), translated to Python by `scripts/vendor_gitleaks_rules.py` (217 of
+    222 rules; the five that need a file name cannot apply to text) and applied by a port of
+    gitleaks' decision procedure, with exact parity against the binary on the
+    repository tree and on a real-format fake-credential corpus
+    (`scripts/redaction_parity.py`, run in CI); a second pass catches keys
+    followed by sentence punctuation, which six gitleaks rules miss;
+  - SQLite and PostgreSQL store connections are built gated: every write
+    statement, through any helper, pool, cursor, `executemany` or COPY, binds
+    redacted parameters; embeddings, the SQLite FTS augmentation and artifact
+    addresses are derived from redacted text;
+  - files are written only through `shared/gated_files.py`, child processes log
+    through a redacting relay, file log handlers carry a redacting filter; an
+    architecture test fails on any other storage primitive in `mcp_server/`;
+  - `.pre-commit-config.yaml` (gitleaks hook) and a blocking `secret-scan` CI job
+    (full history and tree, pinned and checksum-verified binary).
+
+### Added
+
+- `.github/workflows/claude.yml`: every push to a PR runs a Claude Code review (`/code-review` then `/security-review`, one cycle), applies the findings and arms squash auto-merge; `@claude` in a comment or issue runs Claude on that request. Action pinned by SHA (anthropics/claude-code-action v1.0.256).
+- **Per-project export and import of memories (ADR-1113, GDPR art. 20).**
+  `python -m mcp_server.portability export <project-root> <file>` writes the
+  current memories of a project and its subdirectories (never a sibling or the
+  parent; global memories with `--include-global`) as JSON Lines with a
+  versioned header, every value redacted, file mode 0600;
+  `import <file> [--into <root>]` validates the file, relocates directories,
+  recomputes embeddings and skips memories already present.
+
+- **The Claude Code plugin runs its own PostgreSQL server (#744, #740;
+  ADR-1114).** On macOS (arm64, x86_64) and Linux glibc (x86_64, aarch64),
+  Setup (`claude --init-only`) on a fresh install downloads the pinned
+  theseus-rs PostgreSQL 18.6.0 and a pgvector 0.8.7 archive (sha256-checked,
+  about 13 MB), runs `initdb --pwfile`, starts the server on 127.0.0.1 with
+  its cluster in `~/.claude/methodology/managed-pg` (uninstalling the plugin
+  never deletes memories), creates `vector`, `pg_trgm` and the schema, and
+  only then selects it. No Homebrew or system PostgreSQL is needed: the macOS
+  binaries carry their own OpenSSL (pg0, used by the earlier draft of this
+  change, loaded Homebrew's and failed in dyld on a Mac without it). The
+  pgvector archives are compiled by Cortex's CI (`pgvector.yml`: pinned
+  upstream commit, built and load-tested against the pinned PostgreSQL on each
+  platform, build provenance attested) and published from main only as a
+  release of this repository. The server is started and stopped on kernel events (ready in
+  `postmaster.pid`, process exit), never on a timer, and a postmaster is
+  adopted or signalled only when its PID and kernel start time are the ones
+  recorded at spawn and it authenticates with the cluster's password (a
+  wrong server signature, a foreign nonce, trust or a cleartext request is
+  refused). A postmaster that dies under live clients is started again on the
+  same port, and a client never takes a `running` status whose postmaster is
+  dead; one whose supervisor died before recording it is adopted once it
+  proves itself; a live postmaster of the cluster that Cortex did not start
+  is named and left alone, its `postmaster.pid` never removed. The Codex hook entry and `hypermnesia-mcp` stop in one line
+  (`Cortex not ready: ...`) when the server cannot run. The
+  Codex plugin, `hypermnesia-mcp` and `cortex-doctor` attach to the same
+  server, so Claude and Codex on one account share one store. A configured
+  `database_url` (`CLAUDE_PLUGIN_OPTION_DATABASE_URL` for hooks and Setup)
+  always wins, in Setup too; a server that cannot start leaves the SQLite
+  store selected, recorded as `sqlite_fallback` in the Setup outcome and shown
+  at session start as `SQLite fallback: <cause>`; Windows, musl and Linux
+  hosts missing `libxml2.so.2` or OpenSSL 3 keep SQLite. Existing SQLite
+  stores are not migrated. `setup_db.py` now fails when a schema statement
+  fails instead of reporting ready with warnings.
 - **Benchmark refresh preparation: pinned datasets, a per-query journal,
   offline token counting and energy per scored query.** Scores and retrieval
   are unchanged; nothing here runs a scored benchmark.
@@ -35,6 +174,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The `@claude` mention workflow (`.github/workflows/claude.yml`) checks out full history and can run git, gh and the test runners.
 - **No hook installs dependencies any more; run `claude --init-only` after
   `claude plugin install` and after `claude plugin update`** (ADR-1108,
   replacing ADR-1104 decision 4). Every hook used to install whenever its
@@ -326,6 +466,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- `.github/workflows/claude.yml`: the @claude mention workflow can run ruff, uv, pipx, coverage, tsc, shellcheck and the Claude CLI.
 - **`uv.lock` is the only dependency source (ADR-1092).** The thirteen
   generated `requirements/*.txt` exports, their generator and the launcher's
   hand-kept pins are gone. CI jobs, the three Docker images and the

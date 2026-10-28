@@ -22,7 +22,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from mcp_server.hooks import post_commit_reindex as hook
-from mcp_server.shared import log_rotation
+from tests_py.hooks._spawn_logged_fake import fake_spawn
 from tests_py._windows_spawn_fake import (
     as_windows_in_breakaway_job,
     assert_detached_on_windows,
@@ -168,7 +168,7 @@ class TestSpawnReanalyzeInterpreterResolution:
             captured["cmd"] = cmd
             return MagicMock()
 
-        monkeypatch.setattr(hook.subprocess, "Popen", _fake_popen)
+        fake_spawn(monkeypatch, hook, popen=_fake_popen)
 
         assert hook._spawn_reanalyze(str(tmp_path)) is True
         assert captured["cmd"][0] == sys.executable
@@ -177,20 +177,13 @@ class TestSpawnReanalyzeInterpreterResolution:
     def test_spawn_reanalyze_builds_expected_command(self, tmp_path, monkeypatch):
         plugin_root = self._write_launcher(tmp_path, monkeypatch)
         captured = {}
-        opened_paths = []
-        real_open = open
 
         def _fake_popen(cmd, **kwargs):
             captured["cmd"] = cmd
             captured["kwargs"] = kwargs
             return MagicMock()
 
-        def _tracking_open(path, *args, **kwargs):
-            opened_paths.append(str(path))
-            return real_open(path, *args, **kwargs)
-
-        monkeypatch.setattr(hook.subprocess, "Popen", _fake_popen)
-        monkeypatch.setattr(log_rotation, "open", _tracking_open, raising=False)
+        fake_spawn(monkeypatch, hook, popen=_fake_popen)
         as_windows_in_breakaway_job(monkeypatch)
 
         assert hook._spawn_reanalyze("/some/repo") is True
@@ -202,15 +195,13 @@ class TestSpawnReanalyzeInterpreterResolution:
             "/some/repo",
             "--reindex",
         ]
-        assert captured["kwargs"]["stdin"] == hook.subprocess.DEVNULL
-        assert captured["kwargs"]["stderr"] == hook.subprocess.STDOUT
         assert_detached_on_windows(captured["kwargs"])
         # Exact (case-sensitive) log path string — asserting via
         # Path.exists() alone is not portable: case-insensitive filesystems
         # (default macOS APFS) treat ".claude" and ".CLAUDE" as identical.
         log_path = tmp_path / ".claude" / "methodology" / "pipeline_reanalyze.log"
-        assert opened_paths == [str(log_path)]
-        assert captured["kwargs"]["stdout"].name == str(log_path)
+        # source: ADR-1110 — the log is written by the redaction relay
+        assert captured["kwargs"]["log_path"] == log_path
 
         # A second commit's spawn must also succeed: mkdir's parent directory
         # already exists on this call, exercising exist_ok=True.
@@ -222,7 +213,7 @@ class TestSpawnReanalyzeInterpreterResolution:
         monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(tmp_path / "no-scripts-dir"))
         monkeypatch.delenv("CORTEX_CLAUDE_DIR", raising=False)
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
-        with patch.object(hook.subprocess, "Popen") as popen:
+        with patch.object(hook, "spawn_logged") as popen:
             assert hook._spawn_reanalyze("/some/repo") is False
         popen.assert_not_called()
 
@@ -242,7 +233,7 @@ class TestSpawnReanalyzeInterpreterResolution:
             captured["cmd"] = cmd
             return MagicMock()
 
-        monkeypatch.setattr(hook.subprocess, "Popen", _fake_popen)
+        fake_spawn(monkeypatch, hook, popen=_fake_popen)
 
         assert hook._spawn_reanalyze("/some/repo") is True
         expected_launcher = (
@@ -258,7 +249,7 @@ class TestSpawnReanalyzeInterpreterResolution:
         def _boom(cmd, **kwargs):
             raise OSError("no such interpreter")
 
-        monkeypatch.setattr(hook.subprocess, "Popen", _boom)
+        fake_spawn(monkeypatch, hook, popen=_boom)
 
         assert hook._spawn_reanalyze("/some/repo") is False
         err = capsys.readouterr().err

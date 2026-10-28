@@ -4,10 +4,10 @@ source: ADR-0498"""
 
 from __future__ import annotations
 
-import sqlite3
 from pathlib import Path
 
 from mcp_server.hooks.session_start_common import _log
+from mcp_server.infrastructure.db_connect import sqlite_connect
 
 
 def _claude_mem_source() -> dict | None:
@@ -16,7 +16,7 @@ def _claude_mem_source() -> dict | None:
     if not claude_mem_db.exists():
         return None
     try:
-        conn = sqlite3.connect(str(claude_mem_db))
+        conn = sqlite_connect(str(claude_mem_db))  # source: ADR-1110
         count = conn.execute("SELECT COUNT(*) FROM observations").fetchone()[0]
         conn.close()
     except Exception:  # noqa: BLE001 — external-source probe — failure is reported as a count-0 source entry in the banner

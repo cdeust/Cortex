@@ -126,7 +126,7 @@ def _open_sqlite_store() -> tuple[object, int, str] | str:
     except Exception as exc:  # noqa: BLE001 — hook boundary: the cause reaches the user as "not ready"
         _log(f"SQLite store unavailable: {exc}")
         return _status.not_ready(f"the SQLite memory store did not open: {exc}")
-    return store, total, _status.ready(f"SQLite memory at {where}", total)
+    return store, total, _status.sqlite_ready(f"SQLite memory at {where}", total)
 
 
 def _print_sqlite_cold_start(backfill: Callable[[], int]) -> None:

@@ -25,7 +25,7 @@ from mcp_server.core.gist_extraction import (
 )
 from mcp_server.hooks._capture_mode import capture_skip_reason
 from mcp_server.hooks._capture_mode import HIGH_VALUE_TOOLS as _HIGH_VALUE_TOOLS
-from mcp_server.shared.redaction import scrub_secrets
+from mcp_server.shared.redaction_gate import redact_text
 
 _LOG_PREFIX = "[cortex-post-tool-capture]"
 
@@ -352,11 +352,14 @@ def process_event(event: dict[str, Any]) -> None:
         _log(f"skip {tool_name}: {reason}")
         return
 
-    # Scrub secrets from the tool output BEFORE tagging, gisting, or
-    # persisting.  This is the single choke point on the write path.
-    # scrub_secrets covers: URL passwords, AWS keys, bearer tokens,
-    # key=value secret assignments, and PEM private-key blocks.
-    output = scrub_secrets(output)
+    # A gist is cut out of the output, and a cut could shorten a secret
+    # below what the detector recognises: redact an output that will be
+    # gisted before cutting it (the artifact store receives that same
+    # redacted object and does not scan it again). An output kept whole is
+    # redacted once, inside the content below. Tags are a fixed vocabulary
+    # and carry no output text. source: ADR-1110 (review of PR #775, N2)
+    if needs_gist(output):
+        output = redact_text(output)
 
     # Tags are derived from the FULL output so signal tags (error/test/
     # success) survive even when the body is gisted.
@@ -365,8 +368,8 @@ def process_event(event: dict[str, Any]) -> None:
     content = _build_memory_content(tool_name, tool_input, body_output, cwd)
     if pointer:
         content = f"{content}\n\n{pointer}"
-    # source: ADR-0495
-    content = scrub_secrets(content)
+    # source: ADR-0495 (content shape); ADR-1110 — the hook redacts it once
+    content = redact_text(content)
 
     try:
         _store_memory(tool_name, content, tags, cwd)

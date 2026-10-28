@@ -14,6 +14,7 @@ CODE_JOBS = frozenset(
     {
         "test",
         "test-sqlite",
+        "managed-pg",
         "mcp-host-config",
         "test-windows",
         "release-deps",
@@ -24,7 +25,7 @@ CODE_JOBS = frozenset(
     }
 )
 DOCKER_BUILD_JOBS = frozenset({"docker-runtime-build", "devcontainer-build"})
-ALWAYS_JOBS = frozenset({"changes", "lint"})
+ALWAYS_JOBS = frozenset({"changes", "lint", "secret-scan"})  # secret-scan: ADR-1110
 CONDITIONAL_JOBS = CODE_JOBS | DOCKER_BUILD_JOBS | {"docker-smoke"}
 EXPECTED_JOBS = ALWAYS_JOBS | CONDITIONAL_JOBS
 # source: ADR-0711

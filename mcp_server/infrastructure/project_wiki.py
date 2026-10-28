@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from mcp_server.shared.wiki_decision_ids import decision_id, parse_decision_filename
+from mcp_server.shared import gated_files
 
 
 def contained_file(root: Path, relative: str) -> Path:
@@ -65,13 +66,7 @@ def resolve_wiki_root(project_root: str | None, default_root: Path) -> Path:
 
 def save_manifest(project_root: Path, manifest: dict[str, Any]) -> None:
     path = contained_file(project_root.resolve(), "wiki/manifest.json")
-    temporary = path.with_suffix(".json.tmp")
-    if temporary.is_symlink():
-        raise ValueError("project wiki manifest temporary path is a symlink")
-    temporary.write_text(
-        json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
-    temporary.replace(path)
+    gated_files.write_text(path, json.dumps(manifest, indent=2, sort_keys=True) + "\n")
 
 
 def register_project_page(

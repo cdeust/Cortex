@@ -10,6 +10,7 @@ from contextlib import contextmanager
 from typing import Iterator
 
 from mcp_server.shared.platform import home_dir
+from mcp_server.shared.private_paths import open_lock_file
 
 _LOCK_FILE = home_dir() / ".claude" / "methodology" / ".install.lock"
 
@@ -25,7 +26,7 @@ def install_lock() -> Iterator[None]:
 
         source: ADR-0586"""
     _LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
-    fd = os.open(str(_LOCK_FILE), os.O_RDWR | os.O_CREAT, 0o644)
+    fd = open_lock_file(_LOCK_FILE)
     try:
         _acquire(fd)
         try:

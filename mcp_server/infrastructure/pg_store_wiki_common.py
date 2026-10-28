@@ -9,10 +9,17 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
+from mcp_server.shared.redaction_gate import redact_text
+
 
 def body_hash(body: str) -> str:
-    """Deterministic hash of a page body — drives idempotent upserts."""
-    return hashlib.sha256(body.encode("utf-8")).hexdigest()
+    """Deterministic hash of a page body — drives idempotent upserts.
+
+    Taken over the body as the gate stores it: a fast hash of the body
+    before redaction, kept next to the redacted body, would let anyone with
+    the database confirm guesses for the secret it held.
+    source: ADR-1110 (CodeQL py/weak-sensitive-data-hashing on PR #775)"""
+    return hashlib.sha256(redact_text(body).encode("utf-8")).hexdigest()
 
 
 def _returning_id(row: dict[str, Any] | tuple[Any, ...] | None) -> int:

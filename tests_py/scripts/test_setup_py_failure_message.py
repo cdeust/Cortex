@@ -13,11 +13,13 @@ reports, colour codes included. No pip, no PostgreSQL, no model download.
 
 from __future__ import annotations
 
-import shutil
 import subprocess
 from pathlib import Path
 
-import pytest
+from mcp_server.shared.platform import resolve_bash
+
+# A bare "bash" on Windows is the System32 WSL stub. source: ADR-1101
+BASH = resolve_bash()
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LIB_PATH = REPO_ROOT / "scripts" / "lib" / "setup_py_step.sh"
@@ -54,15 +56,11 @@ source "{lib_path}"
 run_setup_py bash -c 'printf "unbuffered=%s\\n" "${{PYTHONUNBUFFERED:-unset}}"'
 """
 
-pytestmark = pytest.mark.skipif(
-    shutil.which("bash") is None, reason="bash is required to drive the shell library"
-)
-
 
 def _drive(output: str, exit_code: int) -> str:
     script = _HARNESS.format(lib_path=LIB_PATH, output=output, exit_code=exit_code)
     result = subprocess.run(
-        ["bash", "-c", script], capture_output=True, text=True, timeout=30
+        [BASH, "-c", script], capture_output=True, text=True, timeout=30
     )
     assert result.returncode == 0, result.stderr
     return result.stdout
@@ -154,7 +152,7 @@ def test_the_run_is_unbuffered_so_tee_does_not_hide_progress():
     are, so the assignment prefix has to reach the child's environment."""
     script = _ENV_HARNESS.format(lib_path=LIB_PATH)
     result = subprocess.run(
-        ["bash", "-c", script], capture_output=True, text=True, timeout=30
+        [BASH, "-c", script], capture_output=True, text=True, timeout=30
     )
 
     assert result.returncode == 0, result.stderr

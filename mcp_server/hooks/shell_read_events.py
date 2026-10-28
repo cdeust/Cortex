@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from mcp_server.hooks.shell_read_paths import shell_read_paths
+from mcp_server.shared import gated_files
 
 
 def _response(event: dict[str, Any]) -> dict[str, Any]:
@@ -90,6 +91,5 @@ def completed_shell_read(
         return paths, project
     pending = _pending_path(pending_root, event, response.get("session_id"))
     if paths and pending is not None and response.get("exit_code") is None:
-        pending.parent.mkdir(parents=True, exist_ok=True)
-        pending.write_text(json.dumps({"paths": paths, "project": project}))
+        gated_files.write_json(pending, {"paths": paths, "project": project})
     return [], project

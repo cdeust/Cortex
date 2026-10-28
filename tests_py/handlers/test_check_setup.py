@@ -31,7 +31,7 @@ class TestCheckSetupHandlerAllGreen:
 
     def test_ready_true_when_all_pass(self, monkeypatch):
         checks = [
-            lambda: _fake_check("Python >= 3.10", True),
+            lambda: _fake_check("Python >= 3.11", True),
             lambda: _fake_check("PG Python drivers", True),
             lambda: _fake_check("DATABASE_URL", True),
             lambda: _fake_check("PG connection", True),
@@ -57,7 +57,7 @@ class TestCheckSetupHandlerDbDown:
 
     def test_ready_false_and_fixes_needed_counts_required_only(self, monkeypatch):
         checks = [
-            lambda: _fake_check("Python >= 3.10", True),
+            lambda: _fake_check("Python >= 3.11", True),
             lambda: _fake_check("PG Python drivers", True),
             lambda: _fake_check("DATABASE_URL", True),
             lambda: _fake_check(
@@ -83,7 +83,7 @@ class TestCheckSetupHandlerDbDown:
 
     def test_optional_only_failure_still_ready(self, monkeypatch):
         checks = [
-            lambda: _fake_check("Python >= 3.10", True),
+            lambda: _fake_check("Python >= 3.11", True),
             lambda: _fake_check("codebase-pipeline (optional)", False, optional=True),
         ]
         monkeypatch.setattr(
@@ -131,7 +131,7 @@ class TestCheckSetupHandlerNoDuplication:
 
     def test_uses_real_doctor_checks_python_version_passes(self):
         result = asyncio.run(handler())
-        py_check = next(c for c in result["checks"] if c["name"] == "Python >= 3.10")
+        py_check = next(c for c in result["checks"] if c["name"] == "Python >= 3.11")
         assert py_check["ok"] is True
 
     def test_check_shape(self):

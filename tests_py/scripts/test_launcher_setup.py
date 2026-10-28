@@ -21,6 +21,7 @@ def setup_env(monkeypatch, tmp_path):
     monkeypatch.syspath_prepend(str(REPO_ROOT / "scripts"))
     import launcher_deps
     import launcher_layout
+    import launcher_pg_provision
     import launcher_setup
 
     key = launcher_deps.lock_key()
@@ -39,6 +40,12 @@ def setup_env(monkeypatch, tmp_path):
         launcher_setup.launcher_gc,
         "collect",
         lambda root, data: removed.append((root, data)) or [],
+    )
+    # The managed PostgreSQL step has its own tests (test_launcher_pg_*).
+    monkeypatch.setattr(
+        launcher_setup,
+        "managed_pg_step",
+        lambda deps, say: launcher_pg_provision.StepOutcome(),
     )
     monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(REPO_ROOT))
     monkeypatch.delenv("CORTEX_RUNNING_ROOT", raising=False)

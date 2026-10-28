@@ -50,6 +50,7 @@ from mcp_server.shared.hook_state_paths import cooldown_path
 from mcp_server.shared.project_scope import resolve_project_root
 from mcp_server.hooks.shell_read_events import completed_shell_read
 from mcp_server.infrastructure.file_memory_priming import prime_file_memories
+from mcp_server.shared import gated_files
 
 _LOG_PREFIX = "[cortex-preemptive]"
 _HEAT_BOOST = 0.1  # source: ADR-0496 — preserved existing activation increment
@@ -94,8 +95,7 @@ def _update_cooldown(file_path: str) -> None:
         if len(data) > _MAX_COOLDOWN_ENTRIES:
             sorted_items = sorted(data.items(), key=lambda x: x[1], reverse=True)
             data = dict(sorted_items[:_MAX_COOLDOWN_ENTRIES])
-        _COOLDOWN_FILE.parent.mkdir(parents=True, exist_ok=True)
-        _COOLDOWN_FILE.write_text(json.dumps(data))
+        gated_files.write_json(_COOLDOWN_FILE, data)
     except (OSError, ValueError, TypeError):
         # Cooldown cache is disposable: a failed write only means the next
         # run skips the cooldown, which is safe.

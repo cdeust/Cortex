@@ -6,12 +6,19 @@ from __future__ import annotations
 
 import os
 import stat
+import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import TextIO
 
+from mcp_server.shared.gated_files import RedactingStream
 from mcp_server.shared.log_file_lock import log_file_lock
+from mcp_server.shared.private_paths import (
+    PRIVATE_FILE_MODE,
+    ensure_private_dir,
+    is_private,
+)
 
 # source: ADR-0655
 
@@ -45,14 +52,24 @@ def _rotate_if_needed(path: Path, incoming_bytes: int) -> None:
 
 
 @contextmanager
-def open_rotating_log(path: Path, incoming_bytes: int = 0) -> Iterator[TextIO]:
+def open_rotating_log(
+    path: Path, incoming_bytes: int = 0, mode: int | None = None
+) -> Iterator[TextIO]:
     """Rotate/open under one lock; close the parent's descriptor on exit.
 
     The caller must keep its write or Popen inside this context. Any filesystem
     or locking error propagates to the writer's existing logged failure boundary.
     """
-    path.parent.mkdir(parents=True, exist_ok=True)
+    if mode is None and is_private(path):
+        mode = PRIVATE_FILE_MODE  # source: ADR-1112
+    ensure_private_dir(path.parent)
     with log_file_lock(path):
         _rotate_if_needed(path, incoming_bytes)
         with open(path, "a", encoding="utf-8", newline="\n") as stream:
-            yield stream
+            if mode is not None and sys.platform != "win32":
+                # on the descriptor actually written, after any rotation
+                os.fchmod(stream.fileno(), mode)
+            # source: ADR-1110 — writers get a redacting stream; it has no
+            # descriptor, so no child process can be handed this file raw
+            # (children log through infrastructure/log_relay instead).
+            yield RedactingStream(stream)  # type: ignore[misc]

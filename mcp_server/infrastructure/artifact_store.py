@@ -13,6 +13,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from mcp_server.infrastructure.config import METHODOLOGY_DIR
+from mcp_server.shared import gated_files
+from mcp_server.shared.redaction_gate import redact_text
 
 ARTIFACTS_DIR = METHODOLOGY_DIR / "artifacts"
 
@@ -30,12 +32,14 @@ def store_artifact(content: str, *, created_at: datetime | None = None) -> Path:
     exists it is NOT rewritten (dedup — identical content maps to one path).
     Parent directories are created as needed. Returns the artifact path.
     """
+    # source: ADR-1110 — the address is taken over the redacted text, so the
+    # name of the file is not derived from a secret either.
+    content = redact_text(content)
     when = created_at or datetime.now(timezone.utc)
     shard = ARTIFACTS_DIR / f"{when.year:04d}-{when.month:02d}"
     address = hashlib.sha256(content.encode("utf-8")).hexdigest()[:_ADDRESS_LEN]
     path = shard / f"{address}.md"
     if path.exists():
         return path
-    shard.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
+    gated_files.write_text(path, content)
     return path

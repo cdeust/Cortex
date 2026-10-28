@@ -722,5 +722,5 @@ class RepositoryTests(unittest.TestCase):
         for a dated claim, false is not for a live one.
         """
         readme = (Path(gen.REPO_ROOT) / "README.md").read_text(encoding="utf-8")
-        self.assertIn("actions/workflows/ci.yml/badge.svg", readme)
+        self.assertIn("actions/workflows/pipeline.yml/badge.svg", readme)
         self.assertIn("bestpractices.dev/projects/13836/badge", readme)

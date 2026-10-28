@@ -23,6 +23,8 @@ from pathlib import Path
 from typing import TextIO
 
 from mcp_server.shared.log_rotation import open_rotating_log
+from mcp_server.shared import gated_files
+from mcp_server.shared.private_paths import open_lock_file
 
 if sys.platform == "win32":
     import msvcrt
@@ -91,11 +93,7 @@ def open_log(spool: Path) -> Iterator[TextIO]:
     logging exists. Rotation happens at each open (``open_rotating_log``, ADR-0655:
     one ``.1`` generation), so the file stays bounded. The Popen must run inside
     this context. source: ADR-0488 (private diagnostics, owner-only mode)"""
-    with open_rotating_log(log_path(spool)) as stream:
-        # on the descriptor that is actually written, after any rotation
-        # created a fresh file with the umask's mode
-        if sys.platform != "win32":
-            os.fchmod(stream.fileno(), PRIVATE_FILE)
+    with open_rotating_log(log_path(spool), mode=PRIVATE_FILE) as stream:
         yield stream
 
 
@@ -104,10 +102,9 @@ def write(spool: Path, payload: dict[str, object]) -> Path:
     postcondition: one complete ``*.json`` file holds ``payload``; a reader never
     sees a partial one (written under another suffix, then ``os.replace``d)."""
     name = f"{time.time_ns():020d}-{os.getpid()}-{uuid.uuid4().hex[:8]}"
-    partial = spool / f".{name}{_PARTIAL_SUFFIX}"
     target = spool / f"{name}{_PAYLOAD_SUFFIX}"
-    partial.write_text(json.dumps(payload), encoding="utf-8")
-    os.replace(partial, target)
+    # source: ADR-1110 — redacted, published atomically under a dot-name
+    gated_files.write_json(target, payload, mode=0o600)
     return target
 
 
@@ -171,7 +168,7 @@ def drain_lock(spool: Path) -> Iterator[bool]:
 
     postcondition: at most one process yields True at a time; a lost race
     yields False at once (never waits), any other ``OSError`` propagates."""
-    descriptor = os.open(spool.parent / "drain.lock", os.O_RDWR | os.O_CREAT, 0o600)
+    descriptor = open_lock_file(spool.parent / "drain.lock")
     held = False
     try:
         held = _try_lock(descriptor)

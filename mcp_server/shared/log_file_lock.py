@@ -11,6 +11,8 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
+from mcp_server.shared.private_paths import open_lock_file
+
 _THREAD_LOCK = threading.Lock()
 
 
@@ -21,7 +23,7 @@ def log_file_lock(path: Path) -> Iterator[None]:
     source: ADR-0654
     """
     # source: ADR-0654
-    descriptor = os.open(str(path) + ".lock", os.O_RDWR | os.O_CREAT, 0o600)
+    descriptor = open_lock_file(str(path) + ".lock")
     try:
         with _THREAD_LOCK:
             _acquire(descriptor)

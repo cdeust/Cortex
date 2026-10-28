@@ -12,18 +12,12 @@ def _probe_was_current(url: str, target_hash: str) -> bool:
     """Read the pre-migration schema state on a short-lived probe connection.
 
     source: ADR-0637"""
-    import psycopg  # noqa: PLC0415 — source: ADR-0637
-    from psycopg.rows import DictRow, dict_row  # noqa: PLC0415 — source: ADR-0637
-
     from mcp_server.infrastructure.pg_store import read_schema_hash  # noqa: PLC0415 — source: ADR-0637
 
-    with psycopg.Connection[DictRow].connect(
-        url,
-        # source: ADR-0637
-        connect_timeout=5,
-        autocommit=True,
-        row_factory=dict_row,
-    ) as probe:
+    from mcp_server.infrastructure.db_connect import pg_connect  # noqa: PLC0415 — source: ADR-0637, ADR-1110
+
+    # source: ADR-0637 (short probe timeout)
+    with pg_connect(url, connect_timeout=5, autocommit=True) as probe:
         return read_schema_hash(probe) == target_hash
 
 

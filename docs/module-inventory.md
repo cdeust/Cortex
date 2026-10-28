@@ -256,7 +256,14 @@ Run the measurement command in the header to get a current file listing.
 - `pg_store_cls.py` — CLS queries (McClelland 1995) + oscillatory-clock state + interference detection
 - `pg_schema.py` — DDL, extensions, PL/pgSQL stored procedures, migrations
 - `memory_config.py` — Runtime configuration (DATABASE_URL, env vars with CORTEX_MEMORY_ prefix)
-- `backend_marker.py` — Persisted plugin backend selection: reads `~/.claude/methodology/backend.json` (written by `scripts/install-plugin.sh`) and resolves it into `CORTEX_MEMORY_STORE_BACKEND` for the launcher, hooks, and doctor
+- `backend_marker.py` — Persisted plugin backend selection: reads `~/.claude/methodology/backend.json` (written by `scripts/install-plugin.sh`) and resolves it into `CORTEX_MEMORY_STORE_BACKEND` for the launcher, hooks, and doctor; a `managed` marker attaches the process to the plugin's own PostgreSQL server (ADR-1114)
+- `managed_pg.py` — The managed PostgreSQL server's cluster root (`~/.claude/methodology/managed-pg`), its three `flock` files and `attach`/`detach` for every surface (ADR-1114)
+- `managed_pg_supervisor.py` — The detached process that owns one managed server: starts it, waits for its last client, stops it (ADR-1114)
+- `managed_pg_server.py` — Starts and stops the managed postmaster; a postmaster is ours only when its PID and kernel start time are the ones recorded at spawn (ADR-1114)
+- `managed_pg_process.py` — Kernel facts and waits: process start time, liveness, exit and directory events (kqueue, inotify + pidfd), no timer (ADR-1114)
+- `managed_pg_pidfile.py` — `postmaster.pid` of one managed cluster: the recorded postmaster's kernel proof, and whether the file's named process is its writer (kernel start time vs line 3) (ADR-1114)
+- `managed_pg_liveness.py` — A client never takes a `running` status whose recorded postmaster is dead: it waits for the supervisor's restart on directory events (ADR-1114)
+- `managed_pg_protocol.py` — Stdlib SCRAM-SHA-256 handshake proving the server holds the cluster's password and accepts connections (ADR-1114)
 - `memory_store.py` — Memory store abstraction
 - `embedding_engine.py` — Vector embeddings (384-dim, sentence-transformers)
 - `artifact_store.py` — Content-addressed raw-output artifacts (`~/.claude/methodology/artifacts/<yyyy-mm>/<sha256[:16]>.md`) backing gist+pointer memories

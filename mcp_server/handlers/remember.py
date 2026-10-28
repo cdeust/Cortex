@@ -41,6 +41,7 @@ from mcp_server.handlers.remember_prepared import PreparedEncoding, PreparedWrit
 from mcp_server.handlers import wiki_memory_sync
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.embedding_engine import get_embedding_engine
+from mcp_server.shared.redaction_gate import redact_text
 from mcp_server.infrastructure.memory_config import (
     get_memory_settings,
     root_agent_topic,
@@ -127,7 +128,9 @@ def _harden_args(args: dict[str, Any] | None) -> bool:
     """Preserve ingestion hardening and connection-rooted scope before validation."""
     if not args or not args.get("content"):
         return False
-    args["content"] = harden_content(args["content"])
+    # source: ADR-1110 — redacted before any derivation (gist, entities,
+    # tags, hash, embedding) so no derived copy carries a secret either.
+    args["content"] = redact_text(harden_content(args["content"]))
     if not args["content"]:
         return False
     root = root_agent_topic()

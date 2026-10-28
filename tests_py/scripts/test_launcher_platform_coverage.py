@@ -45,7 +45,7 @@ LINUX_ARM = "aarch64-manylinux_2_28"
 WINDOWS = "x86_64-pc-windows-msvc"
 MAC_INTEL = "x86_64-apple-darwin"
 MAC_OLD_ARM = "aarch64-apple-darwin"
-PYTHONS = ("3.10", "3.11", "3.12", "3.13", "3.14")
+PYTHONS = ("3.11", "3.12", "3.13", "3.14")
 NO_WHEEL = re.compile(r"Package `(torch|onnxruntime)` can't be installed because it")
 
 # ML cells with no wheel anywhere on the oldest macOS tier: PyTorch publishes
@@ -60,11 +60,11 @@ MAC_TIERS = {
     ((12, 0), "21.6.0", "arm64", "3.12"): ((2, 11), (1, 19)),
     ((12, 0), "21.6.0", "x86_64", "3.12"): ((2, 2), (1, 19)),
     ((12, 0), "21.6.0", "arm64", "3.13"): None,
-    ((13, 0), "22.6.0", "arm64", "3.10"): ((2, 11), (1, 23)),
+    ((13, 0), "22.6.0", "arm64", "3.11"): ((2, 11), (1, 23)),
     ((13, 0), "22.6.0", "arm64", "3.13"): ((2, 11), (1, 23)),
     ((13, 0), "22.6.0", "x86_64", "3.12"): ((2, 2), (1, 23)),
     ((13, 0), "22.6.0", "arm64", "3.14"): None,
-    ((14, 0), "23.6.0", "arm64", "3.10"): ((2, 13), (1, 23)),
+    ((14, 0), "23.6.0", "arm64", "3.11"): ((2, 13), (1, 28)),
     ((14, 0), "23.6.0", "arm64", "3.14"): ((2, 13), (1, 28)),
     ((14, 0), "23.6.0", "x86_64", "3.12"): ((2, 2), (1, 23)),
     ((14, 0), "23.6.0", "x86_64", "3.13"): None,
@@ -107,8 +107,9 @@ def pylocks(uv: str, tmp_path_factory: pytest.TempPathFactory) -> dict[str, Path
     return out
 
 
-def _resolve(uv: str, env: Path, pylock: Path, platform: str, python: str):
+def _resolve(uv: str, env: Path, pylock: Path, target):
     """(returncode, {package: version}, stderr) of a hash-pinned dry run."""
+    platform, python = target
     done = subprocess.run(
         [uv, "pip", "install", "--dry-run", "--offline", "--no-build",
          "--no-config", "--preview-features", "pylock", "--python",
@@ -128,7 +129,7 @@ def _resolve(uv: str, env: Path, pylock: Path, platform: str, python: str):
 def test_base_set_resolves_to_wheels_everywhere(
     uv, empty_env, pylocks, platform, python
 ) -> None:
-    code, picked, stderr = _resolve(uv, empty_env, pylocks["base"], platform, python)
+    code, picked, stderr = _resolve(uv, empty_env, pylocks["base"], (platform, python))
     assert code == 0, stderr
     assert "numpy" in picked
 
@@ -140,7 +141,7 @@ def test_base_set_resolves_to_wheels_everywhere(
 def test_ml_set_resolves_to_a_coherent_stack(
     uv, empty_env, pylocks, platform, python
 ) -> None:
-    code, picked, stderr = _resolve(uv, empty_env, pylocks["ml"], platform, python)
+    code, picked, stderr = _resolve(uv, empty_env, pylocks["ml"], (platform, python))
     if (platform, python) in UNSERVED:
         assert code != 0 and NO_WHEEL.search(stderr), stderr  # loud, never a fallback
         return
@@ -156,7 +157,7 @@ def test_ml_set_resolves_to_a_coherent_stack(
         assert (numpy, transformers) == (2, 5)
     else:
         assert torch >= (2, 12) and numpy == 2 and transformers == 5
-        assert ort >= (1, 24) or python == "3.10"
+        assert ort >= (1, 24)
 
 
 def test_macos_14_and_later_keep_the_newest_torch_and_onnxruntime() -> None:

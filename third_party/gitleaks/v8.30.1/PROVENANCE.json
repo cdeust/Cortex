@@ -1,0 +1,11 @@
+{
+ "component": "gitleaks default rule set",
+ "license": "MIT",
+ "purl": "pkg:github/gitleaks/gitleaks@v8.30.1#config/gitleaks.toml",
+ "retrieved": "2026-10-21",
+ "sha256": "e163e53b9e7e8a8511e77271e2b323ed057759542a6d988258afe3a1fa329caf",
+ "tag": "v8.30.1",
+ "tag_commit": "83d9cd684c87d95d656c1458ef04895a7f1cbd8e",
+ "url": "https://raw.githubusercontent.com/gitleaks/gitleaks/v8.30.1/config/gitleaks.toml",
+ "version": "8.30.1"
+}

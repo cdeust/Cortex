@@ -31,7 +31,6 @@ LOCK = tomllib.loads((REPO / "uv.lock").read_text(encoding="utf-8"))
 PYPROJECT = tomllib.loads((REPO / "pyproject.toml").read_text(encoding="utf-8"))
 UV_PINS = (
     ".github/actions/uv-locked-install/action.yml",
-    ".github/workflows/ci.yml",
     ".github/workflows/release.yml",
 )
 UV_IMAGES = (

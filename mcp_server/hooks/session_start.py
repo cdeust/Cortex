@@ -63,6 +63,7 @@ from mcp_server.hooks.session_start_fetch import (
 )
 from mcp_server.hooks.session_start_sources import _print_external_sources
 from mcp_server.hooks.session_start_sqlite import _backend_is_sqlite, _sqlite_context
+from mcp_server.shared.private_paths import harden_at_startup
 from mcp_server.shared.injection_markers import session_id_from_transcript
 from mcp_server.shared.project_scope import resolve_project_root
 
@@ -145,6 +146,9 @@ def main() -> None:
 
 def _session_start() -> str:
     """Print the context block; return the status line."""
+
+    # source: ADR-1112 — existing installs become owner-only
+    harden_at_startup()
 
     # source: ADR-0498
     event = _read_event()

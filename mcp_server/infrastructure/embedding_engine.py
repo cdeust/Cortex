@@ -36,6 +36,7 @@ from mcp_server.infrastructure.embedding_model_lifecycle import (
     _EmbeddingLifecycleMixin,
     embedding_cache_dir,
 )
+from mcp_server.shared.redaction_gate import redact_text
 from mcp_server.infrastructure.embedding_provider import (
     EmbeddingProvider,
     _EmbeddingMathMixin,
@@ -171,9 +172,10 @@ class EmbeddingEngine(
     def encode(self, text: str) -> bytes | None:
         """Encode text to a float32 byte blob.
 
-        source: ADR-0520"""
+        source: ADR-0520 and ADR-1110 (no vector is derived from a secret)"""
         if not text:
             return None
+        text = redact_text(text)
 
         key = self._cache_key(text)
         if key in self._cache:
@@ -194,7 +196,10 @@ class EmbeddingEngine(
         return result
 
     def encode_batch(self, texts: list[str]) -> list[bytes | None]:
-        """Preserve the batch context; scalar-cache substitution changes vectors."""
+        """Preserve the batch context; scalar-cache substitution changes vectors.
+
+        source: ADR-1110 — inputs pass the redaction gate first."""
+        texts = [redact_text(t) if t else t for t in texts]
         self._ensure_model()
         if self._serve_fallback():
             return self._fallback_provider.encode_batch(texts)
@@ -229,6 +234,7 @@ class EmbeddingEngine(
                 per-text fallback path.
 
         source: ADR-0520"""
+        texts = [redact_text(t) for t in texts if t]  # source: ADR-1110
         to_encode = list(
             dict.fromkeys(
                 t for t in texts if t and self._cache_key(t) not in self._cache

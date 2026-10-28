@@ -5,14 +5,15 @@ source: ADR-0498"""
 from __future__ import annotations
 
 import os
-import subprocess
 from datetime import datetime as _dt, timezone as _tz
 from typing import Any
 
 from mcp_server.hooks.launcher_command import child_command
 from mcp_server.hooks.session_start_common import _log
 from mcp_server.shared import detached_spawn
-from mcp_server.shared.log_rotation import methodology_log_path, open_rotating_log
+from mcp_server.infrastructure.log_relay import spawn_logged
+from mcp_server.shared.log_rotation import methodology_log_path
+from mcp_server.shared import gated_files
 
 
 _CONSOLIDATE_TTL_HOURS: float = float(
@@ -35,14 +36,8 @@ def _spawn_consolidate_cycle(spawn_options: dict[str, Any]) -> int | None:
     cmd = child_command("mcp_server.hooks.consolidate_background")
 
     log_path = methodology_log_path("consolidate.log")
-    with open_rotating_log(log_path) as log:
-        proc = subprocess.Popen(  # noqa: S603 — cmd built from trusted sources
-            cmd,
-            stdin=subprocess.DEVNULL,
-            stdout=log,
-            stderr=subprocess.STDOUT,
-            **spawn_options,
-        )
+    # source: ADR-1110 — the child's output reaches the log only redacted
+    proc = spawn_logged(cmd, log_path, **spawn_options).child
     _log(f"background consolidate spawned → {log_path}")
     return proc.pid
 
@@ -160,13 +155,12 @@ def _legacy_background_consolidate() -> None:
         # decided before the in-flight stamp, like the coordinated path
         spawn_options = detached_spawn.options()
         try:
-            STAMP_PATH.parent.mkdir(parents=True, exist_ok=True)
-            STAMP_PATH.write_text(
+            gated_files.write_text(
+                STAMP_PATH,
                 __import__("datetime")
                 .datetime.now(__import__("datetime").timezone.utc)
                 .isoformat(timespec="seconds")
                 + " (in-flight)",
-                encoding="utf-8",
             )
         except OSError:
             pass

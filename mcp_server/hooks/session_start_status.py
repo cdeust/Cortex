@@ -65,6 +65,19 @@ def ready(store: str, memories: int, environ: Mapping[str, str] = os.environ) ->
     return f"{READY}: {store}, {memories} {noun}; {semantic_clause(environ)}."
 
 
+FALLBACK_ENV = "CORTEX_SQLITE_FALLBACK"  # source: ADR-1114 D3 (set by the launcher)
+
+
+def sqlite_ready(
+    store: str, memories: int, environ: Mapping[str, str] = os.environ
+) -> str:
+    """``ready`` for the SQLite store, plus one line naming why it is the
+    SQLite fallback when Setup could not run the managed server (ADR-1114 D3)."""
+    line = ready(store, memories, environ)
+    cause = environ.get(FALLBACK_ENV, "").strip()
+    return f"{line}\nSQLite fallback: {cause}" if cause else line
+
+
 def not_ready(cause: str) -> str:
     return f"{NOT_READY}: {cause}"
 
