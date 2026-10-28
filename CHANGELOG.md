@@ -8,12 +8,19 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Removed
 
-- Claude repair actions are removed following the owner decision; Claude
-  review returns review-only under ADR-1116 (see Added).
+- The former Claude repair actions are removed following the owner decision.
+  Automatic Claude review remains review-only; owner mentions retain the
+  separate implementation workflow described below and in ADR-1117.
 - Duplicate legacy CI workflows are retired. Pipeline, required CodeQL and the
   protected merge resolver remain active.
 
 ### Fixed
+
+- Owner @claude mentions inherit the official action's tag-mode workspace edit
+  approval instead of overriding it with auto mode (#822). Requests on the same
+  thread are serialized; automatic reviews keep their separate permission mode.
+- Hosted Linux unit runs use Ubuntu PostgreSQL and pgvector packages so the
+  private test cluster can start on runners without libxml2.so.2 (#822).
 
 - Session registry POSIX `ps` probes report nonzero exits and invalid UTF-8
   as named errors with the command and stderr; hooks log the actual cause

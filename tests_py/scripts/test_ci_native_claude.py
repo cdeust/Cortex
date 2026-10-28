@@ -20,17 +20,6 @@ class NativeClaudeTrustTests(unittest.TestCase):
             for step in workflow["jobs"]["review"]["steps"]
             if "claude-code-action@" in step.get("uses", "")
         )
-        args = shlex.split(invocation["with"]["claude_args"])
-        approved = set(args[args.index("--allowedTools") + 1].split(","))
-        self.assertEqual(
-            approved,
-            {
-                "mcp__github_inline_comment__create_inline_comment",
-                "Bash(gh pr comment:*)",
-                "Bash(gh pr diff:*)",
-                "Bash(gh pr view:*)",
-            },
-        )
         self.assertIn("Only post GitHub comments", invocation["with"]["prompt"])
 
     def test_automatic_review_uses_claude_app_identity(self):
@@ -69,7 +58,7 @@ class NativeClaudeTrustTests(unittest.TestCase):
         )
         self.assertFalse(checkout["with"]["persist-credentials"])
 
-    def test_owner_mentions_can_edit_commit_and_push_the_pr_branch(self):
+    def test_owner_mentions_inherit_tag_mode_accept_edits(self):
         # Upstream src/modes/tag/index.ts:159-214 grants workspace edits only
         # through --permission-mode acceptEdits; base-action parse-sdk-options.ts
         # keeps the last --permission-mode, so any workflow value replaces it.
@@ -106,7 +95,20 @@ class NativeClaudeTrustTests(unittest.TestCase):
         )
         self.assertEqual(" ".join(mention["if"].split()), expected)
 
-    def test_automatic_review_retains_auto_permission_mode(self):
+    def test_owner_mentions_serialize_branch_writes(self):
+        workflow = yaml.safe_load(MENTIONS.read_text())
+        mention = workflow["jobs"]["claude"]
+        # source: GitHub Actions concurrency serializes owner requests per thread.
+        self.assertEqual(
+            mention["concurrency"],
+            {
+                "group": "claude-mentions-${{ github.event.issue.number }}",
+                "cancel-in-progress": False,
+            },
+        )
+
+    def test_automatic_review_pins_complete_invocation(self):
+        # source: .github/workflows/claude-review.yml and upstream docs/solutions.md.
         workflow = yaml.safe_load(REVIEW.read_text())
         review = workflow["jobs"]["review"]
         invocation = next(

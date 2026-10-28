@@ -22,6 +22,11 @@ jobs:
       || (github.event_name == 'issues'
        && github.event.issue.user.login == github.repository_owner
        && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude'))))
+    # Serialize owner requests for a thread so branch pushes cannot race.
+    # source: https://docs.github.com/en/actions/using-jobs/using-concurrency
+    concurrency:
+      group: claude-mentions-${{ github.event.issue.number }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -49,8 +54,8 @@ jobs:
           CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          # No --permission-mode: tag mode's acceptEdits allows edits only in
-          # the workspace (src/modes/tag/index.ts at the pinned action SHA).
+          # No --permission-mode: inherit tag mode's workspace edit approval
+          # (src/modes/tag/index.ts at the pinned action SHA).
           # Last value wins: upstream base-action/src/parse-sdk-options.ts.
           claude_args: |
             --strict-mcp-config
