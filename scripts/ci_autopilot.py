@@ -234,8 +234,6 @@ def next_item(options, state, items):
             if result["action"] == "none":
                 waiting = {"state": "review_wait", "item": item, "result": result}
                 continue
-            if result["action"] != "repair":
-                return {"state": "review_resumed", "item": item, "result": result}
             item = {**item, "kind": "pull"}
         key = f"{item['kind']}:{item['number']}"
         if state["seen"].get(key) == item["fingerprint"]:
