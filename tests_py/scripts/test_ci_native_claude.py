@@ -69,6 +69,47 @@ class NativeClaudeTrustTests(unittest.TestCase):
         )
         self.assertFalse(checkout["with"]["persist-credentials"])
 
+    def test_owner_mentions_can_edit_commit_and_push_the_pr_branch(self):
+        # Upstream src/modes/tag/index.ts:159-214 grants workspace edits only
+        # through --permission-mode acceptEdits; base-action parse-sdk-options.ts
+        # keeps the last --permission-mode, so any workflow value replaces it.
+        # Runs 40645284158 and 40645479186 were refused every Edit and Write.
+        workflow = yaml.safe_load(MENTIONS.read_text())
+        mention = workflow["jobs"]["claude"]
+        invocation = next(
+            step
+            for step in mention["steps"]
+            if "claude-code-action@" in step.get("uses", "")
+        )
+        args = shlex.split(invocation["with"]["claude_args"])
+        self.assertNotIn("--permission-mode", args)
+        # Blanket Edit/Write would extend writes beyond the workspace.
+        for flag in ("--allowedTools", "--allowed-tools"):
+            if flag in args:
+                approved = args[args.index(flag) + 1].split(",")
+                self.assertFalse({"Edit", "MultiEdit", "Write"} & set(approved))
+        self.assertEqual(mention["permissions"]["contents"], "write")
+        self.assertIn(
+            "github.event.sender.login == github.repository_owner", mention["if"]
+        )
+        self.assertIn(
+            "github.event.issue.user.login == github.repository_owner", mention["if"]
+        )
+
+    def test_automatic_review_cannot_write_repository_contents(self):
+        workflow = yaml.safe_load(REVIEW.read_text())
+        review = workflow["jobs"]["review"]
+        self.assertEqual(review["permissions"]["contents"], "read")
+        invocation = next(
+            step
+            for step in review["steps"]
+            if "claude-code-action@" in step.get("uses", "")
+        )
+        args = shlex.split(invocation["with"]["claude_args"])
+        approved = args[args.index("--allowedTools") + 1].split(",")
+        for tool in approved:
+            self.assertNotRegex(tool, r"^(Edit|MultiEdit|Write)$|^Bash\(git[ :]")
+
     def test_automatic_review_uses_upstream_app_supported_event(self):
         workflow = yaml.safe_load(REVIEW.read_text())
         events = workflow.get("on", workflow.get(True))
