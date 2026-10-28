@@ -119,6 +119,26 @@ def stop_owned_server(paths) -> None:
             os.close(descriptor)
 
 
+def check_windows_bash_contract() -> None:
+    """Issue #689: run actual manifest hook commands under PowerShell without bash."""
+    if os.name == "nt":
+        subprocess.run(
+            [
+                "pwsh",
+                "-NoProfile",
+                "-NonInteractive",
+                "-File",
+                str(ROOT / "scripts" / "ci_windows_bash.ps1"),
+                "-Python",
+                sys.executable,
+                "-Root",
+                str(ROOT),
+            ],
+            cwd=ROOT,
+            check=True,
+        )
+
+
 def check(work: Path) -> int:
 
     deps = launcher_layout.project_deps_dir(work / "data", ROOT)
@@ -135,6 +155,7 @@ def check(work: Path) -> int:
     try:
         # Exercise the actual host binary, including Git Bash on Windows.
         subprocess.run([resolve_bash(), "-c", "exit 0"], check=True)
+        check_windows_bash_contract()
         outcome = launcher_pg_provision.setup_step(str(work / "data"), print)
         launcher_backend.apply()
         require_backend(
