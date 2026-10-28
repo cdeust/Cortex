@@ -167,7 +167,7 @@ def _recall_memories(conn, query: str, project_root: str | None = None) -> list[
             LIMIT %s
             """
             ),
-            (query, _MIN_HEAT, ancestors, candidate_limit(_MAX_MEMORIES)),
+            (query[:200], _MIN_HEAT, ancestors, candidate_limit(_MAX_MEMORIES)),
         ).fetchall()
 
         results = [_sqlite_result_entry(r["id"], r, r.get("heat", 0)) for r in rows]

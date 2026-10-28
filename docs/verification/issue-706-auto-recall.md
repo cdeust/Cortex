@@ -139,3 +139,23 @@ These measurements distinguish absent candidates from rejected passages and
 provide evidence for a subsequent correction without guessing a new cutoff.
 Raw-score inference failure is an explicit error. All existing parity and
 negative-query assertions remain in force. New hosted results are pending.
+
+
+## Hosted measurement prerequisite at b2087d3
+
+Parity job [122841349229](https://github.com/cdeust/Cortex/actions/runs/40695584656/job/122841349229)
+stopped at the craftsmanship gate: fetch_by_id exceeded the function-size cap.
+No before/after reports were produced on that head. The function's explanatory
+docstring is shortened without changing retrieval, access scope or pagination.
+
+PostgreSQL lexical discovery again uses the pre-fix 200-character query prefix;
+semantic ranking still receives the full prompt. The hosted regression
+test_long_prompt_keeps_lexical_prefix_and_full_semantic_query checks both inputs.
+Scope-starvation coverage now exceeds the configured candidate windows.
+The parity workflow includes the new PG test and watches its diagnostic module
+and all hook regression files.
+
+The positive/negative parity assertions and the existing abstention policy
+remain unchanged. The next hosted run must finish raw-score measurement before
+a calibrated policy can be selected. The earlier 2-versus-28 retrieval failure
+is unresolved; syntax and structural text checks do not establish parity.

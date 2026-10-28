@@ -15,15 +15,10 @@ from mcp_server.infrastructure.memory_store import MemoryStore
 def fetch_by_id(
     store: MemoryStore, args: dict[str, Any], budget_chars: int
 ) -> dict[str, Any]:
-    """Fetch one memory by id — the retrieval path for truncated results.
+    """Fetch a scoped memory and page its content within the host budget.
 
-    The composition root supplies its resolved budget. ``content_offset``
-    pages through contents larger than the response
-    budget: the slice starts there, ``content_length`` carries the full
-    size, and ``bound_payload`` marks the slice ``truncated`` if it
-    still overflows. ``fmt`` is honored for a self-describing response, but a
-    single-item list rarely benefits from tabular encoding — the budget
-    re-check in ``encode_within_budget`` keeps whichever form fits.
+    The composition root resolves the budget. Copy the stored row before
+    slicing; reserved_budget leaves room for the self-describing format.
     """
     memory_id = int(args["memory_id"])
     content_offset = int(args.get("content_offset") or 0)

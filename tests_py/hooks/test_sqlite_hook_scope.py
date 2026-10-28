@@ -149,9 +149,12 @@ def test_process_event_sqlite_without_project_root_restricts_to_globals(
 
 # ── Starvation: the project's own row must survive a foreign-heavy pool ──
 
-# source: auto_recall._MAX_MEMORIES + 2 and session_start_sqlite._HOT_LIMIT +
-# _ANCHOR_LIMIT -- comfortably above both hooks' LIMIT windows.
-_FOREIGN_ROW_COUNT = 25
+# source: both hooks' configured discovery windows; one extra row proves
+# project filtering precedes LIMIT rather than trimming a fetched pool.
+_FOREIGN_ROW_COUNT = max(
+    auto_recall.candidate_limit(auto_recall._MAX_MEMORIES),
+    session_start_sqlite._HOT_LIMIT + session_start_sqlite._ANCHOR_LIMIT,
+) + 1
 
 
 def _seed_starvation_store(store) -> None:
