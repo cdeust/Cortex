@@ -40,6 +40,10 @@ class EvidenceError(runtime.EvidenceError):
     """Preserve the evidence-reader exception interface for its event callers."""
 
 
+class APIError(runtime.APIError, EvidenceError):
+    """Retain transport category within the reader exception catch boundary."""
+
+
 def _json(text: str) -> Any:
     try:
         return runtime._json(text)
@@ -51,6 +55,8 @@ def _api(endpoint: str, *, paginate: bool = False, fields: Record | None = None)
     try:
         options = {"fields": fields} if fields is not None else {}
         return runtime._api(endpoint, paginate=paginate, **options)
+    except runtime.APIError as exc:
+        raise APIError(exc.category) from exc
     except runtime.EvidenceError as exc:
         raise EvidenceError(str(exc)) from exc
 
@@ -199,12 +205,16 @@ def review_evidence(
         }[result["state"]]
     except runtime.EvidenceError as exc:
         result.update(state="blocked", reason=str(exc), reviews_complete=False)
+        if isinstance(exc, runtime.APIError):
+            result["api_category"] = exc.category
     return result
 
 
 def summary_comments(repo: str, pr: int, sha: str, request) -> list[Record]:
     try:
         return runtime.summary_comments(repo, pr, sha, request)
+    except runtime.APIError as exc:
+        raise APIError(exc.category) from exc
     except runtime.EvidenceError as exc:
         raise EvidenceError(str(exc)) from exc
 

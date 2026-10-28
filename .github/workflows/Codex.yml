@@ -32,6 +32,7 @@ jobs:
        && contains(fromJSON('["success", "failure"]'), github.event.workflow_run.conclusion)
        && github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
+    timeout-minutes: 5 # source: one five-minute schedule period; operational cap.
     outputs:
       pr: ${{ steps.event.outputs.pr }}
     steps:
@@ -51,6 +52,7 @@ jobs:
     needs: identify
     if: needs.identify.outputs.pr != ''
     runs-on: ubuntu-latest
+    timeout-minutes: 5 # source: one five-minute schedule period; operational cap.
     permissions:
       contents: read
       pull-requests: read
@@ -77,11 +79,13 @@ jobs:
       cancel-in-progress: false
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    timeout-minutes: 5 # source: one five-minute schedule period; operational cap.
     permissions:
       contents: read
       pull-requests: read
       issues: read
       actions: read
+      checks: read
     outputs:
       prs: ${{ steps.queue.outputs.prs }}
     steps:
@@ -103,6 +107,7 @@ jobs:
       matrix:
         include: ${{ fromJSON(needs.reconcile-identify.outputs.prs) }}
     runs-on: ubuntu-latest
+    timeout-minutes: 5 # source: one five-minute schedule period; operational cap.
     permissions:
       contents: read
       pull-requests: read

@@ -6,6 +6,7 @@ import io
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 import tempfile
 import unittest
@@ -74,6 +75,15 @@ class ReconciliationBoundaryTests(unittest.TestCase):
             self.assertEqual((code, reads, posts), (1, 0, 0), flags)
             self.assertIn("arguments", err)
             self.assertNotIn("PRIVATE_TOKEN", err)
+
+    def test_ascii_integer_limit_remains_a_reachable_arguments_guard(self):
+        limit = sys.get_int_max_str_digits()
+        if limit:
+            env = dict(GITHUB_REPOSITORY=REPO, GH_TOKEN="PRIVATE_TOKEN")
+            flags = ["--pr", "1" * (limit + 1), "--sha", SHA]
+            self.assertEqual(
+                self.invoke(flags, env), (1, "codex reconcile: arguments\n", 0, 0)
+            )
 
     def test_missing_token_and_invalid_repository_never_read_or_post(self):
         for env in (

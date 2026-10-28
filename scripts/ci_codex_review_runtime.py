@@ -12,6 +12,7 @@ import json
 import os
 import re
 import subprocess
+from http import HTTPStatus
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +21,46 @@ Record = dict[str, Any]
 
 class EvidenceError(ValueError):
     """Only fixed diagnostic categories may cross the CLI boundary."""
+
+
+class APIError(EvidenceError):
+    """Sanitized transport category; the existing public reason remains api."""
+
+    def __init__(self, category="unknown"):
+        super().__init__("api")
+        allowed = ("not_found", "forbidden", "rate_limited")
+        self.category = category if category in allowed else "unknown"
+
+
+def _api_category(output):
+    # source: GitHub REST errors expose status; GraphQL errors expose type.
+    # https://docs.github.com/en/rest/using-the-rest-api/troubleshooting-the-rest-api
+    try:
+        payload = _json(output)
+    except (EvidenceError, TypeError):
+        return "unknown"
+    # gh --paginate --slurp wraps a first-page error in one array element.
+    if isinstance(payload, list) and len(payload) == 1:
+        payload = payload[0]
+    if not isinstance(payload, dict):
+        return "unknown"
+    try:
+        status = HTTPStatus(int(payload.get("status", "")))
+    except (ValueError, TypeError):
+        status = None
+    if status in (HTTPStatus.FORBIDDEN, HTTPStatus.TOO_MANY_REQUESTS):
+        return "forbidden" if status == HTTPStatus.FORBIDDEN else "rate_limited"
+    errors = payload.get("errors", [])
+    if not isinstance(errors, list) or any(not isinstance(row, dict) for row in errors):
+        return "unknown"
+    types = {row.get("type") for row in errors if isinstance(row.get("type"), str)}
+    if "RATE_LIMITED" in types:
+        return "rate_limited"
+    if status == HTTPStatus.NOT_FOUND or (
+        errors and all(row.get("type") == "NOT_FOUND" for row in errors)
+    ):
+        return "not_found"
+    return "unknown"
 
 
 def _pairs(items: list[tuple[str, Any]]) -> Record:
@@ -52,8 +93,10 @@ def _api(endpoint: str, *, paginate: bool = False, fields: Record | None = None)
         command.extend((flag, f"{key}={value}"))
     try:
         done = subprocess.run(command, text=True, capture_output=True, check=True)
+    except subprocess.CalledProcessError as exc:
+        raise APIError(_api_category(exc.stdout)) from exc
     except (OSError, subprocess.SubprocessError) as exc:
-        raise EvidenceError("api") from exc
+        raise APIError() from exc
     return _json(done.stdout)
 
 

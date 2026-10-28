@@ -129,13 +129,7 @@ class Server:
         elif endpoint == PULL + "/reviews/3":
             result = self.data["review"]
         elif endpoint == COMMENTS:
-            if not fields or "reviewThreads(" in fields.get("query", ""):
-                raise AssertionError("unexpected GraphQL query")
-            result = summary_pages(
-                [self.data["comments"]],
-                number=fields["number"],
-                sha=self.data["pull"]["head"]["sha"],
-            )
+            result = self.graphql(fields)
         elif endpoint == RUNS:
             result = [{"total_count": 1, "workflow_runs": [self.data["source"]]}]
         elif endpoint == DETAIL:
@@ -149,6 +143,17 @@ class Server:
         else:
             raise AssertionError("unexpected API endpoint: " + endpoint)
         return copy.deepcopy(result)
+
+    def graphql(self, fields):
+        if not fields:
+            raise AssertionError("unexpected GraphQL query")
+        if "reviewThreads(" in fields["query"]:
+            return [self.data["threads"]]
+        return summary_pages(
+            [self.data["comments"]],
+            number=fields["number"],
+            sha=self.data["pull"]["head"]["sha"],
+        )
 
 
 def invoke(server, name="issue_comment", payload=None, expected=797):

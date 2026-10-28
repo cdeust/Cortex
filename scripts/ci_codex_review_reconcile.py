@@ -3,7 +3,7 @@
 
 Sources: GitHub's supported schedule/workflow_dispatch events and paginated PR API.
 https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows
-https://docs.github.com/en/rest/pulls/pulls#list-pull-requests
+https://docs.github.com/en/graphql/reference/objects#statuscheckrollup
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ci_codex_review_event as events  # noqa: E402
-from ci_codex_reviews import EvidenceError, REPO_PATTERN, SHA_PATTERN  # noqa: E402
+from ci_codex_reviews import APIError, EvidenceError, REPO_PATTERN, SHA_PATTERN  # noqa: E402
 
 
 def _diagnostic(number, category):
@@ -160,6 +160,18 @@ def _rollup_wait(rollup):
         raise EvidenceError("protocol") from exc
 
 
+def _proof_can_resume(row, proof):
+    if proof.get("reviews_complete") is not True:
+        return False
+    if proof.get("state") == "success":
+        return True
+    contexts = row["commits"]["nodes"][0]["commit"]["statusCheckRollup"]["contexts"]
+    if contexts["pageInfo"]["hasNextPage"]:
+        return True  # Partial gate names cannot veto a real readiness repair.
+    reviews = [item for item in contexts["nodes"] if item.get("name") == "review"]
+    return not reviews or any(item.get("conclusion") != "SUCCESS" for item in reviews)
+
+
 def _candidate(repo, row):
     number = events.source.positive(row["number"])
     if not _possible_wait(repo, row):
@@ -167,13 +179,15 @@ def _candidate(repo, row):
     sha = row.get("headRefOid")
     if not isinstance(sha, str) or SHA_PATTERN.fullmatch(sha) is None:
         raise EvidenceError("protocol")
+    proof = events.head_proof(repo, number, sha)
+    if proof.get("reason") == "api":
+        raise APIError(proof.get("api_category", "unknown"))
+    if not _proof_can_resume(row, proof):
+        return None
     run = events.source.latest(repo, sha, number)
     if run is None:
         return None
     jobs = events._jobs(repo, run)
-    proof = events._proof(repo, number, run, jobs)
-    if proof.get("reason") == "api":
-        raise EvidenceError("api")
     plan = events._plan(run, jobs, proof, sha)
     return {"number": number, "sha": sha} if plan["action"] != "none" else None
 
@@ -190,9 +204,14 @@ def discover(repo):
         try:
             candidate = _candidate(repo, row)
         except EvidenceError as exc:
-            if str(exc) == "api":
+            if str(exc) == "api" and not (
+                isinstance(exc, APIError) and exc.category == "not_found"
+            ):
                 raise
-            _diagnostic(row["number"], "protocol")
+            _diagnostic(
+                row["number"],
+                "api/not_found" if isinstance(exc, APIError) else "protocol",
+            )
             continue
         if candidate is not None:
             selected.append(candidate)

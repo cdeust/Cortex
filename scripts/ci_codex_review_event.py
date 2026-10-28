@@ -97,7 +97,10 @@ def _superseded_placeholder(effective: dict[str, Record], category: str) -> bool
 
 
 def _proof(repo: str, number: int, run: Record, jobs: list[Record]) -> Record:
-    sha = run["head_sha"]
+    return head_proof(repo, number, run["head_sha"])
+
+
+def head_proof(repo: str, number: int, sha: str) -> Record:
     rows = summary_comments(repo, number, sha, source._api)
     result = review_evidence(rows, sha, repo, number)
     if result.get("reason") in ("protocol", "arguments"):
