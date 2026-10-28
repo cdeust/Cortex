@@ -82,6 +82,28 @@ def _initdb(paths: managed_pg.PgPaths, tree: Path) -> None:
     os.replace(scratch, paths.cluster)
 
 
+def _prove_runs(tree: Path) -> None:
+    """The tree's ``postgres`` loads on this host (initdb is skipped once a
+    cluster exists, and initdb is what ran ``postgres -V`` before)."""
+    done = subprocess.run(
+        [str(tree / "bin" / "postgres"), "-V"],
+        stdin=subprocess.DEVNULL, capture_output=True, text=True, check=False,
+    )  # fmt: skip
+    if done.returncode:
+        output = f"{done.stdout}{done.stderr}".strip()
+        raise managed_pg.ManagedPgError(
+            f"{tree.name} cannot run here: postgres -V exited "
+            f"{done.returncode}: {output}"
+        )
+
+
+def _record_failure(paths: managed_pg.PgPaths, cause: str) -> None:
+    """``provisioned.json`` says ``failed``. provision() creates the root after
+    host_triple(), so a refusal can arrive before the root exists."""
+    paths.root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    managed_pg.write_json(paths.provisioned, {"state": "failed", "error": cause})
+
+
 def _prepare_database(url: str) -> None:
     """The ``cortex`` database, both extensions, pgvector's check, the schema."""
     import psycopg  # noqa: PLC0415 — in the base set, importable once Setup installed it
@@ -119,7 +141,8 @@ def provision(paths: managed_pg.PgPaths, dist: Path) -> None:
 
     Raises ``launcher_pg_assets.UnsupportedError`` on a host without a pinned
     archive, ``AssetError``/``ManagedPgError``/``OSError``/psycopg errors on any
-    failure; ``provisioned.json`` is then left as it was.
+    failure; ``provisioned.json`` is then left as it was, and ``installed.json``
+    names a tree only once its ``postgres`` has run here.
     """
     target = launcher_pg_assets.host_triple()
     paths.root.mkdir(parents=True, exist_ok=True)
@@ -129,6 +152,7 @@ def provision(paths: managed_pg.PgPaths, dist: Path) -> None:
         managed_pg.flock(install, exclusive=True)  # one install at a time, any key
         tree = launcher_pg_assets.install(dist, target)
         _initdb(paths, tree)
+        _prove_runs(tree)  # before installed.json names it: a working tree stays
         managed_pg.write_json(paths.installed, {"tree": str(tree), "target": target})
         try:
             _prepare_database(managed_pg.attach(paths, os.environ))
@@ -207,15 +231,13 @@ def setup_step(data_dir: str, say) -> StepOutcome:
     except launcher_pg_assets.UnsupportedError as exc:
         cause = f"managed PostgreSQL unavailable here ({exc})"
         if managed:  # the store stays on the managed server: Setup fails
-            managed_pg.write_json(
-                paths.provisioned, {"state": "failed", "error": cause}
-            )
-            return StepOutcome(failed=str(exc))
+            _record_failure(paths, cause)
+            return StepOutcome(failed=cause)
         say(f"{cause}; memories stay in SQLite")
         return StepOutcome(fallback=cause)
     except Exception as exc:  # noqa: BLE001 — every failure is printed with its cause; selection decides fatality
         cause = f"managed PostgreSQL did not start: {type(exc).__name__}: {exc}"
-        managed_pg.write_json(paths.provisioned, {"state": "failed", "error": cause})
+        _record_failure(paths, cause)
         if managed:
             return StepOutcome(failed=cause)
         say(f"{cause}; memories stay in SQLite (log: {paths.log})")

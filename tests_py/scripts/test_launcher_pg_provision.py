@@ -68,7 +68,10 @@ def setup_step(monkeypatch, tmp_path):
     return run, marker, marker.parent / "managed-pg", said
 
 
-_DYLD = "#!/bin/sh\necho 'dyld: Library not loaded' >&2\nexit 1\n"  # source: issue #740
+_DYLD = (
+    '#!/bin/sh\n[ "$1" = -V ] && { echo "postgres (PostgreSQL) 18.6"; exit 0; }\n'
+    "echo 'dyld: Library not loaded' >&2\nexit 1\n"
+)  # source: issue #740 (loads for -V, dies when started)
 
 
 def test_a_server_that_does_not_start_selects_nothing(setup_step, tmp_path):
@@ -139,6 +142,53 @@ def test_a_managed_store_on_an_unsupported_host_fails_setup_and_says_so(
     assert json.loads(marker.read_text())["backend"] == "managed"  # untouched
     assert json.loads((root / "provisioned.json").read_text())["state"] == "failed"
     assert not any("stay in SQLite" in line for line in said)
+
+
+def test_a_managed_store_whose_root_is_gone_fails_setup_with_the_cause(
+    setup_step, monkeypatch
+):
+    # PR #823 review r4399346289: the refusal is raised before provision()
+    # creates the root; recording it must not crash Setup with FileNotFoundError.
+    run, marker, root, said = setup_step
+    import launcher_pg_assets
+    from mcp_server.infrastructure.backend_marker import write_backend_marker
+
+    write_backend_marker("managed", "t", marker, root=str(root))
+    assert not root.exists()
+
+    def old_glibc():
+        raise launcher_pg_assets.UnsupportedError("glibc 2.35 is older than 2.36")
+
+    monkeypatch.setattr(launcher_pg_assets, "host_triple", old_glibc)
+    outcome = run(Path("/nowhere"))
+    assert (
+        outcome.failed
+        == "managed PostgreSQL unavailable here (glibc 2.35 is older than 2.36)"
+    )
+    recorded = json.loads((root / "provisioned.json").read_text())
+    assert recorded == {"state": "failed", "error": outcome.failed}
+    assert said == []
+
+
+def test_a_tree_that_cannot_run_here_is_never_recorded(setup_step, tmp_path):
+    # PR #823 review r4399127060: with the cluster already initialised, initdb
+    # (which runs `postgres -V`) is skipped; the new tree must still prove it
+    # loads before installed.json names it, or the working tree is lost.
+    run, marker, root, _said = setup_step
+    from mcp_server.infrastructure import managed_pg
+    from mcp_server.infrastructure.backend_marker import write_backend_marker
+
+    paths = managed_pg.PgPaths(root)
+    paths.cluster.mkdir(parents=True)
+    (paths.cluster / "PG_VERSION").write_text("18\n")
+    before = {"tree": str(tmp_path / "old-tree"), "target": "aarch64-apple-darwin"}
+    managed_pg.write_json(paths.installed, before)
+    write_backend_marker("managed", "t", marker, root=str(root))
+    loader = "#!/bin/sh\necho 'version `GLIBC_2.36` not found' >&2\nexit 1\n"
+    tree = _tree(tmp_path, initdb=_INITDB_OK, postgres=loader)
+    outcome = run(tree)
+    assert managed_pg.read_json(paths.installed) == before  # still the working tree
+    assert "GLIBC_2.36" in outcome.failed and "postgres -V" in outcome.failed
 
 
 def test_after_a_failed_setup_the_store_stays_eligible_for_the_next_one(
