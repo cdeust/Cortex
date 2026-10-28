@@ -78,8 +78,7 @@ def provide(deps_dir: str) -> str:
     found = _uv_python(deps_dir, "find")
     if found.returncode:
         print(
-            f"[cortex-launcher] Python {sys.version.split()[0]} is older than "
-            f"{SUPPORTED[0]}.{SUPPORTED[1]}; installing Python {MANAGED_PYTHON} "
+            f"[cortex-launcher] installing managed Python {MANAGED_PYTHON} "
             f"into {managed_dir(deps_dir)}",
             file=sys.stderr,
         )

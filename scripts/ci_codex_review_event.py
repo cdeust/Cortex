@@ -21,6 +21,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ci_codex_review_event_source as source  # noqa: E402
 from ci_codex_reviews import EvidenceError, REPO_PATTERN, _json, review_evidence  # noqa: E402
+from ci_codex_reviews import summary_comments  # noqa: E402
 from ci_codex_review_resume import resumption_plan  # noqa: E402
 
 Record = dict[str, Any]
@@ -97,7 +98,7 @@ def _superseded_placeholder(effective: dict[str, Record], category: str) -> bool
 
 def _proof(repo: str, number: int, run: Record, jobs: list[Record]) -> Record:
     sha = run["head_sha"]
-    rows = source.records(f"repos/{repo}/issues/{number}/comments")
+    rows = summary_comments(repo, number, sha, source._api)
     result = review_evidence(rows, sha, repo, number)
     if result.get("reason") in ("protocol", "arguments"):
         raise EvidenceError("protocol")

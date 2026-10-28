@@ -9,7 +9,14 @@ import subprocess
 import unittest
 from unittest.mock import patch
 
-from tests_py.scripts.test_ci_codex_reviews import SHA, OTHER, comment, module, state
+from tests_py.scripts.test_ci_codex_reviews import (
+    SHA,
+    OTHER,
+    comment,
+    module,
+    state,
+    summary_pages,
+)
 
 REPO, PR = "cdeust/Cortex", 805
 FINDING = "<!-- codex-security-review-finding:v1 -->"
@@ -208,7 +215,7 @@ class ResolvedSecurityTests(unittest.TestCase):
         from tests_py.scripts.test_ci_codex_reviews import pull
 
         m = module()
-        replies = [pull(), [[summary()]], [page()], pull()]
+        replies = [pull(), summary_pages([[summary()]], number=PR), [page()], pull()]
         results = [
             subprocess.CompletedProcess([], 0, json.dumps(row), "") for row in replies
         ]

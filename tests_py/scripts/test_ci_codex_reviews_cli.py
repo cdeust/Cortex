@@ -21,6 +21,7 @@ from tests_py.scripts.test_ci_codex_reviews import (
     module,
     pull,
     state,
+    summary_pages,
 )
 
 
@@ -65,7 +66,9 @@ class CodexCliTests(unittest.TestCase):
     def test_success_reads_all_comment_pages_and_checks_head_twice(self):
         stale = comment(state(OTHER))
         current = comment(comment_id=2, updated="2026-10-26T22:01:00Z")
-        code, out, err, calls = self.invoke([pull(), [[stale], [current]], pull()])
+        code, out, err, calls = self.invoke(
+            [pull(), summary_pages([[stale], [current]]), pull()]
+        )
         self.assertEqual(code, 0, err)
         self.assertEqual(json.loads(out)["comment_id"], 2)
         self.assertEqual(len(calls), 3)
@@ -76,14 +79,14 @@ class CodexCliTests(unittest.TestCase):
             self.assertFalse(call.kwargs.get("shell", False))
 
     def test_pending_exit_is_two(self):
-        code, out, err, _ = self.invoke([pull(), [[]], pull()])
+        code, out, err, _ = self.invoke([pull(), summary_pages([[]]), pull()])
         self.assertEqual(code, 2, err)
         self.assertEqual(json.loads(out)["state"], "pending")
 
     def test_changed_head_after_comment_read_blocks(self):
         changed = pull()
         changed["head"]["sha"] = OTHER
-        code, out, err, _ = self.invoke([pull(), [[comment()]], changed])
+        code, out, err, _ = self.invoke([pull(), summary_pages([[comment()]]), changed])
         self.assertEqual(code, 1)
         self.assertNotIn('"state": "success"', out)
         self.assertIn("head", err)
@@ -157,7 +160,7 @@ class CodexCliTests(unittest.TestCase):
             path = Path(directory) / "output"
             with patch.dict(os.environ, {"GITHUB_OUTPUT": str(path)}):
                 code, _, err, _ = self.invoke(
-                    [pull(), [[comment()]], pull()], ["--github-output"]
+                    [pull(), summary_pages([[comment()]]), pull()], ["--github-output"]
                 )
             self.assertEqual(code, 0, err)
             self.assertEqual(
@@ -170,7 +173,7 @@ class CodexCliTests(unittest.TestCase):
         data["security_review"].update(
             has_any_findings=True, has_unresolved_findings=True
         )
-        responses = [pull(), [[comment(data)]], pull()]
+        responses = [pull(), summary_pages([[comment(data)]]), pull()]
         strict, _, _, _ = self.invoke(responses)
         ready, out, err, _ = self.invoke(responses, ["--require-complete"])
         self.assertEqual(strict, 1)
@@ -183,7 +186,8 @@ class CodexCliTests(unittest.TestCase):
             data = state()
             data["security_review"]["status"] = status
             code, _, _, _ = self.invoke(
-                [pull(), [[comment(data)]], pull()], ["--require-complete"]
+                [pull(), summary_pages([[comment(data)]]), pull()],
+                ["--require-complete"],
             )
             self.assertEqual(code, 2 if status == "running" else 1)
 
@@ -194,7 +198,7 @@ class CodexCliTests(unittest.TestCase):
             path = Path(directory) / "output"
             with patch.dict(os.environ, {"GITHUB_OUTPUT": str(path)}):
                 code, _, err, _ = self.invoke(
-                    [pull(), [[comment(data)]], pull()],
+                    [pull(), summary_pages([[comment(data)]]), pull()],
                     ["--require-complete", "--github-output"],
                 )
             self.assertEqual(code, 0, err)
@@ -203,7 +207,7 @@ class CodexCliTests(unittest.TestCase):
     def test_missing_github_output_is_blocked(self):
         with patch.dict(os.environ, {}, clear=True):
             code, out, err, _ = self.invoke(
-                [pull(), [[comment()]], pull()], ["--github-output"]
+                [pull(), summary_pages([[comment()]]), pull()], ["--github-output"]
             )
         self.assertEqual(code, 1)
         self.assertIn("output", err)

@@ -1,9 +1,9 @@
 name: PR Review
 
 # source: https://github.com/anthropics/claude-code-action/blob/8041f1d17e0e7d2f2cfe35002962e9f26237c0bb/.github/workflows/claude-review.yml
-# Trusted-base variant: upstream docs/security.md. Auth: upstream issue713.
+# Native App OIDC auth on same-repository PRs; main checkout retained.
 on:
-  pull_request_target:
+  pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
 
 permissions: {}
@@ -18,6 +18,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+      id-token: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -39,7 +40,6 @@ jobs:
         env:
           CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # Native progress/final publication; pinned action restores base config.
           track_progress: true
@@ -51,6 +51,7 @@ jobs:
             Only post GitHub comments - don't submit review text as messages.
           # Scoped gh permissions are from upstream docs/solutions.md.
           claude_args: |
+            --strict-mcp-config
             --permission-mode auto
             --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
-            --model "claude-opus-4-7"
+            --model "claude-opus-5-5"

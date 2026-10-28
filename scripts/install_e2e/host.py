@@ -88,7 +88,16 @@ def _claude_command() -> tuple[str, ...]:
     # Resolve npm's declared bin instead of executing the .cmd shim. The pinned
     # 2.1.306 package declares bin/claude.exe; older JS packages require Node.
     # source: npm view @anthropic-ai/claude-code@2.1.306 bin --json
-    package = executable.parent / "node_modules/@anthropic-ai/claude-code"
+    # npm Windows global shims live in prefix; local shims in node_modules/.bin.
+    # source: https://docs.npmjs.com/cli/v11/configuring-npm/folders#executables
+    directory = executable.parent
+    modules = directory / "node_modules"
+    if (
+        directory.name.casefold() == ".bin"
+        and directory.parent.name.casefold() == "node_modules"
+    ):
+        modules = directory.parent
+    package = modules / "@anthropic-ai/claude-code"
     manifest = json.loads((package / "package.json").read_text(encoding="utf-8"))
     entry = (package / manifest["bin"]["claude"]).resolve()
     if not entry.is_relative_to(package.resolve()) or not entry.is_file():
