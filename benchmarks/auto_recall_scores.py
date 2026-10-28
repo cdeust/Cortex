@@ -20,6 +20,35 @@ def _neural_vector(text: str) -> bytes:
     return vector
 
 
+def _score_query(case: dict, corpus: list[dict], vectors: dict) -> dict:
+    """Score one query against every fixture passage, CE order first."""
+    query_vector = _neural_vector(case["query"])
+    scores = []
+    for passage in corpus:
+        score = get_raw_ce_score(case["query"], passage["memory"])
+        if score is None:
+            raise RuntimeError("raw parity score inference failed")
+        scores.append(
+            {
+                "memory": passage["memory"],
+                "expected": passage["memory"] == case["expected"],
+                "raw_ce_score": score,
+                "embedding_cosine": cosine_similarity(
+                    query_vector, vectors[passage["memory"]]
+                ),
+            }
+        )
+    embedding_order = sorted(
+        scores, key=lambda row: row["embedding_cosine"], reverse=True
+    )
+    for rank, passage in enumerate(embedding_order, start=1):
+        passage["embedding_rank"] = rank
+    return {
+        **case,
+        "passages": sorted(scores, key=lambda row: row["raw_ce_score"], reverse=True),
+    }
+
+
 def measure_scores(corpus: list[dict], negatives: list[dict]) -> list[dict]:
     """Record every fixture pair, including positive and negative controls.
 
@@ -34,35 +63,4 @@ def measure_scores(corpus: list[dict], negatives: list[dict]) -> list[dict]:
     # with hopfield.cosine_similarity (ADR-0235). Measure the existing signal,
     # without introducing a cosine threshold or changing injection decisions.
     vectors = {case["memory"]: _neural_vector(case["memory"]) for case in corpus}
-    report = []
-    for case in queries:
-        query_vector = _neural_vector(case["query"])
-        scores = []
-        for passage in corpus:
-            score = get_raw_ce_score(case["query"], passage["memory"])
-            if score is None:
-                raise RuntimeError("raw parity score inference failed")
-            scores.append(
-                {
-                    "memory": passage["memory"],
-                    "expected": passage["memory"] == case["expected"],
-                    "raw_ce_score": score,
-                    "embedding_cosine": cosine_similarity(
-                        query_vector, vectors[passage["memory"]]
-                    ),
-                }
-            )
-        embedding_order = sorted(
-            scores, key=lambda row: row["embedding_cosine"], reverse=True
-        )
-        for rank, passage in enumerate(embedding_order, start=1):
-            passage["embedding_rank"] = rank
-        report.append(
-            {
-                **case,
-                "passages": sorted(
-                    scores, key=lambda row: row["raw_ce_score"], reverse=True
-                ),
-            }
-        )
-    return report
+    return [_score_query(case, corpus, vectors) for case in queries]
