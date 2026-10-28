@@ -15,6 +15,7 @@ import uuid
 from ci_autopilot_queue import candidates
 from ci_autopilot_issues import intake
 from ci_autopilot_status import publish
+from ci_autopilot_review import reconcile
 
 # source: gh pr list --help (--limit); fail closed if this operational bound is hit.
 PR_INTAKE_LIMIT = 1000
@@ -201,33 +202,50 @@ def tick(options, state):
     if not settle(options, state, items):
         publish(options, github, state["active"], "dispatched")
         return {"state": "worker_active"}
+    return next_item(options, state, items)
+
+
+def arm_merge(options, state, item):
+    subprocess.run(
+        [
+            "gh",
+            "pr",
+            "merge",
+            str(item["number"]),
+            "--repo",
+            options.repository,
+            "--auto",
+            "--squash",
+            "--match-head-commit",
+            item["sha"],
+        ],
+        cwd=options.repo,
+        check=True,
+    )
+    state["seen"][f"merge:{item['number']}"] = item["fingerprint"]
+    return {"state": "auto_merge_armed", "item": item}
+
+
+def next_item(options, state, items):
+    waiting = {"state": "idle"}
     for item in items:
+        if item["kind"] == "review_resume" and not options.inspect:
+            result = reconcile(options, item)
+            if result["action"] == "none":
+                waiting = {"state": "review_wait", "item": item, "result": result}
+                continue
+            if result["action"] != "repair":
+                return {"state": "review_resumed", "item": item, "result": result}
+            item = {**item, "kind": "pull"}
         key = f"{item['kind']}:{item['number']}"
         if state["seen"].get(key) == item["fingerprint"]:
             continue
         if options.inspect:
             return {"state": "ready", "item": item}
         if item["kind"] == "merge":
-            subprocess.run(
-                [
-                    "gh",
-                    "pr",
-                    "merge",
-                    str(item["number"]),
-                    "--repo",
-                    options.repository,
-                    "--auto",
-                    "--squash",
-                    "--match-head-commit",
-                    item["sha"],
-                ],
-                cwd=options.repo,
-                check=True,
-            )
-            state["seen"][key] = item["fingerprint"]
-            return {"state": "auto_merge_armed", "item": item}
+            return arm_merge(options, state, item)
         return launch(options, state, item)
-    return {"state": "idle"}
+    return waiting
 
 
 def main():

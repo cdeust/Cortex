@@ -16,16 +16,25 @@ import subprocess
 import sys
 
 LABEL = "com.cortex.codex-autopilot"
+# source: adjacent imports of ci_autopilot_review and native evidence/event readers.
+RUNTIME = (
+    "ci_autopilot.py",
+    "ci_autopilot_queue.py",
+    "ci_autopilot_issues.py",
+    "ci_autopilot_status.py",
+    "ci_autopilot_review.py",
+    "ci_codex_review_event.py",
+    "ci_codex_review_event_source.py",
+    "ci_codex_review_resume.py",
+    "ci_codex_reviews.py",
+    "ci_codex_review_runtime.py",
+    "ci_codex_review_comments.py",
+)
 
 
 def copy_runtime(options, root):
     source = Path(__file__).resolve().parent
-    for name in (
-        "ci_autopilot.py",
-        "ci_autopilot_queue.py",
-        "ci_autopilot_issues.py",
-        "ci_autopilot_status.py",
-    ):
+    for name in RUNTIME:
         shutil.copyfile(source / name, root / name)
     brief = source.parent / "docs/automation/codex-worker.md"
     shutil.copyfile(brief, root / "codex-worker.md")
@@ -37,27 +46,13 @@ def copy_runtime(options, root):
     (root / "contract.md").write_text(contract)
     manifest = {
         name: hashlib.sha256((root / name).read_bytes()).hexdigest()
-        for name in (
-            "ci_autopilot.py",
-            "ci_autopilot_queue.py",
-            "ci_autopilot_issues.py",
-            "ci_autopilot_status.py",
-            "codex-worker.md",
-            "contract.md",
-        )
+        for name in (*RUNTIME, "codex-worker.md", "contract.md")
     }
     (root / "installed-sha256.json").write_text(json.dumps(manifest, indent=2))
 
 
-def install(options):
-    if sys.platform != "darwin":
-        raise RuntimeError("This installer targets macOS launchd")
-    if options.interval <= 0:
-        raise ValueError("Polling interval must be positive")
-    root = options.runtime.resolve()
-    root.mkdir(parents=True, exist_ok=True)
-    copy_runtime(options, root)
-    arguments = [
+def runtime_arguments(options, root):
+    return [
         sys.executable,
         "-B",
         str(root / "ci_autopilot.py"),
@@ -71,9 +66,19 @@ def install(options):
         str(root / "codex-worker.md"),
         "--status-comments",
     ]
+
+
+def install(options):
+    if sys.platform != "darwin":
+        raise RuntimeError("This installer targets macOS launchd")
+    if options.interval <= 0:
+        raise ValueError("Polling interval must be positive")
+    root = options.runtime.resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    copy_runtime(options, root)
     configuration = {
         "Label": LABEL,
-        "ProgramArguments": arguments,
+        "ProgramArguments": runtime_arguments(options, root),
         "StartInterval": options.interval,
         "RunAtLoad": True,
         "EnvironmentVariables": {
