@@ -24,6 +24,10 @@ from __future__ import annotations
 
 import subprocess
 from pathlib import Path
+from mcp_server.shared.platform import resolve_bash
+
+# A bare "bash" on Windows is the System32 WSL stub. source: ADR-1101
+BASH = resolve_bash()
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LIB_PATH = REPO_ROOT / "scripts" / "lib" / "precache_embedding_model.sh"
@@ -56,7 +60,7 @@ def _run_step(
     if shadow_pythonpath is not None:
         env["PYTHONPATH"] = shadow_pythonpath
     return subprocess.run(
-        ["bash", "-c", script],
+        [BASH, "-c", script],
         capture_output=True,
         text=True,
         env=env,

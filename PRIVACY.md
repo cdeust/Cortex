@@ -1,6 +1,6 @@
 # Privacy Policy — Cortex (hypermnesia-mcp)
 
-_Last updated: 2026-10-21_
+_Last updated: 2026-10-27_
 
 Cortex is a **local-first** memory server for Claude. It is designed so that your
 data stays on your machine. This policy describes exactly what data Cortex
@@ -143,10 +143,19 @@ The only outbound network activity is:
    `CORTEX_RERANKER_OFFLINE=1`: Cortex then refuses the download when the model
    is not already cached and degrades to first-stage retrieval scores, logging
    a warning that names the path it expected, rather than reaching out.
-3. **Integrations you explicitly enable.** If you configure optional upstream MCP
+3. **Code-intelligence server installation, when you run `scripts/setup.sh`.**
+   This explicit setup step can install ai-architect-mcp-codebase from
+   `cdeust/ai-architect-mcp-codebase` GitHub Releases (about 46 MB, measured
+   by the 2026-10-10 audit in issue #705). When no release fits, it can clone
+   that repository and build it with Rust, downloading the hash-pinned
+   toolchain from `sh.rustup.rs` and packages from crates.io if needed.
+   SessionStart only discovers and registers an installed server; it never
+   downloads or builds one. `CORTEX_AUTO_INSTALL_PIPELINE=0` disables this
+   setup step too.
+4. **Integrations you explicitly enable.** If you configure optional upstream MCP
    servers or a remote PostgreSQL database, Cortex communicates only with the
    endpoints you provided.
-4. **Optional OTLP telemetry export (opt-in, OFF by default).** If you set the
+5. **Optional OTLP telemetry export (opt-in, OFF by default).** If you set the
    `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable, Cortex additionally
    mirrors the same aggregate, content-free metrics already visible via
    `get_telemetry` (per-tool call counts, latencies, and result counts —

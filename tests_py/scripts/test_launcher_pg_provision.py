@@ -126,26 +126,27 @@ def test_after_a_failed_setup_the_store_stays_eligible_for_the_next_one(
     tree = _tree(tmp_path, initdb=_INITDB_OK, postgres="#!/bin/sh\nexit 1\n")
     run(tree)
     assert (marker.parent / "managed-pg").is_dir()  # left behind, not "earlier state"
-    import launcher_backend
     import launcher_pg_select
 
     assert launcher_pg_select.why_not_eligible(os.environ, None, marker) == ""
-    assert launcher_backend.decide(marker.parent, marker.name)[0] == "sqlite"
+    from mcp_server.infrastructure.backend_resolution import decide
+
+    assert decide(marker.parent, marker.name)[0] == "sqlite"
 
 
 def test_a_launch_that_chose_sqlite_during_provisioning_is_not_overwritten(
     setup_step, tmp_path, monkeypatch
 ):
     run, marker, _root, said = setup_step
-    import launcher_backend
     import launcher_pg_provision
     from mcp_server.infrastructure.backend_marker import write_backend_marker
+    from mcp_server.infrastructure.backend_resolution import WRITTEN_BY
 
     store = tmp_path / "memory.db"
     monkeypatch.setenv("CORTEX_MEMORY_DB_PATH", str(store))
 
     def first_launch_meanwhile(paths, dist):
-        write_backend_marker("sqlite", launcher_backend.WRITTEN_BY, marker)
+        write_backend_marker("sqlite", WRITTEN_BY, marker)
         store.write_text("memories")
 
     monkeypatch.setattr(launcher_pg_provision, "provision", first_launch_meanwhile)

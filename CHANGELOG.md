@@ -6,11 +6,35 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Removed
+
+- Claude repair actions are removed following the owner decision; Claude
+  review returns review-only under ADR-1116 (see Added).
+- Duplicate legacy CI workflows are retired. Pipeline, required CodeQL and the
+  protected merge resolver remain active.
+
 ### Fixed
+
+- Share the launcher's first-launch backend policy with wheel hooks and direct
+  MCP startup: a fresh unconfigured HOME records SQLite before settings bind;
+  explicit URLs and managed PostgreSQL keep their existing precedence (#703, #704).
+- Stop installing the optional code-intelligence server during hook discovery;
+  installation remains in explicit `scripts/setup.sh` and is disclosed in
+  `PRIVACY.md` (#705).
 
 - The `merge` job of `.github/workflows/pipeline.yml` sets `GH_REPO: ${{ github.repository }}` on its `gh pr merge` step: the job runs without a checkout, so gh could not infer the repository and failed with `fatal: not a git repository` after every stage was green (session-optimizer #65, run 39756969927, 2026-10-22).
 
+- CI requires completed native Codex code and security reviews on the current
+  head. Unresolved findings block protected integration. Partial reruns retain
+  successful prerequisites and supersede obsolete skipped matrix placeholders.
+
 ### Added
+
+- Claude PR reviews use Anthropic's official direct PR workflow and its five
+  upstream reviewer agents (ADR-1117). Reviewer configuration loads from trusted
+  main; PR content is read through GitHub. This replaces ADR-1116's custom
+  workflow_run marker protocol. Codex retains its native review checks.
+  Evidence: `docs/verification/claude-bot-ci-20261027.md`.
 
 - **The single CI pipeline, run by the Claude bot (ADR-1115).**
   `.github/workflows/pipeline.yml` runs contract, unit (the SQLite-backed
@@ -27,6 +51,11 @@ adheres to [Semantic Versioning](https://semver.org/).
   82 % under the 90 % floor, and the Windows install leg.
 
 ### Security
+
+- Pillow now requires version 13.0.0 or newer to address the advisories affecting
+  12.3.0, including GHSA-5x8w-8jj5-q52h. Pillow 13 requires Python 3.11+, so
+  Python 3.10 users must upgrade. The plugin bootstrap selects its managed
+  Python on older interpreters; direct package installations require 3.11+.
 
 - The Claude Code workflows are aligned with the documented Claude Code GitHub Actions setup (https://code.claude.com/docs/en/github-actions, "Run a skill" and "Respond to @claude mentions"): the PR review runs the code-review plugin skill with `--comment` under read-only review permissions, and no checkout names the PR head ref, which clears CodeQL `actions/untrusted-checkout`.
 - The Claude Code PR review no longer checks out PR code in a privileged workflow (CodeQL `actions/untrusted-checkout/high`, `actions/untrusted-checkout-toctou/high`): the review job moves to `.github/workflows/claude-review.yml`, triggered by `pull_request` only, and `.github/workflows/claude.yml` keeps only the `@claude` job on its comment, review and issue triggers, with no PR head checkout.

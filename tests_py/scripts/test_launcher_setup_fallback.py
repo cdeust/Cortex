@@ -20,11 +20,16 @@ _warm = _base._warm
 _CAUSE = "managed PostgreSQL did not start: ServerError: dyld"  # source: test value
 
 
-def test_an_eligible_store_left_on_sqlite_records_why(setup_env, monkeypatch, capsys):
+def test_an_eligible_store_left_on_sqlite_records_why(
+    setup_env, monkeypatch, capsys, tmp_path
+):
     # D3 (round-3 N1): the fallback was only in setup.log; the outcome said "ready".
     setup, _deps_mod, deps, _installed, _removed = setup_env
     import launcher_pg_provision
 
+    store = str(tmp_path / "memory.db")
+    monkeypatch.setenv("CORTEX_MEMORY_DB_PATH", store)
+    monkeypatch.setenv("CORTEX_MEMORY_SQLITE_FALLBACK_PATH", store)
     monkeypatch.setattr(
         setup,
         "managed_pg_step",
@@ -36,6 +41,7 @@ def test_an_eligible_store_left_on_sqlite_records_why(setup_env, monkeypatch, ca
         "status": "ready",
         "error": "",
         "sqlite_fallback": _CAUSE,
+        "sqlite_fallback_paths": [store, store],
     }
     assert setup.sqlite_fallback(deps) == _CAUSE
     assert f"[cortex-setup] SQLite fallback: {_CAUSE}" in capsys.readouterr().out

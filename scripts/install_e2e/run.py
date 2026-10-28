@@ -32,7 +32,9 @@ import argparse
 import contextlib
 import io
 import json
+import os
 import re
+import shutil
 import sys
 import threading
 import time
@@ -77,12 +79,17 @@ def _init(machine: host.Machine, sandbox: list) -> dict:
     started = time.monotonic()
     shown = io.StringIO()
     with contextlib.redirect_stdout(shown), contextlib.redirect_stderr(shown):
-        code = init_plugin.init([*sandbox, "claude"], host.PLUGIN_ID, machine.env)
-    return {
+        code = init_plugin.init([*sandbox, *machine.cli], host.PLUGIN_ID, machine.env)
+    result = {
         "returncode": code,
         "output": shown.getvalue(),
         "seconds": round(time.monotonic() - started, 2),
     }
+    if code:
+        result["failure_logs"] = evidence.setup_failure_logs(
+            machine.plugin_data, machine.work
+        )
+    return result
 
 
 def _plugin_root(machine: host.Machine, sandbox: list) -> str | None:
@@ -97,6 +104,11 @@ def _plugin_root(machine: host.Machine, sandbox: list) -> str | None:
 def _stdio_in_background(machine: host.Machine, sandbox: list, root: str) -> tuple:
     """The session's own MCP server, started with the session, driven over stdio."""
     argv, env = mcp_session.server_command(Path(root), machine.plugin_data, machine.env)
+    if os.name == "nt":
+        executable = shutil.which(argv[0], path=env["PATH"])
+        if executable is None:
+            raise RuntimeError(f"Installed MCP executable not found: {argv[0]}")
+        argv[0] = executable
     argv = [*sandbox, *argv]  # the stdio server too must never reach a PostgreSQL
     result: dict = {}
 
@@ -150,6 +162,20 @@ def _session(
     return report
 
 
+def _supported_store(hook: dict, *, windows: bool) -> bool:
+    message = hook.get("system_message", "")
+    if not windows:
+        return MANAGED_STORE in message
+    # ADR-1114: native Windows has no pinned managed PG archive. Setup must
+    # disclose that limitation, then the real SQLite store must be ready.
+    return (
+        message.startswith(evidence.READY + ": SQLite memory at ")
+        and "SQLite fallback:" in message
+        and "managed PostgreSQL unavailable here" in message
+        and MANAGED_STORE not in message
+    )
+
+
 def _checks(report: dict, expect_semantic: bool) -> dict:
     first, second = report["session_1"], report.get("session_2", {})
     hook, hook_2 = first["hook"], second.get("hook", {})
@@ -161,9 +187,7 @@ def _checks(report: dict, expect_semantic: bool) -> dict:
         "hook_within_timeout": (hook.get("ms") or 10**9) < timeout_ms,
         "init_exit_0": report["init"]["returncode"] == 0,
         "hook_ready_session_1": hook.get("status") == 0 and message_starts_ready(hook),
-        # Every leg (Linux glibc, macOS arm64 and x86_64) is a host where
-        # Setup gives a fresh install the plugin's own server (ADR-1114).
-        "managed_postgresql_session_1": MANAGED_STORE in hook.get("system_message", ""),
+        "supported_store_session_1": _supported_store(hook, windows=os.name == "nt"),
         "hook_installed_nothing": not any(
             "installing" in text
             for text in (hook.get("stderr", ""), hook.get("stdout", ""))
@@ -230,7 +254,9 @@ def main() -> int:
     parser.add_argument(
         "--marketplace", required=True, help="checkout path or owner/repo"
     )
-    parser.add_argument("--work", required=True, help="scratch directory (recreated)")
+    parser.add_argument(
+        "--work", required=True, help="new disposable directory (must not exist)"
+    )
     parser.add_argument(
         "--python", default="/usr/bin/python3", help="the machine's python3"
     )

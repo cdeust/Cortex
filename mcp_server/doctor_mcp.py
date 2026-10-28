@@ -101,7 +101,7 @@ def _check_python_interpreter() -> McpCheck:
             ok=False,
             detail="no python found on PATH",
             attempted="which python3 / python / py",
-            fix="Install Python 3.10+ and ensure `python3` is on PATH. "
+            fix="Install Python 3.11+ and ensure `python3` is on PATH. "
             "On Windows: `py -3` or add Python to PATH. "
             "On Linux: `apt install python3` / `dnf install python3`.",
         )
@@ -362,7 +362,7 @@ def _check_launcher_smoke(install_path: str | None) -> McpCheck:
         attempted=attempted,
         error=stderr.strip() or (proc.stdout or "").strip() or "no output",
         fix="Run the command above by hand to see the full error. "
-        "Common causes: corrupt install, python version <3.10, "
+        "Common causes: corrupt install, python version <3.11, "
         "missing stdlib modules.",
     )
 

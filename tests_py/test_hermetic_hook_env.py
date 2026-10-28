@@ -5,11 +5,16 @@ source: this PR; contract in tests_py/_hermetic_hook_env.py
 
 from __future__ import annotations
 
+import ctypes
+import errno
+import os
 import subprocess
 import sys
 import threading
 import time
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -19,6 +24,77 @@ from tests_py import _hermetic_hook_env as hermetic
 posix_only = pytest.mark.skipif(
     sys.platform == "win32", reason="the capture worker is POSIX-only (ADR-0486)"
 )
+
+
+@pytest.fixture(params=[False, True], ids=["platform-api", "without-os-pidfd"])
+def process_wait_backend(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Linux exercises libc with a real process even if Python has pidfd_open.
+
+    macOS still exercises kqueue; these runs do not claim Linux kernel evidence.
+    """
+    if request.param:
+        monkeypatch.delattr(os, "pidfd_open", raising=False)
+
+
+def test_linux_pidfd_prefers_the_python_binding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    native = Mock(return_value=object())
+    loader = Mock(side_effect=AssertionError("libc should not be loaded"))
+    monkeypatch.setattr(os, "pidfd_open", native, raising=False)
+    monkeypatch.setattr(ctypes, "CDLL", loader)
+    assert hermetic._open_linux_pidfd(os.getpid()) is native.return_value
+    native.assert_called_once_with(os.getpid())
+
+
+def test_linux_pidfd_libc_binding_keeps_the_descriptor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    read_fd, write_fd = os.pipe()
+    native = Mock(return_value=read_fd)
+    loader = Mock(return_value=SimpleNamespace(pidfd_open=native))
+    monkeypatch.delattr(os, "pidfd_open", raising=False)
+    monkeypatch.setattr(ctypes, "CDLL", loader)
+    try:
+        assert hermetic._open_linux_pidfd(os.getpid()) == read_fd
+        loader.assert_called_once_with(None, use_errno=True)
+        native.assert_called_once_with(os.getpid(), 0)
+        assert native.argtypes == (ctypes.c_int, ctypes.c_uint)
+        assert native.restype is ctypes.c_int
+        os.fstat(read_fd)  # ownership stays with the caller until its wait ends
+    finally:
+        os.close(read_fd)
+        os.close(write_fd)
+
+
+@pytest.mark.parametrize("code", [errno.ESRCH, errno.EPERM, errno.EMFILE])
+def test_linux_pidfd_libc_preserves_errors(
+    monkeypatch: pytest.MonkeyPatch, code: int
+) -> None:
+    def failed_open(pid: int, flags: int) -> int:
+        ctypes.set_errno(code)
+        return -1
+
+    monkeypatch.delattr(os, "pidfd_open", raising=False)
+    monkeypatch.setattr(
+        ctypes, "CDLL", Mock(return_value=SimpleNamespace(pidfd_open=failed_open))
+    )
+    with pytest.raises(OSError) as raised:
+        hermetic._open_linux_pidfd(os.getpid())
+    assert raised.value.errno == code
+    if code == errno.ESRCH:
+        assert isinstance(raised.value, ProcessLookupError)
+
+
+def test_linux_pidfd_missing_libc_symbol_fails_explicitly(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delattr(os, "pidfd_open", raising=False)
+    monkeypatch.setattr(ctypes, "CDLL", Mock(return_value=SimpleNamespace()))
+    with pytest.raises(RuntimeError, match="requires os.pidfd_open or libc.pidfd_open"):
+        hermetic._open_linux_pidfd(os.getpid())
 
 
 def test_no_runtime_directory_means_no_worker_and_returns_at_once(
@@ -102,6 +178,7 @@ def _release(stand_in: subprocess.Popen) -> None:
 
 
 @posix_only
+@pytest.mark.usefixtures("process_wait_backend")
 def test_wait_outlasts_the_released_lease_until_the_process_exits(
     tmp_path: Path, stand_in: subprocess.Popen
 ) -> None:
@@ -119,6 +196,7 @@ def test_wait_outlasts_the_released_lease_until_the_process_exits(
 
 
 @posix_only
+@pytest.mark.usefixtures("process_wait_backend")
 def test_wait_returns_only_after_the_worker_has_exited(
     tmp_path: Path, stand_in: subprocess.Popen
 ) -> None:
@@ -153,6 +231,7 @@ def test_deadline_raises_timeout_while_the_lease_is_held(
 
 
 @posix_only
+@pytest.mark.usefixtures("process_wait_backend")
 def test_deadline_raises_timeout_while_the_process_lingers(
     tmp_path: Path, stand_in: subprocess.Popen
 ) -> None:
@@ -165,6 +244,7 @@ def test_deadline_raises_timeout_while_the_process_lingers(
 
 
 @posix_only
+@pytest.mark.usefixtures("process_wait_backend")
 def test_wait_for_process_exit_returns_at_once_for_a_gone_process() -> None:
     done = subprocess.Popen([sys.executable, "-c", "pass"])
     done.wait()

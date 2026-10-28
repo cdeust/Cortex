@@ -1,6 +1,6 @@
 # Cortex — Persistent Memory MCP Server
 
-Persistent memory and cognitive profiling MCP server for Claude Code. Python 3.10+,
+Persistent memory and cognitive profiling MCP server for Claude Code. Python 3.11+,
 FastMCP, Pydantic, numpy; SQLite by default, PostgreSQL+pgvector opt-in (`PRIVACY.md`).
 
 This file is deliberately short: the host harness (hooks, skills, agents) loads what it
@@ -10,12 +10,12 @@ the zetetic implementation standard). Read it before any non-trivial change.
 
 ## Build & Test
 
-- Install (dev): `uv sync --no-default-groups --extra dev` (add `--extra sqlite` for the
+- Install (dev): `uv sync --locked --no-default-groups --extra dev` (add `--extra sqlite` for the
   SQLite backend). Resolve from `uv.lock`, never from the `pyproject.toml` ranges (issue #253).
 - Preflight: `python -m mcp_server.doctor`
 - Tests: `pytest` · one layer: `pytest tests_py/core/`
-- Lint before every commit: `ruff check && ruff format --check` (CI enforces both).
-- Type gate: CONTRIBUTING.md § *Reproducing the pyright gate locally*.
+- Lint before every commit: `ruff check && ruff format --check`.
+- Optional local type diagnostics: CONTRIBUTING.md § *Running pyright locally*.
 - Craftsmanship gate: `python scripts/check_craftsmanship.py` (300 lines per file, 40 per
   method, layer whitelist, `# source:` on every constant).
 - Release-gate benchmarks: `benchmarks/reproduce.sh`, never against the live database.

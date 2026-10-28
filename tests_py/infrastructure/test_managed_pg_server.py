@@ -16,11 +16,13 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
 
 from mcp_server.infrastructure import managed_pg_pidfile as pidfile
+from tests_py._hermetic_hook_env import wait_for_process_exit
 from tests_py.infrastructure import fake_postgres
 from tests_py.infrastructure.fake_pg_lifeline import fake_pg_lifeline
 
@@ -151,7 +153,7 @@ def test_a_dead_pid_is_not_ours(pg):
     assert pidfile.live_postmaster(paths) is None
 
 
-def test_a_zombie_has_no_start_time(pg):
+def test_a_zombie_has_no_start_time(pg, request):
     # An exited, unreaped postmaster (no init in a container) must read as
     # gone, or a wait for its exit would never end.
     from mcp_server.infrastructure import managed_pg_process
@@ -164,10 +166,15 @@ def test_a_zombie_has_no_start_time(pg):
         server._until(paths.cluster, exit_r, lambda: managed_pg_process.exited(exit_r))
     finally:
         os.close(exit_r)
-    os.waitid(os.P_PID, proc.pid, os.WEXITED | os.WNOWAIT)  # a zombie, not reaped
-    assert managed_pg_process.alive_as_this_user(proc.pid)  # an entry: a zombie
-    assert managed_pg_process.started(proc.pid) is None
-    proc.wait()
+    try:
+        # Kernel exit notification does not reap the child, including on macOS
+        # where os.waitid is absent. Use the suite's configured test deadline.
+        deadline = time.monotonic() + float(request.config.getini("timeout"))
+        wait_for_process_exit(proc.pid, deadline)
+        assert managed_pg_process.alive_as_this_user(proc.pid)  # an entry: a zombie
+        assert managed_pg_process.started(proc.pid) is None
+    finally:
+        proc.wait()
 
 
 def test_start_never_adopts_or_dials_a_foreign_listener(pg, foreign, tmp_path):

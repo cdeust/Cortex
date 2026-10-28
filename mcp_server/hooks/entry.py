@@ -34,8 +34,12 @@ from mcp_server.hooks.host_dispatch import (
     run_all,
 )
 from mcp_server.hooks.output_streams import use_utf8_output
-from mcp_server.infrastructure.backend_marker import apply_backend_resolution
-from mcp_server.infrastructure.managed_pg import ManagedPgError, exit_unless_runnable
+from mcp_server.infrastructure.backend_marker import BackendMarkerError
+from mcp_server.infrastructure.backend_resolution import (
+    resolve_auto_backend,
+    settle_backend,
+)
+from mcp_server.infrastructure.managed_pg import ManagedPgError
 
 # The eleven hook modules the Claude Code plugin manifest wires
 # (.claude-plugin/plugin.json), verified against that file. Anything else
@@ -56,56 +60,12 @@ HOOK_MODULES = frozenset(
     }
 )
 
-# source: scripts/launcher.py:139 -- the same local default, PostgreSQL only.
-_DEFAULT_DATABASE_URL = "postgresql://localhost:5432/cortex"
-
 
 def prepare_environment(
     environ: MutableMapping[str, str], marker_path: Path | None = None
 ) -> None:
-    """Resolve the storage backend and the PostgreSQL DATABASE_URL default.
-
-    Precondition: ``environ`` is mutable (normally ``os.environ``).
-    Postcondition: ``CORTEX_MEMORY_STORE_BACKEND`` carries whatever
-    ``apply_backend_resolution`` resolves (mirrors ``mcp_server/__main__.py``
-    line 22 for the server). A configured namespaced URL is promoted to
-    ``DATABASE_URL``. Claude's explicit PostgreSQL path retains its launcher
-    default; Codex's unconfigured cowork auto path defers that default until
-    the shared store factory has selected the live backend.
-    """
-    apply_backend_resolution(environ, marker_path)
-    backend = environ.get("CORTEX_MEMORY_STORE_BACKEND", "")
-    if "DATABASE_URL" not in environ and backend != "sqlite":
-        named_url = environ.get("CORTEX_MEMORY_DATABASE_URL", "").strip()
-        if named_url:
-            environ["DATABASE_URL"] = named_url
-        elif backend not in {"", "auto"} or environ.get("CORTEX_RUNTIME") != "cowork":
-            environ["DATABASE_URL"] = _DEFAULT_DATABASE_URL
-
-
-def resolve_auto_backend(environ: MutableMapping[str, str]) -> None:
-    """Use the MCP store factory's actual auto-selection for Codex hooks.
-
-    source: ADR-0535 — the factory owns PostgreSQL validation and SQLite
-    fallback, including schema/driver failures that a connection probe misses.
-    """
-    if environ.get("CORTEX_RUNTIME") != "cowork":
-        return
-    if environ.get("CORTEX_MEMORY_STORE_BACKEND", "") not in {"", "auto"}:
-        return
-    if environ.get("DATABASE_URL") or environ.get("CORTEX_MEMORY_DATABASE_URL"):
-        return
-
-    from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: PLC0415 — backend must resolve after environment preparation
-    from mcp_server.infrastructure.memory_config import get_memory_settings  # noqa: PLC0415 — use the factory's selected URL
-    from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore  # noqa: PLC0415 — backend must resolve after environment preparation
-
-    store = get_shared_store()
-    if isinstance(store, SqliteMemoryStore):
-        environ["CORTEX_MEMORY_STORE_BACKEND"] = "sqlite"
-    else:
-        environ["CORTEX_MEMORY_STORE_BACKEND"] = "postgresql"
-        environ["DATABASE_URL"] = get_memory_settings().DATABASE_URL
+    """Resolve the shared backend before hooks import settings (issues #703/#704)."""
+    settle_backend(environ, marker_path)
 
 
 def _print_usage() -> None:
@@ -121,8 +81,9 @@ def _prepare_or_exit(environ: MutableMapping[str, str]) -> None:
     hook in one line, exit 1, never a fallback (source: ADR-1114)."""
     try:
         prepare_environment(environ)
-    except ManagedPgError as exc:
-        exit_unless_runnable(exc, "cortex-hook")
+    except (BackendMarkerError, ManagedPgError, OSError) as exc:
+        print(f"[cortex-hook] Cortex not ready: {exc}", file=sys.stderr)
+        sys.exit(1)
 
 
 def main() -> None:
@@ -154,7 +115,7 @@ def main() -> None:
 
     os.environ.setdefault("CORTEX_RUNTIME", "cowork")
     _prepare_or_exit(os.environ)
-    resolve_auto_backend(os.environ)
+    resolve_auto_backend()
 
     from mcp_server.hooks.wiring import wire_composition_root  # noqa: PLC0415 - issue number 560, same seam as scripts/launcher.py:153
 

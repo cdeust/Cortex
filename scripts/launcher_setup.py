@@ -105,6 +105,9 @@ def _record(
         record["gc_error"] = gc_error
     if fallback:
         record[FALLBACK] = fallback
+        import launcher_pg_select  # noqa: PLC0415 — SQLite decision provenance
+
+        record["sqlite_fallback_paths"] = launcher_pg_select.fallback_store_paths()
     path = status_file(deps_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(record), encoding="utf-8")
@@ -170,7 +173,7 @@ def _warm_model(deps_dir: str, launcher: str, log) -> str:
     return ""
 
 
-def _install(deps_dir: str, launcher: str, log) -> int:
+def _install(deps_dir: str, launcher: str, log, previous: dict) -> int:
     started = time.monotonic()
     _say(f"installing the base dependency set into {deps_dir}")
     launcher_deps.ensure_deps(deps_dir)
@@ -179,6 +182,11 @@ def _install(deps_dir: str, launcher: str, log) -> int:
     step = managed_pg_step(deps_dir, _say)
     if step.failed:
         return _fail(deps_dir, step.failed)
+    import launcher_pg_select  # noqa: PLC0415 — after the base set is installed
+
+    fallback = step.fallback
+    if not fallback and launcher_pg_select.retains_fallback_store(previous):
+        fallback = str(previous.get(FALLBACK) or "")
     if os.environ.get(launcher_ml.ZERO_DOWNLOAD_ENV, "").lower() in ("1", "true"):
         _say(f"semantic search skipped: {launcher_ml.ZERO_DOWNLOAD_ENV} is set")
     else:
@@ -188,16 +196,16 @@ def _install(deps_dir: str, launcher: str, log) -> int:
             return _fail(
                 deps_dir,
                 "the locked semantic-search set did not install",
-                step.fallback,
+                fallback,
             )
         _say("downloading the embedding model")
         cause = _warm_model(deps_dir, launcher, log)
         if cause:
             why = f"the embedding model did not download: {cause}"
-            return _fail(deps_dir, why, step.fallback)
-    _record(deps_dir, "ready", fallback=step.fallback)
-    if step.fallback:
-        _say(f"SQLite fallback: {step.fallback}")
+            return _fail(deps_dir, why, fallback)
+    _record(deps_dir, "ready", fallback=fallback)
+    if fallback:
+        _say(f"SQLite fallback: {fallback}")
     Path(f"{deps_dir}.base-job.failed").unlink(missing_ok=True)
     _say(f"ready in {time.monotonic() - started:.0f} s")
     return 0
@@ -234,8 +242,9 @@ def run(deps_dir: str, launcher: str) -> int:
 
 def _run_locked(deps_dir: str, launcher: str, log) -> int:
     with launcher_lock.held(job_lock(deps_dir), None):
+        previous = outcome(deps_dir)
         _record(deps_dir, "installing")
-        code = _install(deps_dir, launcher, log)
+        code = _install(deps_dir, launcher, log, previous)
     if code == 0:
         _collect(deps_dir)
     return code

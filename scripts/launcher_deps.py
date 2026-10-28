@@ -33,6 +33,7 @@ import launcher_deps_fs as _fs  # noqa: E402
 import launcher_layout as _layout  # noqa: E402
 import launcher_lock as _lock  # noqa: E402
 import launcher_sets as _sets  # noqa: E402
+import launcher_site as _site  # noqa: E402
 import importlib  # noqa: E402
 
 # source: ADR-0747
@@ -58,7 +59,11 @@ def _importable(import_name: str, deps_dir: str) -> bool:
 
     try:
         mod = importlib.import_module(import_name)
-    except ImportError:
+    except ImportError as exc:
+        print(
+            f"[cortex-launcher] dependency import failed ({import_name}): {exc}",
+            file=sys.stderr,
+        )
         return False
     if getattr(mod, "__file__", None) is not None:
         return True
@@ -206,6 +211,9 @@ def _install_and_stamp(
     # or without the packages just added): without this a first install's
     # imports fail and the set is never stamped. source: ADR-1104
     importlib.invalidate_caches()
+    # Newly installed .pth files must run before imports (pywin32 on Windows).
+    # Reuse the private-site isolation contract. source: issue #621
+    _site.isolate_deps(deps_dir)
     if all(_importable(name, deps_dir) for name in imports):
         _write_stamp(deps_dir, kind, digest, set_digest)
 

@@ -50,7 +50,6 @@ def test_entry_reports_undecodable_stdin_with_exit_1_for_every_hook(
 ) -> None:
     monkeypatch.setattr(sys, "argv", ["hypermnesia-mcp-hook", name])
     monkeypatch.setattr(entry, "prepare_environment", lambda environ: None)
-    monkeypatch.setattr(entry, "resolve_auto_backend", lambda environ: None)
     monkeypatch.setattr(entry, "run_all", pytest.fail)
     _bad_stdin(monkeypatch)
     with pytest.raises(SystemExit) as caught:

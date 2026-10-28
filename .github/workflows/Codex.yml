@@ -1,0 +1,129 @@
+name: Codex review completion
+
+# Native Codex edits its authenticated summary as each review completes.
+# workflow_run catches the race where that edit preceded the waiting gate.
+# Sources: GitHub Actions events and workflow-runs REST re-run-a-job endpoint.
+on:
+  issue_comment:
+    types: [created, edited]
+  workflow_run:
+    workflows: [Pipeline]
+    types: [completed]
+  # Supported fallback: review-thread resolution has no Actions event.
+  # GitHub documents five minutes as the shortest schedule interval.
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+  actions: read
+
+jobs:
+  identify:
+    if: >-
+      (github.event_name == 'issue_comment'
+       && github.event.issue.pull_request
+       && github.event.comment.user.login == 'chatgpt-codex-connector[bot]'
+       && github.event.comment.user.type == 'Bot')
+      || (github.event_name == 'workflow_run'
+       && contains(fromJSON('["success", "failure"]'), github.event.workflow_run.conclusion)
+       && github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5 # source: one five-minute schedule period; operational cap.
+    outputs:
+      pr: ${{ steps.event.outputs.pr }}
+    steps:
+      # This event has Actions write permission: run only trusted default-branch
+      # code, never a PR checkout, artifact, cache or event-body command.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Authenticate the completion event and identify its live PR
+        id: event
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -B scripts/ci_codex_review_event.py --identify
+
+  resume:
+    needs: identify
+    if: needs.identify.outputs.pr != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5 # source: one five-minute schedule period; operational cap.
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      actions: write
+    # Coalesce events for the same PR, without dropping another PR's event.
+    concurrency:
+      group: codex-review-completion-${{ github.repository }}-${{ needs.identify.outputs.pr }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Resume the exact gate waiting for completed reviews
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_PR: ${{ needs.identify.outputs.pr }}
+        run: python3 -B scripts/ci_codex_review_event.py
+
+  reconcile-identify:
+    concurrency:
+      group: codex-review-discovery-${{ github.repository }}
+      cancel-in-progress: false
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5 # source: one five-minute schedule period; operational cap.
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      actions: read
+      checks: read
+    outputs:
+      prs: ${{ steps.queue.outputs.prs }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Discover completed pipelines whose authenticated gate can resume
+        id: queue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -B scripts/ci_codex_review_reconcile.py --list
+
+  reconcile:
+    needs: reconcile-identify
+    if: needs.reconcile-identify.outputs.prs != '' && needs.reconcile-identify.outputs.prs != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.reconcile-identify.outputs.prs) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5 # source: one five-minute schedule period; operational cap.
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      actions: write
+    concurrency:
+      group: codex-review-completion-${{ github.repository }}-${{ matrix.number }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Recheck current proof and resume only the exact waiting gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_PR: ${{ matrix.number }}
+          HEAD_SHA: ${{ matrix.sha }}
+        run: python3 -B scripts/ci_codex_review_reconcile.py --pr "$EXPECTED_PR" --sha "$HEAD_SHA"

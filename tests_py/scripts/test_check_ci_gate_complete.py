@@ -1,26 +1,15 @@
-"""Tests for scripts/check_ci_gate_complete.py — the aggregate-CI-gate guard.
-
-Branch protection names one status check, ``CI Green``, and the real list of
-gated jobs lives in that job's ``needs:``. This guard is the only thing
-standing between that design and its failure mode: a job added to ci.yml but
-never added to ``needs`` runs outside the gate and can fail without blocking
-a merge — silently, exactly like the eleven-context arrangement it replaced.
-
-So the guard's own failure mode is silence. Each check below is pinned by a
-fixture that must FAIL, plus a live assertion that the repository's real
-ci.yml passes — a parser that quietly stopped matching would otherwise be
-indistinguishable from a clean tree.
-"""
+"""Mutation checks for the generated Pipeline dependency and result gates."""
 
 from __future__ import annotations
 
 import importlib.util
+import io
+import re
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
+from unittest.mock import Mock, patch
 
-# Dotted, path-derived module name: mutmut keys its trampolines on
-# "scripts.check_ci_gate_complete.*" and a bare name makes every mutant look
-# unreached (issue #293, same idiom as test_check_doc_claims.py).
 _SCRIPTS = Path(__file__).resolve().parents[2] / "scripts"
 _spec = importlib.util.spec_from_file_location(
     "scripts.check_ci_gate_complete", _SCRIPTS / "check_ci_gate_complete.py"
@@ -29,212 +18,256 @@ gate = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(gate)
 
 
-def _workflow(jobs: str) -> str:
-    """Wrap job definitions in the minimal ci.yml envelope the parser reads."""
-    return "name: CI\n\non:\n  push:\n    branches: [main]\n\njobs:\n" + jobs
+def change_job(text: str, job: str, transform) -> str:
+    pattern = rf"(?ms)^  {re.escape(job)}:\n.*?(?=^  [A-Za-z0-9_-]+:|\Z)"
+    changed, count = re.subn(pattern, lambda match: transform(match.group()), text)
+    if count != 1 or changed == text:
+        raise AssertionError(f"mutation did not change exactly one {job} block")
+    return changed
 
 
-_COMPLETE = _workflow(
-    """  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    steps:
-      - run: ruff check .
+class PipelineGateTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.workflow = gate.CI_WORKFLOW.read_text(encoding="utf-8")
 
-  mcp-host-config:
-    name: Validate MCP host configurations
-    runs-on: ubuntu-latest
-    if: github.event.pull_request.head.repo.fork == false
-    steps:
-      - run: true
+    def failures(self, workflow: str) -> list[str]:
+        return gate.check(workflow) + gate.check_runtime_contract(workflow)
 
-  ci-green:
-    name: CI Green
-    if: always()
-    runs-on: ubuntu-latest
-    needs:
-      - lint
-      - mcp-host-config
-    steps:
-      - name: Require every job above to have succeeded
-        env:
-          NEEDS: ${{ toJSON(needs) }}
-          ALLOWED_SKIPS: mcp-host-config
-        run: true
-"""
-)
+    def test_live_generated_pipeline_passes(self) -> None:
+        self.assertEqual(gate.CI_WORKFLOW.name, "pipeline.yml")
+        self.assertEqual(self.failures(self.workflow), [])
 
+    def test_each_required_job_must_exist(self) -> None:
+        for job in gate.EXPECTED_NEEDS:
+            with self.subTest(job=job):
+                changed = change_job(self.workflow, job, lambda block: "")
+                self.assertTrue(any(f"'{job}'" in f for f in gate.check(changed)))
 
-class CheckCompleteGate(unittest.TestCase):
-    def test_complete_workflow_has_no_failures(self) -> None:
-        self.assertEqual(gate.check(_COMPLETE), [])
+    def test_new_job_cannot_run_outside_gates(self) -> None:
+        changed = self.workflow + "\n  orphan:\n    runs-on: ubuntu-latest\n"
+        self.assertTrue(any("orphan" in f for f in gate.check(changed)))
 
-    def test_parses_jobs_needs_and_allowed_skips(self) -> None:
-        jobs, needs, allowed, exempt = gate.parse_workflow(_COMPLETE)
-        self.assertEqual(set(jobs), {"lint", "mcp-host-config", "ci-green"})
-        self.assertFalse(jobs["lint"])
-        self.assertTrue(jobs["mcp-host-config"])
-        self.assertEqual(needs, ["lint", "mcp-host-config"])
-        self.assertEqual(allowed, ["mcp-host-config"])
-        self.assertEqual(exempt, set())
+    def test_each_prerequisite_is_required(self) -> None:
+        for job, prerequisites in gate.EXPECTED_NEEDS.items():
+            for removed in prerequisites:
+                with self.subTest(job=job, prerequisite=removed):
+                    remaining = [p for p in prerequisites if p != removed]
+                    replacement = f"    needs: [{', '.join(remaining)}]"
+                    changed = change_job(
+                        self.workflow,
+                        job,
+                        lambda block, replacement=replacement: re.sub(
+                            r"(?m)^    needs:.*$", replacement, block
+                        ),
+                    )
+                    self.assertTrue(gate.check(changed))
 
+    def test_unknown_duplicate_and_self_dependencies_fail(self) -> None:
+        for dependency in ("ghost", "contract", "unit"):
+            with self.subTest(dependency=dependency):
+                changed = change_job(
+                    self.workflow,
+                    "unit",
+                    lambda block, dependency=dependency: block.replace(
+                        "needs: contract", f"needs: [contract, {dependency}]"
+                    ),
+                )
+                self.assertTrue(gate.check(changed))
 
-class RefusesIncompleteGate(unittest.TestCase):
-    def _only_failure(self, workflow: str) -> str:
-        failures = gate.check(workflow)
-        self.assertEqual(len(failures), 1, failures)
-        return failures[0]
-
-    def test_missing_gate_job_fails(self) -> None:
-        workflow = _workflow(
-            "  lint:\n    name: Lint\n    runs-on: ubuntu-latest\n"
-            "    steps:\n      - run: true\n"
+    def test_contract_cannot_wait_for_a_test(self) -> None:
+        changed = change_job(
+            self.workflow,
+            "contract",
+            lambda block: block.replace(
+                "  contract:\n", "  contract:\n    needs: unit\n"
+            ),
         )
-        self.assertIn(gate.GATE_JOB, self._only_failure(workflow))
+        self.assertTrue(gate.check(changed))
 
-    def test_job_absent_from_needs_fails(self) -> None:
-        workflow = _COMPLETE.replace("      - lint\n", "")
-        self.assertIn("'lint' is not in", self._only_failure(workflow))
+    def test_tests_and_contract_cannot_be_skipped(self) -> None:
+        for job in gate.REQUIRED_RESULTS:
+            with self.subTest(job=job):
+                changed = change_job(
+                    self.workflow,
+                    job,
+                    lambda block, job=job: block.replace(
+                        f"  {job}:\n", f"  {job}:\n    if: false\n"
+                    ),
+                )
+                self.assertTrue(gate.check_runtime_contract(changed))
 
-    def test_needs_naming_a_nonexistent_job_fails(self) -> None:
-        workflow = _COMPLETE.replace("      - lint\n", "      - lint\n      - ghost\n")
-        self.assertIn("'ghost'", self._only_failure(workflow))
+    def test_tests_and_contract_cannot_ignore_failures(self) -> None:
+        for job in gate.REQUIRED_RESULTS:
+            with self.subTest(job=job):
+                changed = change_job(
+                    self.workflow,
+                    job,
+                    lambda block, job=job: block.replace(
+                        f"  {job}:\n", f"  {job}:\n    continue-on-error: true\n"
+                    ),
+                )
+                self.assertTrue(gate.check_runtime_contract(changed))
 
-    def test_conditional_job_missing_from_allowed_skips_fails(self) -> None:
-        workflow = _COMPLETE.replace("          ALLOWED_SKIPS: mcp-host-config\n", "")
-        failure = self._only_failure(workflow)
-        self.assertIn("mcp-host-config", failure)
-        self.assertIn("ALLOWED_SKIPS", failure)
-
-    def test_stale_allowed_skips_entry_fails(self) -> None:
-        # `lint` carries no `if:`, so exempting it guards nothing and hides a
-        # real skip if one ever appears.
-        workflow = _COMPLETE.replace(
-            "ALLOWED_SKIPS: mcp-host-config", "ALLOWED_SKIPS: mcp-host-config, lint"
+    def test_merge_result_guard_cannot_be_skipped(self) -> None:
+        changed = self.workflow.replace(
+            "      - name: Require completed tests and review\n",
+            "      - name: Require completed tests and review\n        if: false\n",
         )
-        self.assertIn("'lint'", self._only_failure(workflow))
+        self.assertNotEqual(changed, self.workflow)
+        self.assertTrue(gate.check_runtime_contract(changed))
 
-    def test_gate_must_always_run(self) -> None:
-        for condition in ("", "    if: success()\n"):
-            workflow = _COMPLETE.replace("    if: always()\n", condition)
-            self.assertIn("always()", self._only_failure(workflow))
-
-    def test_duplicate_or_self_needs_fail(self) -> None:
-        for job in ("lint", "ci-green"):
-            workflow = _COMPLETE.replace(
-                "      - lint\n", f"      - lint\n      - {job}\n"
-            )
-            self.assertIn("dependency", self._only_failure(workflow))
-
-
-_WITH_EXEMPT_JOB = _workflow(
-    """  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    steps:
-      - run: ruff check .
-
-  mcp-host-config:
-    name: Validate MCP host configurations
-    runs-on: ubuntu-latest
-    if: github.event.pull_request.head.repo.fork == false
-    steps:
-      - run: true
-
-  release-gate:
-    name: Tag a release
-    needs: [ci-green]
-    # ci-gate-exempt: runs only on push to main, after the PR merged —
-    # there is nothing left for it to gate.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      - run: true
-
-  ci-green:
-    name: CI Green
-    if: always()
-    runs-on: ubuntu-latest
-    needs:
-      - lint
-      - mcp-host-config
-    steps:
-      - name: Require every job above to have succeeded
-        env:
-          NEEDS: ${{ toJSON(needs) }}
-          ALLOWED_SKIPS: mcp-host-config
-        run: true
-"""
-)
-
-
-class GateExemptJobs(unittest.TestCase):
-    def test_exempt_job_outside_needs_has_no_failures(self) -> None:
-        self.assertEqual(gate.check(_WITH_EXEMPT_JOB), [])
-
-    def test_parses_exempt_set(self) -> None:
-        jobs, needs, allowed, exempt = gate.parse_workflow(_WITH_EXEMPT_JOB)
-        self.assertEqual(exempt, {"release-gate"})
-        self.assertNotIn("release-gate", needs)
-        self.assertTrue(jobs["release-gate"])
-
-    def test_exempt_job_without_if_fails(self) -> None:
-        workflow = _WITH_EXEMPT_JOB.replace(
-            "    if: github.event_name == 'push' && github.ref == 'refs/heads/main'\n",
-            "",
+    def test_merge_result_guard_cannot_ignore_failure(self) -> None:
+        changed = self.workflow.replace(
+            "      - name: Require completed tests and review\n",
+            "      - name: Require completed tests and review\n"
+            "        continue-on-error: true\n",
         )
-        failures = gate.check(workflow)
-        self.assertTrue(
-            any("release-gate" in f and "no job-level" in f for f in failures),
-            failures,
+        self.assertNotEqual(changed, self.workflow)
+        self.assertTrue(gate.check_runtime_contract(changed))
+
+    def test_merge_and_review_keep_failure_path_and_pr_scope(self) -> None:
+        for job in ("merge", "review"):
+            for fragment in (
+                "always() && ",
+                "!cancelled() && ",
+                "&& !github.event.pull_request.draft",
+                "&& github.event.pull_request.head.repo.full_name == github.repository",
+            ):
+                with self.subTest(job=job, fragment=fragment):
+                    changed = change_job(
+                        self.workflow,
+                        job,
+                        lambda block, fragment=fragment: block.replace(fragment, "", 1),
+                    )
+                    self.assertTrue(gate.check_runtime_contract(changed))
+
+    def test_tag_cannot_ignore_failed_prerequisites(self) -> None:
+        changed = change_job(
+            self.workflow,
+            "tag",
+            lambda block: block.replace("!cancelled()", "always()", 1),
         )
+        self.assertTrue(gate.check_runtime_contract(changed))
 
-    def test_unexempt_unneeded_job_still_fails(self) -> None:
-        # Sanity: removing the marker (with no needs entry either) reverts to
-        # the original "runs outside the gate" failure — the marker is a
-        # deliberate escape hatch, not a parser blind spot.
-        workflow = _WITH_EXEMPT_JOB.replace(
-            "    # ci-gate-exempt: runs only on push to main, after the PR merged —\n"
-            "    # there is nothing left for it to gate.\n",
-            "",
+    def test_tag_cannot_run_on_pull_requests(self) -> None:
+        changed = change_job(
+            self.workflow,
+            "tag",
+            lambda block: block.replace("== 'push'", "== 'pull_request'"),
         )
-        failures = gate.check(workflow)
-        unmarked = [f for f in failures if "release-gate" in f and "carries no" in f]
-        self.assertTrue(unmarked, failures)
+        self.assertTrue(gate.check_runtime_contract(changed))
+
+    def test_merge_requires_each_actual_result_binding(self) -> None:
+        for job in (*gate.REQUIRED_RESULTS, "review"):
+            with self.subTest(job=job):
+                changed = change_job(
+                    self.workflow,
+                    "merge",
+                    lambda block, job=job: block.replace(
+                        f"needs.{job}.result", "needs.ghost.result"
+                    ),
+                )
+                self.assertTrue(gate.check_runtime_contract(changed))
+
+    def test_merge_rejects_expanded_test_success_policy(self) -> None:
+        for result in ("skipped", "cancelled", "timed_out", "failure"):
+            with self.subTest(result=result):
+                changed = change_job(
+                    self.workflow,
+                    "merge",
+                    lambda block, result=result: block.replace(
+                        "*=success) ;;", f"*=success|*={result}) ;;"
+                    ),
+                )
+                self.assertTrue(gate.check_runtime_contract(changed))
+
+    def test_review_skip_exception_cannot_be_reintroduced(self) -> None:
+        changed = change_job(
+            self.workflow,
+            "merge",
+            lambda block: block.replace(
+                "success:*) ;;", "success:*|'skipped:dependabot[bot]') ;;"
+            ),
+        )
+        self.assertTrue(gate.check_runtime_contract(changed))
+
+    def test_merge_guard_cannot_drop_a_result_or_error_exit(self) -> None:
+        for old, new in (
+            ('"e2e=$E2E" ', ""),
+            ("exit 1", "exit 0"),
+            ("blocked=1", "blocked="),
+        ):
+            with self.subTest(old=old):
+                changed = change_job(
+                    self.workflow,
+                    "merge",
+                    lambda block, old=old, new=new: block.replace(old, new),
+                )
+                self.assertTrue(gate.check_runtime_contract(changed))
+
+    def test_duplicate_yaml_job_or_field_fails(self) -> None:
+        duplicate = self.workflow + "\n  unit:\n    needs: contract\n"
+        self.assertTrue(gate.check(duplicate))
+        changed = change_job(
+            self.workflow,
+            "unit",
+            lambda block: block.replace(
+                "needs: contract", "needs: contract\n    needs: contract"
+            ),
+        )
+        self.assertTrue(gate.check(changed))
+
+    def test_main_reports_success(self) -> None:
+        output = io.StringIO()
+        with redirect_stdout(output):
+            self.assertEqual(gate.main(), 0)
+        self.assertIn("Pipeline gate completeness: OK", output.getvalue())
+
+    def test_main_reports_missing_file_and_bad_gate(self) -> None:
+        for workflow in (
+            Mock(exists=lambda: False),
+            Mock(exists=lambda: True, read_text=lambda **kwargs: "jobs:\n"),
+        ):
+            with self.subTest(workflow=workflow):
+                with (
+                    patch.object(gate, "CI_WORKFLOW", workflow),
+                    redirect_stderr(io.StringIO()),
+                ):
+                    self.assertEqual(gate.main(), 1)
 
 
-class RepositoryWorkflowIsGated(unittest.TestCase):
-    def test_live_ci_workflow_passes(self) -> None:
-        """The guard must agree with the tree it ships in, not just fixtures."""
-        self.assertTrue(gate.CI_WORKFLOW.exists(), gate.CI_WORKFLOW)
+class WorkflowParserTests(unittest.TestCase):
+    def test_needs_scalar_inline_and_block_forms(self) -> None:
+        for body, expected in (
+            (["    needs: contract"], ["contract"]),
+            (["    needs: [contract, unit]"], ["contract", "unit"]),
+            (
+                ["    needs:", "      - contract", "      # comment", "      - unit"],
+                ["contract", "unit"],
+            ),
+        ):
+            with self.subTest(body=body):
+                self.assertEqual(gate._parse_needs(body), expected)
+
+    def test_step_conditions_do_not_make_job_conditional(self) -> None:
+        body = ["    steps:", "      - name: test", "        if: false"]
+        self.assertEqual(gate._field(body, "if"), "")
+
+    def test_folded_conditions_are_read_fully(self) -> None:
         self.assertEqual(
-            gate.check(gate.CI_WORKFLOW.read_text(encoding="utf-8")),
-            [],
+            gate._field(
+                ["    if: >-", "      always()", "      && !cancelled()", "    steps:"],
+                "if",
+            ),
+            "always() && !cancelled()",
         )
 
-    def test_runtime_policy_matches_live_workflow(self) -> None:
-        self.assertEqual(gate.check_runtime_contract(gate.CI_WORKFLOW.read_text()), [])
-
-    def test_costly_jobs_must_wait_for_lint_and_changes(self) -> None:
-        workflow = gate.CI_WORKFLOW.read_text()
-        for prerequisites in ("[changes]", "[lint]", "[changes, lint, test]"):
-            changed = workflow.replace("[changes, lint]", prerequisites, 1)
-            failures = gate.check_runtime_contract(changed)
-            self.assertTrue(any("depend on exactly" in f for f in failures))
-
-    def test_lint_and_changes_cannot_be_conditional(self) -> None:
-        workflow = gate.CI_WORKFLOW.read_text()
-        for job in ("changes", "lint"):
-            changed = workflow.replace(f"  {job}:\n", f"  {job}:\n    if: false\n")
-            self.assertTrue(gate.check_runtime_contract(changed))
-
-    def test_new_skip_needs_an_executable_policy(self) -> None:
-        workflow = gate.CI_WORKFLOW.read_text()
-        workflow = workflow.replace(
-            "ALLOWED_SKIPS: test,", "ALLOWED_SKIPS: unknown-job,test,"
+    def test_parser_stops_at_next_top_level_key(self) -> None:
+        bodies = gate._job_bodies(
+            "name: sample\njobs:\n  contract:\n    steps: []\n"
+            "env:\n  not-a-job: value\n"
         )
-        failures = gate.check_runtime_contract(workflow)
-        self.assertTrue(any("runtime skip policy" in f for f in failures))
+        self.assertEqual(set(bodies), {"contract"})
 
 
 if __name__ == "__main__":

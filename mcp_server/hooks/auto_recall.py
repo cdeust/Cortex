@@ -57,7 +57,8 @@ from mcp_server.shared.freshness import provenance_suffix
 from mcp_server.shared.project_scope import project_ancestors, resolve_project_root
 
 _LOG_PREFIX = "[cortex-auto-recall]"
-_DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://localhost:5432/cortex")
+# source: issues #703/#704 -- only shared resolution supplies a PostgreSQL URL.
+_DATABASE_URL = os.environ.get("DATABASE_URL", "")
 _MAX_MEMORIES = 3
 _MIN_HEAT = 0.15
 _MIN_QUERY_LENGTH = 10
@@ -110,7 +111,9 @@ def _should_skip(query: str) -> bool:
 
 
 def _connect():
-    """Open the hook's PG connection; None when PG is unreachable."""
+    """Open a configured PG connection; None when absent or unreachable."""
+    if not _DATABASE_URL:
+        return None
     try:
         import psycopg  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
     except ImportError:
