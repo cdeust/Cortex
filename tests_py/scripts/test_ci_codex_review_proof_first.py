@@ -1,6 +1,7 @@
 """Second native Claude review6459888424: cheap proof precedes REST discovery."""
 
 import json
+from itertools import product
 import sys
 import unittest
 from unittest.mock import patch
@@ -9,12 +10,32 @@ import subprocess
 from tests_py.scripts.test_ci_codex_reviews import SHA, comment, state
 from tests_py.scripts.test_ci_codex_review_event_fixtures import REPO, PULL, Server
 from tests_py.scripts import test_ci_codex_review_schedule as schedule
+from tests_py.scripts.test_ci_codex_review_resume import evidence
 
 
 def missing(status="404"):
     return subprocess.CalledProcessError(
         1, ["gh", "api"], output=json.dumps(dict(status=status)), stderr="PRIVATE_TOKEN"
     )
+
+
+def policy_route(server, route):
+    if route == "green_wait":
+        server.data["source"]["conclusion"] = "success"
+        server.data["jobs"][-1].update(
+            name="merge pending review",
+            conclusion="success",
+            steps=[
+                dict(name="Record pending review", conclusion="success"),
+                dict(name="Post cleanup", conclusion="skipped"),
+            ],
+        )
+    elif route == "readiness":
+        server.data["jobs"][1]["conclusion"] = "failure"
+        server.data["jobs"][-2].update(
+            conclusion="failure",
+            steps=[dict(name="Require completed Codex reviews", conclusion="failure")],
+        )
 
 
 def nullable_summary():
@@ -96,6 +117,36 @@ class ProofFirstTests(unittest.TestCase):
         result = self.invoke(server)
         self.assertEqual(json.loads(result[1]), [dict(number=797, sha=SHA)])
         self.assertIn((PULL, False), server.calls)
+
+    def test_all_policy_routes_discovered_for_clean_and_unresolved_proof(self):
+        routes = ("green_wait", "readiness", "failed_merge")
+        for route, unresolved in product(routes, (False, True)):
+            with self.subTest(route=route, unresolved=unresolved):
+                self.check_policy_route(route, unresolved)
+
+    def check_policy_route(self, route, unresolved):
+        target = schedule.load()
+        server = _nullable_server()
+        server.data["threads"] = _nullable_threads(resolved=not unresolved)
+        policy_route(server, route)
+        proof = evidence("blocked" if unresolved else "success")
+        actions = {
+            "green_wait": ("review", "review"),
+            "readiness": ("review", "review"),
+            "failed_merge": ("merge", "none"),
+        }
+        expected_action = actions[route][unresolved]
+        plan = target.events._plan(
+            server.data["source"], server.data["jobs"], proof, SHA
+        )
+        self.assertEqual(plan["action"], expected_action)
+        result = self.invoke(server)
+        self.assertEqual(result[0], 0, result[2])
+        expected = [] if expected_action == "none" else [dict(number=797, sha=SHA)]
+        self.assertEqual(json.loads(result[1]), expected)
+        self.assertEqual(result[4], [])
+        if expected_action == "none":
+            self.assertFalse(any(path.startswith("repos/") for path, _ in server.calls))
 
     def test_known_missing_pr_does_not_starve_next_pr(self):
         server = Server()

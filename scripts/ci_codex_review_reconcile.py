@@ -181,6 +181,13 @@ def _proof_can_resume(row, proof):
     contexts = row["commits"]["nodes"][0]["commit"]["statusCheckRollup"]["contexts"]
     if contexts["pageInfo"]["hasNextPage"]:
         return True  # Partial gate names cannot veto a real readiness repair.
+    if any(
+        item.get("__typename") == "CheckRun"
+        and item.get("name") == "merge pending review"
+        and item.get("conclusion") == "SUCCESS"
+        for item in contexts["nodes"]
+    ):
+        return True  # Full policy decides whether this green wait needs repair.
     reviews = [item for item in contexts["nodes"] if item.get("name") == "review"]
     return not reviews or any(item.get("conclusion") != "SUCCESS" for item in reviews)
 
