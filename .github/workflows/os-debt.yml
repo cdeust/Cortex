@@ -1,0 +1,102 @@
+name: Issue 692 class 1 measurement (scratch)
+
+# Based on os-debt.yml at 8bd82a9619a433a0899d0fe8ff0f9a0f9cf176f4.
+# Retained only on this scratch branch; never merged.
+on:
+  push:
+    branches: [scratch/os-debt-692-20261028-ctx29573328]
+permissions:
+  contents: read
+jobs:
+  suite:
+    name: ${{ matrix.os }} / ${{ matrix.revision }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            revision: baseline
+            ref: 36b6164b85e9e3256ff3993b96571582588c1001
+            target: tests_py/scripts/test_launcher_platform_coverage.py
+          - os: windows-latest
+            revision: candidate
+            ref: ae690967da65fb89969597f56482d5212375139a
+            target: ''
+          - os: ubuntu-latest
+            revision: candidate
+            ref: ae690967da65fb89969597f56482d5212375139a
+            target: ''
+          - os: macos-latest
+            revision: candidate
+            ref: ae690967da65fb89969597f56482d5212375139a
+            target: ''
+    env:
+      CORTEX_MEMORY_STORE_BACKEND: sqlite
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ matrix.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Record exact source and locale
+        run: |
+          git rev-parse HEAD
+          python -c "import locale, sys; print(sys.version); print(locale.getpreferredencoding(False)); print(sys.stdout.encoding)"
+      - name: Cache HuggingFace models
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/huggingface
+          key: ${{ runner.os }}-hf-all-MiniLM-L6-v2
+      - name: Install locked dev+sqlite+codebase set
+        uses: ./.github/actions/uv-locked-install
+        with:
+          set: --extra dev --extra sqlite --extra codebase
+          environment: ${{ env.pythonLocation }}
+      - name: Install project
+        run: pip install --no-deps -e .
+      - name: Check changed source on hosted Linux
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          ruff check tests_py/scripts/test_launcher_platform_coverage.py
+          ruff format --check tests_py/scripts/test_launcher_platform_coverage.py
+          python scripts/check_craftsmanship.py --base origin/main
+      - name: Pre-download embedding model
+        run: python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2', device='cpu')"
+      - name: Resolve tree-sitter cache directory
+        run: echo "TREE_SITTER_CACHE_DIR=$(python -c 'from tree_sitter_language_pack import cache_dir; print(cache_dir())')" >> "$GITHUB_ENV"
+      - name: Cache tree-sitter grammars
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ env.TREE_SITTER_CACHE_DIR }}
+          key: ${{ runner.os }}-tree-sitter-grammars-${{ hashFiles('pyproject.toml') }}
+      - name: Prefetch tree-sitter grammars
+        run: python -c "from mcp_server.core.ast_parser import AST_SUPPORTED; from tree_sitter_language_pack import prefetch; prefetch(sorted(AST_SUPPORTED))"
+      - name: Run pytest without early exit
+        env:
+          HF_HUB_OFFLINE: '1'
+          TRANSFORMERS_OFFLINE: '1'
+          CORTEX_RERANKER_OFFLINE: '1'
+          TEST_TARGET: ${{ matrix.target }}
+          RUN_LABEL: ${{ matrix.os }}-${{ matrix.revision }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/os-debt"
+          git rev-parse HEAD > "$RUNNER_TEMP/os-debt/source-sha.txt"
+          python -m pip freeze > "$RUNNER_TEMP/os-debt/installed.txt"
+          pytest_args=(--tb=short -q --junitxml="$RUNNER_TEMP/os-debt/junit-$RUN_LABEL.xml")
+          if [ -n "$TEST_TARGET" ]; then pytest_args+=("$TEST_TARGET"); fi
+          pytest "${pytest_args[@]}" 2>&1 | tee "$RUNNER_TEMP/os-debt/pytest-$RUN_LABEL.log"
+      - name: Upload JUnit XML and raw log
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: os-debt-692-${{ matrix.os }}-${{ matrix.revision }}
+          path: ${{ runner.temp }}/os-debt/
+          if-no-files-found: warn
