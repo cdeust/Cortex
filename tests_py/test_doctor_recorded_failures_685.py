@@ -63,3 +63,20 @@ def test_reader_reports_process_scope_and_does_not_clear_history():
     second = doctor.CHECKS[-1]()
     assert not first.ok and not second.ok
     assert first.detail == second.detail
+
+
+def test_reader_redacts_secrets_and_sorts_components(monkeypatch):
+    failures = {
+        "z.component": {"count": 2, "last_error": "password=fixture-secret"},
+        "a.component": {"count": 1, "last_error": "ordinary failure"},
+    }
+    monkeypatch.setattr(silent_failure, "status", lambda: failures)
+
+    check = doctor._recorded_failures()
+
+    assert check.optional and not check.ok
+    assert "fixture-secret" not in check.detail
+    assert "ordinary failure" in check.detail
+    assert check.detail.startswith("a.component: 1 failure(s), ordinary failure; ")
+    assert "z.component: 2 failure(s)" in check.detail
+    assert failures["z.component"]["last_error"] == "password=fixture-secret"

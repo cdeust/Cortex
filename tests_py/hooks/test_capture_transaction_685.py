@@ -32,10 +32,12 @@ def test_failed_merge_rolls_back_before_capture_worker_reuses_store(
         monkeypatch.setattr(
             "mcp_server.hooks.post_tool_capture._load_remember", lambda: (None, handler)
         )
+        anchor = store._connection_registry.connection()
         with pytest.raises(sqlite3.Error, match="memories_fts"):
             asyncio.run(capture_store.store(payload()))
 
-        assert not store._connection_registry.connection().in_transaction
+        assert store._connection_registry.connection() is anchor
+        assert not anchor.in_transaction
         assert store.get_memory(mid)["content"] == "original memory"
         # An independent writer can commit immediately after the failed capture.
         with closing(sqlite3.connect(path)) as writer, writer:

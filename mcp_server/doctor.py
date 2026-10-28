@@ -27,6 +27,7 @@ from mcp_server.doctor_pgvector import pgvector_iterative_scan
 from mcp_server.infrastructure.config import CLAUDE_DIR
 from mcp_server.shared.subprocess_safe import run_with_hard_timeout
 from mcp_server.shared import gated_files
+from mcp_server.shared.redaction_gate import redact_text
 from mcp_server.observability import silent_failure
 
 # source: validate_memory.py:29 precedent (_GIT_CHECK_TIMEOUT_S)
@@ -498,6 +499,11 @@ def _sqlite_vector_search() -> Check:
             "Use Homebrew Python or a uv-managed Python built with loadable "
             "SQLite extensions, then reinstall with that interpreter.",
         )
+    return _sqlite_vector_probe()
+
+
+def _sqlite_vector_probe() -> Check:
+    """Probe the store after package and interpreter checks (ADR-1089)."""
     try:
         store = SqliteMemoryStore(db_path=get_memory_settings().SQLITE_FALLBACK_PATH)
         try:
@@ -539,7 +545,7 @@ def _recorded_failures() -> Check:
     return Check(
         "Recorded component failures",
         not failures,
-        detail or "No failures recorded in this process",
+        redact_text(detail) or "No failures recorded in this process",
         "Inspect the reported fallbacks; lifetime counts do not show current health."
         if failures
         else "",

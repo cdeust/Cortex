@@ -120,10 +120,29 @@ The method exists in sqlite_connection_registry.py; the proxy is unchanged.
 Three stale craftsmanship exemptions are removed: the observability imports
 in rebuild_profiles and sqlite_store_search, and try_curation's method size.
 Static AST inspection confirms the two imports are absent and the function
-spans 37 lines, below the baseline's 40-line method limit.
+spans 36 lines by end_lineno - lineno, below the gate's 40-line method limit.
 Removing these records tightens the baseline; no new exemption is added.
 
 Current hosted setup failure:
 https://github.com/cdeust/Cortex/actions/runs/40665507420/job/122738926769
 The Ubuntu 26.04 runner again fails to load libxml2.so.2 before pytest starts.
 The corrected assertions and complete craftsmanship gate need hosted execution.
+
+
+## Review correction after b1dc390
+
+Hosted unit setup still fails before pytest:
+https://github.com/cdeust/Cortex/actions/runs/40666548227/job/122742464563
+The PostgreSQL executable cannot load `libxml2.so.2` on the Ubuntu 26.04 runner.
+This is not a test result; runtime verification remains blocked on runner compatibility.
+
+The doctor vector check now delegates its store probe to a helper, preserving
+package/interpreter diagnostics and store closure while bringing both functions
+under METHOD_LINE_LIMIT. The existing vector-check tests are the hosted behavior
+gate. Fallback diagnostic output uses the existing redact_text boundary from
+doctor_mcp; a regression checks secret removal, component ordering, counts and
+history preservation. The failed-capture regression now requires the original
+connection to survive rollback, so replacing it cannot satisfy the assertion.
+
+Sources were edited as API data only. Static syntax and method-span checks are
+pre-publication checks, not runtime proof. The dispatcher owns hosted CI follow-up.
