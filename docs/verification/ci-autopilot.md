@@ -19,7 +19,7 @@ wake an owner issue. Trusted follow-up requirements change the revision and
 remain eligible even if they arrive while a worker finishes.
 Inspection never launches, replays or releases a worker.
 Identical snapshots do not launch an LLM. Changed heads or terminal results
-wake repair. Issue intake paginates the REST API. PR intake has an explicit
+wake repair. Issue intake paginates GraphQL issue and comment connections. PR intake has an explicit
 CLI limit and fails rather than silently discarding a full result set.
 
 A control-plane worker edits a PR or issue branch through the GitHub Git Data

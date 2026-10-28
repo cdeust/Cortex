@@ -9,6 +9,11 @@ on:
   workflow_run:
     workflows: [Pipeline]
     types: [completed]
+  # Supported fallback: review-thread resolution has no Actions event.
+  # GitHub documents five minutes as the shortest schedule interval.
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -65,3 +70,52 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           EXPECTED_PR: ${{ needs.identify.outputs.pr }}
         run: python3 -B scripts/ci_codex_review_event.py
+
+  reconcile-identify:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      actions: read
+    outputs:
+      prs: ${{ steps.queue.outputs.prs }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Discover completed pipelines whose authenticated gate can resume
+        id: queue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -B scripts/ci_codex_review_reconcile.py --list
+
+  reconcile:
+    needs: reconcile-identify
+    if: needs.reconcile-identify.outputs.prs != '' && needs.reconcile-identify.outputs.prs != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.reconcile-identify.outputs.prs) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      actions: write
+    concurrency:
+      group: codex-review-completion-${{ github.repository }}-${{ matrix.number }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Recheck current proof and resume only the exact waiting gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_PR: ${{ matrix.number }}
+          HEAD_SHA: ${{ matrix.sha }}
+        run: python3 -B scripts/ci_codex_review_reconcile.py --pr "$EXPECTED_PR" --sha "$HEAD_SHA"
