@@ -2,7 +2,8 @@
 
 Scope equality alone does not authorize erasing an independent memory. Only
 copies connected to the requested row by supersession edges are included.
-source: ADR-1111; PR #827 security review 6470052457.
+source: ADR-1111
+source: PR #827 security review 6470052457.
 """
 
 from __future__ import annotations
