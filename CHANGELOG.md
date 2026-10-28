@@ -23,7 +23,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 - CI failure ladder for bots in `docs/agent-guidance.md` and `CLAUDE.md`: evidence
   first, merge main when it already carries the fix, separate fix PR otherwise, hold
-  only for workflow-file edits (#PRNUM).
+  only for workflow-file edits (#830).
 
 - The managed PostgreSQL server starts on Ubuntu 25.10 and 26.04, which ship
   no `libxml2.so.2`: Linux GNU now runs theseus 18.6.1, which bundles its
