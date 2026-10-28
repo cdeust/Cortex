@@ -224,6 +224,9 @@ def main() -> None:
         os.environ["HF_HUB_OFFLINE"] = "1"
         rows = asyncio.run(measure(codebase, root, corpus))
         negatives = measure_negatives(codebase, root)
+        from auto_recall_scores import measure_scores  # noqa: PLC0415 -- selected codebase is already wired
+
+        raw_scores = measure_scores(corpus, negatives)
     manifest = json.loads((codebase / ".claude-plugin/plugin.json").read_text())
     budget = manifest["hooks"]["UserPromptSubmit"][0]["hooks"][0]["timeout"]
     results = summary(rows, budget)
@@ -235,6 +238,7 @@ def main() -> None:
         "fixture_sha256": hashlib.sha256(fixture.read_bytes()).hexdigest(),
         "negative_queries": negatives,
         "models": models,
+        "raw_ce_scores": raw_scores,
         "summary": results,
         "rows": rows,
     }

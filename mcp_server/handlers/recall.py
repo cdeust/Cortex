@@ -175,10 +175,7 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     fmt = parse_format(args.get("format") if args else None)
     if args and args.get("memory_id") is not None:
         return fetch_by_id(
-            _get_store(),
-            int(args["memory_id"]),
-            int(args.get("content_offset") or 0),
-            fmt,
+            _get_store(), args, get_memory_settings().MAX_RESPONSE_CHARS
         )
     if not args or not args.get("query"):
         # source: ADR-0430

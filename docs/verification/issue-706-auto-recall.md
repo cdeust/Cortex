@@ -120,3 +120,22 @@ on this fixture rather than establishing a globally calibrated cutoff.
 The original 30-positive fixture remains a small-corpus measurement; the
 pre-limit starvation tests use more excluded rows than the configured pool.
 Neither establishes recall completeness on a large corpus of eligible memories.
+
+## Hosted failure evidence at 1bdf8c6
+
+Unit job [122825144932](https://github.com/cdeust/Cortex/actions/runs/40690888981/job/122825144932)
+reported 2 failed, 11193 passed and 26 skipped. Both failures are existing
+ID-pagination tests: the schema split moved the settings lookup out of the
+recall composition root. The correction passes the caller's resolved response
+budget into ID retrieval. The tests and their size assertions remain unchanged.
+
+Parity job [122825074731](https://github.com/cdeust/Cortex/actions/runs/40690888995/job/122825074731)
+reported 2 hook hits at three versus 28 tool hits at three on 30 queries.
+The model preflight completed; this is a retrieval-quality failure.
+The 0.15 confidence floor remains unchanged. The hosted report now records raw
+cross-encoder scores for every fixture query/passage pair and every negative
+query/passage pair, using the same cached model and passage truncation.
+These measurements distinguish absent candidates from rejected passages and
+provide evidence for a subsequent correction without guessing a new cutoff.
+Raw-score inference failure is an explicit error. All existing parity and
+negative-query assertions remain in force. New hosted results are pending.
