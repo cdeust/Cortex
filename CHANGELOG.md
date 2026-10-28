@@ -15,6 +15,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Session registry POSIX `ps` probes report nonzero exits and invalid UTF-8
+  as named errors with the command and stderr; hooks log the actual cause
+  without starting a legacy consolidate worker (#682).
+
 - Share the launcher's first-launch backend policy with wheel hooks and direct
   MCP startup: a fresh unconfigured HOME records SQLite before settings bind;
   explicit URLs and managed PostgreSQL keep their existing precedence (#703, #704).
