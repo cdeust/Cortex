@@ -26,6 +26,7 @@ from mcp_server.doctor_pgvector import pgvector_iterative_scan
 from mcp_server.infrastructure.config import CLAUDE_DIR
 from mcp_server.shared.subprocess_safe import run_with_hard_timeout
 from mcp_server.shared import gated_files
+from mcp_server.observability import silent_failure
 
 # source: validate_memory.py:29 precedent (_GIT_CHECK_TIMEOUT_S)
 _WORKTREE_LIST_TIMEOUT_S = 2.0
@@ -514,6 +515,27 @@ def _sqlite_vector_search() -> Check:
     )
 
 
+def _recorded_failures() -> Check:
+    """Report failures recorded in this process, including earlier setup probes.
+
+    A separate doctor process has its own counters; this is not a persistent
+    health history. Source: issue #685, silent_failure.status contract.
+    """
+    failures = silent_failure.status()
+    detail = "; ".join(
+        f"{component}: {entry['count']} failure(s), {entry['last_error']}"
+        for component, entry in sorted(failures.items())
+    )
+    return Check(
+        "Recorded component failures",
+        not failures,
+        detail or "No failures recorded in this process",
+        "Resolve the reported component errors; counts cover this process lifetime."
+        if failures
+        else "",
+    )
+
+
 CHECKS: list[Callable[[], Check]] = [
     _python_version,
     _pg_driver,
@@ -526,6 +548,7 @@ CHECKS: list[Callable[[], Check]] = [
     _i10_config,
     _codebase_pipeline,  # optional — doesn't fail doctor
     _worktree_locations,  # optional — doesn't fail doctor
+    _recorded_failures,
 ]
 
 SQLITE_CHECKS: list[Callable[[], Check]] = [
@@ -537,6 +560,7 @@ SQLITE_CHECKS: list[Callable[[], Check]] = [
     _i10_config,
     _codebase_pipeline,  # optional — doesn't fail doctor
     _worktree_locations,  # optional — doesn't fail doctor
+    _recorded_failures,
 ]
 
 

@@ -50,9 +50,9 @@ class SqliteSearchMixin:
             return [], None
         try:
             return self._fts_pool(match, weight, k, pool)
-        except Exception as exc:  # noqa: BLE001 — search degrades to the remaining signals
+        except Exception as exc:  # noqa: BLE001 — record and propagate; partial fusion is not a search result
             silent_failure.note("sqlite_store.rrf_fts_signal", exc)
-            return [], None
+            raise
 
     def _fts_pool(
         self, match: str, weight: float, k: int, pool: int
@@ -127,27 +127,24 @@ class SqliteSearchMixin:
         vec = self._bytes_to_vector(query_embedding)
         if vec is None:
             return []
-        try:
-            rows = self._conn.execute(
-                "SELECT rowid, distance FROM memories_vec "
-                "WHERE embedding MATCH ? ORDER BY distance LIMIT ?",
-                (vec.tobytes(), top_k),
-            ).fetchall()
-            results = [(r["rowid"], r["distance"]) for r in rows]
-            if heads_only and results:
-                ids = [rid for rid, _ in results]
-                placeholders = ",".join("?" * len(ids))
-                current = {
-                    r["id"]
-                    for r in self._conn.execute(
-                        f"SELECT id FROM current_memories WHERE id IN ({placeholders})",  # noqa: S608 — interpolation is a generated ?/%s placeholder list; every value is a bound parameter (docs/ASSURANCE-CASE.md §5)
-                        ids,
-                    ).fetchall()
-                }
-                results = [(rid, d) for rid, d in results if rid in current]
-            return results
-        except (sqlite3.Error, ValueError):
-            return []
+        rows = self._conn.execute(
+            "SELECT rowid, distance FROM memories_vec "
+            "WHERE embedding MATCH ? ORDER BY distance LIMIT ?",
+            (vec.tobytes(), top_k),
+        ).fetchall()
+        results = [(r["rowid"], r["distance"]) for r in rows]
+        if heads_only and results:
+            ids = [rid for rid, _ in results]
+            placeholders = ",".join("?" * len(ids))
+            current = {
+                r["id"]
+                for r in self._conn.execute(
+                    f"SELECT id FROM current_memories WHERE id IN ({placeholders})",  # noqa: S608 — interpolation is a generated ?/%s placeholder list; every value is a bound parameter (docs/ASSURANCE-CASE.md §5)
+                    ids,
+                ).fetchall()
+            }
+            results = [(rid, d) for rid, d in results if rid in current]
+        return results
 
     def get_hot_embeddings(
         self,

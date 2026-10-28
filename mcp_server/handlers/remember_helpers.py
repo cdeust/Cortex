@@ -474,8 +474,9 @@ def try_curation(
                 return "merge", cand_id
             if action == "link":
                 return "link", cand_id
-    except Exception as exc:  # noqa: BLE001 — dedup failure degrades to plain create
+    except Exception as exc:  # noqa: BLE001 — record and propagate; dedup must complete before create
         silent_failure.note("remember_helpers.curation_dedup", exc)
+        raise
     return "create", None
 
 

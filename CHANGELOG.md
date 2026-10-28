@@ -15,6 +15,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Surface the named dedup, SQLite search, profile freshness, and hot-memory
+  read failures instead of returning successful fallbacks; doctor and
+  check_setup report process-local component failure counts and last errors
+  (#685).
+
 - Share the launcher's first-launch backend policy with wheel hooks and direct
   MCP startup: a fresh unconfigured HOME records SQLite before settings bind;
   explicit URLs and managed PostgreSQL keep their existing precedence (#703, #704).

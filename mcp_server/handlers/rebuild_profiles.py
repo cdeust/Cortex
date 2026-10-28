@@ -108,8 +108,9 @@ def _check_skip(force: bool) -> dict | None:
                 "domains": list(profiles.get("domains", {}).keys()),
                 "updatedAt": updated_at,
             }
-    except Exception as exc:  # noqa: BLE001 — freshness check failure degrades to a rebuild
+    except Exception as exc:  # noqa: BLE001 — record and propagate; unknown freshness must not permit a rebuild
         silent_failure.note("rebuild_profiles.freshness_check", exc)
+        raise
     return None
 
 
