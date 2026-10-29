@@ -17,9 +17,13 @@ adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - Automatic recall reranks scoped candidates before cutting the injection,
-  rejects system captures before pool limits, and abstains when the existing
-  relevance gate rejects every candidate (#706). Default recall preserves
-  deliberate memories regardless of user tags and reports hidden captures.
+  rejects system captures before pool limits, and abstains unless a candidate's
+  stored embedding reaches the injection similarity floor or its cross-encoder
+  score passes the existing relevance gate (#706). The hook
+  encodes the prompt with the pinned all-MiniLM-L6-v2 ONNX export (no torch);
+  `download_model` fetches it with the embedding weights. Default recall
+  preserves deliberate memories regardless of user tags and reports hidden
+  captures.
 
 - Exact remember replays return the existing id within the same write scope;
   explicit corrections still post supersession edges. Consolidation retains

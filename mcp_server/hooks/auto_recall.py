@@ -178,9 +178,22 @@ def _recall_memories(conn, query: str, project_root: str | None = None) -> list[
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"FTS query failed: {exc}")
 
-    return rank_memories(query, results, lambda: _pg_hot_candidates(conn, ancestors))[
-        :_MAX_MEMORIES
-    ]
+    return rank_memories(
+        query,
+        results,
+        lambda: _pg_hot_candidates(conn, ancestors),
+        lambda ids: _pg_vectors(conn, ids),
+    )[:_MAX_MEMORIES]
+
+
+def _pg_vectors(conn, ids: list[int]) -> dict[int, list[float]]:
+    """Stored embeddings of the merged candidates, one bounded round trip."""
+    rows = conn.execute(
+        "SELECT id, embedding::real[] AS embedding FROM memories "
+        "WHERE id = ANY(%s::int[]) AND embedding IS NOT NULL",
+        ([int(mid) for mid in ids],),
+    ).fetchall()
+    return {int(r["id"]): r["embedding"] for r in rows}
 
 
 def _pg_hot_candidates(conn, ancestors: list[str]) -> list[dict]:
@@ -244,6 +257,21 @@ def _sqlite_result_entry(memory_id: int, m: dict, heat: float) -> dict:
         "is_stale": bool(m.get("is_stale")),
         "capture_origin": m.get("capture_origin"),
         "source": m.get("source"),
+        "embedding_model": m.get("embedding_model"),
+    }
+
+
+# source: ADR-0616 -- neural and legacy-unstamped vectors share the query space.
+_QUERY_SPACE_MODELS = {"neural", ""}
+
+
+def _sqlite_vectors(store, rows: dict[int, str | None], ids: list[int]) -> dict:
+    """Neural-space vectors only; fallback-stamped vectors never cross-rank."""
+    vectors = store.get_embeddings_for_memories(ids)
+    return {
+        mid: vec
+        for mid, vec in vectors.items()
+        if (rows.get(mid) or "") in _QUERY_SPACE_MODELS
     }
 
 
@@ -274,20 +302,31 @@ def _recall_memories_sqlite(
         if heat < _MIN_HEAT:
             continue
         results.append(_sqlite_result_entry(memory_id, m, heat))
+    seen: dict[int, str | None] = {}
     return rank_memories(
         query,
         results,
-        lambda: [
-            _sqlite_result_entry(m["id"], m, float(m.get("heat") or 0.0))
-            for m in store.get_hot_memories(
-                min_heat=_MIN_HEAT,
-                limit=candidate_limit(_MAX_MEMORIES),
-                directory_ancestors=ancestors,
-                hook_only=True,
-            )
-            if not m.get("is_stale")
-        ],
+        lambda: _sqlite_hot_pool(store, ancestors, results, seen),
+        lambda ids: _sqlite_vectors(store, seen, ids),
     )[:_MAX_MEMORIES]
+
+
+def _sqlite_hot_pool(
+    store, ancestors: list[str], lexical: list[dict], seen: dict[int, str | None]
+) -> list[dict]:
+    """Scoped hot candidates; records every candidate's embedding space."""
+    hot = [
+        _sqlite_result_entry(m["id"], m, float(m.get("heat") or 0.0))
+        for m in store.get_hot_memories(
+            min_heat=_MIN_HEAT,
+            limit=candidate_limit(_MAX_MEMORIES),
+            directory_ancestors=ancestors,
+            hook_only=True,
+        )
+        if not m.get("is_stale")
+    ]
+    seen.update({row["id"]: row["embedding_model"] for row in lexical + hot})
+    return hot
 
 
 def _process_event_sqlite(event: dict[str, Any], query: str) -> None:

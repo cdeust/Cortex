@@ -73,7 +73,10 @@ def seed(database: Path, corpus: list[dict]) -> dict:
             )
     finally:
         with_store.close()
+    from auto_recall_scores import query_encoder_agreement  # noqa: PLC0415 -- selected codebase is already wired
+
     return {
+        "hook_query_encoder": query_encoder_agreement(corpus),
         "embedding_model": embeddings.model_name,
         "embedding_revision": embeddings.revision,
         "reranker_sha256": model_sha256(),

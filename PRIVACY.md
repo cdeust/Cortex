@@ -137,7 +137,8 @@ The only outbound network activity is:
 2. **One-time model download.** On first use, the open-source embedding model
    (`sentence-transformers`, all-MiniLM-L6-v2) and the reranking model
    (`flashrank`, ms-marco-MiniLM) are downloaded from the public Hugging Face
-   model hub. These transfers fetch **model files only** — no user content is
+   model hub, together with the ONNX export and tokenizer of the same pinned
+   embedding revision, which the prompt hook uses to encode queries. These transfers fetch **model files only** — no user content is
    sent. After the first download the models run fully offline. To forbid the
    reranker fetch outright (air-gapped installs, or any environment where an
    unexpected outbound connection is unacceptable), set

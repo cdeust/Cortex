@@ -6,7 +6,7 @@ import pytest
 
 from mcp_server.core import reranker, reranker_model
 from mcp_server.handlers.recall_helpers import filter_low_signal
-from mcp_server.hooks import auto_recall
+from mcp_server.hooks import auto_recall, auto_recall_ranking
 from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 
 
@@ -70,13 +70,22 @@ def test_sqlite_recall_projects_legacy_source(store):
     assert filter_low_signal(rows) == ([], len(rows))
 
 
-@pytest.mark.parametrize("score,expected", [(0.0, []), (1.0, [1])])
-def test_real_injection_reranker_abstains_on_irrelevant_scores(
-    monkeypatch, score, expected
+@pytest.mark.parametrize(
+    "admitted,expected", [(frozenset({1, 2}), [2, 1]), (frozenset(), [2])]
+)
+def test_injection_admits_by_similarity_or_confident_ce(
+    monkeypatch, admitted, expected
 ):
-    ranker = SimpleNamespace(rerank=lambda request: [{"id": 0, "score": score}])
+    # Issue #706: a low CE score no longer vetoes a semantically admitted row;
+    # a CE score above ADR-0245's gate still admits on its own.
+    scores = {0: 0.00001, 1: 0.9}
+    ranker = SimpleNamespace(
+        rerank=lambda request: [{"id": i, "score": s} for i, s in scores.items()]
+    )
     monkeypatch.setattr(reranker, "_ensure_reranker", lambda: ranker)
-    result = reranker.rerank_for_injection("question", [(1, 0.01)], {1: "passage"})
+    result = reranker.rerank_for_injection(
+        "question", [(1, 0.02), (2, 0.01)], {1: "first", 2: "second"}, admitted
+    )
     assert result is not None
     assert [mid for mid, _ in result] == expected
 
@@ -119,6 +128,10 @@ def test_degraded_hook_retains_lexical_protected_order_and_diagnostic(
         lambda: SimpleNamespace(state="failed" if mode == "load" else "loaded"),
     )
     monkeypatch.setattr(reranker, "rerank_for_injection", lambda *args: None)
+    # Every candidate is semantically eligible, so "inference" reaches the CE.
+    monkeypatch.setattr(
+        auto_recall_ranking, "_eligible", lambda query, rows, vectors: list(rows)
+    )
     rows = auto_recall._recall_memories_sqlite(store, "espresso beans", "/repo")
     assert [row["id"] for row in rows] == [protected, ordinary]
     assert "auto recall degraded" in caplog.text

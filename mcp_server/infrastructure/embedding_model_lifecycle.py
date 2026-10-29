@@ -214,9 +214,15 @@ class _EmbeddingLifecycleMixin:
         is installed, so the next session finds the weights. Raises the real
         error (network, disk, missing package); nothing degrades here.
         """
+        from mcp_server.infrastructure.hook_query_encoder import (  # noqa: PLC0415 -- the encoder module imports this one
+            download_query_encoder,
+        )
+
         device = self._resolve_device()
         self._model = self._construct_model(device, embedding_cache_dir(), local=False)
         self._finalize_loaded(device)
+        # Issue #706: the automatic-recall hook encodes queries without torch.
+        download_query_encoder()
 
     def _engage_fallback(self, state: ModelState, reason: str) -> None:
         """Record a non-LOADED lifecycle state and LOUDLY engage the fallback.

@@ -16,7 +16,7 @@ def test_long_prompt_keeps_lexical_prefix_and_full_semantic_query(monkeypatch):
         def fetchall(self):
             return []
 
-    def rank(full_query, lexical, hot_pool):
+    def rank(full_query, lexical, hot_pool, vectors):
         semantic_queries.append(full_query)
         return lexical
 

@@ -20,6 +20,35 @@ def _neural_vector(text: str) -> bytes:
     return vector
 
 
+# source: ONNX vs sentence-transformers on this fixture measured 0.99999997
+# (2026-10-29); below this the hook's query space is not the stored space.
+_MIN_ENCODER_AGREEMENT = 0.999
+
+
+def query_encoder_agreement(corpus: list[dict]) -> dict | None:
+    """The hook's torch-free encoder must reproduce the stored vectors.
+
+    Returns None for prior source, which has no hook query encoder.
+    """
+    try:
+        from mcp_server.infrastructure.hook_query_encoder import (  # noqa: PLC0415 -- absent from prior source
+            cached_query_encoder,
+        )
+    except ImportError:
+        return None
+    encoder = cached_query_encoder()
+    if encoder is None:
+        raise RuntimeError("hook query encoder absent after preflight")
+    texts = [case["memory"] for case in corpus] + [case["query"] for case in corpus]
+    worst = min(
+        cosine_similarity(encoder(text).tobytes(), _neural_vector(text))
+        for text in texts
+    )
+    if worst < _MIN_ENCODER_AGREEMENT:
+        raise RuntimeError(f"hook query encoder disagrees with engine: {worst}")
+    return {"min_cosine_to_engine": worst}
+
+
 def _score_query(case: dict, corpus: list[dict], vectors: dict) -> dict:
     """Score one query against every fixture passage, CE order first."""
     query_vector = _neural_vector(case["query"])

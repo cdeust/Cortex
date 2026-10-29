@@ -38,7 +38,7 @@ def test_postgres_pools_share_the_pre_limit_trust_predicate(monkeypatch):
         def fetchall(self):
             return []
 
-    def rank(query, lexical, hot_pool):
+    def rank(query, lexical, hot_pool, vectors):
         hot_pool()
         return lexical
 
@@ -61,7 +61,7 @@ def test_sqlite_lexical_prefix_is_bounded_and_semantic_query_is_full(monkeypatch
             inputs.append(value)
             return []
 
-    def rank(full_query, lexical, hot_pool):
+    def rank(full_query, lexical, hot_pool, vectors):
         queries.append(full_query)
         return []
 

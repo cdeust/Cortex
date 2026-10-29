@@ -201,15 +201,36 @@ def get_raw_ce_score(
         return None
 
 
-def rerank_for_injection(
-    query: str, candidates: list[tuple[int, float]], content_lookup: dict[int, str]
-) -> list[tuple[int, float]] | None:
-    """Return eligible blended scores, or None on inference failure.
+def _injectable(
+    candidates: list[tuple[int, float]],
+    ce_scores: dict[int, float],
+    admitted: frozenset[int],
+) -> list[tuple[int, float]]:
+    """Blend every candidate, keep admitted ones and confident CE matches."""
+    eligible = set(admitted) | {
+        candidates[i][0]
+        for i, score in ce_scores.items()
+        if _compute_retrieval_confidence([score]) == 1.0
+    }
+    return [
+        pair
+        for pair in _blend_scores(candidates, ce_scores, alpha=0.70, adaptive=False)
+        if pair[0] in eligible
+    ]
 
-    Unlike tool recall, automatic injection must abstain for insufficient
-    context. Reuse ADR-0245's existing confidence gate per passage; this is
-    the existing engineering default, not a hook-calibrated probability.
-    The hosted negative-query benchmark records its behavior.
+
+def rerank_for_injection(
+    query: str,
+    candidates: list[tuple[int, float]],
+    content_lookup: dict[int, str],
+    admitted: frozenset[int] = frozenset(),
+) -> list[tuple[int, float]] | None:
+    """Blended scores of injectable candidates, or None on inference failure.
+
+    A candidate is injectable when ``admitted`` (embedding similarity, issue
+    #706) or when its own cross-encoder score passes ADR-0245's 0.15 gate.
+    The gate alone rejected 28 of 30 relevant paraphrases on the hosted
+    fixture (run 40794598785), so it no longer has to agree.
     """
     ranker = _ensure_reranker()
     if ranker is None:
@@ -228,16 +249,7 @@ def rerank_for_injection(
         ce_scores = {r["id"]: float(r["score"]) for r in raw}
         if set(ce_scores) != set(range(len(candidates))):
             raise ValueError("incomplete injection reranker response")
-        eligible = {
-            candidates[i][0]
-            for i, score in ce_scores.items()
-            if _compute_retrieval_confidence([score]) == 1.0
-        }
-        return [
-            pair
-            for pair in _blend_scores(candidates, ce_scores, alpha=0.70, adaptive=False)
-            if pair[0] in eligible
-        ]
+        return _injectable(candidates, ce_scores, admitted)
     except Exception as exc:  # noqa: BLE001 -- inference failure retains lexical recall
         silent_failure.note("reranker.injection_call", exc)
         return None

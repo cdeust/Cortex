@@ -1,14 +1,21 @@
-"""Scoped hook reranking with explicit inference status and abstention."""
+"""Scoped hook ranking with explicit inference status and abstention."""
 
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
+from typing import Any
+
+import numpy as np
 
 from mcp_server.core import reranker, reranker_model
+from mcp_server.core.injection_relevance import relevant_by_similarity
+from mcp_server.infrastructure.hook_query_encoder import cached_query_encoder
 from mcp_server.infrastructure.memory_config import get_memory_settings
 
 logger = logging.getLogger(__name__)
+
+VectorLookup = Callable[[list[int]], dict[int, Any]]
 
 
 def candidate_limit(limit: int) -> int:
@@ -31,28 +38,61 @@ def _cached_model_available() -> bool:
         return False
 
 
+def _as_vector(value: Any) -> np.ndarray:
+    """Stored SQLite bytes or a PostgreSQL real[] as float32."""
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        return np.frombuffer(bytes(value), dtype=np.float32)
+    return np.asarray(value, dtype=np.float32)
+
+
+def _merge(lexical: list[dict], hot: Iterable[dict]) -> dict[int, dict]:
+    rows = {memory["id"]: memory for memory in lexical}
+    for memory in hot:
+        rows.setdefault(memory["id"], memory)
+    return rows
+
+
+def _eligible(query: str, rows: dict[int, dict], vectors: VectorLookup) -> list[int]:
+    """Embedding-similarity abstention; raises on encoder or lookup failure."""
+    encoder = cached_query_encoder()
+    if encoder is None:
+        raise RuntimeError("cached query encoder absent")
+    stored = vectors(list(rows))
+    return relevant_by_similarity(
+        encoder(query), {mid: _as_vector(v) for mid, v in stored.items() if mid in rows}
+    )
+
+
 def rank_memories(
-    query: str, lexical: list[dict], hot_pool: Callable[[], list[dict]]
+    query: str,
+    lexical: list[dict],
+    hot_pool: Callable[[], list[dict]],
+    vectors: VectorLookup,
 ) -> list[dict]:
     """Rank eligible rows; inference failure retains protected lexical recall."""
     if not _cached_model_available():
         return _lexical_fallback(lexical, "cached reranker absent")
-    rows = {memory["id"]: memory for memory in lexical}
     try:
-        hot = hot_pool()
+        rows = _merge(lexical, hot_pool())
     except Exception as exc:  # noqa: BLE001 -- pool failure preserves lexical recall
         return _lexical_fallback(lexical, f"hot pool unavailable: {exc}")
-    for memory in hot:
-        rows.setdefault(memory["id"], memory)
     if not rows:
         return []
     if reranker.ensure_reranker_loaded().state != "loaded":
         return _lexical_fallback(lexical, "cached reranker failed")
-    # source: recall's configured WRRF_K; preserve reciprocal-rank input.
+    try:
+        similar = _eligible(query, rows, vectors)
+    except Exception as exc:  # noqa: BLE001 -- encoder failure preserves lexical recall
+        return _lexical_fallback(lexical, f"semantic relevance unavailable: {exc}")
+    order = similar + [mid for mid in rows if mid not in set(similar)]
+    # source: recall's configured WRRF_K; similarity order is the first stage.
     k = get_memory_settings().WRRF_K
-    pairs = [(mid, 1.0 / (k + rank)) for rank, mid in enumerate(rows, start=1)]
+    pairs = [(mid, 1.0 / (k + rank)) for rank, mid in enumerate(order, start=1)]
     ranked = reranker.rerank_for_injection(
-        query, pairs, {mid: memory["content"] for mid, memory in rows.items()}
+        query,
+        pairs,
+        {mid: memory["content"] for mid, memory in rows.items()},
+        frozenset(similar),
     )
     if ranked is None:
         return _lexical_fallback(lexical, "reranking failed")

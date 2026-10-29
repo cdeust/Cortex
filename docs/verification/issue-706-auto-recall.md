@@ -240,3 +240,58 @@ This is an evidence collection change only. Production retrieval, the relevance
 floor, trust predicates, fixture, and positive/negative acceptance assertions
 are unchanged. No embedding cutoff is selected from unmeasured assumptions.
 Hosted results for this change are pending; issue #706 remains unresolved.
+
+
+## Semantic abstention after 83743ce6 (merged with main at 190c6f1b)
+
+Hosted [parity run 40794598785](https://github.com/cdeust/Cortex/actions/runs/40794598785)
+measured 2 hook hits at three against 28 tool hits. Its artifact settles the
+cause. The expected passage's raw cross-encoder score is at most 4e-5 for 12 of
+30 queries, three of them near 1e-5, while each negative control's best passage
+scores 1.3e-5 to 1.5e-5. A relative measure fails as well: one positive's
+top-to-median log gap is 0.03, a negative control's reaches 0.12. No absolute or
+relative cross-encoder cutoff keeps the positives and rejects the controls.
+Embedding cosine separates them: the lowest expected-passage cosine is 0.235,
+the highest negative-control passage cosine 0.152, and the expected passage is
+in the embedding top three for 29 of 30 queries.
+
+The hook therefore needs the semantic signal the tool already fuses. Loading
+sentence-transformers in the hook process measured 15.8 to 23.3 s on the
+owner's Mac against the 5 s manifest budget. The pinned revision
+`1110a243fdf4706b3f48f1d95db1a4f5529b4d41` ships `onnx/model.onnx`
+(sha256 `6fd5d72fe4589f189f8ebc006442dbb529bb7ce38f8082112682524616046452`)
+and `tokenizer.json`; mean pooling and L2 normalisation over that export load
+and encode in 0.45 to 0.6 s and agree with the stored engine vectors at
+cosine 0.99999994 or better on every fixture memory and query.
+
+Policy: the hook merges its scoped lexical and hot pools as before, reads the
+candidates' stored vectors (neural or legacy-unstamped space only, ADR-0616),
+and admits a candidate when its cosine with the prompt reaches
+`INJECTION_SIMILARITY_FLOOR = 0.19`, inside the measured 0.152 to 0.235 gap,
+or when its own cross-encoder score passes ADR-0245's 0.15 gate (the previous
+rule, kept so a lexical match without a stored vector is still injectable).
+The cross-encoder no longer vetoes a semantically admitted candidate.
+Similarity order is the first stage; the cached cross-encoder reorders with
+recall's existing blend. The floor is calibrated on 30 positive and 3 negative
+prompts, not globally. A
+missing ONNX export, a missing package or a load failure keeps the existing
+lexical fallback with its degradation diagnostic. `download_model` fetches the
+export with the embedding weights; the parity preflight fails if the hook
+encoder disagrees with the engine below cosine 0.999.
+
+Local measurement, macOS arm64, Python 3.13.7, locked dev/sqlite/codebase/
+postgresql/lint environment, the same benchmark command as the workflow:
+
+| Source | tool hits@3 | hook hits@3 | negatives empty | hook mean / max s |
+| --- | ---: | ---: | --- | --- |
+| prior `3aef5b59` (`--expect-gap`) | 28 | 2 | not asserted | 1.51 / 2.31 |
+| PR head `64c52723` | 28 | 2 | yes | 1.77 / 3.87 |
+| this correction | 28 | 29 | yes (3/3) | 1.89 / 3.23 |
+
+Mac latency includes an external-volume interpreter start; the hosted runner
+measured 0.81 s mean before this change. Latency is reported, not asserted.
+
+Remaining gap: candidate discovery is still the lexical and hot pools. A
+relevant memory that is neither lexically matched nor among the hottest scoped
+rows is not considered; the 30-memory fixture fits in the hot pool and does not
+measure that case.
