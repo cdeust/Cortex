@@ -142,10 +142,13 @@ def test_legacy_summary_missing_sections_and_identical_occurrences_resume():
     normalized = _normalized()
     prov = _provenance()
     tag = document_provenance_dedup_tag(prov)
+    own = f"ingest_document:{prov.source}"
     summary_id = store.insert_memory(
-        {"content": normalized.summary, "tags": [tag, "summary"]}
+        {"content": normalized.summary, "tags": [tag, "summary"], "source": own}
     )
-    section_id = store.insert_memory({"content": "body", "tags": [tag, "section"]})
+    section_id = store.insert_memory(
+        {"content": "body", "tags": [tag, "section"], "source": own}
+    )
     result = write_document_memories(
         DocumentMemoryContext(store, prov, "documents", "/"), normalized
     )
@@ -180,7 +183,13 @@ def test_excess_rows_fail_closed():
     store = _FakeStore()
     tag = document_provenance_dedup_tag(_provenance())
     for _ in range(4):
-        store.insert_memory({"content": "summary", "tags": [tag, "summary"]})
+        store.insert_memory(
+            {
+                "content": "summary",
+                "tags": [tag, "summary"],
+                "source": f"ingest_document:{_provenance().source}",
+            }
+        )
     result = write_document_memories(
         DocumentMemoryContext(store, _provenance(), "d", "/"), _normalized()
     )

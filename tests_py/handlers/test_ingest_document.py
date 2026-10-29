@@ -55,10 +55,9 @@ class _FakeStore:
             self._by_tag.setdefault(tag, []).append(row)
         return mid
 
-    def get_memories_by_tag(
-        self, tag: str, limit: int = 20, heads_only: bool = True
-    ) -> list[dict]:
-        return self._by_tag.get(tag, [])
+    def get_memories_by_tag(self, tag, limit=20, heads_only=True, source=None):
+        rows = self._by_tag.get(tag, [])
+        return [r for r in rows if source in (None, r.get("source"))]
 
 
 class _RecordingWrite:

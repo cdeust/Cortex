@@ -62,6 +62,14 @@ def _expected_receipts(normalized: NormalizedDocument) -> set[tuple[str, str]]:
     return expected
 
 
+def _receipt_content(row: dict[str, Any]) -> Any:
+    """Stored text as written; compression keeps it in ``original_content``.
+
+    source: handlers/consolidation/compression.py::_compress_full_to_gist
+    """
+    return row.get("original_content") or row.get("content")
+
+
 def _is_obsolete(
     row: dict[str, Any], own_source: str, expected: set[tuple[str, str]]
 ) -> bool:
@@ -70,7 +78,35 @@ def _is_obsolete(
     role = "summary" if "summary" in tags else "section" if "section" in tags else ""
     if not role or row.get("source") != own_source:
         return False
-    return (role, row.get("content")) not in expected
+    return (role, _receipt_content(row)) not in expected
+
+
+def _retire_obsolete(
+    store: Any, normalized: NormalizedDocument, prov: DocumentProvenance, limit: int
+) -> tuple[list[dict[str, Any]], list[int]]:
+    """Read this ingester's receipts, retiring those no expected component matches.
+
+    Rows other writers tag with this provenance are filtered out by the query,
+    so they neither fill the bounded read nor get retired.
+    """
+    tag = redact_text(document_provenance_dedup_tag(prov))
+    own_source = redact_text(f"ingest_document:{prov.source}")
+    expected = _expected_receipts(normalized)
+    retired: list[int] = []
+    while True:
+        rows = store.get_memories_by_tag(
+            tag, limit=limit, heads_only=False, source=own_source
+        )
+        obsolete = [
+            row["id"] for row in rows if _is_obsolete(row, own_source, expected)
+        ]
+        if not obsolete:
+            return rows, retired
+        if set(obsolete) & set(retired):
+            raise ValueError("store still returns retired receipts; refusing resume")
+        for memory_id in obsolete:
+            store.mark_memory_stale(memory_id)
+        retired.extend(obsolete)
 
 
 def _existing_components(
@@ -83,23 +119,9 @@ def _existing_components(
     which the tag read already excludes, so they are never counted.
     """
     tag = redact_text(document_provenance_dedup_tag(prov))
-    own_source = redact_text(f"ingest_document:{prov.source}")
-    expected = _expected_receipts(normalized)
     # source: issue #714 — one summary + all sections + one overflow sentinel.
     limit = len(normalized.section_memories) + 2
-    retired: list[int] = []
-    while True:
-        rows = store.get_memories_by_tag(tag, limit=limit, heads_only=False)
-        obsolete = [
-            row["id"] for row in rows if _is_obsolete(row, own_source, expected)
-        ]
-        if not obsolete:
-            break
-        if set(obsolete) & set(retired):
-            raise ValueError("store still returns retired receipts; refusing resume")
-        for memory_id in obsolete:
-            store.mark_memory_stale(memory_id)
-        retired.extend(obsolete)
+    rows, retired = _retire_obsolete(store, normalized, prov, limit)
     if len(rows) >= limit:
         raise ValueError(
             "document has excess component rows; refusing ambiguous resume"
@@ -120,7 +142,7 @@ def _take_existing(rows: list[dict[str, Any]], role: str, content: str) -> int |
     """Consume one matching row, preserving repeated identical section occurrences."""
     content = redact_text(content)
     for index, row in enumerate(rows):
-        if role in row.get("tags", []) and row.get("content") == content:
+        if role in row.get("tags", []) and _receipt_content(row) == content:
             return rows.pop(index)["id"]
     return None
 

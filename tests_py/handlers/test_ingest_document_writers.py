@@ -31,9 +31,13 @@ class _FakeStore:
         return mid
 
     def get_memories_by_tag(
-        self, tag: str, limit: int = 20, heads_only: bool = True
+        self,
+        tag: str,
+        limit: int = 20,
+        heads_only: bool = True,
+        source: str | None = None,
     ) -> list[dict]:
-        self.last_tag_query = (tag, limit)
+        self.last_tag_query = (tag, limit, source)
         return self._existing_by_tag.get(tag, [])
 
 
@@ -146,7 +150,11 @@ def test_section_only_receipt_does_not_skip_summary():
     store = Store()
     tag = "doc-ingest:docx:/d.docx@v1"
     section_id = store.insert_memory(
-        {"content": "[Intro]\n\nbody", "tags": [tag, "section"]}
+        {
+            "content": "[Intro]\n\nbody",
+            "tags": [tag, "section"],
+            "source": "ingest_document:/d.docx",
+        }
     )
     result = write_document_memories(
         DocumentMemoryContext(store, _PROV, "dom", "/dir"), _normalized()
@@ -187,4 +195,4 @@ def test_receipt_scan_rechecks_tags_roles_content_and_ids():
         assert len(store.memories) == 2
         assert result["completed_components"] == ["summary", "section:0"]
         assert result["failures"] == {}
-        assert store.last_tag_query == (tag, 3)
+        assert store.last_tag_query == (tag, 3, "ingest_document:/d.docx")

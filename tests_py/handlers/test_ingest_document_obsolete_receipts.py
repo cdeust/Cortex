@@ -121,15 +121,31 @@ def test_superseded_carrier_with_matching_content_is_consumed(store):
     assert again["reused_components"] == ["summary", "section:0", "section:1"]
 
 
-def test_rows_not_written_by_ingestion_are_never_retired(store):
+@pytest.mark.parametrize("source", ["user", "cls-consolidation"])
+def test_rows_not_written_by_ingestion_are_neither_retired_nor_counted(store, source):
     tag = document_provenance_dedup_tag(_PROV)
     note = store.insert_memory(
-        {"content": "user note", "tags": [tag, "section"], "source": "user"}
+        {"content": "other", "tags": [tag, "section"], "source": source}
     )
-    result = _write(store, _output("a"))
-    assert result["failures"] == {}
-    assert result["retired_receipt_ids"] == []
+    first = _write(store, _output("a"))
+    again = _write(store, _output("a"))
+    for result in (first, again):
+        assert result["failures"] == {}
+        assert result["retired_receipt_ids"] == []
+    assert again["reused_components"] == ["summary", "section:0"]
     assert note in {row["id"] for row in _live(store, _PROV)}
+
+
+def test_compressed_section_remains_its_receipt(store):
+    first = _write(store, _output("a long section body", "b"))
+    section = first["section_memory_ids"][0]
+    original = store.get_memory(section)["content"]
+    store.update_memory_compression(section, "gist", None, 1, original)
+    store.update_memory_compression(section, "tag", None, 2)
+    again = _write(store, _output("a long section body", "b"))
+    assert again["retired_receipt_ids"] == []
+    assert again["section_memory_ids"] == first["section_memory_ids"]
+    assert again["reused_components"] == ["summary", "section:0", "section:1"]
 
 
 class _StaleIgnoringStore(_FakeStore):

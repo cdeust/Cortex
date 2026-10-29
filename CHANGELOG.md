@@ -23,6 +23,8 @@ adheres to [Semantic Versioning](https://semver.org/).
   memories a same-version ingest wrote for another normalized output (a
   different `title` override, a normalizer or redaction change) are marked
   stale and listed in `retired_receipt_ids`, so they never block a later resume.
+  Only the ingester's own rows are read (`get_memories_by_tag(source=...)` on
+  both backends), and a compressed section is matched by its original text.
 
 - Exact remember replays return the existing id within the same write scope;
   explicit corrections still post supersession edges. Consolidation retains
