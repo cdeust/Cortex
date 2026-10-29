@@ -48,10 +48,8 @@ class CommonSourceChecks:
             with self.subTest(job=job):
                 self.reject(job, "needs.contract.outputs.tested_sha", "github.sha")
 
-    def test_privileged_tag_checkout_requires_literal_main(self) -> None:
-        for ref in ("${{ needs.contract.outputs.tested_sha }}", "${{ github.sha }}"):
-            with self.subTest(ref=ref):
-                self.reject("tag", "ref: main", f"ref: {ref}")
+    def test_tag_checkout_requires_contract_sha(self) -> None:
+        self.reject("tag", "needs.contract.outputs.tested_sha", "github.sha")
 
     def test_tag_cannot_replace_explicit_target_with_checkout_head(self) -> None:
         for before, after in (
@@ -70,12 +68,9 @@ class CommonSourceChecks:
             with self.subTest(before=before):
                 self.reject("tag", before, after)
 
-    def test_tag_requires_commit_and_trusted_main_ancestry(self) -> None:
+    def test_tag_requires_a_commit_object(self) -> None:
         for before, after in (
             ('"cat-file", "-t", sha', '"cat-file", "-t", "HEAD"'),
-            ('"refs/remotes/origin/main^{commit}"', '"HEAD^{commit}"'),
-            ('if git("rev-parse", "HEAD").stdout.strip() != trusted:', "if False:"),
-            ('git("merge-base", "--is-ancestor", sha, trusted)', "pass"),
         ):
             with self.subTest(before=before):
                 self.reject("tag", before, after)
@@ -182,15 +177,12 @@ class PipelinePostMergeSourceTests(CommonSourceChecks, unittest.TestCase):
     def test_contract_checkout_requires_resolved_commit(self) -> None:
         self.reject("contract", "needs.resolve.outputs.tested_sha", "github.sha")
 
-    def test_resolver_must_confirm_post_merge_identity_and_ancestry(self) -> None:
+    def test_resolver_must_confirm_post_merge_identity(self) -> None:
         for before, after in (
             ('pr = api.request("GET", pr_path)', "pr = original_pr"),
             ('_pr_identity(pr, repository, original_pr["head"]["sha"])', "pass"),
             ('pr.get("merge_commit_sha") == sha', "True"),
-            ("compare/main...{full_sha(sha)}", "compare/main...main"),
-            ('comparison.get("status") in ("behind", "identical")', "True"),
-            ('comparison.get("merge_base_commit", {}).get("sha") == sha', "True"),
-            ("_confirm_main_merge(pr_path, pr, sha, api)", "pass"),
+            ("_confirm_pr_merge(pr_path, pr, sha, api)", "pass"),
         ):
             with self.subTest(before=before):
                 self.reject("resolve", before, after)

@@ -19,7 +19,8 @@ SHA = "a" * 40  # GitHub SHA-1 field, synthetic fixture.
 
 def command():
     text = PIPELINE.read_text()
-    block = text.split("        run: &codex_review_reader |\n", 1)[1]
+    # The review job's reader step; the merge job no longer reuses it (owner rule 2026-10-29).
+    block = text[text.index("          set -euo pipefail\n          args=(") :]
     return (
         textwrap.dedent(block.split("\n          CODEX_REVIEW_PY", 1)[0])
         + "\nCODEX_REVIEW_PY\n"
@@ -27,14 +28,14 @@ def command():
 
 
 class CodexWiringTests(unittest.TestCase):
-    def test_workflow_embeds_exact_reader_and_reuses_it_for_merge(self):
+    def test_workflow_embeds_exact_reader_in_the_review_job_only(self):
         run = command()
         for name, path in (("RUNTIME_SOURCE", RUNTIME), ("READER_SOURCE", READER)):
             source = run.split(name + " = r" + chr(39) * 3 + "\n", 1)[1]
             source = source.split("\n" + chr(39) * 3, 1)[0]
             self.assertEqual(source + "\n", path.read_text())
         text = PIPELINE.read_text()
-        self.assertEqual(text.count("run: *codex_review_reader"), 1)
+        self.assertNotIn("codex_review_reader", text)
         self.assertIn('python3 -I - "${args[@]}"', run)
         self.assertNotIn("git show", run)
 
@@ -44,12 +45,10 @@ class CodexWiringTests(unittest.TestCase):
         block = text[readiness:].split("\n      - name:", 1)[0]
         self.assertNotIn("        if:", block)
         self.assertIn("CODEX_COMPLETION_ONLY: 'true'", block)
-        merge = text.split("\n  merge:\n", 1)[1]
-        self.assertIn("      - name: Require complete Codex reviews\n", merge)
-        self.assertIn("CODEX_COMPLETION_ONLY: 'false'", merge)
-        self.assertIn("if: needs.review.outputs.state != 'pending'", merge)
-        self.assertIn("needs.review.outputs.state == 'pending'", merge)
-        self.assertIn("'merge pending review' || 'merge'", merge)
+        merge = text.split("\n  merge:\n", 1)[1].split("\n  tag:\n", 1)[0]
+        self.assertNotIn("Codex", merge)
+        self.assertNotIn("review", merge.replace("# nothing else (no main, no review", ""))
+        self.assertNotIn("gh pr view", merge)
 
     def test_current_clean_and_pending_evidence_with_poisoned_checkout(self):
         for completed in (True, False):
