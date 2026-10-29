@@ -63,7 +63,7 @@ def _withdrawn(thread: dict, files: set) -> bool:
 
 def _staleness(value: dict | None, pr: dict, open_findings: bool) -> str | None:
     """Name why a Codex verdict does not cover the current head, else None."""
-    value = value or {}
+    value = value if isinstance(value, dict) else {}
     status, sha = value.get("status"), value.get("commit_sha")
     if status is None or sha is None:
         return "absent"
@@ -192,7 +192,9 @@ def _lift(obs: dict, step: dict) -> None:
     step["actions"] += [{"type": "remove_label", "label": label} for label in held]
     merge = obs.get("merge")
     if held and merge and merge["failed_step"] == ELIGIBILITY_STEP:
-        step["actions"].append({"type": "rerun_job", "job": merge["job_id"]})
+        # A "merge pending review" job keeps its name on a lone rerun (its name
+        # reads needs.review.outputs.state): rerun review, which reruns merge.
+        step["actions"].append({"type": "rerun_job", "job": merge["rerun_job"]})
 
 
 def plan(obs: dict) -> dict:
@@ -204,6 +206,9 @@ def plan(obs: dict) -> dict:
     # Security findings are never self-resolved: only a fresh Codex verdict or
     # the owner clears one (scripts/ci_codex_review_runtime.py).
     files = set(pr["files"])
+    if pr.get("files_capped"):
+        # pulls/files stops at 3000 files: no path can be proven withdrawn.
+        files |= {t["path"] for t in obs["threads"]}
     # Claude inline findings carry no security marker, so only Codex code
     # findings are ever resolved by the planner.
     gone = [
@@ -218,6 +223,12 @@ def plan(obs: dict) -> dict:
         f"{t['reviewer']}_finding_open: {t['url']}"
         for t in obs["threads"]
         if _open(t, files)
+    ]
+    # Withdrawn but never auto-resolved (Claude, Codex security): still named.
+    step["causes"] += [
+        f"{t['reviewer']}_finding_withdrawn_unresolved: {t['url']}"
+        for t in obs["threads"]
+        if _withdrawn(t, files) and t not in gone
     ]
     if all(codex) and claude and not step["causes"]:
         _lift(obs, step)

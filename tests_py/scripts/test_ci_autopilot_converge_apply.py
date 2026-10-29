@@ -110,7 +110,12 @@ class LiveShapeTests(unittest.TestCase):
                 "name": "merge pending review",
                 "conclusion": "FAILURE",
                 "detailsUrl": "https://github.com/o/r/actions/runs/3/job/33",
-            }
+            },
+            {
+                "name": "review",
+                "conclusion": "SUCCESS",
+                "detailsUrl": "https://github.com/o/r/actions/runs/3/job/31",
+            },
         ]
         answers = {
             "repos/o/r/actions/runs/3": {
@@ -128,6 +133,8 @@ class LiveShapeTests(unittest.TestCase):
         self.assertEqual(
             (job["job_id"], job["failed_step"]), (33, "Verify live PR eligibility")
         )
+        # A lone rerun keeps the pending name: the review job is rerun instead.
+        self.assertEqual(job["rerun_job"], 31)
 
     def test_clean_security_receipt_for_the_head_is_found(self):
         body = (
@@ -151,11 +158,12 @@ class LiveShapeTests(unittest.TestCase):
         self.assertEqual(gh.call_args_list, [])
 
     def test_one_unreadable_pr_never_stops_the_others(self):
-        pulls = [{"number": 1}, {"number": 2}]
+        pulls = [{"number": 1, "headRefOid": HEAD}, {"number": 2, "headRefOid": HEAD}]
         ok = {"pr": 2, "head": HEAD, "actions": [], "causes": []}
         with (
             patch.object(cli, "_open_pulls", return_value=pulls),
-            patch.object(cli, "_converge", side_effect=[KeyError("x"), ok]) as run,
+            patch.object(cli, "observe_pull", side_effect=[IndexError("x"), ok]) as run,
+            patch.object(cli, "plan", side_effect=lambda obs: obs),
         ):
             self.assertEqual(cli.main(["--repo", "o/r"]), 1)
         self.assertEqual(run.call_count, 2)
@@ -202,6 +210,26 @@ class ApplyTests(unittest.TestCase):
         with patch.object(cli, "gh", return_value=None) as gh:
             cli.apply("cdeust/Cortex", quiet, None)
         self.assertIn("state=success", gh.call_args_list[0].args)
+
+    def test_published_status_is_wired_from_the_combined_status(self):
+        combined = {
+            "statuses": [
+                {
+                    "context": "autopilot-converge",
+                    "state": "failure",
+                    "description": "a; b ",
+                },
+            ]
+        }
+        self.assertEqual(
+            observer._published(combined["statuses"]),
+            {"state": "failure", "description": "a; b "},
+        )
+        result = {"pr": 1, "head": HEAD, "actions": [], "causes": ["a", "b"]}
+        result["published"] = observer._published(combined["statuses"])
+        with patch.object(cli, "gh", return_value=None) as gh:
+            cli.apply("cdeust/Cortex", result, None)
+        self.assertEqual(gh.call_args_list, [])
 
 
 if __name__ == "__main__":

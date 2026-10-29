@@ -55,7 +55,8 @@ class TwoAgreementsTests(unittest.TestCase):
     def test_both_reviewers_agree_lifts_the_hold_and_reruns_the_held_merge(self):
         item = converged(830)
         item["pr"]["labels"] = ["hold", "autopilot:hold"]
-        item["merge"] = {"run_id": 1, "job_id": 77, "failed_step": ELIGIBILITY_STEP}
+        merge = {"run_id": 1, "job_id": 77, "rerun_job": 77}
+        item["merge"] = {**merge, "failed_step": ELIGIBILITY_STEP}
         result = plan(item)
         self.assertEqual(result["causes"], [])
         self.assertEqual(

@@ -50,7 +50,12 @@ def _status(repo: str, result: dict) -> None:
     red = bool(result["causes"])
     text = "; ".join(result["causes"]) if red else "converging: no named red cause"
     state = "failure" if red else "success"
-    if result.get("published") == {"state": state, "description": text[:STATUS_LENGTH]}:
+    shown = text[:STATUS_LENGTH].rstrip()
+    published = result.get("published") or {}
+    if (published.get("state"), (published.get("description") or "").rstrip()) == (
+        state,
+        shown,
+    ):
         return  # Unchanged: commit statuses are capped per sha and context.
     gh(
         "api",
@@ -62,7 +67,7 @@ def _status(repo: str, result: dict) -> None:
         "-f",
         "context=autopilot-converge",
         "-f",
-        f"description={text[:STATUS_LENGTH]}",
+        f"description={shown}",
         "-f",
         f"target_url=https://github.com/{repo}/pull/{result['pr']}",
     )
@@ -173,28 +178,45 @@ def main(argv: list[str] | None = None) -> int:
     red = False
     token = os.environ.get("CODEX_REQUEST_TOKEN") or None
     for pull in _open_pulls(args.repo, args.pr):
-        try:
-            result = _converge(args, pull, token)
-        except (subprocess.CalledProcessError, KeyError, TypeError, ValueError) as exc:
-            # One PR's unreadable data never stops the others; it is named red.
-            result = {
-                "pr": pull["number"],
-                "actions": [],
-                "causes": [f"observe_failed: {type(exc).__name__}"],
-            }
+        result = _guarded(args, pull, token)
         red = red or bool(result["causes"])
         shown = [{k: v for k, v in a.items() if k != "body"} for a in result["actions"]]
         print(json.dumps({**result, "actions": shown}, sort_keys=True))
     return 1 if red else 0
 
 
-def _converge(args, pull: dict, token: str | None) -> dict:
-    obs = observe_pull(args.repo, pull)
-    result = name_requester(plan(obs), token)
-    result["published"] = obs.get("published")
-    if args.apply and "skipped" not in result:
-        apply(args.repo, result, token)
-    return result
+# source: failures seen or reviewed on #834: API errors, malformed markers,
+# deleted thread roots (IndexError) and non-object review values.
+FAILURES = (
+    subprocess.CalledProcessError,
+    LookupError,
+    TypeError,
+    ValueError,
+    AttributeError,
+)
+
+
+def _guarded(args, pull: dict, token: str | None) -> dict:
+    """One PR's failure never stops the others; it is named red on its head."""
+    stage = "observe_failed"
+    try:
+        obs = observe_pull(args.repo, pull)
+        result = name_requester(plan(obs), token)
+        result["published"] = obs.get("published")
+        stage = "apply_failed"
+        if args.apply and "skipped" not in result:
+            apply(args.repo, result, token)
+        return result
+    except FAILURES as exc:
+        head = pull.get("headRefOid", "")
+        cause = f"{stage}: {type(exc).__name__}"
+        failed = {"pr": pull["number"], "head": head, "actions": [], "causes": [cause]}
+        if args.apply and head:
+            try:
+                _status(args.repo, failed)
+            except FAILURES:
+                pass  # The workflow log still names the cause; the pass goes on.
+        return failed
 
 
 if __name__ == "__main__":

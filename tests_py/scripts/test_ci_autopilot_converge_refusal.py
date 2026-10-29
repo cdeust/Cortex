@@ -66,6 +66,24 @@ class WithdrawnTests(unittest.TestCase):
         self.assertIn(codex["path"], resolved[0]["body"])
         self.assertIn(item["pr"]["head"], resolved[0]["body"])
 
+    def test_withdrawn_findings_never_auto_resolved_stay_named(self):
+        item = case(833, claude_merge=True)
+        result = plan(item)
+        claude = [t["url"] for t in item["threads"] if t["reviewer"] == "claude"]
+        for url in claude:
+            self.assertIn(
+                f"claude_finding_withdrawn_unresolved: {url}", result["causes"]
+            )
+
+    def test_capped_file_list_never_proves_a_withdrawal(self):
+        item = case(833, claude_merge=True)
+        item["pr"]["files_capped"] = True
+        result = plan(item)
+        self.assertNotIn("resolve_withdrawn", [a["type"] for a in result["actions"]])
+        self.assertEqual(
+            len([c for c in result["causes"] if "_finding_open: " in c]), 3
+        )
+
     def test_pr831_withdrawn_security_finding_requests_review_never_self_resolves(self):
         item = case(831, claude_merge=True)
         result = plan(item)
@@ -75,7 +93,11 @@ class WithdrawnTests(unittest.TestCase):
             "PRRT_kwDORqU88s6xY_R9", [a.get("thread") for a in result["actions"]]
         )
         self.assertEqual(
-            result["causes"], ["codex_finding_open: " + item["threads"][1]["url"]]
+            result["causes"],
+            [
+                "codex_finding_open: " + item["threads"][1]["url"],
+                "codex_finding_withdrawn_unresolved: " + item["threads"][0]["url"],
+            ],
         )
 
 

@@ -27,6 +27,8 @@ JOB_URL = re.compile(r"/actions/runs/(\d+)/job/(\d+)")
 # source: native Codex security receipt on #830 (comment at 2026-10-29T08:25:28Z).
 RECEIPT_CLEAN = "Security review completed. No security issues were found"
 RECEIPT_COMMIT = re.compile(r"\*\*Reviewed commit:\*\* `([0-9a-f]{7,40})`")
+# source: GitHub REST "List pull requests files" returns at most 3000 files.
+FILES_CAP = 3000
 # source: the automatic Claude review workflow file and the Pipeline file.
 REVIEW_WORKFLOW = ".github/workflows/claude-review.yml"
 PIPELINE_WORKFLOW = ".github/workflows/pipeline.yml"
@@ -192,7 +194,16 @@ def _merge_job(repo: str, rollup: list, head: str) -> dict | None:
         return None
     steps = run_gh("api", f"repos/{repo}/actions/jobs/{found[2]}")["steps"]
     failed = [s["name"] for s in steps if s.get("conclusion") == "failure"]
-    return {"run_id": found[1], "job_id": found[2], "failed_step": (failed or [""])[0]}
+    review = [r for r in _rows(rollup, "review") if r[1] == found[1]]
+    pending = found[0].get("name") == "merge pending review" and review
+    rerun = review[0][2] if pending else found[2]
+    step = (failed or [""])[0]
+    return {
+        "run_id": found[1],
+        "job_id": found[2],
+        "rerun_job": rerun,
+        "failed_step": step,
+    }
 
 
 def _security_receipt(comments: list, head: str) -> str | None:
@@ -230,6 +241,7 @@ def _pr_fields(pull: dict, files: list) -> dict:
         "draft": pull["isDraft"],
         "labels": [x["name"] for x in pull["labels"]],
         "files": sorted(paths),
+        "files_capped": len(files) >= FILES_CAP,
         "checks_completed": checks_completed(pull["statusCheckRollup"]),
     }
 
