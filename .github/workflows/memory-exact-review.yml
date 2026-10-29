@@ -38,7 +38,7 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           git diff --name-only -z origin/main...HEAD -- '*.py' | xargs -0 -r uv run --no-sync ruff check --
           git diff --name-only -z origin/main...HEAD -- '*.py' | xargs -0 -r uv run --no-sync ruff format --check --
-          uv run --no-sync python scripts/check_craftsmanship.py --base origin/main
+          uv run --no-sync python scripts/check_craftsmanship.py
           uv run --no-sync python scripts/check_project_wiki.py
       - name: Reproduce old failures and measure the old collapse
         run: |

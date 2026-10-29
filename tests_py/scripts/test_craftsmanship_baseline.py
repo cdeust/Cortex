@@ -1,19 +1,11 @@
 """Tests for scripts/craftsmanship_baseline.py — the ratchet.
 
-Pins the four failure directions the ratchet enforces: a violation absent
-from the base-ref baseline is NEW (blocks); a baseline entry whose
-violation no longer reproduces is STALE (also blocks, forcing the
-baseline to be pruned rather than silently drifting from reality); a
-baseline-file entry present in the working tree but absent from the base
-ref's committed baseline is ADDED (blocks — the file may only shrink
-within a PR, see ``added_entries``); and an entry present at the base ref
-but absent from the working tree whose violation STILL reproduces is a
-FALSIFIED removal (blocks — the mirror image of ADDED, see
-``falsified_removals``). Both end-to-end exploits these last two checks
-close — a working-tree-only baseline can be self-regenerated to launder a
-new violation, or hand-edited to launder a removal — are reproduced
-against real throwaway git repos in ``test_check_craftsmanship.py``
-(``SneakyLimitExploitTests``, ``FalsifiedRemovalExploitTests``).
+Pins the two failure directions the ratchet enforces against the baseline
+committed in the same tree: a violation absent from that baseline is NEW
+(blocks); a baseline entry whose violation no longer reproduces is STALE
+(also blocks, forcing the baseline to be pruned rather than silently
+drifting from reality). The end-to-end behaviour against real throwaway
+git repos lives in ``test_check_craftsmanship_exploits.py``.
 """
 
 from __future__ import annotations
@@ -73,65 +65,6 @@ class DiffTests(unittest.TestCase):
         # to nothing — every entry for it is stale.
         stale = baseline_mod.stale_entries({V1}, {})
         self.assertEqual(stale, [V1])
-
-
-class AddedEntriesTests(unittest.TestCase):
-    """The ratchet-file check: the baseline file may only shrink."""
-
-    def test_entry_added_beyond_base_is_reported(self) -> None:
-        working = {V1, V2}
-        base = {V1}
-        self.assertEqual(baseline_mod.added_entries(working, base), [V2])
-
-    def test_pure_shrink_reports_nothing(self) -> None:
-        working = {V1}
-        base = {V1, V2}
-        self.assertEqual(baseline_mod.added_entries(working, base), [])
-
-    def test_identical_baseline_reports_nothing(self) -> None:
-        self.assertEqual(baseline_mod.added_entries({V1, V2}, {V1, V2}), [])
-
-
-class FalsifiedRemovalsTests(unittest.TestCase):
-    """The mirror-image ratchet check: an entry present at the base ref
-    but absent from the working tree is only a legitimate prune if its
-    violation genuinely no longer reproduces.
-    """
-
-    def test_removed_entry_whose_violation_still_reproduces_is_falsified(self) -> None:
-        # V1 was in base, is absent from working (hand-deleted), but a.py
-        # STILL contains it per the fresh rescan — falsified.
-        base = {V1, V2}
-        working = {V2}
-        rescanned = {"a.py": {V1}}
-        self.assertEqual(
-            baseline_mod.falsified_removals(base, working, rescanned), [V1]
-        )
-
-    def test_removed_entry_whose_violation_is_genuinely_gone_is_not_falsified(
-        self,
-    ) -> None:
-        # Legitimate fix-and-prune: V1 removed from working, and a fresh
-        # scan of a.py no longer finds it.
-        base = {V1, V2}
-        working = {V2}
-        rescanned = {"a.py": set()}
-        self.assertEqual(baseline_mod.falsified_removals(base, working, rescanned), [])
-
-    def test_entry_still_present_in_working_is_never_falsified(self) -> None:
-        # Not a removal at all — untouched entries are added_entries'/
-        # stale_entries' concern, not this one's.
-        base = {V1}
-        working = {V1}
-        rescanned = {"a.py": {V1}}
-        self.assertEqual(baseline_mod.falsified_removals(base, working, rescanned), [])
-
-    def test_file_missing_from_rescan_map_means_not_falsified(self) -> None:
-        # Deleted file: nothing to rescan, so nothing reproduces -> a
-        # legitimate removal (the file, and everything in it, is gone).
-        base = {V1}
-        working: set[rules.Violation] = set()
-        self.assertEqual(baseline_mod.falsified_removals(base, working, {}), [])
 
 
 class CountByKindTests(unittest.TestCase):

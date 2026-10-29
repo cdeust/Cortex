@@ -4,14 +4,17 @@ verified.
 
 Usage::
 
-    python scripts/check_craftsmanship.py                 # diff vs origin/main
-    python scripts/check_craftsmanship.py --base main      # diff vs an explicit ref
+    python scripts/check_craftsmanship.py                 # every tracked .py file
     python scripts/check_craftsmanship.py path/to/file.py  # explicit files
     python scripts/check_craftsmanship.py --write-baseline # regenerate the baseline
 
-Exit codes: 0 clean, 1 new/stale/added/falsified-removal violations found,
-2 could not determine which files to check (git diff failed and no files
-were given explicitly) or could not resolve the base ref in diff mode.
+The measure of the working tree must be at most the baseline committed in
+that same tree: a violation absent from it is new debt, an entry whose
+violation no longer reproduces is stale and must be pruned in the same
+diff. No ref is read, so the result does not depend on what any other
+branch holds.
+
+Exit codes: 0 clean, 1 new or stale violations found.
 
 source: ADR-0712"""
 
@@ -45,33 +48,10 @@ def scan_files(rel_paths: list[str]) -> set[rules.Violation]:
     return found
 
 
-def _report(
-    new: list[rules.Violation],
-    stale: list[rules.Violation],
-    added: list[rules.Violation],
-    falsified: list[rules.Violation],
-) -> None:
-    if added:
-        print(
-            "Craftsmanship gate: baseline entries ADDED without a base-ref "
-            "match (the ratchet only shrinks — fix the violation, don't "
-            "grandfather it):",
-            file=sys.stderr,
-        )
-        for v in added:
-            print(f"  - [{v.kind}] {v.file}: {v.detail}", file=sys.stderr)
-    if falsified:
-        print(
-            "Craftsmanship gate: baseline entries REMOVED but the violation "
-            "still reproduces (a falsified prune — fix the code, or leave "
-            "the entry, don't just delete the JSON line):",
-            file=sys.stderr,
-        )
-        for v in falsified:
-            print(f"  - [{v.kind}] {v.file}: {v.detail}", file=sys.stderr)
+def _report(new: list[rules.Violation], stale: list[rules.Violation]) -> None:
     if new:
         print(
-            "Craftsmanship gate: NEW violations (not in the base-ref baseline):",
+            "Craftsmanship gate: NEW violations (not in this tree's baseline):",
             file=sys.stderr,
         )
         for v in new:
@@ -84,7 +64,7 @@ def _report(
         )
         for v in stale:
             print(f"  - [{v.kind}] {v.file}: {v.detail}", file=sys.stderr)
-    if not new and not stale and not added and not falsified:
+    if not new and not stale:
         print("Craftsmanship gate: OK")
 
 
@@ -98,26 +78,7 @@ def _write_baseline(baseline_path: Path) -> int:
     return 0
 
 
-def _added_and_falsified(
-    working_baseline: set[rules.Violation], base_baseline: set[rules.Violation] | None
-) -> tuple[list[rules.Violation], list[rules.Violation]]:
-    """The two base-ref-anchored ratchet checks — skipped (empty) in the
-    bootstrap case (no base-ref baseline to compare against yet).
-    """
-    if base_baseline is None:
-        return [], []
-    added = baseline_mod.added_entries(working_baseline, base_baseline)
-    removed_files = sorted({v.file for v in base_baseline - working_baseline})
-    removed_rescanned = {f: scan_files([f]) for f in removed_files}
-    falsified = baseline_mod.falsified_removals(
-        base_baseline, working_baseline, removed_rescanned
-    )
-    return added, falsified
-
-
-def _run_gate(
-    target_files: list[str], baseline_path: Path, base_ref: str | None
-) -> int:
+def _run_gate(target_files: list[str], baseline_path: Path) -> int:
     # Wiki deletion/renaming can invalidate a pointer in an unchanged file.
     sources = craftsmanship_git.all_tracked_python_files(REPO_ROOT)
     decision_errors = craftsmanship_decisions.check_decisions(
@@ -128,33 +89,20 @@ def _run_gate(
             print(f"Craftsmanship gate: [decision-integrity] {error}", file=sys.stderr)
         return 1
     current = scan_files(target_files)
-    working_baseline = baseline_mod.load_baseline(baseline_path)
-    base_baseline = craftsmanship_git.load_baseline_from_ref(
-        REPO_ROOT, base_ref, baseline_path
-    )
+    baseline = baseline_mod.load_baseline(baseline_path)
+    new = baseline_mod.new_violations(current, baseline)
 
-    # The tamper-proof comparison source for "is this violation already
-    # known" is the base ref's baseline — falling back to the working
-    # tree's only in the bootstrap case (base_baseline is None: no base
-    # ref, or the file does not exist at the base ref yet).
-    comparison_baseline = (
-        base_baseline if base_baseline is not None else working_baseline
-    )
-    new = baseline_mod.new_violations(current, comparison_baseline)
-    added, falsified = _added_and_falsified(working_baseline, base_baseline)
-
-    baseline_files = sorted({v.file for v in working_baseline})
+    baseline_files = sorted({v.file for v in baseline})
     rescanned = {f: scan_files([f]) for f in baseline_files}
-    stale = baseline_mod.stale_entries(working_baseline, rescanned)
+    stale = baseline_mod.stale_entries(baseline, rescanned)
 
-    _report(new, stale, added, falsified)
-    return 1 if (new or stale or added or falsified) else 0
+    _report(new, stale)
+    return 1 if (new or stale) else 0
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     parser.add_argument("files", nargs="*", help="explicit files to check")
-    parser.add_argument("--base", default=None, help="git ref to diff/compare against")
     parser.add_argument(
         "--baseline", default=str(DEFAULT_BASELINE), help="baseline JSON path"
     )
@@ -173,31 +121,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.write_baseline:
         return _write_baseline(baseline_path)
 
-    if args.files:
-        # Ad hoc/local usage: the base ref still feeds the ratchet-file
-        # and base-baseline comparisons below when it resolves, but an
-        # unresolved ref here is NOT fatal (offline/no-remote local runs
-        # stay usable) — it just falls back to bootstrap semantics.
-        target_files = args.files
-        base_ref = craftsmanship_git.resolve_base_ref(REPO_ROOT, args.base)
-    else:
-        base_ref = craftsmanship_git.resolve_base_ref(REPO_ROOT, args.base)
-        if base_ref is None:
-            print(
-                "Craftsmanship gate: could not resolve a base ref to diff against",
-                file=sys.stderr,
-            )
-            return 2
-        diffed = craftsmanship_git.changed_python_files(REPO_ROOT, base_ref)
-        if diffed is None:
-            print(
-                f"Craftsmanship gate: `git diff` against {base_ref} failed",
-                file=sys.stderr,
-            )
-            return 2
-        target_files = diffed
-
-    return _run_gate(target_files, baseline_path, base_ref)
+    target_files = args.files or craftsmanship_git.all_tracked_python_files(REPO_ROOT)
+    return _run_gate(target_files, baseline_path)
 
 
 if __name__ == "__main__":
