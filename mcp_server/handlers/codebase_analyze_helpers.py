@@ -409,3 +409,25 @@ def persist_community_tags(
                         )
             except Exception as exc:  # noqa: BLE001 — per-file failure must not abort the batch
                 silent_failure.note("codebase_analyze.community_tag", exc)
+
+
+def refresh_source_hash(store: MemoryStore, memory_id: int, content_hash: str) -> None:
+    """Refresh source provenance without resetting replay heat or importance.
+
+    source: PR #827 native finding 4400997881.
+    """
+    row = store.get_memory(memory_id)
+    if row is None:
+        raise ValueError("Exact replay source memory no longer exists")
+    tags = [
+        tag
+        for tag in _parse_tags(row.get("tags"))
+        if not isinstance(tag, str) or not tag.startswith(HASH_TAG_PREFIX)
+    ]
+    tags.append(f"{HASH_TAG_PREFIX}{content_hash}")
+    with store.acquire_batch() as conn:
+        conn.execute(
+            "UPDATE memories SET tags = %s::jsonb WHERE id = %s",
+            (json.dumps(tags), memory_id),
+        )
+        conn.commit()

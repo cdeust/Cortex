@@ -36,6 +36,7 @@ from mcp_server.infrastructure.embedding_engine import (
 )
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
+from mcp_server.infrastructure.memory_exact import collapse_exact
 from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
 from mcp_server.hooks.consolidate_background import _write_stamp
 
@@ -47,7 +48,8 @@ schema = {
     "description": (
         # source: ADR-0341
         "Run scheduled memory-system maintenance cycles: thermodynamic "
-        "heat decay, full-text → gist → tag compression, "
+        "heat decay, scoped exact-replay consolidation (exact_duplicates counters), "
+        "full-text → gist → tag compression, "
         "episodic→semantic CLS transfer, synaptic plasticity LTP/LTD, "
         "microglial pruning of orphan edges, homeostatic scaling, cascade "
         "stage advancement, and optional deep-sleep replay. Each cycle is "
@@ -347,6 +349,7 @@ def _run_always_cycles(
     stats: dict[str, Any],
 ) -> dict[str, Any]:
     """Run cycles that always execute regardless of flags."""
+    stats["exact_duplicates"] = _timed(collapse_exact, store)
     stats["cascade"] = _timed(run_cascade_advancement, store)
     stats["homeostatic"] = _timed(run_homeostatic_cycle, store, None)
 

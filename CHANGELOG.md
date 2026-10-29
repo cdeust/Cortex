@@ -21,6 +21,22 @@ adheres to [Semantic Versioning](https://semver.org/).
   from durable rows and page content, including stored summaries with missing
   sections, without duplicating successful writes (#714).
 
+- Exact remember replays return the existing id within the same write scope;
+  explicit corrections still post supersession edges. Consolidation retains
+  and supersedes legacy copies, preserves protection flags, and excludes
+  benchmark rows and block replicas (#707). The new counter is
+  `exact_duplicates.superseded_total`. SQLite writers need no registered `md5()`.
+  Replays refresh source hashes without resetting heat, and identical deliberate
+  batch items are refused before curation. Hard forget erases retained exact twins.
+
+- Surface named dedup, SQLite recall-signal, profile freshness, and hot-memory
+  read failures to callers instead of continuing with partial results (#685).
+  Doctor and check_setup expose process-local historical fallback counts as
+  optional warnings; these lifetime counters do not block readiness.
+  Capture workers roll back unfinished SQLite writes when a handler raises.
+  A broken SQLite vector index now rejects captures at the novelty lookup;
+  failed captures are not retried by the resident capture worker.
+
 - Owner @claude mentions inherit the official action's tag-mode workspace edit
   approval instead of overriding it with auto mode (#822). Requests on the same
   thread run one at a time with up to 100 pending requests retained; automatic

@@ -154,9 +154,37 @@ class PgDdlMixin(PgStoreHost):
         ddl_hash = compute_ddl_hash()
 
         # source: ADR-0545
-        if self._recorded_schema_hash() == ddl_hash:
+        if self._recorded_schema_hash() != ddl_hash:
+            self._apply_ddl_locked(ddl_list, ddl_hash)
+        self._ensure_exact_index()
+
+    def _ensure_exact_index(self) -> None:
+        """Build outside the schema transaction without blocking ordinary writes.
+
+        source: PostgreSQL sql-createindex.html, Building Indexes Concurrently.
+        """
+        state = self._conn.execute(
+            "SELECT indisvalid FROM pg_index "
+            "WHERE indexrelid = to_regclass('idx_memories_exact_content')"
+        ).fetchone()
+        if state and state["indisvalid"]:
             return
-        self._apply_ddl_locked(ddl_list, ddl_hash)
+        self._conn.execute("SELECT pg_advisory_lock(%s)", (self._SCHEMA_LOCK_ID,))
+        try:
+            state = self._conn.execute(
+                "SELECT indisvalid FROM pg_index "
+                "WHERE indexrelid = to_regclass('idx_memories_exact_content')"
+            ).fetchone()
+            if state and not state["indisvalid"]:
+                self._conn.execute(
+                    "DROP INDEX CONCURRENTLY IF EXISTS idx_memories_exact_content"
+                )
+            self._conn.execute(
+                "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_memories_exact_content "
+                "ON memories (md5(content)) WHERE superseded_by_id IS NULL"
+            )
+        finally:
+            self._conn.execute("SELECT pg_advisory_unlock(%s)", (self._SCHEMA_LOCK_ID,))
 
     def _apply_ddl_locked(self, ddl_list: list[LiteralString], ddl_hash: str) -> None:
         """Apply DDL and its revision atomically under a transaction lock.

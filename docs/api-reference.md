@@ -54,8 +54,10 @@ Full rescan of session data to rebuild cognitive profiles. The transcripts on di
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `domain` | string | No | — | Rebuild only this domain |
-| `force` | boolean | No | `false` | Bypass the 1-hour freshness check only; never replaces a profile |
+| `force` | boolean | No | `false` | Bypass the 1-hour freshness check, including invalid timestamp metadata; never replaces a profile |
 | `replace_accumulated_profiles` | boolean | No | `false` | Destructive: replace a domain's stored profile with the smaller scan when the scan sees fewer sessions than the profile records |
+
+A present but unparseable or timezone-naive `updatedAt` raises an error before scanning. Rerun with `force=true` to bypass that freshness check. Missing, empty, or null timestamps permit a rebuild. The existing JSON reader logs corrupt or unreadable files to stderr and treats them as absent; changing that file-read policy is outside #685.
 
 **Returns:** `domains`, `totalSessions`, `totalMemories`, `duration`, and `domainOutcomes`, one entry per scanned domain: `{domain, action, storedSessions, scannedSessions, resultingSessions}` where `action` is `created`, `rebuilt` (scan saw at least as many sessions), `kept` (scan saw fewer; stored profile unchanged) or `replaced` (scan saw fewer and `replace_accumulated_profiles` was set).
 
@@ -586,3 +588,14 @@ The server uses a typed error hierarchy:
 | `StorageError` | Filesystem/database persistence failures |
 | `AnalysisError` | Core analysis failures |
 | `McpConnectionError` | MCP client connection failures |
+
+
+### Exact replay responses
+
+`remember` returns `{stored: false, action: "rejected", reason: "exact_duplicate",
+memory_id: existing_id}` for an exact replay in the same write scope, including a forced
+write. An explicit `supersedes_id` correction still posts its atomic supersession edge.
+Automatic capture uses the same check. Benchmark rows cannot reject a production write.
+
+`consolidate` reports the number of retained duplicate rows it superseded in
+`exact_duplicates.superseded_total`. A duplicate-free pass takes no table write lock.

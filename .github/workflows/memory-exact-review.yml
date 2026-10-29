@@ -1,0 +1,117 @@
+# source: PR #827 hosted unit job 122814815963; ci.json and scripts/ci_unit.sh.
+name: Exact replay regression evidence
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "mcp_server/infrastructure/*exact*.py"
+      - "mcp_server/handlers/codebase_analyze*.py"
+      - "mcp_server/handlers/remember*.py"
+      - "tests_py/handlers/test_issue_707*"
+      - ".github/workflows/memory-exact-review.yml"
+permissions:
+  contents: read
+jobs:
+  before-and-after:
+    runs-on: ubuntu-latest
+    env:
+      CORTEX_RERANKER_OFFLINE: "1"
+      BEFORE_SHA: 53261c9e21c15f02df8d6273283ca3881270442f
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Create the unit environment
+        run: python -m venv .venv
+      - name: Install the locked test environment
+        uses: ./.github/actions/uv-locked-install
+        with:
+          environment: ${{ github.workspace }}/.venv
+          set: --extra dev --extra sqlite --extra codebase --extra postgresql --group lint
+      - name: Check final Python sources
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          git diff --name-only -z origin/main...HEAD -- '*.py' | xargs -0 -r uv run --no-sync ruff check --
+          git diff --name-only -z origin/main...HEAD -- '*.py' | xargs -0 -r uv run --no-sync ruff format --check --
+          uv run --no-sync python scripts/check_craftsmanship.py --base origin/main
+          uv run --no-sync python scripts/check_project_wiki.py
+      - name: Reproduce old failures and measure the old collapse
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          export UV_PROJECT_ENVIRONMENT="$GITHUB_WORKSPACE/.venv"
+          mkdir -p "$GITHUB_WORKSPACE/.claude/worktrees"
+          baseline="$GITHUB_WORKSPACE/.claude/worktrees/issue-707-before"
+          git worktree add --detach "$baseline" "$BEFORE_SHA"
+          cp tests_py/handlers/test_issue_707_benchmark.py "$baseline/tests_py/handlers/"
+          cd "$baseline"
+          set +e
+          uv run --no-sync bash scripts/ci_unit.sh tests_py/handlers/test_memory_portability.py tests_py/handlers/test_remember_supersede.py tests_py/handlers/test_issue_707_benchmark.py -s --junitxml="$RUNNER_TEMP/before.xml"
+          status=$?
+          set -e
+          test "$status" -eq 1
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          root = ET.parse(Path(os.environ["RUNNER_TEMP"]) / "before.xml")
+          failures = [
+              case.attrib["name"] for case in root.findall(".//testcase")
+              if case.find("failure") is not None
+          ]
+          assert len(failures) == 2, failures
+          assert any("test_a_secret_stored_before_the_gate" in name for name in failures)
+          assert any("test_human_edit_never_lost_forced_duplicate" in name for name in failures)
+          assert not root.findall(".//error")
+          print("BEFORE: both known regressions reproduced; benchmark measurements above.")
+          PY
+      - name: Reproduce reviewed-head regressions
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          export UV_PROJECT_ENVIRONMENT="$GITHUB_WORKSPACE/.venv"
+          baseline="$GITHUB_WORKSPACE/.claude/worktrees/issue-707-reviewed"
+          git worktree add --detach "$baseline" e7c20793173660405f92bf05bdc6d0f7020c98c7
+          cp tests_py/handlers/test_issue_707_followup.py "$baseline/tests_py/handlers/"
+          cd "$baseline"
+          set +e
+          uv run --no-sync bash scripts/ci_unit.sh tests_py/handlers/test_issue_707_followup.py -s --junitxml="$RUNNER_TEMP/reviewed-before.xml"
+          status=$?
+          set -e
+          test "$status" -eq 1
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          root = ET.parse(Path(os.environ["RUNNER_TEMP"]) / "reviewed-before.xml")
+          failures = [
+              case.attrib["name"] for case in root.findall(".//testcase")
+              if case.find("failure") is not None
+          ]
+          expected = (
+              "test_source_hash_refresh", "test_deliberate_bulk_replay",
+              "test_distinct_scopes", "test_collapse_works_without_sqlite",
+              "test_hard_forget", "test_pg_collapse",
+          )
+          for name in expected:
+              assert any(failure.startswith(name) for failure in failures), (name, failures)
+          assert not root.findall(".//error")
+          print("REVIEWED BEFORE: all six reviewed regressions reproduced.")
+          PY
+      - name: Verify the final head and measure its collapse
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          uv run --no-sync bash scripts/ci_unit.sh tests_py/handlers/test_memory_portability.py tests_py/handlers/test_remember_supersede.py tests_py/handlers/test_issue_707_exact_duplicates.py tests_py/handlers/test_issue_707_review_regressions.py tests_py/handlers/test_issue_707_followup.py tests_py/handlers/test_issue_707_benchmark.py -s --junitxml="$RUNNER_TEMP/after.xml"
+      - name: Preserve hosted receipts
+        if: always()
+        run: |
+          for report in "$RUNNER_TEMP/before.xml" "$RUNNER_TEMP/reviewed-before.xml" "$RUNNER_TEMP/after.xml"; do
+            if [ -f "$report" ]; then
+              cat "$report"
+            fi
+          done
