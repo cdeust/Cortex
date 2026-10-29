@@ -5,6 +5,7 @@ two raw summaries of cdeust/ci-autonome#1 on one head (07:51:07Z after
 "Draft marked ready", 07:57:01Z after "@codex security review").
 """
 
+import copy
 import json
 from pathlib import Path
 import sys
@@ -31,7 +32,7 @@ def observation(sample: dict, requests: list) -> dict:
     verdict = {"head": HEAD, "merge": True, "url": "u"}
     return {
         "pr": pr,
-        "summary": sample["summary_comment"]["codex_review_state"],
+        "summary": copy.deepcopy(sample["summary_comment"]["codex_review_state"]),
         "summary_url": SUMMARY,
         "threads": [],
         "requests": requests,

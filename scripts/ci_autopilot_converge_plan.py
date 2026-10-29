@@ -43,7 +43,7 @@ def request_context(kind: str) -> str:
     return f"autopilot-converge/request-{kind}"
 
 
-def _owner_held(pr: dict) -> bool:
+def owner_held(pr: dict) -> bool:
     labels = {label.lower() for label in pr["labels"]}
     return (
         pr["draft"]
@@ -106,7 +106,9 @@ def _spent(kind: str, reason: str, obs: dict) -> str:
     """Name a second unusable Codex verdict on the same sha (one request spent).
 
     A null verdict links the summary comment so the local manager can escalate
-    the connector (cdeust/ci-autonome#1 samples, 07:51Z and 07:57Z).
+    the connector. A clean native receipt for the head is handled earlier in
+    _codex_kind (codex_security_flags_null_after_clean_receipt), as on
+    cdeust/ci-autonome#1 at 07:56:59Z.
     """
     if reason != "unknown_verdict":
         return f"review_stale_after_request: {kind} {reason}"
@@ -116,7 +118,8 @@ def _spent(kind: str, reason: str, obs: dict) -> str:
 
 def _codex_kind(kind: str, obs: dict, step: dict) -> bool:
     """Plan one Codex review kind into `step`; True when it concludes to merge."""
-    pr, files = obs["pr"], set(obs["pr"]["files"])
+    # `files` is the effective path set computed once in plan() (3000 cap).
+    pr, files = obs["pr"], obs["files"]
     mine = [
         t
         for t in obs["threads"]
@@ -129,10 +132,12 @@ def _codex_kind(kind: str, obs: dict, step: dict) -> bool:
     receipt = obs.get("security_receipt") if kind == "security_review" else None
     if reason == "unknown_verdict" and receipt:
         # The verdict exists in a native receipt (#830 08:25:28Z, ci-autonome#1
-        # 07:56:59Z): no relaunch; the gate reader's null handling is the gap.
+        # 07:56:59Z): no relaunch. The native gate still reads the null flags as
+        # pending, so this kind does not conclude to merge until the template's
+        # gate reader reads the receipt: the gap is named and blocks the lift.
         gap = f"codex_security_flags_null_after_clean_receipt: {receipt}"
         step["causes"].append(gap)
-        return not open_findings
+        return False
     # Orderings, not durations: Codex starts on push, so wait until every check
     # of this head finished before asking.
     early = reason in ("absent", "behind") and not pr["checks_completed"]
@@ -196,17 +201,23 @@ def _lift(obs: dict, step: dict) -> None:
     held = [label for label in REVIEW_HOLDS if label in obs["pr"]["labels"]]
     step["actions"] += [{"type": "remove_label", "label": label} for label in held]
     merge = obs.get("merge")
-    if held and merge and merge["failed_step"] == ELIGIBILITY_STEP:
-        # A "merge pending review" job keeps its name on a lone rerun (its name
-        # reads needs.review.outputs.state): rerun review, which reruns merge.
-        step["actions"].append({"type": "rerun_job", "job": merge["rerun_job"]})
+    # Planned from the failed eligibility step, not from a label still present:
+    # a lift applied partly (or by hand) is retried; the step re-reads labels.
+    if merge and merge["failed_step"] == ELIGIBILITY_STEP:
+        if merge["rerun_job"] is None:
+            run = merge["run_id"]
+            step["causes"].append(f"merge_pending_review_without_review_job: run {run}")
+        else:
+            # A "merge pending review" job keeps its name on a lone rerun (its
+            # name reads needs.review.outputs.state): rerun review, then merge.
+            step["actions"].append({"type": "rerun_job", "job": merge["rerun_job"]})
 
 
 def plan(obs: dict) -> dict:
     """Return the actions that make this PR converge and its named red causes."""
     pr = obs["pr"]
     step = {"pr": pr["number"], "head": pr["head"], "actions": [], "causes": []}
-    if _owner_held(pr):
+    if owner_held(pr):
         return {**step, "skipped": "owner_hold_or_draft"}
     # Security findings are never self-resolved: only a fresh Codex verdict or
     # the owner clears one (scripts/ci_codex_review_runtime.py).
@@ -222,7 +233,8 @@ def plan(obs: dict) -> dict:
         if _withdrawn(t, files) and t["reviewer"] == "codex" and not t["security"]
     ]
     step["actions"] += [_resolution(t, pr["head"]) for t in gone]
-    codex = [_codex_kind(kind, obs, step) for kind in TRIGGERS]
+    effective = {**obs, "files": files}
+    codex = [_codex_kind(kind, effective, step) for kind in TRIGGERS]
     claude = _claude(obs, step)
     step["causes"] += [
         f"{t['reviewer']}_finding_open: {t['url']}"

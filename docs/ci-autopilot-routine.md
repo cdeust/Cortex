@@ -42,8 +42,9 @@ une PR qui porte ce label reste dans ton périmètre de réparation. Seuls
 1. Lance `python3 scripts/ci_autopilot_converge.py --repo cdeust/Cortex --apply`.
    Il relance une revue Codex périmée (une fois par tête et par type), relance une
    revue Claude échouée, répond et résout les constats sur un chemin que la PR ne
-   modifie plus (jamais un constat de sécurité), lève les holds de revue et relance
-   le job merge retenu quand Codex et Claude concluent tous deux à la fusion, et
+   modifie plus (constats de code Codex seulement), lève les holds de revue et
+   relance le job merge retenu (par son job review s'il s'appelle « merge pending
+   review ») quand Codex et Claude concluent tous deux à la fusion, et
    publie le statut `autopilot-converge` avec la cause rouge nommée. Tes
    commentaires sont publiés sous le compte du mainteneur (ceux de la routine sur
    #826, #829 et #831 portent l'auteur `cdeust`), et des demandes `@codex review`
@@ -56,9 +57,22 @@ une PR qui porte ce label reste dans ton périmètre de réparation. Seuls
    reçoit une réponse avec la preuve (fichier, ligne, commande et sortie), puis le
    fil est résolu. Un constat de sécurité n'est jamais résolu par toi : tu
    corriges, puis la revue Codex de la nouvelle tête tranche.
-3. `codex_security_verdict_missing` ou `codex_code_verdict_missing` : la revue a
-   rendu deux fois un verdict nul sur la même tête ; tu cites le lien de synthèse
-   et tu le signales au manager local (connecteur Codex), sans label.
+   `*_finding_withdrawn_unresolved` : constat Claude ou de sécurité sur un chemin
+   que la PR ne modifie plus ; Claude : réponse avec la preuve puis résolution ;
+   sécurité : `@codex security review` sur la tête.
+3. Causes de revue Codex :
+   - `codex_request_unanswered` ou `codex_request_running` : la relance de ce
+     passage attend Codex ; tu n'en postes pas d'autre sur la même tête.
+   - `codex_security_verdict_missing` ou `codex_code_verdict_missing` : deux
+     verdicts nuls sur la même tête, sans reçu ; tu cites le lien de synthèse et
+     tu le signales au manager local (connecteur Codex), sans label.
+   - `codex_security_flags_null_after_clean_receipt` : le verdict existe (reçu
+     « No security issues were found ») ; ce n'est pas un verdict manquant, ne
+     relance pas. Le lecteur de la gate native ne lit pas encore ce reçu : c'est
+     une PR du template zetetic-team-subagents.
+   - `merge_pending_review_without_review_job`, `observe_failed`, `plan_failed`,
+     `apply_failed` : tu lis la cause et le log du workflow `autopilot-converge`,
+     puis tu corriges la cause racine.
 4. Pour un check rouge : l'échelle de `docs/agent-guidance.md` décide. Un seuil de
    test ne baisse jamais ; la cause racine est corrigée.
 5. Anti-boucle : quand la même signature d'échec revient après trois tentatives,

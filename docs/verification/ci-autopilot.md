@@ -186,45 +186,54 @@ issue comments and GraphQL reviewThreads, captured 07:22Z):
   `.github/workflows/claude.yml`, a path the PR no longer changed.
 
 Second owner rule, same day: `hold` and `autopilot:hold` mean "reviews
-incomplete". `scripts/ci_autopilot_converge_plan.py` therefore lifts a review
-hold, and reruns a merge job that failed on "Verify live PR eligibility", only
+incomplete". `scripts/ci_autopilot_converge_plan.py` lifts a review hold only
 when Codex (both kinds complete on the head, no open finding) and Claude (a
 `claude-review-verdict:v1` marker for the head with `merge: true`, no open
-inline finding) both conclude to merge. A missing reviewer is launched again:
-a stale Codex review is requested once per head and kind, a failed Claude
-review job is rerun once. The request comment is the bare trigger; its trace
-is the commit status `autopilot-converge/request-<kind>` on the head, and a
-request counts as answered only once that kind's own summary row (its
-`relative-time` datetime) moved after it; the single summary comment is also
-edited by the other kind. Until then the cause is
-`codex_request_unanswered: <kind> since <time>`, and once Codex picked it up
-but has not finished, `codex_request_running: <kind> since <time>`.
-On #830 at head `3d3e4f90` (fixture `codex_receipts_pr830.json`), an
+inline finding) both conclude to merge. A merge job that failed on "Verify
+live PR eligibility" in the newest Pipeline run of the head is then rerun,
+whether or not a label is still present, so a lift applied partly or by hand
+is retried. A `merge pending review` job keeps that name on a lone rerun, so
+its run's `review` job is rerun instead; without one, the cause is
+`merge_pending_review_without_review_job`.
+
+States and what the planner does:
+
+| State | Action | Status |
+| --- | --- | --- |
+| Codex review absent or behind the head, checks still running | wait | green, converging |
+| absent, behind, failed, null verdict, or flag unresolved after every finding was resolved or withdrawn | one bare `@codex review` / `@codex security review` per head and kind, traced by the status `autopilot-converge/request-<kind>` | green on that pass |
+| request sent, this kind's summary row did not move after it | none | `codex_request_unanswered` |
+| request picked up, still running | none | `codex_request_running` |
+| same verdict still unusable after the answer | none | `review_stale_after_request`, or `codex_<kind>_verdict_missing: <summary link>` for a null verdict |
+| security flags null, clean native receipt for the head | none (the verdict exists) | `codex_security_flags_null_after_clean_receipt: <receipt link>` |
+| Codex code finding on a path the PR no longer changes | reply with the proof, resolve | — |
+| Claude finding, or Codex security finding, on such a path | never resolved (security: fresh review) | `*_finding_withdrawn_unresolved` |
+| finding on a changed path | none (repair actor fixes or refutes) | `codex_finding_open`, `claude_finding_open` |
+| Claude review job failed | rerun once | then `claude_review_failed_after_rerun` |
+| Claude review completed without a verdict marker | none | `claude_verdict_unreadable` |
+| observe, plan or apply error | none | `observe_failed`, `plan_failed`, `apply_failed` with the error text |
+
+Green means progressing (checks running, a request just sent, a Claude review
+in progress). Every stall is named red. "Answered" reads the summary row of
+the same kind, because the single summary comment is also edited by the other
+kind. A `pulls/files` list at its 3000-file cap never proves a withdrawal.
+
+Measured on #830 at head `3d3e4f90` (fixture `codex_receipts_pr830.json`): an
 `@codex security review` comment followed by an HTML marker (08:16:09Z) moved
 the code row (08:17:29Z) and got a code review receipt (08:17:27Z); the bare
 trigger (08:22:29Z) moved the security row (08:25:29Z) and got the receipt
 "Security review completed. No security issues were found" (08:25:28Z), while
-the summary flags stayed null. No marker goes in a trigger, and that last state
-is named `codex_security_flags_null_after_clean_receipt: <receipt link>` without
-a relaunch: the verdict exists in the receipt (also ci-autonome#1, 07:56:59Z,
-fixture `codex_security_receipt_ci_autonome_pr1.json`), and reading it is a
-change of the native gate reader in the zetetic-team-subagents template.
-A second unusable verdict on the same head is named: `review_stale_after_request`,
-or `codex_security_verdict_missing: <summary link>` for a null verdict, the state
-measured twice on cdeust/ci-autonome#1 (07:51:07Z and 07:57:01Z, fixture
-`tests_py/scripts/fixtures/codex_null_verdict_ci_autonome_pr1.json`). "Running"
-counts as stale only after every check of that head finished, an ordering
-rather than a duration. A non-security finding on a path absent from
-`pulls/{n}/files` is answered with that proof and resolved; a security finding
-on such a path gets a fresh `@codex security review` instead, because only the
-owner or a new Codex verdict clears one (`_trusted_resolver`). The planner never
-merges and never touches `do-not-merge`, a "do not merge" title, a draft or a
-fork.
+the summary flags stayed null. The same pair exists on cdeust/ci-autonome#1
+(07:56:59Z receipt, 07:57:00Z row; fixtures `codex_null_verdict_ci_autonome_pr1.json`
+and `codex_security_receipt_ci_autonome_pr1.json`). In both, the receipt
+precedes the row by about one second, so the planner takes the latest receipt
+for the head rather than requiring it to follow the row. Reading the receipt
+is a change of the native gate reader in the zetetic-team-subagents template;
+until then the named gap blocks the lift and the gate stays pending.
 
 The Claude review does not emit the verdict marker yet: `.claude/commands/review-pr.md`
 is rendered from the zetetic-team-subagents template and only asks for
-comments. Until the template emits it, a completed Claude review is the red
-cause `claude_verdict_unreadable` and no review hold is lifted; the planner
+comments. Until the template emits it, no review hold is lifted; the planner
 does not add holds, so the Pipeline gate keeps merging on Codex alone as before.
 
 Live receipts: `@codex review` comments posted from the owner's account on
@@ -236,10 +245,11 @@ a bare `@codex security review` (07:37:27Z) produced a P1 finding, fixed in
 
 The Claude review row is taken from the run of
 `.github/workflows/claude-review.yml` on the head, never from the `@claude`
-mention job that shares its job name (#826 run 40794598626), and a held merge
-job only from `.github/workflows/pipeline.yml` on the head. Request traces and
-the published status are read from the combined status of the head (latest
-per context, one page). A forged trace cannot hide a stall: it reads as
+mention job that shares its job name (#826 run 40794598626). A held merge job
+comes from the newest `.github/workflows/pipeline.yml` run on the head, and its
+job id must belong to that run. Request traces and the published status are
+read across every page of the combined status of the head (latest status per
+context, `per_page=100`). A forged trace cannot hide a stall: it reads as
 `codex_request_unanswered`.
 
 Requests posted by the workflow token come from github-actions[bot]. Every

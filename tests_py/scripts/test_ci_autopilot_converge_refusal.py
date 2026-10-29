@@ -79,7 +79,16 @@ class WithdrawnTests(unittest.TestCase):
         item = case(833, claude_merge=True)
         item["pr"]["files_capped"] = True
         result = plan(item)
-        self.assertNotIn("resolve_withdrawn", [a["type"] for a in result["actions"]])
+        types = [a["type"] for a in result["actions"]]
+        self.assertNotIn("resolve_withdrawn", types)
+        # The capped set reaches _codex_kind too: no needless code re-request.
+        item["summary"]["code_review"]["has_unresolved_findings"] = True
+        item["summary"]["code_review"]["has_any_findings"] = True
+        again = plan(item)
+        kinds = [
+            a.get("kind") for a in again["actions"] if a["type"] == "request_review"
+        ]
+        self.assertNotIn("code_review", kinds)
         self.assertEqual(
             len([c for c in result["causes"] if "_finding_open: " in c]), 3
         )

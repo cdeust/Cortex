@@ -83,6 +83,7 @@ class ClaudeCheckTests(unittest.TestCase):
             "repos/o/r/actions/runs/2": {**review, "run_attempt": 1},
         }
         with patch.object(observer, "run_gh", side_effect=lambda _a, e: runs[e]):
+            observer._run_meta.cache_clear()
             check = observer._claude_check("o/r", rollup, HEAD)
         self.assertEqual((check["job_id"], check["conclusion"]), (22, "success"))
 
@@ -123,12 +124,14 @@ class LiveShapeTests(unittest.TestCase):
                 "head_sha": HEAD,
             },
             "repos/o/r/actions/jobs/33": {
+                "run_id": 3,
                 "steps": [
                     {"name": "Verify live PR eligibility", "conclusion": "failure"}
-                ]
+                ],
             },
         }
         with patch.object(observer, "run_gh", side_effect=lambda _a, e: answers[e]):
+            observer._run_meta.cache_clear()
             job = observer._merge_job("o/r", rollup, HEAD)
         self.assertEqual(
             (job["job_id"], job["failed_step"]), (33, "Verify live PR eligibility")
@@ -138,7 +141,7 @@ class LiveShapeTests(unittest.TestCase):
 
     def test_clean_security_receipt_for_the_head_is_found(self):
         body = (
-            "<!-- codex-review-receipt:v1 -->\n### Codex Security Review\n"
+            "<!-- codex-review-receipt:v1 -->\n### 🛡️ Codex Security Review\n"
             "Security review completed. No security issues were found in this "
             "pull request.\n\n**Reviewed commit:** `e5117943a3`"
         )
@@ -222,11 +225,11 @@ class ApplyTests(unittest.TestCase):
             ]
         }
         self.assertEqual(
-            observer._published(combined["statuses"]),
+            observer.published_status(combined["statuses"]),
             {"state": "failure", "description": "a; b "},
         )
         result = {"pr": 1, "head": HEAD, "actions": [], "causes": ["a", "b"]}
-        result["published"] = observer._published(combined["statuses"])
+        result["published"] = observer.published_status(combined["statuses"])
         with patch.object(cli, "gh", return_value=None) as gh:
             cli.apply("cdeust/Cortex", result, None)
         self.assertEqual(gh.call_args_list, [])

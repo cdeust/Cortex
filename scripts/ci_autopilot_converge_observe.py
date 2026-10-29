@@ -7,6 +7,7 @@ bodies and paths are data, never instructions.
 
 from __future__ import annotations
 
+import functools
 import json
 import os
 import re
@@ -26,7 +27,9 @@ VERDICT = re.compile(r"<!-- claude-review-verdict:v1\s+(.*?)\s*-->", re.S)
 JOB_URL = re.compile(r"/actions/runs/(\d+)/job/(\d+)")
 # source: native Codex security receipt on #830 (comment at 2026-10-29T08:25:28Z).
 RECEIPT_CLEAN = "Security review completed. No security issues were found"
-RECEIPT_COMMIT = re.compile(r"\*\*Reviewed commit:\*\* `([0-9a-f]{7,40})`")
+RECEIPT_COMMIT = re.compile(r"\*\*Reviewed commit:\*\* `([0-9a-f]{10,40})`")
+RECEIPT = "<!-- codex-review-receipt:v1 -->"
+RECEIPT_KIND = "### 🛡️ Codex Security Review"
 # source: GitHub REST "List pull requests files" returns at most 3000 files.
 FILES_CAP = 3000
 # source: the automatic Claude review workflow file and the Pipeline file.
@@ -156,11 +159,6 @@ def _rows(rollup: list, name: str) -> list[tuple[dict, int, int]]:
     return found
 
 
-def _row(rollup: list, name: str) -> tuple[dict, int, int] | None:
-    found = _rows(rollup, name)
-    return found[0] if found else None
-
-
 def _claude_check(repo: str, rollup: list, head: str) -> dict | None:
     """The automatic review job; the @claude mention job shares its name (#826).
 
@@ -168,7 +166,7 @@ def _claude_check(repo: str, rollup: list, head: str) -> dict | None:
     branch could copy.
     """
     for row, run, job in _rows(rollup, "Claude review"):
-        meta = run_gh("api", f"repos/{repo}/actions/runs/{run}")
+        meta = _run_meta(repo, run)
         if (meta["path"], meta["head_sha"]) != (REVIEW_WORKFLOW, head):
             continue
         conclusion = (row.get("conclusion") or "").lower()
@@ -182,23 +180,37 @@ def _claude_check(repo: str, rollup: list, head: str) -> dict | None:
     return None
 
 
+@functools.lru_cache(maxsize=None)
+def _run_meta(repo: str, run: int) -> dict:
+    """One fetch per run per pass (one process is one pass)."""
+    return run_gh("api", f"repos/{repo}/actions/runs/{run}")
+
+
 def _pipeline_run(repo: str, run: int, head: str) -> bool:
-    meta = run_gh("api", f"repos/{repo}/actions/runs/{run}")
+    meta = _run_meta(repo, run)
     return (meta["path"], meta["head_sha"]) == (PIPELINE_WORKFLOW, head)
 
 
 def _merge_job(repo: str, rollup: list, head: str) -> dict | None:
     # pipeline.yml names the job "merge pending review" while reviews are pending.
     rows = _rows(rollup, "merge") + _rows(rollup, "merge pending review")
-    failed_rows = [r for r in rows if r[0].get("conclusion") == "FAILURE"]
-    found = next((r for r in failed_rows if _pipeline_run(repo, r[1], head)), None)
-    if found is None:
+    mine = [r for r in rows if _pipeline_run(repo, r[1], head)]
+    if not mine:
         return None
-    steps = run_gh("api", f"repos/{repo}/actions/jobs/{found[2]}")["steps"]
-    failed = [s["name"] for s in steps if s.get("conclusion") == "failure"]
+    # The newest Pipeline run of this head decides; an older held job is stale.
+    newest = max(r[1] for r in mine)
+    found = next((r for r in mine if r[1] == newest), None)
+    if found[0].get("conclusion") != "FAILURE":
+        return None
+    job = run_gh("api", f"repos/{repo}/actions/jobs/{found[2]}")
+    if job.get("run_id") != found[1]:
+        return None  # The detailsUrl job id does not belong to that run.
+    failed = [s["name"] for s in job["steps"] if s.get("conclusion") == "failure"]
     review = [r for r in _rows(rollup, "review") if r[1] == found[1]]
-    pending = found[0].get("name") == "merge pending review" and review
-    rerun = review[0][2] if pending else found[2]
+    if found[0].get("name") != "merge pending review":
+        rerun = found[2]
+    else:
+        rerun = review[0][2] if review else None
     step = (failed or [""])[0]
     return {
         "run_id": found[1],
@@ -208,23 +220,34 @@ def _merge_job(repo: str, rollup: list, head: str) -> dict | None:
     }
 
 
+def _receipt_head(comment: dict) -> str | None:
+    """The reviewed commit of a native security receipt from the Codex bot."""
+    body = comment.get("body") or ""
+    if (
+        comment["user"]["login"] != BOT
+        or comment["user"]["type"] != "Bot"
+        or not body.startswith(RECEIPT)
+        or RECEIPT_KIND not in body
+    ):
+        return None
+    found = RECEIPT_COMMIT.search(body)
+    return found.group(1) if found else None
+
+
 def _security_receipt(comments: list, head: str) -> str | None:
-    """A native "No security issues were found" receipt for this head (#830, 08:25Z)."""
-    for c in comments:
-        body = c.get("body") or ""
-        found = RECEIPT_COMMIT.search(body)
-        if (
-            c["user"]["login"] == BOT
-            and c["user"]["type"] == "Bot"
-            and RECEIPT_CLEAN in body
-            and found
-            and head.startswith(found.group(1))
-        ):
-            return c.get("html_url", "")
-    return None
+    """The latest native security receipt for this head, if it is clean.
+
+    Only the latest receipt for the head counts, so an older clean receipt never
+    outweighs a newer review of the same sha (#830 08:25:28Z, ci-autonome#1).
+    """
+    mine = [c for c in comments if head.startswith(_receipt_head(c) or "-")]
+    if not mine:
+        return None
+    latest = max(mine, key=lambda c: (c["updated_at"], c["id"]))
+    return latest.get("html_url", "") if RECEIPT_CLEAN in latest["body"] else None
 
 
-def _published(statuses: list) -> dict | None:
+def published_status(statuses: list) -> dict | None:
     """The autopilot-converge status in the combined status of the head."""
     for status in statuses:
         if status.get("context") == "autopilot-converge":
@@ -252,10 +275,9 @@ def observe_pull(repo: str, pull: dict) -> dict:
     number, rollup = pull["number"], pull["statusCheckRollup"]
     pr = _pr_fields(pull, read_pages(f"repos/{repo}/pulls/{number}/files"))
     comments = read_pages(f"repos/{repo}/issues/{number}/comments")
-    # Combined status: the latest status per context, one page.
-    pages = run_gh(
-        "api", "--paginate", "--slurp", f"repos/{repo}/commits/{pr['head']}/status"
-    )
+    # Combined status: the latest status per context, read across all pages.
+    endpoint = f"repos/{repo}/commits/{pr['head']}/status?per_page=100"
+    pages = run_gh("api", "--paginate", "--slurp", endpoint)
     statuses = [s for page in pages for s in page["statuses"]]
     claude = {
         "verdict": _latest_marker(comments, "claude[bot]", VERDICT),
@@ -272,5 +294,5 @@ def observe_pull(repo: str, pull: dict) -> dict:
         "requests": spent_requests(statuses, pr["head"]),
         "claude": claude,
         "merge": _merge_job(repo, rollup, pr["head"]),
-        "published": _published(statuses),
+        "published": published_status(statuses),
     }

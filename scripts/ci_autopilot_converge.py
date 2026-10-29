@@ -5,9 +5,10 @@ Owner rules 2026-10-29: "Le CI doit être autonome, ma revue ne devrait jamais
 être nécessaire"; `hold`/`autopilot:hold` mean "reviews incomplete". Reads live
 GitHub data (scripts/ci_autopilot_converge_observe.py), plans with
 scripts/ci_autopilot_converge_plan.py and, with --apply, requests a stale
-Codex review, reruns a failed Claude review, resolves code findings on
-withdrawn paths, lifts the review holds and reruns the held merge job once
-Codex and Claude both conclude to merge, and publishes the remaining named
+Codex review, reruns a failed Claude review, resolves Codex code findings on
+withdrawn paths, lifts the review holds and reruns the held merge (through
+its review job when it is named "merge pending review") once Codex and Claude
+both conclude to merge, and publishes the remaining named
 red cause as the commit status `autopilot-converge` on the PR head. It never
 merges itself, never resolves a security finding, never touches an owner
 hold (`do-not-merge`, "do not merge" title), a draft or a fork.
@@ -24,16 +25,23 @@ import json
 import os
 import subprocess
 import sys
+import traceback
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from ci_autopilot_converge_observe import observe_pull, run_gh  # noqa: E402
-from ci_autopilot_converge_plan import plan  # noqa: E402
+from ci_autopilot_converge_observe import (  # noqa: E402
+    observe_pull,
+    published_status,
+    run_gh,
+)
+from ci_autopilot_converge_plan import owner_held, plan  # noqa: E402
 
 # source: gh pr list --limit; fail closed instead of truncating (ci_autopilot.py).
 PR_LIMIT = 1000
 # source: GitHub commit status description limit, REST "Create a commit status".
 STATUS_LENGTH = 140
+# source: operational cut of an error message inside that 140-character limit.
+DETAIL_LENGTH = 80
 # source: GitHub GraphQL mutations addPullRequestReviewThreadReply, resolveReviewThread.
 REPLY = (
     "mutation($t:ID!,$b:String!){addPullRequestReviewThreadReply("
@@ -198,25 +206,46 @@ FAILURES = (
 
 def _guarded(args, pull: dict, token: str | None) -> dict:
     """One PR's failure never stops the others; it is named red on its head."""
-    stage = "observe_failed"
+    stage, published = "observe_failed", None
     try:
         obs = observe_pull(args.repo, pull)
+        published = obs.get("published")
+        stage = "plan_failed"
         result = name_requester(plan(obs), token)
-        result["published"] = obs.get("published")
+        result["published"] = published
         stage = "apply_failed"
         if args.apply and "skipped" not in result:
             apply(args.repo, result, token)
         return result
     except FAILURES as exc:
-        head = pull.get("headRefOid", "")
-        cause = f"{stage}: {type(exc).__name__}"
-        failed = {"pr": pull["number"], "head": head, "actions": [], "causes": [cause]}
-        if args.apply and head:
-            try:
-                _status(args.repo, failed)
-            except FAILURES:
-                pass  # The workflow log still names the cause; the pass goes on.
-        return failed
+        traceback.print_exc(file=sys.stderr)
+        return _failed(args, pull, (stage, exc), published)
+
+
+def _failed(args, pull: dict, failure: tuple, published: dict | None) -> dict:
+    stage, exc = failure
+    detail = getattr(exc, "stderr", None) or str(exc)
+    detail = " ".join(str(detail).split())[:DETAIL_LENGTH]
+    head = pull.get("headRefOid", "")
+    cause = f"{stage}: {type(exc).__name__} {detail}".rstrip()
+    failed = {"pr": pull["number"], "head": head, "actions": [], "causes": [cause]}
+    labels = [label["name"] for label in pull.get("labels", [])]
+    shape = {"draft": pull.get("isDraft", True), "labels": labels}
+    if owner_held({**shape, "title": pull.get("title", "")}):
+        return {**failed, "skipped": "owner_hold_or_draft"}
+    if args.apply and head:
+        try:
+            failed["published"] = published or _published_now(args.repo, head)
+            _status(args.repo, failed)
+        except FAILURES:
+            traceback.print_exc(file=sys.stderr)  # The log still names the cause.
+    return failed
+
+
+def _published_now(repo: str, head: str) -> dict | None:
+    """A GET of the combined status does not count toward the status cap."""
+    pages = gh("api", "--paginate", "--slurp", f"repos/{repo}/commits/{head}/status")
+    return published_status([s for page in pages for s in page["statuses"]])
 
 
 if __name__ == "__main__":

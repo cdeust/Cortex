@@ -18,15 +18,20 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 - No PR waits for the owner any more (owner rules 2026-10-29). `hold` and
   `autopilot:hold` mean "reviews incomplete": the scheduled `autopilot-converge`
-  workflow lifts them, and reruns the held merge job, once Codex and Claude both
-  conclude to merge. A stale Codex review (absent, behind the head, failed,
-  running after every check, null verdict, unresolved after every finding was
-  resolved or withdrawn) is requested once per head and kind; a second null
-  verdict is the red cause `codex_security_verdict_missing` (or `_code_`) with
-  the summary link. A failed Claude review is rerun once. Findings on paths the
-  PR no longer changes are answered and resolved, never a security finding.
-  Every other state is a named red `autopilot-converge` status. The local queue
-  keeps only `do-not-merge` as an owner hold.
+  workflow lifts them once Codex and Claude both conclude to merge, and reruns
+  a merge job held on eligibility (through its review job when it is named
+  `merge pending review`). A stale Codex review is requested once per head and
+  kind with a bare trigger; an unanswered, still running or still unusable
+  request is named (`codex_request_unanswered`, `codex_request_running`,
+  `review_stale_after_request`, `codex_<kind>_verdict_missing`). Null security
+  flags next to a clean native receipt are named
+  `codex_security_flags_null_after_clean_receipt` without a relaunch. A failed
+  Claude review is rerun once. Only Codex code findings on paths the PR no
+  longer changes are answered and resolved; other withdrawn findings are named
+  `*_finding_withdrawn_unresolved`. Errors are `observe_failed`, `plan_failed`
+  or `apply_failed`. Green on `autopilot-converge` means progressing; every
+  stall is a named red status. The local queue keeps only `do-not-merge` as an
+  owner hold.
 
 - Exact remember replays return the existing id within the same write scope;
   explicit corrections still post supersession edges. Consolidation retains
