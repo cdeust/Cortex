@@ -47,11 +47,6 @@ coding write gates, causal graphs, and intent-aware retrieval.
   same-machine checks against it drift ±0.003 on LoCoMo MRR intra-day
   (measured 2026-07-14, `benchmarks/results/repro/20260714-floors-rebaseline/`)
   and nearly false-failed a floor that passes cleanly under `reproduce.sh`.
-  The published `FLOOR_*` check inside `reproduce.sh` is non-blocking
-  (source: main no longer clears them — see the script's own `FLOOR_*`
-  comment, cdeust/Cortex PR #492): gate a PR with `--no-regression` instead,
-  which fails only if HEAD is worse than its own `--baseline-ref` (default
-  `origin/main`), not against a published number nothing currently clears.
 - Iteration benchmarks: `python3 benchmarks/{longmemeval,locomo,beam}/run_benchmark.py`
   ⚠ Consolidation is OFF by default → scores collapse to ≈0%. This is a
   harness artifact (every candidate is prefiltered by the read-path heat
