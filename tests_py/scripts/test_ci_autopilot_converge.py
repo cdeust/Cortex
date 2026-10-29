@@ -12,7 +12,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
-from ci_autopilot_converge_plan import ELIGIBILITY_STEP, plan, request_marker  # noqa: E402
+from ci_autopilot_converge_plan import ELIGIBILITY_STEP, plan  # noqa: E402
 
 FIXTURES = json.loads(
     (Path(__file__).parent / "fixtures/ci_autopilot_converge_prs.json").read_text()
@@ -81,9 +81,10 @@ class MissingReviewerTests(unittest.TestCase):
         result = plan(case(830, claude_merge=True))
         self.assertEqual(kinds(result, "request_review"), ["code_review"])
         request = result["actions"][0]
-        self.assertTrue(request["body"].startswith("@codex review\n"))
-        marker = request_marker("code_review", case(830)["pr"]["head"])
-        self.assertIn(marker, request["body"])
+        # Bare trigger: a trailing marker turned a security request into a code
+        # review on #830 (08:16:09Z -> receipt 08:17:27Z).
+        self.assertEqual(request["body"], "@codex review")
+        self.assertEqual(request["context"], "autopilot-converge/request-code_review")
         self.assertEqual(request["reason"], "behind")
 
     def test_pr830_a_spent_request_becomes_a_named_red_cause(self):
@@ -109,11 +110,18 @@ class MissingReviewerTests(unittest.TestCase):
         item["pr"]["checks_completed"] = False
         self.assertEqual(plan(item)["actions"], [])
 
+    def test_absent_or_behind_review_waits_while_checks_run(self):
+        for number in (830, 772):
+            with self.subTest(number=number):
+                item = case(number, claude_merge=True)
+                item["pr"]["checks_completed"] = False
+                self.assertEqual(plan(item)["actions"], [])
+
     def test_unknown_security_verdict_is_requested(self):
         result = plan(case(833))
         request = [a for a in result["actions"] if a["type"] == "request_review"]
         self.assertEqual([a["kind"] for a in request], ["security_review"])
-        self.assertTrue(request[0]["body"].startswith("@codex security review\n"))
+        self.assertEqual(request[0]["body"], "@codex security review")
 
     def test_failed_claude_review_is_rerun_once_then_named(self):
         item = converged(830)

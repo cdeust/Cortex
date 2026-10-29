@@ -13,7 +13,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 import ci_autopilot_converge as cli  # noqa: E402
-from ci_autopilot_converge_plan import plan, request_marker  # noqa: E402
+from ci_autopilot_converge_plan import plan, request_context  # noqa: E402
 
 EVIDENCE = json.loads(
     (
@@ -46,9 +46,9 @@ class NullVerdictTests(unittest.TestCase):
             [(a["type"], a["kind"], a["reason"]) for a in result["actions"]],
             [("request_review", "security_review", "unknown_verdict")],
         )
-        body = result["actions"][0]["body"]
-        self.assertTrue(body.startswith("@codex security review\n"))
-        self.assertIn(request_marker("security_review", HEAD), body)
+        action = result["actions"][0]
+        self.assertEqual(action["body"], "@codex security review")
+        self.assertEqual(action["context"], request_context("security_review"))
         self.assertEqual(result["causes"], [])
 
     def test_second_null_verdict_on_the_same_sha_is_named_with_the_summary(self):
@@ -65,6 +65,20 @@ class NullVerdictTests(unittest.TestCase):
         spent = [{"kind": "security_review", "head": HEAD}]
         result = plan(observation(EVIDENCE["samples"][1], spent))
         self.assertNotIn("remove_label", [a["type"] for a in result["actions"]])
+
+    def test_real_timeline_waits_for_the_answer_then_names_the_gap(self):
+        asked = EVIDENCE["timeline"]["retrigger_comment"]["created_at"]
+        spent = [{"kind": "security_review", "head": HEAD, "at": asked}]
+        for index, expected in (
+            (0, []),
+            (1, [f"codex_security_verdict_missing: {SUMMARY}"]),
+        ):
+            with self.subTest(sample=index):
+                sample = EVIDENCE["samples"][index]
+                item = observation(sample, spent)
+                item["summary_updated"] = sample["summary_comment"]["updated_at"]
+                result = plan(item)
+                self.assertEqual((result["actions"], result["causes"]), ([], expected))
 
 
 if __name__ == "__main__":

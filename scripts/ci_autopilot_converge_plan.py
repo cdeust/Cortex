@@ -27,14 +27,20 @@ ACTIVE = ("running", "queued")
 REVIEW_HOLDS = ("hold", "autopilot:hold")
 # source: owner holds that stay with the owner (#646 title, pipeline.yml labels).
 OWNER_HOLDS = {"do-not-merge"}
-# source: stable marker of this planner's comments; one request per kind and head.
+# source: stable marker of this planner's thread replies.
 MARKER = "ci-autopilot-converge:v1"
 # source: .github/workflows/pipeline.yml merge step that names a label hold.
 ELIGIBILITY_STEP = "Verify live PR eligibility"
 
 
-def request_marker(kind: str, head: str) -> str:
-    return f"<!-- {MARKER} request kind={kind} head={head} -->"
+def request_context(kind: str) -> str:
+    """Commit status recording one request per head and kind (the trace).
+
+    The comment itself must be the bare trigger: on #830 at 08:16:09Z an
+    "@codex security review" comment followed by an HTML marker was answered
+    with a code review receipt (08:17:27Z), not a security review.
+    """
+    return f"autopilot-converge/request-{kind}"
 
 
 def _owner_held(pr: dict) -> bool:
@@ -76,8 +82,13 @@ def _staleness(value: dict | None, pr: dict, open_findings: bool) -> str | None:
 
 
 def _request(kind: str, head: str, reason: str) -> dict:
-    body = f"{TRIGGERS[kind]}\n\n{request_marker(kind, head)}\n"
-    return {"type": "request_review", "kind": kind, "reason": reason, "body": body}
+    return {
+        "type": "request_review",
+        "kind": kind,
+        "reason": reason,
+        "body": TRIGGERS[kind],
+        "context": request_context(kind),
+    }
 
 
 def _resolution(thread: dict, head: str) -> dict:
@@ -113,9 +124,17 @@ def _codex_kind(kind: str, obs: dict, step: dict) -> bool:
     ]
     open_findings = any(_open(t, files) for t in mine)
     reason = _staleness((obs["summary"] or {}).get(kind), pr, open_findings)
-    if reason in (None, "running"):
-        return reason is None and not open_findings
-    if {"kind": kind, "head": pr["head"]} in obs["requests"]:
+    if reason is None:
+        return not open_findings
+    # Orderings, not durations: Codex starts on push, so wait until every check
+    # of this head finished, and until Codex answered our last request.
+    early = reason in ("absent", "behind") and not pr["checks_completed"]
+    sent = [r for r in obs["requests"] if (r["kind"], r["head"]) == (kind, pr["head"])]
+    answered = obs.get("summary_updated")
+    pending = any(r.get("at") and (not answered or r["at"] > answered) for r in sent)
+    if reason == "running" or early or pending:
+        return False
+    if sent:
         step["causes"].append(_spent(kind, reason, obs.get("summary_url")))
     else:
         step["actions"].append(_request(kind, pr["head"], reason))

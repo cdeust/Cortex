@@ -191,8 +191,13 @@ hold, and reruns a merge job that failed on "Verify live PR eligibility", only
 when Codex (both kinds complete on the head, no open finding) and Claude (a
 `claude-review-verdict:v1` marker for the head with `merge: true`, no open
 inline finding) both conclude to merge. A missing reviewer is launched again:
-a stale Codex review is requested once per head and kind (marker
-`ci-autopilot-converge:v1 request`), a failed Claude review job is rerun once.
+a stale Codex review is requested once per head and kind, a failed Claude
+review job is rerun once. The request comment is the bare trigger; its trace
+is the commit status `autopilot-converge/request-<kind>` on the head, and a
+request counts as answered only once the Codex summary was updated after it.
+On #830 an `@codex security review` comment followed by an HTML marker
+(08:16:09Z) was answered with a code review receipt (08:17:27Z), so no marker
+goes in the trigger.
 A second unusable verdict on the same head is named: `review_stale_after_request`,
 or `codex_security_verdict_missing: <summary link>` for a null verdict, the state
 measured twice on cdeust/ci-autonome#1 (07:51:07Z and 07:57:01Z, fixture

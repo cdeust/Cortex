@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 import ci_autopilot_converge as cli  # noqa: E402
 import ci_autopilot_converge_observe as observer  # noqa: E402
-from ci_autopilot_converge_plan import request_marker  # noqa: E402
+from ci_autopilot_converge_plan import request_context  # noqa: E402
 
 HEAD = "e5117943a3d394f7028abc3b70d6573eb3f10948"  # PR 830 head before fe32c7d0.
 STATE = (
@@ -45,11 +45,14 @@ class ParseTests(unittest.TestCase):
             observer._latest_marker([forged], "claude[bot]", observer.VERDICT)
         )
 
-    def test_spent_requests_are_read_from_markers(self):
-        body = "@codex review\n\n" + request_marker("code_review", HEAD)
+    def test_spent_requests_are_read_from_head_statuses(self):
+        statuses = [
+            {"context": request_context("security_review"), "created_at": "t1"},
+            {"context": "autopilot-converge", "created_at": "t2"},
+        ]
         self.assertEqual(
-            observer.spent_requests([comment("cdeust", body)]),
-            [{"kind": "code_review", "head": HEAD}],
+            observer.spent_requests(statuses, HEAD),
+            [{"kind": "security_review", "head": HEAD, "at": "t1"}],
         )
 
     def test_pending_checks_are_not_completed(self):
@@ -59,10 +62,34 @@ class ParseTests(unittest.TestCase):
         self.assertFalse(observer.checks_completed([{"state": "PENDING"}]))
 
 
+class ClaudeCheckTests(unittest.TestCase):
+    def test_the_mention_job_with_the_same_name_is_never_the_review(self):
+        rollup = [
+            {
+                "name": "Claude review",
+                "conclusion": "FAILURE",
+                "detailsUrl": "https://github.com/o/r/actions/runs/1/job/11",
+            },
+            {
+                "name": "Claude review",
+                "conclusion": "SUCCESS",
+                "detailsUrl": "https://github.com/o/r/actions/runs/2/job/22",
+            },
+        ]
+        runs = {
+            "repos/o/r/actions/runs/1": {"name": "Claude", "run_attempt": 1},
+            "repos/o/r/actions/runs/2": {"name": "PR Review", "run_attempt": 1},
+        }
+        with patch.object(observer, "run_gh", side_effect=lambda _a, e: runs[e]):
+            check = observer._claude_check("o/r", rollup)
+        self.assertEqual((check["job_id"], check["conclusion"]), (22, "success"))
+
+
 class ApplyTests(unittest.TestCase):
     def result(self):
-        body = "@codex review\n\n" + request_marker("code_review", HEAD) + "\n"
+        body = "@codex review"
         request = {"type": "request_review", "kind": "code_review", "body": body}
+        request["context"] = request_context("code_review")
         return {
             "pr": 830,
             "head": HEAD,
@@ -83,13 +110,16 @@ class ApplyTests(unittest.TestCase):
         self.assertIn(label, calls[0])
         self.assertEqual(calls[1][:2], ("pr", "comment"))
         self.assertEqual(gh.call_args_list[1].kwargs["token"], "request-token")
-        self.assertTrue(gh.call_args_list[1].kwargs["stdin"].startswith("@codex"))
-        self.assertIn("t=PRRT_x", calls[2])
-        self.assertTrue(any("resolveReviewThread" in a for a in calls[3]))
-        self.assertIn("repos/cdeust/Cortex/actions/jobs/77/rerun", calls[4])
-        self.assertIn(f"repos/cdeust/Cortex/statuses/{HEAD}", calls[5])
-        self.assertIn("state=failure", calls[5])
-        self.assertIn("description=codex_finding_open: u", calls[5])
+        self.assertEqual(gh.call_args_list[1].kwargs["stdin"], "@codex review")
+        trace = f"context={request_context('code_review')}"
+        self.assertIn(trace, calls[2])
+        self.assertIn(f"repos/cdeust/Cortex/statuses/{HEAD}", calls[2])
+        self.assertIn("t=PRRT_x", calls[3])
+        self.assertTrue(any("resolveReviewThread" in a for a in calls[4]))
+        self.assertIn("repos/cdeust/Cortex/actions/jobs/77/rerun", calls[5])
+        self.assertIn(f"repos/cdeust/Cortex/statuses/{HEAD}", calls[6])
+        self.assertIn("state=failure", calls[6])
+        self.assertIn("description=codex_finding_open: u", calls[6])
 
     def test_converging_pr_gets_a_green_status(self):
         quiet = {"pr": 1, "head": HEAD, "causes": [], "actions": []}

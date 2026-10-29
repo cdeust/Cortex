@@ -12,7 +12,7 @@ import os
 import re
 import subprocess
 
-from ci_autopilot_converge_plan import MARKER
+from ci_autopilot_converge_plan import TRIGGERS, request_context
 
 # source: native Codex bot identity, scripts/ci_codex_reviews.py BOT.
 BOT = "chatgpt-codex-connector[bot]"
@@ -22,12 +22,10 @@ REVIEWERS = {"chatgpt-codex-connector": "codex", "claude": "claude"}
 STATE = re.compile(r"<!-- codex-review-state:v1\s+(.*?)\s*-->", re.S)
 # source: Claude verdict contract of this planner (docs/ci-autopilot-routine.md).
 VERDICT = re.compile(r"<!-- claude-review-verdict:v1\s+(.*?)\s*-->", re.S)
-# source: this planner's request marker (ci_autopilot_converge_plan.request_marker).
-REQUEST = re.compile(
-    r"<!-- " + re.escape(MARKER) + r" request kind=(\w+) head=([0-9a-f]{40}) -->"
-)
 # source: GitHub Actions job URL shape in statusCheckRollup.detailsUrl.
 JOB_URL = re.compile(r"/actions/runs/(\d+)/job/(\d+)")
+# source: .github/workflows/claude-review.yml `name: PR Review`.
+REVIEW_WORKFLOW = "PR Review"
 # source: Codex security finding marker, scripts/ci_codex_review_runtime.py FINDING.
 SECURITY = "<!-- codex-security-review-finding:v1 -->"
 # source: GitHub GraphQL reviewThreads, first:100 is the documented page maximum.
@@ -68,17 +66,24 @@ def _latest_marker(comments: list, author: str, pattern) -> dict | None:
         return None
     latest = max(rows, key=lambda c: (c["updated_at"], c["id"]))
     value = json.loads(pattern.search(latest["body"]).group(1))
-    return {**value, "url": latest.get("html_url", "")}
+    return {**value, "url": latest.get("html_url", ""), "at": latest["updated_at"]}
 
 
 def codex_summary(comments: list) -> dict | None:
     value = _latest_marker(comments, BOT, STATE)
-    return None if value is None else {k: v for k, v in value.items() if k != "url"}
+    if value is None:
+        return None
+    return {k: v for k, v in value.items() if k not in ("url", "at")}
 
 
-def spent_requests(comments: list) -> list:
-    found = (REQUEST.search(c.get("body") or "") for c in comments)
-    return [{"kind": m.group(1), "head": m.group(2)} for m in found if m]
+def spent_requests(statuses: list, head: str) -> list:
+    """Requests recorded as `request_context` commit statuses on this head."""
+    contexts = {request_context(kind): kind for kind in TRIGGERS}
+    return [
+        {"kind": contexts[s["context"]], "head": head, "at": s.get("created_at")}
+        for s in statuses
+        if s.get("context") in contexts
+    ]
 
 
 def _thread(node: dict) -> dict | None:
@@ -117,22 +122,35 @@ def checks_completed(rollup: list) -> bool:
     )
 
 
-def _row(rollup: list, name: str) -> tuple[dict, int, int] | None:
+def _rows(rollup: list, name: str) -> list[tuple[dict, int, int]]:
+    found = []
     for row in rollup:
-        found = JOB_URL.search(row.get("detailsUrl") or "")
-        if row.get("name") == name and row.get("conclusion") != "SKIPPED" and found:
-            return row, int(found.group(1)), int(found.group(2))
-    return None
+        url = JOB_URL.search(row.get("detailsUrl") or "")
+        if row.get("name") == name and row.get("conclusion") != "SKIPPED" and url:
+            found.append((row, int(url.group(1)), int(url.group(2))))
+    return found
+
+
+def _row(rollup: list, name: str) -> tuple[dict, int, int] | None:
+    found = _rows(rollup, name)
+    return found[0] if found else None
 
 
 def _claude_check(repo: str, rollup: list) -> dict | None:
-    found = _row(rollup, "Claude review")
-    if found is None:
-        return None
-    row, run, job = found
-    attempt = run_gh("api", f"repos/{repo}/actions/runs/{run}")["run_attempt"]
-    conclusion = (row.get("conclusion") or "").lower()
-    return {"conclusion": conclusion, "run_id": run, "job_id": job, "attempt": attempt}
+    """The automatic review job; the @claude mention job shares its name (#826)."""
+    for row, run, job in _rows(rollup, "Claude review"):
+        meta = run_gh("api", f"repos/{repo}/actions/runs/{run}")
+        if meta["name"] != REVIEW_WORKFLOW:
+            continue
+        conclusion = (row.get("conclusion") or "").lower()
+        attempt = meta["run_attempt"]
+        return {
+            "conclusion": conclusion,
+            "run_id": run,
+            "job_id": job,
+            "attempt": attempt,
+        }
+    return None
 
 
 def _merge_job(repo: str, rollup: list) -> dict | None:
@@ -148,6 +166,7 @@ def observe_pull(repo: str, pull: dict) -> dict:
     number, rollup = pull["number"], pull["statusCheckRollup"]
     files = read_pages(f"repos/{repo}/pulls/{number}/files")
     comments = read_pages(f"repos/{repo}/issues/{number}/comments")
+    statuses = f"repos/{repo}/commits/{pull['headRefOid']}/statuses"
     pr = {
         "number": number,
         "head": pull["headRefOid"],
@@ -166,8 +185,9 @@ def observe_pull(repo: str, pull: dict) -> dict:
         "pr": pr,
         "summary": codex_summary(comments),
         "summary_url": summary.get("url"),
+        "summary_updated": summary.get("at"),
         "threads": review_threads(repo, number),
-        "requests": spent_requests(comments),
+        "requests": spent_requests(read_pages(statuses), pr["head"]),
         "claude": claude,
         "merge": _merge_job(repo, rollup),
     }

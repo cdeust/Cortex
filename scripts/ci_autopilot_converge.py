@@ -64,7 +64,24 @@ def _status(repo: str, result: dict) -> None:
     )
 
 
-def _act(repo: str, number: str, action: dict, token: str | None) -> None:
+def _trace(repo: str, head: str, action: dict) -> None:
+    """Record the request on the head so it is sent once per sha and kind."""
+    gh(
+        "api",
+        "--method",
+        "POST",
+        f"repos/{repo}/statuses/{head}",
+        "-f",
+        "state=success",
+        "-f",
+        f"context={action['context']}",
+        "-f",
+        f"description=requested {action['kind']} ({action['reason']})",
+    )
+
+
+def _act(repo: str, target: tuple, action: dict, token: str | None) -> None:
+    number, head = target
     kind = action["type"]
     if kind == "request_review":
         body = ("--body-file", "-")
@@ -78,6 +95,7 @@ def _act(repo: str, number: str, action: dict, token: str | None) -> None:
             token=token,
             stdin=action["body"],
         )
+        _trace(repo, head, action)
     elif kind == "resolve_withdrawn":
         thread = f"t={action['thread']}"
         gh(
@@ -105,7 +123,7 @@ def _act(repo: str, number: str, action: dict, token: str | None) -> None:
 
 def apply(repo: str, result: dict, request_token: str | None) -> None:
     for action in result["actions"]:
-        _act(repo, str(result["pr"]), action, request_token)
+        _act(repo, (str(result["pr"]), result["head"]), action, request_token)
     _status(repo, result)
 
 
