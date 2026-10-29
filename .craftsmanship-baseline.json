@@ -3548,19 +3548,9 @@
       "detail": "write_doc_memory"
     },
     {
-      "file": "mcp_server/handlers/ingest_document.py",
-      "kind": "method-size",
-      "detail": "_persist"
-    },
-    {
       "file": "mcp_server/handlers/ingest_document_writers.py",
       "kind": "layer-violation",
       "detail": "mcp_server.observability"
-    },
-    {
-      "file": "mcp_server/handlers/ingest_document_writers.py",
-      "kind": "method-size",
-      "detail": "write_document_memories"
     },
     {
       "file": "mcp_server/handlers/ingest_findings.py",
@@ -4958,11 +4948,6 @@
       "detail": "fake_projects_dir"
     },
     {
-      "file": "tests_py/handlers/test_ble001_sweep_handlers.py",
-      "kind": "file-size",
-      "detail": "exceeds 300-line cap"
-    },
-    {
       "file": "tests_py/handlers/test_cls_diagnostics.py",
       "kind": "file-size",
       "detail": "exceeds 300-line cap"
@@ -5061,16 +5046,6 @@
       "file": "tests_py/handlers/test_ingest_docs_content.py",
       "kind": "method-size",
       "detail": "TestRunDocsPass.test_writes_one_memory_per_readable_doc_and_skips_oversized"
-    },
-    {
-      "file": "tests_py/handlers/test_ingest_document.py",
-      "kind": "file-size",
-      "detail": "exceeds 300-line cap"
-    },
-    {
-      "file": "tests_py/handlers/test_ingest_document.py",
-      "kind": "method-size",
-      "detail": "TestDocxHappyPath.test_ingests_docx_end_to_end_exact_response"
     },
     {
       "file": "tests_py/handlers/test_ingest_findings.py",
