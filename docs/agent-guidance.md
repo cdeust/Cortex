@@ -122,23 +122,19 @@ separate **cortex-viz** MCP (reads this same store read-only).
 - **Enforced by `scripts/check_craftsmanship.py`**, run in CI on every push
   and PR (`.github/workflows/ci.yml`, `craftsmanship` job) and locally via
   `python scripts/check_craftsmanship.py`. It checks the four rules above,
-  by AST, on the files a diff touches — never the whole repository. The
-  layer whitelist is *parsed* from `docs/module-inventory.md`'s own table
-  at run time (`scripts/craftsmanship_layer_table.py`), never a second
-  hardcoded copy that could silently diverge from it.
-  The comparison baseline is read via `git show <base-ref>:.craftsmanship-baseline.json`
-  — the PR's BASE ref, immutable to the PR's own commits — never the
-  working tree: a working-tree-only baseline is self-service (add a
-  violation, run `--write-baseline` in the same tree, the gate would pass
-  on it — this exact exploit is reproduced and closed in
-  `tests_py/scripts/test_check_craftsmanship.py::SneakyLimitExploitTests`).
-  The gate fails the diff on: any violation absent from that base-ref
-  baseline (new debt); any base-ref-baselined entry whose violation no
-  longer reproduces (fixed but not pruned); or any entry present in the
-  working-tree `.craftsmanship-baseline.json` but absent from the base
-  ref's (the file may only SHRINK within a PR — an addition is refused
-  outright, matched or not, because debt discovered mid-PR gets fixed at
-  the source, not grandfathered). Regenerate with
+  by AST, on every tracked `.py` file. The layer whitelist is *parsed* from
+  `docs/module-inventory.md`'s own table at run time
+  (`scripts/craftsmanship_layer_table.py`), never a second hardcoded copy
+  that could silently diverge from it.
+  The comparison baseline is the `.craftsmanship-baseline.json` committed in
+  the SAME tree as the code measured: the measure of the working tree must
+  be at most that baseline. No ref is read, so what `main` holds, or when it
+  moved, cannot change the verdict (reproduced in
+  `tests_py/scripts/test_check_craftsmanship_exploits.py::RatchetBehaviourTests`).
+  The gate fails on: any violation absent from that baseline (new debt,
+  including one whose baseline line was hand-deleted); or any baseline entry
+  whose violation no longer reproduces (fixed but not pruned — a PR that
+  improves the measure lowers the baseline in its own diff). Regenerate with
   `python scripts/check_craftsmanship.py --write-baseline` only to prune
   entries whose violations you actually fixed. Previously "enforced by
   code review today; no automated pre-commit hook checks this yet" (issue

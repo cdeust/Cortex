@@ -36,7 +36,7 @@ jobs:
           export PATH="$HOME/.local/bin:$PATH"
           uv run --no-sync ruff check mcp_server/infrastructure/sqlite_schema.py mcp_server/infrastructure/sqlite_store.py tests_py/infrastructure/test_supersession_delete_parity.py
           uv run --no-sync ruff format --check mcp_server/infrastructure/sqlite_schema.py mcp_server/infrastructure/sqlite_store.py tests_py/infrastructure/test_supersession_delete_parity.py
-          uv run --no-sync python scripts/check_craftsmanship.py --base origin/main
+          uv run --no-sync python scripts/check_craftsmanship.py
           uv run --no-sync python scripts/check_project_wiki.py
       - name: Reproduce the SQLite failure on the PR base
         run: |

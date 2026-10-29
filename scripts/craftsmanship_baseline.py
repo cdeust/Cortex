@@ -1,8 +1,8 @@
 """Baseline load/save/diff for the craftsmanship gate.
 
-This module supplies the parsing both paths share
-(``parse_baseline_json``); the git plumbing lives in
-``check_craftsmanship.py``, which already owns ``_run_git``.
+The baseline is a file committed in the same tree as the code it
+describes: the measure of the working tree must be at most that baseline,
+and a PR that improves the measure lowers the baseline in its own diff.
 
 source: ADR-0720"""
 
@@ -21,13 +21,7 @@ from craftsmanship_rules import Violation  # noqa: E402
 
 
 def parse_baseline_json(text: str) -> set[Violation]:
-    """Parse a baseline JSON document's ``violations`` array.
-
-    Shared by ``load_baseline`` (working tree) and
-    ``check_craftsmanship.load_baseline_from_ref`` (``git show`` output) —
-    the two loaders differ only in how they obtain ``text``, never in how
-    they interpret it.
-    """
+    """Parse a baseline JSON document's ``violations`` array."""
     data = json.loads(text)
     return {
         Violation(entry["file"], entry["kind"], entry["detail"])
@@ -81,39 +75,6 @@ def stale_entries(
         entry for entry in baseline if entry not in rescanned.get(entry.file, set())
     ]
     return sorted(stale, key=lambda v: (v.file, v.kind, v.detail))
-
-
-def added_entries(
-    working_baseline: set[Violation], base_baseline: set[Violation]
-) -> list[Violation]:
-    """Entries present in this PR's baseline file but absent from the base
-        ref's — the ratchet-file check.
-
-    source: ADR-0720"""
-    return sorted(
-        working_baseline - base_baseline, key=lambda v: (v.file, v.kind, v.detail)
-    )
-
-
-def falsified_removals(
-    base_baseline: set[Violation],
-    working_baseline: set[Violation],
-    rescanned: dict[str, set[Violation]],
-) -> list[Violation]:
-    """The mirror image of ``added_entries``, flagged in review: closing
-        "add a violation, then run --write-baseline in the same tree" without
-        also closing "delete the JSON line by hand, leave the violation in
-        place" left the ratchet open on the removal side — any of the ~1400
-        grandfathered entries could be hand-deleted from
-        ``.craftsmanship-baseline.json`` for free, since neither
-        ``added_entries`` (only looks at additions) nor ``new_violations``
-        (only rescans this PR's diffed files, not every baselined file) would
-        ever see it.
-
-    source: ADR-0720"""
-    removed = base_baseline - working_baseline
-    falsified = [v for v in removed if v in rescanned.get(v.file, set())]
-    return sorted(falsified, key=lambda v: (v.file, v.kind, v.detail))
 
 
 def count_by_kind(violations: set[Violation] | list[Violation]) -> dict[str, int]:

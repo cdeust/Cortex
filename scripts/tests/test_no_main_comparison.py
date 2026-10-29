@@ -26,6 +26,19 @@ FORBIDDEN = (
     "update-branch",
     "update_branch",
     "merge-base HEAD origin/main",
+    # The craftsmanship ratchet reads the baseline committed in its own
+    # tree; a read of one from another ref is a comparison against main.
+    "load_baseline_from_ref",
+    "resolve_base_ref",
+    "changed_python_files",
+)
+RATCHET_FILES = (
+    "scripts/check_craftsmanship.py",
+    "scripts/craftsmanship_git.py",
+    "scripts/craftsmanship_baseline.py",
+)
+RATCHET_FORBIDDEN = re.compile(
+    r"origin/|--base\b|\bgit show\b|rev-parse|merge-base|GITHUB_BASE_REF"
 )
 PATTERN = re.compile("|".join(re.escape(m) for m in FORBIDDEN), re.IGNORECASE)
 SKIP_DIRS = {"__pycache__", ".git", "node_modules", ".venv"}
@@ -68,15 +81,31 @@ def find_violations(root: Path, scanned=SCANNED, skip: Path | None = SELF) -> li
 
 class NoMainComparisonTests(unittest.TestCase):
     def test_repository_has_no_comparison_against_main(self) -> None:
-        self.assertTrue((ROOT / ".github" / "workflows").is_dir(), "wrong root: " + str(ROOT))
+        self.assertTrue(
+            (ROOT / ".github" / "workflows").is_dir(), "wrong root: " + str(ROOT)
+        )
         self.assertEqual(find_violations(ROOT), [])
+
+    def test_ratchet_reads_no_ref(self) -> None:
+        for name in RATCHET_FILES:
+            text = _read_text(ROOT / name)
+            self.assertNotEqual(text, "", name + " is missing or unreadable")
+            self.assertIsNone(RATCHET_FORBIDDEN.search(text), name)
+
+    def test_workflows_run_the_ratchet_without_a_base(self) -> None:
+        for path in sorted((ROOT / ".github" / "workflows").glob("*.yml")):
+            for line in _read_text(path).splitlines():
+                if "check_craftsmanship.py" in line:
+                    self.assertIsNone(re.search(r"--base\b", line), path.name)
 
     def test_guard_detects_every_forbidden_marker(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             workflows = Path(tmp) / ".github" / "workflows"
             workflows.mkdir(parents=True)
             for index, marker in enumerate(FORBIDDEN):
-                (workflows / f"w{index}.yml").write_text(f"run: {marker}\n", encoding="utf-8")
+                (workflows / f"w{index}.yml").write_text(
+                    f"run: {marker}\n", encoding="utf-8"
+                )
             hits = find_violations(Path(tmp), skip=None)
             self.assertEqual(len(hits), len(FORBIDDEN), hits)
 
