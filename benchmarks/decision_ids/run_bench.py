@@ -22,7 +22,7 @@ from mcp_server.handlers import recall, unified_search  # noqa: E402
 from mcp_server.infrastructure.wiki_decision_index import write_decision_index  # noqa: E402
 
 # source: ADR-0819
-BASELINE_REF = "e81735de3eb2248c134980008b2485d7d2a6dcc9"
+PRE_CHANGE_COMMIT = "e81735de3eb2248c134980008b2485d7d2a6dcc9"
 # source: ADR-0819
 KNOWN_IDS = ("ADR-0001", "ADR-0055", "ADR-0056", "ADR-2019", "ADR-9999")
 
@@ -60,7 +60,7 @@ def _baseline_handler():
         [
             "git",
             "show",
-            f"{BASELINE_REF}:mcp_server/handlers/unified_search.py",
+            f"{PRE_CHANGE_COMMIT}:mcp_server/handlers/unified_search.py",
         ],
         cwd=root,
         capture_output=True,
@@ -68,7 +68,7 @@ def _baseline_handler():
         check=True,
     ).stdout
     namespace = {"__name__": "decision_ids_baseline"}
-    exec(compile(source, f"{BASELINE_REF}:unified_search.py", "exec"), namespace)
+    exec(compile(source, f"{PRE_CHANGE_COMMIT}:unified_search.py", "exec"), namespace)
     namespace["recall_handler"] = AsyncMock(return_value={"memories": []})
     namespace["is_enabled"] = lambda: False
     return namespace["handler"]
@@ -125,7 +125,7 @@ async def run_benchmark() -> dict:
     return {
         "benchmark": "decision_ids",
         "scope": "wiki-only known-item source coverage; no PG ranking claim",
-        "baseline_ref": BASELINE_REF,
+        "pre_change_commit": PRE_CHANGE_COMMIT,
         "known_ids": KNOWN_IDS,
         "before": before,
         "after": after,

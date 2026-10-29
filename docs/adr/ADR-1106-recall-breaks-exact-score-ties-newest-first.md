@@ -53,7 +53,7 @@ Branch at cfd03db9 (the `git_sha` of every run's `MANIFEST.json`), `benchmarks/r
 | LoCoMo, all 10 conversations | 1982 | 0.8870 | 0.7780 | one run |
 | LoCoMo, conv-26, conv-30, conv-41 (`--limit 3`), run a and run b | 495 | 0.8687 | 0.7660 | 0 of 495 differ (conv-41: 0 of 193) |
 
-On origin/main two runs differed in 128 of conv-41's 193 top-10 sets (Context). The `--no-regression --baseline-ref origin/main` gate did not run: building the baseline environment failed on libcst for x86_64.
+On origin/main two runs differed in 128 of conv-41's 193 top-10 sets (Context). [Retiré 2026-10-29 : porte de non-régression contre main supprimée sur ordre de l'owner ; les benchmarks sont une mesure, pas une porte.]
 
 Reference range of origin/main (fee4c61a / 6cecb7c2, ADR-1105): LongMemEval-S R@10 0.980 to 0.982, MRR 0.904 to 0.906; LoCoMo R@10 0.8875 to 0.8900, MRR 0.780. Main's run-to-run spread on these benchmarks is being measured and will be added here.
 

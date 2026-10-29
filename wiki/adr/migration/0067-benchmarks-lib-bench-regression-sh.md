@@ -3,78 +3,32 @@
 Status: accepted; preserved from the existing implementation during issue #514.
 
 These are historical implementation records, not new algorithm or threshold choices.
+
+[Retiré 2026-10-29 : porte de non-régression contre main supprimée sur ordre de l'owner ; les benchmarks sont une mesure, pas une porte.]
 Source: `benchmarks/lib/bench_regression.sh`; original SHA-256 `aeac114807f760a997399f674f245aad5ed0cc5ebb75ecf46cb32f1f2a414290`.
 
 ## Original shell-comment, lines 2–14
 
 ````text
-# No-regression gate: compares the checked-out tree's benchmark scores
-# against the SAME benchmarks run on a baseline ref (default origin/main),
-# in the SAME ephemeral container/DB, instead of gating on the fixed
-# FLOOR_* constants in reproduce.sh.
-#
-# Why this exists (source: cdeust/Cortex PR #492, 2026-09-07): the
-# published floors (README benchmark tables, E1 v3 campaign) no longer
-# match what main itself measures — LongMemEval MRR 0.904988 vs floor
-# 0.914, LoCoMo MRR 3-run mean 0.779868 vs floor 0.805, LoCoMo Recall@10
-# 0.889506 vs floor 0.915 — all measured on main@6ec76a0e via this same
-# reproduce.sh. That gap predates and is independent of any pending PR:
-# every PR built on top of that commit inherits an already-failing floor
-# gate it did not cause and cannot pass by itself. Lowering FLOOR_* to
-
+[Retiré 2026-10-29 : porte de non-régression contre main supprimée sur ordre de l'owner ; les benchmarks sont une mesure, pas une porte.]
 ````
 
 ## Original shell-comment, lines 16–39
 
 ````text
-# ratchet in issue #188: "raising the floor would just hide the debt").
-# The fix is the same shape as that issue's resolution and as
-# scripts/check_craftsmanship.py's own baseline discipline (diff against
-# the base ref, never the working tree, never a hand-edited threshold):
-# gate on whether THIS tree is worse than its own baseline, not on
-# whether it clears a number nothing currently clears.
-#
-# Contract with the caller (reproduce.sh):
-#   REPO_ROOT, RESULTS_DIR, BENCH_DB_URL, PASSTHROUGH[]   (read)
-#   ONLY, QUICK, LIMIT                                    (read, scope which
-#                                                           benchmarks/limits
-#                                                           the baseline run
-#                                                           mirrors)
-#   want_bench(), run_bench()                             (read, reused so
-#                                                           the baseline run
-#                                                           takes the exact
-#                                                           same code path)
-#   REGRESSION_TOLERANCE                                  (read; reproduce.sh
-#                                                           default below)
-#
-# source: tolerance reuses FLOOR_TOLERANCE's own provenance (0.5 percentage
-# points, benchmarks/results/a3_longmemeval_post_refactor.md design §8) —
-# a regression gate has no reason to be stricter than the floor gate it
-# replaces as the blocking check.
-
+[Retiré 2026-10-29 : porte de non-régression contre main supprimée sur ordre de l'owner ; les benchmarks sont une mesure, pas une porte.]
 ````
 
 ## Original shell-comment, lines 97–99
 
 ````text
-    # Inside the repo, under the directory Claude Code's own worktree tooling
-    # uses (gitignored via .claude/*) — never /tmp or a sibling directory, where
-    # a killed run leaves a worktree nothing reclaims (owner correction 2026-09-08).
-
+[Retiré 2026-10-29 : porte de non-régression contre main supprimée sur ordre de l'owner ; les benchmarks sont une mesure, pas une porte.]
 ````
 
 ## Original shell-comment, lines 148–155
 
 ````text
-# Compare $RESULTS_DIR/<stem>.json (HEAD, already produced by run_bench)
-# against $RESULTS_DIR/baseline/<stem>.json (just produced above). Fails
-# only when HEAD is more than REGRESSION_TOLERANCE below its own baseline —
-# never against a fixed published number. BEAM is intentionally excluded,
-# matching FLOOR check_floors' own scope note (its numbers predate the
-# 200->395-question split rebasing and are within-system comparison only,
-# which is exactly what this gate does — but BEAM still has no committed
-# per-question stability data to size a tolerance from).
-
+[Retiré 2026-10-29 : porte de non-régression contre main supprimée sur ordre de l'owner ; les benchmarks sont une mesure, pas une porte.]
 ````
 
 
@@ -83,50 +37,35 @@ Source: `benchmarks/lib/bench_regression.sh`; original SHA-256 `aeac114807f760a9
 ### benchmarks/lib/bench_regression.sh — pre-cleanup line 3
 
 ````text
-# match would hide the drift (same anti-pattern rejected for the pyright
+[Retiré 2026-10-29 : porte de non-régression contre main supprimée sur ordre de l'owner ; les benchmarks sont une mesure, pas une porte.]
 ````
 
 ### benchmarks/lib/bench_regression.sh — pre-cleanup line 9
 
 ````text
-# Baseline worktrees omit ignored datasets. Reuse the exact HEAD inputs,
-# never a second download which could change the corpus between comparisons.
+[Retiré 2026-10-29 : porte de non-régression contre main supprimée sur ordre de l'owner ; les benchmarks sont une mesure, pas une porte.]
 ````
 
 ### benchmarks/lib/bench_regression.sh — pre-cleanup line 40
 
 ````text
-# Run the same benchmark set (respecting --only/--quick/--limit) against
-# BASELINE_REF's code, in an isolated git worktree, writing results under
-# $RESULTS_DIR/baseline/. Reuses the already-running container: harnesses
-# self-clean (purge is_benchmark rows on open, per reproduce.sh's header),
-# so a second harness run against the same DB is safe and does not require
-# a second container.
+[Retiré 2026-10-29 : porte de non-régression contre main supprimée sur ordre de l'owner ; les benchmarks sont une mesure, pas une porte.]
 ````
 
 ### benchmarks/lib/bench_regression.sh — pre-cleanup line 75
 
 ````text
-    # cd into the worktree so `uv run` resolves ITS pyproject.toml/uv.lock —
-    # the baseline may pin different dependency versions than HEAD, and
-    # running it under HEAD's resolved env would not actually measure the
-    # baseline's code.
+[Retiré 2026-10-29 : porte de non-régression contre main supprimée sur ordre de l'owner ; les benchmarks sont une mesure, pas une porte.]
 ````
 
 ### benchmarks/lib/bench_regression.sh — pre-cleanup line 80
 
 ````text
-        # Preserve errexit while cleaning up even when provisioning or a runner
-        # fails. An OR-list around this subshell would disable errexit within it.
+[Retiré 2026-10-29 : porte de non-régression contre main supprimée sur ordre de l'owner ; les benchmarks sont une mesure, pas une porte.]
 ````
 
 ### benchmarks/lib/bench_regression.sh — pre-cleanup line 133
 
 ````text
-        # Round to the same 4-decimal precision reproduce.sh prints, so the
-        # pass/fail line matches exactly what a reader sees in this log —
-        # comparing at higher hidden precision than what's displayed is the
-        # rounding mismatch that made single-run borderline cases confusing
-        # to bisect (reproduce.sh's own check_floors docstring, LoCoMo
-        # same-commit noise note, stdev 0.0022 measured 2026-07-14).
+[Retiré 2026-10-29 : porte de non-régression contre main supprimée sur ordre de l'owner ; les benchmarks sont une mesure, pas une porte.]
 ````

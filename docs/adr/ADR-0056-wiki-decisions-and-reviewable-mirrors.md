@@ -62,7 +62,7 @@ index metadata is regenerated on each checkout and is not portable Git data.
 Tests cover duplicate IDs, stale maps, reserved allocation, mirror drift,
 path escapes, exact lookup without model calls, and migration rollback.
 The known-item benchmark reports recall@1 and MRR@10 with explicit baseline
-conditions; the ordinary retrieval regression gate remains required.
+conditions. [Retiré 2026-10-29 : porte de non-régression contre main supprimée sur ordre de l'owner ; les benchmarks sont une mesure, pas une porte.]
 
 ## Preserved governed wiki-write contract
 
