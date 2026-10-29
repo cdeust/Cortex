@@ -29,8 +29,6 @@ jobs:
       cancel-in-progress: false
       queue: max
     runs-on: ubuntu-latest
-    # Workflow-capable credential is exposed only to default-branch owner requests.
-    environment: claude-workflow-edit
     permissions:
       contents: write
       pull-requests: write
@@ -41,7 +39,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-          # The action configures git auth with the supplied workflow-capable token.
+          # Use the action App token instead of a persisted workflow token.
           persist-credentials: false
       - name: Install subprocess isolation
         run: |
@@ -56,17 +54,13 @@ jobs:
         env:
           CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
         with:
-          # source: pinned action.yml github_token; docs/faq.md workflow limitation.
-          github_token: ${{ secrets.CLAUDE_WORKFLOW_TOKEN }}
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # Upstream action.yml and src/github/data/fetcher.ts at the pinned SHA
           # apply this filter to issue comments, reviews and inline comments.
           include_comments_by_actor: ${{ github.repository_owner }}
-          # Keep tag mode acceptEdits; explicitly allow protected workflow edits.
-          # source: pinned src/modes/tag/index.ts and base-action/src/parse-sdk-options.ts.
-          # Tool allow rules accumulate with the upstream tag-mode tools.
+          # No --permission-mode: inherit tag mode's workspace edit approval
+          # (src/modes/tag/index.ts at the pinned action SHA).
+          # Last value wins: upstream base-action/src/parse-sdk-options.ts.
           claude_args: |
             --strict-mcp-config
-            --allowedTools "Edit(.github/workflows/**),Write(.github/workflows/**)"
-            --append-system-prompt "This owner-triggered job uses a supplied GitHub token with workflow write scope. When the owner requests workflow fixes, edit and push .github/workflows files to the existing PR branch. The default GitHub App workflow-write limitation does not apply to this job. Never push to main or alter repository settings."
             --model "claude-opus-5-5"
