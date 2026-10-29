@@ -29,5 +29,7 @@ the zetetic implementation standard). Read it before any non-trivial change.
 - No source, no implementation; benchmark before commit; no silent fallbacks or
   compatibility shims.
 - CI red on a PR: follow the CI failure ladder in `docs/agent-guidance.md` (evidence →
-  PR-caused? → merge main if main has the fix → separate fix PR → workflows-only hold).
-  Never stop at "I can't".
+  decide → first exit that applies: PR fix, merge main, fix PR, posted workflow diff).
+  No PR waits for the owner: never apply a hold label or ask for a human decision; a
+  denial, push rejection, 403 or merge conflict is a hard stop reported with its evidence,
+  never routed around.

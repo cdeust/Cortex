@@ -21,10 +21,6 @@ adheres to [Semantic Versioning](https://semver.org/).
   thread run one at a time with up to 100 pending requests retained; automatic
   reviews keep their separate permission mode.
 
-- CI failure ladder for bots in `docs/agent-guidance.md` and `CLAUDE.md`: evidence
-  first, merge main when it already carries the fix, separate fix PR otherwise, hold
-  only for workflow-file edits (#830).
-
 - The managed PostgreSQL server starts on Ubuntu 25.10 and 26.04, which ship
   no `libxml2.so.2`: Linux GNU now runs theseus 18.6.1, which bundles its
   runtime libraries (about 40 MB instead of 12 MB); macOS keeps 18.6.0. The
@@ -52,6 +48,11 @@ adheres to [Semantic Versioning](https://semver.org/).
   successful prerequisites and supersede obsolete skipped matrix placeholders.
 
 ### Added
+
+- CI failure ladder for bots in `docs/agent-guidance.md` and `CLAUDE.md`: decide
+  from the full job log and the full PR diff, then fix in the PR, merge main when it
+  carries the fix, open a fix PR, or post a workflow diff. No exit waits for the owner;
+  denials, push rejections and merge conflicts are reported hard stops (#830).
 
 - Claude PR reviews use Anthropic's official direct PR workflow and its five
   upstream reviewer agents (ADR-1117). Reviewer configuration loads from trusted
