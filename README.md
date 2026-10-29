@@ -306,8 +306,7 @@ disabled. Against v4.14.1 the change is 0.4 points of Recall@10 and 0.012 of MRR
 floor check reports Recall@10 within the 0.005 tolerance of the July floor (0.982) and MRR
 0.0093 below its floor (0.914), which the script treats as non-blocking by design;
 [docs/agent-guidance.md](docs/agent-guidance.md) records that `main` no longer clears those
-floors and that the release gate is `--no-regression` against `origin/main`. The same tree has
-no LoCoMo or BEAM figure yet.
+floors. The same tree has no LoCoMo or BEAM figure yet.
 
 Reproduce with `benchmarks/reproduce.sh`, which runs in an isolated ephemeral container, never
 against a live store.
