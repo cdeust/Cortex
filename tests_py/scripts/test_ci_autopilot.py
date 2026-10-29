@@ -32,7 +32,7 @@ class QueueTests(unittest.TestCase):
             {"isDraft": True},
             {"isCrossRepository": True},
             {"title": "Fix bug (do not merge)"},
-            {"labels": [{"name": "hold"}]},
+            {"labels": [{"name": "do-not-merge"}]},
         ):
             with self.subTest(change=change):
                 item = {**pull(), **change}

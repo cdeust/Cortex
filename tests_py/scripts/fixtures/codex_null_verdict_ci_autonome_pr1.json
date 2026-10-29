@@ -1,0 +1,133 @@
+{
+  "schema": "codex-null-verdict-evidence/v2",
+  "repository": "cdeust/ci-autonome",
+  "pull_request": 1,
+  "head_sha": "f9d4591c15f4cada6616784e1a0f3fdedd27ccc7",
+  "observation": "Two consecutive Codex security reviews on the same head reported status completed with has_any_findings and has_unresolved_findings null (trigger 'Draft marked ready', then 'Manual request' via '@codex security review'); no thumbs-up reaction, no review comment, no review thread. The native gate classifies a null flag as pending (scripts/ci_codex_reviews.py: None in flags -> pending), so the merge job stays 'merge pending review'.",
+  "timeline": {
+    "ready_for_review": "2026-10-29T07:44:36Z (Pipeline 40837380594 / PR Review 40837380652 created)",
+    "codex_eyes_reaction_on_pr": "2026-10-29T07:44:48Z",
+    "code_review_completed": "2026-10-29T07:49:23.395280Z (has_any_findings false)",
+    "security_review_completed_null_verdict": "2026-10-29T07:51:07.116287Z",
+    "review_job_rerun": {
+      "run": 40837380594,
+      "attempt": 2,
+      "job": 123327650318,
+      "started": "2026-10-29T07:51:31Z",
+      "completed": "2026-10-29T07:51:38Z"
+    },
+    "merge_job_after_rerun": {
+      "job": 123327706921,
+      "name": "merge pending review",
+      "completed": "2026-10-29T07:51:45Z"
+    },
+    "evidence_captured_at": "2026-10-29T07:53:20Z",
+    "retrigger_comment": {
+      "id": 6491136282,
+      "body": "@codex security review",
+      "created_at": "2026-10-29T07:53:34Z"
+    },
+    "retrigger_eyes_reaction": "2026-10-29T07:53:42Z",
+    "summary_status_running_after_retrigger": "2026-10-29T07:53:44Z",
+    "security_review_completed_null_verdict_2": "2026-10-29T07:57:00.860574Z (trigger: Manual request)",
+    "reactions_after_sample_2": "none on PR, none on comment 6491136282 (eyes removed, no +1)",
+    "sample_2_captured_at": "2026-10-29T07:57:19Z"
+  },
+  "samples": [
+    {
+      "trigger": "Draft marked ready",
+      "summary_comment": {
+        "id": 6488058788,
+        "author": "chatgpt-codex-connector[bot]",
+        "created_at": "2026-10-29T04:36:17Z",
+        "updated_at": "2026-10-29T07:51:07Z",
+        "codex_review_state": {
+          "code_review": {
+            "commit_sha": "f9d4591c15f4cada6616784e1a0f3fdedd27ccc7",
+            "has_any_findings": false,
+            "has_unresolved_findings": false,
+            "status": "completed"
+          },
+          "security_review": {
+            "commit_sha": "f9d4591c15f4cada6616784e1a0f3fdedd27ccc7",
+            "has_any_findings": null,
+            "has_unresolved_findings": null,
+            "status": "completed"
+          }
+        },
+        "codex_security_review": {
+          "blockingSeverityThreshold": "P0",
+          "headSha": "f9d4591c15f4cada6616784e1a0f3fdedd27ccc7",
+          "mergeGateEnabled": false,
+          "pullRequestNumber": 1,
+          "repository": "cdeust/ci-autonome",
+          "status": "completed"
+        },
+        "review_rows": [
+          "| 📝 **Code Review** | ✅ **Completed** <relative-time datetime=\"2026-10-29T07:49:23.395280Z\">2026-10-29T07:49:23.395280Z</relative-time> | `f9d4591` | Draft marked ready |",
+          "| 🔒 **Security Review** | ✅ **Completed** <relative-time datetime=\"2026-10-29T07:51:07.116287Z\">2026-10-29T07:51:07.116287Z</relative-time> | `f9d4591` | Draft marked ready |"
+        ]
+      },
+      "gate_output": {
+        "run": 40837380594,
+        "attempt": 2,
+        "job": 123327650318,
+        "output": {
+          "code_review": {
+            "commit_sha": "f9d4591c15f4cada6616784e1a0f3fdedd27ccc7",
+            "has_any_findings": false,
+            "has_unresolved_findings": false,
+            "status": "completed"
+          },
+          "comment_id": 6488058788,
+          "reason": "review_pending",
+          "reviews_complete": false,
+          "security_review": {
+            "commit_sha": "f9d4591c15f4cada6616784e1a0f3fdedd27ccc7",
+            "has_any_findings": null,
+            "has_unresolved_findings": null,
+            "status": "completed"
+          },
+          "sha": "f9d4591c15f4cada6616784e1a0f3fdedd27ccc7",
+          "state": "pending",
+          "updated_at": "2026-10-29T07:51:07Z"
+        }
+      }
+    },
+    {
+      "trigger": "Manual request (@codex security review, comment 6491136282)",
+      "summary_comment": {
+        "id": 6488058788,
+        "author": "chatgpt-codex-connector[bot]",
+        "created_at": "2026-10-29T04:36:17Z",
+        "updated_at": "2026-10-29T07:57:01Z",
+        "codex_review_state": {
+          "code_review": {
+            "commit_sha": "f9d4591c15f4cada6616784e1a0f3fdedd27ccc7",
+            "has_any_findings": false,
+            "has_unresolved_findings": false,
+            "status": "completed"
+          },
+          "security_review": {
+            "commit_sha": "f9d4591c15f4cada6616784e1a0f3fdedd27ccc7",
+            "has_any_findings": null,
+            "has_unresolved_findings": null,
+            "status": "completed"
+          }
+        },
+        "codex_security_review": {
+          "blockingSeverityThreshold": "P0",
+          "headSha": "f9d4591c15f4cada6616784e1a0f3fdedd27ccc7",
+          "mergeGateEnabled": false,
+          "pullRequestNumber": 1,
+          "repository": "cdeust/ci-autonome",
+          "status": "completed"
+        },
+        "review_rows": [
+          "| 📝 **Code Review** | ✅ **Completed** <relative-time datetime=\"2026-10-29T07:49:23.395280Z\">2026-10-29T07:49:23.395280Z</relative-time> | `f9d4591` | Draft marked ready |",
+          "| 🔒 **Security Review** | ✅ **Completed** <relative-time datetime=\"2026-10-29T07:57:00.860574Z\">2026-10-29T07:57:00.860574Z</relative-time> | `f9d4591` | Manual request |"
+        ]
+      }
+    }
+  ]
+}

@@ -16,6 +16,18 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- No PR waits for the owner any more (owner rules 2026-10-29). `hold` and
+  `autopilot:hold` mean "reviews incomplete": the scheduled `autopilot-converge`
+  workflow lifts them, and reruns the held merge job, once Codex and Claude both
+  conclude to merge. A stale Codex review (absent, behind the head, failed,
+  running after every check, null verdict, unresolved after every finding was
+  resolved or withdrawn) is requested once per head and kind; a second null
+  verdict is the red cause `codex_security_verdict_missing` (or `_code_`) with
+  the summary link. A failed Claude review is rerun once. Findings on paths the
+  PR no longer changes are answered and resolved, never a security finding.
+  Every other state is a named red `autopilot-converge` status. The local queue
+  keeps only `do-not-merge` as an owner hold.
+
 - Exact remember replays return the existing id within the same write scope;
   explicit corrections still post supersession edges. Consolidation retains
   and supersedes legacy copies, preserves protection flags, and excludes

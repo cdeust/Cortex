@@ -1,0 +1,518 @@
+{
+ "cases": {
+  "765": {
+   "claude": {
+    "check": {
+     "attempt": 1,
+     "conclusion": "success",
+     "job_id": 122653857497,
+     "run_id": 40639431815
+    },
+    "verdict": null
+   },
+   "merge": null,
+   "pr": {
+    "checks_completed": true,
+    "draft": false,
+    "files": [
+     ".devcontainer/Dockerfile"
+    ],
+    "head": "e6a9cfa113747e62cf93809550d938f5e7718edf",
+    "labels": [
+     "dependencies",
+     "docker"
+    ],
+    "number": 765,
+    "title": "build: bump python from `cad9a2c` to `a2b82f3` in /.devcontainer"
+   },
+   "requests": [],
+   "summary": {
+    "code_review": {
+     "commit_sha": null,
+     "has_any_findings": null,
+     "has_unresolved_findings": null,
+     "status": null
+    },
+    "security_review": {
+     "commit_sha": "e6a9cfa113747e62cf93809550d938f5e7718edf",
+     "has_any_findings": false,
+     "has_unresolved_findings": false,
+     "status": "completed"
+    }
+   },
+   "threads": []
+  },
+  "772": {
+   "claude": {
+    "check": {
+     "attempt": 1,
+     "conclusion": "success",
+     "job_id": 122652497492,
+     "run_id": 40639005071
+    },
+    "verdict": null
+   },
+   "merge": null,
+   "pr": {
+    "checks_completed": true,
+    "draft": false,
+    "files": [
+     "tests_py/_launcher_ready.py",
+     "tests_py/hooks/test_entry.py"
+    ],
+    "head": "c0615126c14e1a48a24f4df1b84ee84fefb19186",
+    "labels": [],
+    "number": 772,
+    "title": "test(hooks): ready plugin data dir for launcher-driven entry parity tests"
+   },
+   "requests": [],
+   "summary": {
+    "code_review": {
+     "commit_sha": null,
+     "has_any_findings": null,
+     "has_unresolved_findings": null,
+     "status": null
+    },
+    "security_review": {
+     "commit_sha": "c0615126c14e1a48a24f4df1b84ee84fefb19186",
+     "has_any_findings": false,
+     "has_unresolved_findings": false,
+     "status": "completed"
+    }
+   },
+   "threads": []
+  },
+  "826": {
+   "claude": {
+    "check": {
+     "attempt": 1,
+     "conclusion": "success",
+     "job_id": 123187859288,
+     "run_id": 40794598626
+    },
+    "verdict": null
+   },
+   "merge": {
+    "failed_step": "Require complete Codex reviews",
+    "job_id": 123195072660,
+    "run_id": 40794598637
+   },
+   "pr": {
+    "checks_completed": true,
+    "draft": false,
+    "files": [
+     ".craftsmanship-baseline.json",
+     ".github/workflows/auto-recall-parity.yml",
+     "CHANGELOG.md",
+     "benchmarks/auto_recall_parity.py",
+     "benchmarks/auto_recall_scores.py",
+     "benchmarks/fixtures/auto_recall_paraphrases.json",
+     "docs/verification/issue-706-auto-recall.md",
+     "mcp_server/core/capture_origin.py",
+     "mcp_server/core/reranker.py",
+     "mcp_server/handlers/memory_import_checks.py",
+     "mcp_server/handlers/recall.py",
+     "mcp_server/handlers/recall_by_id.py",
+     "mcp_server/handlers/recall_helpers.py",
+     "mcp_server/handlers/recall_output_schema.py",
+     "mcp_server/handlers/recall_schema.py",
+     "mcp_server/hooks/auto_recall.py",
+     "mcp_server/hooks/auto_recall_ranking.py",
+     "mcp_server/infrastructure/hook_capture_filter.py",
+     "mcp_server/infrastructure/sqlite_store_queries.py",
+     "mcp_server/infrastructure/sqlite_store_recall.py",
+     "mcp_server/infrastructure/sqlite_store_search.py",
+     "mcp_server/shared/capture_origin.py",
+     "tests_py/handlers/test_inject_triggered_memories.py",
+     "tests_py/handlers/test_recall_low_signal_filter.py",
+     "tests_py/hooks/test_auto_recall.py",
+     "tests_py/hooks/test_auto_recall_paraphrase.py",
+     "tests_py/hooks/test_auto_recall_pg_query.py",
+     "tests_py/hooks/test_auto_recall_review.py",
+     "tests_py/hooks/test_auto_recall_scope.py",
+     "tests_py/hooks/test_auto_recall_trust.py",
+     "tests_py/hooks/test_hook_receipts.py",
+     "tests_py/hooks/test_sqlite_hook_paths.py",
+     "tests_py/hooks/test_sqlite_hook_scope.py"
+    ],
+    "head": "edd876417df7118e02680718e4e7427cddb2fdb2",
+    "labels": [
+     "autopilot:hold"
+    ],
+    "number": 826,
+    "title": "fix(recall): rerank automatic context and preserve user-tagged memories"
+   },
+   "requests": [],
+   "summary": {
+    "code_review": {
+     "commit_sha": "edd876417df7118e02680718e4e7427cddb2fdb2",
+     "has_any_findings": true,
+     "has_unresolved_findings": true,
+     "status": "completed"
+    },
+    "security_review": {
+     "commit_sha": "edd876417df7118e02680718e4e7427cddb2fdb2",
+     "has_any_findings": false,
+     "has_unresolved_findings": false,
+     "status": "completed"
+    }
+   },
+   "threads": [
+    {
+     "id": "PRRT_kwDORqU88s6xG_TV",
+     "outdated": true,
+     "path": "mcp_server/hooks/auto_recall_ranking.py",
+     "resolved": false,
+     "reviewer": "codex",
+     "security": false,
+     "url": "https://github.com/cdeust/Cortex/pull/826#discussion_r4400319648"
+    },
+    {
+     "id": "PRRT_kwDORqU88s6xG_TZ",
+     "outdated": false,
+     "path": "benchmarks/auto_recall_parity.py",
+     "resolved": false,
+     "reviewer": "codex",
+     "security": false,
+     "url": "https://github.com/cdeust/Cortex/pull/826#discussion_r4400319655"
+    },
+    {
+     "id": "PRRT_kwDORqU88s6xG_Tg",
+     "outdated": false,
+     "path": "mcp_server/handlers/recall_helpers.py",
+     "resolved": false,
+     "reviewer": "codex",
+     "security": false,
+     "url": "https://github.com/cdeust/Cortex/pull/826#discussion_r4400319666"
+    },
+    {
+     "id": "PRRT_kwDORqU88s6xG_Tt",
+     "outdated": false,
+     "path": "mcp_server/hooks/auto_recall.py",
+     "resolved": false,
+     "reviewer": "codex",
+     "security": false,
+     "url": "https://github.com/cdeust/Cortex/pull/826#discussion_r4400319677"
+    },
+    {
+     "id": "PRRT_kwDORqU88s6xHGz3",
+     "outdated": false,
+     "path": "mcp_server/hooks/auto_recall_ranking.py",
+     "resolved": false,
+     "reviewer": "codex",
+     "security": true,
+     "url": "https://github.com/cdeust/Cortex/pull/826#discussion_r4400368710"
+    },
+    {
+     "id": "PRRT_kwDORqU88s6xIzxw",
+     "outdated": false,
+     "path": "mcp_server/core/reranker.py",
+     "resolved": false,
+     "reviewer": "codex",
+     "security": false,
+     "url": "https://github.com/cdeust/Cortex/pull/826#discussion_r4401083336"
+    },
+    {
+     "id": "PRRT_kwDORqU88s6xIzx-",
+     "outdated": true,
+     "path": "mcp_server/hooks/auto_recall.py",
+     "resolved": false,
+     "reviewer": "codex",
+     "security": false,
+     "url": "https://github.com/cdeust/Cortex/pull/826#discussion_r4401083354"
+    }
+   ]
+  },
+  "828": {
+   "claude": {
+    "check": {
+     "attempt": 1,
+     "conclusion": "success",
+     "job_id": 123013396856,
+     "run_id": 40744164141
+    },
+    "verdict": null
+   },
+   "merge": null,
+   "pr": {
+    "checks_completed": true,
+    "draft": false,
+    "files": [
+     ".claude-plugin/marketplace.json",
+     ".claude-plugin/plugin.json",
+     ".github/workflows/publish-ccplugins.yml",
+     "README.md",
+     "docs/benchmarks/e1-v3-results.md",
+     "manifest.json"
+    ],
+    "head": "ece25bd362d5563abc21c15f2a1b66e8cfc2a8fd",
+    "labels": [],
+    "number": 828,
+    "title": "docs: align neuroscience retrieval claims with committed evidence"
+   },
+   "requests": [],
+   "summary": {
+    "code_review": {
+     "commit_sha": "ece25bd362d5563abc21c15f2a1b66e8cfc2a8fd",
+     "has_any_findings": null,
+     "has_unresolved_findings": null,
+     "status": "running"
+    },
+    "security_review": {
+     "commit_sha": "ece25bd362d5563abc21c15f2a1b66e8cfc2a8fd",
+     "has_any_findings": false,
+     "has_unresolved_findings": false,
+     "status": "completed"
+    }
+   },
+   "threads": []
+  },
+  "829": {
+   "claude": {
+    "check": {
+     "attempt": 1,
+     "conclusion": "success",
+     "job_id": 123031789821,
+     "run_id": 40749419954
+    },
+    "verdict": null
+   },
+   "merge": {
+    "failed_step": "Require complete Codex reviews",
+    "job_id": 123044497152,
+    "run_id": 40749419955
+   },
+   "pr": {
+    "checks_completed": true,
+    "draft": false,
+    "files": [
+     ".craftsmanship-baseline.json",
+     "CHANGELOG.md",
+     "mcp_server/handlers/ingest_document.py",
+     "mcp_server/handlers/ingest_document_writers.py",
+     "tests_py/handlers/test_ble001_sweep_handlers.py",
+     "tests_py/handlers/test_ble001_sweep_handlers_memory.py",
+     "tests_py/handlers/test_ingest_dedup_after_supersession.py",
+     "tests_py/handlers/test_ingest_document.py",
+     "tests_py/handlers/test_ingest_document_format.py",
+     "tests_py/handlers/test_ingest_document_recovery.py",
+     "tests_py/handlers/test_ingest_document_writers.py"
+    ],
+    "head": "02106924f83d54a3d97769900dcffe35c0286105",
+    "labels": [
+     "autopilot:hold"
+    ],
+    "number": 829,
+    "title": "fix: resume partial document ingestion from durable components"
+   },
+   "requests": [],
+   "summary": {
+    "code_review": {
+     "commit_sha": "02106924f83d54a3d97769900dcffe35c0286105",
+     "has_any_findings": true,
+     "has_unresolved_findings": true,
+     "status": "completed"
+    },
+    "security_review": {
+     "commit_sha": "02106924f83d54a3d97769900dcffe35c0286105",
+     "has_any_findings": false,
+     "has_unresolved_findings": false,
+     "status": "completed"
+    }
+   },
+   "threads": [
+    {
+     "id": "PRRT_kwDORqU88s6xRlU6",
+     "outdated": false,
+     "path": "mcp_server/handlers/ingest_document_writers.py",
+     "resolved": false,
+     "reviewer": "codex",
+     "security": false,
+     "url": "https://github.com/cdeust/Cortex/pull/829#discussion_r4404811276"
+    }
+   ]
+  },
+  "830": {
+   "claude": {
+    "check": {
+     "attempt": 1,
+     "conclusion": "success",
+     "job_id": 123055684729,
+     "run_id": 40756208808
+    },
+    "verdict": null
+   },
+   "merge": null,
+   "pr": {
+    "checks_completed": true,
+    "draft": false,
+    "files": [
+     "CHANGELOG.md",
+     "CLAUDE.md",
+     "docs/agent-guidance.md",
+     "docs/verification/claude-bot-ci-20261027.md"
+    ],
+    "head": "e5117943a3d394f7028abc3b70d6573eb3f10948",
+    "labels": [],
+    "number": 830,
+    "title": "docs(ci): CI failure ladder for bots; merge main before holding"
+   },
+   "requests": [],
+   "summary": {
+    "code_review": {
+     "commit_sha": "7d10a05e887f25ef77d04a110014d9d84f2ba636",
+     "has_any_findings": true,
+     "has_unresolved_findings": true,
+     "status": "completed"
+    },
+    "security_review": {
+     "commit_sha": "e5117943a3d394f7028abc3b70d6573eb3f10948",
+     "has_any_findings": false,
+     "has_unresolved_findings": false,
+     "status": "completed"
+    }
+   },
+   "threads": [
+    {
+     "id": "PRRT_kwDORqU88s6xSqOR",
+     "outdated": false,
+     "path": "docs/agent-guidance.md",
+     "resolved": false,
+     "reviewer": "codex",
+     "security": false,
+     "url": "https://github.com/cdeust/Cortex/pull/830#discussion_r4405272291"
+    }
+   ]
+  },
+  "831": {
+   "claude": {
+    "check": {
+     "attempt": 1,
+     "conclusion": "success",
+     "job_id": 123222531153,
+     "run_id": 40805251400
+    },
+    "verdict": null
+   },
+   "merge": null,
+   "pr": {
+    "checks_completed": true,
+    "draft": false,
+    "files": [
+     ".github/workflows/secret-sync.yml",
+     "tests_py/test_secret_sync_workflow.py"
+    ],
+    "head": "d0858e4ce3a79230d898f73e85a5f6e55c1b478f",
+    "labels": [
+     "autopilot:hold"
+    ],
+    "number": 831,
+    "title": "ci: bootstrap ci-autonome with the existing Claude OAuth secret"
+   },
+   "requests": [],
+   "summary": {
+    "code_review": {
+     "commit_sha": "d0858e4ce3a79230d898f73e85a5f6e55c1b478f",
+     "has_any_findings": false,
+     "has_unresolved_findings": false,
+     "status": "completed"
+    },
+    "security_review": {
+     "commit_sha": "d0858e4ce3a79230d898f73e85a5f6e55c1b478f",
+     "has_any_findings": true,
+     "has_unresolved_findings": true,
+     "status": "completed"
+    }
+   },
+   "threads": [
+    {
+     "id": "PRRT_kwDORqU88s6xY_R9",
+     "outdated": true,
+     "path": ".github/workflows/claude.yml",
+     "resolved": false,
+     "reviewer": "codex",
+     "security": true,
+     "url": "https://github.com/cdeust/Cortex/pull/831#discussion_r4408005275"
+    },
+    {
+     "id": "PRRT_kwDORqU88s6xY6j_",
+     "outdated": false,
+     "path": ".github/workflows/secret-sync.yml",
+     "resolved": false,
+     "reviewer": "codex",
+     "security": false,
+     "url": "https://github.com/cdeust/Cortex/pull/831#discussion_r4407972840"
+    }
+   ]
+  },
+  "833": {
+   "claude": {
+    "check": {
+     "attempt": 1,
+     "conclusion": "success",
+     "job_id": 123309797654,
+     "run_id": 40832535163
+    },
+    "verdict": null
+   },
+   "merge": null,
+   "pr": {
+    "checks_completed": true,
+    "draft": false,
+    "files": [
+     ".github/workflows/secret-sync.yml",
+     "tests_py/test_secret_sync_workflow.py"
+    ],
+    "head": "4c20ffabf5bf65fa799a2bdafc58276e13fd12ba",
+    "labels": [],
+    "number": 833,
+    "title": "chore(ci): retire completed one-time Claude OAuth bootstrap"
+   },
+   "requests": [],
+   "summary": {
+    "code_review": {
+     "commit_sha": "4c20ffabf5bf65fa799a2bdafc58276e13fd12ba",
+     "has_any_findings": false,
+     "has_unresolved_findings": false,
+     "status": "completed"
+    },
+    "security_review": {
+     "commit_sha": "4c20ffabf5bf65fa799a2bdafc58276e13fd12ba",
+     "has_any_findings": null,
+     "has_unresolved_findings": null,
+     "status": "completed"
+    }
+   },
+   "threads": [
+    {
+     "id": "PRRT_kwDORqU88s6xbcHf",
+     "outdated": true,
+     "path": "scripts/tests/test_ci_codex_review_event_attempts.py",
+     "resolved": false,
+     "reviewer": "claude",
+     "security": false,
+     "url": "https://github.com/cdeust/Cortex/pull/833#discussion_r4409051900"
+    },
+    {
+     "id": "PRRT_kwDORqU88s6xbcOL",
+     "outdated": true,
+     "path": "scripts/tests/test_ci_codex_review_event_attempts.py",
+     "resolved": false,
+     "reviewer": "codex",
+     "security": false,
+     "url": "https://github.com/cdeust/Cortex/pull/833#discussion_r4409052556"
+    },
+    {
+     "id": "PRRT_kwDORqU88s6xb8i7",
+     "outdated": true,
+     "path": "scripts/tests/test_ci_workflow_authorization.py",
+     "resolved": false,
+     "reviewer": "claude",
+     "security": false,
+     "url": "https://github.com/cdeust/Cortex/pull/833#discussion_r4409260577"
+    }
+   ]
+  }
+ },
+ "source": "cdeust/Cortex REST pulls/issues comments and GraphQL reviewThreads, captured 2026-10-29T07:22Z; Claude review and merge rows from statusCheckRollup, failed steps from actions/jobs"
+}

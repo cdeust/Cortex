@@ -5,7 +5,10 @@ import json
 
 from ci_codex_review_resume import PREREQUISITES
 
-HOLDS = {"hold", "do-not-merge", "autopilot:hold"}
+# source: owner rule 2026-10-29. `hold`/`autopilot:hold` mean "reviews
+# incomplete": the PR still needs repair, and
+# scripts/ci_autopilot_converge_plan.py lifts them once both reviewers agree.
+HOLDS = {"do-not-merge"}
 
 
 def held(item: dict) -> bool:

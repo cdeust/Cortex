@@ -1,0 +1,47 @@
+name: Autopilot converge
+
+# Owner rules 2026-10-29: "Le CI doit être autonome, ma revue ne devrait jamais
+# être nécessaire"; `hold`/`autopilot:hold` mean "reviews incomplete". Every
+# open PR either converges (a stale Codex review is requested again, a failed
+# Claude review is rerun, findings on withdrawn paths are answered and
+# resolved, the review holds are lifted and the held merge job rerun once Codex
+# and Claude both conclude to merge) or carries a red `autopilot-converge`
+# status naming its cause. It never merges: the protected Pipeline gate does.
+# Logic: scripts/ci_autopilot_converge_plan.py.
+# Schedule only: no workflow_run, so no PR-run data can reach this
+# privileged job (zizmor dangerous-triggers). A pass reads live API state.
+# Sources: GitHub Actions schedule and GITHUB_TOKEN permission docs.
+on:
+  schedule:
+    - cron: "*/15 * * * *" # source: operational cadence; Codex.yml polls every 5 min.
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: autopilot-converge-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  converge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10 # source: operational cap; one pass reads each open PR once.
+    permissions:
+      actions: write # rerun a failed Claude review or a held merge job
+      contents: read
+      issues: write # lift the review holds, post review requests
+      pull-requests: write # answer and resolve withdrawn code findings
+      statuses: write # named autopilot-converge status on the PR head
+    steps:
+      # Trusted default-branch code only: no PR checkout, artifact or cache.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Converge open pull requests or name why they are red
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Optional user token for "@codex review" comments. Without it the
+          # workflow bot posts the request and a spent request names the gap.
+          CODEX_REQUEST_TOKEN: ${{ secrets.CODEX_REQUEST_TOKEN }}
+        run: python3 -I -B scripts/ci_autopilot_converge.py --repo "$GITHUB_REPOSITORY" --apply

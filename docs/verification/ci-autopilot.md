@@ -164,3 +164,65 @@ was the original author, not a reproduced foreign-writer attack.
 [RenamedTitleEvent fields](https://docs.github.com/en/graphql/reference/objects#renamedtitleevent)
 provide the separate attribution. On official claude-code-action issue1445,
 last:1 selected the current title from two rename events while first:1 did not.
+
+## Convergence without the owner (2026-10-29)
+
+Owner rule, 2026-10-29: "Le CI doit être autonome, ma revue ne devrait jamais
+être nécessaire." On that morning seven PRs were stalled with every test green
+or with the automation's own hold. Their API states are the fixtures of
+`tests_py/scripts/fixtures/ci_autopilot_converge_prs.json` (REST pulls, files,
+issue comments and GraphQL reviewThreads, captured 07:22Z):
+
+- #830 at `e5117943`: the review job printed `"reason": "review_pending"` with
+  `code_review.commit_sha` `7d10a05e` (the first commit, pushed 23 s earlier).
+  Codex reviewed only the first commit; nothing requested a review of the head,
+  so the job stayed `merge pending review` and the required `merge` context
+  never ran.
+- #828: `code_review` `running` on the head since 2026-10-28T18:20Z, every check
+  finished. #772 and #765: `code_review` all null on the head.
+- #833: `security_review` completed on the head with null verdict flags.
+- #826 and #829: `autopilot:hold` applied by the hourly routine with "décision
+  humaine requise"; #831 held the same way for a security finding on
+  `.github/workflows/claude.yml`, a path the PR no longer changed.
+
+Second owner rule, same day: `hold` and `autopilot:hold` mean "reviews
+incomplete". `scripts/ci_autopilot_converge_plan.py` therefore lifts a review
+hold, and reruns a merge job that failed on "Verify live PR eligibility", only
+when Codex (both kinds complete on the head, no open finding) and Claude (a
+`claude-review-verdict:v1` marker for the head with `merge: true`, no open
+inline finding) both conclude to merge. A missing reviewer is launched again:
+a stale Codex review is requested once per head and kind (marker
+`ci-autopilot-converge:v1 request`), a failed Claude review job is rerun once.
+A second unusable verdict on the same head is named: `review_stale_after_request`,
+or `codex_security_verdict_missing: <summary link>` for a null verdict, the state
+measured twice on cdeust/ci-autonome#1 (07:51:07Z and 07:57:01Z, fixture
+`tests_py/scripts/fixtures/codex_null_verdict_ci_autonome_pr1.json`). "Running"
+counts as stale only after every check of that head finished, an ordering
+rather than a duration. A non-security finding on a path absent from
+`pulls/{n}/files` is answered with that proof and resolved; a security finding
+on such a path gets a fresh `@codex security review` instead, because only the
+owner or a new Codex verdict clears one (`_trusted_resolver`). The planner never
+merges and never touches `do-not-merge`, a "do not merge" title, a draft or a
+fork.
+
+The Claude review does not emit the verdict marker yet: `.claude/commands/review-pr.md`
+is rendered from the zetetic-team-subagents template and only asks for
+comments. Until the template emits it, a completed Claude review is the red
+cause `claude_verdict_unreadable` and no review hold is lifted; the planner
+does not add holds, so the Pipeline gate keeps merging on Codex alone as before.
+
+Live receipts: `@codex review` comments posted from the owner's account on
+#828, #772 and #765 at 2026-10-29T07:31:55Z-07:31:59Z were followed by native
+reviews and gate merges at 07:34:13Z-07:34:17Z. On #830 a push of `fe32c7d0` started both reviews on the
+new head (summary updated 07:31:25Z); the code review completed clean and the
+security review completed with null flags, the #833 state, which a
+`@codex security review` comment then targeted.
+
+Requests posted by the workflow token come from github-actions[bot]. Every
+review trigger observed in this repository came from the owner's account, so a
+bot request is not proven to start a review. The optional
+`CODEX_REQUEST_TOKEN` secret (a token of a Codex-linked user, issues write)
+makes the workflow post as that user; without it a spent request is reported
+as `review_stale_after_request ... CODEX_REQUEST_TOKEN unset` on the PR status.
+The routine prompt of record is `docs/ci-autopilot-routine.md`; the routine's
+configuration on claude.ai is outside this repository.
