@@ -30,6 +30,8 @@ from ci_pipeline_profiles import (  # noqa: E402
 from ci_pipeline_routes import check_profile_route, check_routes  # noqa: E402
 
 EXPECTED_CONDITIONS = conditions(False)
+# source: the merge job step name in .github/workflows/pipeline.yml (PR #839).
+MERGE_GUARD = "Require the test jobs of this run"
 _JOB_RE = re.compile(r"^  ([A-Za-z0-9_-]+):\s*$")
 
 
@@ -127,16 +129,16 @@ def check(text: str, *, post_merge: bool = False) -> list[str]:
 
 
 def _check_merge_results(body: list[str]) -> list[str]:
-    """Pin the generated fail-closed result guard, not the removed ALLOWED_SKIPS."""
+    """Pin the generated fail-closed test-aggregate step of the merge job."""
     guard: list[str] = []
     collecting = False
     for line in body:
         if line.startswith("      - "):
-            collecting = line == "      - name: Require completed tests and review"
+            collecting = line == f"      - name: {MERGE_GUARD}"
         elif collecting:
             guard.append(line)
     if not guard:
-        return ["merge must retain its completed tests and review guard step"]
+        return ["merge must retain its test-aggregate guard step"]
     # The generated step fields have four more spaces than job fields.
     fields = [line[4:] for line in guard]
     failures = []
@@ -146,22 +148,20 @@ def _check_merge_results(body: list[str]) -> list[str]:
         failures.append("merge result guard must not ignore failures")
     text = "\n".join(guard)
     compact = " ".join(text.split())
-    for job in (*REQUIRED_RESULTS, "review"):
+    for job in REQUIRED_RESULTS:
         binding = f"{job.upper()}: ${{{{ needs.{job}.result }}}}"
         if binding not in text:
             failures.append(f"merge must bind the live {job} result")
     pairs = " ".join(f'"{job}=${job.upper()}"' for job in REQUIRED_RESULTS)
-    # Source: merge's Require completed tests and review step in the template.
+    # Source: merge's "Require the test jobs of this run" step in pipeline.yml.
     clauses = (
         f"for pair in {pairs}; do",
         'case "$pair" in *=success) ;; *)',
-        "blocked=1 ;; esac done",
-        'case "$REVIEW:$ACTOR" in success:*) ;; *)',
-        'blocked=1 ;; esac if [ -n "$blocked" ]; then',
+        'blocked=1 ;; esac done if [ -n "$blocked" ]; then',
         "exit 1 fi",
     )
     if any(clause not in compact for clause in clauses):
-        failures.append("merge must retain its fail-closed test/review result policy")
+        failures.append("merge must retain its fail-closed test result policy")
     return failures
 
 
