@@ -86,4 +86,6 @@ The mention bot's tools were read from the pinned action source: tag mode adds `
 
 Codex finding PRRT_kwDORqU88s6xSqOR on #830 showed that the first draft classified failures as infrastructure from a diff filtered to `scripts .github ci.json pyproject.toml uv.lock`, while `scripts/ci_environment.py` imports and runs `mcp_server.doctor`, `backend_marker` and `managed_pg`. Step 2 now reads the unfiltered diff and the modules the failing step executes.
 
+Codex security finding PRRT_kwDORqU88s6xdRLJ (P1) on #830 showed that step 3 told an agent to run the PR's own `ci.json` command, which a local agent would execute on the maintainer host with the `uv *` and `pytest` approvals of `.claude/settings.json`. Step 3 now leaves PR-head commands to hosted CI or a disposable sandbox without maintainer tokens, with the command taken from `origin/main:ci.json`, and an every-step rule states the same boundary as `scripts/ci_autopilot.py`.
+
 Acceptance still open: no hosted bot run has exercised the ladder yet. It is accepted by a bot comment that shows step 4 or step 5 taken, or a hard stop quoting its denial.
