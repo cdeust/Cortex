@@ -42,7 +42,11 @@ files. We hold that intent to the
 publish **no CO₂ or energy figure**, because we have not measured one.
 [What we do and do not claim ↓](#green-software-engineering)
 
-> **36 neuroscience mechanisms · 57 memory tools · 11 lifecycle hooks · a self-curating per-project wiki — all local, all open-source, MIT.**
+> **36 implemented, inspectable neuroscience-inspired mechanisms · 57 memory tools · 11 lifecycle hooks · a self-curating per-project wiki — all local, all open-source, MIT.**
+>
+> The committed ablations do not establish that these 36 mechanisms improve retrieval
+> collectively or individually. Published neuroscience references explain their design;
+> retrieval benefits require measurements in Cortex. See [Verification](#verification).
 
 ## Install
 
@@ -507,12 +511,31 @@ measured one.
 
 ## Verification
 
-The v4.14.1 figures above are backed by a per-mechanism ablation campaign — full *n*, single-seed, with code SHAs, dirty flags, manifests, and per-row JSON preserved; the v4.20.0 figures are a single measurement without one:
+The retrieval scores above describe particular runs of the integrated system. They do not
+establish a causal retrieval benefit from the 36 mechanisms. The committed evidence is mixed:
 
-- **LongMemEval-S, 17 rows, n=500** — `docs/benchmarks/e1-v3-results.md`. Per-mechanism deltas at the calibrated equilibrium + category-specialization analysis.
-- **LoCoMo, 14 rows, n=1986** — `docs/benchmarks/e1-v3-locomo-results.md` (pre-fix) and `docs/benchmarks/e1-v3-locomo-results-post-fix.md` (post plasticity result-shape fix). Two-baseline design (NO_CONSOLIDATION / WITH_CONSOLIDATION).
+- **LongMemEval-S, 17 rows, n=500** — [report](docs/benchmarks/e1-v3-results.md)
+  and [summary CSV](benchmarks/results/ablation/longmemeval-s_v3/summary.csv).
+  Spreading activation has the same reported MRR and R@10 as baseline; ablating adaptive
+  decay raises MRR from 0.9124 to 0.9138. Several mechanisms have identical scores.
+  These isolated-haystack runs do not establish benefits from longitudinal state.
+- **LoCoMo, 14 rows, n=1986** — [pre-fix report](docs/benchmarks/e1-v3-locomo-results.md)
+  and [run manifest](benchmarks/results/ablation/locomo_v3/manifest.json).
+  Some rows favor a mechanism and others favor its ablation; this is not evidence that
+  every mechanism helps. The [post-fix report](docs/benchmarks/e1-v3-locomo-results-post-fix.md)
+  is explicitly unverified because its named result artifacts are not committed.
+- **BEAM decay sweep** — the [June 11 control summary](benchmarks/results/decay_sweep/20260611T080828Z/summary.csv)
+  reports MRR 0.694 for both lambda 0.95 and 1.0. This run shows no retrieval gain from decay.
 
-The full per-mechanism evidence lives in the thermodynamic paper (§6.3); the BEAM decay dose-response (§6.4) documents a re-scoped negative result after a dirty-store confound was caught and traced. **[Thermodynamic Memory vs. Flat-Importance Stores (PDF, 34 pages)](docs/arxiv-thermodynamic/main.pdf)** · **[Stage-Aware Context Assembly (PDF, 39 pages)](docs/arxiv-context-assembly/main.pdf)**.
+Mechanisms remain available for inspection and evaluation. A claim that they improve
+retrieval requires a longitudinal evaluation on real data, with per-mechanism ablations
+and per-question results; that work is tracked in [#343](https://github.com/cdeust/Cortex/issues/343).
+A null result under these conditions neither proves general benefit nor proves a mechanism
+cannot help in another setting.
+
+The thermodynamic paper (§6.3–6.4) discusses these experiments, including a negative decay
+result after a dirty-store confound. Its design rationale does not replace empirical
+evidence. **[Thermodynamic Memory vs. Flat-Importance Stores (PDF, 34 pages)](docs/arxiv-thermodynamic/main.pdf)** · **[Stage-Aware Context Assembly (PDF, 39 pages)](docs/arxiv-context-assembly/main.pdf)**.
 
 ---
 
