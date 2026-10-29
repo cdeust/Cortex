@@ -34,6 +34,10 @@ WARMUP_MODULE = "mcp_server.infrastructure.embedding_warmup"  # source: ADR-1104
 # The job writes its outcome here; the launcher hands it to the SessionStart
 # hook (source: ADR-1104).
 STATUS_ENV = "CORTEX_SEMANTIC_STATUS_FILE"
+# The model files a ready job has fetched; a record naming other files is
+# re-run so an upgrade fetches what it adds (source: issue #706, the hook's
+# ONNX query encoder). Must equal embedding_warmup.MODEL_FILES.
+MODEL_FILES = "all-MiniLM-L6-v2@1110a243+onnx-query-encoder"
 # The operator's opt-out of every embedding download (source: ADR-0519).
 ZERO_DOWNLOAD_ENV = "CORTEX_EMBEDDING_ZERO_DOWNLOAD"
 
@@ -57,7 +61,8 @@ def state(deps_dir: str) -> tuple[str, str]:
     """``("ready", "")``, ``("failed", why)`` or ``("installing", "")``.
 
     Ready needs both the ML set stamped for this uv.lock and the job's own
-    success record (the model is downloaded after the set installs).
+    success record (the model is downloaded after the set installs) for the
+    model files this version requires.
     """
     try:
         outcome = json.loads(status_file(deps_dir).read_text(encoding="utf-8"))
@@ -68,7 +73,11 @@ def state(deps_dir: str) -> tuple[str, str]:
             "failed",
             f"{outcome.get('error', 'unknown error')} (log: {job_log(deps_dir)})",
         )
-    if outcome.get("status") == "ready" and launcher_deps.set_ready(deps_dir, "ml"):
+    if (
+        outcome.get("status") == "ready"
+        and outcome.get("model_files") == MODEL_FILES
+        and launcher_deps.set_ready(deps_dir, "ml")
+    ):
         return "ready", ""
     return "installing", ""
 

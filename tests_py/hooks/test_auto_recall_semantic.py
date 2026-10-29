@@ -11,6 +11,7 @@ from mcp_server.core.injection_relevance import (
     relevant_by_similarity,
 )
 from mcp_server.hooks import auto_recall, auto_recall_ranking
+from mcp_server.infrastructure.hook_query_encoder import scorer_from_encoder
 from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 
 # source: all-MiniLM-L6-v2 output dimension (the stored vector width).
@@ -51,7 +52,9 @@ def loaded(monkeypatch):
         lambda query, pairs, texts, admitted: [p for p in pairs if p[0] in admitted],
     )
     monkeypatch.setattr(
-        auto_recall_ranking, "cached_query_encoder", lambda: lambda text: _QUERY
+        auto_recall_ranking,
+        "cached_query_scorer",
+        lambda: scorer_from_encoder(lambda text: _QUERY),
     )
 
 
@@ -74,8 +77,12 @@ def _seed(store, content, cosine, **overrides):
 
 
 def test_floor_orders_by_similarity_and_drops_unrelated():
-    vectors = {1: _vector(0.3), 2: _vector(0.9), 3: _vector(0.1)}
-    assert relevant_by_similarity(_QUERY, vectors) == [2, 1]
+    assert relevant_by_similarity({1: 0.3, 2: 0.9, 3: 0.1}) == [2, 1]
+    scorer = scorer_from_encoder(lambda text: _QUERY)
+    stored = {1: _vector(0.3).tobytes(), 2: [0.9, 0.1], 3: _vector(0.9).tolist()}
+    scores = scorer("prompt", stored)
+    assert set(scores) == {1, 3}  # a vector of another width is not comparable
+    assert scores[1] == pytest.approx(0.3, abs=1e-6)
     # source: hosted bounds 0.235 (lowest positive) / 0.152 (highest negative).
     assert 0.152 < INJECTION_SIMILARITY_FLOOR < 0.235
 
@@ -101,7 +108,7 @@ def test_fallback_space_vectors_never_qualify(store, loaded):
 
 def test_absent_query_encoder_degrades_to_lexical(store, loaded, monkeypatch, caplog):
     lexical = _seed(store, "espresso beans in the pantry", 0.1)
-    monkeypatch.setattr(auto_recall_ranking, "cached_query_encoder", lambda: None)
+    monkeypatch.setattr(auto_recall_ranking, "cached_query_scorer", lambda: None)
     rows = auto_recall._recall_memories_sqlite(store, "espresso beans", "/repo")
     assert [row["id"] for row in rows] == [lexical]
     assert "semantic relevance unavailable" in caplog.text

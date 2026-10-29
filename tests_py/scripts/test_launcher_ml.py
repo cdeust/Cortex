@@ -62,7 +62,7 @@ def test_state_names_the_failure_and_the_log(ml_mod, deps_dir):
 
 
 def test_ready_needs_the_job_and_the_stamp(ml_mod, deps_dir, monkeypatch):
-    _status(ml_mod, deps_dir, {"status": "ready"})
+    _status(ml_mod, deps_dir, {"status": "ready", "model_files": ml_mod.MODEL_FILES})
     monkeypatch.setattr(ml_mod.launcher_deps, "set_ready", lambda d, k: False)
     assert ml_mod.state(deps_dir)[0] == "installing"  # uv.lock moved on
     monkeypatch.setattr(ml_mod.launcher_deps, "set_ready", lambda d, k: k == "ml")
@@ -119,6 +119,18 @@ def test_the_status_variable_matches_the_warmup_module(ml_mod):
     from mcp_server.infrastructure import embedding_warmup
 
     assert embedding_warmup.STATUS_ENV == ml_mod.STATUS_ENV
+    assert embedding_warmup.MODEL_FILES == ml_mod.MODEL_FILES
+
+
+def test_a_ready_record_without_the_onnx_encoder_reruns_the_job(
+    ml_mod, deps_dir, spawned, monkeypatch
+):
+    # Issue #706: a pre-upgrade record lacks the hook's query-encoder files.
+    _status(ml_mod, deps_dir, {"status": "ready", "model": "all-MiniLM-L6-v2"})
+    monkeypatch.setattr(ml_mod.launcher_deps, "set_ready", lambda d, k: True)
+    assert ml_mod.state(deps_dir) == ("installing", "")
+    ml_mod.start(deps_dir, "/plugin/scripts/launcher.py")
+    assert len(spawned) == 1
 
 
 def test_a_failed_ml_install_is_recorded_as_such_and_skips_the_warm_up(

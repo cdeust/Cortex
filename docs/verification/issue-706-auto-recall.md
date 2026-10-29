@@ -295,3 +295,20 @@ Remaining gap: candidate discovery is still the lexical and hot pools. A
 relevant memory that is neither lexically matched nor among the hottest scoped
 rows is not considered; the 30-memory fixture fits in the hot pool and does not
 measure that case.
+
+### Corrections after b1525d9a
+
+Hosted parity run 40847804130 stopped at the craftsmanship gate:
+`[layer-violation] mcp_server/core/injection_relevance.py: numpy`. Core may
+import shared only. The core module now keeps the floor and the pure ordering
+decision over a mapping of similarities; the cosine and vector decoding live in
+`infrastructure/hook_query_encoder.py` as a `QueryScorer`, which the hook
+obtains through `cached_query_scorer()`. The admission rule is unchanged.
+
+The native Codex review of b1525d9a found that an installation whose semantic
+job already recorded `ready` never re-runs it, so it would never fetch the ONNX
+export. The job's record now names the model files it fetched
+(`MODEL_FILES`, shared by `scripts/launcher_ml.py` and
+`infrastructure/embedding_warmup.py` with a parity test); a ready record that
+names other files, including every pre-upgrade record, counts as installing and
+the next session starts the job again.

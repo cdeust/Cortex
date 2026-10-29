@@ -6,11 +6,9 @@ import logging
 from collections.abc import Callable, Iterable
 from typing import Any
 
-import numpy as np
-
 from mcp_server.core import reranker, reranker_model
 from mcp_server.core.injection_relevance import relevant_by_similarity
-from mcp_server.infrastructure.hook_query_encoder import cached_query_encoder
+from mcp_server.infrastructure.hook_query_encoder import cached_query_scorer
 from mcp_server.infrastructure.memory_config import get_memory_settings
 
 logger = logging.getLogger(__name__)
@@ -38,13 +36,6 @@ def _cached_model_available() -> bool:
         return False
 
 
-def _as_vector(value: Any) -> np.ndarray:
-    """Stored SQLite bytes or a PostgreSQL real[] as float32."""
-    if isinstance(value, (bytes, bytearray, memoryview)):
-        return np.frombuffer(bytes(value), dtype=np.float32)
-    return np.asarray(value, dtype=np.float32)
-
-
 def _merge(lexical: list[dict], hot: Iterable[dict]) -> dict[int, dict]:
     rows = {memory["id"]: memory for memory in lexical}
     for memory in hot:
@@ -53,14 +44,12 @@ def _merge(lexical: list[dict], hot: Iterable[dict]) -> dict[int, dict]:
 
 
 def _eligible(query: str, rows: dict[int, dict], vectors: VectorLookup) -> list[int]:
-    """Embedding-similarity abstention; raises on encoder or lookup failure."""
-    encoder = cached_query_encoder()
-    if encoder is None:
+    """Embedding-similarity admission; raises on encoder or lookup failure."""
+    scorer = cached_query_scorer()
+    if scorer is None:
         raise RuntimeError("cached query encoder absent")
-    stored = vectors(list(rows))
-    return relevant_by_similarity(
-        encoder(query), {mid: _as_vector(v) for mid, v in stored.items() if mid in rows}
-    )
+    stored = {mid: v for mid, v in vectors(list(rows)).items() if mid in rows}
+    return relevant_by_similarity(scorer(query, stored))
 
 
 def rank_memories(

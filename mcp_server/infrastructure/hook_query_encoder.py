@@ -11,7 +11,8 @@ cache only; ``download_query_encoder`` is the explicit fetch.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
+from typing import Any
 
 import numpy as np
 
@@ -30,6 +31,8 @@ _FILES = ("tokenizer.json", "onnx/model.onnx")
 _MAX_TOKENS = 256
 
 QueryEncoder = Callable[[str], np.ndarray]
+# query text, stored vectors by memory id -> cosine by memory id
+QueryScorer = Callable[[str, Mapping[int, Any]], dict[int, float]]
 
 
 def _cached_paths() -> list[str] | None:
@@ -92,6 +95,36 @@ def cached_query_encoder() -> QueryEncoder | None:
         return None
 
 
+def _as_vector(value: Any) -> np.ndarray:
+    """Stored SQLite bytes or a PostgreSQL real[] as float32."""
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        return np.frombuffer(bytes(value), dtype=np.float32)
+    return np.asarray(value, dtype=np.float32)
+
+
+def scorer_from_encoder(encode: QueryEncoder) -> QueryScorer:
+    """Cosine of the encoded query with each stored vector of its width."""
+
+    def score(query: str, stored: Mapping[int, Any]) -> dict[int, float]:
+        vector = encode(query)
+        norm = float(np.linalg.norm(vector))
+        result: dict[int, float] = {}
+        for mid, raw in stored.items():
+            other = _as_vector(raw)
+            scale = norm * float(np.linalg.norm(other))
+            if other.shape == vector.shape and scale > 0.0:
+                result[mid] = float(np.dot(vector, other) / scale)
+        return result
+
+    return score
+
+
+def cached_query_scorer() -> QueryScorer | None:
+    """A similarity scorer over the cached encoder, or None when absent."""
+    encoder = cached_query_encoder()
+    return None if encoder is None else scorer_from_encoder(encoder)
+
+
 def download_query_encoder() -> None:
     """Fetch both files at the pinned revision; raises the real error."""
     from huggingface_hub import hf_hub_download  # noqa: PLC0415 -- optional ML dependency
@@ -105,4 +138,11 @@ def download_query_encoder() -> None:
         )
 
 
-__all__ = ["QueryEncoder", "cached_query_encoder", "download_query_encoder"]
+__all__ = [
+    "QueryEncoder",
+    "QueryScorer",
+    "cached_query_encoder",
+    "cached_query_scorer",
+    "download_query_encoder",
+    "scorer_from_encoder",
+]

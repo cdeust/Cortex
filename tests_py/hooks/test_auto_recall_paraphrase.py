@@ -43,10 +43,12 @@ def test_paraphrase_reaches_reranker_before_top_three_cut(store, monkeypatch):
     for index in range(10):
         record = f"Morning beverage query logging record {index}"
         _insert(store, record, heat=0.9, embedding=_unit(0, 1))
+    from mcp_server.infrastructure.hook_query_encoder import scorer_from_encoder  # noqa: PLC0415 -- absent from the pre-fix source this test also runs on
+
     query_vector = np.frombuffer(_unit(0), dtype=np.float32)
     monkeypatch.setattr(
-        "mcp_server.hooks.auto_recall_ranking.cached_query_encoder",
-        lambda: lambda text: query_vector,
+        "mcp_server.hooks.auto_recall_ranking.cached_query_scorer",
+        lambda: scorer_from_encoder(lambda text: query_vector),
     )
     calls = []
 

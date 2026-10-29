@@ -17,6 +17,9 @@ from pathlib import Path
 from mcp_server.shared import gated_files
 
 STATUS_ENV = "CORTEX_SEMANTIC_STATUS_FILE"  # source: scripts/launcher_ml.py STATUS_ENV
+# What download_model fetched; the launcher re-runs a record naming other files.
+# source: scripts/launcher_ml.py MODEL_FILES (issue #706)
+MODEL_FILES = "all-MiniLM-L6-v2@1110a243+onnx-query-encoder"
 
 
 def _record(outcome: dict) -> None:
@@ -38,7 +41,14 @@ def main() -> None:
     except BaseException as exc:
         _record({"status": "failed", "error": f"{type(exc).__name__}: {exc}"})
         raise
-    _record({"status": "ready", "model": engine.model_name, "dim": engine.dimensions})
+    _record(
+        {
+            "status": "ready",
+            "model": engine.model_name,
+            "dim": engine.dimensions,
+            "model_files": MODEL_FILES,
+        }
+    )
     print(f"[cortex] semantic search ready: {engine.model_name} ({engine.dimensions}D)")
 
 
