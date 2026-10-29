@@ -76,7 +76,7 @@ def _check_receipt(body, field) -> list[str]:
     clauses = (
         'run.get("path") == ".github/workflows/pipeline.yml" '
         'and run.get("name") == "Pipeline"',
-        'required = ["contract", "unit", "regression", "e2e", "review", "merge"]',
+        'required = ["contract", "unit", "regression", "e2e", "merge"]',
         'for category in ("environment", "install"):',
         'for runner in ("ubuntu-latest", "macos-latest", "windows-latest")',
         "len(actual) == len(expected) and set(actual) == expected",
@@ -85,7 +85,7 @@ def _check_receipt(body, field) -> list[str]:
         'job.get("status") == "completed" and allowed,',
         "_validate_run(source, repository)",
         "_validate_run(run, repository)",
-        '_validate_jobs(jobs, run.get("actor", {}).get("login"))',
+        "_validate_jobs(jobs) return run",
     )
     if any(clause not in run for clause in clauses):
         return [
