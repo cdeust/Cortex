@@ -194,10 +194,17 @@ inline finding) both conclude to merge. A missing reviewer is launched again:
 a stale Codex review is requested once per head and kind, a failed Claude
 review job is rerun once. The request comment is the bare trigger; its trace
 is the commit status `autopilot-converge/request-<kind>` on the head, and a
-request counts as answered only once the Codex summary was updated after it.
-On #830 an `@codex security review` comment followed by an HTML marker
-(08:16:09Z) was answered with a code review receipt (08:17:27Z), so no marker
-goes in the trigger.
+request counts as answered only once that kind's own summary row (its
+`relative-time` datetime) moved after it; the single summary comment is also
+edited by the other kind. Until then the cause is
+`codex_request_unanswered: <kind> since <time>`, so waiting never shows green.
+On #830 at head `3d3e4f90` (fixture `codex_receipts_pr830.json`), an
+`@codex security review` comment followed by an HTML marker (08:16:09Z) moved
+the code row (08:17:29Z) and got a code review receipt (08:17:27Z); the bare
+trigger (08:22:29Z) moved the security row (08:25:29Z) and got the receipt
+"Security review completed. No security issues were found" (08:25:28Z), while
+the summary flags stayed null. No marker goes in a trigger, and that last state
+is named `codex_security_flags_null_after_clean_receipt: <receipt link>`.
 A second unusable verdict on the same head is named: `review_stale_after_request`,
 or `codex_security_verdict_missing: <summary link>` for a null verdict, the state
 measured twice on cdeust/ci-autonome#1 (07:51:07Z and 07:57:01Z, fixture
@@ -218,10 +225,18 @@ does not add holds, so the Pipeline gate keeps merging on Codex alone as before.
 
 Live receipts: `@codex review` comments posted from the owner's account on
 #828, #772 and #765 at 2026-10-29T07:31:55Z-07:31:59Z were followed by native
-reviews and gate merges at 07:34:13Z-07:34:17Z. On #830 a push of `fe32c7d0` started both reviews on the
-new head (summary updated 07:31:25Z); the code review completed clean and the
-security review completed with null flags, the #833 state, which a
-`@codex security review` comment then targeted.
+reviews and gate merges at 07:34:13Z-07:34:17Z. On #830, pushes of
+`fe32c7d0` and `3d3e4f90` started both reviews on each new head; on `fe32c7d0`
+a bare `@codex security review` (07:37:27Z) produced a P1 finding, fixed in
+`3d3e4f90`.
+
+The Claude review row is taken from the run of
+`.github/workflows/claude-review.yml` on the head, never from the `@claude`
+mention job that shares its job name (#826 run 40794598626), and a held merge
+job only from `.github/workflows/pipeline.yml` on the head. Request traces and
+the published status are read from the combined status of the head (latest
+per context, one page). A forged trace cannot hide a stall: it reads as
+`codex_request_unanswered`.
 
 Requests posted by the workflow token come from github-actions[bot]. Every
 review trigger observed in this repository came from the owner's account, so a

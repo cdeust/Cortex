@@ -13,6 +13,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 import ci_autopilot_converge as cli  # noqa: E402
+import ci_autopilot_converge_observe as observer  # noqa: E402
 from ci_autopilot_converge_plan import plan, request_context  # noqa: E402
 
 EVIDENCE = json.loads(
@@ -69,14 +70,18 @@ class NullVerdictTests(unittest.TestCase):
     def test_real_timeline_waits_for_the_answer_then_names_the_gap(self):
         asked = EVIDENCE["timeline"]["retrigger_comment"]["created_at"]
         spent = [{"kind": "security_review", "head": HEAD, "at": asked}]
+        unanswered = (
+            "codex_request_unanswered: security_review since 2026-10-29T07:53:34Z"
+        )
         for index, expected in (
-            (0, []),
+            (0, [unanswered]),
             (1, [f"codex_security_verdict_missing: {SUMMARY}"]),
         ):
             with self.subTest(sample=index):
                 sample = EVIDENCE["samples"][index]
                 item = observation(sample, spent)
-                item["summary_updated"] = sample["summary_comment"]["updated_at"]
+                rows = "\n".join(sample["summary_comment"]["review_rows"])
+                item["answered"] = observer.answer_times(rows)
                 result = plan(item)
                 self.assertEqual((result["actions"], result["causes"]), ([], expected))
 

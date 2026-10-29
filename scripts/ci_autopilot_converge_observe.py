@@ -27,8 +27,16 @@ JOB_URL = re.compile(r"/actions/runs/(\d+)/job/(\d+)")
 # source: native Codex security receipt on #830 (comment at 2026-10-29T08:25:28Z).
 RECEIPT_CLEAN = "Security review completed. No security issues were found"
 RECEIPT_COMMIT = re.compile(r"\*\*Reviewed commit:\*\* `([0-9a-f]{7,40})`")
-# source: .github/workflows/claude-review.yml `name: PR Review`.
-REVIEW_WORKFLOW = "PR Review"
+# source: the automatic Claude review workflow file and the Pipeline file.
+REVIEW_WORKFLOW = ".github/workflows/claude-review.yml"
+PIPELINE_WORKFLOW = ".github/workflows/pipeline.yml"
+# source: native Codex summary rows, e.g. #830 comment 6478784748.
+ROWS = {
+    "code_review": re.compile(r"\*\*Code Review\*\* \|[^\n]*?datetime=\"([^\"]+)\""),
+    "security_review": re.compile(
+        r"\*\*Security Review\*\* \|[^\n]*?datetime=\"([^\"]+)\""
+    ),
+}
 # source: Codex security finding marker, scripts/ci_codex_review_runtime.py FINDING.
 SECURITY = "<!-- codex-security-review-finding:v1 -->"
 # source: GitHub GraphQL reviewThreads, first:100 is the documented page maximum.
@@ -74,14 +82,21 @@ def _latest_marker(comments: list, author: str, pattern) -> dict | None:
         return None  # A malformed marker reads as absent, never as a verdict.
     if not isinstance(value, dict):
         return None
-    return {**value, "url": latest.get("html_url", ""), "at": latest["updated_at"]}
+    meta = {"url": latest.get("html_url", ""), "at": latest["updated_at"]}
+    return {**value, **meta, "body": latest["body"]}
 
 
 def codex_summary(comments: list) -> dict | None:
     value = _latest_marker(comments, BOT, STATE)
     if value is None:
         return None
-    return {k: v for k, v in value.items() if k not in ("url", "at")}
+    return {k: v for k, v in value.items() if k not in ("url", "at", "body")}
+
+
+def answer_times(body: str) -> dict:
+    """Per-kind time of the latest summary row (completed, or running since)."""
+    found = {kind: pattern.search(body) for kind, pattern in ROWS.items()}
+    return {kind: m.group(1) for kind, m in found.items() if m}
 
 
 def spent_requests(statuses: list, head: str) -> list:
@@ -144,11 +159,15 @@ def _row(rollup: list, name: str) -> tuple[dict, int, int] | None:
     return found[0] if found else None
 
 
-def _claude_check(repo: str, rollup: list) -> dict | None:
-    """The automatic review job; the @claude mention job shares its name (#826)."""
+def _claude_check(repo: str, rollup: list, head: str) -> dict | None:
+    """The automatic review job; the @claude mention job shares its name (#826).
+
+    Matched on the workflow file path and head, not the display name a PR
+    branch could copy.
+    """
     for row, run, job in _rows(rollup, "Claude review"):
         meta = run_gh("api", f"repos/{repo}/actions/runs/{run}")
-        if meta["name"] != REVIEW_WORKFLOW:
+        if (meta["path"], meta["head_sha"]) != (REVIEW_WORKFLOW, head):
             continue
         conclusion = (row.get("conclusion") or "").lower()
         attempt = meta["run_attempt"]
@@ -161,12 +180,15 @@ def _claude_check(repo: str, rollup: list) -> dict | None:
     return None
 
 
-def _merge_job(repo: str, rollup: list) -> dict | None:
+def _merge_job(repo: str, rollup: list, head: str) -> dict | None:
     # pipeline.yml names the job "merge pending review" while reviews are pending.
     rows = _rows(rollup, "merge") + _rows(rollup, "merge pending review")
     failed_rows = [r for r in rows if r[0].get("conclusion") == "FAILURE"]
     found = failed_rows[0] if failed_rows else None
     if found is None:
+        return None
+    meta = run_gh("api", f"repos/{repo}/actions/runs/{found[1]}")
+    if (meta["path"], meta["head_sha"]) != (PIPELINE_WORKFLOW, head):
         return None
     steps = run_gh("api", f"repos/{repo}/actions/jobs/{found[2]}")["steps"]
     failed = [s["name"] for s in steps if s.get("conclusion") == "failure"]
@@ -190,7 +212,7 @@ def _security_receipt(comments: list, head: str) -> str | None:
 
 
 def _published(statuses: list) -> dict | None:
-    """Latest autopilot-converge status (GitHub lists commit statuses newest first)."""
+    """The autopilot-converge status in the combined status of the head."""
     for status in statuses:
         if status.get("context") == "autopilot-converge":
             return {k: status.get(k) for k in ("state", "description")}
@@ -216,21 +238,22 @@ def observe_pull(repo: str, pull: dict) -> dict:
     number, rollup = pull["number"], pull["statusCheckRollup"]
     pr = _pr_fields(pull, read_pages(f"repos/{repo}/pulls/{number}/files"))
     comments = read_pages(f"repos/{repo}/issues/{number}/comments")
-    statuses = read_pages(f"repos/{repo}/commits/{pr['head']}/statuses")
+    # Combined status: the latest status per context, one page.
+    statuses = run_gh("api", f"repos/{repo}/commits/{pr['head']}/status")["statuses"]
     claude = {
         "verdict": _latest_marker(comments, "claude[bot]", VERDICT),
-        "check": _claude_check(repo, rollup),
+        "check": _claude_check(repo, rollup, pr["head"]),
     }
     summary = _latest_marker(comments, BOT, STATE) or {}
     return {
         "pr": pr,
         "summary": codex_summary(comments),
         "summary_url": summary.get("url"),
-        "summary_updated": summary.get("at"),
+        "answered": answer_times(summary.get("body", "")),
         "security_receipt": _security_receipt(comments, pr["head"]),
         "threads": review_threads(repo, number),
         "requests": spent_requests(statuses, pr["head"]),
         "claude": claude,
-        "merge": _merge_job(repo, rollup),
+        "merge": _merge_job(repo, rollup, pr["head"]),
         "published": _published(statuses),
     }

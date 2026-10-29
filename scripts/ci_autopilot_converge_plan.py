@@ -133,18 +133,28 @@ def _codex_kind(kind: str, obs: dict, step: dict) -> bool:
     if reason is None:
         return not open_findings
     # Orderings, not durations: Codex starts on push, so wait until every check
-    # of this head finished, and until Codex answered our last request.
+    # of this head finished before asking.
     early = reason in ("absent", "behind") and not pr["checks_completed"]
     sent = [r for r in obs["requests"] if (r["kind"], r["head"]) == (kind, pr["head"])]
-    answered = obs.get("summary_updated")
-    pending = any(r.get("at") and (not answered or r["at"] > answered) for r in sent)
-    if reason == "running" or early or pending:
-        return False
     if sent:
-        step["causes"].append(_spent(kind, reason, obs))
-    else:
+        _after_request(kind, reason, sent, obs, step)
+    elif reason != "running" and not early:
         step["actions"].append(_request(kind, pr["head"], reason))
     return False
+
+
+def _after_request(kind: str, reason: str, sent: list, obs: dict, step: dict) -> None:
+    """One request per head and kind was sent: wait for its answer, else name it.
+
+    Answered means this kind's own summary row changed after the request (the
+    single summary comment is also edited by the other kind, #830 08:17:27Z).
+    """
+    asked = max((r.get("at") or "")[:19] for r in sent)
+    answer = ((obs.get("answered") or {}).get(kind) or "")[:19]
+    if asked and answer <= asked:
+        step["causes"].append(f"codex_request_unanswered: {kind} since {asked}Z")
+    elif reason not in ("running", "running_after_checks"):
+        step["causes"].append(_spent(kind, reason, obs))
 
 
 def _claude(obs: dict, step: dict) -> bool:

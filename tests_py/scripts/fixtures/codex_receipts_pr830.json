@@ -1,0 +1,61 @@
+{
+ "comments": [
+  {
+   "body": "<!-- codex-pull-request-review-summary -->\n<!-- codex-review-state:v1 {\"code_review\":{\"commit_sha\":\"3d3e4f904136bd795a3f4ed3957cafc5ae12f5cf\",\"has_any_findings\":false,\"has_unresolved_findings\":false,\"status\":\"completed\"},\"security_review\":{\"commit_sha\":\"3d3e4f904136bd795a3f4ed3957cafc5ae12f5cf\",\"has_any_findings\":null,\"has_unresolved_findings\":null,\"status\":\"completed\"}} -->\n<!-- codex-security-review:v1 {\"blockingSeverityThreshold\":\"P0\",\"headSha\":\"3d3e4f904136bd795a3f4ed3957cafc5ae12f5cf\",\"mergeGateEnabled\":false,\"pullRequestNumber\":830,\"repository\":\"cdeust/Cortex\",\"status\":\"completed\"} -->\n## Codex Review Summary\n\nThis comment shows the latest Codex review activity on this pull request.\n\n| Review | Status | Commit | Review trigger |\n| --- | --- | --- | --- |\n| \ud83d\udcdd **Code Review** | \u2705 **Completed** <relative-time datetime=\"2026-10-29T08:17:29.109882Z\">2026-10-29T08:17:29.109882Z</relative-time> | `3d3e4f9` | Manual request |\n| \ud83d\udd12 **Security Review** | \u2705 **Completed** <relative-time datetime=\"2026-10-29T08:25:29.765961Z\">2026-10-29T08:25:29.765961Z</relative-time> | `3d3e4f9` | Manual request |\n\n### Security findings\n\n#### Advisory findings (1)\n\n- \ud83d\udfe1 [Keep PR-controlled CI commands off local agents](https://github.com/cdeust/Cortex/pull/830#discussion_r4409816482) \u00b7 **High**\n\n<details> <summary>\u2139\ufe0f About Codex in GitHub</summary>\n<br/>\n\n[Your team has set up Codex to review pull requests in this repo](https://chatgpt.com/codex/cloud/settings/general). Reviews are triggered when you\n- Open a pull request for review\n- Mark a draft as ready\n- Comment \"@codex review\" or \"@codex security review\".\n\nCodex reacts with \ud83d\udc40 while any review is running, comments if it has suggestions, and reacts with \ud83d\udc4d once all reviews finish with no findings.\n\n</details>",
+   "created_at": "2026-10-28T19:39:06Z",
+   "html_url": "https://github.com/cdeust/Cortex/pull/830#issuecomment-6478784748",
+   "id": 6478784748,
+   "updated_at": "2026-10-29T08:25:30Z",
+   "user": {
+    "login": "chatgpt-codex-connector[bot]",
+    "type": "Bot"
+   }
+  },
+  {
+   "body": "@codex security review\n\n<!-- ci-autopilot-converge:v1 request kind=security_review head=3d3e4f904136bd795a3f4ed3957cafc5ae12f5cf -->\n",
+   "created_at": "2026-10-29T08:16:09Z",
+   "html_url": "https://github.com/cdeust/Cortex/pull/830#issuecomment-6491554825",
+   "id": 6491554825,
+   "updated_at": "2026-10-29T08:16:09Z",
+   "user": {
+    "login": "cdeust",
+    "type": "User"
+   }
+  },
+  {
+   "body": "<!-- codex-review-receipt:v1 -->\n\nCodex Review: Didn't find any major issues. Delightful!\n\n**Reviewed commit:** `3d3e4f9041`\n\n<details> <summary>\u2139\ufe0f About Codex in GitHub</summary>\n<br/>\n\n[Your team has set up Codex to review pull requests in this repo](https://chatgpt.com/codex/cloud/settings/general). Reviews are triggered when you\n- Open a pull request for review\n- Mark a draft as ready\n- Comment \"@codex review\".\n\nIf Codex has suggestions, it will comment; otherwise it will react with \ud83d\udc4d.\n\n\n\n\nCodex can also answer questions or update the PR. Try commenting \"@codex address that feedback\".\n            \n</details>",
+   "created_at": "2026-10-29T08:17:27Z",
+   "html_url": "https://github.com/cdeust/Cortex/pull/830#issuecomment-6491578917",
+   "id": 6491578917,
+   "updated_at": "2026-10-29T08:17:27Z",
+   "user": {
+    "login": "chatgpt-codex-connector[bot]",
+    "type": "Bot"
+   }
+  },
+  {
+   "body": "@codex security review",
+   "created_at": "2026-10-29T08:22:29Z",
+   "html_url": "https://github.com/cdeust/Cortex/pull/830#issuecomment-6491671127",
+   "id": 6491671127,
+   "updated_at": "2026-10-29T08:22:29Z",
+   "user": {
+    "login": "cdeust",
+    "type": "User"
+   }
+  },
+  {
+   "body": "<!-- codex-review-receipt:v1 -->\n\n### \ud83d\udee1\ufe0f Codex Security Review\n\nSecurity review completed. No security issues were found in this pull request.\n\n**Reviewed commit:** `3d3e4f9041`\n\n[View security finding report](https://chatgpt.com/codex/cloud/tasks/task_e_6ae3024f122c83248e4f12908c9fb99a)\n\n_Only the user who started this review can view the report in Codex._\n\n<details> <summary>\u2139\ufe0f About Codex security reviews in GitHub</summary>\n<br/>\n\nThis is an experimental Codex feature. Security reviews are triggered when:\n- You comment \"@codex security review\"\n- A regular code review gets triggered (for example, \"@codex review\" or when a PR is opened), and you\u2019re opted in so security review runs alongside code review\n\nOnce complete, Codex will leave suggestions, or a comment if no findings are found.\n\n\n</details>",
+   "created_at": "2026-10-29T08:25:28Z",
+   "html_url": "https://github.com/cdeust/Cortex/pull/830#issuecomment-6491726092",
+   "id": 6491726092,
+   "updated_at": "2026-10-29T08:25:28Z",
+   "user": {
+    "login": "chatgpt-codex-connector[bot]",
+    "type": "Bot"
+   }
+  }
+ ],
+ "head": "3d3e4f904136bd795a3f4ed3957cafc5ae12f5cf",
+ "source": "cdeust/Cortex#830 issue comments, REST, captured 2026-10-29T08:4xZ; head 3d3e4f904136bd795a3f4ed3957cafc5ae12f5cf"
+}

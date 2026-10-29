@@ -88,6 +88,8 @@ def _act(repo: str, target: tuple, action: dict, token: str | None) -> None:
     number, head = target
     kind = action["type"]
     if kind == "request_review":
+        # Trace first: a failed comment then reads as an unanswered request.
+        _trace(repo, head, action)
         body = ("--body-file", "-")
         gh(
             "pr",
@@ -99,7 +101,6 @@ def _act(repo: str, target: tuple, action: dict, token: str | None) -> None:
             token=token,
             stdin=action["body"],
         )
-        _trace(repo, head, action)
     elif kind == "resolve_withdrawn":
         thread = f"t={action['thread']}"
         gh(

@@ -76,12 +76,14 @@ class ClaudeCheckTests(unittest.TestCase):
                 "detailsUrl": "https://github.com/o/r/actions/runs/2/job/22",
             },
         ]
+        mention = {"path": ".github/workflows/claude.yml", "head_sha": HEAD}
+        review = {"path": ".github/workflows/claude-review.yml", "head_sha": HEAD}
         runs = {
-            "repos/o/r/actions/runs/1": {"name": "Claude", "run_attempt": 1},
-            "repos/o/r/actions/runs/2": {"name": "PR Review", "run_attempt": 1},
+            "repos/o/r/actions/runs/1": {**mention, "run_attempt": 1},
+            "repos/o/r/actions/runs/2": {**review, "run_attempt": 1},
         }
         with patch.object(observer, "run_gh", side_effect=lambda _a, e: runs[e]):
-            check = observer._claude_check("o/r", rollup)
+            check = observer._claude_check("o/r", rollup, HEAD)
         self.assertEqual((check["job_id"], check["conclusion"]), (22, "success"))
 
 
@@ -110,11 +112,19 @@ class LiveShapeTests(unittest.TestCase):
                 "detailsUrl": "https://github.com/o/r/actions/runs/3/job/33",
             }
         ]
-        steps = {
-            "steps": [{"name": "Verify live PR eligibility", "conclusion": "failure"}]
+        answers = {
+            "repos/o/r/actions/runs/3": {
+                "path": ".github/workflows/pipeline.yml",
+                "head_sha": HEAD,
+            },
+            "repos/o/r/actions/jobs/33": {
+                "steps": [
+                    {"name": "Verify live PR eligibility", "conclusion": "failure"}
+                ]
+            },
         }
-        with patch.object(observer, "run_gh", return_value=steps):
-            job = observer._merge_job("o/r", rollup)
+        with patch.object(observer, "run_gh", side_effect=lambda _a, e: answers[e]):
+            job = observer._merge_job("o/r", rollup, HEAD)
         self.assertEqual(
             (job["job_id"], job["failed_step"]), (33, "Verify live PR eligibility")
         )
@@ -174,12 +184,12 @@ class ApplyTests(unittest.TestCase):
         calls = [c.args for c in gh.call_args_list]
         label = "repos/cdeust/Cortex/issues/830/labels/autopilot%3Ahold"
         self.assertIn(label, calls[0])
-        self.assertEqual(calls[1][:2], ("pr", "comment"))
-        self.assertEqual(gh.call_args_list[1].kwargs["token"], "request-token")
-        self.assertEqual(gh.call_args_list[1].kwargs["stdin"], "@codex review")
         trace = f"context={request_context('code_review')}"
-        self.assertIn(trace, calls[2])
-        self.assertIn(f"repos/cdeust/Cortex/statuses/{HEAD}", calls[2])
+        self.assertIn(trace, calls[1])
+        self.assertIn(f"repos/cdeust/Cortex/statuses/{HEAD}", calls[1])
+        self.assertEqual(calls[2][:2], ("pr", "comment"))
+        self.assertEqual(gh.call_args_list[2].kwargs["token"], "request-token")
+        self.assertEqual(gh.call_args_list[2].kwargs["stdin"], "@codex review")
         self.assertIn("t=PRRT_x", calls[3])
         self.assertTrue(any("resolveReviewThread" in a for a in calls[4]))
         self.assertIn("repos/cdeust/Cortex/actions/jobs/77/rerun", calls[5])
