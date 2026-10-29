@@ -52,20 +52,60 @@ def content_version(raw: str) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
+def _expected_receipts(normalized: NormalizedDocument) -> set[tuple[str, str]]:
+    """(role, stored content) pairs the current normalized output can consume."""
+    expected = {("summary", redact_text(normalized.summary))}
+    expected.update(
+        ("section", redact_text(memory.content))
+        for memory in normalized.section_memories
+    )
+    return expected
+
+
+def _is_obsolete(
+    row: dict[str, Any], own_source: str, expected: set[tuple[str, str]]
+) -> bool:
+    """An ingest-authored receipt of another normalized output of this version."""
+    tags = row.get("tags", [])
+    role = "summary" if "summary" in tags else "section" if "section" in tags else ""
+    if not role or row.get("source") != own_source:
+        return False
+    return (role, row.get("content")) not in expected
+
+
 def _existing_components(
     store: Any, normalized: NormalizedDocument, prov: DocumentProvenance
-) -> list[dict[str, Any]]:
-    """Read durable receipts before writing; lookup failure must prevent duplicates."""
+) -> tuple[list[dict[str, Any]], list[int]]:
+    """Read durable receipts before writing; lookup failure must prevent duplicates.
+
+    Receipts left by another normalized output of the same version (title
+    override, normalizer or redaction change) are retired with ``is_stale``,
+    which the tag read already excludes, so they are never counted.
+    """
     tag = redact_text(document_provenance_dedup_tag(prov))
+    own_source = redact_text(f"ingest_document:{prov.source}")
+    expected = _expected_receipts(normalized)
     # source: issue #714 — one summary + all sections + one overflow sentinel.
     limit = len(normalized.section_memories) + 2
-    rows = store.get_memories_by_tag(tag, limit=limit, heads_only=False)
+    retired: list[int] = []
+    while True:
+        rows = store.get_memories_by_tag(tag, limit=limit, heads_only=False)
+        obsolete = [
+            row["id"] for row in rows if _is_obsolete(row, own_source, expected)
+        ]
+        if not obsolete:
+            break
+        if set(obsolete) & set(retired):
+            raise ValueError("store still returns retired receipts; refusing resume")
+        for memory_id in obsolete:
+            store.mark_memory_stale(memory_id)
+        retired.extend(obsolete)
     if len(rows) >= limit:
         raise ValueError(
             "document has excess component rows; refusing ambiguous resume"
         )
     # Stable order assigns identical section occurrences the same receipts on retry.
-    return sorted(
+    current = sorted(
         (
             row
             for row in rows
@@ -73,6 +113,7 @@ def _existing_components(
         ),
         key=lambda row: row["id"],
     )
+    return current, retired
 
 
 def _take_existing(rows: list[dict[str, Any]], role: str, content: str) -> int | None:
@@ -145,7 +186,8 @@ def write_document_memories(
 
     Wiki and individual memories commit independently. No process-local completion
     marker is authoritative. A retry consumes existing rows once per expected
-    occurrence; a failed receipt lookup writes nothing. Intended for sequential
+    occurrence; receipts of another normalized output of this version are
+    retired first. A failed receipt lookup writes nothing. Intended for sequential
     retries, not a distributed concurrent-ingestion uniqueness guarantee.
     source: issue #714
     """
@@ -159,14 +201,18 @@ def write_document_memories(
         "expected_components": expected,
         "completed_components": [],
         "reused_components": [],
+        "retired_receipt_ids": [],
         "failures": {},
     }
     try:
-        rows = _existing_components(context.store, normalized, context.provenance)
+        rows, retired = _existing_components(
+            context.store, normalized, context.provenance
+        )
     except Exception as exc:  # noqa: BLE001 — storage boundary; no duplicate-prone fallback
         silent_failure.note("ingest_document.memory_lookup", exc)
         result["failures"]["memory_lookup"] = str(exc)
         return result
+    result["retired_receipt_ids"] = retired
     _write_missing_memories(context, normalized, _WriteProgress(rows, result))
     return result
 

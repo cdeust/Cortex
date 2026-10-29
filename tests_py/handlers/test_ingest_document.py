@@ -26,6 +26,7 @@ _RESULT_KEYS = {
     "expected_components",
     "completed_components",
     "failures",
+    "retired_receipt_ids",
     "idempotent_skip",
     "title",
     "source",
@@ -117,6 +118,7 @@ class TestDocxHappyPath:
         assert out["section_count"] == 1
         assert out["images_skipped"] == 0
         assert out["notices"] == []
+        assert out["retired_receipt_ids"] == []
         assert len(out["version"]) == 16
         # The wiki write is invoked with the governed root, the slugged path,
         # replace mode, and provenance tags.

@@ -53,14 +53,20 @@ schema = {
         "same staleness/validation path as code references. Embedded images "
         "are skipped with an explicit notice (no OCR). Re-ingesting the same "
         "document version resumes missing components without duplicating successful "
-        "writes. ingested is true only when wiki, summary and every section "
-        "are complete; partial results include expected_components, "
-        "completed_components and failures. Malformed "
+        "writes; summary/section memories this version wrote for a different "
+        "normalized output (another title override) are marked stale and "
+        "listed in retired_receipt_ids. ingested is true only when wiki, "
+        "summary and every section are complete; partial results include "
+        "expected_components, completed_components and failures. Malformed "
         "zip/XML fails loudly, writing nothing. Distinct from `ingest_prd` "
         "(markdown PRDs with decision/requirement extraction), "
         "`ingest_codebase` (code symbols), and `wiki_write` (manual single "
-        "page). Returns {ingested, wiki_path, summary_memory_id, "
-        "section_count, images_skipped, notices, idempotent_skip}."
+        "page). Returns {ingested, status ('complete'|'partial'), reason, "
+        "idempotent_skip, wiki_path (null when the wiki write failed), "
+        "summary_memory_id, section_count (sections written), "
+        "section_memory_ids, expected_components, completed_components, "
+        "failures, retired_receipt_ids, images_skipped, notices, title, "
+        "source, source_kind, version}."
     ),
     "inputSchema": {
         "type": "object",
@@ -269,6 +275,7 @@ def _ingestion_result(
         "expected_components": expected,
         "completed_components": completed,
         "failures": failures,
+        "retired_receipt_ids": written["retired_receipt_ids"],
         "images_skipped": normalized.image_count,
         "notices": normalized.notices,
     }

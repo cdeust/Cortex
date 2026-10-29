@@ -19,7 +19,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Document ingestion reports partial wiki/summary/section writes with component
   receipts and failure reasons. Same-version retries resume missing components
   from durable rows and page content, including stored summaries with missing
-  sections, without duplicating successful writes (#714).
+  sections, without duplicating successful writes (#714). Summary and section
+  memories a same-version ingest wrote for another normalized output (a
+  different `title` override, a normalizer or redaction change) are marked
+  stale and listed in `retired_receipt_ids`, so they never block a later resume.
 
 - Exact remember replays return the existing id within the same write scope;
   explicit corrections still post supersession edges. Consolidation retains
