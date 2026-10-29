@@ -450,13 +450,7 @@ adheres to [Semantic Versioning](https://semver.org/).
   Product code that decodes a child process's output names the encoding (`uv`,
   `git`, the Codex session queue). The decision is ADR-1098.
 
-- **`benchmarks/lib/bench_regression.sh` runs under the macOS system bash
-  3.2.57** (#690). The baseline worktree cleanup trap expanded a function-local
-  `wt_dir` when it fired; under `bash -c` and 3.2 the locals are already gone
-  then, so `set -u` aborted with `wt_dir: unbound variable`, the worktree was
-  left behind and the runner's exit status was lost. The trap body is now built
-  when it is set. `test_bench_regression_datasets.py` runs under `/bin/bash` and
-  the first `bash` on `PATH`.
+- [Retiré 2026-10-29 : porte de non-régression contre main supprimée sur ordre de l'owner ; les benchmarks sont une mesure, pas une porte.]
 - **`scripts/mutation_check.sh` refuses an empty test list** (#690 sibling
   search). The first argument empty used to exit 0 under `/bin/bash` 3.2.57
   (mutmut ran on one empty test name) and exit 1 under bash 5.3 (no tests to
@@ -1071,8 +1065,7 @@ adheres to [Semantic Versioning](https://semver.org/).
   measure the un-ablated system, so it fails loudly instead. The background
   consolidation spawned by SessionStart now reports the dashboard outcome
   (`dashboards=written=N` or the error) instead of defaulting to `ok`. Measured
-  with `benchmarks/reproduce.sh --no-regression --no-ablation` against the
-  previous `main`: LongMemEval-S R@10 0.9800 (+0.0000), MRR 0.9057 (+0.0005);
+  with `benchmarks/reproduce.sh --no-ablation`: LongMemEval-S R@10 0.9800 (+0.0000), MRR 0.9057 (+0.0005);
   LoCoMo R@10 0.8890 (-0.0005), MRR 0.7801 (-0.0014), within tolerance.
 
 - **The documentation describes the recall fusion the code runs (#562).**
@@ -1289,10 +1282,7 @@ adheres to [Semantic Versioning](https://semver.org/).
   inherited an already-failing gate. `check_floors` stays informational
   (rounds `got` to the same 4-decimal precision it prints before comparing,
   matching what's on screen) but no longer `exit 1`s — same disposition as
-  the pyright ratchet (issue #188). Added `--no-regression` /
-  `--baseline-ref`: the blocking gate a PR should use instead of lowering
-  `FLOOR_*`, comparing HEAD against a baseline ref's own measured scores
-  rather than a fixed number.
+  the pyright ratchet (issue #188). [Retiré 2026-10-29 : porte de non-régression contre main supprimée sur ordre de l'owner ; les benchmarks sont une mesure, pas une porte.]
 
 - **`mcp_server/core/provenance.py`'s 43 surviving mutants, closed** (#389). A
   scoped `scripts/mutation_check.sh` run left 43 genuine survivors out of 232

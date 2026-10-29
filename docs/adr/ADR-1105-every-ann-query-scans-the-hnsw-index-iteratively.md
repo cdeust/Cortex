@@ -48,7 +48,7 @@ Rerunning `off` changed 5 of 100 top-10 sets (noise); strict and relaxed each ch
 
 ## Benchmark
 
-`benchmarks/reproduce.sh --only longmemeval,locomo --no-ablation --no-regression --baseline-ref origin/main` (pgvector/pgvector:pg16, pgvector 0.8.6; HEAD 8a6d995a against origin/main fee4c61a; `benchmarks/results/repro/20261014T121110Z/`), plus a second LongMemEval run of the branch (`20261014T142625Z/`) to measure run-to-run noise:
+`benchmarks/reproduce.sh --only longmemeval,locomo --no-ablation` (pgvector/pgvector:pg16, pgvector 0.8.6; HEAD 8a6d995a against origin/main fee4c61a; `benchmarks/results/repro/20261014T121110Z/`), plus a second LongMemEval run of the branch (`20261014T142625Z/`) to measure run-to-run noise:
 
 | | LongMemEval-S R@10 | MRR | time | LoCoMo R@10 | MRR | time |
 |---|---|---|---|---|---|---|
@@ -57,7 +57,7 @@ Rerunning `off` changed 5 of 100 top-10 sets (noise); strict and relaxed each ch
 | this change, rerun | 0.9780 | 0.9050 | 1765 s | | | |
 | origin/main, rerun | 0.9800 | 0.9057 | 2064 s | | | |
 
-The regression gate passes (tolerance 0.005). The last row is a second run of origin/main's code (same image, `run_benchmark.py` directly, a fresh database; slower because three other benchmark processes shared the machine). These benchmarks do not exercise the setting: every LongMemEval and LoCoMo table is small (110 eligible rows for LongMemEval `f4f1d8a4`, 70 to 122 for the LoCoMo conversations checked), and the `vec` CTE plans a sequential or bitmap scan plus a sort, which is exact, in every plan recorded (auto_explain, with `hnsw.iterative_scan` off, `relaxed_order`, and `enable_indexscan = off`). With the same heap, off, strict and relaxed return the same pre-rerank list. Every difference between runs is run-to-run variation of the code on main:
+[Retiré 2026-10-29 : porte de non-régression contre main supprimée sur ordre de l'owner ; les benchmarks sont une mesure, pas une porte.] The last row is a second run of origin/main's code (same image, `run_benchmark.py` directly, a fresh database; slower because three other benchmark processes shared the machine). These benchmarks do not exercise the setting: every LongMemEval and LoCoMo table is small (110 eligible rows for LongMemEval `f4f1d8a4`, 70 to 122 for the LoCoMo conversations checked), and the `vec` CTE plans a sequential or bitmap scan plus a sort, which is exact, in every plan recorded (auto_explain, with `hnsw.iterative_scan` off, `relaxed_order`, and `enable_indexscan = off`). With the same heap, off, strict and relaxed return the same pre-rerank list. Every difference between runs is run-to-run variation of the code on main:
 
 - When a table holds more than `v_pool` (100) eligible rows, the `hot` and `recency` CTEs cut ties at `LIMIT 100`. In `f4f1d8a4` all 110 rows have `effective_heat` 0.05, so 10 arbitrary rows lose the whole heat contribution (`p_w_heat` 0.5 for that intent). Which 10 follows the order the scan reads the heap, which depends on where earlier deletes left free space, and so on autovacuum timing. The answer session's chunks fall inside or outside that cut from run to run.
 - LongMemEval `f4f1d8a4`: the answer is in the top 10 in the first origin/main run only; it is missing in the origin/main rerun, both branch runs, and a replay of origin/main's code through the first 60 questions (top 10 identical to the branch's). Pairwise top-10 set differences: main vs main 11, main vs branch 10 and 11, branch vs branch 5, main rerun vs branch 5.
