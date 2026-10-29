@@ -56,18 +56,15 @@ class RefusalTests(unittest.TestCase):
 
 
 class WithdrawnTests(unittest.TestCase):
-    def test_code_finding_on_a_withdrawn_path_is_answered_and_resolved(self):
+    def test_codex_code_finding_on_a_withdrawn_path_is_answered_and_resolved(self):
         item = case(833)
         result = plan(item)
         resolved = [a for a in result["actions"] if a["type"] == "resolve_withdrawn"]
-        self.assertEqual(
-            [a["thread"] for a in resolved], [t["id"] for t in item["threads"]]
-        )
+        # Claude inline findings carry no security marker: never auto-resolved.
+        self.assertEqual([a["thread"] for a in resolved], ["PRRT_kwDORqU88s6xbcOL"])
         codex = [t for t in item["threads"] if t["reviewer"] == "codex"][0]
-        self.assertEqual(codex["id"], "PRRT_kwDORqU88s6xbcOL")
-        for action, thread in zip(resolved, item["threads"], strict=True):
-            self.assertIn(thread["path"], action["body"])
-            self.assertIn(item["pr"]["head"], action["body"])
+        self.assertIn(codex["path"], resolved[0]["body"])
+        self.assertIn(item["pr"]["head"], resolved[0]["body"])
 
     def test_pr831_withdrawn_security_finding_requests_review_never_self_resolves(self):
         item = case(831, claude_merge=True)

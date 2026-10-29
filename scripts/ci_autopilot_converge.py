@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -48,13 +49,16 @@ gh = run_gh
 def _status(repo: str, result: dict) -> None:
     red = bool(result["causes"])
     text = "; ".join(result["causes"]) if red else "converging: no named red cause"
+    state = "failure" if red else "success"
+    if result.get("published") == {"state": state, "description": text[:STATUS_LENGTH]}:
+        return  # Unchanged: commit statuses are capped per sha and context.
     gh(
         "api",
         "--method",
         "POST",
         f"repos/{repo}/statuses/{result['head']}",
         "-f",
-        f"state={'failure' if red else 'success'}",
+        f"state={state}",
         "-f",
         "context=autopilot-converge",
         "-f",
@@ -168,13 +172,28 @@ def main(argv: list[str] | None = None) -> int:
     red = False
     token = os.environ.get("CODEX_REQUEST_TOKEN") or None
     for pull in _open_pulls(args.repo, args.pr):
-        result = name_requester(plan(observe_pull(args.repo, pull)), token)
-        if args.apply and "skipped" not in result:
-            apply(args.repo, result, token)
+        try:
+            result = _converge(args, pull, token)
+        except (subprocess.CalledProcessError, KeyError, TypeError, ValueError) as exc:
+            # One PR's unreadable data never stops the others; it is named red.
+            result = {
+                "pr": pull["number"],
+                "actions": [],
+                "causes": [f"observe_failed: {type(exc).__name__}"],
+            }
         red = red or bool(result["causes"])
         shown = [{k: v for k, v in a.items() if k != "body"} for a in result["actions"]]
         print(json.dumps({**result, "actions": shown}, sort_keys=True))
     return 1 if red else 0
+
+
+def _converge(args, pull: dict, token: str | None) -> dict:
+    obs = observe_pull(args.repo, pull)
+    result = name_requester(plan(obs), token)
+    result["published"] = obs.get("published")
+    if args.apply and "skipped" not in result:
+        apply(args.repo, result, token)
+    return result
 
 
 if __name__ == "__main__":

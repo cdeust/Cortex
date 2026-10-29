@@ -102,16 +102,22 @@ def _resolution(thread: dict, head: str) -> dict:
     return {"type": "resolve_withdrawn", "thread": thread["id"], "body": body}
 
 
-def _spent(kind: str, reason: str, summary_url: str | None) -> str:
+def _spent(kind: str, reason: str, obs: dict) -> str:
     """Name a second unusable Codex verdict on the same sha (one request spent).
 
     A null verdict links the summary comment so the local manager can escalate
-    the connector (cdeust/ci-autonome#1 samples, 07:51Z and 07:57Z).
+    the connector (cdeust/ci-autonome#1 samples, 07:51Z and 07:57Z). On #830 the
+    flags stayed null while a native receipt said "No security issues were
+    found" (08:25:28Z): that names the gate reader's gap, not a missing review.
     """
-    if reason == "unknown_verdict":
-        label = "security" if kind == "security_review" else "code"
-        return f"codex_{label}_verdict_missing: {summary_url or 'no summary comment'}"
-    return f"review_stale_after_request: {kind} {reason}"
+    if reason != "unknown_verdict":
+        return f"review_stale_after_request: {kind} {reason}"
+    if kind == "security_review" and obs.get("security_receipt"):
+        return (
+            f"codex_security_flags_null_after_clean_receipt: {obs['security_receipt']}"
+        )
+    label = "security" if kind == "security_review" else "code"
+    return f"codex_{label}_verdict_missing: {obs.get('summary_url') or 'no summary'}"
 
 
 def _codex_kind(kind: str, obs: dict, step: dict) -> bool:
@@ -135,7 +141,7 @@ def _codex_kind(kind: str, obs: dict, step: dict) -> bool:
     if reason == "running" or early or pending:
         return False
     if sent:
-        step["causes"].append(_spent(kind, reason, obs.get("summary_url")))
+        step["causes"].append(_spent(kind, reason, obs))
     else:
         step["actions"].append(_request(kind, pr["head"], reason))
     return False
@@ -145,7 +151,11 @@ def _claude(obs: dict, step: dict) -> bool:
     """Plan the Claude review; True when its verdict for this head is merge."""
     pr, claude = obs["pr"], obs["claude"]
     verdict, check = claude.get("verdict"), claude.get("check")
-    if verdict and verdict["head"] == pr["head"]:
+    if (
+        verdict
+        and verdict.get("head") == pr["head"]
+        and type(verdict.get("merge")) is bool
+    ):
         if not verdict["merge"]:
             step["causes"].append(f"claude_refused: {verdict['url']}")
         return verdict["merge"]
@@ -184,7 +194,13 @@ def plan(obs: dict) -> dict:
     # Security findings are never self-resolved: only a fresh Codex verdict or
     # the owner clears one (scripts/ci_codex_review_runtime.py).
     files = set(pr["files"])
-    gone = [t for t in obs["threads"] if _withdrawn(t, files) and not t["security"]]
+    # Claude inline findings carry no security marker, so only Codex code
+    # findings are ever resolved by the planner.
+    gone = [
+        t
+        for t in obs["threads"]
+        if _withdrawn(t, files) and t["reviewer"] == "codex" and not t["security"]
+    ]
     step["actions"] += [_resolution(t, pr["head"]) for t in gone]
     codex = [_codex_kind(kind, obs, step) for kind in TRIGGERS]
     claude = _claude(obs, step)

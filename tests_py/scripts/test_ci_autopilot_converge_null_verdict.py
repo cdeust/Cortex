@@ -80,6 +80,15 @@ class NullVerdictTests(unittest.TestCase):
                 result = plan(item)
                 self.assertEqual((result["actions"], result["causes"]), ([], expected))
 
+    def test_null_flags_after_a_clean_receipt_name_the_gate_gap(self):
+        spent = [{"kind": "security_review", "head": HEAD}]
+        item = observation(EVIDENCE["samples"][1], spent)
+        item["security_receipt"] = "https://github.com/o/r/pull/1#issuecomment-9"
+        cause = (
+            "codex_security_flags_null_after_clean_receipt: " + item["security_receipt"]
+        )
+        self.assertEqual(plan(item)["causes"], [cause])
+
 
 if __name__ == "__main__":
     unittest.main()

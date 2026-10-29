@@ -24,6 +24,9 @@ STATE = re.compile(r"<!-- codex-review-state:v1\s+(.*?)\s*-->", re.S)
 VERDICT = re.compile(r"<!-- claude-review-verdict:v1\s+(.*?)\s*-->", re.S)
 # source: GitHub Actions job URL shape in statusCheckRollup.detailsUrl.
 JOB_URL = re.compile(r"/actions/runs/(\d+)/job/(\d+)")
+# source: native Codex security receipt on #830 (comment at 2026-10-29T08:25:28Z).
+RECEIPT_CLEAN = "Security review completed. No security issues were found"
+RECEIPT_COMMIT = re.compile(r"\*\*Reviewed commit:\*\* `([0-9a-f]{7,40})`")
 # source: .github/workflows/claude-review.yml `name: PR Review`.
 REVIEW_WORKFLOW = "PR Review"
 # source: Codex security finding marker, scripts/ci_codex_review_runtime.py FINDING.
@@ -65,7 +68,12 @@ def _latest_marker(comments: list, author: str, pattern) -> dict | None:
     if not rows:
         return None
     latest = max(rows, key=lambda c: (c["updated_at"], c["id"]))
-    value = json.loads(pattern.search(latest["body"]).group(1))
+    try:
+        value = json.loads(pattern.search(latest["body"]).group(1))
+    except ValueError:
+        return None  # A malformed marker reads as absent, never as a verdict.
+    if not isinstance(value, dict):
+        return None
     return {**value, "url": latest.get("html_url", ""), "at": latest["updated_at"]}
 
 
@@ -154,28 +162,61 @@ def _claude_check(repo: str, rollup: list) -> dict | None:
 
 
 def _merge_job(repo: str, rollup: list) -> dict | None:
-    found = _row(rollup, "merge")
-    if found is None or found[0].get("conclusion") != "FAILURE":
+    # pipeline.yml names the job "merge pending review" while reviews are pending.
+    rows = _rows(rollup, "merge") + _rows(rollup, "merge pending review")
+    failed_rows = [r for r in rows if r[0].get("conclusion") == "FAILURE"]
+    found = failed_rows[0] if failed_rows else None
+    if found is None:
         return None
     steps = run_gh("api", f"repos/{repo}/actions/jobs/{found[2]}")["steps"]
     failed = [s["name"] for s in steps if s.get("conclusion") == "failure"]
     return {"run_id": found[1], "job_id": found[2], "failed_step": (failed or [""])[0]}
 
 
-def observe_pull(repo: str, pull: dict) -> dict:
-    number, rollup = pull["number"], pull["statusCheckRollup"]
-    files = read_pages(f"repos/{repo}/pulls/{number}/files")
-    comments = read_pages(f"repos/{repo}/issues/{number}/comments")
-    statuses = f"repos/{repo}/commits/{pull['headRefOid']}/statuses"
-    pr = {
-        "number": number,
+def _security_receipt(comments: list, head: str) -> str | None:
+    """A native "No security issues were found" receipt for this head (#830, 08:25Z)."""
+    for c in comments:
+        body = c.get("body") or ""
+        found = RECEIPT_COMMIT.search(body)
+        if (
+            c["user"]["login"] == BOT
+            and c["user"]["type"] == "Bot"
+            and RECEIPT_CLEAN in body
+            and found
+            and head.startswith(found.group(1))
+        ):
+            return c.get("html_url", "")
+    return None
+
+
+def _published(statuses: list) -> dict | None:
+    """Latest autopilot-converge status (GitHub lists commit statuses newest first)."""
+    for status in statuses:
+        if status.get("context") == "autopilot-converge":
+            return {k: status.get(k) for k in ("state", "description")}
+    return None
+
+
+def _pr_fields(pull: dict, files: list) -> dict:
+    # A rename keeps the old path in previous_filename: still changed code.
+    paths = {f["filename"] for f in files}
+    paths |= {f["previous_filename"] for f in files if f.get("previous_filename")}
+    return {
+        "number": pull["number"],
         "head": pull["headRefOid"],
         "title": pull["title"],
         "draft": pull["isDraft"],
         "labels": [x["name"] for x in pull["labels"]],
-        "files": sorted({f["filename"] for f in files}),
-        "checks_completed": checks_completed(rollup),
+        "files": sorted(paths),
+        "checks_completed": checks_completed(pull["statusCheckRollup"]),
     }
+
+
+def observe_pull(repo: str, pull: dict) -> dict:
+    number, rollup = pull["number"], pull["statusCheckRollup"]
+    pr = _pr_fields(pull, read_pages(f"repos/{repo}/pulls/{number}/files"))
+    comments = read_pages(f"repos/{repo}/issues/{number}/comments")
+    statuses = read_pages(f"repos/{repo}/commits/{pr['head']}/statuses")
     claude = {
         "verdict": _latest_marker(comments, "claude[bot]", VERDICT),
         "check": _claude_check(repo, rollup),
@@ -186,8 +227,10 @@ def observe_pull(repo: str, pull: dict) -> dict:
         "summary": codex_summary(comments),
         "summary_url": summary.get("url"),
         "summary_updated": summary.get("at"),
+        "security_receipt": _security_receipt(comments, pr["head"]),
         "threads": review_threads(repo, number),
-        "requests": spent_requests(read_pages(statuses), pr["head"]),
+        "requests": spent_requests(statuses, pr["head"]),
         "claude": claude,
         "merge": _merge_job(repo, rollup),
+        "published": _published(statuses),
     }

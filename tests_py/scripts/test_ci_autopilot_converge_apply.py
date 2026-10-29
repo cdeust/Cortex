@@ -85,6 +85,72 @@ class ClaudeCheckTests(unittest.TestCase):
         self.assertEqual((check["job_id"], check["conclusion"]), (22, "success"))
 
 
+class LiveShapeTests(unittest.TestCase):
+    """Findings of the Claude review of #834 on live data shapes."""
+
+    def test_malformed_marker_reads_as_absent(self):
+        bad = comment("claude[bot]", "<!-- claude-review-verdict:v1 {not json} -->")
+        self.assertIsNone(
+            observer._latest_marker([bad], "claude[bot]", observer.VERDICT)
+        )
+
+    def test_renamed_file_keeps_its_old_path_in_the_diff(self):
+        pull = {"number": 1, "headRefOid": HEAD, "title": "t", "isDraft": False}
+        pull.update(labels=[], statusCheckRollup=[])
+        files = [{"filename": "new.py", "previous_filename": "old.py"}]
+        self.assertEqual(
+            observer._pr_fields(pull, files)["files"], ["new.py", "old.py"]
+        )
+
+    def test_held_merge_job_named_pending_review_is_found(self):
+        rollup = [
+            {
+                "name": "merge pending review",
+                "conclusion": "FAILURE",
+                "detailsUrl": "https://github.com/o/r/actions/runs/3/job/33",
+            }
+        ]
+        steps = {
+            "steps": [{"name": "Verify live PR eligibility", "conclusion": "failure"}]
+        }
+        with patch.object(observer, "run_gh", return_value=steps):
+            job = observer._merge_job("o/r", rollup)
+        self.assertEqual(
+            (job["job_id"], job["failed_step"]), (33, "Verify live PR eligibility")
+        )
+
+    def test_clean_security_receipt_for_the_head_is_found(self):
+        body = (
+            "<!-- codex-review-receipt:v1 -->\n### Codex Security Review\n"
+            "Security review completed. No security issues were found in this "
+            "pull request.\n\n**Reviewed commit:** `e5117943a3`"
+        )
+        found = comment(observer.BOT, body)
+        found["html_url"] = "receipt"
+        self.assertEqual(observer._security_receipt([found], HEAD), "receipt")
+        self.assertIsNone(observer._security_receipt([found], "f" * 40))
+
+    def test_unchanged_status_is_not_posted_again(self):
+        quiet = {"pr": 1, "head": HEAD, "causes": [], "actions": []}
+        quiet["published"] = {
+            "state": "success",
+            "description": "converging: no named red cause",
+        }
+        with patch.object(cli, "gh", return_value=None) as gh:
+            cli.apply("cdeust/Cortex", quiet, None)
+        self.assertEqual(gh.call_args_list, [])
+
+    def test_one_unreadable_pr_never_stops_the_others(self):
+        pulls = [{"number": 1}, {"number": 2}]
+        ok = {"pr": 2, "head": HEAD, "actions": [], "causes": []}
+        with (
+            patch.object(cli, "_open_pulls", return_value=pulls),
+            patch.object(cli, "_converge", side_effect=[KeyError("x"), ok]) as run,
+        ):
+            self.assertEqual(cli.main(["--repo", "o/r"]), 1)
+        self.assertEqual(run.call_count, 2)
+
+
 class ApplyTests(unittest.TestCase):
     def result(self):
         body = "@codex review"

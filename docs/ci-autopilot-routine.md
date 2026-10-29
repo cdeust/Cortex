@@ -44,9 +44,12 @@ une PR qui porte ce label reste dans ton périmètre de réparation. Seuls
    revue Claude échouée, répond et résout les constats sur un chemin que la PR ne
    modifie plus (jamais un constat de sécurité), lève les holds de revue et relance
    le job merge retenu quand Codex et Claude concluent tous deux à la fusion, et
-   publie le statut `autopilot-converge` avec la cause rouge nommée. Tu tournes
-   avec le compte du mainteneur : tes demandes `@codex review` sont honorées comme
-   celles de #797 et #831.
+   publie le statut `autopilot-converge` avec la cause rouge nommée. Tes
+   commentaires sont publiés sous le compte du mainteneur (ceux de la routine sur
+   #826, #829 et #831 portent l'auteur `cdeust`), et des demandes `@codex review`
+   de ce compte ont été honorées sur #828, #772 et #765 (07:31:55Z-07:31:59Z,
+   fusions par la gate à 07:34Z). Une demande doit être le déclencheur seul, sans
+   autre texte.
 2. Pour chaque cause `codex_finding_open`, `claude_finding_open` ou
    `claude_refused` : un constat fondé est corrigé dans la branche de la PR (merge
    de main si besoin, jamais de rebase ni de force-push) ; un constat non fondé
