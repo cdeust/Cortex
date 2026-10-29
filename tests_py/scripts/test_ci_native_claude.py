@@ -83,7 +83,17 @@ class NativeClaudeTrustTests(unittest.TestCase):
             invocation["with"]["include_comments_by_actor"],
             "${{ github.repository_owner }}",
         )
-        self.assertEqual(args, ["--strict-mcp-config", "--model", "claude-opus-5-5"])
+        # Template 5f5537a (#218): owner agents validate and repair workflows, so
+        # the invocation names validation tools and a render-ci system prompt.
+        # Still no --permission-mode: tag mode's acceptEdits is inherited.
+        self.assertNotIn("--permission-mode", args)
+        self.assertEqual(args[0], "--strict-mcp-config")
+        self.assertEqual(args[-2:], ["--model", "claude-opus-5-5"])
+        self.assertEqual(args[1], "--allowedTools")
+        self.assertIn("Bash(git:*)", args[2].split(","))
+        self.assertEqual(args[3], "--append-system-prompt")
+        self.assertIn("render-ci", args[4])
+        self.assertIn("never push main", args[4])
         self.assertEqual(mention["permissions"]["contents"], "write")
         # Pin both branches and the outer sender gate, including their grouping.
         expected = (
@@ -100,18 +110,17 @@ class NativeClaudeTrustTests(unittest.TestCase):
         )
         self.assertEqual(" ".join(mention["if"].split()), expected)
 
-    def test_owner_mentions_serialize_branch_writes(self):
+    def test_owner_mentions_authorize_fix_target(self):
+        # Template 5f5537a (#218) replaced per-thread concurrency with a step that
+        # refuses fork and default-branch PRs before checkout.
         workflow = yaml.safe_load(MENTIONS.read_text())
-        mention = workflow["jobs"]["claude"]
-        # source: https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency
-        self.assertEqual(
-            mention["concurrency"],
-            {
-                "group": "claude-mentions-${{ github.event.issue.number }}",
-                "cancel-in-progress": False,
-                "queue": "max",
-            },
-        )
+        steps = workflow["jobs"]["claude"]["steps"]
+        names = [step.get("name") for step in steps]
+        self.assertEqual(names[0], "Authorize owner fix target")
+        self.assertTrue(steps[1]["uses"].startswith("actions/checkout@"))
+        script = steps[0]["run"]
+        self.assertIn("head.repo.full_name == $repo", script)
+        self.assertIn("head.ref != .base.repo.default_branch", script)
 
     def test_automatic_review_pins_complete_invocation(self):
         # source: .github/workflows/claude-review.yml and upstream docs/solutions.md.
