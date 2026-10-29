@@ -28,7 +28,7 @@ schema = {
                 "type": "integer",
                 "description": (
                     "ID of the resulting memory row (PG bigint). Present when "
-                    "stored=true."
+                    "stored=true, or the existing row when reason=exact_duplicate."
                 ),
             },
             "action": {
@@ -42,7 +42,8 @@ schema = {
                 ],
                 "description": (
                     "stored=new row; merged=folded into the most-similar existing "
-                    "memory; rejected=redundant per the predictive-coding gate; "
+                    "memory; rejected=exact replay or redundant per the "
+                    "predictive-coding gate; "
                     "superseded=new row replaces an older version (append-only edge "
                     "posted); superseded_conflict=another writer superseded the target "
                     "first — nothing was kept, rebase and retry."
@@ -51,8 +52,8 @@ schema = {
             "reason": {
                 "type": "string",
                 "description": (
-                    "Human-readable explanation of the gate decision (e.g. 'low "
-                    "surprise', 'high entity overlap')."
+                    "Reason code or diagnostic explanation of the decision (e.g. 'low "
+                    "surprise', 'high entity overlap', 'exact_duplicate')."
                 ),
             },
             "merged_with": {
@@ -266,7 +267,8 @@ schema = {
             "force": {
                 "type": "boolean",
                 "description": (
-                    "Bypass the predictive-coding write gate and always insert. "
+                    "Bypass the predictive-coding write gate. Exact replays are still "
+                    "refused unless supersedes_id requests an explicit correction. "
                     "Use sparingly — anchored facts and curated lessons only. "
                     "Combined with supersedes_id this is the sovereign human "
                     "correction: the gate is bypassed but the supersession "
@@ -283,8 +285,8 @@ schema = {
                     "superseded_by_id is compare-and-set to it, and recall "
                     "demotes the old version. Rejected when the target is "
                     "missing or already superseded — an existing version "
-                    "chain is never forked silently. Bypasses automatic "
-                    "curation (the intent is explicit); the write gate "
+                    "chain is never forked silently. Bypasses exact replay refusal "
+                    "and automatic curation (the intent is explicit); the write gate "
                     "still applies unless force=true."
                 ),
                 "examples": [4255039],

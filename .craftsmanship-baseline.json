@@ -3643,11 +3643,6 @@
       "detail": "_handler_impl"
     },
     {
-      "file": "mcp_server/handlers/rebuild_profiles.py",
-      "kind": "layer-violation",
-      "detail": "mcp_server.observability"
-    },
-    {
       "file": "mcp_server/handlers/recall.py",
       "kind": "layer-violation",
       "detail": "mcp_server.observability"
@@ -3726,11 +3721,6 @@
       "file": "mcp_server/handlers/remember_helpers.py",
       "kind": "method-size",
       "detail": "try_block_replica_upsert"
-    },
-    {
-      "file": "mcp_server/handlers/remember_helpers.py",
-      "kind": "method-size",
-      "detail": "try_curation"
     },
     {
       "file": "mcp_server/handlers/remember_helpers.py",
@@ -4306,11 +4296,6 @@
       "file": "mcp_server/infrastructure/sqlite_store_relationships.py",
       "kind": "method-size",
       "detail": "SqliteRelationshipMixin.reinforce_or_create_relationship"
-    },
-    {
-      "file": "mcp_server/infrastructure/sqlite_store_search.py",
-      "kind": "layer-violation",
-      "detail": "mcp_server.observability"
     },
     {
       "file": "mcp_server/infrastructure/sqlite_store_search.py",

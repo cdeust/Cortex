@@ -245,7 +245,7 @@ class TestRebuildSmartCaching:
             result = asyncio.run(handler({}))
         assert "skipped" not in result
 
-    def test_handles_invalid_updated_at_gracefully(self):
+    def test_invalid_updated_at_raises_before_rebuild(self):
         profiles = {
             "updatedAt": "not-a-date",
             "domains": {"d": {}},
@@ -275,9 +275,8 @@ class TestRebuildSmartCaching:
             ),
             patch("mcp_server.handlers.rebuild_profiles.save_profiles"),
         ):
-            result = asyncio.run(handler({}))
-        # Should not skip (exception in date parsing is caught)
-        assert "skipped" not in result
+            with pytest.raises(ValueError, match="force=true"):
+                asyncio.run(handler({}))
 
     def test_does_not_skip_when_no_updated_at(self):
         profiles = {"domains": {"d": {}}}

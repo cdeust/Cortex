@@ -27,6 +27,8 @@ from mcp_server.doctor_pgvector import pgvector_iterative_scan
 from mcp_server.infrastructure.config import CLAUDE_DIR
 from mcp_server.shared.subprocess_safe import run_with_hard_timeout
 from mcp_server.shared import gated_files
+from mcp_server.shared.redaction_gate import redact_text
+from mcp_server.observability import silent_failure
 
 # source: validate_memory.py:29 precedent (_GIT_CHECK_TIMEOUT_S)
 _WORKTREE_LIST_TIMEOUT_S = 2.0
@@ -497,6 +499,11 @@ def _sqlite_vector_search() -> Check:
             "Use Homebrew Python or a uv-managed Python built with loadable "
             "SQLite extensions, then reinstall with that interpreter.",
         )
+    return _sqlite_vector_probe()
+
+
+def _sqlite_vector_probe() -> Check:
+    """Probe the store after package and interpreter checks (ADR-1089)."""
     try:
         store = SqliteMemoryStore(db_path=get_memory_settings().SQLITE_FALLBACK_PATH)
         try:
@@ -524,6 +531,28 @@ def _sqlite_vector_search() -> Check:
     )
 
 
+def _recorded_failures() -> Check:
+    """Report historical fallback failures recorded in this process.
+
+    A separate doctor process has its own counters; this is not a persistent
+    health history. Source: issue #685, silent_failure.status contract.
+    """
+    failures = silent_failure.status()
+    detail = "; ".join(
+        redact_text(f"{component}: {entry['count']} failure(s), {entry['last_error']}")
+        for component, entry in sorted(failures.items())
+    )
+    return Check(
+        "Recorded component failures",
+        not failures,
+        detail or "No failures recorded in this process",
+        "Inspect the reported fallbacks; lifetime counts do not show current health."
+        if failures
+        else "",
+        optional=True,
+    )
+
+
 CHECKS: list[Callable[[], Check]] = [
     _python_version,
     _pg_driver,
@@ -536,6 +565,7 @@ CHECKS: list[Callable[[], Check]] = [
     _i10_config,
     _codebase_pipeline,  # optional — doesn't fail doctor
     _worktree_locations,  # optional — doesn't fail doctor
+    _recorded_failures,  # historical warning, not a readiness verdict
 ]
 
 SQLITE_CHECKS: list[Callable[[], Check]] = [
@@ -547,6 +577,7 @@ SQLITE_CHECKS: list[Callable[[], Check]] = [
     _i10_config,
     _codebase_pipeline,  # optional — doesn't fail doctor
     _worktree_locations,  # optional — doesn't fail doctor
+    _recorded_failures,  # historical warning, not a readiness verdict
 ]
 
 

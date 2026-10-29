@@ -190,7 +190,7 @@ async def _import_single_item(
         remember_args["created_at"] = str(timestamp)
     result = await remember_handler(remember_args)
 
-    if not result.get("stored"):
+    if not result.get("stored") and result.get("reason") != "exact_duplicate":
         return None
     return result.get("memory_id")
 

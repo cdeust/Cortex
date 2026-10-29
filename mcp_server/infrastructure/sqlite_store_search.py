@@ -16,7 +16,6 @@ from typing import Any
 import numpy as np
 
 from mcp_server.infrastructure.hook_capture_filter import HOOK_CAPTURE_FILTER
-from mcp_server.observability import silent_failure
 from mcp_server.shared.code_tokenize import expand_fts_query as _expand_fts_query
 from mcp_server.infrastructure.sqlite_scope_clause import directory_scope_clause
 from mcp_server.shared.tie_groups import TieGroup, group_credit, ranked_credits
@@ -41,7 +40,7 @@ class SqliteSearchMixin:
         self, query_text: str, weight: float, k: int, pool: int
     ) -> tuple[list[tuple[int, float]], TieGroup | None]:
         """Rank-fuse the FTS5 pool by ``bm25``; a boundary group past the
-        pool comes back as a ``TieGroup`` (ADR-1109).
+        pool comes back as a ``TieGroup`` (ADR-1109). Query failures propagate.
 
         source: ADR-1109"""
         if not query_text or weight <= 0:
@@ -49,11 +48,7 @@ class SqliteSearchMixin:
         match = _expand_fts_query(query_text)
         if not match:
             return [], None
-        try:
-            return self._fts_pool(match, weight, k, pool)
-        except Exception as exc:  # noqa: BLE001 — search degrades to the remaining signals
-            silent_failure.note("sqlite_store.rrf_fts_signal", exc)
-            return [], None
+        return self._fts_pool(match, weight, k, pool)
 
     def _fts_pool(
         self, match: str, weight: float, k: int, pool: int
@@ -131,33 +126,33 @@ class SqliteSearchMixin:
     ) -> list[tuple[int, float]]:
         """Vector KNN search via sqlite-vec. Returns (memory_id, distance).
 
+        Query failures and malformed embedding buffers propagate. Returns []
+        when sqlite-vec is unavailable or the embedding is None.
+
         source: ADR-0616"""
         if not self._has_vec:
             return []
         vec = self._bytes_to_vector(query_embedding)
         if vec is None:
             return []
-        try:
-            rows = self._conn.execute(
-                "SELECT rowid, distance FROM memories_vec "
-                "WHERE embedding MATCH ? ORDER BY distance LIMIT ?",
-                (vec.tobytes(), top_k),
-            ).fetchall()
-            results = [(r["rowid"], r["distance"]) for r in rows]
-            if heads_only and results:
-                ids = [rid for rid, _ in results]
-                placeholders = ",".join("?" * len(ids))
-                current = {
-                    r["id"]
-                    for r in self._conn.execute(
-                        f"SELECT id FROM current_memories WHERE id IN ({placeholders})",  # noqa: S608 — interpolation is a generated ?/%s placeholder list; every value is a bound parameter (docs/ASSURANCE-CASE.md §5)
-                        ids,
-                    ).fetchall()
-                }
-                results = [(rid, d) for rid, d in results if rid in current]
-            return results
-        except (sqlite3.Error, ValueError):
-            return []
+        rows = self._conn.execute(
+            "SELECT rowid, distance FROM memories_vec "
+            "WHERE embedding MATCH ? ORDER BY distance LIMIT ?",
+            (vec.tobytes(), top_k),
+        ).fetchall()
+        results = [(r["rowid"], r["distance"]) for r in rows]
+        if heads_only and results:
+            ids = [rid for rid, _ in results]
+            placeholders = ",".join("?" * len(ids))
+            current = {
+                r["id"]
+                for r in self._conn.execute(
+                    f"SELECT id FROM current_memories WHERE id IN ({placeholders})",  # noqa: S608 — interpolation is a generated ?/%s placeholder list; every value is a bound parameter (docs/ASSURANCE-CASE.md §5)
+                    ids,
+                ).fetchall()
+            }
+            results = [(rid, d) for rid, d in results if rid in current]
+        return results
 
     def get_hot_embeddings(
         self,
