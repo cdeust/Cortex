@@ -68,6 +68,69 @@ def _authenticate_editor(comment: Record) -> None:
         raise EvidenceError("editor")
 
 
+# Source: native receipts6491350304 (cortex-viz PR213) and6491478435 (Cortex
+# PR829), 2026-10-29: posted with the summary's security flags still null.
+# Survey of 13 security receipts in 36 cdeust PRs on 2026-10-29: all state no
+# issues; two automatic ones (spec PR163 receipt6491660443) add the suffix below.
+RECEIPT = "<!-- codex-review-receipt:v1 -->\n"
+SECURITY_HEADING = re.compile(
+    r"\n### 🛡️ Codex Security Review(?: · _Automatically triggered_)?\n"
+)
+NO_SECURITY_ISSUES = (
+    "\nSecurity review completed. No security issues were found in this pull request.\n"
+)
+RECEIPT_COMMIT = re.compile(r"\n\*\*Reviewed commit:\*\* `([0-9a-f]{10,40})`\n")
+# A completed null verdict without a receipt, or a receipt whose wording no
+# observed receipt has, blocks under its own name (the gate never relaunches).
+MISSING, UNRECOGNIZED = "verdict_missing", "receipt_unrecognized"
+BLOCKING = ("failed", "unresolved", MISSING, UNRECOGNIZED)
+BLOCKED_REASONS = (
+    ("failed", "review_failed"),
+    (MISSING, "codex_security_verdict_missing"),
+    (UNRECOGNIZED, "codex_security_receipt_unrecognized"),
+)
+
+
+def security_receipt(comments, target, review, metadata):
+    """Native verdict for a completed security review whose flags stayed null.
+
+    Codex documents an empty result as no proof; its authenticated receipt is the
+    report it points to. Every security receipt for this head must state no
+    issues; no receipt or any other wording blocks under a named state.
+    """
+    repo, pr, sha = target
+    if (
+        review.get("status") != "completed"
+        or review.get("commit_sha") != sha
+        or review.get("has_any_findings") is not None
+        or review.get("has_unresolved_findings") is not None
+        or not isinstance(metadata, dict)
+        or (metadata.get("repository"), metadata.get("pullRequestNumber")) != (repo, pr)
+        or (metadata.get("headSha"), metadata.get("status")) != (sha, "completed")
+    ):
+        return None
+    receipts = []
+    for comment in comments:
+        body = comment.get("body")
+        if not (_bot_author(comment) and isinstance(body, str)):
+            continue
+        if not body.startswith(RECEIPT) or len(SECURITY_HEADING.findall(body)) != 1:
+            continue
+        commits = RECEIPT_COMMIT.findall(body)
+        if len(commits) != 1 or not sha.startswith(commits[0]):
+            continue
+        _authenticate_editor(comment)
+        if body.count(NO_SECURITY_ISSUES) != 1:
+            return {"state": UNRECOGNIZED, "source": "codex_security_receipt",
+                    "receipt_ids": [comment["id"]]}
+        receipts.append(comment["id"])
+    return {
+        "state": "success" if receipts else MISSING,
+        "source": "codex_security_receipt",
+        "receipt_ids": sorted(receipts),
+    }
+
+
 # Body and edit attribution must come from the same authenticated API node.
 # https://docs.github.com/en/graphql/reference/issues#issuecomment
 COMMENTS_QUERY = """

@@ -62,7 +62,7 @@ def _attempt_jobs(repo: str, run: Record, attempt: int) -> list[Record]:
 
 
 def _jobs(repo: str, run: Record) -> list[Record]:
-    """Keep the newest result per name, including jobs untouched by partial reruns.
+    """Keep the newest logical job, including jobs untouched by partial reruns.
 
     The run/jobs default filter=latest exposes only the most recent execution.
     Read authenticated attempts back to attempt1 to retain the entire original graph,
@@ -73,11 +73,14 @@ def _jobs(repo: str, run: Record) -> list[Record]:
     for attempt in range(source.positive(run["run_attempt"]), 0, -1):
         names: set[str] = set()
         for job in _attempt_jobs(repo, run, attempt):
-            if job["name"] in names or job["id"] in identities:
+            # pipeline.yml gives its single merge job two review-dependent names.
+            # Source: cortex-vision PR5 discussion_r4408735600.
+            name = "merge" if job["name"] == "merge pending review" else job["name"]
+            if name in names or job["id"] in identities:
                 raise EvidenceError("protocol")
-            names.add(job["name"])
+            names.add(name)
             identities.add(job["id"])
-            effective.setdefault(job["name"], job)
+            effective.setdefault(name, job)
     # Job-level if precedes expansion; newer children replace skipped placeholders.
     for category in ("environment", "install"):
         if _superseded_placeholder(effective, category):

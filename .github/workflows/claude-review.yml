@@ -26,6 +26,18 @@ jobs:
           ref: main
           fetch-depth: 1
           persist-credentials: false
+      # source: pinned action src/modes/tag/index.ts#L79 fetches the PR head
+      # (src/github/operations/branch.ts#L241) before its own git auth, and
+      # src/github/operations/git-config.ts#L78-L81 unsets this local header
+      # before Claude runs. Private repositories cannot fetch anonymously.
+      - name: Authorize pinned action fetch
+        env:
+          FETCH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          basic="$(printf 'x-access-token:%s' "$FETCH_TOKEN" | base64 | tr -d '\n')"
+          echo "::add-mask::$basic"
+          git config --local "http.$GITHUB_SERVER_URL/.extraheader" "AUTHORIZATION: basic $basic"
       - name: Install subprocess isolation
         run: |
           sudo apt-get update

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ci_codex_review_comments import RECEIPT
 from ci_codex_reviews import BOT, SUMMARY, EvidenceError, SHA_PATTERN, _api, _eligible
 
 Record = dict[str, Any]
@@ -58,7 +59,7 @@ def canonical(item: Any) -> bool:
         isinstance(item, dict)
         and bot(item.get("user"))
         and isinstance(item.get("body"), str)
-        and item["body"].startswith(SUMMARY)
+        and item["body"].startswith((SUMMARY, RECEIPT))
     )
 
 
