@@ -94,6 +94,31 @@ class NullVerdictTests(unittest.TestCase):
         )
         self.assertEqual(plan(item)["causes"], [cause])
 
+    def test_ci_autonome_receipt_is_the_verdict_no_relaunch(self):
+        receipt = json.loads(
+            (
+                Path(__file__).parent
+                / "fixtures/codex_security_receipt_ci_autonome_pr1.json"
+            ).read_text()
+        )
+        url = observer._security_receipt([receipt], HEAD)
+        self.assertEqual(url, receipt["html_url"])
+        item = observation(EVIDENCE["samples"][1], [])
+        item["security_receipt"] = url
+        result = plan(item)
+        self.assertEqual(result["actions"], [])
+        gap = f"codex_security_flags_null_after_clean_receipt: {url}"
+        self.assertEqual(result["causes"], [gap])
+
+    def test_request_picked_up_but_still_running_is_named(self):
+        asked = EVIDENCE["timeline"]["retrigger_comment"]["created_at"]
+        spent = [{"kind": "security_review", "head": HEAD, "at": asked}]
+        item = observation(EVIDENCE["samples"][0], spent)
+        item["summary"]["security_review"]["status"] = "running"
+        item["answered"] = {"security_review": "2026-10-29T07:53:44Z"}
+        cause = "codex_request_running: security_review since 2026-10-29T07:53:44Z"
+        self.assertEqual(plan(item)["causes"], [cause])
+
 
 if __name__ == "__main__":
     unittest.main()

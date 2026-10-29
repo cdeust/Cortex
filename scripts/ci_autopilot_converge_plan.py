@@ -106,16 +106,10 @@ def _spent(kind: str, reason: str, obs: dict) -> str:
     """Name a second unusable Codex verdict on the same sha (one request spent).
 
     A null verdict links the summary comment so the local manager can escalate
-    the connector (cdeust/ci-autonome#1 samples, 07:51Z and 07:57Z). On #830 the
-    flags stayed null while a native receipt said "No security issues were
-    found" (08:25:28Z): that names the gate reader's gap, not a missing review.
+    the connector (cdeust/ci-autonome#1 samples, 07:51Z and 07:57Z).
     """
     if reason != "unknown_verdict":
         return f"review_stale_after_request: {kind} {reason}"
-    if kind == "security_review" and obs.get("security_receipt"):
-        return (
-            f"codex_security_flags_null_after_clean_receipt: {obs['security_receipt']}"
-        )
     label = "security" if kind == "security_review" else "code"
     return f"codex_{label}_verdict_missing: {obs.get('summary_url') or 'no summary'}"
 
@@ -132,28 +126,39 @@ def _codex_kind(kind: str, obs: dict, step: dict) -> bool:
     reason = _staleness((obs["summary"] or {}).get(kind), pr, open_findings)
     if reason is None:
         return not open_findings
+    receipt = obs.get("security_receipt") if kind == "security_review" else None
+    if reason == "unknown_verdict" and receipt:
+        # The verdict exists in a native receipt (#830 08:25:28Z, ci-autonome#1
+        # 07:56:59Z): no relaunch; the gate reader's null handling is the gap.
+        gap = f"codex_security_flags_null_after_clean_receipt: {receipt}"
+        step["causes"].append(gap)
+        return not open_findings
     # Orderings, not durations: Codex starts on push, so wait until every check
     # of this head finished before asking.
     early = reason in ("absent", "behind") and not pr["checks_completed"]
     sent = [r for r in obs["requests"] if (r["kind"], r["head"]) == (kind, pr["head"])]
     if sent:
-        _after_request(kind, reason, sent, obs, step)
+        _after_request((kind, reason), sent, obs, step)
     elif reason != "running" and not early:
         step["actions"].append(_request(kind, pr["head"], reason))
     return False
 
 
-def _after_request(kind: str, reason: str, sent: list, obs: dict, step: dict) -> None:
+def _after_request(spec: tuple, sent: list, obs: dict, step: dict) -> None:
     """One request per head and kind was sent: wait for its answer, else name it.
 
     Answered means this kind's own summary row changed after the request (the
     single summary comment is also edited by the other kind, #830 08:17:27Z).
     """
+    kind, reason = spec
     asked = max((r.get("at") or "")[:19] for r in sent)
     answer = ((obs.get("answered") or {}).get(kind) or "")[:19]
     if asked and answer <= asked:
         step["causes"].append(f"codex_request_unanswered: {kind} since {asked}Z")
-    elif reason not in ("running", "running_after_checks"):
+    elif reason in ("running", "running_after_checks"):
+        # Picked up but not finished: named, never green (#828 ran for 13 h).
+        step["causes"].append(f"codex_request_running: {kind} since {answer}Z")
+    else:
         step["causes"].append(_spent(kind, reason, obs))
 
 

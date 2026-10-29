@@ -1,0 +1,12 @@
+{
+ "source": "GET repos/cdeust/ci-autonome/issues/comments/6491197130 (security receipt after the second null-flag summary)",
+ "id": 6491197130,
+ "html_url": "https://github.com/cdeust/ci-autonome/pull/1#issuecomment-6491197130",
+ "created_at": "2026-10-29T07:56:59Z",
+ "updated_at": "2026-10-29T07:56:59Z",
+ "body": "<!-- codex-review-receipt:v1 -->\n\n### 🛡️ Codex Security Review\n\nSecurity review completed. No security issues were found in this pull request.\n\n**Reviewed commit:** `f9d4591c15`\n\n[View security finding report](https://chatgpt.com/codex/cloud/tasks/task_e_6ae2fb859664832480432749c00b89cc)\n\n_Only the user who started this review can view the report in Codex._\n\n<details> <summary>ℹ️ About Codex security reviews in GitHub</summary>\n<br/>\n\nThis is an experimental Codex feature. Security reviews are triggered when:\n- You comment \"@codex security review\"\n- A regular code review gets triggered (for example, \"@codex review\" or when a PR is opened), and you’re opted in so security review runs alongside code review\n\nOnce complete, Codex will leave suggestions, or a comment if no findings are found.\n\n\n</details>",
+ "user": {
+  "login": "chatgpt-codex-connector[bot]",
+  "type": "Bot"
+ }
+}

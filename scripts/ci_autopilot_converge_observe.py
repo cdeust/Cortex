@@ -182,15 +182,17 @@ def _claude_check(repo: str, rollup: list, head: str) -> dict | None:
     return None
 
 
+def _pipeline_run(repo: str, run: int, head: str) -> bool:
+    meta = run_gh("api", f"repos/{repo}/actions/runs/{run}")
+    return (meta["path"], meta["head_sha"]) == (PIPELINE_WORKFLOW, head)
+
+
 def _merge_job(repo: str, rollup: list, head: str) -> dict | None:
     # pipeline.yml names the job "merge pending review" while reviews are pending.
     rows = _rows(rollup, "merge") + _rows(rollup, "merge pending review")
     failed_rows = [r for r in rows if r[0].get("conclusion") == "FAILURE"]
-    found = failed_rows[0] if failed_rows else None
+    found = next((r for r in failed_rows if _pipeline_run(repo, r[1], head)), None)
     if found is None:
-        return None
-    meta = run_gh("api", f"repos/{repo}/actions/runs/{found[1]}")
-    if (meta["path"], meta["head_sha"]) != (PIPELINE_WORKFLOW, head):
         return None
     steps = run_gh("api", f"repos/{repo}/actions/jobs/{found[2]}")["steps"]
     failed = [s["name"] for s in steps if s.get("conclusion") == "failure"]
@@ -251,7 +253,10 @@ def observe_pull(repo: str, pull: dict) -> dict:
     pr = _pr_fields(pull, read_pages(f"repos/{repo}/pulls/{number}/files"))
     comments = read_pages(f"repos/{repo}/issues/{number}/comments")
     # Combined status: the latest status per context, one page.
-    statuses = run_gh("api", f"repos/{repo}/commits/{pr['head']}/status")["statuses"]
+    pages = run_gh(
+        "api", "--paginate", "--slurp", f"repos/{repo}/commits/{pr['head']}/status"
+    )
+    statuses = [s for page in pages for s in page["statuses"]]
     claude = {
         "verdict": _latest_marker(comments, "claude[bot]", VERDICT),
         "check": _claude_check(repo, rollup, pr["head"]),

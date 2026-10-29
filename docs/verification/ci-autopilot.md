@@ -197,14 +197,18 @@ is the commit status `autopilot-converge/request-<kind>` on the head, and a
 request counts as answered only once that kind's own summary row (its
 `relative-time` datetime) moved after it; the single summary comment is also
 edited by the other kind. Until then the cause is
-`codex_request_unanswered: <kind> since <time>`, so waiting never shows green.
+`codex_request_unanswered: <kind> since <time>`, and once Codex picked it up
+but has not finished, `codex_request_running: <kind> since <time>`.
 On #830 at head `3d3e4f90` (fixture `codex_receipts_pr830.json`), an
 `@codex security review` comment followed by an HTML marker (08:16:09Z) moved
 the code row (08:17:29Z) and got a code review receipt (08:17:27Z); the bare
 trigger (08:22:29Z) moved the security row (08:25:29Z) and got the receipt
 "Security review completed. No security issues were found" (08:25:28Z), while
 the summary flags stayed null. No marker goes in a trigger, and that last state
-is named `codex_security_flags_null_after_clean_receipt: <receipt link>`.
+is named `codex_security_flags_null_after_clean_receipt: <receipt link>` without
+a relaunch: the verdict exists in the receipt (also ci-autonome#1, 07:56:59Z,
+fixture `codex_security_receipt_ci_autonome_pr1.json`), and reading it is a
+change of the native gate reader in the zetetic-team-subagents template.
 A second unusable verdict on the same head is named: `review_stale_after_request`,
 or `codex_security_verdict_missing: <summary link>` for a null verdict, the state
 measured twice on cdeust/ci-autonome#1 (07:51:07Z and 07:57:01Z, fixture
