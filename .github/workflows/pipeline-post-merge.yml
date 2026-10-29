@@ -460,7 +460,7 @@ jobs:
           echo "tested_sha=$actual" >> "$GITHUB_OUTPUT"
 
       - name: Guard - no comparison against main (owner rule 2026-10-29)
-        run: python3 scripts/tests/test_no_main_comparison.py
+        run: python3 -m unittest discover -s scripts/tests -p test_no_main_comparison.py -v
 
       - name: Validate ci.json
         id: commands
