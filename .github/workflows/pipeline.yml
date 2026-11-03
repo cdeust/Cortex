@@ -1800,14 +1800,25 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
           HEAD: ${{ github.event.pull_request.head.sha }}
+          BASE: ${{ github.event.pull_request.base.ref }}
         run: |
+          # Only PRs into main are merged by this path, the boundary the resolve
+          # job keeps (base.ref == main). Codex finding on #238 (P2).
+          if [ "$BASE" != "main" ]; then
+            echo "## Merge: tests green; base is $BASE, not main, auto-merge not armed" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           # Owner holds stay owner holds: a do-not-merge label or a "do not merge"
-          # title is read live before arming, the same two the resolve job reads.
-          # Codex finding on #238 (P1).
+          # title is read live before arming, the same two the resolve job reads,
+          # and a hold found here revokes any earlier arming (GitHub keeps an armed
+          # request across a writer's push). Codex findings on #238 (P1).
           held="$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,labels \
             --jq '[(.title | ascii_downcase | contains("do not merge")), ([.labels[].name | ascii_downcase] | index("do-not-merge") != null)] | any')"
           if [ "$held" = "true" ]; then
-            echo "## Merge: tests green, owner hold on the PR (do-not-merge label or title), auto-merge not armed" >> "$GITHUB_STEP_SUMMARY"
+            if ! gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --disable-auto >disarm.log 2>&1; then
+              grep -qiE "not enabled|not allowed|no auto-merge|is not in auto-merge" disarm.log || { cat disarm.log; echo "::error::disarming auto-merge failed"; exit 1; }
+            fi
+            echo "## Merge: tests green, owner hold on the PR (do-not-merge label or title), auto-merge not armed, any earlier arming revoked" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           if gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --auto --squash --match-head-commit "$HEAD" >arm.log 2>&1; then
