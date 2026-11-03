@@ -1,7 +1,9 @@
-"""Authenticated GitHub comment metadata and native Bot edit attribution.
+"""Authenticated GitHub comment metadata, native Bot edit attribution, and the
+Codex +1 reaction read (REST issues/{pr}/reactions) for null verdicts.
 
 Sources: IssueComment.editor/lastEditedAt and Bot.id, returned with the body.
 https://docs.github.com/en/graphql/reference/issues#issuecomment
+https://docs.github.com/en/rest/reactions/reactions#list-reactions-for-an-issue
 """
 
 from __future__ import annotations
@@ -167,24 +169,34 @@ def summary_comments(repo: str, pr: int, sha: str, request) -> list[Record]:
     return _comment_pages(request("graphql", paginate=True, fields=fields), sha, pr)
 
 
-# source: Codex summary text, "reacts with 👍 once all reviews finish with no
-# findings"; PR846 +1 at 2026-11-03T00:23:49Z, after its last head's Security
-# Review row of 00:23:45.38Z and five pushes, so Codex re-dates its +1 per head.
-# The reactions API reports that user with type "User", so only the login is read.
+# source: PR846 summary 6591745340, one table row per review on the reviewed head.
 COMPLETED_ROW = re.compile(
-    r"\*\*(Code|Security) Review\*\* \| ✅ \*\*Completed\*\* "
-    r'<relative-time datetime="([^"]+)"'
+    r"^\|[^|\n]*\*\*(Code|Security) Review\*\* \| ✅ \*\*Completed\*\* "
+    r'<relative-time datetime="([^"]+)"',
+    re.M,
 )
 # source: the summary lists one Code Review row and one Security Review row.
 REVIEW_KINDS = ("Code", "Security")
+# source: runtime.FINDING and _announced; any finding text voids the clean path.
+FINDING_TEXT = (
+    "\n### Security findings\n",
+    "<!-- codex-security-review-finding:v1 -->",
+)
 
 
 def _stamp(value: Any) -> datetime:
     if not isinstance(value, str) or STAMP_PATTERN.fullmatch(value) is None:
         raise EvidenceError("protocol")
-    return datetime.fromisoformat(value)
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError as exc:  # shape-valid, calendar-invalid (month 13)
+        raise EvidenceError("protocol") from exc
 
 
+# source: Codex summary text, "reacts with 👍 once all reviews finish with no
+# findings"; PR846 +1 at 2026-11-03T00:23:49Z, after its last head's Security
+# Review row of 00:23:45.38Z and five pushes, so Codex re-dates its +1 per head.
+# The reactions API reports that user with type "User", so only the login is read.
 def _codex_reactions(repo: str, pr: int) -> dict[str, datetime]:
     pages = runtime._api(f"repos/{repo}/issues/{pr}/reactions", paginate=True)
     try:
@@ -201,11 +213,14 @@ def _codex_reactions(repo: str, pr: int) -> dict[str, datetime]:
 def resolve_no_findings(target, body, review, metadata):
     """Null verdict after completion (PR833, PR846) is clean only with Codex's +1
     not earlier than both Completed rows of this Bot summary (second precision:
-    reactions carry seconds, rows microseconds), with no 👀 left. A commit date
-    would not do: a later push of an older commit keeps its date (PR847 review).
+    reactions carry seconds, rows microseconds), with no 👀 left and no finding
+    text in the summary. A commit date would not do: a later push of an older
+    commit keeps its date (PR847 review).
     """
     flags = (review.get("has_any_findings"), review.get("has_unresolved_findings"))
     if flags != (None, None) or not runtime._completed_here(target, review, metadata):
+        return None
+    if any(marker in body for marker in FINDING_TEXT):
         return None
     rows = COMPLETED_ROW.findall(body)
     if sorted(kind for kind, _ in rows) != sorted(REVIEW_KINDS):

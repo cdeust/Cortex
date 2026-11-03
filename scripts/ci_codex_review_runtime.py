@@ -1,7 +1,7 @@
 """Trusted Codex review I/O and nullable security-resolution proof.
 
 Sources: PR805 summary6442631163 on0134b085; authenticated GraphQL reviewThreads
-(isResolved, resolvedBy, author.__typename, comment.databaseId); PR846 reactions.
+(isResolved, resolvedBy, author.__typename, comment.databaseId).
 https://docs.github.com/en/graphql/guides/using-pagination-in-the-graphql-api
 """
 
@@ -229,7 +229,13 @@ def _completed_here(target, review, metadata) -> bool:
 
 
 def resolve_security(target, body, review, metadata):
-    """Reconcile one unknown verdict with positive, authenticated finding proof."""
+    """Reconcile one unknown verdict with positive, authenticated finding proof.
+
+    Applies only to has_any_findings True with has_unresolved_findings None on
+    the reviewed head; returns None otherwise (the null/null case is left to
+    comments.resolve_no_findings); raises protocol when an announced finding
+    has no native review thread.
+    """
     repo, pr, sha = target
     if (
         not _completed_here(target, review, metadata)

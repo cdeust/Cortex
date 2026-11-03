@@ -102,13 +102,45 @@ class CodexNoFindingsTests(unittest.TestCase):
         self.assertEqual(same_second["state"], "success")
 
     def test_a_malformed_completion_row_blocks(self):
-        rows = (
+        for stamp in ("2026-11-03 00:23:45", "2026-02-30T00:00:00Z"):
+            rows = (
+                row_text("📝 **Code Review**", CODE_DONE),
+                row_text("🔒 **Security Review**", stamp),
+            )
+            result = self.evaluate([reaction()], row=summary(rows=rows))
+            self.assertEqual(result["state"], "blocked", stamp)
+            self.assertEqual(result["reason"], "protocol")
+
+    def test_finding_text_in_the_summary_voids_the_clean_path(self):
+        for text in (
+            "\n### Security findings\n\n#### Advisory findings (1)\n",
+            "\n<!-- codex-security-review-finding:v1 -->\n",
+        ):
+            row = summary()
+            row["body"] = row["body"].replace("\n<details>", text + "\n<details>", 1)
+            m = module()
+            with patch.object(
+                m.runtime, "_api", side_effect=AssertionError("unexpected API")
+            ):
+                result = m.review_evidence([row], SHA, REPO, PR)
+            self.assertEqual(result["state"], "pending", text)
+
+    def test_only_table_rows_count_as_completion_rows(self):
+        quoted_only = (
             row_text("📝 **Code Review**", CODE_DONE),
-            row_text("🔒 **Security Review**", "2026-11-03 00:23:45"),
+            "> " + row_text("🔒 **Security Review**", SECURITY_DONE),
         )
-        result = self.evaluate([reaction()], row=summary(rows=rows))
-        self.assertEqual(result["state"], "blocked")
-        self.assertEqual(result["reason"], "protocol")
+        m = module()
+        with patch.object(m.runtime, "_api", side_effect=AssertionError("unexpected")):
+            result = m.review_evidence([summary(rows=quoted_only)], SHA, REPO, PR)
+        self.assertEqual(result["state"], "pending")
+        with_copy = (
+            row_text("📝 **Code Review**", CODE_DONE),
+            row_text("🔒 **Security Review**", SECURITY_DONE),
+            "> " + row_text("🔒 **Security Review**", "2026-11-02T00:00:00.000000Z"),
+        )
+        accepted = self.evaluate([reaction()], row=summary(rows=with_copy))
+        self.assertEqual(accepted["state"], "success")
 
     def test_both_completion_rows_are_required_in_the_summary(self):
         only_security = (row_text("🔒 **Security Review**", SECURITY_DONE),)
@@ -120,12 +152,7 @@ class CodexNoFindingsTests(unittest.TestCase):
             row_text("🔒 **Security Review**", SECURITY_DONE),
             row_text("🔒 **Security Review**", SECURITY_DONE),
         )
-        quoted = (
-            row_text("📝 **Code Review**", CODE_DONE),
-            row_text("🔒 **Security Review**", SECURITY_DONE),
-            "> " + row_text("🔒 **Security Review**", SECURITY_DONE),
-        )
-        for rows in ((), only_security, running, twice, quoted):
+        for rows in ((), only_security, running, twice):
             m = module()
             with patch.object(
                 m.runtime, "_api", side_effect=AssertionError("unexpected API")
@@ -168,6 +195,7 @@ class CodexNoFindingsTests(unittest.TestCase):
             [reaction(created=1)],
             [reaction(created="2026-11-03 00:23:49")],
             [reaction(created="2026-11-03T00:23:49+00:00")],
+            [reaction(created="2026-13-45T25:99:99Z")],
             [reaction("eyes", created=None), reaction()],
             ["+1"],
         ):
