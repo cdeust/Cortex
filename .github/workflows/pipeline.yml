@@ -1801,6 +1801,15 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
+          # Owner holds stay owner holds: a do-not-merge label or a "do not merge"
+          # title is read live before arming, the same two the resolve job reads.
+          # Codex finding on #238 (P1).
+          held="$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,labels \
+            --jq '[(.title | ascii_downcase | contains("do not merge")), ([.labels[].name | ascii_downcase] | index("do-not-merge") != null)] | any')"
+          if [ "$held" = "true" ]; then
+            echo "## Merge: tests green, owner hold on the PR (do-not-merge label or title), auto-merge not armed" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           if gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --auto --squash --match-head-commit "$HEAD" >arm.log 2>&1; then
             echo "## Merge: auto-merge armed for $HEAD, GitHub merges when the required checks pass" >> "$GITHUB_STEP_SUMMARY"
             exit 0
