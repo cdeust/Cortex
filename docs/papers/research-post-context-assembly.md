@@ -1,5 +1,7 @@
 # Stage-Aware Context Assembly for Long-Context Memory Retrieval
 
+> **Superseded.** This April 2026 draft is kept for history. The canonical version is the PDF [`docs/arxiv-context-assembly/main.pdf`](../arxiv-context-assembly/main.pdf) (May 2026, compiled August 2026). Where the two differ, the PDF is authoritative.
+
 **Clement Deust** (architecture, original design, benchmarking) and **Claude Opus 4.6** (Python port, benchmark integration, paper-backed complements)
 
 **Date:** April 2026
