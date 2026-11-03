@@ -12,7 +12,8 @@ failed evidence blocks integration. The authenticated canonical bot summary,
 not prose acknowledgements, supplies the evidence. A security review that
 Codex reports completed with both verdict flags null (PR833, PR846) counts as
 clean only on Codex's own +1 reaction on the PR, dated no earlier than both
-Completed rows of that summary, with no 👀 left and no finding text in it
+Completed rows of that summary for that head, with no 👀 left, no finding text
+in it and no unresolved native finding thread
 (`scripts/ci_codex_review_comments.py`, `resolve_no_findings`).
 
 The review job has read permissions and no checkout. Its embedded evidence

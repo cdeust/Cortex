@@ -14,6 +14,7 @@ import json
 import unittest
 from unittest.mock import patch
 
+from tests_py.scripts.test_ci_codex_resolution import page
 from tests_py.scripts.test_ci_codex_reviews import SHA, OTHER, comment, module, state
 
 REPO, PR = "cdeust/Cortex", 846
@@ -23,11 +24,17 @@ REACTED = "2026-11-03T00:23:49Z"
 CODEX = {"login": "chatgpt-codex-connector[bot]", "type": "Bot"}
 
 
-def row_text(kind, done):
+def row_text(kind, done, short=SHA[:7]):
     return (
         f"| {kind} | ✅ **Completed** "
-        f'<relative-time datetime="{done}">{done}</relative-time> | `e8ab290` | x |'
+        f'<relative-time datetime="{done}">{done}</relative-time> | `{short}` | x |'
     )
+
+
+def threads(nodes=()):
+    packet = page()
+    packet["data"]["repository"]["pullRequest"]["reviewThreads"]["nodes"] = list(nodes)
+    return [packet]
 
 
 def summary(sha=SHA, metadata_sha=SHA, rows=None):
@@ -52,18 +59,23 @@ def reaction(content="+1", user=CODEX, created=REACTED):
     return {"content": content, "user": dict(user), "created_at": created}
 
 
-def api(reactions):
+def api(reactions, thread_pages=None, raw=False):
     def request(endpoint, *, paginate=False, fields=None):
+        if endpoint == "graphql":
+            assert paginate and "reviewThreads" in fields["query"]
+            return threads() if thread_pages is None else thread_pages
         assert endpoint == f"repos/{REPO}/issues/{PR}/reactions" and paginate
-        return [list(reactions)]
+        return reactions if raw else [list(reactions)]
 
     return request
 
 
 class CodexNoFindingsTests(unittest.TestCase):
-    def evaluate(self, reactions, row=None):
+    def evaluate(self, reactions, row=None, thread_pages=None, raw=False):
         m = module()
-        with patch.object(m.runtime, "_api", side_effect=api(reactions)):
+        with patch.object(
+            m.runtime, "_api", side_effect=api(reactions, thread_pages, raw)
+        ):
             return m.review_evidence([summary() if row is None else row], SHA, REPO, PR)
 
     def test_codex_plus_one_after_the_reviewed_commit_completes_the_review(self):
@@ -124,6 +136,32 @@ class CodexNoFindingsTests(unittest.TestCase):
             ):
                 result = m.review_evidence([row], SHA, REPO, PR)
             self.assertEqual(result["state"], "pending", text)
+
+    def test_rows_must_name_the_reviewed_head(self):
+        rows = (
+            row_text("📝 **Code Review**", CODE_DONE),
+            row_text("🔒 **Security Review**", SECURITY_DONE, short=OTHER[:7]),
+        )
+        m = module()
+        with patch.object(m.runtime, "_api", side_effect=AssertionError("unexpected")):
+            result = m.review_evidence([summary(rows=rows)], SHA, REPO, PR)
+        self.assertEqual(result["state"], "pending")
+
+    def test_native_finding_threads_decide_after_the_reaction(self):
+        resolved = page()["data"]["repository"]["pullRequest"]["reviewThreads"]["nodes"]
+        self.assertEqual(
+            self.evaluate([reaction()], thread_pages=threads(resolved))["state"],
+            "success",
+        )
+        open_thread = [dict(resolved[0], isResolved=False, resolvedBy=None)]
+        pending = self.evaluate([reaction()], thread_pages=threads(open_thread))
+        self.assertEqual(pending["state"], "pending")
+        self.assertFalse(pending["reviews_complete"])
+        moved = threads()
+        moved[0]["data"]["repository"]["pullRequest"]["headRefOid"] = OTHER
+        blocked = self.evaluate([reaction()], thread_pages=moved)
+        self.assertEqual(blocked["state"], "blocked")
+        self.assertEqual(blocked["reason"], "head_moved")
 
     def test_only_table_rows_count_as_completion_rows(self):
         quoted_only = (
@@ -186,11 +224,15 @@ class CodexNoFindingsTests(unittest.TestCase):
             self.assertEqual(m.review_evidence([summary()], SHA)["state"], "pending")
 
     def test_malformed_reaction_records_block_without_a_verdict(self):
-        anonymous = self.evaluate([{"content": "+1", "created_at": REACTED}])
-        self.assertEqual(anonymous["state"], "pending")
+        for payload in ({}, [{}], [[{}]], [[{"content": "+1", "created_at": REACTED}]]):
+            result = self.evaluate(payload, raw=True)
+            self.assertEqual(result["state"], "blocked", payload)
+            self.assertEqual(result["reason"], "protocol")
         for reactions in (
             [{"user": dict(CODEX), "created_at": REACTED}],
             [{"user": dict(CODEX), "content": "+1"}],
+            [{"user": None, "content": "+1", "created_at": REACTED}],
+            [{"user": dict(CODEX), "content": 1, "created_at": REACTED}],
             [reaction(created=None)],
             [reaction(created=1)],
             [reaction(created="2026-11-03 00:23:49")],

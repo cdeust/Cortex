@@ -1037,7 +1037,7 @@ jobs:
           # source: PR846 summary 6591745340, one table row per review on the reviewed head.
           COMPLETED_ROW = re.compile(
               r"^\|[^|\n]*\*\*(Code|Security) Review\*\* \| ✅ \*\*Completed\*\* "
-              r'<relative-time datetime="([^"]+)"',
+              r'<relative-time datetime="([^"]+)"[^|\n]*\| `([0-9a-f]{7,40})` \|',
               re.M,
           )
           # source: the summary lists one Code Review row and one Security Review row.
@@ -1064,35 +1064,58 @@ jobs:
           # The reactions API reports that user with type "User", so only the login is read.
           def _codex_reactions(repo: str, pr: int) -> dict[str, datetime]:
               pages = runtime._api(f"repos/{repo}/issues/{pr}/reactions", paginate=True)
-              try:
-                  rows = [row for page in pages for row in page]
-                  return {
-                      row["content"]: _stamp(row["created_at"])
-                      for row in rows
-                      if (row.get("user") or {}).get("login") == BOT
-                  }
-              except (KeyError, TypeError, AttributeError) as exc:
-                  raise EvidenceError("protocol") from exc
+              if not isinstance(pages, list) or any(not isinstance(p, list) for p in pages):
+                  raise EvidenceError("protocol")
+              rows = [row for page in pages for row in page]
+              if any(
+                  not isinstance(row, dict)
+                  or not isinstance(row.get("content"), str)
+                  or not isinstance(row.get("user"), dict)
+                  or not isinstance(row["user"].get("login"), str)
+                  for row in rows
+              ):
+                  raise EvidenceError("protocol")
+              return {
+                  row["content"]: _stamp(row.get("created_at"))
+                  for row in rows
+                  if row["user"]["login"] == BOT
+              }
+
+
+          def _unresolved_findings(repo: str, pr: int, sha: str) -> bool:
+              """Native Codex finding threads on this head that the owner has not resolved."""
+              owner, name = repo.split("/")
+              fields = dict(query=runtime.THREAD_QUERY, owner=owner, name=name, number=pr)
+              states = runtime._thread_states(
+                  runtime._api("graphql", paginate=True, fields=fields), sha, owner
+              )
+              return not all(states.values())
 
 
           def resolve_no_findings(target, body, review, metadata):
               """Null verdict after completion (PR833, PR846) is clean only with Codex's +1
-              not earlier than both Completed rows of this Bot summary (second precision:
-              reactions carry seconds, rows microseconds), with no 👀 left and no finding
-              text in the summary. A commit date would not do: a later push of an older
-              commit keeps its date (PR847 review).
+              not earlier than both Completed rows of this Bot summary for this head
+              (second precision: reactions carry seconds, rows microseconds), with no 👀
+              left, no finding text in the summary and no unresolved native finding
+              thread. A commit date would not do: a later push of an older commit keeps
+              its date (PR847 review).
               """
+              repo, pr, sha = target
               flags = (review.get("has_any_findings"), review.get("has_unresolved_findings"))
               if flags != (None, None) or not runtime._completed_here(target, review, metadata):
                   return None
               if any(marker in body for marker in FINDING_TEXT):
                   return None
               rows = COMPLETED_ROW.findall(body)
-              if sorted(kind for kind, _ in rows) != sorted(REVIEW_KINDS):
+              if sorted(kind for kind, _, _ in rows) != sorted(REVIEW_KINDS):
                   return None
-              marks = _codex_reactions(target[0], target[1])
-              finished = max(_stamp(stamp) for _, stamp in rows).replace(microsecond=0)
+              if any(not sha.startswith(short) for _, _, short in rows):
+                  return None
+              marks = _codex_reactions(repo, pr)
+              finished = max(_stamp(stamp) for _, stamp, _ in rows).replace(microsecond=0)
               if "eyes" in marks or "+1" not in marks or marks["+1"] < finished:
+                  return None
+              if _unresolved_findings(repo, pr, sha):
                   return None
               return {
                   "state": "success",
