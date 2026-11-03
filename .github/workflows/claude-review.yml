@@ -11,9 +11,14 @@ permissions: {}
 jobs:
   review:
     name: Claude review
+    # Dependabot-triggered pull_request events receive Dependabot secrets only,
+    # so secrets.CLAUDE_CODE_OAUTH_TOKEN is empty there and the action aborts with
+    # "Environment variable validation failed" (run 41180098727, PR #844).
+    # source: https://docs.github.com/en/code-security/dependabot/working-with-dependabot/automating-dependabot-with-github-actions#responding-to-events
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository
       && !github.event.pull_request.draft
+      && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     permissions:
       contents: read
