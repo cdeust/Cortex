@@ -116,7 +116,16 @@ class CodexNoFindingsTests(unittest.TestCase):
             row_text("📝 **Code Review**", CODE_DONE),
             "| 🔒 **Security Review** | 🔄 **Running** since x | `e8ab290` | x |",
         )
-        for rows in ((), only_security, running):
+        twice = (
+            row_text("🔒 **Security Review**", SECURITY_DONE),
+            row_text("🔒 **Security Review**", SECURITY_DONE),
+        )
+        quoted = (
+            row_text("📝 **Code Review**", CODE_DONE),
+            row_text("🔒 **Security Review**", SECURITY_DONE),
+            "> " + row_text("🔒 **Security Review**", SECURITY_DONE),
+        )
+        for rows in ((), only_security, running, twice, quoted):
             m = module()
             with patch.object(
                 m.runtime, "_api", side_effect=AssertionError("unexpected API")
