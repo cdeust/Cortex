@@ -162,12 +162,9 @@ QUICK=0
 LIMIT=""
 KEEP_DB=0
 RERANKER_CELL=""        # explicit W4-2 experiment; production defaults unchanged
-NO_REGRESSION=0
 PASSTHROUGH=()
 started_container=0
 
-# shellcheck source=benchmarks/lib/bench_regression.sh
-. "$REPO_ROOT/benchmarks/lib/bench_regression.sh"
 # shellcheck source=benchmarks/lib/bench_only.sh
 . "$REPO_ROOT/benchmarks/lib/bench_only.sh"
 
@@ -196,9 +193,6 @@ parse_args() {
             --keep-db)       KEEP_DB=1; shift ;;
             --reranker-cell) RERANKER_CELL="$2"; shift 2 ;;
             --results-dir)   RESULTS_DIR="$2"; shift 2 ;;
-            --no-regression) NO_REGRESSION=1; shift ;;
-            --baseline-ref)  BASELINE_REF="$2"; shift 2 ;;
-            --baseline-ref=*) BASELINE_REF="${1#*=}"; shift ;;
             *)               PASSTHROUGH+=("$1"); shift ;;
         esac
     done
@@ -466,8 +460,7 @@ for stem, expected in floors.items():
         print(f"FLOOR CHECK {stem}.{key}: {got:.4f} vs floor {floor:.4f} ({delta:+.4f}) {status}")
 if failed:
     print("\nFLOOR CHECK: full-run scores deviate from the published numbers (non-blocking).")
-    print("This does not fail the build — see the FLOOR_* comment above for why, and use")
-    print("--no-regression to gate a PR against its own baseline instead.")
+    print("This does not fail the build — see the FLOOR_* comment above for why.")
 PY
 }
 
@@ -497,8 +490,6 @@ main() {
         fetch_longmemeval_cleaned
     fi
     if [ "$RUN_ABLATION" = "1" ] && [ "$ABLATE_ON" = "longmemeval-s" ]; then fetch_longmemeval; fi
-
-    if [ "$NO_REGRESSION" = "1" ]; then preflight_regression_datasets; fi
 
     acquire_lock
     trap teardown EXIT
@@ -541,20 +532,6 @@ main() {
     # source: ADR-0859
     if [ "$RUN_BENCHMARKS" = "1" ] && [ -z "$LIMIT" ] && [ "$QUICK" = "0" ]; then
         check_floors
-    fi
-
-    # source: ADR-0859
-    #
-    #
-    #
-    #
-    if [ "$NO_REGRESSION" = "1" ]; then
-        if [ "$RUN_BENCHMARKS" != "1" ] || [ -n "$LIMIT" ] || [ "$QUICK" = "1" ]; then
-            echo "error: --no-regression requires a full benchmark run (no --ablation-only, --quick or --limit)." >&2
-            exit 1
-        fi
-        run_baseline_benchmarks
-        check_regression
     fi
 
     echo

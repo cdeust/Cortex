@@ -67,17 +67,7 @@ Source rationale preserved verbatim. Identifiers inside historical quotations ar
 #                         requires --no-ablation and pre-provisioned pinned cache.
 #   --results-dir <path>  Explicit cell output directory (default remains timestamped).
 #   --only decision-ids   Exact wiki ID known-item coverage (no model calls).
-#   --no-regression       Blocking gate: also run --baseline-ref's benchmarks
-#                          in the same container and fail only if HEAD is
-#                          worse than ITS OWN baseline by more than
-#                          REGRESSION_TOLERANCE — use this instead of
-#                          lowering FLOOR_* when main itself no longer
-#                          clears the published floors (see check_floors'
-#                          comment below and benchmarks/lib/bench_regression.sh).
-#                          Full runs (no --quick/--limit) only; roughly
-#                          doubles wall time (runs the suite twice).
-#   --baseline-ref <ref>   Ref --no-regression compares HEAD against.
-#                          Default: origin/main.
+#   [Retiré 2026-10-29 : porte de non-régression contre main supprimée sur ordre de l'owner ; les benchmarks sont une mesure, pas une porte.]
 #   Anything else is passed through to the underlying run_benchmark.py calls.
 ````
 
@@ -163,10 +153,7 @@ Source rationale preserved verbatim. Identifiers inside historical quotations ar
 # 0.779868 (< 0.805) and Recall@10 0.889506 (< 0.915) via THIS SAME script
 # (cdeust/Cortex PR #492, 2026-09-07) — main itself no longer clears these
 # floors, so treating them as blocking fails every PR built on top of main
-# regardless of what that PR changes. The blocking gate for a PR is
-# --no-regression (benchmarks/lib/bench_regression.sh): whether HEAD is
-# worse than its OWN baseline, not whether it clears a number nothing
-# currently clears. check_floors below still prints PASS/FAIL per metric —
+# regardless of what that PR changes. # [Retiré 2026-10-29 : porte de non-régression contre main supprimée sur ordre de l'owner ; les benchmarks sont une mesure, pas une porte.] check_floors below still prints PASS/FAIL per metric —
 # that visibility is the point — it just no longer exits 1.
 ````
 
@@ -292,11 +279,7 @@ Source rationale preserved verbatim. Identifiers inside historical quotations ar
 ## benchmarks/reproduce.sh — original line 514
 
 ````text
-# No-regression gate (blocking): run the same suite on BASELINE_REF in
-# this same container, then fail only if HEAD is worse than that
-# baseline by more than REGRESSION_TOLERANCE. See --no-regression above
-# and benchmarks/lib/bench_regression.sh's header for why this replaces
-# the (now non-blocking) floor check as the thing a PR must pass.
+# [Retiré 2026-10-29 : porte de non-régression contre main supprimée sur ordre de l'owner ; les benchmarks sont une mesure, pas une porte.]
 ````
 
 ## benchmarks/reproduce.sh — original line 431
