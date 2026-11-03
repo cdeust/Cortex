@@ -157,9 +157,10 @@ def _reviews(latest, target):
         state, reviews[kind] = _review(data.get(kind), expected_sha)
         proof = None
         if kind == "security_review" and state == "pending" and repo and pr:
+            target = (repo, pr, expected_sha)
             proof = runtime.resolve_security(
-                (repo, pr, expected_sha), latest["body"], reviews[kind], security
-            )
+                target, latest["body"], reviews[kind], security
+            ) or runtime.resolve_no_findings(target, reviews[kind], security)
         if proof is not None:
             state = proof.pop("state")
             reviews[kind]["resolution"] = proof
