@@ -74,6 +74,7 @@ class CodexNoFindingsTests(unittest.TestCase):
         resolution = result["security_review"]["resolution"]
         self.assertEqual(resolution["source"], "github_reaction")
         self.assertEqual(resolution["reacted_at"], REACTED)
+        self.assertEqual(result["security_review"]["commit_sha"], SHA)
         self.assertIsNone(result["security_review"]["has_any_findings"])
 
     def test_no_reaction_other_user_or_eyes_keeps_the_review_pending(self):
@@ -99,6 +100,15 @@ class CodexNoFindingsTests(unittest.TestCase):
         # Same second as the row: reactions carry seconds, the row microseconds.
         same_second = self.evaluate([reaction(created="2026-11-03T00:23:45Z")])
         self.assertEqual(same_second["state"], "success")
+
+    def test_a_malformed_completion_row_blocks(self):
+        rows = (
+            row_text("📝 **Code Review**", CODE_DONE),
+            row_text("🔒 **Security Review**", "2026-11-03 00:23:45"),
+        )
+        result = self.evaluate([reaction()], row=summary(rows=rows))
+        self.assertEqual(result["state"], "blocked")
+        self.assertEqual(result["reason"], "protocol")
 
     def test_both_completion_rows_are_required_in_the_summary(self):
         only_security = (row_text("🔒 **Security Review**", SECURITY_DONE),)
@@ -145,6 +155,11 @@ class CodexNoFindingsTests(unittest.TestCase):
         for reactions in (
             [{"user": dict(CODEX), "created_at": REACTED}],
             [{"user": dict(CODEX), "content": "+1"}],
+            [reaction(created=None)],
+            [reaction(created=1)],
+            [reaction(created="2026-11-03 00:23:49")],
+            [reaction(created="2026-11-03T00:23:49+00:00")],
+            [reaction("eyes", created=None), reaction()],
             ["+1"],
         ):
             result = self.evaluate(reactions)

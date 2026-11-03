@@ -10,6 +10,7 @@ from datetime import datetime
 import re
 from typing import Any
 
+import ci_codex_review_runtime as runtime
 from ci_codex_review_runtime import EvidenceError
 
 Record = dict[str, Any]
@@ -164,3 +165,55 @@ def summary_comments(repo: str, pr: int, sha: str, request) -> list[Record]:
     owner, name = repo.split("/")
     fields = dict(query=COMMENTS_QUERY, owner=owner, name=name, number=pr)
     return _comment_pages(request("graphql", paginate=True, fields=fields), sha, pr)
+
+
+# source: Codex summary text, "reacts with 👍 once all reviews finish with no
+# findings"; PR846 +1 at 2026-11-03T00:23:49Z, after its last head's Security
+# Review row of 00:23:45.38Z and five pushes, so Codex re-dates its +1 per head.
+# The reactions API reports that user with type "User", so only the login is read.
+COMPLETED_ROW = re.compile(
+    r"\*\*(?:Code|Security) Review\*\* \| ✅ \*\*Completed\*\* "
+    r'<relative-time datetime="([^"]+)"'
+)
+REVIEW_ROWS = 2  # source: the summary lists one Code Review and one Security Review.
+
+
+def _stamp(value: Any) -> datetime:
+    if not isinstance(value, str) or STAMP_PATTERN.fullmatch(value) is None:
+        raise EvidenceError("protocol")
+    return datetime.fromisoformat(value)
+
+
+def _codex_reactions(repo: str, pr: int) -> dict[str, datetime]:
+    pages = runtime._api(f"repos/{repo}/issues/{pr}/reactions", paginate=True)
+    try:
+        rows = [row for page in pages for row in page]
+        return {
+            row["content"]: _stamp(row["created_at"])
+            for row in rows
+            if (row.get("user") or {}).get("login") == BOT
+        }
+    except (KeyError, TypeError, AttributeError) as exc:
+        raise EvidenceError("protocol") from exc
+
+
+def resolve_no_findings(target, body, review, metadata):
+    """Null verdict after completion (PR833, PR846) is clean only with Codex's +1
+    not earlier than both Completed rows of this Bot summary (second precision:
+    reactions carry seconds, rows microseconds), with no 👀 left. A commit date
+    would not do: a later push of an older commit keeps its date (PR847 review).
+    """
+    flags = (review.get("has_any_findings"), review.get("has_unresolved_findings"))
+    if flags != (None, None) or not runtime._completed_here(target, review, metadata):
+        return None
+    if len(rows := COMPLETED_ROW.findall(body)) != REVIEW_ROWS:
+        return None
+    marks = _codex_reactions(target[0], target[1])
+    finished = max(_stamp(row) for row in rows).replace(microsecond=0)
+    if "eyes" in marks or "+1" not in marks or marks["+1"] < finished:
+        return None
+    return {
+        "state": "success",
+        "source": "github_reaction",
+        "reacted_at": marks["+1"].strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }

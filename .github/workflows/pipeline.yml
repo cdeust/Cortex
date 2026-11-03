@@ -808,6 +808,7 @@ jobs:
 
 
           def _completed_here(target, review, metadata) -> bool:
+              """The review and the security metadata both name this PR's reviewed head."""
               repo, pr, sha = target
               found = (review.get("status"), review.get("commit_sha")) + tuple(
                   metadata.get(k) if isinstance(metadata, dict) else None
@@ -853,40 +854,6 @@ jobs:
               from ci_codex_review_comments import summary_comments as fetch  # noqa: PLC0415 - import cycle: comments shares RuntimeEvidenceError
 
               return fetch(repo, pr, sha, request)
-
-
-          # source: Codex summary text, "reacts with 👍 once all reviews finish with no findings".
-          CODEX_LOGIN = "chatgpt-codex-connector[bot]"
-          REVIEW_ROWS = 2  # source: the summary lists one Code Review and one Security Review.
-          COMPLETED_ROW = (
-              r"\*\*(?:Code|Security) Review\*\* \| ✅ \*\*Completed\*\* "
-              r'<relative-time datetime="([^"]+)"'
-          )
-
-
-          def resolve_no_findings(target, body, review, metadata):
-              """Null verdict after completion (PR833, PR846) is clean only with Codex's +1
-              later than both completion rows of this Bot summary, with no 👀 left.
-              """
-              flags = (review.get("has_any_findings"), review.get("has_unresolved_findings"))
-              if flags != (None, None) or not _completed_here(target, review, metadata):
-                  return None
-              if len(completed := re.findall(COMPLETED_ROW, body)) != REVIEW_ROWS:
-                  return None
-              pages = _api(f"repos/{target[0]}/issues/{target[1]}/reactions", paginate=True)
-              try:
-                  marks = {
-                      row["content"]: row["created_at"]
-                      for page in pages
-                      for row in page
-                      if (row.get("user") or {}).get("login") == CODEX_LOGIN
-                  }
-              except (KeyError, TypeError, AttributeError) as exc:
-                  raise EvidenceError("protocol") from exc
-              # ISO 8601 UTC text; reactions carry seconds, rows microseconds (PR847 review).
-              if "eyes" in marks or marks.get("+1", "") < max(completed)[:19]:
-                  return None
-              return {"state": "success", "source": "github_reaction", "reacted_at": marks["+1"]}
           '''
 
           COMMENTS_SOURCE = r'''
@@ -902,6 +869,7 @@ jobs:
           import re
           from typing import Any
 
+          import ci_codex_review_runtime as runtime
           from ci_codex_review_runtime import EvidenceError
 
           Record = dict[str, Any]
@@ -1056,6 +1024,58 @@ jobs:
               owner, name = repo.split("/")
               fields = dict(query=COMMENTS_QUERY, owner=owner, name=name, number=pr)
               return _comment_pages(request("graphql", paginate=True, fields=fields), sha, pr)
+
+
+          # source: Codex summary text, "reacts with 👍 once all reviews finish with no
+          # findings"; PR846 +1 at 2026-11-03T00:23:49Z, after its last head's Security
+          # Review row of 00:23:45.38Z and five pushes, so Codex re-dates its +1 per head.
+          # The reactions API reports that user with type "User", so only the login is read.
+          COMPLETED_ROW = re.compile(
+              r"\*\*(?:Code|Security) Review\*\* \| ✅ \*\*Completed\*\* "
+              r'<relative-time datetime="([^"]+)"'
+          )
+          REVIEW_ROWS = 2  # source: the summary lists one Code Review and one Security Review.
+
+
+          def _stamp(value: Any) -> datetime:
+              if not isinstance(value, str) or STAMP_PATTERN.fullmatch(value) is None:
+                  raise EvidenceError("protocol")
+              return datetime.fromisoformat(value)
+
+
+          def _codex_reactions(repo: str, pr: int) -> dict[str, datetime]:
+              pages = runtime._api(f"repos/{repo}/issues/{pr}/reactions", paginate=True)
+              try:
+                  rows = [row for page in pages for row in page]
+                  return {
+                      row["content"]: _stamp(row["created_at"])
+                      for row in rows
+                      if (row.get("user") or {}).get("login") == BOT
+                  }
+              except (KeyError, TypeError, AttributeError) as exc:
+                  raise EvidenceError("protocol") from exc
+
+
+          def resolve_no_findings(target, body, review, metadata):
+              """Null verdict after completion (PR833, PR846) is clean only with Codex's +1
+              not earlier than both Completed rows of this Bot summary (second precision:
+              reactions carry seconds, rows microseconds), with no 👀 left. A commit date
+              would not do: a later push of an older commit keeps its date (PR847 review).
+              """
+              flags = (review.get("has_any_findings"), review.get("has_unresolved_findings"))
+              if flags != (None, None) or not runtime._completed_here(target, review, metadata):
+                  return None
+              if len(rows := COMPLETED_ROW.findall(body)) != REVIEW_ROWS:
+                  return None
+              marks = _codex_reactions(target[0], target[1])
+              finished = max(_stamp(row) for row in rows).replace(microsecond=0)
+              if "eyes" in marks or "+1" not in marks or marks["+1"] < finished:
+                  return None
+              return {
+                  "state": "success",
+                  "source": "github_reaction",
+                  "reacted_at": marks["+1"].strftime("%Y-%m-%dT%H:%M:%SZ"),
+              }
           '''
 
           READER_SOURCE = r'''
@@ -1085,6 +1105,7 @@ jobs:
               sys.path.insert(0, str(Path(__file__).resolve().parent))
           import ci_codex_review_runtime as runtime  # noqa: E402
           from ci_codex_review_runtime import _outputs  # noqa: E402
+          import ci_codex_review_comments as comments  # noqa: E402
           from ci_codex_review_comments import _authenticate_editor, _bot_author, _canonical  # noqa: E402
 
           Record = dict[str, Any]
@@ -1218,11 +1239,9 @@ jobs:
                   state, reviews[kind] = _review(data.get(kind), expected_sha)
                   proof = None
                   if kind == "security_review" and state == "pending" and repo and pr:
-                      target = (repo, pr, expected_sha)
-                      proof = runtime.resolve_security(
-                          target, latest["body"], reviews[kind], security
-                      ) or runtime.resolve_no_findings(
-                          target, latest["body"], reviews[kind], security
+                      args = ((repo, pr, expected_sha), latest["body"], reviews[kind], security)
+                      proof = runtime.resolve_security(*args) or comments.resolve_no_findings(
+                          *args
                       )
                   if proof is not None:
                       state = proof.pop("state")

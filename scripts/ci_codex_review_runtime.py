@@ -219,6 +219,7 @@ def _thread_states(pages: Any, sha: str, owner: str) -> dict[int, bool]:
 
 
 def _completed_here(target, review, metadata) -> bool:
+    """The review and the security metadata both name this PR's reviewed head."""
     repo, pr, sha = target
     found = (review.get("status"), review.get("commit_sha")) + tuple(
         metadata.get(k) if isinstance(metadata, dict) else None
@@ -264,37 +265,3 @@ def summary_comments(repo: str, pr: int, sha: str, request) -> list[Record]:
     from ci_codex_review_comments import summary_comments as fetch  # noqa: PLC0415 - import cycle: comments shares RuntimeEvidenceError
 
     return fetch(repo, pr, sha, request)
-
-
-# source: Codex summary text, "reacts with 👍 once all reviews finish with no findings".
-CODEX_LOGIN = "chatgpt-codex-connector[bot]"
-REVIEW_ROWS = 2  # source: the summary lists one Code Review and one Security Review.
-COMPLETED_ROW = (
-    r"\*\*(?:Code|Security) Review\*\* \| ✅ \*\*Completed\*\* "
-    r'<relative-time datetime="([^"]+)"'
-)
-
-
-def resolve_no_findings(target, body, review, metadata):
-    """Null verdict after completion (PR833, PR846) is clean only with Codex's +1
-    later than both completion rows of this Bot summary, with no 👀 left.
-    """
-    flags = (review.get("has_any_findings"), review.get("has_unresolved_findings"))
-    if flags != (None, None) or not _completed_here(target, review, metadata):
-        return None
-    if len(completed := re.findall(COMPLETED_ROW, body)) != REVIEW_ROWS:
-        return None
-    pages = _api(f"repos/{target[0]}/issues/{target[1]}/reactions", paginate=True)
-    try:
-        marks = {
-            row["content"]: row["created_at"]
-            for page in pages
-            for row in page
-            if (row.get("user") or {}).get("login") == CODEX_LOGIN
-        }
-    except (KeyError, TypeError, AttributeError) as exc:
-        raise EvidenceError("protocol") from exc
-    # ISO 8601 UTC text; reactions carry seconds, rows microseconds (PR847 review).
-    if "eyes" in marks or marks.get("+1", "") < max(completed)[:19]:
-        return None
-    return {"state": "success", "source": "github_reaction", "reacted_at": marks["+1"]}
