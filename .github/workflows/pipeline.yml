@@ -583,7 +583,7 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           CODEX_COMPLETION_ONLY: 'true'
-        run: |
+        run: &codex_review_reader |
           set -euo pipefail
           args=(--repo "$GH_REPO" --pr "$PR" --sha "$HEAD_SHA" --github-output)
           # Owner rule 2026-11-03 (23:29): a missing verdict fails this job (exit 2),
@@ -1793,24 +1793,19 @@ jobs:
           fi
           echo "## Merge: the test jobs are green on this commit" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Require both reviews concluded without a blocking finding
+      # The reader runs again here, live, on this head (CODEX_COMPLETION_ONLY
+      # false: pending exits 2, blocked exits 1, both with the causes in the
+      # JSON line). The review job's state is advisory; this step decides, so a
+      # re-run of this job alone (Codex completion, MERGE resumption) re-reads a
+      # finding resolved since. Step name pinned by ci_codex_review_resume.MERGE.
+      - name: Require complete Codex reviews
         env:
-          REVIEW: ${{ needs.review.result }}
-          STATE: ${{ needs.review.outputs.state }}
-          CAUSES: ${{ needs.review.outputs.causes }}
-        run: |
-          case "$REVIEW:$STATE" in
-            success:success)
-              echo "## Reviews: Codex and Claude concluded for this head, no blocking finding" >> "$GITHUB_STEP_SUMMARY" ;;
-            *:pending)
-              echo "::error::reviews pending (${CAUSES:-unnamed}); the completion workflow re-runs this gate when a verdict lands"
-              echo "## Merge: blocked, a review has not concluded for this head: ${CAUSES:-unnamed}" >> "$GITHUB_STEP_SUMMARY"
-              exit 1 ;;
-            *)
-              echo "::error::reviews block or are unreadable (state ${STATE:-none}, job $REVIEW): ${CAUSES:-unnamed}"
-              echo "## Merge: blocked, a reviewer reports a blocking finding or no readable verdict: ${CAUSES:-unnamed}" >> "$GITHUB_STEP_SUMMARY"
-              exit 1 ;;
-          esac
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          CODEX_COMPLETION_ONLY: 'false'
+        run: *codex_review_reader
 
       # This job is itself a required check and still running, so a direct merge
       # here would be refused; auto-merge lets GitHub perform the squash the
