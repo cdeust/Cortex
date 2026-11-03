@@ -228,6 +228,15 @@ def _completed_here(target, review, metadata) -> bool:
     return found == ("completed", sha, repo, pr, sha, "completed")
 
 
+def review_thread_states(repo: str, pr: int, sha: str) -> dict[int, bool]:
+    """Native Codex finding threads of the PR at this head: id to resolved."""
+    if repo.count("/") != 1:
+        raise EvidenceError("protocol")
+    owner, name = repo.split("/")
+    fields = dict(query=THREAD_QUERY, owner=owner, name=name, number=pr)
+    return _thread_states(_api("graphql", paginate=True, fields=fields), sha, owner)
+
+
 def resolve_security(target, body, review, metadata):
     """Reconcile one unknown verdict with positive, authenticated finding proof.
 
@@ -246,10 +255,7 @@ def resolve_security(target, body, review, metadata):
     expected = _announced(body, repo, pr)
     if not expected:
         return None
-    owner, name = repo.split("/")
-    fields = dict(query=THREAD_QUERY, owner=owner, name=name, number=pr)
-    pages = _api("graphql", paginate=True, fields=fields)
-    states = _thread_states(pages, sha, owner)
+    states = review_thread_states(repo, pr, sha)
     if not expected.issubset(states):
         raise EvidenceError("protocol")
     clean = all(states[identity] for identity in expected)

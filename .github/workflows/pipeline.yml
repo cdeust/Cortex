@@ -817,6 +817,15 @@ jobs:
               return found == ("completed", sha, repo, pr, sha, "completed")
 
 
+          def review_thread_states(repo: str, pr: int, sha: str) -> dict[int, bool]:
+              """Native Codex finding threads of the PR at this head: id to resolved."""
+              if repo.count("/") != 1:
+                  raise EvidenceError("protocol")
+              owner, name = repo.split("/")
+              fields = dict(query=THREAD_QUERY, owner=owner, name=name, number=pr)
+              return _thread_states(_api("graphql", paginate=True, fields=fields), sha, owner)
+
+
           def resolve_security(target, body, review, metadata):
               """Reconcile one unknown verdict with positive, authenticated finding proof.
 
@@ -835,10 +844,7 @@ jobs:
               expected = _announced(body, repo, pr)
               if not expected:
                   return None
-              owner, name = repo.split("/")
-              fields = dict(query=THREAD_QUERY, owner=owner, name=name, number=pr)
-              pages = _api("graphql", paginate=True, fields=fields)
-              states = _thread_states(pages, sha, owner)
+              states = review_thread_states(repo, pr, sha)
               if not expected.issubset(states):
                   raise EvidenceError("protocol")
               clean = all(states[identity] for identity in expected)
@@ -1084,12 +1090,7 @@ jobs:
 
           def _unresolved_findings(repo: str, pr: int, sha: str) -> bool:
               """Native Codex finding threads on this head that the owner has not resolved."""
-              owner, name = repo.split("/")
-              fields = dict(query=runtime.THREAD_QUERY, owner=owner, name=name, number=pr)
-              states = runtime._thread_states(
-                  runtime._api("graphql", paginate=True, fields=fields), sha, owner
-              )
-              return not all(states.values())
+              return not all(runtime.review_thread_states(repo, pr, sha).values())
 
 
           def resolve_no_findings(target, body, review, metadata):
@@ -1111,8 +1112,8 @@ jobs:
                   return None
               if any(not sha.startswith(short) for _, _, short in rows):
                   return None
-              marks = _codex_reactions(repo, pr)
               finished = max(_stamp(stamp) for _, stamp, _ in rows).replace(microsecond=0)
+              marks = _codex_reactions(repo, pr)
               if "eyes" in marks or "+1" not in marks or marks["+1"] < finished:
                   return None
               if _unresolved_findings(repo, pr, sha):

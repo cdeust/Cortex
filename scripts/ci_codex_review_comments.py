@@ -219,12 +219,7 @@ def _codex_reactions(repo: str, pr: int) -> dict[str, datetime]:
 
 def _unresolved_findings(repo: str, pr: int, sha: str) -> bool:
     """Native Codex finding threads on this head that the owner has not resolved."""
-    owner, name = repo.split("/")
-    fields = dict(query=runtime.THREAD_QUERY, owner=owner, name=name, number=pr)
-    states = runtime._thread_states(
-        runtime._api("graphql", paginate=True, fields=fields), sha, owner
-    )
-    return not all(states.values())
+    return not all(runtime.review_thread_states(repo, pr, sha).values())
 
 
 def resolve_no_findings(target, body, review, metadata):
@@ -246,8 +241,8 @@ def resolve_no_findings(target, body, review, metadata):
         return None
     if any(not sha.startswith(short) for _, _, short in rows):
         return None
-    marks = _codex_reactions(repo, pr)
     finished = max(_stamp(stamp) for _, stamp, _ in rows).replace(microsecond=0)
+    marks = _codex_reactions(repo, pr)
     if "eyes" in marks or "+1" not in marks or marks["+1"] < finished:
         return None
     if _unresolved_findings(repo, pr, sha):
