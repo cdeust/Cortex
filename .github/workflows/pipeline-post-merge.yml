@@ -968,13 +968,39 @@ jobs:
             echo "has_deploy_key=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Checkout the tested commit for release publication
+      # No working tree of the tested commit is checked out here. This job holds
+      # a write-enabled deploy key and runs after a workflow_run event, so a
+      # checkout is the CodeQL finding actions/untrusted-checkout (Cortex PR839,
+      # ai-architect-mcp-codebase PR471, high). The publish step needs only the
+      # commit object and an authenticated origin: a bare repository with the
+      # commit fetched by SHA gives both and executes nothing from the commit.
+      # GitHub's SSH host keys are read from api.github.com/meta over TLS at run
+      # time (source: docs.github.com, "GitHub's SSH key fingerprints"), the
+      # same keys actions/checkout installs, without a hard-coded copy to age.
+      - name: Fetch the tested commit into a bare repository
         if: steps.guard.outputs.has_deploy_key == 'true'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.contract.outputs.tested_sha }}
-          fetch-depth: 0
-          ssh-key: ${{ secrets.RELEASE_TAG_SSH_KEY }}
+        env:
+          SSH_KEY: ${{ secrets.RELEASE_TAG_SSH_KEY }}
+          TESTED_SHA: ${{ needs.contract.outputs.tested_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          case "$TESTED_SHA" in
+            *[!0-9a-f]* | '') echo "::error::tested_sha is not a lowercase hex SHA"; exit 1 ;;
+          esac
+          [ "${#TESTED_SHA}" -eq 40 ] || { echo "::error::tested_sha is not 40 hex chars"; exit 1; }
+          key_dir="$RUNNER_TEMP/release-key"
+          (umask 077 && mkdir -p "$key_dir" && printf '%s\n' "$SSH_KEY" > "$key_dir/id")
+          gh api meta --jq '.ssh_keys[] | "github.com " + .' > "$key_dir/known_hosts"
+          [ -s "$key_dir/known_hosts" ] || { echo "::error::api.github.com/meta returned no SSH host keys"; exit 1; }
+          ssh_command="ssh -i $key_dir/id -o IdentitiesOnly=yes -o UserKnownHostsFile=$key_dir/known_hosts -o StrictHostKeyChecking=yes"
+          echo "GIT_SSH_COMMAND=$ssh_command" >> "$GITHUB_ENV"
+          export GIT_SSH_COMMAND="$ssh_command"
+          repo="$RUNNER_TEMP/release-repo"
+          git init --quiet --bare "$repo"
+          git -C "$repo" remote add origin "git@github.com:${GITHUB_REPOSITORY}.git"
+          git -C "$repo" fetch --quiet --depth=1 origin "$TESTED_SHA"
+          [ "$(git -C "$repo" cat-file -t "$TESTED_SHA")" = commit ] || { echo "::error::fetched object is not a commit"; exit 1; }
 
       - name: Set up Python
         if: steps.guard.outputs.has_deploy_key == 'true'
@@ -985,6 +1011,7 @@ jobs:
       - name: Publish declared package tags
         id: publish
         if: steps.guard.outputs.has_deploy_key == 'true'
+        working-directory: ${{ runner.temp }}/release-repo
         env:
           RELEASE_TAGS: ${{ needs.contract.outputs.release_tags }}
           TESTED_SHA: ${{ needs.contract.outputs.tested_sha }}
