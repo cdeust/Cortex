@@ -3,7 +3,7 @@
 Owner rule 2026-10-29: "je veux plus la revoir A VIE". The check that compared
 the pipeline.yml executed by a pull request with the one on main (and refused the
 autonomous merge with "workflow proof definition is not trusted") was removed. Any
-reintroduction under any of the markers below, in .github/workflows/ or scripts/,
+reintroduction under any of the markers below, in .github/workflows/, scripts/ or benchmarks/,
 fails this test. This file is excluded from its own scan.
 """
 
@@ -16,7 +16,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SELF = Path(__file__).resolve()
-SCANNED = (".github/workflows", "scripts")
+SCANNED = (".github/workflows", "scripts", "benchmarks")
 FORBIDDEN = (
     "authorize_workflow",
     "workflow proof definition",
@@ -26,6 +26,10 @@ FORBIDDEN = (
     "update-branch",
     "update_branch",
     "merge-base HEAD origin/main",
+    "no-regression",
+    "baseline-ref",
+    "BASELINE_REF",
+    "bench_regression",
 )
 PATTERN = re.compile("|".join(re.escape(m) for m in FORBIDDEN), re.IGNORECASE)
 SKIP_DIRS = {"__pycache__", ".git", "node_modules", ".venv"}
