@@ -46,6 +46,10 @@ jobs:
           export UV_PROJECT_ENVIRONMENT="$GITHUB_WORKSPACE/.venv"
           mkdir -p "$GITHUB_WORKSPACE/.claude/worktrees"
           baseline="$GITHUB_WORKSPACE/.claude/worktrees/issue-707-before"
+          # BEFORE_SHA is the first commit of PR #827, squash-merged as f0e4c81:
+          # it is reachable only through refs/pull/827/head, which the PR
+          # checkout never fetches (run 40946855373: "invalid reference").
+          git fetch --no-tags origin refs/pull/827/head
           git worktree add --detach "$baseline" "$BEFORE_SHA"
           cp tests_py/handlers/test_issue_707_benchmark.py "$baseline/tests_py/handlers/"
           cd "$baseline"
