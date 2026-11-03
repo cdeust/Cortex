@@ -160,7 +160,9 @@ def _reviews(latest, target):
             target = (repo, pr, expected_sha)
             proof = runtime.resolve_security(
                 target, latest["body"], reviews[kind], security
-            ) or runtime.resolve_no_findings(target, reviews[kind], security)
+            ) or runtime.resolve_no_findings(
+                target, latest["body"], reviews[kind], security
+            )
         if proof is not None:
             state = proof.pop("state")
             reviews[kind]["resolution"] = proof

@@ -1,10 +1,13 @@
 """Completed Codex security review with both verdict flags null (PR833, PR846).
 
 Source: PR846 summary comment 6591745340 on e8ab290 (security_review completed,
-has_any_findings null, has_unresolved_findings null) and the Codex +1 reaction
-on the PR at 2026-11-03T00:23:49Z, after the head commit of 2026-11-03T00:22:08Z.
-Without this path the reader reported "pending" for ever and the Pipeline's merge
-job kept the name "merge pending review", which branch protection never accepts.
+has_any_findings null, has_unresolved_findings null; Code Review completed
+2026-11-03T00:23:14.923148Z, Security Review completed 00:23:45.383348Z) and the
+Codex +1 reaction on the PR at 00:23:49Z. Without this path the reader reported
+"pending" for ever and the Pipeline's merge job kept the name "merge pending
+review", which branch protection never accepts. Freshness is anchored on the
+summary's own completion rows: a commit date would let a later push of an older
+commit reuse a stale +1 (PR847 Codex review).
 """
 
 import json
@@ -14,12 +17,20 @@ from unittest.mock import patch
 from tests_py.scripts.test_ci_codex_reviews import SHA, OTHER, comment, module, state
 
 REPO, PR = "cdeust/Cortex", 846
-COMMITTED = "2026-11-03T00:22:08Z"
+CODE_DONE = "2026-11-03T00:23:14.923148Z"
+SECURITY_DONE = "2026-11-03T00:23:45.383348Z"
 REACTED = "2026-11-03T00:23:49Z"
 CODEX = {"login": "chatgpt-codex-connector[bot]", "type": "Bot"}
 
 
-def summary(sha=SHA, metadata_sha=SHA):
+def row_text(kind, done):
+    return (
+        f"| {kind} | ✅ **Completed** "
+        f'<relative-time datetime="{done}">{done}</relative-time> | `e8ab290` | x |'
+    )
+
+
+def summary(sha=SHA, metadata_sha=SHA, rows=None):
     data = state(sha)
     data["security_review"].update(has_any_findings=None, has_unresolved_findings=None)
     row = comment(data)
@@ -27,6 +38,12 @@ def summary(sha=SHA, metadata_sha=SHA):
         repository=REPO, pullRequestNumber=PR, headSha=metadata_sha, status="completed"
     )
     row["body"] += "\n<!-- codex-security-review:v1 " + json.dumps(metadata) + " -->"
+    if rows is None:
+        rows = (
+            row_text("📝 **Code Review**", CODE_DONE),
+            row_text("🔒 **Security Review**", SECURITY_DONE),
+        )
+    row["body"] += "\n## Codex Review Summary\n\n" + "\n".join(rows)
     row["body"] += "\n<details>About Codex</details>"
     return row
 
@@ -35,25 +52,18 @@ def reaction(content="+1", user=CODEX, created=REACTED):
     return {"content": content, "user": dict(user), "created_at": created}
 
 
-def commit(date=COMMITTED):
-    return {"sha": SHA, "commit": {"committer": {"date": date}}}
-
-
-def api(reactions, head=None):
+def api(reactions):
     def request(endpoint, *, paginate=False, fields=None):
-        if endpoint.endswith("/reactions"):
-            assert paginate
-            return [list(reactions)]
-        assert endpoint == f"repos/{REPO}/commits/{SHA}" and not paginate
-        return commit() if head is None else head
+        assert endpoint == f"repos/{REPO}/issues/{PR}/reactions" and paginate
+        return [list(reactions)]
 
     return request
 
 
 class CodexNoFindingsTests(unittest.TestCase):
-    def evaluate(self, reactions, row=None, head=None):
+    def evaluate(self, reactions, row=None):
         m = module()
-        with patch.object(m.runtime, "_api", side_effect=api(reactions, head)):
+        with patch.object(m.runtime, "_api", side_effect=api(reactions)):
             return m.review_evidence([summary() if row is None else row], SHA, REPO, PR)
 
     def test_codex_plus_one_after_the_reviewed_commit_completes_the_review(self):
@@ -78,10 +88,31 @@ class CodexNoFindingsTests(unittest.TestCase):
             self.assertEqual(result["state"], "pending", reactions)
             self.assertFalse(result["reviews_complete"])
 
-    def test_a_plus_one_older_than_the_reviewed_commit_is_stale(self):
-        for created in ("2026-11-03T00:22:08Z", "2026-11-02T23:59:59Z"):
+    def test_a_plus_one_older_than_the_last_completion_row_is_stale(self):
+        for created in (
+            "2026-11-03T00:23:44Z",
+            "2026-11-03T00:23:15Z",
+            "2026-11-02T23:59:59Z",
+        ):
             result = self.evaluate([reaction(created=created)])
             self.assertEqual(result["state"], "pending", created)
+        # Same second as the row: reactions carry seconds, the row microseconds.
+        same_second = self.evaluate([reaction(created="2026-11-03T00:23:45Z")])
+        self.assertEqual(same_second["state"], "success")
+
+    def test_both_completion_rows_are_required_in_the_summary(self):
+        only_security = (row_text("🔒 **Security Review**", SECURITY_DONE),)
+        running = (
+            row_text("📝 **Code Review**", CODE_DONE),
+            "| 🔒 **Security Review** | 🔄 **Running** since x | `e8ab290` | x |",
+        )
+        for rows in ((), only_security, running):
+            m = module()
+            with patch.object(
+                m.runtime, "_api", side_effect=AssertionError("unexpected API")
+            ):
+                result = m.review_evidence([summary(rows=rows)], SHA, REPO, PR)
+            self.assertEqual(result["state"], "pending", rows)
 
     def test_running_stale_or_mismatched_metadata_never_reads_reactions(self):
         rows = [summary(metadata_sha=OTHER)]
@@ -108,16 +139,16 @@ class CodexNoFindingsTests(unittest.TestCase):
         with patch.object(m.runtime, "_api", side_effect=AssertionError("unexpected")):
             self.assertEqual(m.review_evidence([summary()], SHA)["state"], "pending")
 
-    def test_malformed_reaction_or_commit_records_block_without_a_verdict(self):
+    def test_malformed_reaction_records_block_without_a_verdict(self):
         anonymous = self.evaluate([{"content": "+1", "created_at": REACTED}])
         self.assertEqual(anonymous["state"], "pending")
-        for reactions, head in (
-            ([{"user": dict(CODEX), "created_at": REACTED}], None),
-            ([{"user": dict(CODEX), "content": "+1"}], None),
-            ([reaction()], {"sha": SHA, "commit": {}}),
+        for reactions in (
+            [{"user": dict(CODEX), "created_at": REACTED}],
+            [{"user": dict(CODEX), "content": "+1"}],
+            ["+1"],
         ):
-            result = self.evaluate(reactions, head=head)
-            self.assertEqual(result["state"], "blocked", (reactions, head))
+            result = self.evaluate(reactions)
+            self.assertEqual(result["state"], "blocked", reactions)
             self.assertEqual(result["reason"], "protocol")
             self.assertFalse(result["reviews_complete"])
 
