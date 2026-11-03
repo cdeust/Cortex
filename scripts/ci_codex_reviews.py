@@ -24,8 +24,10 @@ if "ci_codex_review_runtime" not in sys.modules:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ci_codex_review_runtime as runtime  # noqa: E402
 from ci_codex_review_runtime import _outputs  # noqa: E402
-import ci_codex_review_comments as comments  # noqa: E402
 from ci_codex_review_comments import _authenticate_editor, _bot_author, _canonical  # noqa: E402
+from ci_codex_review_comments import security_receipt  # noqa: E402
+from ci_codex_review_reaction import reaction_verdict  # noqa: E402
+from ci_codex_review_agreement import conclude  # noqa: E402
 
 Record = dict[str, Any]
 SUMMARY = "<!-- codex-pull-request-review-summary -->"
@@ -148,7 +150,7 @@ def _review(value: Any, expected_sha: str) -> tuple[str, Record]:
     return ("unresolved" if clean["has_unresolved_findings"] else "success"), clean
 
 
-def _reviews(latest, target):
+def _reviews(latest, target, comments):
     expected_sha, repo, pr = target
     reviews = {}
     data = _marker(latest["body"], "codex-review-state", True)
@@ -156,11 +158,15 @@ def _reviews(latest, target):
     states = []
     for kind in KINDS:
         state, reviews[kind] = _review(data.get(kind), expected_sha)
-        proof = None
-        if kind == "security_review" and state == "pending" and repo and pr:
-            args = ((repo, pr, expected_sha), latest["body"], reviews[kind], security)
-            proof = runtime.resolve_security(*args) or comments.resolve_no_findings(
-                *args
+        proof, attested = None, state == "success" and reviews[kind]["has_any_findings"] is True
+        if kind == "security_review" and (state == "pending" or attested) and repo and pr:
+            proof = runtime.resolve_security(
+                (repo, pr, expected_sha), latest["body"], reviews[kind], security
+            ) or security_receipt(
+                comments, (repo, pr, expected_sha), reviews[kind], security
+            )
+            proof = reaction_verdict(
+                proof, (repo, pr, expected_sha), latest["body"], reviews[kind], security
             )
         if proof is not None:
             state = proof.pop("state")
@@ -182,7 +188,7 @@ def review_evidence(
             raise EvidenceError("protocol")
         candidates = [comment for comment in comments if _canonical(comment)]
         if not candidates:
-            return result
+            return {**result, **conclude(None, comments, expected_sha)}
         latest = max(candidates, key=_order)
         result.update(comment_id=latest["id"], updated_at=latest["updated_at"])
         latest_order = _order(latest)
@@ -192,19 +198,9 @@ def review_evidence(
                 _authenticate_editor(item)
         if latest["body"].count(SUMMARY) != 1:
             raise EvidenceError("protocol")
-        states, details = _reviews(latest, (expected_sha, repo, pr))
+        states, details = _reviews(latest, (expected_sha, repo, pr), comments)
         result.update(details)
-        result["reviews_complete"] = all(s in ("success", "unresolved") for s in states)
-        result["state"] = (
-            "blocked"
-            if any(s in ("failed", "unresolved") for s in states)
-            else ("pending" if "pending" in states else "success")
-        )
-        result["reason"] = {
-            "blocked": "review_failed" if "failed" in states else "review_unresolved",
-            "pending": "review_pending",
-            "success": "reviews_complete",
-        }[result["state"]]
+        result.update(conclude(states, comments, expected_sha))  # Codex, then Claude.
     except runtime.EvidenceError as exc:
         result.update(state="blocked", reason=str(exc), reviews_complete=False)
         if isinstance(exc, runtime.APIError):

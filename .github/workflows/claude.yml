@@ -22,12 +22,6 @@ jobs:
       || (github.event_name == 'issues'
        && github.event.issue.user.login == github.repository_owner
        && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude'))))
-    # Run one owner request per thread at a time; retain pending requests.
-    # source: https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency
-    concurrency:
-      group: claude-mentions-${{ github.event.issue.number }}
-      cancel-in-progress: false
-      queue: max
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -36,11 +30,36 @@ jobs:
       id-token: write
       actions: read
     steps:
+      - name: Authorize owner fix target
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          # Owner mentions cannot turn a fork or default-branch PR into a fix target.
+          if jq -e '.issue.pull_request != null' "$GITHUB_EVENT_PATH" >/dev/null; then
+            gh api "repos/$GH_REPO/pulls/$ISSUE_NUMBER" |
+              jq -e --arg repo "$GH_REPO" \
+                '.head.repo.full_name == $repo and .head.ref != .base.repo.default_branch' >/dev/null
+          fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           # Use the action App token instead of a persisted workflow token.
           persist-credentials: false
+      # source: pinned action src/modes/tag/index.ts#L79 fetches the PR head or
+      # base (src/github/operations/branch.ts#L241, #L350, #L368) before its own
+      # git auth, and src/github/operations/git-config.ts#L78-L81 unsets this
+      # local header before Claude runs. Private repositories cannot fetch anonymously.
+      - name: Authorize pinned action fetch
+        env:
+          FETCH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          basic="$(printf 'x-access-token:%s' "$FETCH_TOKEN" | base64 | tr -d '\n')"
+          echo "::add-mask::$basic"
+          git config --local "http.$GITHUB_SERVER_URL/.extraheader" "AUTHORIZATION: basic $basic"
       - name: Install subprocess isolation
         run: |
           sudo apt-get update
@@ -55,12 +74,11 @@ jobs:
           CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          # Upstream action.yml and src/github/data/fetcher.ts at the pinned SHA
-          # apply this filter to issue comments, reviews and inline comments.
           include_comments_by_actor: ${{ github.repository_owner }}
-          # No --permission-mode: inherit tag mode's workspace edit approval
-          # (src/modes/tag/index.ts at the pinned action SHA).
-          # Last value wins: upstream base-action/src/parse-sdk-options.ts.
+          # Inherit tag mode's acceptEdits: Edit/Write inside the workspace.
+          # Explicit validation tools run headlessly without a permission prompt.
           claude_args: |
             --strict-mcp-config
+            --allowedTools "Task,Bash(git:*),Bash(gh:*),Bash(python3:*),Bash(python:*),Bash(pytest:*),Bash(uv:*),Bash(uvx:*),Bash(npm:*),Bash(npx:*),Bash(pnpm:*),Bash(cargo:*),Bash(bash:*)"
+            --append-system-prompt "For generated GitHub workflows, edit their canonical source and run render-ci; never hand-edit generated workflows. Commit only on the task branch, open or update a PR, and never push main or bypass review or merge gates."
             --model "claude-opus-5-5"
