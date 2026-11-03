@@ -1,6 +1,6 @@
 # Stage-Aware Context Assembly for Long-Context Memory Retrieval
 
-> **Superseded.** This April 2026 draft is kept for history. The canonical version is the PDF [`docs/arxiv-context-assembly/main.pdf`](../arxiv-context-assembly/main.pdf) (May 2026, compiled August 2026). Where the two differ, the PDF is authoritative.
+> **Superseded.** First drafted April 2026, last edited August 2026; kept for history. The canonical version is the PDF [`docs/arxiv-context-assembly/main.pdf`](../arxiv-context-assembly/main.pdf) (May 2026, compiled August 2026). The PDF reverses §8.7 below: label-free temporal stage detection (0.471 MRR on BEAM-10M) outperforms the oracle `plan_id` boundaries (0.429), and the detector is benchmarked on BEAM-10M; the body of this draft still reports the oracle configuration and calls the detector untested. Where the two differ, the PDF is authoritative.
 
 **Clement Deust** (architecture, original design, benchmarking) and **Claude Opus 4.6** (Python port, benchmark integration, paper-backed complements)
 

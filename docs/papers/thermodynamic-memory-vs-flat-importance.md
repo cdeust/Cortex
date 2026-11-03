@@ -1,6 +1,6 @@
 # Thermodynamic Memory vs. Flat-Importance Stores: Why Long-Term Retrieval Collapses Without Decay
 
-> **Superseded.** This April 2026 draft is kept for history. The canonical version is the PDF [`docs/arxiv-thermodynamic/main.pdf`](../arxiv-thermodynamic/main.pdf) (May 2026, compiled August 2026). The PDF reverses the decay claim made below: a clean six-point λ sweep (395 questions) finds decay neutral for ranking, and the earlier +68 % result is traced to store contamination. Figures in this draft are not current.
+> **Superseded.** First drafted April 2026, last edited August 2026; kept for history. The canonical version is the PDF [`docs/arxiv-thermodynamic/main.pdf`](../arxiv-thermodynamic/main.pdf) (May 2026, compiled August 2026). The PDF reverses the decay framing of §5–§6 below: a clean six-point λ sweep (395 questions) finds decay neutral-to-slightly-negative for ranking, with λ = 1.0 weakly optimal, and an earlier two-point sweep showing +68 % from decay (reported in earlier PDF drafts, not in this file) is traced to store contamination. Decay is re-scoped as store hygiene. The headline retrieval figures below still match the PDF.
 
 **Author:** Clément Deust
 **Affiliation:** Cortex Project
