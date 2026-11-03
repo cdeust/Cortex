@@ -557,10 +557,9 @@ jobs:
         run: bash -eo pipefail -c "$CI_COMMAND"
 
   review:
-    # Owner rule 2026-10-29: the review posts but never blocks. A failed job
-    # fails the run, and the completion caller fires only on a successful run;
-    # the required jobs are the tests and their aggregate `merge`.
-    continue-on-error: true
+    # Owner rule 2026-11-03 (23:29): the merge job requires this job. A blocking
+    # finding fails it and the run; a missing verdict leaves it green with
+    # state pending, and the completion workflow re-runs it when a verdict lands.
     needs: [unit, regression, e2e, environment, install]
     outputs:
       state: ${{ steps.evidence.outputs.state }}
@@ -587,7 +586,10 @@ jobs:
         run: |
           set -euo pipefail
           args=(--repo "$GH_REPO" --pr "$PR" --sha "$HEAD_SHA" --github-output)
-          if [ "$CODEX_COMPLETION_ONLY" = true ]; then args+=(--require-complete --allow-pending); fi
+          # Owner rule 2026-11-03 (23:29): a missing verdict fails this job (exit 2),
+          # so the completion workflow re-runs it, and its dependent merge job, when
+          # the verdict lands; --allow-pending (#205) kept a pending head green.
+          if [ "$CODEX_COMPLETION_ONLY" = true ]; then args+=(--require-complete); fi
           python3 -I - "${args[@]}" <<'CODEX_REVIEW_PY'
           import sys
           from types import ModuleType
@@ -1749,15 +1751,17 @@ jobs:
   # No checkout or merge
   # mutation here: the completed-run resolver performs the protected merge.
   merge:
-    # The aggregate of the test jobs of this run: green when they all are. It reads
-    # nothing else (no main, no review state, no live PR label). When they are
-    # green it arms GitHub's native auto-merge on this PR, so the merge happens
-    # with this PR's own definition in the path and nothing from main's: a PR
-    # that fixes the pipeline is merged by the pipeline it fixes (owner rule
-    # 2026-11-03: a CI that blocks itself and cannot correct itself is not
-    # autonomous). Branch protection stays the only gate: GitHub squashes as
-    # soon as the required checks pass, this job included.
-    needs: [contract, unit, regression, e2e, environment, install]
+    # Owner rule 2026-11-03 (23:29): a PR is fit to merge when the test jobs of
+    # this run are green and both reviews, Codex and Claude, have concluded for
+    # this head with no blocking finding from either. The review job reads both
+    # verdicts (state: success, pending or blocked); this job is red while a
+    # verdict is missing, and the Codex completion workflow re-runs the review
+    # job of this run when a verdict lands (re-run-a-job re-runs its dependents,
+    # this job included). When it passes it arms GitHub's native auto-merge on
+    # this PR, so the merge happens with this PR's own definition in the path
+    # and nothing from main's: a PR that fixes the pipeline is merged by the
+    # pipeline it fixes. Branch protection stays the only gate GitHub applies.
+    needs: [contract, unit, regression, e2e, environment, install, review]
     if: >-
       always() && !cancelled() && github.event_name == 'pull_request'
       && !github.event.pull_request.draft
@@ -1788,6 +1792,25 @@ jobs:
             exit 1
           fi
           echo "## Merge: the test jobs are green on this commit" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Require both reviews concluded without a blocking finding
+        env:
+          REVIEW: ${{ needs.review.result }}
+          STATE: ${{ needs.review.outputs.state }}
+          CAUSES: ${{ needs.review.outputs.causes }}
+        run: |
+          case "$REVIEW:$STATE" in
+            success:success)
+              echo "## Reviews: Codex and Claude concluded for this head, no blocking finding" >> "$GITHUB_STEP_SUMMARY" ;;
+            *:pending)
+              echo "::error::reviews pending (${CAUSES:-unnamed}); the completion workflow re-runs this gate when a verdict lands"
+              echo "## Merge: blocked, a review has not concluded for this head: ${CAUSES:-unnamed}" >> "$GITHUB_STEP_SUMMARY"
+              exit 1 ;;
+            *)
+              echo "::error::reviews block or are unreadable (state ${STATE:-none}, job $REVIEW): ${CAUSES:-unnamed}"
+              echo "## Merge: blocked, a reviewer reports a blocking finding or no readable verdict: ${CAUSES:-unnamed}" >> "$GITHUB_STEP_SUMMARY"
+              exit 1 ;;
+          esac
 
       # This job is itself a required check and still running, so a direct merge
       # here would be refused; auto-merge lets GitHub perform the squash the

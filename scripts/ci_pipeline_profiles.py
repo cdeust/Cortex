@@ -16,8 +16,9 @@ DIRECT_NEEDS = {
     "environment": ("contract", "e2e"),
     "install": ("contract", "environment"),
     "review": TEST_JOBS,
-    # Owner rule 2026-10-29: merge is the aggregate of the test jobs only.
-    "merge": REQUIRED_RESULTS,
+    # Owner rule 2026-11-03 (23:29): merge needs the test jobs and the review
+    # job, whose state says Codex and Claude both concluded without a blocker.
+    "merge": (*REQUIRED_RESULTS, "review"),
     "tag": REQUIRED_RESULTS,
 }
 POST_MERGE_NEEDS = {
