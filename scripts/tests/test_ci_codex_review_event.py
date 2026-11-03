@@ -106,6 +106,53 @@ class CodexEventTests(unittest.TestCase):
             self.assertEqual(result, {"action": "none"})
             self.assertEqual(post, [])
 
+    def test_claude_verdict_comment_resumes_the_gate(self):
+        # Owner rule 2026-11-03 (23:29): the merge gate needs both verdicts, so a
+        # Claude App comment carrying the verdict marker is a completion event
+        # like a Codex summary (Codex finding on #240: no path without schedule).
+        claude = {"login": "claude[bot]", "type": "Bot"}
+        body = "Review done\n<!-- claude-review-verdict:v1 {\"head\": \"x\", \"merge\": true} -->\n"
+        server = Server()
+        # The fetched comment 9 is Claude's; the Codex summary stays in the list.
+        server.data["comment"] = dict(
+            server.data["comment"], user=copy.deepcopy(claude), body=body
+        )
+        payload = event()
+        payload["sender"] = copy.deepcopy(claude)
+        payload["comment"].update(user=copy.deepcopy(claude), body=body)
+        result, post = invoke(server, payload=payload)
+        self.assertEqual(result, {"action": "merge", "job_id": 21})
+        self.assertEqual(len(post), 1)
+
+    def test_claude_comment_without_one_verdict_marker_is_ignored(self):
+        claude = {"login": "claude[bot]", "type": "Bot"}
+        marker = "<!-- claude-review-verdict:v1 {\"merge\": true} -->"
+        for body in ("Claude Code is working", marker + "\n" + marker):
+            server = Server()
+            server.data["comment"] = dict(
+                server.data["comment"], user=copy.deepcopy(claude), body=body
+            )
+            payload = event()
+            payload["sender"] = copy.deepcopy(claude)
+            payload["comment"].update(user=copy.deepcopy(claude), body=body)
+            result, post = invoke(server, payload=payload)
+            self.assertEqual(result, {"action": "none"}, body)
+            self.assertEqual(post, [])
+
+    def test_a_user_posting_a_verdict_marker_is_ignored(self):
+        human = {"login": "cdeust", "type": "User"}
+        body = "<!-- claude-review-verdict:v1 {\"merge\": true} -->"
+        server = Server()
+        server.data["comment"] = dict(
+            server.data["comment"], user=copy.deepcopy(human), body=body
+        )
+        payload = event()
+        payload["sender"] = copy.deepcopy(human)
+        payload["comment"].update(user=copy.deepcopy(human), body=body)
+        result, post = invoke(server, payload=payload)
+        self.assertEqual(result, {"action": "none"})
+        self.assertEqual(post, [])
+
     def test_pr_review_event_is_ignored_because_workflow_definition_is_untrusted(self):
         server = Server()
         result, post = invoke(server, "pull_request_review")

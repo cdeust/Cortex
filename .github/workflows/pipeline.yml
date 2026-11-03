@@ -1798,7 +1798,11 @@ jobs:
       # JSON line). The review job's state is advisory; this step decides, so a
       # re-run of this job alone (Codex completion, MERGE resumption) re-reads a
       # finding resolved since. Step name pinned by ci_codex_review_resume.MERGE.
+      # Only PRs into main are merged by this path, and the reader's eligibility
+      # rejects any other base (ci_codex_reviews._eligible), so it runs for main
+      # only; a PR into another branch keeps its green tests (Codex on #240, P2).
       - name: Require complete Codex reviews
+        if: github.event.pull_request.base.ref == 'main'
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}

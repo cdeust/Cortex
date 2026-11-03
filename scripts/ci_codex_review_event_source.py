@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ci_codex_review_agreement import CLAUDE, VERDICT
 from ci_codex_review_comments import RECEIPT
 from ci_codex_reviews import BOT, SUMMARY, EvidenceError, SHA_PATTERN, _api, _eligible
 
@@ -51,6 +52,23 @@ def bot(user: Any) -> bool:
         isinstance(user, dict)
         and user.get("login") == BOT
         and user.get("type") == "Bot"
+    )
+
+
+def claude_verdict(item: Any) -> bool:
+    """A Claude App comment carrying exactly one verdict marker completes a review.
+
+    Owner rule 2026-11-03 (23:29): the merge gate needs both verdicts, so a
+    Claude verdict posted after the pipeline must resume the gate like a Codex
+    completion does (Codex finding on #240: no path without the schedule).
+    """
+    user = item.get("user") if isinstance(item, dict) else None
+    return (
+        isinstance(user, dict)
+        and user.get("login") == CLAUDE
+        and user.get("type") == "Bot"
+        and isinstance(item.get("body"), str)
+        and len(VERDICT.findall(item["body"])) == 1
     )
 
 
@@ -195,11 +213,14 @@ def _comment(event: Record, repo: str) -> Record | None:
     issue, item = event.get("issue"), event.get("comment")
     if not isinstance(issue, dict) or not isinstance(issue.get("pull_request"), dict):
         return None
-    if event.get("action") not in ("created", "edited") or not canonical(item):
+    if event.get("action") not in ("created", "edited"):
+        return None
+    completion = canonical if canonical(item) else (claude_verdict if claude_verdict(item) else None)
+    if completion is None:
         return None
     number, identity = positive(issue.get("number")), positive(item.get("id"))
     actual = _api(f"repos/{repo}/issues/comments/{identity}")
-    if not canonical(actual):
+    if not completion(actual):
         return None
     if actual.get("id") != identity:
         raise EvidenceError("protocol")
@@ -247,8 +268,14 @@ def event_pr(name: str, event: Record, repo: str) -> Record | None:
         raise EvidenceError("event")
     if repository["full_name"].casefold() != repo.casefold():
         return None
-    if name in ("issue_comment", "pull_request_review") and not bot(
-        event.get("sender")
+    sender = event.get("sender")
+    if name in ("issue_comment", "pull_request_review") and not (
+        bot(sender)
+        or (
+            isinstance(sender, dict)
+            and sender.get("login") == CLAUDE
+            and sender.get("type") == "Bot"
+        )
     ):
         return None
     handler = {
