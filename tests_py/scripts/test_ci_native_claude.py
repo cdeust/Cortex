@@ -159,6 +159,9 @@ class NativeClaudeTrustTests(unittest.TestCase):
         predicate = workflow["jobs"]["review"]["if"]
         self.assertIn("head.repo.full_name == github.repository", predicate)
         self.assertIn("!github.event.pull_request.draft", predicate)
+        # Dependabot events carry Dependabot secrets only; the OAuth token is
+        # empty there and the action aborts (run 41180098727).
+        self.assertIn("github.actor != 'dependabot[bot]'", predicate)
         self.assertEqual(workflow["permissions"], {})
 
     def test_review_loads_trusted_configuration_before_receiving_authority(self):

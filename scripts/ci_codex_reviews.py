@@ -24,6 +24,7 @@ if "ci_codex_review_runtime" not in sys.modules:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ci_codex_review_runtime as runtime  # noqa: E402
 from ci_codex_review_runtime import _outputs  # noqa: E402
+import ci_codex_review_comments as comments  # noqa: E402
 from ci_codex_review_comments import _authenticate_editor, _bot_author, _canonical  # noqa: E402
 
 Record = dict[str, Any]
@@ -157,8 +158,9 @@ def _reviews(latest, target):
         state, reviews[kind] = _review(data.get(kind), expected_sha)
         proof = None
         if kind == "security_review" and state == "pending" and repo and pr:
-            proof = runtime.resolve_security(
-                (repo, pr, expected_sha), latest["body"], reviews[kind], security
+            args = ((repo, pr, expected_sha), latest["body"], reviews[kind], security)
+            proof = runtime.resolve_security(*args) or comments.resolve_no_findings(
+                *args
             )
         if proof is not None:
             state = proof.pop("state")

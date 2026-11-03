@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 PIPELINE = ROOT / ".github/workflows/pipeline.yml"
 READER = ROOT / "scripts/ci_codex_reviews.py"
 RUNTIME = ROOT / "scripts/ci_codex_review_runtime.py"
+COMMENTS = ROOT / "scripts/ci_codex_review_comments.py"
 SHA = "a" * 40  # GitHub SHA-1 field, synthetic fixture.
 
 
@@ -30,7 +31,11 @@ def command():
 class CodexWiringTests(unittest.TestCase):
     def test_workflow_embeds_exact_reader_in_the_review_job_only(self):
         run = command()
-        for name, path in (("RUNTIME_SOURCE", RUNTIME), ("READER_SOURCE", READER)):
+        for name, path in (
+            ("RUNTIME_SOURCE", RUNTIME),
+            ("COMMENTS_SOURCE", COMMENTS),
+            ("READER_SOURCE", READER),
+        ):
             source = run.split(name + " = r" + chr(39) * 3 + "\n", 1)[1]
             source = source.split("\n" + chr(39) * 3, 1)[0]
             self.assertEqual(source + "\n", path.read_text())

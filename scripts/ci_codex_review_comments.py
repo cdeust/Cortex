@@ -1,7 +1,9 @@
-"""Authenticated GitHub comment metadata and native Bot edit attribution.
+"""Authenticated GitHub comment metadata, native Bot edit attribution, and the
+Codex +1 reaction read (REST issues/{pr}/reactions) for null verdicts.
 
 Sources: IssueComment.editor/lastEditedAt and Bot.id, returned with the body.
 https://docs.github.com/en/graphql/reference/issues#issuecomment
+https://docs.github.com/en/rest/reactions/reactions#list-reactions-for-an-issue
 """
 
 from __future__ import annotations
@@ -10,6 +12,7 @@ from datetime import datetime
 import re
 from typing import Any
 
+import ci_codex_review_runtime as runtime
 from ci_codex_review_runtime import EvidenceError
 
 Record = dict[str, Any]
@@ -164,3 +167,88 @@ def summary_comments(repo: str, pr: int, sha: str, request) -> list[Record]:
     owner, name = repo.split("/")
     fields = dict(query=COMMENTS_QUERY, owner=owner, name=name, number=pr)
     return _comment_pages(request("graphql", paginate=True, fields=fields), sha, pr)
+
+
+# source: PR846 summary 6591745340, one table row per review on the reviewed head.
+COMPLETED_ROW = re.compile(
+    r"^\|[^|\n]*\*\*(Code|Security) Review\*\* \| ✅ \*\*Completed\*\* "
+    r'<relative-time datetime="([^"]+)"[^|\n]*\| `([0-9a-f]{7,40})` \|',
+    re.M,
+)
+# source: the summary lists one Code Review row and one Security Review row.
+REVIEW_KINDS = ("Code", "Security")
+# source: runtime.FINDING and _announced; any finding text voids the clean path.
+FINDING_TEXT = (
+    "\n### Security findings\n",
+    "<!-- codex-security-review-finding:v1 -->",
+)
+
+
+def _stamp(value: Any) -> datetime:
+    if not isinstance(value, str) or STAMP_PATTERN.fullmatch(value) is None:
+        raise EvidenceError("protocol")
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError as exc:  # shape-valid, calendar-invalid (month 13)
+        raise EvidenceError("protocol") from exc
+
+
+# source: Codex summary text, "reacts with 👍 once all reviews finish with no
+# findings"; PR846 +1 at 2026-11-03T00:23:49Z, after its last head's Security
+# Review row of 00:23:45.38Z and five pushes, so Codex re-dates its +1 per head.
+# The reactions API reports that user with type "User", so only the login is read.
+def _codex_reactions(repo: str, pr: int) -> dict[str, datetime]:
+    pages = runtime._api(f"repos/{repo}/issues/{pr}/reactions", paginate=True)
+    if not isinstance(pages, list) or any(not isinstance(p, list) for p in pages):
+        raise EvidenceError("protocol")
+    rows = [row for page in pages for row in page]
+    if any(
+        not isinstance(row, dict)
+        or not isinstance(row.get("content"), str)
+        or not isinstance(row.get("user"), dict)
+        or not isinstance(row["user"].get("login"), str)
+        for row in rows
+    ):
+        raise EvidenceError("protocol")
+    return {
+        row["content"]: _stamp(row.get("created_at"))
+        for row in rows
+        if row["user"]["login"] == BOT
+    }
+
+
+def _unresolved_findings(repo: str, pr: int, sha: str) -> bool:
+    """Native Codex finding threads on this head that the owner has not resolved."""
+    return not all(runtime.review_thread_states(repo, pr, sha).values())
+
+
+def resolve_no_findings(target, body, review, metadata):
+    """Null verdict after completion (PR833, PR846) is clean only with Codex's +1
+    not earlier than both Completed rows of this Bot summary for this head
+    (second precision: reactions carry seconds, rows microseconds), with no 👀
+    left, no finding text in the summary and no unresolved native finding
+    thread. A commit date would not do: a later push of an older commit keeps
+    its date (PR847 review).
+    """
+    repo, pr, sha = target
+    flags = (review.get("has_any_findings"), review.get("has_unresolved_findings"))
+    if flags != (None, None) or not runtime._completed_here(target, review, metadata):
+        return None
+    if any(marker in body for marker in FINDING_TEXT):
+        return None
+    rows = COMPLETED_ROW.findall(body)
+    if sorted(kind for kind, _, _ in rows) != sorted(REVIEW_KINDS):
+        return None
+    if any(not sha.startswith(short) for _, _, short in rows):
+        return None
+    finished = max(_stamp(stamp) for _, stamp, _ in rows).replace(microsecond=0)
+    marks = _codex_reactions(repo, pr)
+    if "eyes" in marks or "+1" not in marks or marks["+1"] < finished:
+        return None
+    if _unresolved_findings(repo, pr, sha):
+        return None
+    return {
+        "state": "success",
+        "source": "github_reaction",
+        "reacted_at": marks["+1"].strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }

@@ -47,10 +47,6 @@ coding write gates, causal graphs, and intent-aware retrieval.
   same-machine checks against it drift ±0.003 on LoCoMo MRR intra-day
   (measured 2026-07-14, `benchmarks/results/repro/20260714-floors-rebaseline/`)
   and nearly false-failed a floor that passes cleanly under `reproduce.sh`.
-  The published `FLOOR_*` check inside `reproduce.sh` is non-blocking
-  (source: main no longer clears them — see the script's own `FLOOR_*`
-  comment, cdeust/Cortex PR #492). No merge or release is gated on a
-  comparison with `main`, its tip, a SHA or a merge-base.
 - Iteration benchmarks: `python3 benchmarks/{longmemeval,locomo,beam}/run_benchmark.py`
   ⚠ Consolidation is OFF by default → scores collapse to ≈0%. This is a
   harness artifact (every candidate is prefiltered by the read-path heat
@@ -121,23 +117,19 @@ separate **cortex-viz** MCP (reads this same store read-only).
 - **Enforced by `scripts/check_craftsmanship.py`**, run in CI on every push
   and PR (`.github/workflows/ci.yml`, `craftsmanship` job) and locally via
   `python scripts/check_craftsmanship.py`. It checks the four rules above,
-  by AST, on the files a diff touches — never the whole repository. The
-  layer whitelist is *parsed* from `docs/module-inventory.md`'s own table
-  at run time (`scripts/craftsmanship_layer_table.py`), never a second
-  hardcoded copy that could silently diverge from it.
-  The comparison baseline is read via `git show <base-ref>:.craftsmanship-baseline.json`
-  — the PR's BASE ref, immutable to the PR's own commits — never the
-  working tree: a working-tree-only baseline is self-service (add a
-  violation, run `--write-baseline` in the same tree, the gate would pass
-  on it — this exact exploit is reproduced and closed in
-  `tests_py/scripts/test_check_craftsmanship.py::SneakyLimitExploitTests`).
-  The gate fails the diff on: any violation absent from that base-ref
-  baseline (new debt); any base-ref-baselined entry whose violation no
-  longer reproduces (fixed but not pruned); or any entry present in the
-  working-tree `.craftsmanship-baseline.json` but absent from the base
-  ref's (the file may only SHRINK within a PR — an addition is refused
-  outright, matched or not, because debt discovered mid-PR gets fixed at
-  the source, not grandfathered). Regenerate with
+  by AST, on every tracked `.py` file. The layer whitelist is *parsed* from
+  `docs/module-inventory.md`'s own table at run time
+  (`scripts/craftsmanship_layer_table.py`), never a second hardcoded copy
+  that could silently diverge from it.
+  The comparison baseline is the `.craftsmanship-baseline.json` committed in
+  the SAME tree as the code measured: the measure of the working tree must
+  be at most that baseline. No ref is read, so what `main` holds, or when it
+  moved, cannot change the verdict (reproduced in
+  `tests_py/scripts/test_check_craftsmanship_exploits.py::RatchetBehaviourTests`).
+  The gate fails on: any violation absent from that baseline (new debt,
+  including one whose baseline line was hand-deleted); or any baseline entry
+  whose violation no longer reproduces (fixed but not pruned — a PR that
+  improves the measure lowers the baseline in its own diff). Regenerate with
   `python scripts/check_craftsmanship.py --write-baseline` only to prune
   entries whose violations you actually fixed. Previously "enforced by
   code review today; no automated pre-commit hook checks this yet" (issue
@@ -165,7 +157,7 @@ separate **cortex-viz** MCP (reads this same store read-only).
   `--worktree`) puts them and the directory its cleanup sweep looks at.
   Owner correction 2026-09-08, after 76 outside worktrees (43 detached + 33 on
   branches, all under `/private/tmp/cortex-green-*`) had to be removed by hand.
-  `scripts/spawn-agent.sh` and `benchmarks/lib/bench_regression.sh` follow this.
+  `scripts/spawn-agent.sh` follows this.
 
 ## Scientific Implementation Standard (Zetetic Principle)
 
