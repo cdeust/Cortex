@@ -138,10 +138,10 @@ class ResolvedSecurityTests(unittest.TestCase):
                 self.assertEqual(self.evaluate(packet)["state"], "blocked")
 
     def test_running_stale_unknown_or_explicit_verdict_never_uses_resolution(self):
+        # A null has_any_findings takes the reaction path: test_ci_codex_no_findings.
         for field, value in (
             ("status", "running"),
             ("commit_sha", OTHER),
-            ("has_any_findings", None),
             ("has_unresolved_findings", True),
         ):
             row = summary()
