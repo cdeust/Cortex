@@ -54,15 +54,18 @@ class CommonSourceChecks:
     def test_tag_never_checks_out_under_the_deploy_key(self) -> None:
         # CodeQL actions/untrusted-checkout (PR839): the bare fetch may not become
         # a checkout, and the fetch must stay by SHA, bare and host-key checked.
+        fetch = "- name: Fetch the tested commit into a bare repository"
+        checkout = (
+            "- uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1\n"
+            "        with:\n"
+            "          ref: ${{ needs.contract.outputs.tested_sha }}\n"
+            "      " + fetch
+        )
+        by_sha = 'fetch --quiet --depth=1 origin "$TESTED_SHA"'
         for before, after in (
-            (
-                "- name: Fetch the tested commit into a bare repository",
-                "- uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n"
-                "        with:\n          ref: ${{ needs.contract.outputs.tested_sha }}\n"
-                "      - name: Fetch the tested commit into a bare repository",
-            ),
+            (fetch, checkout),
             ("git init --quiet --bare", "git init --quiet"),
-            ('fetch --quiet --depth=1 origin "$TESTED_SHA"', "fetch --quiet --depth=1 origin main"),
+            (by_sha, "fetch --quiet --depth=1 origin main"),
             ("StrictHostKeyChecking=yes", "StrictHostKeyChecking=no"),
         ):
             with self.subTest(before=before):

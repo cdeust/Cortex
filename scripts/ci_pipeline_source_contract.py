@@ -75,7 +75,8 @@ def _check_fetch(body, field, job: str) -> list[str]:
     step = fetches[0]
     failures = []
     env = field(step, "env")
-    if f"TESTED_SHA: {TESTED_REF}" not in env or "SSH_KEY: ${{ secrets.RELEASE_TAG_SSH_KEY }}" not in env:
+    key = "SSH_KEY: ${{ secrets.RELEASE_TAG_SSH_KEY }}"
+    if f"TESTED_SHA: {TESTED_REF}" not in env or key not in env:
         failures.append(f"{job} fetch must bind the tested SHA and the deploy key")
     run = field(step, "run")
     for clause in (
