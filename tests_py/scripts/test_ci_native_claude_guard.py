@@ -73,7 +73,12 @@ def _run_guard(pull, is_pull, gh_exit=0, repo="cdeust/Cortex", event_body=None):
             "GH_STUB_EXIT": str(gh_exit),
         }
         result = subprocess.run(
-            ["bash", "-c", script], env=env, capture_output=True, text=True, check=False
+            ["bash", "-c", script],
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=30,
         )
         return result, log.read_text().splitlines()
 

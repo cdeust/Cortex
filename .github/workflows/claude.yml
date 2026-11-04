@@ -120,14 +120,14 @@ jobs:
           # No self-update probe against pypi.org from a job holding write tokens.
           PIP_DISABLE_PIP_VERSION_CHECK: "1"
         run: pip install --no-deps --no-build-isolation .
-      # Bound: 5 attempts, 4 sleeps of 100 s in total, and each attempt imports torch
-      # from cold; 7 minutes leaves the loop room to print its ::error::
-      # before the step is killed (#856 review).
+      # Bound: 5 attempts of at most 60 s each (coreutils timeout, exit 124 on
+      # a stall), 4 sleeps totalling 100 s; 7 minutes leaves the loop room to
+      # print its ::error:: before the step is killed (#856 review).
       - name: Pre-download embedding model
         timeout-minutes: 7
         run: |
           for attempt in 1 2 3 4 5; do
-            python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2', device='cpu')" && exit 0
+            timeout 60 python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2', device='cpu')" && exit 0
             [ "$attempt" -lt 5 ] || break
             echo "HF pre-download attempt ${attempt} failed; retrying in $((attempt * 10))s" >&2
             sleep $((attempt * 10))
@@ -150,11 +150,11 @@ jobs:
           # apply this filter to issue comments, reviews and inline comments.
           include_comments_by_actor: ${{ github.repository_owner }}
           # No --permission-mode: inherit tag mode's workspace edit approval
-          # (src/modes/tag/index.ts at the pinned action SHA).
-          # Last value wins: upstream base-action/src/parse-sdk-options.ts.
+          # (src/modes/tag/index.ts at the pinned action SHA; last value wins,
+          # base-action/src/parse-sdk-options.ts).
           # Tag mode grants edits and its own scoped git (add, rm, commit, push to
           # the PR branch) only; headless, anything that falls through to "ask" is
-          # denied (src/modes/tag/index.ts:158-214). The allowlist adds exactly
+          # denied (src/modes/tag/index.ts:158-214). The allowlist adds
           # CLAUDE.md's validation commands (the environment is installed above,
           # so no uv sync: it would build a second .venv and may rewrite uv.lock,
           # tests_py/scripts/test_uv_lock_single_source.py), git inspection and
@@ -169,7 +169,9 @@ jobs:
           # .claude/, .mcp.json and CLAUDE.md from the base branch
           # (src/entrypoints/run.ts, restore-config.ts): main's own
           # .claude/settings.json applies, and its allow rules add to this
-          # allowlist. The project source stays loaded on purpose, it carries
+          # allowlist (the effective list is the union; the test maps every
+          # rule of that file to a prefix here, a denied prefix or a named
+          # exemption). The project source stays loaded on purpose, it carries
           # CLAUDE.md, .claude/agents, .claude/commands and the file's deny
           # rules; --disallowedTools removes what that file allows and a
           # write-token job must not run (deny wins over allow): uv (unlocked

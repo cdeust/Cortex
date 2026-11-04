@@ -14,6 +14,10 @@ MENTIONS = ROOT / ".github/workflows/claude.yml"
 ACTION = "anthropics/claude-code-action@8041f1d17e0e7d2f2cfe35002962e9f26237c0bb"
 GUARD = "Authorize owner fix target"
 SETTINGS = ROOT / ".claude/settings.json"
+# .claude/settings.json allow rules the job keeps beyond --allowedTools: ruff
+# format rewrites files, which tag mode's Edit/Write already grant; python3 is
+# a second name for the interpreter the job installed (#856 review).
+SETTINGS_EXEMPT = {"ruff format", "python3 -m mcp_server.doctor"}
 CLAUDE_ARGS = [
     "--strict-mcp-config",
     "--allowedTools",
@@ -33,6 +37,12 @@ def _canonical(requirement):
     """PEP 503 name of a requirement string, without specifier, marker or URL."""
     name = re.split(r"[<>=!~;@\[ ]", requirement.strip(), maxsplit=1)[0]
     return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def _bash_prefixes(rules):
+    """Command prefixes of Bash(...) rules, in `prefix:*` or `prefix*` syntax."""
+    bodies = [r[len("Bash(") : -1] for r in rules if r.startswith("Bash(")]
+    return [b.removesuffix(":*").removesuffix("*").rstrip() for b in bodies]
 
 
 def _job():
@@ -153,18 +163,23 @@ class OwnerMentionTests(unittest.TestCase):
     def test_repo_settings_cannot_widen_the_headless_allowlist(self):
         # The pinned action loads project settings and, on a PR, restores them
         # from the base branch (restore-config.ts), so main's .claude/settings.json
-        # applies: each of its Bash allow rules the mention job must not run is
-        # denied (deny wins over allow), and each of its deny rules still holds.
-        # The flags are read at their only occurrence: the CLI keeps the last.
+        # applies and the effective allowlist is the union. Every Bash allow rule
+        # of that file must fall under a prefix allowed here, a prefix denied here
+        # (deny wins over allow) or a named exemption; its curl deny is mirrored.
         args = shlex.split(_step(_job(), uses=ACTION)["with"]["claude_args"])
         self.assertNotIn("--setting-sources", args)
         self.assertEqual(args.count("--disallowedTools"), 1)
-        denied = args[args.index("--disallowedTools") + 1].split(",")
-        settings = json.loads(SETTINGS.read_text())["permissions"]
-        self.assertIn("Bash(uv *)", settings["allow"])
-        self.assertIn("Bash(uv:*)", denied)
-        self.assertIn("Bash(curl *)", settings["deny"])
-        self.assertIn("Bash(curl:*)", denied)
+        allowed = _bash_prefixes(args[args.index("--allowedTools") + 1].split(","))
+        denied = _bash_prefixes(args[args.index("--disallowedTools") + 1].split(","))
+        self.assertIn("uv", denied)
+        self.assertIn("curl", denied)
+        settings = json.loads(SETTINGS.read_text())
+        self.assertLessEqual(set(settings), {"$schema", "permissions"})
+        self.assertLessEqual(set(settings["permissions"]), {"allow", "deny"})
+        self.assertIn("Bash(curl *)", settings["permissions"]["deny"])
+        for rule in _bash_prefixes(settings["permissions"]["allow"]):
+            covered = any(rule.startswith(p) for p in allowed + denied)
+            self.assertTrue(covered or rule in SETTINGS_EXEMPT, rule)
 
     def test_non_isolated_build_takes_its_backend_from_a_selected_locked_group(self):
         # Invariant, not literal (Codex P1 on #856): with --no-build-isolation,
@@ -228,7 +243,6 @@ class OwnerMentionTests(unittest.TestCase):
         bounds = [step.get("timeout-minutes") for step in before_agent]
         self.assertEqual(bounds, [2, 3, 3, 2, 8, 3, 7])
         self.assertTrue(all(type(b) is int for b in bounds), bounds)
-        self.assertGreaterEqual(job["timeout-minutes"] - sum(bounds), 30)
         self.assertGreaterEqual(job["timeout-minutes"] - sum(bounds), 30)
 
     def test_owner_mentions_serialize_branch_writes(self):
