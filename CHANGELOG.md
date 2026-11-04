@@ -44,6 +44,9 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The benchmark machine-load snapshot records no load average on Windows
+  instead of raising: `os.getloadavg` does not exist there, and the
+  `AttributeError` escaped the `except OSError` (#692 class 4, 13 tests).
 - The README now states that both LongMemEval headline numbers (v4.14.1,
   v4.20.0) describe the PostgreSQL store with the reranker, and the Storage
   table no longer claims an "identical" retrieval contract on SQLite: the tool
