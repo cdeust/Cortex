@@ -6,6 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Automatic Claude reviews are capped at three per PR (ADR-1119). A read-only
+  `budget` job counts the reviews already published and skips the fourth
+  without a comment; the accepted part merges and the rest moves to a
+  refinement PR. The review prompt now defines a Blocker, limits Notes to three
+  one-line items, reviews only the commits since the previous review on rounds
+  two and three, and ends with a `Verdict:` line. The label `claude-rereview`
+  allows exactly one more review. Measured on PR 856: 20 reviews, 22 of 24 comments saying
+  "nothing blocks merge".
+
 ### Removed
 
 - The former Claude repair actions are removed following the owner decision.

@@ -140,6 +140,26 @@ separate **cortex-viz** MCP (reads this same store read-only).
   #114) now live in the baseline like any other pre-existing debt, not as
   separate prose here.
 
+## Review rounds
+
+Owner rule 2026-11-04 (ADR-1119): three Claude reviews per PR, at most. PR 856
+took 20 because 22 of 24 reviews said "nothing blocks merge" and each was still
+answered with a push, which started the next review.
+
+- Push on a **Blocker** only: a defect traced or reproduced in the diff that
+  makes CI, security or a CLAUDE.md non-negotiable wrong. A Note (wording,
+  docstring, wrap width, an extra assertion) is not a reason to push.
+- Fix every Blocker of a round in **one** push. Do not push once per finding.
+- Post no "pushed X for the review" comment. The commit message is the record.
+- Keep a PR to its stated object. A test added to answer a Low finding is new
+  surface for the next review: do not add it.
+- After the third review the PR is not reviewed again. The accepted part
+  merges. Whatever is not accepted does not enter: cut it from the PR and open a
+  refinement PR, which has a new budget of three. The label `claude-rereview`
+  allows exactly one more review (a fourth, never a fifth) and belongs to the owner.
+- A PR that edits `claude-review.yml` is not reviewed by the action (it refuses
+  a workflow that differs from main). Keep such a PR minimal.
+
 ## What NOT to do
 
 - Do NOT gate a release benchmark against the live production database —
