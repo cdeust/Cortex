@@ -45,23 +45,40 @@ jobs:
       # owner-authored PR whose head is a fork, or main itself, must not become a
       # fix target (zetetic-team-subagents #242 review, finding 1).
       - name: Authorize owner fix target
+        timeout-minutes: 2
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           set -euo pipefail
-          if jq -e '.issue.pull_request != null' "$GITHUB_EVENT_PATH" >/dev/null; then
-            gh api "repos/$GH_REPO/pulls/$ISSUE_NUMBER" |
-              jq -e --arg repo "$GH_REPO" \
-                '.head.repo.full_name == $repo and .head.ref != .base.repo.default_branch' >/dev/null
+          # jq propagates null, so `.issue.pull_request != null` reads false on an
+          # event without an issue object: such an event is malformed, not a plain issue.
+          if ! is_pull="$(jq -r 'if (.issue | type) == "object" then (.issue.pull_request != null) else "malformed" end' "$GITHUB_EVENT_PATH")" \
+            || { [ "$is_pull" != true ] && [ "$is_pull" != false ]; }; then
+            echo "::error::could not read an event with an issue object at GITHUB_EVENT_PATH; refusing the fix target"
+            exit 1
+          fi
+          if [ "$is_pull" = true ]; then
+            if ! pull="$(gh api "repos/$GH_REPO/pulls/$ISSUE_NUMBER")"; then
+              echo "::error::could not read PR #$ISSUE_NUMBER; refusing the fix target"
+              exit 1
+            fi
+            if ! jq -e --arg repo "$GH_REPO" \
+                '.head.repo.full_name == $repo and .head.ref != .base.repo.default_branch' \
+                >/dev/null <<<"$pull"; then
+              echo "::error::PR #$ISSUE_NUMBER head is a fork or the default branch; refusing the fix target"
+              exit 1
+            fi
           fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 3
         with:
           fetch-depth: 0
           # Use the action App token instead of a persisted workflow token.
           persist-credentials: false
       - name: Install subprocess isolation
+        timeout-minutes: 3
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y bubblewrap socat
@@ -70,23 +87,100 @@ jobs:
             sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           fi
           bwrap --version
+      # The allowlisted commands need an installed environment: Python 3.12 and
+      # the dev+sqlite+codebase extras of ci.json "regression" on the SQLite
+      # backend (ci.json "unit" adds postgresql and a server this job does not
+      # have, so PG-only paths are not covered here), plus the lint group for
+      # ruff (as memory-exact-review.yml installs it), the packaging group for
+      # the build backend, and the embedding model that tests_py/infrastructure/
+      # test_embedding_live_contract.py needs under CI. source: ci.json.
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        timeout-minutes: 2
+        with:
+          python-version: "3.12"
+      - name: Install the locked dev+sqlite+codebase set, lint and packaging groups
+        timeout-minutes: 8
+        uses: ./.github/actions/uv-locked-install
+        with:
+          set: --extra dev --extra sqlite --extra codebase --group lint --group packaging
+          environment: ${{ env.pythonLocation }}
+      # uv-locked-install passes --no-install-project (ADR-1092). The build
+      # backend (pyproject build-system.requires: hatchling) comes from the
+      # locked, hash-checked packaging group above, so the project builds
+      # without isolation: no unpinned PyPI fetch outside bubblewrap in a job
+      # holding write tokens (#856 reviews). test_ci_native_claude_mentions
+      # checks that every build requirement is in a selected group.
+      # Non-editable on purpose: hatchling's editable hook imports `editables`,
+      # which uv.lock does not carry, so `-e .` dies with ModuleNotFoundError
+      # on a fresh runner (Codex P1 on #856). The agent reads the checkout, not
+      # the installed copy, so an editable install buys nothing here.
+      - name: Install the project
+        timeout-minutes: 3
+        env:
+          # No self-update probe against pypi.org from a job holding write tokens.
+          PIP_DISABLE_PIP_VERSION_CHECK: "1"
+        run: pip install --no-deps --no-build-isolation .
+      # Bound: 5 attempts of at most 60 s each (coreutils timeout, exit 124 on
+      # a stall), 4 sleeps totalling 100 s; 7 minutes leaves the loop room to
+      # print its ::error:: before the step is killed (#856 review).
+      - name: Pre-download embedding model
+        timeout-minutes: 7
+        run: |
+          for attempt in 1 2 3 4 5; do
+            timeout 60 python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2', device='cpu')" && exit 0
+            [ "$attempt" -lt 5 ] || break
+            echo "HF pre-download attempt ${attempt} failed; retrying in $((attempt * 10))s" >&2
+            sleep $((attempt * 10))
+          done
+          echo "::error::embedding model pre-download failed after 5 attempts"
+          exit 1
       - uses: anthropics/claude-code-action@8041f1d17e0e7d2f2cfe35002962e9f26237c0bb # v1.0.263
         env:
           CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
+          # Backend chosen on purpose (ci.json "regression"), not by the
+          # tests_py/conftest.py fallback; offline switches as in
+          # .github/actions/test-suite: an agent-run pytest never downloads.
+          CORTEX_MEMORY_STORE_BACKEND: "sqlite"
+          CORTEX_RERANKER_OFFLINE: "1"
+          HF_HUB_OFFLINE: "1"
+          TRANSFORMERS_OFFLINE: "1"
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # Upstream action.yml and src/github/data/fetcher.ts at the pinned SHA
           # apply this filter to issue comments, reviews and inline comments.
           include_comments_by_actor: ${{ github.repository_owner }}
           # No --permission-mode: inherit tag mode's workspace edit approval
-          # (src/modes/tag/index.ts at the pinned action SHA).
-          # Last value wins: upstream base-action/src/parse-sdk-options.ts.
-          # Tag mode grants edits and scoped git only; headless, anything that
-          # falls through to "ask" is denied (src/modes/tag/index.ts#L148-L201).
-          # The allowlist is CLAUDE.md's validation set: uv sync, pytest, ruff,
-          # python -m mcp_server.doctor, python scripts/check_craftsmanship.py,
-          # plus git and gh for the branch and the PR. No Bash(bash:*).
+          # (src/modes/tag/index.ts at the pinned action SHA; last value wins,
+          # base-action/src/parse-sdk-options.ts).
+          # Tag mode grants edits and its own scoped git (add, rm, commit, push to
+          # the PR branch) only; headless, anything that falls through to "ask" is
+          # denied (src/modes/tag/index.ts:158-214). The allowlist adds
+          # CLAUDE.md's validation commands (the environment is installed above,
+          # so no uv sync: it would build a second .venv and may rewrite uv.lock,
+          # tests_py/scripts/test_uv_lock_single_source.py), git inspection and
+          # gh run view for the CI logs a fix needs. Tag mode supplies the PR
+          # itself and owns the tracking comment, so no gh pr view/diff/comment.
+          # A command prefix is not a security boundary (pytest runs repo code by
+          # design, git diff and git log take --output): the boundary is the
+          # owner gate, the App token, the job permissions and the bubblewrap
+          # sandbox. Reviews of #855 and #856.
+          # The pinned action loads user, project and local settings
+          # (base-action/src/parse-sdk-options.ts) and, on a PR, first restores
+          # .claude/, .mcp.json and CLAUDE.md from the base branch
+          # (src/entrypoints/run.ts, restore-config.ts): main's own
+          # .claude/settings.json applies, and its allow rules add to this
+          # allowlist (the effective list is the union;
+          # test_ci_native_claude_settings maps every Bash allow rule of that
+          # file to a prefix here, a denied prefix or a named exemption (ruff
+          # format, python3 -m mcp_server.doctor), and pins the deny rules the
+          # job relies on). The project source stays loaded on purpose: it
+          # carries CLAUDE.md, .claude/agents, .claude/commands and the file's
+          # deny rules;
+          # --disallowedTools denies what a write-token job must not run (deny
+          # wins over allow): uv, which that file allows (unlocked fetches, a
+          # second .venv, uv.lock rewrites), and curl, mirroring its own deny.
           claude_args: |
             --strict-mcp-config
-            --allowedTools "Bash(git:*),Bash(gh:*),Bash(uv:*),Bash(pytest:*),Bash(python:*),Bash(python3:*),Bash(ruff:*)"
+            --allowedTools "Bash(pytest:*),Bash(ruff check:*),Bash(ruff format --check:*),Bash(python -m mcp_server.doctor:*),Bash(python scripts/check_craftsmanship.py:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(gh run view:*)"
+            --disallowedTools "Bash(uv:*),Bash(curl:*)"
             --model "claude-opus-5-5"

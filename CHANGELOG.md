@@ -49,6 +49,28 @@ adheres to [Semantic Versioning](https://semver.org/).
   handler runs. **Breaking:** a caller that read `{"status": "error"}` for an
   unknown mode now receives an MCP input-validation error.
 
+- Owner `@claude` mentions (`.github/workflows/claude.yml`) can run CLAUDE.md's
+  validation commands headlessly (`pytest`, `ruff check`, `ruff format --check`,
+  `python -m mcp_server.doctor`, `python scripts/check_craftsmanship.py`, plus `git
+  status|diff|log` and `gh run view`); tag mode keeps its own scoped `git
+  add|rm|commit|push`, and main's `.claude/settings.json` adds `ruff format` and
+  `python3 -m mcp_server.doctor`; headless, anything that falls through to "ask"
+  is denied. The job installs Python 3.12, the locked dev+sqlite+codebase extras of `ci.json`
+  "regression" on the SQLite backend, the lint and packaging groups, the project
+  as a non-editable wheel built from the locked backend (no unpinned Python
+  package fetch; the apt packages and the embedding model, fetched before the
+  agent starts, excepted). The action restores `.claude/` from the base branch,
+  so main's `.claude/settings.json` adds its allow rules to the list; `uv` and
+  `curl` are denied outright, that file's rules are rewritten in word-bounded
+  `:*` form (in effect once merged: the action restores the base branch's copy),
+  and a test maps each of its Bash allow rules to an allowed prefix, a denied
+  prefix or a named exemption, pins the deny rules the job relies on and refuses a
+  tracked `settings.local.json`. A first step refuses a fix target whose head is
+  a fork or the default branch and refuses when the event cannot be read or
+  carries no issue object; the job is bound to 60 minutes and every step before
+  the agent has its own bound (28 minutes in the worst case), so the agent keeps
+  at least 30; the offline switches of the test-suite action are set (#855,
+  #856).
 - Document ingestion reports partial wiki/summary/section writes with component
   receipts and failure reasons. Same-version retries resume missing components
   from durable rows and page content, including stored summaries with missing
