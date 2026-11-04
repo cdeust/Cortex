@@ -16,6 +16,13 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The groomer coordinator no longer starts a consolidate cycle outside its
+  lock in two failure cases (#683, ADR-1118). An existing `groomer.pid` that
+  cannot be read (permission denied, I/O error) now raises
+  `GroomerPidUnreadableError` instead of reading as "not running"; SessionStart
+  logs it at ERROR and starts no cycle. Only an `OSError` on the coordinator's
+  files still takes the legacy spawn; any other exception at SessionStart is
+  logged at ERROR and starts no cycle.
 - `explore_features` passes client-side output validation: every response
   carries the required `mode` and `status`, the declared `outputSchema` lists
   the keys the handler returns (`dictionary`, `graph`, `domains`, `comparison`,

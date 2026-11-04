@@ -51,9 +51,11 @@ def _maybe_background_consolidate() -> None:
     logs an ERROR and starts no cycle. It does NOT take the legacy path,
     which bypasses the coordinator's lock and ``groomer.pid`` guard and would
     let overlapping windows spawn duplicate cycles (the race #171 removed).
-    The legacy path remains for other coordinator failures (I/O).
+    The legacy path remains only for ``OSError`` on the coordinator's own
+    files; any other exception (a bug) logs ERROR and starts no cycle.
 
-    source: ADR-1097 (coordinator: ADR-0527; consolidate period: ADR-0498)"""
+    source: ADR-1097 and ADR-1118 (coordinator: ADR-0527; consolidate period:
+    ADR-0498)"""
     try:
         from mcp_server.infrastructure.groomer_coordinator import (  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
             GroomerCoordinator,
@@ -64,12 +66,17 @@ def _maybe_background_consolidate() -> None:
         outcome = _ensure_coordinated_cycle(coord)
         if outcome is not None:
             _log(f"groomer coordinator: {outcome}")
-    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
+    except OSError as exc:  # I/O on the coordinator's files (ADR-1097 point 5)
         _log(
             f"NOTICE: groomer coordinator unavailable ({exc}); falling back "
             "to legacy per-session consolidate spawn"
         )
         _legacy_background_consolidate()
+    except Exception as exc:  # noqa: BLE001 — hook boundary: logged at ERROR, the hook stays non-fatal, and no cycle starts outside the lock (ADR-1118)
+        _log(
+            f"ERROR: groomer coordinator failed ({type(exc).__name__}: {exc}); "
+            "no consolidate cycle started this session"
+        )
 
 
 def _consolidate_spawn_options() -> dict[str, Any] | None:
@@ -94,13 +101,13 @@ def _ensure_coordinated_cycle(coord) -> str | None:
     """Register this window and ensure the cycle; None on a hard failure.
 
     postcondition: on an unresolved window identity, an unreadable process
-    table (ADR-1097 points 2, 3) or an unreadable job state (ADR-1102) logs
+    table (ADR-1097 points 2, 3), an unreadable ``groomer.pid`` (ADR-1118)
+    or an unreadable job state (ADR-1102) logs
     ERROR with the cause and returns None with nothing spawned or stamped;
     the window stays registered only in the job-state case.
 
     source: ADR-1097 and ADR-1102"""
     from mcp_server.infrastructure.groomer_identity import (  # noqa: PLC0415 — hook latency boundary: see _maybe_background_consolidate
-        LivenessProbeUnavailableError,
         WindowIdentityUnavailableError,
         window_pid,
     )
@@ -117,15 +124,32 @@ def _ensure_coordinated_cycle(coord) -> str | None:
     spawn_options = _consolidate_spawn_options()
     if spawn_options is None:
         return None
+    return _ensure_cycle_or_fail(coord, session_pid, spawn_options)
+
+
+def _ensure_cycle_or_fail(coord, session_pid: int, spawn_options) -> str | None:
+    """Run the coordinator's gate; None on a hard failure.
+
+    postcondition: when it cannot tell whether a cycle is running (the
+    process table or ``groomer.pid`` is unreadable), the window is
+    deregistered, the cause logged at ERROR and nothing spawned or stamped.
+
+    source: ADR-1097 point 3 and ADR-1118"""
+    from mcp_server.infrastructure.groomer_identity import (  # noqa: PLC0415 — hook latency boundary: see _maybe_background_consolidate
+        GroomerPidUnreadableError,
+        LivenessProbeUnavailableError,
+    )
+
     try:
         return coord.ensure_cycle(
             period_hours=_CONSOLIDATE_TTL_HOURS,
             spawn_fn=lambda: _spawn_consolidate_cycle(spawn_options),
         )
-    except LivenessProbeUnavailableError as exc:
+    except (LivenessProbeUnavailableError, GroomerPidUnreadableError) as exc:
         coord.deregister(session_pid)
         _log(
-            f"ERROR: groomer coordinator: liveness probe failed ({exc}); "
+            f"ERROR: groomer coordinator: cannot tell whether a cycle is "
+            f"running ({type(exc).__name__}: {exc}); "
             "no consolidate cycle started this session"
         )
         return None

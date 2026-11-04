@@ -23,7 +23,10 @@ import hashlib
 import os
 from mcp_server.infrastructure.backend_marker import effective_backend
 from mcp_server.infrastructure.memory_config import get_memory_settings
-from mcp_server.infrastructure.groomer_identity import LivenessProbeUnavailableError
+from mcp_server.infrastructure.groomer_identity import (
+    GroomerPidUnreadableError,
+    LivenessProbeUnavailableError,
+)
 from mcp_server.shared import gated_files
 
 logger = logging.getLogger(__name__)
@@ -148,15 +151,21 @@ class GroomerCoordinator:
         a bare flag).
 
         precondition: none. postcondition: False when ``groomer.pid`` is
-        missing or unparseable. Raises
+        missing or unparseable. Raises ``GroomerPidUnreadableError`` when it
+        exists but cannot be read (ADR-1118), and
         ``LivenessProbeUnavailableError`` when the liveness probe cannot read
         the process table (ADR-1097 point 3).
 
-        source: ADR-0527 (probe failure: ADR-1097)"""
+        source: ADR-0527 (probe failure: ADR-1097; unreadable file: ADR-1118)"""
         try:
             pid = int(self.pid_path.read_text(encoding="utf-8").strip())
-        except (OSError, ValueError):
+        except FileNotFoundError:
             return False
+        except ValueError:  # unparseable, including undecodable bytes
+            return False
+        except OSError as exc:
+            # must not read as "not running": a live cycle may hold the file
+            raise GroomerPidUnreadableError(str(exc)) from exc
         try:
             return pid_alive(pid)
         except OSError as exc:
