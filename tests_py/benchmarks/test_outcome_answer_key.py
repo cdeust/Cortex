@@ -133,6 +133,7 @@ def test_untried_approach_needs_only_tried_false():
         (FAMILY_VALUE, {"values": ["1"], "sources": [":52"]}, "inside the repo"),
         (FAMILY_VALUE, {"values": ["1"], "sources": ["C:\\repo\\a.py"]}, "inside"),
         (FAMILY_VALUE, {"values": ["1"], "sources": ["\\\\srv\\s\\a.py"]}, "inside"),
+        (FAMILY_VALUE, {"values": ["1"], "sources": ["C:a.py"]}, "inside the repo"),
         ("other", {}, "unknown family"),
         (FAMILY_COMMIT, None, "key must be a mapping"),
     ],
@@ -170,7 +171,10 @@ def test_task_is_hashable_by_id():
 def test_load_tasks_invalid_json_names_the_file(tmp_path):
     path = tmp_path / "tasks.json"
     path.write_text("[{", encoding="utf-8")
-    with pytest.raises(ValueError, match="tasks.json: invalid JSON"):
+    with pytest.raises(ValueError, match="tasks.json: not valid UTF-8 JSON"):
+        load_tasks(path)
+    path.write_bytes(b"\xff\xfe[")
+    with pytest.raises(ValueError, match="tasks.json: not valid UTF-8 JSON"):
         load_tasks(path)
 
 

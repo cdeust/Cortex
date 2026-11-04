@@ -179,8 +179,8 @@ def load_tasks(path: Path) -> tuple[OutcomeTask, ...]:
     """Read a JSON list of task objects; ids must be unique."""
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as error:
-        raise ValueError(f"{path}: invalid JSON: {error}") from error
+    except (json.JSONDecodeError, UnicodeDecodeError) as error:
+        raise ValueError(f"{path}: not valid UTF-8 JSON: {error}") from error
     if not isinstance(raw, list) or not raw:
         raise ValueError(f"{path}: expected a non-empty JSON list of tasks")
     tasks = tuple(_task_from_json(path, item) for item in raw)

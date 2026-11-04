@@ -19,7 +19,16 @@ agent runs (``git clone --no-local --no-hardlinks``, or a bare mirror), and
 must call ``check_commit_keys`` on that same copy before the first trial:
 an agent with write access could otherwise prune or add objects and change
 which short prefixes are ambiguous (it still cannot make a non-prefix of
-the key pass).
+the key pass). Make the copy with ``git clone --bare``/``--mirror`` or
+``git clone --no-local --no-hardlinks``: a ``cp -r`` of a work tree's
+``.git`` keeps ``core.bare=false`` and is rejected, and so is a ``.git``,
+``objects`` or ``objects/pack`` that is a symlink.
+
+Environment: git 2.32 or newer is required and checked; a missing ``git``
+binary raises ``FileNotFoundError``. Git reads no global or system config,
+which also means no ``safe.directory`` override: a corpus owned by another
+user fails loudly with git's "dubious ownership" message, so the snapshot
+must belong to the user running the verifier.
 
 source: issue #343"""
 
@@ -34,6 +43,10 @@ from pathlib import Path
 from benchmarks.outcome.answer_key import FAMILY_COMMIT, CommitResolver, OutcomeTask
 
 _LOWER_HEX = re.compile(r"[0-9a-f]+")
+
+# source: git release notes — `rev-parse --path-format` arrived in 2.31.0 and
+# `GIT_CONFIG_GLOBAL` in 2.32.0; older git silently echoes or ignores them.
+_MIN_GIT = (2, 32)
 
 # Git reads no global or system config, so CI and developer machines resolve
 # identically; repository-local config still applies.
@@ -64,6 +77,17 @@ def _git(repo: Path, args: list[str], stdin: str | None = None) -> str:
         ) from error
 
 
+def _check_git_version() -> None:
+    out = subprocess.run(
+        ["git", "version"], capture_output=True, text=True, check=True
+    ).stdout
+    match = re.search(r"(\d+)\.(\d+)", out)
+    if match is None or (int(match[1]), int(match[2])) < _MIN_GIT:
+        raise RuntimeError(
+            f"git >= {_MIN_GIT[0]}.{_MIN_GIT[1]} required, found {out!r}"
+        )
+
+
 def _same_path(found: str, expected: Path) -> bool:
     return expected.exists() and os.path.samefile(found, expected)
 
@@ -80,8 +104,11 @@ def _check_corpus(repo: Path) -> None:
             "--git-common-dir",
         ],
     ).splitlines()
-    bare, git_dir, common_dir = info[0], info[1], info[2]
+    bare, git_dir, common_dir = info  # a wrong line count raises here
     expected = repo if bare == "true" else repo / ".git"
+    for link in (repo / ".git", expected / "objects", expected / "objects" / "pack"):
+        if link.is_symlink():
+            raise ValueError(f"{repo}: {link} is a symlink to a store outside the copy")
     if not _same_path(git_dir, expected) or not _same_path(common_dir, expected):
         raise ValueError(
             f"{repo} is not a self-contained repository root (git dir {git_dir}, "
@@ -103,9 +130,12 @@ def git_commit_resolver(repo: Path) -> CommitResolver:
     Before any answer is resolved, a path git cannot open raises
     ``RuntimeError`` (with git's message), and a path that is not a
     self-contained repository root (see the module docstring) raises
-    ``ValueError``. The returned function raises ``ValueError`` for a name
-    that is not lowercase hex (``verify`` lowercases answers first).
+    ``ValueError``; git older than 2.32 raises ``RuntimeError``. The returned
+    function raises ``ValueError`` for a name that is not lowercase hex
+    (``verify`` lowercases answers first) and ``RuntimeError`` if git fails
+    mid-run.
     """
+    _check_git_version()
     repo = Path(repo)
     _check_corpus(repo)
 
