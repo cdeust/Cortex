@@ -206,18 +206,17 @@ DRAIN_DEADLINE_S = 120.0
 
 
 class TestDetachedDrainer(unittest.TestCase):
-    def test_drainer_outlives_its_parent_and_stores_the_spooled_line(self):
-        spool = capture_spool.spool_directory(capture_dispatch.CLAUDE_DIR)
-        self.assertEqual(capture_spool.pending(spool), [])
-        capture_spool.write(spool, EXPECTED)
-        before = _stored_rows()
-        repo_root = Path(capture_dispatch.__file__).resolve().parents[2]
-        # The drainer is started through the plugin launcher (issue #667). The
-        # real launcher installs deps/ over the network; this test is about
-        # detachment, so a stand-in launcher with the same argv contract runs
-        # the module (the real one is exercised by test_launcher_command).
-        plugin_root = Path(tempfile.mkdtemp())
-        self.addCleanup(shutil.rmtree, plugin_root, True)
+    def _temporary_directory(self) -> Path:
+        directory = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, directory, True)
+        return directory
+
+    def _stand_in_plugin_root(self, repo_root: Path) -> Path:
+        """The drainer is started through the plugin launcher (issue #667). The
+        real launcher installs deps/ over the network; this test is about
+        detachment, so a stand-in launcher with the same argv contract runs
+        the module (the real one is exercised by test_launcher_command)."""
+        plugin_root = self._temporary_directory()
         (plugin_root / "scripts").mkdir()
         (plugin_root / "scripts" / "launcher.py").write_text(
             "import runpy, sys\n"
@@ -225,13 +224,31 @@ class TestDetachedDrainer(unittest.TestCase):
             "sys.argv = sys.argv[1:]\n"
             "runpy.run_module(sys.argv[0], run_name='__main__', alter_sys=True)\n"
         )
+        return plugin_root
+
+    def test_drainer_outlives_its_parent_and_stores_the_spooled_line(self):
+        # Own capture root (issue #693): the suite-wide CORTEX_CLAUDE_DIR is shared,
+        # so a spool file left by an earlier test made this test order dependent.
+        # The hook and the drainer it detaches inherit this root through the
+        # environment; the store stays the suite's (CORTEX_MEMORY_DB_PATH).
+        claude_dir = self._temporary_directory()
+        spool = capture_spool.spool_directory(claude_dir)
+        self.assertEqual(capture_spool.pending(spool), [])
+        capture_spool.write(spool, EXPECTED)
+        before = _stored_rows()
+        repo_root = Path(capture_dispatch.__file__).resolve().parents[2]
+        plugin_root = self._stand_in_plugin_root(repo_root)
         log = capture_spool.log_path(spool)
         hook = subprocess.Popen(
             [sys.executable, "-c", HOOK, str(log)],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             cwd=repo_root,
-            env={**os.environ, "CLAUDE_PLUGIN_ROOT": str(plugin_root)},
+            env={
+                **os.environ,
+                "CLAUDE_PLUGIN_ROOT": str(plugin_root),
+                "CORTEX_CLAUDE_DIR": str(claude_dir),
+            },
         )
         out, diagnostics = hook.communicate()
         self.assertEqual(hook.returncode, 0, diagnostics)  # the parent is gone ...
