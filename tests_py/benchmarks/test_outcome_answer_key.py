@@ -180,6 +180,24 @@ def test_commit_answer_resolved_by_git(repo):
     assert not verify(task, {"commit": "ffffffff"}, resolve_commit=resolve)
 
 
+def test_hex_named_ref_does_not_stand_in_for_a_hash_prefix(repo):
+    # Codex review 4467463788 on #858: rev-parse would resolve a branch
+    # spelled in hex; the resolver consults object names only.
+    first = _git(repo, "rev-list", "--max-parents=0", "HEAD")
+    ref = next(p for p in ("deadbeef", "cafebabe") if not first.startswith(p))
+    _git(repo, "branch", ref, first)
+    task = OutcomeTask("x", FAMILY_COMMIT, "Which commit?", {"commit": first})
+    assert not verify(task, {"commit": ref}, resolve_commit=git_commit_resolver(repo))
+
+
+def test_non_commit_objects_sharing_the_prefix_are_ignored(repo):
+    first = _git(repo, "rev-list", "--max-parents=0", "HEAD")
+    blob = _git(repo, "rev-parse", "HEAD:f.txt")
+    resolve = git_commit_resolver(repo)
+    assert resolve(first) == first
+    assert resolve(blob) is None
+
+
 def test_resolver_refuses_non_hex(repo):
     with pytest.raises(ValueError):
         git_commit_resolver(repo)("HEAD")

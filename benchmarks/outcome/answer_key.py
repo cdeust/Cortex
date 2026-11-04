@@ -205,29 +205,39 @@ def verify(
     return _verify_value(task, answer)
 
 
+def _git(repo: Path, args: list[str], stdin: str | None = None) -> str:
+    return subprocess.run(
+        ["git", "-C", str(repo), *args],
+        input=stdin,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+
+
 def git_commit_resolver(repo: Path) -> CommitResolver:
     """Resolve a hex abbreviation to the full commit hash in ``repo``.
 
-    ``None`` when git cannot name exactly one commit (unknown or ambiguous).
+    Only object names are consulted, never refs: a branch or tag that happens
+    to be spelled in hex cannot stand in for a hash prefix. ``None`` when the
+    prefix names no commit or more than one (git lists no candidate below its
+    minimum abbreviation, so a too-short prefix is unknown, not ambiguous).
     """
 
     def resolve(hex_name: str) -> str | None:
         if not _HEX.fullmatch(hex_name):
             raise ValueError(f"not a hex object name: {hex_name!r}")
-        result = subprocess.run(
-            [
-                "git",
-                "-C",
-                str(repo),
-                "rev-parse",
-                "--verify",
-                "--quiet",
-                f"{hex_name}^{{commit}}",
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
+        candidates = _git(repo, ["rev-parse", f"--disambiguate={hex_name}"])
+        if not candidates.strip():
+            return None
+        typed = _git(
+            repo, ["cat-file", "--batch-check=%(objectname) %(objecttype)"], candidates
         )
-        return result.stdout.strip() if result.returncode == 0 else None
+        commits = [
+            name
+            for name, kind in (line.split() for line in typed.splitlines())
+            if kind == "commit"
+        ]
+        return commits[0] if len(commits) == 1 else None
 
     return resolve
