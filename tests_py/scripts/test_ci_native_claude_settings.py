@@ -66,13 +66,17 @@ class SettingsAgainstMentionJob(unittest.TestCase):
         # here, a prefix denied here (deny wins over allow) or a named exemption
         # the file still carries; the deny rules the job relies on stay in place.
         args = shlex.split(find_step(mention_job(), uses=ACTION)["with"]["claude_args"])
-        # Readable on their own; CLAUDE_ARGS above pins the same facts exactly.
+        # Readable on their own; CLAUDE_ARGS in test_ci_native_claude_mentions
+        # pins the same facts exactly.
         self.assertNotIn("--setting-sources", args)
         self.assertEqual(args.count("--disallowedTools"), 1)
         allowed = _bash_rules(args[args.index("--allowedTools") + 1].split(","))
         denied = _bash_rules(args[args.index("--disallowedTools") + 1].split(","))
         self.assertIn(("uv", True), denied)
         self.assertIn(("curl", True), denied)
+        # The action also loads settings.local.json and restores it from the
+        # base branch, so a committed copy would reach the job unchecked.
+        self.assertFalse((ROOT / ".claude/settings.local.json").exists())
         settings = json.loads(SETTINGS.read_text())
         self.assertLessEqual(set(settings), {"$schema", "permissions"})
         self.assertLessEqual(set(settings["permissions"]), {"allow", "deny"})

@@ -131,8 +131,11 @@ class OwnerMentionTests(unittest.TestCase):
         # 5 attempts of at most 60 s and sleeps of 10+20+30+40 s fit the step.
         self.assertIn("timeout 60 python -c", model["run"])
         self.assertIn("for attempt in 1 2 3 4 5;", model["run"])
-        self.assertIn("sleep $((attempt * 10))", model["run"])
-        self.assertIn('[ "$attempt" -lt 5 ] || break', model["run"])
+        run = model["run"]
+        self.assertLess(
+            run.index('[ "$attempt" -lt 5 ] || break'), run.index("sleep $((")
+        )
+        self.assertIn("sleep $((attempt * 10))", run)
         worst = 5 * 60 + sum(10 * a for a in range(1, 5))
         self.assertLess(worst, model["timeout-minutes"] * 60)
 
