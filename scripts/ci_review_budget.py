@@ -9,8 +9,8 @@ the cap was reached do not count as reviews.
 
 Writes `round`, `cap`, `skip` and `reviewed_sha` to $GITHUB_OUTPUT. At the cap
 no fourth review runs: the accepted part merges, the rest leaves the PR for a
-refinement PR with a new budget. The label `claude-rereview` lifts the cap for
-one more review (owner decision, ADR-1119).
+refinement PR with a new budget. The label `claude-rereview` raises the cap by one
+(a fourth review, never a fifth), however long the label stays attached (ADR-1119).
 Any API or protocol error exits non-zero: no silent fallback to "review".
 
 Sources: https://docs.github.com/en/rest/actions/workflow-runs#list-workflow-runs-for-a-workflow
@@ -38,7 +38,7 @@ BYPASS_LABEL = "claude-rereview"
 EXHAUSTED = (
     f"{CAP} of {CAP} reviews used. A fourth review is not run: merge the accepted "
     "part, remove the rest from this PR and send it to a new refinement PR "
-    f"(new budget). The label {BYPASS_LABEL} lifts the cap once (ADR-1119)."
+    f"(new budget). The label {BYPASS_LABEL} allows one more review (ADR-1119)."
 )
 # The step of claude-review.yml that runs the action; the test pins this name.
 ACTION_STEP = "PR Review"
@@ -113,13 +113,15 @@ def ran_the_action(gh: Gh, repo: str, run: Record) -> bool:
 def decide(reviews: list[Record], labels: list[str], cap: int = CAP) -> Record:
     ordered = sorted(reviews, key=lambda run: run["created_at"])
     count = len(ordered)
+    # The label grants exactly one more review, however long it stays attached.
+    allowed = cap + (1 if BYPASS_LABEL in labels else 0)
     last = ordered[-1]["head_sha"] if ordered else ""
     if last and not SHA.fullmatch(last):
         raise BudgetError("protocol")
     return {
         "round": count + 1,
         "cap": cap,
-        "skip": "true" if count >= cap and BYPASS_LABEL not in labels else "false",
+        "skip": "true" if count >= allowed else "false",
         "reviewed_sha": last,
     }
 

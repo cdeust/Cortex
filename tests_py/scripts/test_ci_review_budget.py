@@ -67,10 +67,13 @@ class DecideTests(unittest.TestCase):
         out = budget.decide([run(1, 1), run(2, 2), run(3, 3)], [])
         self.assertEqual((out["round"], out["skip"]), (4, "true"))
 
-    def test_label_lifts_the_cap_once_more(self):
-        reviews = [run(1, 1), run(2, 2), run(3, 3)]
-        out = budget.decide(reviews, ["other", budget.BYPASS_LABEL])
-        self.assertEqual(out["skip"], "false")
+    def test_label_grants_exactly_one_more_review(self):
+        label = [budget.BYPASS_LABEL]
+        three = [run(i, i) for i in (1, 2, 3)]
+        self.assertEqual(budget.decide(three, label)["skip"], "false")
+        four = [*three, run(4, 4)]
+        out = budget.decide(four, label)
+        self.assertEqual((out["round"], out["skip"]), (5, "true"))
 
     def test_a_malformed_commit_is_a_protocol_error(self):
         with self.assertRaises(budget.BudgetError):
