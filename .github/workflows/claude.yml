@@ -120,7 +120,7 @@ jobs:
           # No self-update probe against pypi.org from a job holding write tokens.
           PIP_DISABLE_PIP_VERSION_CHECK: "1"
         run: pip install --no-deps --no-build-isolation .
-      # Bound: 5 retries sleep 100 s in total and each attempt imports torch
+      # Bound: 5 attempts, 4 sleeps of 100 s in total, and each attempt imports torch
       # from cold; 7 minutes leaves the loop room to print its ::error::
       # before the step is killed (#856 review).
       - name: Pre-download embedding model
@@ -152,8 +152,8 @@ jobs:
           # No --permission-mode: inherit tag mode's workspace edit approval
           # (src/modes/tag/index.ts at the pinned action SHA).
           # Last value wins: upstream base-action/src/parse-sdk-options.ts.
-          # Tag mode grants edits and its own scoped git (add, commit, push to the
-          # PR branch) only; headless, anything that falls through to "ask" is
+          # Tag mode grants edits and its own scoped git (add, rm, commit, push to
+          # the PR branch) only; headless, anything that falls through to "ask" is
           # denied (src/modes/tag/index.ts:158-214). The allowlist adds exactly
           # CLAUDE.md's validation commands (the environment is installed above,
           # so no uv sync: it would build a second .venv and may rewrite uv.lock,
@@ -164,16 +164,18 @@ jobs:
           # design, git diff and git log take --output): the boundary is the
           # owner gate, the App token, the job permissions and the bubblewrap
           # sandbox. Reviews of #855 and #856.
-          # --setting-sources user: the pinned action loads user, project and
-          # local settings by default (base-action/src/parse-sdk-options.ts),
-          # so the checked-out .claude/settings.json (Bash(uv *), Bash(ruff
-          # format*)) would widen this allowlist, from the PR head's copy on a
-          # PR. Only the action's own ~/.claude/settings.json is read. The deny
-          # list is belt and braces: deny wins over allow, so no uv (unlocked
-          # fetches, second .venv) and no curl even if a source is added later.
+          # The pinned action loads user, project and local settings
+          # (base-action/src/parse-sdk-options.ts) and, on a PR, first restores
+          # .claude/, .mcp.json and CLAUDE.md from the base branch
+          # (src/entrypoints/run.ts, restore-config.ts): main's own
+          # .claude/settings.json applies, and its allow rules add to this
+          # allowlist. The project source stays loaded on purpose, it carries
+          # CLAUDE.md, .claude/agents, .claude/commands and the file's deny
+          # rules; --disallowedTools removes what that file allows and a
+          # write-token job must not run (deny wins over allow): uv (unlocked
+          # fetches, a second .venv, uv.lock rewrites), curl.
           claude_args: |
             --strict-mcp-config
-            --setting-sources user
             --allowedTools "Bash(pytest:*),Bash(ruff check:*),Bash(ruff format --check:*),Bash(python -m mcp_server.doctor:*),Bash(python scripts/check_craftsmanship.py:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(gh run view:*)"
             --disallowedTools "Bash(uv:*),Bash(curl:*)"
             --model "claude-opus-5-5"

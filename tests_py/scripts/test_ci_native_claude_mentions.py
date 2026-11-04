@@ -1,5 +1,6 @@
 """Regression guards for the owner @claude mention workflow (claude.yml)."""
 
+import json
 import re
 import shlex
 import tomllib
@@ -12,6 +13,20 @@ ROOT = Path(__file__).resolve().parents[2]
 MENTIONS = ROOT / ".github/workflows/claude.yml"
 ACTION = "anthropics/claude-code-action@8041f1d17e0e7d2f2cfe35002962e9f26237c0bb"
 GUARD = "Authorize owner fix target"
+SETTINGS = ROOT / ".claude/settings.json"
+CLAUDE_ARGS = [
+    "--strict-mcp-config",
+    "--allowedTools",
+    "Bash(pytest:*),Bash(ruff check:*),Bash(ruff format --check:*),"
+    "Bash(python -m mcp_server.doctor:*),"
+    "Bash(python scripts/check_craftsmanship.py:*),"
+    "Bash(git status:*),Bash(git diff:*),Bash(git log:*),"
+    "Bash(gh run view:*)",
+    "--disallowedTools",
+    "Bash(uv:*),Bash(curl:*)",
+    "--model",
+    "claude-opus-5-5",
+]
 
 
 def _canonical(requirement):
@@ -86,24 +101,7 @@ class OwnerMentionTests(unittest.TestCase):
         # gh api, no gh pr comment (tag mode owns its tracking comment).
         invocation = _step(_job(), uses=ACTION)
         args = shlex.split(invocation["with"]["claude_args"])
-        self.assertEqual(
-            args,
-            [
-                "--strict-mcp-config",
-                "--setting-sources",
-                "user",
-                "--allowedTools",
-                "Bash(pytest:*),Bash(ruff check:*),Bash(ruff format --check:*),"
-                "Bash(python -m mcp_server.doctor:*),"
-                "Bash(python scripts/check_craftsmanship.py:*),"
-                "Bash(git status:*),Bash(git diff:*),Bash(git log:*),"
-                "Bash(gh run view:*)",
-                "--disallowedTools",
-                "Bash(uv:*),Bash(curl:*)",
-                "--model",
-                "claude-opus-5-5",
-            ],
-        )
+        self.assertEqual(args, CLAUDE_ARGS)
         self.assertEqual(
             invocation["env"],
             {
@@ -149,17 +147,23 @@ class OwnerMentionTests(unittest.TestCase):
         # which no selected group carries (Codex P1, Claude review on #856).
         run = shlex.split(_step(_job(), name="Install the project")["run"])
         self.assertIn("--no-build-isolation", run)
-        self.assertFalse({"-e", "--editable"} & set(run), run)
+        editable = [a for a in run if a.startswith(("-e", "--editable"))]
+        self.assertEqual(editable, [], run)
 
     def test_repo_settings_cannot_widen_the_headless_allowlist(self):
-        # base-action/src/parse-sdk-options.ts at the pinned SHA loads
-        # ["user", "project", "local"] unless --setting-sources is given, so
-        # .claude/settings.json (Bash(uv *), Bash(ruff format*)) would apply,
-        # from the PR head's copy on a PR. Deny rules win over allow rules.
+        # The pinned action loads project settings and, on a PR, restores them
+        # from the base branch (restore-config.ts), so main's .claude/settings.json
+        # applies: each of its Bash allow rules the mention job must not run is
+        # denied (deny wins over allow), and each of its deny rules still holds.
+        # The flags are read at their only occurrence: the CLI keeps the last.
         args = shlex.split(_step(_job(), uses=ACTION)["with"]["claude_args"])
-        self.assertEqual(args[args.index("--setting-sources") + 1], "user")
+        self.assertNotIn("--setting-sources", args)
+        self.assertEqual(args.count("--disallowedTools"), 1)
         denied = args[args.index("--disallowedTools") + 1].split(",")
+        settings = json.loads(SETTINGS.read_text())["permissions"]
+        self.assertIn("Bash(uv *)", settings["allow"])
         self.assertIn("Bash(uv:*)", denied)
+        self.assertIn("Bash(curl *)", settings["deny"])
         self.assertIn("Bash(curl:*)", denied)
 
     def test_non_isolated_build_takes_its_backend_from_a_selected_locked_group(self):
@@ -223,6 +227,8 @@ class OwnerMentionTests(unittest.TestCase):
         before_agent = steps[: steps.index(_step(job, uses=ACTION))]
         bounds = [step.get("timeout-minutes") for step in before_agent]
         self.assertEqual(bounds, [2, 3, 3, 2, 8, 3, 7])
+        self.assertTrue(all(type(b) is int for b in bounds), bounds)
+        self.assertGreaterEqual(job["timeout-minutes"] - sum(bounds), 30)
         self.assertGreaterEqual(job["timeout-minutes"] - sum(bounds), 30)
 
     def test_owner_mentions_serialize_branch_writes(self):
