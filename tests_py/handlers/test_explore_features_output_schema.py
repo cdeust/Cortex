@@ -15,9 +15,13 @@ from unittest.mock import patch
 import jsonschema
 import pytest
 
+from mcp.server.mcpserver import MCPServer
+
+from mcp_server import tool_registry_core as registry
 from mcp_server.core.behavioral_crosscoder import detect_persistent_features
 from mcp_server.core.persona_vector import PERSONA_DIMENSIONS
 from mcp_server.core.sparse_dictionary import build_seed_dictionary
+from mcp_server.handlers import explore_features
 from mcp_server.handlers.explore_features import handler, schema
 from mcp_server.handlers.explore_features_schema import MODES
 
@@ -116,9 +120,37 @@ def test_no_data_path_validates_and_echoes_mode(mode, profiles):
     }
 
 
-def test_input_and_output_mode_enums_match():
-    input_enum = schema["inputSchema"]["properties"]["mode"]["enum"]
-    assert input_enum == _OUTPUT_SCHEMA["properties"]["mode"]["enum"] == list(MODES)
+def _registered_server() -> MCPServer:
+    server = MCPServer(name="explore-features-schema-test")
+    registry._register_explore_features(server)
+    return server
+
+
+def test_registered_input_schema_publishes_the_mode_enum():
+    """Clients read the wrapper signature, not schema["inputSchema"]."""
+    tools = asyncio.run(_registered_server().list_tools())
+    (tool,) = [t for t in tools if t.name == "explore_features"]
+    published = tool.input_schema["properties"]["mode"]["enum"]
+    declared = schema["inputSchema"]["properties"]["mode"]["enum"]
+    assert published == declared == _OUTPUT_SCHEMA["properties"]["mode"]["enum"]
+    assert published == list(MODES)
+
+
+def test_registered_tool_rejects_an_unknown_mode_before_the_handler():
+    """An unknown mode is an input-validation error, so the handler's
+    ValueError and safe_handler's substring classifier are never reached."""
+    with (
+        patch("mcp_server.handlers.explore_features.handler") as called,
+        pytest.raises(Exception, match="extension"),
+    ):
+        asyncio.run(
+            _registered_server().call_tool("explore_features", {"mode": "extension"})
+        )
+    called.assert_not_called()
+
+
+def test_handlers_cover_every_mode():
+    assert set(explore_features._HANDLERS) == set(MODES)
 
 
 def test_description_states_the_real_persona_dimension_count():

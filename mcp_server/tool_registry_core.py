@@ -21,6 +21,7 @@ from mcp_server.handlers import (
     rebuild_profiles,
     record_session_end,
 )
+from mcp_server.handlers.explore_features_schema import ExploreMode
 from mcp_server.tool_error_handler import safe_handler
 from mcp_server.handlers._tool_meta import tool_kwargs
 
@@ -161,7 +162,7 @@ def _register_explore_features(mcp: MCPServer) -> None:
         **tool_kwargs(explore_features.schema),
     )
     async def tool_explore_features(
-        mode: str,
+        mode: ExploreMode,
         domain: str | None = None,
         compare_domain: str | None = None,
     ) -> dict[str, Any]:

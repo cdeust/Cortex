@@ -22,8 +22,10 @@ adheres to [Semantic Versioning](https://semver.org/).
   `persistentFeatures`…), and the description states the 9 persona dimensions
   actually returned, without the drift it never computed. An unknown mode is
   now a tool error rather than an error dict no schema could accept (#680).
-  **Breaking:** a caller that read `{"status": "error"}` for an unknown mode
-  now receives an MCP tool error whose message names the mode.
+  The registered wrapper types `mode` as a `Literal`, so the published input
+  schema carries the enum and the MCP SDK rejects any other value before the
+  handler runs. **Breaking:** a caller that read `{"status": "error"}` for an
+  unknown mode now receives an MCP input-validation error.
 
 - Document ingestion reports partial wiki/summary/section writes with component
   receipts and failure reasons. Same-version retries resume missing components

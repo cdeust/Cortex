@@ -118,7 +118,7 @@ Interpretability exploration across four modes.
 - **`features`** — Sparse feature dictionary and cross-domain persistent features (ignores `domain`)
 - **`attribution`** — Pipeline attribution graph via perturbation tracing
 - **`persona`** — 9D persona vector (`dimensions` names them) for one domain, or for every domain plus their session-weighted composition
-- **`crosscoder`** — Cross-domain persistent behavioral features
+- **`crosscoder`** — Active features shared by and unique to `domain` and `compare_domain`; without both, the features persistent across all domains
 
 Every response carries `mode` and `status` (`ok`, `no_data` or `error`) beside
 the lens's payload. An unknown `mode` is a tool error.

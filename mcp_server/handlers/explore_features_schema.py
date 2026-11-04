@@ -11,10 +11,15 @@ handler never sets makes every call fail client-side.
 
 from __future__ import annotations
 
+from typing import Literal, get_args
+
 from mcp_server.core.persona_vector import PERSONA_DIMENSIONS
 from mcp_server.handlers._tool_meta import READ_ONLY
 
-MODES = ("features", "attribution", "persona", "crosscoder")
+# The registered wrapper types `mode` with ExploreMode, so the MCP SDK publishes
+# the enum and rejects any other string before the handler runs.
+ExploreMode = Literal["features", "attribution", "persona", "crosscoder"]
+MODES: tuple[str, ...] = get_args(ExploreMode)
 
 _PERSONA_DIM = len(PERSONA_DIMENSIONS)
 
@@ -104,7 +109,8 @@ schema = {
         "run rebuild_profiles first); `persona` returns the "
         f"{_PERSONA_DIM}D persona vector of one domain, or of every domain "
         "with their session-weighted composition; `crosscoder` compares two "
-        "domains to detect persistent behavioral features. Use this when "
+        "domains (shared and unique active features), or without both returns "
+        "the features persistent across all domains. Use this when "
         "facing an unfamiliar pattern and you want a behavioral "
         "explanation. Distinct from `query_methodology` (full profile, not the "
         "interpretability internals) and `list_domains` (overview, no "
@@ -124,8 +130,10 @@ schema = {
                     "Which interpretability lens to apply. 'features' = sparse "
                     "feature dictionary and persistent features; 'attribution' "
                     "= decision tracing; "
-                    f"'persona' = {_PERSONA_DIM}D vector; 'crosscoder' = "
-                    "two-domain feature persistence."
+                    f"'persona' = {_PERSONA_DIM}D vector; 'crosscoder' = active "
+                    "features shared by and unique to domain and "
+                    "compare_domain, or the features persistent across all "
+                    "domains without both."
                 ),
                 "enum": list(MODES),
                 "examples": ["features", "persona"],

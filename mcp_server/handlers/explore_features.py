@@ -56,13 +56,7 @@ def _dispatch(mode: str, args: dict) -> dict:
             "message": "No profiles built yet. Run rebuild_profiles first.",
         }
 
-    if mode == "features":
-        return _handle_features(profiles)
-    if mode == "attribution":
-        return _handle_attribution(profiles, domain)
-    if mode == "persona":
-        return _handle_persona(profiles, domain)
-    return _handle_crosscoder(profiles, domain, compare_domain)
+    return _HANDLERS[mode](profiles, domain, compare_domain)
 
 
 def _resolve_feature_dictionary(profiles: dict) -> FeatureDictionary:
@@ -79,7 +73,7 @@ def _resolve_feature_dictionary(profiles: dict) -> FeatureDictionary:
     return build_seed_dictionary()
 
 
-def _handle_features(profiles: dict) -> dict:
+def _handle_features(profiles: dict, *_ignored: str | None) -> dict:
     d = _resolve_feature_dictionary(profiles)
 
     return {
@@ -120,7 +114,7 @@ def _fetch_attribution_conversations(dp: dict) -> list[dict]:
     return discover_conversations_for_projects(project_ids, ATTRIBUTION_SAMPLE_LIMIT)
 
 
-def _handle_attribution(profiles: dict, domain: str | None) -> dict:
+def _handle_attribution(profiles: dict, domain: str | None, *_: str | None) -> dict:
     domain_id = domain or next(iter(profiles.get("domains", {})), None)
     dp = profiles.get("domains", {}).get(domain_id) if domain_id else None
 
@@ -144,7 +138,7 @@ def _handle_attribution(profiles: dict, domain: str | None) -> dict:
     }
 
 
-def _handle_persona(profiles: dict, domain: str | None) -> dict:
+def _handle_persona(profiles: dict, domain: str | None, *_: str | None) -> dict:
     if domain:
         dp = profiles.get("domains", {}).get(domain)
         if not dp:
@@ -229,3 +223,13 @@ def _handle_crosscoder(
         "persistentFeatures": [pf.model_dump() for pf in persistent],
         "domainCount": len(profiles.get("domains", {})),
     }
+
+
+# One entry per mode: a mode added to MODES without a handler is a KeyError,
+# never another lens's output under its name (test_handlers_cover_every_mode).
+_HANDLERS = {
+    "features": _handle_features,
+    "attribution": _handle_attribution,
+    "persona": _handle_persona,
+    "crosscoder": _handle_crosscoder,
+}
