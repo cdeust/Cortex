@@ -83,12 +83,12 @@ jobs:
           fi
           bwrap --version
       # The allowlisted commands need an installed environment: Python 3.12 and
-      # the unit job's dev+sqlite+codebase extras on the SQLite backend (no
-      # postgresql: this job has no server, tests_py/conftest.py falls back to
-      # SQLite, so PG-only paths are not covered here), plus the lint group for
-      # ruff (as memory-exact-review.yml installs it) and the embedding model,
-      # which tests_py/infrastructure/test_embedding_live_contract.py requires
-      # offline under CI. source: ci.json "unit", .github/actions/test-suite.
+      # the dev+sqlite+codebase extras of ci.json "regression" on the SQLite
+      # backend (ci.json "unit" adds postgresql and a server this job does not
+      # have, so PG-only paths are not covered here), plus the lint group for
+      # ruff (as memory-exact-review.yml installs it), the packaging group for
+      # the build backend, and the embedding model that tests_py/infrastructure/
+      # test_embedding_live_contract.py needs under CI. source: ci.json.
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
@@ -99,9 +99,9 @@ jobs:
           environment: ${{ env.pythonLocation }}
       # uv-locked-install passes --no-install-project (ADR-1092). The build
       # backend (pyproject build-system.requires: hatchling) comes from the
-      # locked packaging group above, as release.yml installs it, so the project
-      # builds without isolation: no unpinned PyPI fetch outside bubblewrap in a
-      # job holding write tokens (#856 reviews). test_ci_native_claude_mentions
+      # locked, hash-checked packaging group above, so the project builds
+      # without isolation: no unpinned PyPI fetch outside bubblewrap in a job
+      # holding write tokens (#856 reviews). test_ci_native_claude_mentions
       # checks that every build requirement is in a selected group.
       - name: Install the project
         run: pip install --no-deps --no-build-isolation -e .
@@ -116,8 +116,10 @@ jobs:
       - uses: anthropics/claude-code-action@8041f1d17e0e7d2f2cfe35002962e9f26237c0bb # v1.0.263
         env:
           CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
-          # Same offline switches as .github/actions/test-suite: an agent-run
-          # pytest must not download models.
+          # Backend chosen on purpose (ci.json "regression"), not by the
+          # tests_py/conftest.py fallback; offline switches as in
+          # .github/actions/test-suite: an agent-run pytest never downloads.
+          CORTEX_MEMORY_STORE_BACKEND: "sqlite"
           CORTEX_RERANKER_OFFLINE: "1"
           HF_HUB_OFFLINE: "1"
           TRANSFORMERS_OFFLINE: "1"

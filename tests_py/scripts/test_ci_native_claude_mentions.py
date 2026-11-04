@@ -14,6 +14,12 @@ ACTION = "anthropics/claude-code-action@8041f1d17e0e7d2f2cfe35002962e9f26237c0bb
 GUARD = "Authorize owner fix target"
 
 
+def _canonical(requirement):
+    """PEP 503 name of a requirement string, without specifier, marker or URL."""
+    name = re.split(r"[<>=!~;@\[ ]", requirement.strip(), maxsplit=1)[0]
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
 def _job():
     return yaml.safe_load(MENTIONS.read_text())["jobs"]["claude"]
 
@@ -98,6 +104,7 @@ class OwnerMentionTests(unittest.TestCase):
             invocation["env"],
             {
                 "CLAUDE_CODE_SUBPROCESS_ENV_SCRUB": "1",
+                "CORTEX_MEMORY_STORE_BACKEND": "sqlite",
                 "CORTEX_RERANKER_OFFLINE": "1",
                 "HF_HUB_OFFLINE": "1",
                 "TRANSFORMERS_OFFLINE": "1",
@@ -105,9 +112,9 @@ class OwnerMentionTests(unittest.TestCase):
         )
 
     def test_owner_mentions_install_the_tested_environment_before_the_agent(self):
-        # Python 3.12 and the unit job's dev+sqlite+codebase extras on the SQLite
-        # backend; ruff lives in the lint group; the embedding contract test
-        # needs the model; the build backend comes from the packaging group.
+        # Python 3.12 and ci.json "regression"'s dev+sqlite+codebase extras on the
+        # SQLite backend; ruff lives in the lint group; the embedding contract
+        # test needs the model; the build backend comes from the packaging group.
         job = _job()
         steps = job["steps"]
         python = _step(job, uses="actions/setup-python@")
@@ -131,29 +138,33 @@ class OwnerMentionTests(unittest.TestCase):
         )
         self.assertIn("SentenceTransformer('all-MiniLM-L6-v2'", model["run"])
 
-    def test_build_backend_is_installed_before_an_isolated_build_is_refused(self):
+    def test_non_isolated_build_takes_its_backend_from_a_selected_locked_group(self):
         # Invariant, not literal (Codex P1 on #856): with --no-build-isolation,
-        # every build-system requirement must come from a selected locked group.
+        # every build-system requirement must come from a dependency group the
+        # set selects with --group/--only-group (an --extra is not a group).
         job = _job()
         project = _step(job, name="Install the project")
-        if "--no-build-isolation" not in project["run"]:
-            self.skipTest("the project builds in isolation")
-        selected = _step(job, uses="./.github/actions/uv-locked-install")["with"]["set"]
-        groups = set(shlex.split(selected)[1::2])
+        self.assertIn("--no-build-isolation", project["run"])
+        tokens = shlex.split(
+            _step(job, uses="./.github/actions/uv-locked-install")["with"]["set"]
+        )
+        groups = {
+            v
+            for f, v in zip(tokens, tokens[1:], strict=False)
+            if f in ("--group", "--only-group")
+        }
         pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text())
-        for requirement in pyproject["build-system"]["requires"]:
-            name = re.split(r"[<>=!~\[ ]", requirement, maxsplit=1)[0]
+        requires = pyproject["build-system"]["requires"]
+        self.assertTrue(requires)
+        for requirement in requires:
+            name = _canonical(requirement)
             providers = {
                 group
                 for group, deps in pyproject["dependency-groups"].items()
-                if any(
-                    dep.split()[0].startswith(name)
-                    for dep in deps
-                    if isinstance(dep, str)
-                )
+                if any(_canonical(dep) == name for dep in deps if isinstance(dep, str))
             }
             self.assertTrue(
-                providers & groups, f"{name} comes from {providers}, not {groups}"
+                providers & groups, f"{name}: in {providers}, selected {groups}"
             )
 
     def test_owner_mentions_authorize_the_fix_target_before_checkout(self):

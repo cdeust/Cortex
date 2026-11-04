@@ -32,11 +32,11 @@ adheres to [Semantic Versioning](https://semver.org/).
   validation commands headlessly (`pytest`, `ruff check`, `ruff format --check`,
   `python -m mcp_server.doctor`, `python scripts/check_craftsmanship.py`, plus
   `git status|diff|log` and `gh run view`); tag mode keeps its own scoped
-  `git add|commit|push` and denies every other shell command at the pinned action.
-  The job installs Python 3.12, the unit job's locked dev+sqlite+codebase extras
-  on the SQLite backend (no postgresql), the lint and packaging groups (ruff and
-  the build backend from the lock, no PyPI fetch) and the embedding model before
-  the agent starts. A first step refuses a fix target whose head is a fork or the default
+  `git add|commit|push` and denies every other command prefix at the pinned action.
+  The job installs Python 3.12, the locked dev+sqlite+codebase extras of
+  `ci.json` "regression" on the SQLite backend, the lint and packaging groups
+  (ruff and the build backend from the lock, no unpinned fetch) and the embedding
+  model before the agent starts. A first step refuses a fix target whose head is a fork or the default
   branch and refuses when the event cannot be read, the job is bound to 60
   minutes, and the offline switches of the test-suite action are set
   (#855, #856).
