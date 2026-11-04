@@ -33,6 +33,13 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- A document section memory is labelled by its full heading path
+  (`[Install > Notes]`), not its own heading alone, so the same text under two
+  parents is recalled as two distinguishable segments (#713, slice 1).
+  Top-level sections keep their label; a re-ingest of an already-ingested
+  nested document retires the old flat-labelled receipts as for any other
+  normalizer change (#714).
+
 - The groomer coordinator no longer starts a consolidate cycle outside its
   lock in three failure cases (#683, ADR-1118). An existing `groomer.pid` that
   cannot be read (permission denied, I/O error) now raises
