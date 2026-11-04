@@ -18,6 +18,7 @@ SETTINGS = ROOT / ".claude/settings.json"
 # format rewrites files, which tag mode's Edit/Write already grant; python3 is
 # a second name for the interpreter the job installed (#856 review).
 SETTINGS_EXEMPT = {"ruff format", "python3 -m mcp_server.doctor"}
+_BASH_RULE = re.compile(r"^Bash\(([^()*:]+)( \*|:\*)?\)$")
 CLAUDE_ARGS = [
     "--strict-mcp-config",
     "--allowedTools",
@@ -39,27 +40,30 @@ def _canonical(requirement):
     return re.sub(r"[-_.]+", "-", name).lower()
 
 
-_BASH_RULE = re.compile(r"^Bash\(([^()*:]+?)(:\*)?\)$")
+def _bash_rules(rules):
+    """`(prefix, wildcard)` of `Bash(cmd)`, `Bash(cmd:*)` or `Bash(cmd *)` rules.
 
-
-def _bash_prefixes(rules):
-    """Command prefixes of `Bash(cmd)` / `Bash(cmd:*)` rules; anything else fails.
-
-    Only this syntax is word-bounded in Claude Code (`Bash(uv:*)` covers `uv x`,
-    not `uvx`); a raw `Bash(cmd*)`, a bare `Bash`, a non-Bash tool or a `*`
-    elsewhere is rejected so no rule can pass as narrower than it is.
+    `cmd:*` and `cmd *` are the equivalent word-bounded wildcards of Claude Code
+    (`Bash(uv:*)` covers `uv x`, not `uvx`); `Bash(cmd)` is exact. A raw
+    `Bash(cmd*)` is a string prefix, so it is rejected, as are a bare `Bash`, a
+    non-Bash tool, a `*` elsewhere and an empty command.
     """
-    prefixes = []
+    parsed = []
     for rule in rules:
         match = _BASH_RULE.match(rule)
-        if match is None:
-            raise AssertionError(f"not a word-bounded Bash rule: {rule!r}")
-        prefixes.append(match.group(1).strip())
-    return prefixes
+        if match is None or not match.group(1).strip():
+            raise AssertionError(f"not an exact or word-bounded Bash rule: {rule!r}")
+        parsed.append((match.group(1).strip(), match.group(2) is not None))
+    return parsed
 
 
-def _covers(prefix, rule):
-    return rule == prefix or rule.startswith(prefix + " ")
+def _covers(cli, rule):
+    """A wildcard CLI entry covers the rule's prefix at a word boundary; an exact
+    CLI entry covers only the identical exact rule."""
+    (prefix, wildcard), (cmd, cmd_wildcard) = cli, rule
+    if not wildcard:
+        return not cmd_wildcard and cmd == prefix
+    return cmd == prefix or cmd.startswith(prefix + " ")
 
 
 def _job():
@@ -121,10 +125,11 @@ class OwnerMentionTests(unittest.TestCase):
 
     def test_owner_mentions_allow_the_validation_commands_only(self):
         # Tag mode supplies no shell allowlist beyond its own scoped git
-        # (src/modes/tag/index.ts:158-214 at the pinned SHA); headless, a command
-        # listed neither here nor in .claude/settings.json (next test) is denied.
-        # The list is CLAUDE.md's validation set,
-        # git inspection and gh run view: no uv sync (the job installs the
+        # (src/modes/tag/index.ts:158-214 at the pinned SHA); headless, anything
+        # that falls through to "ask" is denied, and .claude/settings.json adds
+        # its rules (test_settings_allow_rules_map_to_allowed_denied_or_exempt).
+        # The list is CLAUDE.md's validation set, git inspection and gh run view:
+        # no uv sync (the job installs the
         # environment; test_uv_lock_single_source.py), no bare interpreter, no
         # gh api, no gh pr comment (tag mode owns its tracking comment).
         invocation = _step(_job(), uses=ACTION)
@@ -168,10 +173,12 @@ class OwnerMentionTests(unittest.TestCase):
         self.assertEqual(project["run"], "pip install --no-deps --no-build-isolation .")
         self.assertEqual(project["env"], {"PIP_DISABLE_PIP_VERSION_CHECK": "1"})
         self.assertIn("SentenceTransformer('all-MiniLM-L6-v2'", model["run"])
-        # 5 attempts of at most 60 s and sleeps of 10+20+30+40 s fit the 7 minutes.
+        # 5 attempts of at most 60 s and sleeps of 10+20+30+40 s fit the step.
         self.assertIn("timeout 60 python -c", model["run"])
         self.assertIn("for attempt in 1 2 3 4 5;", model["run"])
-        self.assertLess(5 * 60 + sum(10 * a for a in range(1, 5)), 7 * 60)
+        self.assertIn("sleep $((attempt * 10))", model["run"])
+        worst = 5 * 60 + sum(10 * a for a in range(1, 5))
+        self.assertLess(worst, model["timeout-minutes"] * 60)
 
     def test_non_isolated_install_is_never_editable(self):
         # Invariant behind the literal above: build-system.requires lists what
@@ -190,21 +197,22 @@ class OwnerMentionTests(unittest.TestCase):
         # here, a prefix denied here (deny wins over allow) or a named exemption
         # that the file still carries; its curl deny is mirrored.
         args = shlex.split(_step(_job(), uses=ACTION)["with"]["claude_args"])
+        # Readable on their own; CLAUDE_ARGS above pins the same facts exactly.
         self.assertNotIn("--setting-sources", args)
         self.assertEqual(args.count("--disallowedTools"), 1)
-        allowed = _bash_prefixes(args[args.index("--allowedTools") + 1].split(","))
-        denied = _bash_prefixes(args[args.index("--disallowedTools") + 1].split(","))
-        self.assertIn("uv", denied)
-        self.assertIn("curl", denied)
+        allowed = _bash_rules(args[args.index("--allowedTools") + 1].split(","))
+        denied = _bash_rules(args[args.index("--disallowedTools") + 1].split(","))
+        self.assertIn(("uv", True), denied)
+        self.assertIn(("curl", True), denied)
         settings = json.loads(SETTINGS.read_text())
         self.assertLessEqual(set(settings), {"$schema", "permissions"})
         self.assertLessEqual(set(settings["permissions"]), {"allow", "deny"})
         self.assertIn("Bash(curl:*)", settings["permissions"]["deny"])
-        rules = _bash_prefixes(settings["permissions"]["allow"])
-        self.assertLessEqual(SETTINGS_EXEMPT, set(rules))
+        rules = _bash_rules(settings["permissions"]["allow"])
+        self.assertLessEqual(SETTINGS_EXEMPT, {cmd for cmd, _ in rules})
         for rule in rules:
-            covered = any(_covers(p, rule) for p in allowed + denied)
-            self.assertTrue(covered or rule in SETTINGS_EXEMPT, rule)
+            covered = any(_covers(cli, rule) for cli in allowed + denied)
+            self.assertTrue(covered or rule[0] in SETTINGS_EXEMPT, rule)
 
     def test_non_isolated_build_takes_its_backend_from_a_selected_locked_group(self):
         # Invariant, not literal (Codex P1 on #856): with --no-build-isolation,
