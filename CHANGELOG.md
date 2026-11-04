@@ -34,12 +34,15 @@ adheres to [Semantic Versioning](https://semver.org/).
   status|diff|log` and `gh run view`); tag mode keeps its own scoped `git
   add|commit|push` and denies every other command prefix at the pinned action. The
   job installs Python 3.12, the locked dev+sqlite+codebase extras of `ci.json`
-  "regression" on the SQLite backend, the lint and packaging groups (ruff and the
-  build backend from the lock, no unpinned fetch) and the embedding model before the
-  agent starts. A first step refuses a fix target whose head is a fork or the
-  default branch and refuses when the event cannot be read or carries no issue
-  object, the job is bound to 60 minutes, and the offline switches of the test-suite
-  action are set (#855, #856).
+  "regression" on the SQLite backend, the lint and packaging groups, the project as a
+  non-editable wheel built from the locked backend (no unpinned package fetch; the
+  embedding model download, made before the agent starts, excepted). The agent reads
+  only the action's own settings (`--setting-sources user`), so the checked-out
+  `.claude/settings.json` cannot widen the allowlist, and `uv` and `curl` are denied
+  outright. A first step refuses a fix target whose head is a fork or the default
+  branch and refuses when the event cannot be read or carries no issue object, the
+  job is bound to 60 minutes, and the offline switches of the test-suite action are
+  set (#855, #856).
 - Document ingestion reports partial wiki/summary/section writes with component
   receipts and failure reasons. Same-version retries resume missing components
   from durable rows and page content, including stored summaries with missing

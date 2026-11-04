@@ -90,12 +90,16 @@ class OwnerMentionTests(unittest.TestCase):
             args,
             [
                 "--strict-mcp-config",
+                "--setting-sources",
+                "user",
                 "--allowedTools",
                 "Bash(pytest:*),Bash(ruff check:*),Bash(ruff format --check:*),"
                 "Bash(python -m mcp_server.doctor:*),"
                 "Bash(python scripts/check_craftsmanship.py:*),"
                 "Bash(git status:*),Bash(git diff:*),Bash(git log:*),"
                 "Bash(gh run view:*)",
+                "--disallowedTools",
+                "Bash(uv:*),Bash(curl:*)",
                 "--model",
                 "claude-opus-5-5",
             ],
@@ -136,7 +140,27 @@ class OwnerMentionTests(unittest.TestCase):
         # Not editable: hatchling's editable hook needs `editables`, absent
         # from uv.lock (Codex P1 on #856); the wheel build does not.
         self.assertEqual(project["run"], "pip install --no-deps --no-build-isolation .")
+        self.assertEqual(project["env"], {"PIP_DISABLE_PIP_VERSION_CHECK": "1"})
         self.assertIn("SentenceTransformer('all-MiniLM-L6-v2'", model["run"])
+
+    def test_non_isolated_install_is_never_editable(self):
+        # Invariant behind the literal above: build-system.requires lists what
+        # a wheel build needs; an editable build adds hatchling's `editables`,
+        # which no selected group carries (Codex P1, Claude review on #856).
+        run = shlex.split(_step(_job(), name="Install the project")["run"])
+        self.assertIn("--no-build-isolation", run)
+        self.assertFalse({"-e", "--editable"} & set(run), run)
+
+    def test_repo_settings_cannot_widen_the_headless_allowlist(self):
+        # base-action/src/parse-sdk-options.ts at the pinned SHA loads
+        # ["user", "project", "local"] unless --setting-sources is given, so
+        # .claude/settings.json (Bash(uv *), Bash(ruff format*)) would apply,
+        # from the PR head's copy on a PR. Deny rules win over allow rules.
+        args = shlex.split(_step(_job(), uses=ACTION)["with"]["claude_args"])
+        self.assertEqual(args[args.index("--setting-sources") + 1], "user")
+        denied = args[args.index("--disallowedTools") + 1].split(",")
+        self.assertIn("Bash(uv:*)", denied)
+        self.assertIn("Bash(curl:*)", denied)
 
     def test_non_isolated_build_takes_its_backend_from_a_selected_locked_group(self):
         # Invariant, not literal (Codex P1 on #856): with --no-build-isolation,
@@ -190,15 +214,15 @@ class OwnerMentionTests(unittest.TestCase):
     def test_owner_mentions_bound_the_run(self):
         # source: docs.github.com workflow-syntax#jobsjob_idtimeout-minutes;
         # the default is 360 minutes and the queue serializes per thread. Every
-        # step before the agent carries its own bound (worst case 26 minutes:
-        # guard 2, checkout 3, apt 3, python 2, locked install 8, project 3,
-        # model 5), leaving the agent at least 30 of the job's 60 minutes.
+        # step before the agent carries its own bound (guard, checkout, apt,
+        # python, locked install, project, model: 28 minutes in the worst
+        # case), leaving the agent at least 30 of the job's 60 minutes.
         job = _job()
         self.assertEqual(job["timeout-minutes"], 60)
         steps = job["steps"]
         before_agent = steps[: steps.index(_step(job, uses=ACTION))]
         bounds = [step.get("timeout-minutes") for step in before_agent]
-        self.assertTrue(all(type(b) is int and b > 0 for b in bounds), bounds)
+        self.assertEqual(bounds, [2, 3, 3, 2, 8, 3, 7])
         self.assertGreaterEqual(job["timeout-minutes"] - sum(bounds), 30)
 
     def test_owner_mentions_serialize_branch_writes(self):
