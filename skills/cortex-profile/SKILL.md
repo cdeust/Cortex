@@ -47,7 +47,7 @@ Returns the 9-dimensional persona vector of every domain and their session-weigh
 Other exploration modes:
 - `"mode": "features"` — The sparse behavioral feature dictionary and the features that persist across domains
 - `"mode": "attribution"` — How the pipeline traces decisions back to behavioral signals
-- `"mode": "crosscoder"` — Behavioral patterns that persist across different project domains
+- `"mode": "crosscoder"` — With `"domain"` and `"compare_domain"`, the active features the two domains share and those unique to each; without both, the behavioral patterns that persist across all domains
 
 ### Step 3: View All Domains
 

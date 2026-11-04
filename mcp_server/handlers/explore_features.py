@@ -7,6 +7,7 @@ in explore_features_schema.py and is re-exported here.
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import cast
 
 from mcp_server.core.attribution_tracer import trace_attribution
 from mcp_server.core.behavioral_crosscoder import (
@@ -36,13 +37,14 @@ async def handler(args: dict) -> dict:
     An unknown mode raises: it cannot be echoed under the declared enum, and
     an error dict without a valid ``mode`` fails client output validation.
     """
-    mode = args.get("mode")
-    if mode not in MODES:
-        raise ValueError(f"Unknown mode: {mode!r}; expected one of {MODES}")
+    raw_mode = args.get("mode")
+    if raw_mode not in MODES:
+        raise ValueError(f"Unknown mode: {raw_mode!r}; expected one of {MODES}")
+    mode = cast(ExploreMode, raw_mode)  # narrowed by the MODES check above
     return {"mode": mode, **_dispatch(mode, args)}
 
 
-def _dispatch(mode: str, args: dict) -> dict:
+def _dispatch(mode: ExploreMode, args: dict) -> dict:
     domain = args.get("domain")
     compare_domain = args.get("compare_domain")
 
