@@ -6,17 +6,22 @@ task families; each has its own key and its own answer fields:
 
 - ``introducing_commit`` — "which commit introduced behaviour X". Key: the
   full commit hash. Answer field ``commit``: a hex string. It is correct when
-  the corpus repository resolves it to exactly that commit, so any
-  unambiguous abbreviation counts and an ambiguous one does not; the
+  it is a prefix of exactly one commit object in the corpus repository and
+  that commit is the key. Refs are never consulted, so a branch or tag
+  spelled in hex does not count; objects that are not commits (blobs, trees,
+  annotated tag objects) neither count nor make a prefix ambiguous; git's own
+  minimum abbreviation applies (a shorter prefix names nothing). The
   repository, not a tuned prefix length, decides.
 - ``abandoned_approach`` — "was approach Y tried, and what was the recorded
   reason it stopped". Key: ``tried`` and, when tried, the accepted wordings
   of the recorded reason. Answer fields ``tried`` (bool) and ``reason``.
 - ``decided_value`` — "what is the decided value of constant Z and its
   cited source". Key: the accepted spellings of the value and the source
-  file path(s). Answer fields ``value`` and ``source``; a ``:<line>`` suffix
-  on the source is ignored because line numbers drift between commits while
-  the file that holds the citation does not.
+  file path(s), repository-relative. Answer fields ``value`` and ``source``;
+  one trailing ``:<line>`` on the source is ignored because line numbers
+  drift between commits while the file that holds the citation does not.
+  Any other spelling (``#L52``, ``:52-60``, an absolute path) is not
+  rewritten and does not match.
 
 Free text is compared by exact match after normalisation (Unicode NFKC,
 case folding, whitespace collapsed) against the accepted list written in the
@@ -33,11 +38,13 @@ source: issue #343"""
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import unicodedata
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 from pathlib import Path, PurePosixPath
 
 FAMILY_COMMIT = "introducing_commit"
@@ -61,7 +68,7 @@ def normalize_text(text: str) -> str:
 
 
 def normalize_source(path: str) -> str:
-    """Repository-relative POSIX path, without ``./`` or a ``:<line>`` suffix."""
+    """POSIX separators, ``./`` collapsed, one trailing ``:<line>`` removed."""
     stripped = _LINE_SUFFIX.sub("", path.strip()).replace("\\", "/")
     return str(PurePosixPath(stripped))
 
@@ -74,6 +81,20 @@ def _accepted(values: object, field: str, task_id: str) -> frozenset[str]:
     return frozenset(values)
 
 
+def _check_source(source: str, task_id: str) -> None:
+    path = PurePosixPath(normalize_source(source))
+    if path.is_absolute() or ".." in path.parts or str(path) == ".":
+        raise ValueError(
+            f"task {task_id!r}: key source {source!r} must name a file inside the repo"
+        )
+
+
+def _freeze(key: Mapping[str, object]) -> Mapping[str, object]:
+    return MappingProxyType(
+        {k: tuple(v) if isinstance(v, list) else v for k, v in key.items()}
+    )
+
+
 @dataclass(frozen=True)
 class OutcomeTask:
     task_id: str
@@ -82,13 +103,21 @@ class OutcomeTask:
     key: Mapping[str, object]
 
     def __post_init__(self) -> None:
-        if not isinstance(self.task_id, str) or not self.task_id:
+        if not isinstance(self.task_id, str) or not self.task_id.strip():
             raise ValueError(f"task_id must be a non-empty string: {self.task_id!r}")
         if self.family not in FAMILIES:
             raise ValueError(f"task {self.task_id!r}: unknown family {self.family!r}")
         if not isinstance(self.question, str) or not self.question.strip():
             raise ValueError(f"task {self.task_id!r}: question must be non-empty")
-        _KEY_CHECKS[self.family](self.task_id, self.key)
+        if not isinstance(self.key, Mapping):
+            raise ValueError(f"task {self.task_id!r}: key must be a mapping")
+        fields, check = _KEY_SCHEMAS[self.family]
+        unknown = sorted(set(self.key) - fields)
+        if unknown:
+            raise ValueError(f"task {self.task_id!r}: unknown key fields {unknown}")
+        check(self.task_id, self.key)
+        # Frozen after validation, so the checked key is the key that scores.
+        object.__setattr__(self, "key", _freeze(self.key))
 
 
 def _check_commit_key(task_id: str, key: Mapping[str, object]) -> None:
@@ -115,13 +144,14 @@ def _check_approach_key(task_id: str, key: Mapping[str, object]) -> None:
 
 def _check_value_key(task_id: str, key: Mapping[str, object]) -> None:
     _accepted(key.get("values"), "key.values", task_id)
-    _accepted(key.get("sources"), "key.sources", task_id)
+    for source in _accepted(key.get("sources"), "key.sources", task_id):
+        _check_source(source, task_id)
 
 
-_KEY_CHECKS = {
-    FAMILY_COMMIT: _check_commit_key,
-    FAMILY_APPROACH: _check_approach_key,
-    FAMILY_VALUE: _check_value_key,
+_KEY_SCHEMAS = {
+    FAMILY_COMMIT: (frozenset({"commit"}), _check_commit_key),
+    FAMILY_APPROACH: (frozenset({"tried", "reasons"}), _check_approach_key),
+    FAMILY_VALUE: (frozenset({"values", "sources"}), _check_value_key),
 }
 
 
@@ -161,9 +191,9 @@ def _verify_commit(
     if given is None:
         return False
     given = given.strip().lower()
-    # Hex only: nothing else reaches the resolver, so no ref name, revision
-    # expression or option can stand in for an object name.
-    if not _HEX.fullmatch(given):
+    # Hex only, so no revision expression or option reaches git; no longer
+    # than a full hash, so an oversized answer cannot overflow argv.
+    if not _HEX.fullmatch(given) or len(given) > max(_FULL_HASH_LENGTHS):
         return False
     return resolve(given) == task.key["commit"]
 
@@ -206,9 +236,16 @@ def verify(
 
 
 def _git(repo: Path, args: list[str], stdin: str | None = None) -> str:
+    """Run git on ``repo`` only; any git failure raises (never scored).
+
+    ``GIT_*`` variables are dropped so an inherited ``GIT_DIR`` or
+    ``GIT_OBJECT_DIRECTORY`` cannot point the lookup at another store.
+    """
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
     return subprocess.run(
         ["git", "-C", str(repo), *args],
         input=stdin,
+        env=env,
         capture_output=True,
         text=True,
         check=True,
@@ -222,6 +259,8 @@ def git_commit_resolver(repo: Path) -> CommitResolver:
     to be spelled in hex cannot stand in for a hash prefix. ``None`` when the
     prefix names no commit or more than one (git lists no candidate below its
     minimum abbreviation, so a too-short prefix is unknown, not ambiguous).
+    A path that is not a readable repository raises ``CalledProcessError``:
+    a broken corpus must stop the run, not score every answer incorrect.
     """
 
     def resolve(hex_name: str) -> str | None:
