@@ -8,8 +8,9 @@
 3. A spawn that raised ``OSError`` inside ``ensure_cycle`` left the lock and
    reached that legacy spawn.
 
-The tests named ``unreadable``, ``unexpected`` and ``failed_spawn`` fail on
-main; the others pin behaviour that stays unchanged.
+``test_missing_pid_file_*``, ``test_unparseable_pid_file_*`` and
+``test_coordinator_io_failure_keeps_the_documented_legacy_path`` pin behaviour
+that stays unchanged; every other test fails on main.
 
 source: ADR-1118 (amends ADR-0527 and ADR-1097 point 5)
 """
@@ -181,13 +182,17 @@ def test_spawn_returning_none_is_spawn_failed_and_keeps_the_period(coord):
     ``groomer.pid``, not counted as a cycle, and no retry in the period."""
     since = datetime.now(timezone.utc) - timedelta(seconds=1)
 
+    spawns = []
+
     def stamped_then_fails():
         assert coord.stamp_path.exists(), "spawn_fn runs after the stamp"
-        return
+        spawns.append(1)
+        return  # None: the failed-spawn sentinel (RET501 forbids `return None`)
 
     outcome = coord.ensure_cycle(period_hours=6.0, spawn_fn=stamped_then_fails)
 
     assert outcome == groomer_coordinator.SPAWN_FAILED
+    assert spawns == [1], "no retry on None inside the call"
     assert not coord.pid_path.exists()
     assert coord.count_cycles_since(since) == 0
     retried = []

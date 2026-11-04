@@ -18,9 +18,9 @@ isolated here through the production contract, never a test-only branch:
   ``../ai-architect-mcp-codebase`` exists on a contributor's machine
   (the 2026-10-14 leak). ``discover_pipeline_command`` returns None and
   the hook returns.
-* consolidate: the coordinator's public ``ensure_cycle`` records a cycle as
-  just run (a ``spawn_fn`` that starts nothing), so the hook sees
-  ``skipped_fresh`` for the 6 h period.
+* consolidate: the coordinator's public ``ensure_cycle`` stamps the period as
+  just started (a ``spawn_fn`` that starts nothing, so ``runs.log`` records
+  ``spawn_failed``), and the hook sees ``skipped_fresh`` for the 6 h period.
 
 A third worker is the resident capture worker (ADR-0486, ADR-0508): a real
 PostToolUse hook run admits its capture to a worker that, by design, outlives

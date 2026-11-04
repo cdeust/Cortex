@@ -22,10 +22,10 @@ adheres to [Semantic Versioning](https://semver.org/).
   `GroomerPidUnreadableError` instead of reading as "not running"; SessionStart
   logs it at ERROR and starts no cycle. Only an `OSError` on the coordinator's
   files still takes the legacy spawn; any other exception at SessionStart is
-  logged at ERROR and starts no cycle. A failed spawn of the cycle (building the
-  command or `Popen` raising `OSError`, e.g. EAGAIN) is logged at ERROR and recorded as `spawn_failed`
-  instead of `started`, rather than leaving the lock and retrying through the
-  legacy spawn.
+  logged at ERROR and starts no cycle. A failed spawn of the cycle (building
+  the command or `Popen` raising `OSError`, e.g. EAGAIN) is logged at ERROR
+  and recorded as `spawn_failed` instead of `started`, rather than leaving the
+  lock and retrying through the legacy spawn.
 - `explore_features` passes client-side output validation: every response
   carries the required `mode` and `status`, the declared `outputSchema` lists
   the keys the handler returns (`dictionary`, `graph`, `domains`, `comparison`,
