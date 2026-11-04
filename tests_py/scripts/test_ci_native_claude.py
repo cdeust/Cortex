@@ -70,7 +70,6 @@ class NativeClaudeTrustTests(unittest.TestCase):
             for step in mention["steps"]
             if "claude-code-action@" in step.get("uses", "")
         )
-        args = shlex.split(invocation["with"]["claude_args"])
         self.assertEqual(
             invocation["uses"],
             "anthropics/claude-code-action@8041f1d17e0e7d2f2cfe35002962e9f26237c0bb",
@@ -83,7 +82,7 @@ class NativeClaudeTrustTests(unittest.TestCase):
             invocation["with"]["include_comments_by_actor"],
             "${{ github.repository_owner }}",
         )
-        self.assertEqual(args, ["--strict-mcp-config", "--model", "claude-opus-5-5"])
+        self.assertNotIn("--permission-mode", invocation["with"]["claude_args"])
         self.assertEqual(mention["permissions"]["contents"], "write")
         # Pin both branches and the outer sender gate, including their grouping.
         expected = (
@@ -99,6 +98,52 @@ class NativeClaudeTrustTests(unittest.TestCase):
             "|| contains(github.event.issue.title, '@claude'))))"
         )
         self.assertEqual(" ".join(mention["if"].split()), expected)
+
+    def test_owner_mentions_allow_the_validation_commands_only(self):
+        # Tag mode supplies no shell allowlist beyond scoped git; headless, an
+        # unlisted command is denied (src/modes/tag/index.ts#L148-L201 at the
+        # pinned SHA). The list is CLAUDE.md's validation set; never Bash(bash:*).
+        workflow = yaml.safe_load(MENTIONS.read_text())
+        invocation = next(
+            step
+            for step in workflow["jobs"]["claude"]["steps"]
+            if "claude-code-action@" in step.get("uses", "")
+        )
+        args = shlex.split(invocation["with"]["claude_args"])
+        self.assertEqual(
+            args,
+            [
+                "--strict-mcp-config",
+                "--allowedTools",
+                "Bash(git:*),Bash(gh:*),Bash(uv:*),Bash(pytest:*),"
+                "Bash(python:*),Bash(python3:*),Bash(ruff:*)",
+                "--model",
+                "claude-opus-5-5",
+            ],
+        )
+        self.assertNotIn("Bash(bash:*)", invocation["with"]["claude_args"])
+
+    def test_owner_mentions_authorize_the_fix_target_before_checkout(self):
+        # The sender gate checks who asked, not which head the pinned action
+        # checks out and pushes to (src/modes/tag/index.ts). A fork head or main
+        # itself is refused before any checkout.
+        workflow = yaml.safe_load(MENTIONS.read_text())
+        steps = workflow["jobs"]["claude"]["steps"]
+        guard = next(s for s in steps if s.get("name") == "Authorize owner fix target")
+        checkout = next(
+            s for s in steps if s.get("uses", "").startswith("actions/checkout@")
+        )
+        self.assertLess(steps.index(guard), steps.index(checkout))
+        self.assertIn(".head.repo.full_name == $repo", guard["run"])
+        self.assertIn(".head.ref != .base.repo.default_branch", guard["run"])
+        self.assertIn("set -euo pipefail", guard["run"])
+        self.assertEqual(guard["env"]["GH_TOKEN"], "${{ github.token }}")
+
+    def test_owner_mentions_bound_the_run(self):
+        # source: docs.github.com workflow-syntax#jobsjob_idtimeout-minutes;
+        # the default is 360 minutes and the queue serializes per thread.
+        workflow = yaml.safe_load(MENTIONS.read_text())
+        self.assertEqual(workflow["jobs"]["claude"]["timeout-minutes"], 60)
 
     def test_owner_mentions_serialize_branch_writes(self):
         workflow = yaml.safe_load(MENTIONS.read_text())
