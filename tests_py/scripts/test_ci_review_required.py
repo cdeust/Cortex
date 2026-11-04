@@ -47,24 +47,38 @@ class ReviewIsNotRequiredTests(unittest.TestCase):
 
     def test_a_red_test_job_still_blocks_with_a_green_review(self):
         namespace = resolver()
-        for name in ("contract", "unit", "regression", "e2e", "merge", "install (macos-latest)"):
-            with self.subTest(name=name), self.assertRaises(namespace["PostMergeError"]):
+        for name in (
+            "contract",
+            "unit",
+            "regression",
+            "e2e",
+            "merge",
+            "install (macos-latest)",
+        ):
+            with (
+                self.subTest(name=name),
+                self.assertRaises(namespace["PostMergeError"]),
+            ):
                 jobs = completed_jobs("review")
-                next(job for job in jobs if job["name"] == name)["conclusion"] = "failure"
+                next(job for job in jobs if job["name"] == name)["conclusion"] = (
+                    "failure"
+                )
                 namespace["_validate_jobs"](jobs)
 
     def test_the_resolver_source_names_no_review_job(self):
         text = (ROOT / ".github/workflows/pipeline-post-merge.yml").read_text()
-        source = text.split("          python3 - <<'PY'\n", 1)[1].split("\n          PY", 1)[0]
+        source = text.split("          python3 - <<'PY'\n", 1)[1].split(
+            "\n          PY", 1
+        )[0]
         for forbidden in ('"review"', "merge pending review", "review_pending"):
             self.assertNotIn(forbidden, source)
 
-    def test_the_review_job_cannot_fail_the_pipeline(self):
+    def test_the_pipeline_has_no_review_job(self):
+        # ADR-1120: the reviewer is claude-review.yml, never a Pipeline job.
         text = (ROOT / ".github/workflows/pipeline.yml").read_text()
-        block = text.split("\n  review:\n", 1)[1].split("\n  merge:\n", 1)[0]
-        self.assertIn("    continue-on-error: true\n", block.split("    steps:", 1)[0])
+        self.assertNotIn("\n  review:\n", text)
         merge = text.split("\n  merge:\n", 1)[1].split("\n  tag:\n", 1)[0]
-        needs = next(l for l in merge.splitlines() if l.startswith("    needs:"))
+        needs = next(x for x in merge.splitlines() if x.startswith("    needs:"))
         self.assertNotIn("review", needs)
 
 
