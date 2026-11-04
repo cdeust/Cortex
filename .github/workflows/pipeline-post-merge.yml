@@ -307,12 +307,26 @@ jobs:
               return any(_push_covers_commit(push, sha) for push in pushes)
 
 
+          def _ran_the_review(run, prefix, api):
+              """True when this run's `Claude review` job executed the `PR Review` step."""
+              jobs = api.records(f"{prefix}/actions/runs/{run['id']}/jobs", "jobs")
+              return any(
+                  job.get("name") == "Claude review"
+                  and any(
+                      step.get("name") == "PR Review" and step.get("conclusion") == "success"
+                      for step in job.get("steps") or []
+                  )
+                  for job in jobs
+              )
+
+
           def _review_approves(number, head, repository, api):
               """The Claude review of this exact head decides the merge (ADR-1121).
 
-              The workflow run of claude-review.yml for the head SHA must have succeeded;
-              the latest claude[bot] comment updated after that run started must end its
-              verdict line with approve. No review, a stale review or a block holds the merge.
+              A verdict counts only when its comment links the run id of a claude-review.yml
+              run of this head whose `PR Review` step succeeded. A review of an older head
+              links another run, and a run that skipped the review (past the cap) has no
+              such step, so neither can approve a newer head. The latest verdict wins.
               """
               prefix = f"/repos/{repository}"
               runs = [
@@ -323,18 +337,18 @@ jobs:
                   )
                   if run.get("head_sha") == head and run.get("conclusion") == "success"
               ]
-              require(runs, "merge held: no successful Claude review run for this head")
-              started = max(run.get("created_at", "") for run in runs)
+              reviewed = [run for run in runs if _ran_the_review(run, prefix, api)]
+              require(reviewed, "merge held: no Claude review ran on this head")
+              links = [f"/actions/runs/{run['id']}" for run in reviewed]
               verdicts = []
               for comment in api.records(f"{prefix}/issues/{number}/comments"):
                   user = comment.get("user") or {}
+                  body = comment.get("body") or ""
                   if user.get("login") != "claude[bot]" or user.get("type") != "Bot":
                       continue
-                  if comment.get("updated_at", "") < started:
+                  if not any(re.search(re.escape(link) + r"(?!\d)", body) for link in links):
                       continue
-                  found = re.findall(
-                      r"^Verdict: (approve|block)\s*$", comment.get("body") or "", re.M
-                  )
+                  found = re.findall(r"^Verdict: (approve|block)\s*$", body, re.M)
                   if found:
                       verdicts.append((comment["updated_at"], found[-1]))
               require(verdicts, "merge held: Claude has not posted a verdict on this head")
