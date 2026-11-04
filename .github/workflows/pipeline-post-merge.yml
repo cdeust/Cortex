@@ -161,8 +161,8 @@ jobs:
 
           def _validate_jobs(jobs):
               # Owner rule 2026-10-29: the required jobs are the tests and their
-              # aggregate `merge`; the `review` job may run and post but is never
-              # read here. Overall success alone accepts skipped jobs.
+              # aggregate `merge`; the Claude verdict is read by
+              # _review_approves. Overall success alone accepts skipped jobs.
               required = ["contract", "unit", "regression", "e2e", "merge"]
               for category in ("environment", "install"):
                   expected = {
@@ -307,7 +307,41 @@ jobs:
               return any(_push_covers_commit(push, sha) for push in pushes)
 
 
-          def _merge_open_pr(pr, merge_path, head, api):
+          def _review_approves(number, head, repository, api):
+              """The Claude review of this exact head decides the merge (ADR-1121).
+
+              The workflow run of claude-review.yml for the head SHA must have succeeded;
+              the latest claude[bot] comment updated after that run started must end its
+              verdict line with approve. No review, a stale review or a block holds the merge.
+              """
+              prefix = f"/repos/{repository}"
+              runs = [
+                  run
+                  for run in api.records(
+                      f"{prefix}/actions/workflows/claude-review.yml/runs?head_sha={head}",
+                      "workflow_runs",
+                  )
+                  if run.get("head_sha") == head and run.get("conclusion") == "success"
+              ]
+              require(runs, "merge held: no successful Claude review run for this head")
+              started = max(run.get("created_at", "") for run in runs)
+              verdicts = []
+              for comment in api.records(f"{prefix}/issues/{number}/comments"):
+                  user = comment.get("user") or {}
+                  if user.get("login") != "claude[bot]" or user.get("type") != "Bot":
+                      continue
+                  if comment.get("updated_at", "") < started:
+                      continue
+                  found = re.findall(
+                      r"^Verdict: (approve|block)\s*$", comment.get("body") or "", re.M
+                  )
+                  if found:
+                      verdicts.append((comment["updated_at"], found[-1]))
+              require(verdicts, "merge held: Claude has not posted a verdict on this head")
+              require(max(verdicts)[1] == "approve", "merge held: Claude review verdict is block")
+
+
+          def _merge_open_pr(pr, merge_path, head, api, repository):
               require(
                   pr.get("state") == "open" and pr.get("draft") is False,
                   "PR is closed or draft",
@@ -320,6 +354,7 @@ jobs:
                   ),
                   "PR label holds merge",
               )
+              _review_approves(pr["number"], head, repository, api)
               result = api.request(
                   "PUT",
                   merge_path,
@@ -350,7 +385,7 @@ jobs:
               if already_merged:
                   sha = full_sha(pr.get("merge_commit_sha"))
               else:
-                  sha = _merge_open_pr(pr, pr_path + "/merge", run["head_sha"], api)
+                  sha = _merge_open_pr(pr, pr_path + "/merge", run["head_sha"], api, repository)
               _confirm_pr_merge(pr_path, pr, sha, api)
               if already_merged and _has_push_pipeline(repository, sha, api):
                   return {
