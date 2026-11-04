@@ -8,6 +8,9 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- The Claude review verdict decides the merge (ADR-1121). The post-merge
+  resolver merges a PR only when the latest `claude[bot]` verdict on its head
+  is `Verdict: approve`; a block, a stale or a missing verdict holds the merge.
 - Codex no longer runs in the CI (ADR-1120). The 891-line `review` job of
   `pipeline.yml` and `Codex.yml` are removed; `merge` remains the aggregate of
   the test jobs and the Claude workflow is the only automatic reviewer.
