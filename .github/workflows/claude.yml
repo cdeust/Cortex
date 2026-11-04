@@ -51,7 +51,12 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           set -euo pipefail
-          if jq -e '.issue.pull_request != null' "$GITHUB_EVENT_PATH" >/dev/null; then
+          is_pull="$(jq -r '.issue.pull_request != null' "$GITHUB_EVENT_PATH" 2>/dev/null || true)"
+          if [ "$is_pull" != true ] && [ "$is_pull" != false ]; then
+            echo "::error::could not read the event at GITHUB_EVENT_PATH; refusing the fix target"
+            exit 1
+          fi
+          if [ "$is_pull" = true ]; then
             if ! pull="$(gh api "repos/$GH_REPO/pulls/$ISSUE_NUMBER")"; then
               echo "::error::could not read PR #$ISSUE_NUMBER; refusing the fix target"
               exit 1
@@ -77,20 +82,32 @@ jobs:
             sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           fi
           bwrap --version
-      # The allowlisted commands need the locked environment the pipeline tests
-      # in (.github/actions/test-suite): without it bare pytest, ruff and python
-      # run against the system interpreter or are not found (#856 review).
+      # The allowlisted commands need the environment ci.json's unit job tests
+      # in: Python 3.12, the locked dev+sqlite+codebase set, the lint group for
+      # ruff (pyproject [dependency-groups], as memory-exact-review.yml installs
+      # it) and the embedding model, which tests_py/infrastructure/
+      # test_embedding_live_contract.py requires offline under CI (#856 review).
+      # source: ci.json "unit", .github/actions/test-suite/action.yml.
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
-      - name: Install the locked dev+sqlite set
+      - name: Install the locked dev+sqlite+codebase set and the lint group
         uses: ./.github/actions/uv-locked-install
         with:
-          set: --extra dev --extra sqlite
+          set: --extra dev --extra sqlite --extra codebase --group lint
           environment: ${{ env.pythonLocation }}
+      # uv-locked-install passes --no-install-project (ADR-1092); hatchling is in
+      # the locked set, so the project installs without build isolation.
       - name: Install the project
-        # source: ADR-0800, as .github/actions/test-suite installs it.
-        run: pip install --no-deps -e .
+        run: pip install --no-deps --no-build-isolation -e .
+      - name: Pre-download embedding model
+        run: |
+          for attempt in 1 2 3 4 5; do
+            python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2', device='cpu')" && exit 0
+            echo "HF pre-download attempt ${attempt} failed; retrying in $((attempt * 10))s" >&2
+            sleep $((attempt * 10))
+          done
+          exit 1
       - uses: anthropics/claude-code-action@8041f1d17e0e7d2f2cfe35002962e9f26237c0bb # v1.0.263
         env:
           CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
@@ -110,13 +127,16 @@ jobs:
           # Tag mode grants edits and its own scoped git (add, commit, push to the
           # PR branch) only; headless, anything that falls through to "ask" is
           # denied (src/modes/tag/index.ts:158-214). The allowlist adds exactly
-          # CLAUDE.md's validation commands plus git and gh inspection commands;
-          # the tracking comment is tag mode's own MCP tool, so no gh pr comment.
-          # A command prefix is not a security boundary (pytest and uv run repo
-          # code by design, git diff takes --output): the boundary is the owner
-          # gate, the App token, the job permissions and the bubblewrap sandbox.
-          # Reviews of #855 and #856.
+          # CLAUDE.md's validation commands (the environment is installed above,
+          # so no uv sync: it would build a second .venv and may rewrite uv.lock,
+          # tests_py/scripts/test_uv_lock_single_source.py), git inspection and
+          # gh run view for the CI logs a fix needs. Tag mode supplies the PR
+          # itself and owns the tracking comment, so no gh pr view/diff/comment.
+          # A command prefix is not a security boundary (pytest runs repo code by
+          # design, git diff and git log take --output): the boundary is the
+          # owner gate, the App token, the job permissions and the bubblewrap
+          # sandbox. Reviews of #855 and #856.
           claude_args: |
             --strict-mcp-config
-            --allowedTools "Bash(uv sync:*),Bash(pytest:*),Bash(ruff check:*),Bash(ruff format --check:*),Bash(python -m mcp_server.doctor:*),Bash(python scripts/check_craftsmanship.py:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh run view:*)"
+            --allowedTools "Bash(pytest:*),Bash(ruff check:*),Bash(ruff format --check:*),Bash(python -m mcp_server.doctor:*),Bash(python scripts/check_craftsmanship.py:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(gh run view:*)"
             --model "claude-opus-5-5"

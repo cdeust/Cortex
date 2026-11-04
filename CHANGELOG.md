@@ -29,13 +29,16 @@ adheres to [Semantic Versioning](https://semver.org/).
   unknown mode now receives an MCP input-validation error.
 
 - Owner `@claude` mentions (`.github/workflows/claude.yml`) can run CLAUDE.md's
-  validation commands headlessly (`uv sync`, `pytest`, `ruff check`,
-  `ruff format --check`, `python -m mcp_server.doctor`, `scripts/check_craftsmanship.py`,
-  plus `git status|diff|log` and `gh pr view|diff`, `gh run view`): tag mode at the
-  pinned action denies every unlisted shell command, and the job now installs the
-  locked dev+sqlite environment those commands need. A first step refuses a fix
-  target whose head is a fork or `main`, the job is bound to 60 minutes, and the
-  offline switches of the pipeline's pytest step are set (#855, #856).
+  validation commands headlessly (`pytest`, `ruff check`, `ruff format --check`,
+  `python -m mcp_server.doctor`, `python scripts/check_craftsmanship.py`, plus
+  `git status|diff|log` and `gh run view`); tag mode keeps its own scoped
+  `git add|commit|push` and denies every other shell command at the pinned action.
+  The job installs the environment `ci.json`'s unit job tests in (Python 3.12,
+  locked dev+sqlite+codebase set, lint group, embedding model) before the agent
+  starts. A first step refuses a fix target whose head is a fork or the default
+  branch and refuses when the event cannot be read, the job is bound to 60
+  minutes, and the offline switches of the pipeline's pytest step are set
+  (#855, #856).
 - Document ingestion reports partial wiki/summary/section writes with component
   receipts and failure reasons. Same-version retries resume missing components
   from durable rows and page content, including stored summaries with missing
