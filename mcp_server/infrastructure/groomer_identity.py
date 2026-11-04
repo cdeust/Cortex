@@ -14,7 +14,7 @@ class GroomerPidUnreadableError(RuntimeError):
     a missing file), so whether a cycle is running is unknown.
 
     Not an ``OSError``: it must not reach the legacy degrade path, which
-    bypasses the very guard this file is.
+    bypasses the single-instance guard that ``groomer.pid`` provides.
 
     source: ADR-1118"""
 

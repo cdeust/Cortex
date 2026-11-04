@@ -28,16 +28,22 @@ def _spawn_consolidate_cycle(spawn_options: dict[str, Any]) -> int | None:
     decided by the caller before it stamped the period (ADR-1102).
     postcondition: a fully-detached subprocess (own
     process group, stdio → ``consolidate.log``) is started and its pid
-    returned, or None if the spawn itself failed. The worker runs decay,
+    returned, or None after logging ERROR if the spawn itself failed
+    (``OSError`` from the log file or ``Popen``). It never raises
+    ``OSError``: inside ``ensure_cycle`` that would leave the lock and reach
+    the legacy spawn, a second cycle outside it (ADR-1118). The worker runs decay,
     compression, CLS, memify, cascade, homeostatic, emergence cycles plus
     autonomous wiki maintenance — this is the SAME cycle as before; #171
     changes only WHO decides to start it, never what it does.
     """
     cmd = child_command("mcp_server.hooks.consolidate_background")
-
-    log_path = methodology_log_path("consolidate.log")
-    # source: ADR-1110 — the child's output reaches the log only redacted
-    proc = spawn_logged(cmd, log_path, **spawn_options).child
+    try:
+        log_path = methodology_log_path("consolidate.log")
+        # source: ADR-1110 — the child's output reaches the log only redacted
+        proc = spawn_logged(cmd, log_path, **spawn_options).child
+    except OSError as exc:
+        _log(f"ERROR: background consolidate spawn failed ({exc}); no cycle started")
+        return None
     _log(f"background consolidate spawned → {log_path}")
     return proc.pid
 
@@ -106,7 +112,7 @@ def _ensure_coordinated_cycle(coord) -> str | None:
     ERROR with the cause and returns None with nothing spawned or stamped;
     the window stays registered only in the job-state case.
 
-    source: ADR-1097 and ADR-1102"""
+    source: ADR-1097 and ADR-1102 (unreadable groomer.pid: ADR-1118)"""
     from mcp_server.infrastructure.groomer_identity import (  # noqa: PLC0415 — hook latency boundary: see _maybe_background_consolidate
         WindowIdentityUnavailableError,
         window_pid,
@@ -158,11 +164,11 @@ def _ensure_cycle_or_fail(coord, session_pid: int, spawn_options) -> str | None:
 def _legacy_background_consolidate() -> None:
     """Pre-#171 per-session stamp spawn — the honest degrade path.
 
-    Kept as the fallback the coordinator degrades to (never a silent skip).
-    Spawns the cycle when the global ``.last_consolidate`` stamp is older
-    than the TTL. Retains the crude ``"(in-flight)"`` marker: under this
-    path (coordinator wholly unavailable) it is still strictly better than
-    no guard at all.
+    Kept as the fallback the coordinator degrades to on an ``OSError`` on
+    its own files (ADR-1118 point 3), never a silent skip. Spawns the cycle
+    when the global ``.last_consolidate`` stamp is older than the TTL.
+    Retains the crude ``"(in-flight)"`` marker: under this path it is still
+    strictly better than no guard at all.
     """
     try:
         from mcp_server.hooks.consolidate_background import (  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)

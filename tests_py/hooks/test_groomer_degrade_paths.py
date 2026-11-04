@@ -123,7 +123,10 @@ def test_session_start_with_unreadable_pid_file_fails_hard(
     assert not unreadable_pid_file.stamp_path.exists()
     assert list(unreadable_pid_file._iter_session_files()) == []
     errors = _errors(calls)
-    assert len(errors) == 1 and "Permission denied" in errors[0]
+    assert len(errors) == 1
+    assert "GroomerPidUnreadableError" in errors[0]
+    assert "Permission denied" in errors[0]
+    assert "no consolidate cycle started" in errors[0]
 
 
 # ── path 2: the hook boundary ─────────────────────────────────────────────
@@ -147,17 +150,50 @@ def test_unexpected_coordinator_exception_spawns_nothing(
 
 
 def test_coordinator_io_failure_keeps_the_documented_legacy_path(
-    start_hook, coord, monkeypatch
+    start_hook, tmp_path, monkeypatch
 ):
-    """ADR-1097 point 5, unchanged: I/O on the coordinator's own files."""
+    """ADR-1097 point 5, unchanged: I/O on the coordinator's own files.
+
+    A cache root that is a regular file makes ``ensure_cycle``'s ``mkdir``
+    raise a real ``OSError`` (no monkeypatch; works as root)."""
     consolidate, calls = start_hook
-
-    def disk_full(self, _pid):
-        raise OSError(errno.ENOSPC, "No space left on device")
-
-    monkeypatch.setattr(groomer_coordinator.GroomerCoordinator, "register", disk_full)
+    not_a_dir = tmp_path / "cache-is-a-file"
+    not_a_dir.write_text("", encoding="utf-8")
+    monkeypatch.setenv("XDG_CACHE_HOME", str(not_a_dir))
     consolidate._maybe_background_consolidate()
 
     assert calls["legacy"] == 1
     assert calls["spawn"] == 0
-    assert any("No space left on device" in m for m in calls["log"])
+    assert any("falling back to legacy" in m for m in calls["log"])
+
+
+# ── a failed spawn inside the lock ────────────────────────────────────────
+
+
+def test_failed_spawn_inside_the_lock_never_reaches_the_legacy_path(
+    coord, tmp_path, monkeypatch
+):
+    """A Popen OSError (EAGAIN at the fork limit) used to leave ensure_cycle
+    as an OSError and start a legacy cycle outside the lock (ADR-1118 pt 4)."""
+    from mcp_server.hooks import session_start_consolidate as consolidate
+
+    calls = {"legacy": 0, "log": []}
+
+    def fork_limit(*_args, **_kwargs):
+        raise BlockingIOError(errno.EAGAIN, "Resource temporarily unavailable")
+
+    def legacy():
+        calls["legacy"] += 1
+
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.delenv("CORTEX_CLAUDE_DIR", raising=False)
+    monkeypatch.setattr(consolidate, "spawn_logged", fork_limit)
+    monkeypatch.setattr(consolidate, "_legacy_background_consolidate", legacy)
+    monkeypatch.setattr(consolidate, "_log", calls["log"].append)
+    monkeypatch.setattr(session_registry, "find_claude_ancestor", os.getppid)
+    consolidate._maybe_background_consolidate()
+
+    assert calls["legacy"] == 0, "no second spawn outside the lock"
+    assert not coord.pid_path.exists()
+    errors = _errors(calls)
+    assert len(errors) == 1 and "Resource temporarily unavailable" in errors[0]
