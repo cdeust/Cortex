@@ -97,6 +97,12 @@ def test_approach_reason_is_exact_after_normalisation_not_similarity():
     )
 
 
+def test_tried_approach_without_a_text_reason_is_incorrect():
+    task = _approach_task()
+    for answer in ({"tried": True}, {"tried": True, "reason": 5}):
+        assert not verify(task, answer, resolve_commit=_no_git)
+
+
 def test_untried_approach_needs_only_tried_false():
     task = _approach_task(tried=False)
     assert verify(task, {"tried": False}, resolve_commit=_no_git)
@@ -107,6 +113,9 @@ def test_untried_approach_needs_only_tried_false():
     "family,key,match",
     [
         (FAMILY_COMMIT, {"commit": "0123456"}, "full lowercase hex"),
+        (FAMILY_COMMIT, {"commit": "a" * 41}, "full lowercase hex"),
+        (FAMILY_COMMIT, {"commit": "a" * 63}, "full lowercase hex"),
+        (FAMILY_COMMIT, {"commit": ""}, "full lowercase hex"),
         (FAMILY_COMMIT, {"commit": _SHA.upper()}, "full lowercase hex"),
         (FAMILY_COMMIT, {"commit": _SHA, "note": "x"}, "unknown key fields"),
         (FAMILY_APPROACH, {"tried": "yes"}, "must be a bool"),
@@ -120,6 +129,10 @@ def test_untried_approach_needs_only_tried_false():
         (FAMILY_VALUE, {"values": ["1"], "sources": ["./"]}, "inside the repo"),
         (FAMILY_VALUE, {"values": ["1"], "sources": ["/etc/a.py"]}, "inside the repo"),
         (FAMILY_VALUE, {"values": ["1"], "sources": ["../a.py"]}, "inside the repo"),
+        (FAMILY_VALUE, {"values": ["1"], "sources": ["a/../../b.py"]}, "inside"),
+        (FAMILY_VALUE, {"values": ["1"], "sources": [":52"]}, "inside the repo"),
+        (FAMILY_VALUE, {"values": ["1"], "sources": ["C:\\repo\\a.py"]}, "inside"),
+        (FAMILY_VALUE, {"values": ["1"], "sources": ["\\\\srv\\s\\a.py"]}, "inside"),
         ("other", {}, "unknown family"),
         (FAMILY_COMMIT, None, "key must be a mapping"),
     ],
@@ -152,6 +165,13 @@ def test_task_is_hashable_by_id():
     task = _value_task()
     assert hash(task) == hash(task.task_id)
     assert {task} == {_value_task()}
+
+
+def test_load_tasks_invalid_json_names_the_file(tmp_path):
+    path = tmp_path / "tasks.json"
+    path.write_text("[{", encoding="utf-8")
+    with pytest.raises(ValueError, match="tasks.json: invalid JSON"):
+        load_tasks(path)
 
 
 def test_load_tasks_error_names_the_file(tmp_path):

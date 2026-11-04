@@ -44,7 +44,7 @@ import re
 import unicodedata
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from types import MappingProxyType
 
 FAMILY_COMMIT = "introducing_commit"
@@ -83,7 +83,8 @@ def _accepted(values: object, field: str, task_id: str) -> frozenset[str]:
 
 def _check_source(source: str, task_id: str) -> None:
     path = PurePosixPath(normalize_source(source))
-    if path.is_absolute() or ".." in path.parts or str(path) == ".":
+    windows_anchor = PureWindowsPath(source.strip()).anchor
+    if path.is_absolute() or windows_anchor or ".." in path.parts or str(path) == ".":
         raise ValueError(
             f"task {task_id!r}: key source {source!r} must name a file inside the repo"
         )
@@ -176,7 +177,10 @@ def _task_from_json(path: Path, item: object) -> OutcomeTask:
 
 def load_tasks(path: Path) -> tuple[OutcomeTask, ...]:
     """Read a JSON list of task objects; ids must be unique."""
-    raw = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        raise ValueError(f"{path}: invalid JSON: {error}") from error
     if not isinstance(raw, list) or not raw:
         raise ValueError(f"{path}: expected a non-empty JSON list of tasks")
     tasks = tuple(_task_from_json(path, item) for item in raw)
@@ -200,7 +204,9 @@ def _verify_commit(
         return False
     given = given.strip().lower()
     # Hex only, so no revision expression or option reaches git; no longer
-    # than a full hash, so an oversized answer cannot overflow argv.
+    # than the longest full hash (64), so an oversized answer cannot overflow
+    # argv. A 41-64 digit answer in a SHA-1 corpus reaches git, which lists
+    # nothing for it.
     if not _HEX.fullmatch(given) or len(given) > max(_FULL_HASH_LENGTHS):
         return False
     return resolve(given) == task.key["commit"]

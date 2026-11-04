@@ -7,69 +7,111 @@ confirms, before a run, that every commit key names a commit of that corpus,
 so a typo or a hash from another repository fails the run instead of scoring
 every answer incorrect.
 
+The corpus must be self-contained: a work tree with its own ``.git``
+directory, or a bare repository, whose object store is not borrowed through
+``objects/info/alternates``, a ``gitdir:`` file or ``commondir``. Anything
+else raises before an answer is scored, because those indirections would
+read an object store outside the snapshot.
+
 The resolver reads whatever repository it is given. The two-arm runner
-(slice 4) must hand it a read-only copy taken before the agent runs, or an
-agent with write access could prune or add objects and change which short
-prefixes are ambiguous (it still cannot make a non-prefix of the key pass).
+(slice 4) must hand it a read-only, self-contained copy taken before the
+agent runs (``git clone --no-local --no-hardlinks``, or a bare mirror), and
+must call ``check_commit_keys`` on that same copy before the first trial:
+an agent with write access could otherwise prune or add objects and change
+which short prefixes are ambiguous (it still cannot make a non-prefix of
+the key pass).
 
 source: issue #343"""
 
 from __future__ import annotations
 
 import os
+import re
 import subprocess
-from collections.abc import Iterable
+from collections.abc import Sequence
 from pathlib import Path
 
-from benchmarks.outcome.answer_key import (
-    _HEX,
-    FAMILY_COMMIT,
-    CommitResolver,
-    OutcomeTask,
-)
+from benchmarks.outcome.answer_key import FAMILY_COMMIT, CommitResolver, OutcomeTask
+
+_LOWER_HEX = re.compile(r"[0-9a-f]+")
+
+# Git reads no global or system config, so CI and developer machines resolve
+# identically; repository-local config still applies.
+_ISOLATED_CONFIG = {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
 
 
 def _git(repo: Path, args: list[str], stdin: str | None = None) -> str:
-    """Run git on ``repo`` only; any git failure raises (never scored).
+    """Run git on ``repo`` only; a git failure raises ``RuntimeError``.
 
     ``GIT_*`` variables are dropped so an inherited ``GIT_DIR`` or
     ``GIT_OBJECT_DIRECTORY`` cannot point the lookup at another store, and
     ``--no-replace-objects`` stops ``refs/replace/*`` from changing the type
-    or identity git reports for an object.
+    or identity git reports for an object. Git's stderr is kept in the error.
     """
     env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
-    return subprocess.run(
-        ["git", "--no-replace-objects", "-C", str(repo), *args],
-        input=stdin,
-        env=env,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout
+    try:
+        return subprocess.run(
+            ["git", "--no-replace-objects", "-C", str(repo), *args],
+            input=stdin,
+            env={**env, **_ISOLATED_CONFIG},
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+    except subprocess.CalledProcessError as error:
+        raise RuntimeError(
+            f"git {' '.join(args)} failed in {repo}: {error.stderr.strip()}"
+        ) from error
+
+
+def _same_path(found: str, expected: Path) -> bool:
+    return expected.exists() and os.path.samefile(found, expected)
+
+
+def _check_corpus(repo: Path) -> None:
+    """Raise unless ``repo`` is a self-contained repository root."""
+    info = _git(
+        repo,
+        [
+            "rev-parse",
+            "--path-format=absolute",
+            "--is-bare-repository",
+            "--absolute-git-dir",
+            "--git-common-dir",
+        ],
+    ).splitlines()
+    bare, git_dir, common_dir = info[0], info[1], info[2]
+    expected = repo if bare == "true" else repo / ".git"
+    if not _same_path(git_dir, expected) or not _same_path(common_dir, expected):
+        raise ValueError(
+            f"{repo} is not a self-contained repository root (git dir {git_dir}, "
+            f"common dir {common_dir})"
+        )
+    if (expected / "objects" / "info" / "alternates").exists():
+        raise ValueError(f"{repo} borrows objects through objects/info/alternates")
 
 
 def git_commit_resolver(repo: Path) -> CommitResolver:
-    """Resolve a hex abbreviation to the full commit hash in ``repo``.
+    """Resolve a lowercase hex abbreviation to the full commit hash in ``repo``.
 
     Only object names are consulted, never refs: a branch or tag that happens
     to be spelled in hex cannot stand in for a hash prefix. ``None`` when the
     prefix names no commit or more than one (git lists no candidate below its
-    minimum abbreviation, so a too-short prefix is unknown, not ambiguous).
-    A broken corpus must stop the run, not score every answer incorrect: a
-    path that is not inside a readable repository raises
-    ``CalledProcessError``, and a path that is inside one without being its
-    work-tree root (a plain subdirectory, a checkout whose ``.git`` is gone)
-    raises ``ValueError`` here, before any answer is resolved, instead of
-    silently resolving against the enclosing repository. A non-hex name
-    passed to the returned function raises ``ValueError``.
+    hard minimum of 4 hex digits, or beyond the repository's hash length).
+
+    A broken corpus stops the run instead of scoring every answer incorrect.
+    Before any answer is resolved, a path git cannot open raises
+    ``RuntimeError`` (with git's message), and a path that is not a
+    self-contained repository root (see the module docstring) raises
+    ``ValueError``. The returned function raises ``ValueError`` for a name
+    that is not lowercase hex (``verify`` lowercases answers first).
     """
-    top = Path(_git(repo, ["rev-parse", "--show-toplevel"]).strip())
-    if top.resolve() != Path(repo).resolve():
-        raise ValueError(f"{repo} is not the root of a git work tree (found {top})")
+    repo = Path(repo)
+    _check_corpus(repo)
 
     def resolve(hex_name: str) -> str | None:
-        if not _HEX.fullmatch(hex_name):
-            raise ValueError(f"not a hex object name: {hex_name!r}")
+        if not _LOWER_HEX.fullmatch(hex_name):
+            raise ValueError(f"not a lowercase hex object name: {hex_name!r}")
         candidates = _git(repo, ["rev-parse", f"--disambiguate={hex_name}"])
         if not candidates.strip():
             return None
@@ -86,8 +128,12 @@ def git_commit_resolver(repo: Path) -> CommitResolver:
     return resolve
 
 
-def check_commit_keys(tasks: Iterable[OutcomeTask], resolve: CommitResolver) -> None:
-    """Raise ``ValueError`` unless every commit key names a commit in the corpus."""
+def check_commit_keys(tasks: Sequence[OutcomeTask], resolve: CommitResolver) -> None:
+    """Raise ``ValueError`` unless every commit key names a commit in the corpus.
+
+    A ``Sequence``, not an iterable: the runner iterates the same tasks again
+    to run the trials, and a consumed generator would score zero tasks.
+    """
     for task in tasks:
         if (
             task.family == FAMILY_COMMIT
