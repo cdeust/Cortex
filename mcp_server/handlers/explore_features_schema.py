@@ -19,7 +19,7 @@ from mcp_server.handlers._tool_meta import READ_ONLY
 # The registered wrapper types `mode` with ExploreMode, so the MCP SDK publishes
 # the enum and rejects any other string before the handler runs.
 ExploreMode = Literal["features", "attribution", "persona", "crosscoder"]
-MODES: tuple[str, ...] = get_args(ExploreMode)
+MODES: tuple[ExploreMode, ...] = get_args(ExploreMode)
 
 _PERSONA_DIM = len(PERSONA_DIMENSIONS)
 
@@ -116,9 +116,12 @@ schema = {
         "interpretability internals) and `list_domains` (overview, no "
         "analysis). Read-only on "
         "profiles.json. Latency <100ms. Every response carries `mode` and "
-        "`status`, plus the lens's payload: "
-        "{dictionary | graph | persona | domains | comparison | "
-        "persistentFeatures}. An unknown mode is a tool error."
+        "`status`. status=ok adds the lens's keys: features → dictionary, "
+        "persistentFeatures; attribution → domain, graph; persona → domain, "
+        "persona, dimensions (or domains, global, dimensions without "
+        "domain); crosscoder → comparison (or persistentFeatures, "
+        "domainCount without both domains). status=no_data or error adds "
+        "only message. An unknown mode is rejected as invalid input."
     ),
     "inputSchema": {
         "type": "object",

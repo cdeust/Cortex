@@ -22,6 +22,7 @@ from mcp_server import tool_registry_core as registry
 from mcp_server.core.persona_vector import PERSONA_DIMENSIONS
 from mcp_server.core.sparse_dictionary import build_seed_dictionary
 from mcp_server.handlers import explore_features
+from mcp_server.handlers._tool_meta import apply_output_schemas
 from mcp_server.handlers.explore_features import handler, schema
 from mcp_server.handlers.explore_features_schema import MODES
 
@@ -128,16 +129,42 @@ def test_no_data_path_validates_and_echoes_mode(mode, profiles):
 
 
 def _registered_server() -> MCPServer:
+    """Registered as the real server wires it (__main__.py), output schema
+    included, so these tests see what clients see."""
     server = MCPServer(name="explore-features-schema-test")
     registry._register_explore_features(server)
+    apply_output_schemas(server, {"explore_features": schema})
     return server
+
+
+def _registered_tool():
+    tools = asyncio.run(_registered_server().list_tools())
+    (tool,) = [t for t in tools if t.name == "explore_features"]
+    return tool
+
+
+def test_registered_tool_publishes_the_declared_output_schema():
+    assert _registered_tool().output_schema == _OUTPUT_SCHEMA
+
+
+@pytest.mark.parametrize(
+    ("args", "status"),
+    [({"mode": "features"}, "ok"), ({"mode": "persona", "domain": "x"}, "error")],
+)
+def test_registered_call_returns_structured_content_that_validates(args, status):
+    """End to end: wrapper, safe_handler, to_json_native and the SDK (#680)."""
+    with patch(
+        "mcp_server.handlers.explore_features.load_profiles", return_value=_STORED
+    ):
+        result = asyncio.run(_registered_server().call_tool("explore_features", args))
+    content = result.structured_content
+    jsonschema.validate(content, _OUTPUT_SCHEMA)
+    assert (content["mode"], content["status"]) == (args["mode"], status)
 
 
 def test_registered_input_schema_publishes_the_mode_enum():
     """Clients read the wrapper signature, not schema["inputSchema"]."""
-    tools = asyncio.run(_registered_server().list_tools())
-    (tool,) = [t for t in tools if t.name == "explore_features"]
-    published = tool.input_schema["properties"]["mode"]["enum"]
+    published = _registered_tool().input_schema["properties"]["mode"]["enum"]
     declared = schema["inputSchema"]["properties"]["mode"]["enum"]
     assert published == declared == _OUTPUT_SCHEMA["properties"]["mode"]["enum"]
     assert published == list(MODES)

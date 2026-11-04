@@ -120,8 +120,13 @@ Interpretability exploration across four modes.
 - **`persona`** — 9D persona vector (`dimensions` names them) for one domain, or for every domain plus their session-weighted composition
 - **`crosscoder`** — Active features shared by and unique to `domain` and `compare_domain`; without both, the features persistent across all domains
 
-Every response carries `mode` and `status` (`ok`, `no_data` or `error`) beside
-the lens's payload. An unknown `mode` is a tool error.
+Every response carries `mode` and `status` (`ok`, `no_data` or `error`).
+`ok` adds the lens's keys: `features` → `dictionary`, `persistentFeatures`;
+`attribution` → `domain`, `graph`; `persona` → `domain`, `persona`,
+`dimensions` (or `domains`, `global`, `dimensions` without `domain`);
+`crosscoder` → `comparison` (or `persistentFeatures`, `domainCount` without both
+domains). `no_data` and `error` add only `message`. An unknown `mode` is
+rejected as invalid input (an MCP input-validation error).
 
 **Target Latency:** <100ms
 

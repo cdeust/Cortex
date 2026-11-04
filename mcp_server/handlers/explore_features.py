@@ -6,6 +6,8 @@ in explore_features_schema.py and is re-exported here.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from mcp_server.core.attribution_tracer import trace_attribution
 from mcp_server.core.behavioral_crosscoder import (
     compare_feature_profiles,
@@ -17,7 +19,7 @@ from mcp_server.core.persona_vector import (
     compose_personas,
 )
 from mcp_server.core.sparse_dictionary import build_seed_dictionary
-from mcp_server.handlers.explore_features_schema import MODES, schema
+from mcp_server.handlers.explore_features_schema import MODES, ExploreMode, schema
 from mcp_server.infrastructure.profile_store import load_profiles
 from mcp_server.infrastructure.scanner import discover_conversations_for_projects
 from mcp_server.shared.types_features import FeatureDictionary, PersistentFeature
@@ -73,7 +75,10 @@ def _resolve_feature_dictionary(profiles: dict) -> FeatureDictionary:
     return build_seed_dictionary()
 
 
-def _handle_features(profiles: dict, *_ignored: str | None) -> dict:
+def _handle_features(
+    profiles: dict, domain: str | None, compare_domain: str | None
+) -> dict:
+    """``domain`` and ``compare_domain`` are ignored: the dictionary is global."""
     d = _resolve_feature_dictionary(profiles)
 
     return {
@@ -114,7 +119,9 @@ def _fetch_attribution_conversations(dp: dict) -> list[dict]:
     return discover_conversations_for_projects(project_ids, ATTRIBUTION_SAMPLE_LIMIT)
 
 
-def _handle_attribution(profiles: dict, domain: str | None, *_: str | None) -> dict:
+def _handle_attribution(
+    profiles: dict, domain: str | None, compare_domain: str | None
+) -> dict:
     domain_id = domain or next(iter(profiles.get("domains", {})), None)
     dp = profiles.get("domains", {}).get(domain_id) if domain_id else None
 
@@ -138,7 +145,9 @@ def _handle_attribution(profiles: dict, domain: str | None, *_: str | None) -> d
     }
 
 
-def _handle_persona(profiles: dict, domain: str | None, *_: str | None) -> dict:
+def _handle_persona(
+    profiles: dict, domain: str | None, compare_domain: str | None
+) -> dict:
     if domain:
         dp = profiles.get("domains", {}).get(domain)
         if not dp:
@@ -227,7 +236,7 @@ def _handle_crosscoder(
 
 # One entry per mode: a mode added to MODES without a handler is a KeyError,
 # never another lens's output under its name (test_handlers_cover_every_mode).
-_HANDLERS = {
+_HANDLERS: dict[ExploreMode, Callable[[dict, str | None, str | None], dict]] = {
     "features": _handle_features,
     "attribution": _handle_attribution,
     "persona": _handle_persona,
