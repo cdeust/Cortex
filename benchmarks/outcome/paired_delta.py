@@ -13,9 +13,11 @@ because an unpaired or malformed trial would bias the delta: a malformed
 field, an unknown arm, an unknown metric name, a duplicate trial, a missing
 counterpart, tasks run with different repeat labels, empty input, or a
 resample count that is not an int large enough to place both percentile
-bounds (at least 40 for a 95% interval). The resample count is checked up
-front, even when too few tasks leave no interval to compute, so a bad
-configuration fails on its first run rather than on its first large one.
+bounds (at least 40 for a 95% interval), or a seed that is not an int (a
+``None`` seed would silently draw from OS entropy and make the interval
+irreproducible). The resample count and the seed are checked up front, even
+when too few tasks leave no interval to compute, so a bad configuration
+fails on its first run rather than on its first large one.
 
 For each metric the report gives:
 
@@ -218,6 +220,8 @@ def summarize(
     """Score both arms; ``seed`` makes the bootstrap reproducible."""
     # Checked before pairing on purpose: see the module docstring.
     _percentile_ranks(n_resamples)
+    if not isinstance(seed, int) or isinstance(seed, bool):
+        raise ValueError(f"seed must be an int: {seed!r}")
     pairs = pair_trials(trials)
     n_tasks = len({task for task, _ in pairs})
     n_repeats = len({rep for _, rep in pairs})

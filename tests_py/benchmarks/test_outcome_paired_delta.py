@@ -76,7 +76,8 @@ def test_mean_delta_matches_hand_computation():
     assert deltas["tokens"].mean_delta == pytest.approx(-100.0)
     # Per-sweep mean deltas are equal for every metric (turns: r0 = (-4+0)/2,
     # r1 = (-2-2)/2; correct: 0.5 and 0.5; tokens: -100 and -100), so the
-    # spread is 0. Taken flat over pairs or grouped by task it would not be.
+    # spread is 0. Flat over pairs it would not be; grouped by task, turns
+    # and tokens would not be.
     assert [d.repeat_std for d in report.deltas] == [0.0, 0.0, 0.0]
 
 
@@ -120,17 +121,18 @@ def test_interval_lies_strictly_inside_the_task_mean_range():
 
 
 def test_interval_bounds_are_the_2_5_and_97_5_percentiles():
-    # Nine tasks with delta 0, one with delta -10: a resample mean is -k,
+    # Nine tasks with delta 0, the last one with delta -10: a resample mean is -k,
     # k ~ Binomial(10, 0.1). P(k >= 3) = 0.070 and P(k >= 4) = 0.013, so the
     # 2.5th percentile is -3; P(k = 0) = 0.349, so the 97.5th is 0. The most
     # extreme of 1000 resamples is k >= 4 (expected count 12.8), so returning
     # the resample min/max instead of the percentiles fails this test. The
-    # seed is fixed. Empirical sweep, not a hand-worked value: 199 of seeds
-    # 0-199 gave (-3, 0) and one gave (-4, 0).
+    # seed is fixed. Empirical sweep, not a hand-worked value: all of seeds
+    # 0-199 gave (-3, 0). The outlier is the last task, so a resampler that
+    # never draws it gives (0, 0) and fails.
     trials = []
     for i in range(10):
         trials.append(_trial(f"t{i}", ARM_RECALL, 0, True, 0, 0))
-        trials.append(_trial(f"t{i}", ARM_NO_RECALL, 0, True, 10 if i == 0 else 0, 0))
+        trials.append(_trial(f"t{i}", ARM_NO_RECALL, 0, True, 10 if i == 9 else 0, 0))
     turns = _by_metric(summarize(trials, n_resamples=1000, seed=7))["turns"]
     assert turns.ci95 == (-3.0, 0.0)
 
@@ -244,6 +246,7 @@ def test_tasks_with_equal_counts_but_different_repeat_labels_raise():
     [
         (("t1", "cortex", 0, True, 1, 1), "unknown arm"),
         (("", ARM_RECALL, 0, True, 1, 1), "task_id"),
+        ((5, ARM_RECALL, 0, True, 1, 1), "task_id"),
         (("t1", ARM_RECALL, True, True, 1, 1), "repeat"),
         (("t1", ARM_RECALL, "0", True, 1, 1), "repeat"),
         (("t1", ARM_RECALL, 0, 1, 1, 1), "correct"),
@@ -256,6 +259,19 @@ def test_malformed_trial_raises(fields, message):
         _trial(*fields)
 
 
-def test_metric_rejects_a_non_metric_field():
+@pytest.mark.parametrize("name", ["task_id", "repeat", "arm"])
+def test_metric_rejects_a_non_metric_field(name):
     with pytest.raises(ValueError, match="unknown metric"):
-        _trial("t1", ARM_RECALL, 0, True, 1, 1).metric("task_id")
+        _trial("t1", ARM_RECALL, 0, True, 1, 1).metric(name)
+
+
+@pytest.mark.parametrize("seed", [None, True, "7", 7.0])
+def test_non_int_seed_raises_even_below_the_interval_minimum(seed):
+    # Two tasks: no interval is drawn, so only the up-front check can fail.
+    with pytest.raises(ValueError, match="seed must be an int"):
+        summarize(_two_tasks_two_repeats(), n_resamples=1000, seed=seed)
+
+
+def test_resample_count_is_checked_before_pairing():
+    with pytest.raises(ValueError, match="n_resamples=39"):
+        summarize([], n_resamples=39, seed=7)
