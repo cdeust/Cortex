@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
@@ -52,9 +53,9 @@ def content_version(raw: str) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
-def _expected_receipts(normalized: NormalizedDocument) -> set[tuple[str, str]]:
-    """(role, stored content) pairs the current normalized output can consume."""
-    expected = {("summary", redact_text(normalized.summary))}
+def _expected_receipts(normalized: NormalizedDocument) -> Counter[tuple[str, str]]:
+    """(role, stored content) occurrences the current normalized output can consume."""
+    expected = Counter([("summary", redact_text(normalized.summary))])
     expected.update(
         ("section", redact_text(memory.content))
         for memory in normalized.section_memories
@@ -70,15 +71,32 @@ def _receipt_content(row: dict[str, Any]) -> Any:
     return row.get("original_content") or row.get("content")
 
 
-def _is_obsolete(
-    row: dict[str, Any], own_source: str, expected: set[tuple[str, str]]
-) -> bool:
-    """An ingest-authored receipt of another normalized output of this version."""
+def _role(row: dict[str, Any]) -> str:
+    """Component role an ingest receipt was written for, if any."""
     tags = row.get("tags", [])
-    role = "summary" if "summary" in tags else "section" if "section" in tags else ""
-    if not role or row.get("source") != own_source:
-        return False
-    return (role, _receipt_content(row)) not in expected
+    return "summary" if "summary" in tags else "section" if "section" in tags else ""
+
+
+def _unconsumable(
+    rows: list[dict[str, Any]], own_source: str, expected: Counter[tuple[str, str]]
+) -> list[dict[str, Any]]:
+    """Ingest-authored receipts no expected occurrence of this output consumes.
+
+    Occurrences consume receipts in id order, as ``_take_existing`` does, so a
+    repeated section that now occurs fewer times leaves its highest ids over.
+    """
+    remaining = Counter(expected)
+    left: list[dict[str, Any]] = []
+    for row in sorted(rows, key=lambda row: row["id"]):
+        role = _role(row)
+        if not role or row.get("source") != own_source:
+            continue
+        key = (role, _receipt_content(row))
+        if remaining[key] > 0:
+            remaining[key] -= 1
+        else:
+            left.append(row)
+    return left
 
 
 def _retire_obsolete(
@@ -87,26 +105,35 @@ def _retire_obsolete(
     """Read this ingester's receipts, retiring those no expected component matches.
 
     Rows other writers tag with this provenance are filtered out by the query,
-    so they neither fill the bounded read nor get retired.
+    so they neither fill the bounded read nor get retired. A superseded receipt
+    is kept live but set aside (ADR-1100): staling it would hide the retracted
+    text from a later resume, which would then insert it again as a fresh head.
     """
     tag = redact_text(document_provenance_dedup_tag(prov))
     own_source = redact_text(f"ingest_document:{prov.source}")
     expected = _expected_receipts(normalized)
     retired: list[int] = []
+    kept: set[int] = set()
     while True:
         rows = store.get_memories_by_tag(
-            tag, limit=limit, heads_only=False, source=own_source
+            tag, limit=limit + len(kept), heads_only=False, source=own_source
         )
-        obsolete = [
-            row["id"] for row in rows if _is_obsolete(row, own_source, expected)
+        left = [
+            row
+            for row in _unconsumable(rows, own_source, expected)
+            if row["id"] not in kept
         ]
-        if not obsolete:
-            return rows, retired
-        if set(obsolete) & set(retired):
+        if not left:
+            return [row for row in rows if row.get("id") not in kept], retired
+        heads = [row["id"] for row in left if row.get("superseded_by_id") is None]
+        if set(heads) & set(retired):
             raise ValueError("store still returns retired receipts; refusing resume")
-        for memory_id in obsolete:
+        for memory_id in heads:
             store.mark_memory_stale(memory_id)
-        retired.extend(obsolete)
+        retired.extend(heads)
+        kept.update(
+            row["id"] for row in left if row.get("superseded_by_id") is not None
+        )
 
 
 def _existing_components(
@@ -115,8 +142,9 @@ def _existing_components(
     """Read durable receipts before writing; lookup failure must prevent duplicates.
 
     Receipts left by another normalized output of the same version (title
-    override, normalizer or redaction change) are retired with ``is_stale``,
-    which the tag read already excludes, so they are never counted.
+    override, normalizer or redaction change), including surplus occurrences
+    of a repeated section, are retired with ``is_stale``, which the tag read
+    already excludes, so they are never counted.
     """
     tag = redact_text(document_provenance_dedup_tag(prov))
     # source: issue #714 — one summary + all sections + one overflow sentinel.

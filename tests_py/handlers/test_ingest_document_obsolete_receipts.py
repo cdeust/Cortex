@@ -169,3 +169,31 @@ def test_store_that_keeps_returning_retired_rows_fails_closed():
     assert "memory_lookup" in result["failures"]
     assert result["completed_components"] == []
     assert len(fake.memories) == 1
+
+
+def test_dropped_repeat_of_an_identical_section_retires_the_surplus(store):
+    first = _write(store, _output("a", "a", "a"))
+    again = _write(store, _output("a", "a"))
+    assert again["failures"] == {}
+    assert again["retired_receipt_ids"] == [first["section_memory_ids"][2]]
+    assert again["section_memory_ids"] == first["section_memory_ids"][:2]
+    assert len(_live(store, _PROV)) == 3
+
+
+def test_superseded_summary_survives_a_title_round_trip(store):
+    first = _write(store, _output("a", summary="title A"))
+    carrier = first["summary_memory_id"]
+    new_id, _ = store.supersede_atomic(
+        {"content": "corrected A", "source": "user", "domain": "d", "heat": 0.5},
+        carrier,
+    )
+    assert new_id is not None
+    renamed = _write(store, _output("a", summary="title B"))
+    assert renamed["failures"] == {}
+    assert renamed["retired_receipt_ids"] == []
+    rows_before = store.count_memories()["total"]
+    back = _write(store, _output("a", summary="title A"))
+    assert back["failures"] == {}
+    assert back["retired_receipt_ids"] == [renamed["summary_memory_id"]]
+    assert back["summary_memory_id"] == carrier
+    assert store.count_memories()["total"] == rows_before

@@ -180,13 +180,14 @@ def test_failed_lookup_writes_nothing(monkeypatch):
 
 
 def test_excess_rows_fail_closed():
+    # Rows with no component role cannot be consumed or retired as surplus.
     store = _FakeStore()
     tag = document_provenance_dedup_tag(_provenance())
     for _ in range(4):
         store.insert_memory(
             {
                 "content": "summary",
-                "tags": [tag, "summary"],
+                "tags": [tag, "document"],
                 "source": f"ingest_document:{_provenance().source}",
             }
         )
