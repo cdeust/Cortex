@@ -8,6 +8,8 @@ use ``_no_git``. Corpus validation is in test_outcome_corpus_check.py."""
 
 from __future__ import annotations
 
+import subprocess
+
 import pytest
 
 from benchmarks.outcome.answer_key import FAMILY_COMMIT, OutcomeTask, verify
@@ -194,3 +196,22 @@ def test_tree_hash_whitespace_and_case(repo):
     assert verify(_commit_task(first), padded, resolve_commit=resolve)
     with pytest.raises(ValueError, match="lowercase hex"):
         resolve(first.upper())
+
+
+@pytest.mark.parametrize("bad", [lambda sha: sha[:3], lambda sha: sha + "0"])
+def test_prefix_rule_holds_when_git_lists_too_much(repo, monkeypatch, bad):
+    # git 2.56.0 (CI run 41836365875) lists the commit for a 3-digit prefix and
+    # for the full hash plus a digit; git 2.43.0 lists nothing. Simulate the
+    # permissive git so the rule is pinned on every git version.
+    first = git(repo, "rev-list", "--max-parents=0", "HEAD")
+    resolve = git_commit_resolver(repo)
+    real_run = subprocess.run
+
+    def permissive_run(args, **kwargs):
+        if any(a.startswith("--disambiguate=") for a in args):
+            return subprocess.CompletedProcess(args, 0, first + "\n", "")
+        return real_run(args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", permissive_run)
+    assert resolve(bad(first)) is None
+    assert resolve(first[:4]) == first

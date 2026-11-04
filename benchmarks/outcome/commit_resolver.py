@@ -50,6 +50,13 @@ from benchmarks.outcome.answer_key import FAMILY_COMMIT, CommitResolver, Outcome
 
 _LOWER_HEX = re.compile(r"[0-9a-f]+")
 
+# source: git-rev-parse(1), --disambiguate: "The <prefix> must be at least 4
+# hexadecimal digits long". Enforced here because git itself stopped holding
+# to it: git 2.56.0 (ubuntu-26.04 runner, CI run 41836365875, 2026-11-04)
+# lists candidates for a 3-digit prefix and for the full hash plus one digit,
+# where git 2.43.0 lists nothing.
+_MIN_ABBREV = 4
+
 # source: git release notes — `rev-parse --path-format` arrived in 2.31.0 and
 # `GIT_CONFIG_GLOBAL` in 2.32.0; older git silently echoes or ignores them.
 _MIN_GIT = (2, 32)
@@ -159,13 +166,33 @@ def _check_corpus(repo: Path) -> None:
         raise ValueError(f"{repo} borrows objects through objects/info/alternates")
 
 
+def _commit_candidates(repo: Path, hex_name: str) -> list[str]:
+    """Commit objects whose full name starts with ``hex_name``.
+
+    The prefix rule is checked here rather than trusted to git, whose
+    ``--disambiguate`` output differs between versions (see ``_MIN_ABBREV``).
+    """
+    if len(hex_name) < _MIN_ABBREV:
+        return []
+    listed = _git(repo, ["rev-parse", f"--disambiguate={hex_name}"]).split()
+    names = "\n".join(name for name in listed if name.startswith(hex_name))
+    if not names:
+        return []
+    typed = _git(repo, ["cat-file", "--batch-check=%(objectname) %(objecttype)"], names)
+    return [
+        name
+        for name, kind in (line.split() for line in typed.splitlines())
+        if kind == "commit"
+    ]
+
+
 def git_commit_resolver(repo: Path) -> CommitResolver:
     """Resolve a lowercase hex abbreviation to the full commit hash in ``repo``.
 
     Only object names are consulted, never refs: a branch or tag that happens
     to be spelled in hex cannot stand in for a hash prefix. ``None`` when the
-    prefix names no commit or more than one (git lists no candidate below its
-    hard minimum of 4 hex digits, or beyond the repository's hash length).
+    prefix names no commit or more than one; a prefix under 4 digits, or one
+    no object name starts with (too long), names nothing on any git version.
 
     A broken corpus stops the run instead of scoring every answer incorrect.
     Before any answer is resolved, a path git cannot open raises
@@ -185,17 +212,7 @@ def git_commit_resolver(repo: Path) -> CommitResolver:
     def resolve(hex_name: str) -> str | None:
         if not _LOWER_HEX.fullmatch(hex_name):
             raise ValueError(f"not a lowercase hex object name: {hex_name!r}")
-        candidates = _git(repo, ["rev-parse", f"--disambiguate={hex_name}"])
-        if not candidates.strip():
-            return None
-        typed = _git(
-            repo, ["cat-file", "--batch-check=%(objectname) %(objecttype)"], candidates
-        )
-        commits = [
-            name
-            for name, kind in (line.split() for line in typed.splitlines())
-            if kind == "commit"
-        ]
+        commits = _commit_candidates(repo, hex_name)
         return commits[0] if len(commits) == 1 else None
 
     return resolve

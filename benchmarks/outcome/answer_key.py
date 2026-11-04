@@ -10,8 +10,8 @@ task families; each has its own key and its own answer fields:
   that commit is the key. Refs are never consulted, so a branch or tag
   spelled in hex does not count; objects that are not commits (blobs, trees,
   annotated tag objects) neither count nor make a prefix ambiguous, unlike
-  ``git rev-parse``, which calls such a prefix ambiguous; git's hard minimum
-  of 4 hex digits applies (a shorter prefix names nothing). The repository,
+  ``git rev-parse``, which calls such a prefix ambiguous; git's documented
+  minimum of 4 hex digits applies (a shorter prefix names nothing). The repository,
   not a tuned prefix length, decides. The lookup lives in
   ``commit_resolver``; the verifier only receives a ``CommitResolver``.
 - ``abandoned_approach`` — "was approach Y tried, and what was the recorded
