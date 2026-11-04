@@ -29,6 +29,10 @@ jobs:
       cancel-in-progress: false
       queue: max
     runs-on: ubuntu-latest
+    # One hung agent run must not hold the per-thread queue for the 360-minute
+    # default (zetetic-team-subagents #242 review, finding 4).
+    # source: https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idtimeout-minutes
+    timeout-minutes: 60
     permissions:
       contents: write
       pull-requests: write
@@ -36,6 +40,22 @@ jobs:
       id-token: write
       actions: read
     steps:
+      # The `if:` above checks who asked, not which branch the pinned action will
+      # check out and push to (src/modes/tag/index.ts fetches the PR head). An
+      # owner-authored PR whose head is a fork, or main itself, must not become a
+      # fix target (zetetic-team-subagents #242 review, finding 1).
+      - name: Authorize owner fix target
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          if jq -e '.issue.pull_request != null' "$GITHUB_EVENT_PATH" >/dev/null; then
+            gh api "repos/$GH_REPO/pulls/$ISSUE_NUMBER" |
+              jq -e --arg repo "$GH_REPO" \
+                '.head.repo.full_name == $repo and .head.ref != .base.repo.default_branch' >/dev/null
+          fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -61,6 +81,12 @@ jobs:
           # No --permission-mode: inherit tag mode's workspace edit approval
           # (src/modes/tag/index.ts at the pinned action SHA).
           # Last value wins: upstream base-action/src/parse-sdk-options.ts.
+          # Tag mode grants edits and scoped git only; headless, anything that
+          # falls through to "ask" is denied (src/modes/tag/index.ts#L148-L201).
+          # The allowlist is CLAUDE.md's validation set: uv sync, pytest, ruff,
+          # python -m mcp_server.doctor, python scripts/check_craftsmanship.py,
+          # plus git and gh for the branch and the PR. No Bash(bash:*).
           claude_args: |
             --strict-mcp-config
+            --allowedTools "Bash(git:*),Bash(gh:*),Bash(uv:*),Bash(pytest:*),Bash(python:*),Bash(python3:*),Bash(ruff:*)"
             --model "claude-opus-5-5"
