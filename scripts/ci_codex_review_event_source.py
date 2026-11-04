@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ci_codex_review_comments import RECEIPT
 from ci_codex_reviews import BOT, SUMMARY, EvidenceError, SHA_PATTERN, _api, _eligible
 
 Record = dict[str, Any]
@@ -58,7 +59,7 @@ def canonical(item: Any) -> bool:
         isinstance(item, dict)
         and bot(item.get("user"))
         and isinstance(item.get("body"), str)
-        and item["body"].startswith(SUMMARY)
+        and item["body"].startswith((SUMMARY, RECEIPT))
     )
 
 
@@ -92,8 +93,10 @@ def live_pr(repo: str, number: int, sha: str | None = None) -> Record | None:
         _eligible(pull, repo, head if sha is None else sha)
     except EvidenceError:
         return None
+    # Owner rule 2026-11-03: hold and autopilot:hold are not read anywhere in the
+    # gate; only the owner's holds end resumption here.
     if "do not merge" in title.casefold() or any(
-        label["name"].casefold() in ("hold", "do-not-merge") for label in labels
+        label["name"].casefold() == "do-not-merge" for label in labels
     ):
         return None
     return pull
