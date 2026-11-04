@@ -174,9 +174,7 @@ class OwnerMentionTests(unittest.TestCase):
                 "environment": "${{ env.pythonLocation }}",
             },
         )
-        self.assertEqual(
-            project["run"], "pip install --no-deps --no-build-isolation -e ."
-        )
+        self.assertEqual(project["run"], "pip install --no-deps -e .")
         self.assertIn("SentenceTransformer('all-MiniLM-L6-v2'", model["run"])
 
     def test_owner_mentions_authorize_the_fix_target_before_checkout(self):
