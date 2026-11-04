@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 
 from mcp_server.hooks.session_start_common import _DATABASE_URL, _PLUGIN_ROOT, _log
+from mcp_server.infrastructure.config import CLAUDE_PROJECTS_DIR
 
 
 def _try_setup_db() -> dict | None:
@@ -112,8 +113,8 @@ def _count_memories(conn) -> int:
 
 
 def _count_session_files() -> int:
-    """Count JSONL session files in ~/.claude/projects/."""
-    projects_dir = Path.home() / ".claude" / "projects"
+    """Count JSONL session files under the host's transcript root."""
+    projects_dir = CLAUDE_PROJECTS_DIR
     if not projects_dir.exists():
         return 0
     count = 0

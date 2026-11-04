@@ -75,12 +75,17 @@ def _resolved_real_data_roots() -> list[tuple[str, str]]:
     too early, or a future edit that moves the redirection below the first
     import, would leave these constants bound to the real `~/.claude`
     while the env vars still look correct."""
-    from mcp_server.infrastructure.config import CLAUDE_DIR, WIKI_ROOT
+    from mcp_server.infrastructure.config import (
+        CLAUDE_DIR,
+        CLAUDE_PROJECTS_DIR,
+        WIKI_ROOT,
+    )
     from mcp_server.infrastructure.memory_config import get_memory_settings
 
     settings = get_memory_settings()
     return [
         ("CLAUDE_DIR", str(CLAUDE_DIR)),
+        ("CLAUDE_PROJECTS_DIR", str(CLAUDE_PROJECTS_DIR)),
         ("WIKI_ROOT", str(WIKI_ROOT)),
         ("MemorySettings.DB_PATH", settings.DB_PATH),
         ("MemorySettings.SQLITE_FALLBACK_PATH", settings.SQLITE_FALLBACK_PATH),

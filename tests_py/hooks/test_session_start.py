@@ -390,9 +390,9 @@ def test_count_pending_curations_empty_sample_short_circuits(monkeypatch):
 
 
 def test_count_session_files_counts_jsonl_per_project(tmp_path, monkeypatch):
-    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(ss_db, "CLAUDE_PROJECTS_DIR", tmp_path / "projects")
     assert ss_db._count_session_files() == 0
-    proj = tmp_path / ".claude" / "projects" / "p1"
+    proj = tmp_path / "projects" / "p1"
     proj.mkdir(parents=True)
     (proj / "a.jsonl").write_text("{}")
     (proj / "b.jsonl").write_text("{}")
@@ -736,7 +736,7 @@ def test_sqlite_context_empty_store_prints_cold_start(capsys, monkeypatch, tmp_p
     store = MagicMock()
     store.count_memories.return_value = {"total": 0}
     monkeypatch.setattr(memory_store, "get_shared_store", lambda: store)
-    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(ss_db, "CLAUDE_PROJECTS_DIR", tmp_path / "projects")
 
     ss_sqlite._sqlite_context({}, _unexpected_backfill, MagicMock())
 

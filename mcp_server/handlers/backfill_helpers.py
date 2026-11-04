@@ -7,7 +7,7 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-from mcp_server.infrastructure.config import CLAUDE_DIR
+from mcp_server.infrastructure.config import CLAUDE_PROJECTS_DIR
 from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.observability import silent_failure
 from mcp_server.shared.domain_mapping import resolve_domain
@@ -123,7 +123,7 @@ def mark_backfilled(store: MemoryStore, path: Path, fhash: str, count: int) -> N
 
 def discover_files(project_filter: str, max_files: int) -> list[tuple[Path, str]]:
     """Return (path, project_slug) pairs for JSONL session files."""
-    projects_dir = CLAUDE_DIR / "projects"
+    projects_dir = CLAUDE_PROJECTS_DIR
     if not projects_dir.exists():
         return []
 

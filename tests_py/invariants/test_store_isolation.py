@@ -207,12 +207,12 @@ class TestRealTreeIsNeverWritten:
 
 
 class TestResolvedRealDataRoots:
-    """`_pg_safety_guards._resolved_real_data_roots` names the exact four
+    """`_pg_safety_guards._resolved_real_data_roots` names the exact five
     roots `guard_against_real_data_roots` checks. A wrong label here would
     still let the guard fire correctly but tell an operator the wrong name
     for which root escaped."""
 
-    def test_returns_the_four_named_roots_in_order(self):
+    def test_returns_the_five_named_roots_in_order(self):
         from mcp_server.infrastructure import config, memory_config
         from tests_py import _pg_safety_guards
 
@@ -222,6 +222,7 @@ class TestResolvedRealDataRoots:
         )
         with (
             mock.patch.object(config, "CLAUDE_DIR", "/fake/claude"),
+            mock.patch.object(config, "CLAUDE_PROJECTS_DIR", "/fake/claude/projects"),
             mock.patch.object(config, "WIKI_ROOT", "/fake/claude/wiki"),
             mock.patch.object(
                 memory_config, "get_memory_settings", return_value=fake_settings
@@ -229,6 +230,7 @@ class TestResolvedRealDataRoots:
         ):
             assert _pg_safety_guards._resolved_real_data_roots() == [
                 ("CLAUDE_DIR", "/fake/claude"),
+                ("CLAUDE_PROJECTS_DIR", "/fake/claude/projects"),
                 ("WIKI_ROOT", "/fake/claude/wiki"),
                 ("MemorySettings.DB_PATH", "/fake/db.sqlite"),
                 ("MemorySettings.SQLITE_FALLBACK_PATH", "/fake/fallback.sqlite"),

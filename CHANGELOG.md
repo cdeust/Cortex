@@ -44,6 +44,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Transcript discovery honours the host's config directory (#710, slice 1).
+  Profile rebuilds, `import_sessions`, `backfill_memories`, explore features and
+  the SessionStart session count read `$CLAUDE_CONFIG_DIR/projects` when the
+  variable is set, instead of always `~/.claude/projects`. `CORTEX_CLAUDE_DIR`
+  still wins, and Cortex's own data (store, profiles, wiki) does not move.
 - The benchmark machine-load snapshot records no load average on Windows
   instead of raising: `os.getloadavg` does not exist there, and the
   `AttributeError` escaped the `except OSError` (#692 class 4, 13 tests).
