@@ -205,8 +205,8 @@ def _verify_commit(
     given = given.strip().lower()
     # Hex only, so no revision expression or option reaches git; no longer
     # than the longest full hash (64), so an oversized answer cannot overflow
-    # argv. A 41-64 digit answer in a SHA-1 corpus reaches git, which lists
-    # nothing for it.
+    # argv. A 41-64 digit answer in a SHA-1 corpus reaches the resolver, which
+    # keeps only object names that start with it, so it names nothing.
     if not _HEX.fullmatch(given) or len(given) > max(_FULL_HASH_LENGTHS):
         return False
     return resolve(given) == task.key["commit"]

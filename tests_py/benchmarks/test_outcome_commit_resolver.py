@@ -160,8 +160,9 @@ def test_replace_refs_do_not_change_the_answer(crowded_repo):
 
 
 def test_answer_longer_than_the_key_names_nothing(repo):
-    # Probe of git 2.43: `--disambiguate=<sha1>0` lists nothing in a SHA-1
-    # repository, so an over-length answer is incorrect rather than padded.
+    # The resolver keeps only names that start with the answer (and refuses
+    # fewer than _MIN_ABBREV digits), so an over-length answer names nothing
+    # whatever git lists for it; on git 2.56 this exercises the filter.
     first = git(repo, "rev-list", "--max-parents=0", "HEAD")
     resolve = git_commit_resolver(repo)
     assert resolve(first + "0") is None
@@ -198,20 +199,42 @@ def test_tree_hash_whitespace_and_case(repo):
         resolve(first.upper())
 
 
-@pytest.mark.parametrize("bad", [lambda sha: sha[:3], lambda sha: sha + "0"])
-def test_prefix_rule_holds_when_git_lists_too_much(repo, monkeypatch, bad):
+@pytest.mark.parametrize(
+    "bad,git_calls", [(lambda sha: sha[:3], 0), (lambda sha: sha + "0", 1)]
+)
+def test_prefix_rule_holds_when_git_lists_too_much(repo, monkeypatch, bad, git_calls):
     # git 2.56.0 (CI run 41836365875) lists the commit for a 3-digit prefix and
     # for the full hash plus a digit; git 2.43.0 lists nothing. Simulate the
     # permissive git so the rule is pinned on every git version.
     first = git(repo, "rev-list", "--max-parents=0", "HEAD")
     resolve = git_commit_resolver(repo)
-    real_run = subprocess.run
+    calls = _fake_disambiguate(monkeypatch, first + "\n")
+    assert resolve(bad(first)) is None
+    # The floor returns before git; the over-long answer reaches the fake.
+    assert len(calls) == git_calls
 
-    def permissive_run(args, **kwargs):
+
+def _fake_disambiguate(monkeypatch, output):
+    """Make `rev-parse --disambiguate` print ``output``; return its calls."""
+    real_run = subprocess.run
+    calls = []
+
+    def fake_run(args, **kwargs):
         if any(a.startswith("--disambiguate=") for a in args):
-            return subprocess.CompletedProcess(args, 0, first + "\n", "")
+            calls.append(args)
+            return subprocess.CompletedProcess(args, 0, output, "")
         return real_run(args, **kwargs)
 
-    monkeypatch.setattr(subprocess, "run", permissive_run)
-    assert resolve(bad(first)) is None
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    return calls
+
+
+def test_filter_keeps_only_matching_names_from_a_mixed_list(repo, monkeypatch):
+    # Without the per-name filter, both commits would survive and the prefix
+    # would be ambiguous (None).
+    first = git(repo, "rev-list", "--max-parents=0", "HEAD")
+    head = git(repo, "rev-parse", "HEAD")
+    resolve = git_commit_resolver(repo)
+    calls = _fake_disambiguate(monkeypatch, f"{head}\n{first}\n")
     assert resolve(first[:4]) == first
+    assert len(calls) == 1
