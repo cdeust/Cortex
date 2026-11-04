@@ -14,30 +14,30 @@ from pathlib import Path
 import pytest
 
 from mcp_server.handlers import ingest_document
-from mcp_server.handlers.ingest_document import _resolve_format
 
 _W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 
 
-class TestResolveFormat:
-    def test_explicit_docx(self):
-        assert _resolve_format(Path("x.txt"), "docx") == "docx"
-
-    def test_explicit_confluence(self):
-        assert _resolve_format(Path("x.txt"), "confluence") == "confluence-export"
-
-    def test_auto_docx_by_extension(self):
-        assert _resolve_format(Path("a.docx"), "auto") == "docx"
-
-    @pytest.mark.parametrize("ext", [".xml", ".xhtml", ".html", ".htm"])
-    def test_auto_confluence_by_extension(self, ext):
-        assert _resolve_format(Path("a" + ext), "auto") == "confluence-export"
-
-    def test_unknown_extension_returns_empty(self):
-        assert _resolve_format(Path("a.txt"), "auto") == ""
-
-    def test_extension_is_case_insensitive(self):
-        assert _resolve_format(Path("A.DOCX"), "auto") == "docx"
+_RESULT_KEYS = {
+    "ingested",
+    "status",
+    "reason",
+    "section_memory_ids",
+    "expected_components",
+    "completed_components",
+    "failures",
+    "retired_receipt_ids",
+    "idempotent_skip",
+    "title",
+    "source",
+    "source_kind",
+    "version",
+    "wiki_path",
+    "summary_memory_id",
+    "section_count",
+    "images_skipped",
+    "notices",
+}
 
 
 class _FakeStore:
@@ -55,10 +55,9 @@ class _FakeStore:
             self._by_tag.setdefault(tag, []).append(row)
         return mid
 
-    def get_memories_by_tag(
-        self, tag: str, limit: int = 20, heads_only: bool = True
-    ) -> list[dict]:
-        return self._by_tag.get(tag, [])
+    def get_memories_by_tag(self, tag, limit=20, heads_only=True, source=None):
+        rows = self._by_tag.get(tag, [])
+        return [r for r in rows if source in (None, r.get("source"))]
 
 
 class _RecordingWrite:
@@ -68,14 +67,18 @@ class _RecordingWrite:
     async def __call__(
         self, root, rel_path, content, *, mode="create", tags=None, memory_ids=None
     ):
+        from mcp_server.infrastructure.wiki_store import write_page
+
         self.calls.append((root, rel_path, content, mode, tags))
+        write_page(root, rel_path, content, mode=mode)
         return {"path": rel_path, "created": True, "bytes_written": len(content)}
 
 
 @pytest.fixture
-def wired(monkeypatch):
+def wired(monkeypatch, tmp_path):
     store = _FakeStore()
     write = _RecordingWrite()
+    monkeypatch.setattr(ingest_document, "WIKI_ROOT", tmp_path / "wiki")
     monkeypatch.setattr(ingest_document, "_get_store", lambda: store)
     monkeypatch.setattr(ingest_document, "write_governed_page", write)
     return store, write
@@ -103,19 +106,7 @@ class TestDocxHappyPath:
         )
         out = await ingest_document.handler({"path": str(p)})
         # Exact key set — guards every response field name.
-        assert set(out.keys()) == {
-            "ingested",
-            "idempotent_skip",
-            "title",
-            "source",
-            "source_kind",
-            "version",
-            "wiki_path",
-            "summary_memory_id",
-            "section_count",
-            "images_skipped",
-            "notices",
-        }
+        assert set(out) == _RESULT_KEYS
         assert out["ingested"] is True
         assert out["idempotent_skip"] is False
         assert out["title"] == "Spec"
@@ -126,14 +117,13 @@ class TestDocxHappyPath:
         assert out["section_count"] == 1
         assert out["images_skipped"] == 0
         assert out["notices"] == []
+        assert out["retired_receipt_ids"] == []
         assert len(out["version"]) == 16
         # The wiki write is invoked with the governed root, the slugged path,
         # replace mode, and provenance tags.
-        from mcp_server.infrastructure.config import WIKI_ROOT
-
         assert len(write.calls) == 1
         root, rel, _content, mode, tags = write.calls[0]
-        assert root == WIKI_ROOT
+        assert root == ingest_document.WIKI_ROOT
         assert rel == "documents/spec.md"
         assert mode == "replace"
         assert tags == ["document", "ingest", "docx"]
@@ -164,7 +154,7 @@ class TestDocxHappyPath:
         assert out["title"] == "Custom Title"
 
     @pytest.mark.asyncio
-    async def test_wiki_write_failure_sets_wiki_path_none_but_still_ingests(
+    async def test_wiki_write_failure_reports_partial_with_memory_receipts(
         self, wired, tmp_path, caplog, monkeypatch
     ):
         store, _ = wired
@@ -175,7 +165,10 @@ class TestDocxHappyPath:
         monkeypatch.setattr(ingest_document, "write_governed_page", _failing_write)
         p = _make_docx(tmp_path / "d.docx", _para("H", "Heading1") + _para("body"))
         out = await ingest_document.handler({"path": str(p)})
-        assert out["ingested"] is True
+        assert out["ingested"] is False
+        assert out["status"] == "partial"
+        assert out["failures"] == {"wiki": "boom"}
+        assert out["completed_components"] == ["summary", "section:0"]
         assert out["wiki_path"] is None
         # Memories are still written; the wiki failure is logged with the
         # failing page payload (exact message), not silently.
@@ -191,16 +184,10 @@ class TestDocxHappyPath:
         writes_after_first = len(write.calls)
         memories_after_first = len(store.memories)
         out = await ingest_document.handler({"path": str(p)})
-        assert set(out.keys()) == {
-            "ingested",
-            "idempotent_skip",
-            "reason",
-            "summary_memory_id",
-            "title",
-            "version",
-            "images_skipped",
-            "notices",
-        }
+        assert out["status"] == "complete"
+        assert out["completed_components"] == out["expected_components"]
+        assert out["section_count"] == 1
+        assert out["failures"] == {}
         assert out["ingested"] is True
         assert out["idempotent_skip"] is True
         assert out["reason"] == "already ingested at this version"

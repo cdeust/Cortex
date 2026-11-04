@@ -1,6 +1,6 @@
 """Ingest duplicate-prevention lookups still see a superseded carrier.
 
-ADR-1100: ``find_existing_memory`` (findings) and ``already_ingested``
+ADR-1100: ``find_existing_memory`` (findings) and ``write_document_memories``
 (documents) are idempotency checks. A corrected fact is a new row from
 ``remember(supersedes_id=...)`` and need not carry the dedup tag, so a lookup
 that reads chain heads misses the retracted carrier and the next ingestion
@@ -14,7 +14,7 @@ import pytest
 from mcp_server.core.document_model import DocumentProvenance
 from mcp_server.core.document_normalizer import NormalizedDocument, SectionMemory
 from mcp_server.handlers.ingest_document_writers import (
-    already_ingested,
+    DocumentMemoryContext,
     write_document_memories,
 )
 from mcp_server.handlers.ingest_findings_artifacts import FindingRecord
@@ -73,11 +73,20 @@ def test_a_superseded_document_summary_is_not_ingested_again(store):
         notices=[],
         image_count=0,
     )
-    written = write_document_memories(store, normalized, prov, "ingest-dedup", "dir")
+    written = write_document_memories(
+        DocumentMemoryContext(store, prov, "ingest-dedup", "dir"), normalized
+    )
     carriers = {written["summary_memory_id"], *written["section_memory_ids"]}
     for carrier in carriers:
         _supersede(store, carrier, f"corrected {carrier}, no dedup tag")
 
     # every row that carried the dedup tag is now retracted: the lookup must
     # still report the prior ingestion, or the document is ingested twice
-    assert already_ingested(store, prov) in carriers
+    rows_before = store.count_memories()
+    resumed = write_document_memories(
+        DocumentMemoryContext(store, prov, "ingest-dedup", "dir"), normalized
+    )
+    assert resumed["summary_memory_id"] == written["summary_memory_id"]
+    assert resumed["section_memory_ids"] == written["section_memory_ids"]
+    assert resumed["failures"] == {}
+    assert store.count_memories() == rows_before
