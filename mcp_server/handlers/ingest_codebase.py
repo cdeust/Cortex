@@ -51,7 +51,7 @@ from mcp_server.infrastructure.staging_resolve_sink import (
     build_entity_sink,
 )
 from mcp_server.shared.progress import NullProgress, ProgressReporter
-import shutil
+from mcp_server.infrastructure import code_graph_cache as graph_cache
 
 logger = logging.getLogger(__name__)
 
@@ -104,37 +104,24 @@ def _get_store() -> MemoryStore:
 def _default_output_dir(project_path: str) -> str:
     """Default graph location under ~/.cache/cortex/code-graphs/."""
 
-    return str(
-        Path.home() / ".cache" / "cortex" / "code-graphs" / project_key(project_path)
-    )
+    return str(graph_cache.default_cache_dir() / project_key(project_path))
 
 
-def _prune_precedent_graphs(output_dir: str) -> list[str]:
-    """Remove stale graphs for the SAME project once a fresh one is built.
+def _record_and_prune_graphs(project_path: str, output_dir: str) -> None:
+    """Tie ``output_dir`` to its project root, then prune orphaned graphs.
 
-    Remove stale sibling graph directories sharing the current project name prefix,
-    preserving the graph just written. Returns removed directory names.
+    Replaces the former name-prefix prune, which deleted any sibling sharing
+    the project name's first segment (``cortex-viz-*`` for ``cortex``) and
+    never removed a deleted worktree's graph (issue #711).
 
-    source: ADR-0399"""
+    source: issue #711"""
 
-    cur = Path(output_dir)
-    parent = cur.parent
-    if not parent.is_dir():
-        return []
-    # Project name = key minus the trailing ``-<hash>`` segment.
-    prefix = cur.name.rsplit("-", 1)[0] + "-"
-    removed: list[str] = []
-    for sib in parent.iterdir():
-        if sib == cur or not sib.is_dir() or not sib.name.startswith(prefix):
-            continue
+    if Path(output_dir).expanduser().is_dir():
         try:
-            shutil.rmtree(sib)
-            removed.append(sib.name)
+            graph_cache.write_root_marker(output_dir, project_path)
         except OSError as exc:
-            logger.warning("could not prune precedent graph %s: %s", sib, exc)
-    if removed:
-        logger.info("pruned %d precedent graph(s): %s", len(removed), removed)
-    return removed
+            logger.warning("could not write root marker in %s: %s", output_dir, exc)
+    graph_cache.prune_orphan_graphs(graph_cache.default_cache_dir())
 
 
 def _parse_int_or_none(raw: Any) -> int | None:
@@ -501,8 +488,7 @@ async def handler(
             "error": f"{type(exc).__name__}: {exc}",
         }
 
-    # source: ADR-0399
-    _prune_precedent_graphs(output_dir)
+    _record_and_prune_graphs(project_path, output_dir)
 
     diagnostics: list[Any] = []
     do_symbols = top_symbols is None or top_symbols > 0
