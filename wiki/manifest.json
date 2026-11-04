@@ -3644,6 +3644,10 @@
       "mirror": "ADR-1119-claude-reviews-are-capped-at-three-per-pull-request.md",
       "path": "adr/cortex/1119-claude-reviews-are-capped-at-three-per-pull-request.md"
     },
+    "ADR-1120": {
+      "mirror": "ADR-1120-codex-no-longer-runs-in-the-pipeline-and-the-merge-gate-is-the-test-jobs.md",
+      "path": "adr/cortex/1120-codex-no-longer-runs-in-the-pipeline-and-the-merge-gate-is-the-test-jobs.md"
+    },
     "ADR-9852": {
       "mirror": "ADR-9852-restore-the-previous-head-when-a-superseding-memory-is-deleted.md",
       "path": "adr/cortex/9852-restore-the-previous-head-when-a-superseding-memory-is-deleted.md"

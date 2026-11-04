@@ -15,21 +15,16 @@ DIRECT_NEEDS = {
     "e2e": ("contract", "regression"),
     "environment": ("contract", "e2e"),
     "install": ("contract", "environment"),
-    "review": TEST_JOBS,
     # Owner rule 2026-10-29: merge is the aggregate of the test jobs only.
     "merge": REQUIRED_RESULTS,
     "tag": REQUIRED_RESULTS,
 }
 POST_MERGE_NEEDS = {
     "resolve": (),
-    **{
-        job: needs
-        for job, needs in DIRECT_NEEDS.items()
-        if job not in ("review", "merge")
-    },
+    **{job: needs for job, needs in DIRECT_NEEDS.items() if job != "merge"},
     "contract": ("resolve",),
 }
-# Source: existing same-repository, non-draft PR review and merge policy.
+# Source: existing same-repository, non-draft PR merge policy.
 PR_CONDITION = (
     "always() && !cancelled() && github.event_name == 'pull_request' "
     "&& !github.event.pull_request.draft "
@@ -61,7 +56,6 @@ def conditions(post_merge: bool) -> dict[str, str]:
     else:
         result.update(
             contract="!cancelled()",
-            review=PR_CONDITION,
             merge=PR_CONDITION,
             tag="!cancelled() && github.event_name == 'push' "
             "&& github.ref == 'refs/heads/main'",

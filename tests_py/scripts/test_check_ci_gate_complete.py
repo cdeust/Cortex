@@ -125,8 +125,8 @@ class PipelineGateTests(unittest.TestCase):
         self.assertNotEqual(changed, self.workflow)
         self.assertTrue(gate.check_runtime_contract(changed))
 
-    def test_merge_and_review_keep_failure_path_and_pr_scope(self) -> None:
-        for job in ("merge", "review"):
+    def test_merge_keeps_failure_path_and_pr_scope(self) -> None:
+        for job in ("merge",):
             for fragment in (
                 "always() && ",
                 "!cancelled() && ",
