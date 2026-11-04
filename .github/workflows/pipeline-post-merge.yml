@@ -307,19 +307,19 @@ jobs:
               return any(_push_covers_commit(push, sha) for push in pushes)
 
 
+          # Owner rule 2026-11-03 ("Retire les holds"): the gate reads no review hold.
+          # `hold` and `autopilot:hold` neither block nor get deleted; a green Pipeline
+          # merges (owner rule 2026-10-29). `do-not-merge` and a "do not merge" title
+          # stay the owner's holds. Lifting holds on green tests alone was the blocking
+          # finding of the Claude review on cortex-viz PR216 (comment 6508578491).
           def _merge_open_pr(pr, merge_path, head, api):
               require(
                   pr.get("state") == "open" and pr.get("draft") is False,
                   "PR is closed or draft",
               )
               require("do not merge" not in pr.get("title", "").lower(), "PR title holds merge")
-              require(
-                  not any(
-                      label.get("name", "").lower() in ("hold", "do-not-merge")
-                      for label in pr.get("labels", [])
-                  ),
-                  "PR label holds merge",
-              )
+              names = [label.get("name", "").lower() for label in pr.get("labels", [])]
+              require("do-not-merge" not in names, "PR label holds merge")
               result = api.request(
                   "PUT",
                   merge_path,
@@ -435,7 +435,8 @@ jobs:
           test "$actual" = "$EXPECTED_SHA"
           echo "tested_sha=$actual" >> "$GITHUB_OUTPUT"
 
-      - name: Guard - no comparison against main (owner rule 2026-10-29)
+
+      - name: Test no comparison with main
         run: python3 -m unittest discover -s scripts/tests -p test_no_main_comparison.py -v
 
       - name: Validate ci.json
