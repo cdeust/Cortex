@@ -3,6 +3,7 @@
 import json
 import os
 import shlex
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -13,8 +14,10 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 MENTIONS = ROOT / ".github/workflows/claude.yml"
 GH_STUB = """#!/bin/sh
+printf '%s\\n' "$*" >> "$GH_STUB_LOG"
 [ -n "$GH_STUB_JSON" ] || exit 1
 printf '%s' "$GH_STUB_JSON"
+exit "${GH_STUB_EXIT:-0}"
 """
 
 
@@ -34,14 +37,18 @@ def _pull(head_repo, head_ref):
     }
 
 
-def _run_guard(pull, is_pull):
-    """Run the guard step's script with a stub gh and a fixture event."""
+def _run_guard(pull, is_pull, gh_exit=0):
+    """Run the guard step's script with a stub gh and a fixture event.
+
+    Returns the completed process and the argv lines the stub gh recorded."""
     workflow = yaml.safe_load(MENTIONS.read_text())
     script = workflow["jobs"]["claude"]["steps"][0]["run"]
     with tempfile.TemporaryDirectory() as scratch:
         gh = Path(scratch) / "gh"
         gh.write_text(GH_STUB)
         gh.chmod(0o755)
+        log = Path(scratch) / "gh.log"
+        log.touch()
         event = Path(scratch) / "event.json"
         event.write_text(
             json.dumps({"issue": {"pull_request": {} if is_pull else None}})
@@ -52,10 +59,13 @@ def _run_guard(pull, is_pull):
             "GH_REPO": "cdeust/Cortex",
             "ISSUE_NUMBER": "1",
             "GH_STUB_JSON": json.dumps(pull) if pull is not None else "",
+            "GH_STUB_LOG": str(log),
+            "GH_STUB_EXIT": str(gh_exit),
         }
-        return subprocess.run(
+        result = subprocess.run(
             ["bash", "-c", script], env=env, capture_output=True, text=True, check=False
         )
+        return result, log.read_text().splitlines()
 
 
 class OwnerMentionTests(unittest.TestCase):
@@ -121,7 +131,8 @@ class OwnerMentionTests(unittest.TestCase):
         # Tag mode supplies no shell allowlist beyond its own scoped git
         # (src/modes/tag/index.ts:158-214 at the pinned SHA); headless, an
         # unlisted command is denied. The list is CLAUDE.md's validation set,
-        # read-only git and read-only gh: no bare interpreter, no gh api.
+        # git and gh inspection commands: no bare interpreter, no gh api,
+        # no gh pr comment (tag mode owns its tracking comment).
         invocation = _action_step(MENTIONS, "claude")
         args = shlex.split(invocation["with"]["claude_args"])
         self.assertEqual(
@@ -129,12 +140,12 @@ class OwnerMentionTests(unittest.TestCase):
             [
                 "--strict-mcp-config",
                 "--allowedTools",
-                "Bash(uv sync:*),Bash(pytest:*),Bash(ruff check:*),Bash(ruff format:*),"
+                "Bash(uv sync:*),Bash(pytest:*),Bash(ruff check:*),"
+                "Bash(ruff format --check:*),"
                 "Bash(python -m mcp_server.doctor:*),"
                 "Bash(python scripts/check_craftsmanship.py:*),"
                 "Bash(git status:*),Bash(git diff:*),Bash(git log:*),"
-                "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),"
-                "Bash(gh run view:*)",
+                "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh run view:*)",
                 "--model",
                 "claude-opus-5-5",
             ],
@@ -167,23 +178,38 @@ class OwnerMentionTests(unittest.TestCase):
         )
         self.assertEqual(set(guard) - {"name", "env", "run"}, set())
 
+    @unittest.skipUnless(
+        shutil.which("jq") and shutil.which("bash"), "needs bash and jq"
+    )
     def test_fix_target_guard_refuses_fork_and_default_branch_heads(self):
-        # Behaviour, not text: the step runs under bash with a stub gh.
+        # Behaviour, not text: the step runs under bash with a stub gh that logs
+        # its argv. Every refusal names itself with a ::error:: line.
+        ok, fork = _pull("cdeust/Cortex", "fix/x"), _pull("someone/Cortex", "fix/x")
         cases = {
-            "same-repo feature head": (_pull("cdeust/Cortex", "fix/x"), 0, True),
-            "fork head": (_pull("someone/Cortex", "fix/x"), 1, True),
-            "fork head named main": (_pull("someone/Cortex", "main"), 1, True),
-            "same-repo main head": (_pull("cdeust/Cortex", "main"), 1, True),
-            "deleted fork head": ({"head": {"repo": None, "ref": "x"}}, 1, True),
-            "gh failure": (None, 1, True),
-            "plain issue": (_pull("cdeust/Cortex", "fix/x"), 0, False),
+            "same-repo feature head": (ok, True, 0, 0),
+            "fork head": (fork, True, 0, 1),
+            "fork head named main": (_pull("someone/Cortex", "main"), True, 0, 1),
+            "same-repo main head": (_pull("cdeust/Cortex", "main"), True, 0, 1),
+            "deleted fork head": ({"head": {"repo": None, "ref": "x"}}, True, 0, 1),
+            "gh prints nothing and fails": (None, True, 1, 1),
+            "gh prints a passing head but fails": (ok, True, 1, 1),
         }
-        for name, (pull, expected, is_pull) in cases.items():
+        for name, (pull, is_pull, gh_exit, expected) in cases.items():
             with self.subTest(name):
-                result = _run_guard(pull, is_pull)
+                result, calls = _run_guard(pull, is_pull, gh_exit)
                 self.assertEqual(result.returncode, expected, result.stderr)
-                if expected:
-                    self.assertIn("::error::", result.stdout + result.stderr)
+                self.assertEqual(calls, ["api repos/cdeust/Cortex/pulls/1"])
+                self.assertEqual("::error::" in result.stdout, bool(expected))
+
+    @unittest.skipUnless(
+        shutil.which("jq") and shutil.which("bash"), "needs bash and jq"
+    )
+    def test_fix_target_guard_never_consults_gh_for_a_plain_issue(self):
+        # The stub would fail if called (no JSON): a passing exit proves the
+        # pull_request gate, and the empty log proves gh never ran.
+        result, calls = _run_guard(None, is_pull=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(calls, [])
 
     def test_owner_mentions_bound_the_run(self):
         # source: docs.github.com workflow-syntax#jobsjob_idtimeout-minutes;

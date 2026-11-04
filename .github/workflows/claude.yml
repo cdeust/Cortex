@@ -52,9 +52,13 @@ jobs:
         run: |
           set -euo pipefail
           if jq -e '.issue.pull_request != null' "$GITHUB_EVENT_PATH" >/dev/null; then
-            if ! gh api "repos/$GH_REPO/pulls/$ISSUE_NUMBER" |
-              jq -e --arg repo "$GH_REPO" \
-                '.head.repo.full_name == $repo and .head.ref != .base.repo.default_branch' >/dev/null; then
+            if ! pull="$(gh api "repos/$GH_REPO/pulls/$ISSUE_NUMBER")"; then
+              echo "::error::could not read PR #$ISSUE_NUMBER; refusing the fix target"
+              exit 1
+            fi
+            if ! jq -e --arg repo "$GH_REPO" \
+                '.head.repo.full_name == $repo and .head.ref != .base.repo.default_branch' \
+                >/dev/null <<<"$pull"; then
               echo "::error::PR #$ISSUE_NUMBER head is a fork or the default branch; refusing the fix target"
               exit 1
             fi
@@ -73,6 +77,20 @@ jobs:
             sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           fi
           bwrap --version
+      # The allowlisted commands need the locked environment the pipeline tests
+      # in (.github/actions/test-suite): without it bare pytest, ruff and python
+      # run against the system interpreter or are not found (#856 review).
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Install the locked dev+sqlite set
+        uses: ./.github/actions/uv-locked-install
+        with:
+          set: --extra dev --extra sqlite
+          environment: ${{ env.pythonLocation }}
+      - name: Install the project
+        # source: ADR-0800, as .github/actions/test-suite installs it.
+        run: pip install --no-deps -e .
       - uses: anthropics/claude-code-action@8041f1d17e0e7d2f2cfe35002962e9f26237c0bb # v1.0.263
         env:
           CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
@@ -92,11 +110,13 @@ jobs:
           # Tag mode grants edits and its own scoped git (add, commit, push to the
           # PR branch) only; headless, anything that falls through to "ask" is
           # denied (src/modes/tag/index.ts:158-214). The allowlist adds exactly
-          # CLAUDE.md's validation commands, read-only git and read-only gh. A
-          # command prefix is not a security boundary (pytest and uv run repo
-          # code by design): the boundary is the owner gate, the App token, the
-          # job permissions and the bubblewrap sandbox. Review of #855.
+          # CLAUDE.md's validation commands plus git and gh inspection commands;
+          # the tracking comment is tag mode's own MCP tool, so no gh pr comment.
+          # A command prefix is not a security boundary (pytest and uv run repo
+          # code by design, git diff takes --output): the boundary is the owner
+          # gate, the App token, the job permissions and the bubblewrap sandbox.
+          # Reviews of #855 and #856.
           claude_args: |
             --strict-mcp-config
-            --allowedTools "Bash(uv sync:*),Bash(pytest:*),Bash(ruff check:*),Bash(ruff format:*),Bash(python -m mcp_server.doctor:*),Bash(python scripts/check_craftsmanship.py:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(gh run view:*)"
+            --allowedTools "Bash(uv sync:*),Bash(pytest:*),Bash(ruff check:*),Bash(ruff format --check:*),Bash(python -m mcp_server.doctor:*),Bash(python scripts/check_craftsmanship.py:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh run view:*)"
             --model "claude-opus-5-5"
