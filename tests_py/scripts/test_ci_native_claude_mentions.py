@@ -84,9 +84,9 @@ class OwnerMentionTests(unittest.TestCase):
         # that falls through to "ask" is denied, and .claude/settings.json adds
         # its rules (test_ci_native_claude_settings).
         # The list is CLAUDE.md's validation set, git inspection and gh run view:
-        # no uv sync (the job installs the
-        # environment; test_uv_lock_single_source.py), no bare interpreter, no
-        # gh api, no gh pr comment (tag mode owns its tracking comment).
+        # no uv sync (the job installs the environment;
+        # test_uv_lock_single_source.py), no bare interpreter, no gh api, no gh
+        # pr comment (tag mode owns its tracking comment).
         invocation = find_step(mention_job(), uses=ACTION)
         args = shlex.split(invocation["with"]["claude_args"])
         self.assertEqual(args, CLAUDE_ARGS)
@@ -142,6 +142,10 @@ class OwnerMentionTests(unittest.TestCase):
         self.assertLess(run.index("|| break"), run.index("sleep $((attempt * 10))"))
         worst = 5 * 60 + sum(10 * a for a in range(1, 5))
         self.assertLess(worst, model["timeout-minutes"] * 60)
+        # Five failures end the step red, after the loop: no silent fallback to
+        # an agent without the model.
+        self.assertLess(run.index("done"), run.index("::error::"))
+        self.assertTrue(run.rstrip().endswith("exit 1"), run)
 
     def test_non_isolated_install_is_never_editable(self):
         # Invariant behind the literal above: build-system.requires lists what

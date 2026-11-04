@@ -173,9 +173,9 @@ jobs:
           # test_ci_native_claude_settings maps every Bash allow rule of that
           # file to a prefix here, a denied prefix or a named exemption (ruff
           # format, python3 -m mcp_server.doctor), and pins the deny rules the
-          # job relies on). The
-          # project source stays loaded on purpose: it carries CLAUDE.md,
-          # .claude/agents, .claude/commands and the file's deny rules;
+          # job relies on). The project source stays loaded on purpose: it
+          # carries CLAUDE.md, .claude/agents, .claude/commands and the file's
+          # deny rules;
           # --disallowedTools denies what a write-token job must not run (deny
           # wins over allow): uv, which that file allows (unlocked fetches, a
           # second .venv, uv.lock rewrites), and curl, mirroring its own deny.

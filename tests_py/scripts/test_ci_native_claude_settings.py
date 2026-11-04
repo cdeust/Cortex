@@ -75,6 +75,17 @@ class SettingsAgainstMentionJob(unittest.TestCase):
         denied = _bash_rules(args[args.index("--disallowedTools") + 1].split(","))
         self.assertIn(("uv", True), denied)
         self.assertIn(("curl", True), denied)
+        settings = json.loads(SETTINGS.read_text())
+        self.assertLessEqual(set(settings), {"$schema", "permissions"})
+        self.assertLessEqual(set(settings["permissions"]), {"allow", "deny"})
+        self.assertLessEqual(SETTINGS_DENY, set(settings["permissions"]["deny"]))
+        rules = _bash_rules(settings["permissions"]["allow"])
+        self.assertLessEqual(SETTINGS_EXEMPT, {cmd for cmd, _ in rules})
+        for rule in rules:
+            covered = any(_covers(cli, rule) for cli in allowed + denied)
+            self.assertTrue(covered or rule[0] in SETTINGS_EXEMPT, rule)
+
+    def test_settings_local_is_not_tracked(self):
         # The action also loads settings.local.json and restores .claude/ from
         # the base branch, so a tracked copy (force-added past .gitignore) would
         # reach the job unchecked; the untracked local copy is fine.
@@ -86,16 +97,7 @@ class SettingsAgainstMentionJob(unittest.TestCase):
             check=True,
             timeout=30,
         ).stdout
-        self.assertEqual(tracked, "")
-        settings = json.loads(SETTINGS.read_text())
-        self.assertLessEqual(set(settings), {"$schema", "permissions"})
-        self.assertLessEqual(set(settings["permissions"]), {"allow", "deny"})
-        self.assertLessEqual(SETTINGS_DENY, set(settings["permissions"]["deny"]))
-        rules = _bash_rules(settings["permissions"]["allow"])
-        self.assertLessEqual(SETTINGS_EXEMPT, {cmd for cmd, _ in rules})
-        for rule in rules:
-            covered = any(_covers(cli, rule) for cli in allowed + denied)
-            self.assertTrue(covered or rule[0] in SETTINGS_EXEMPT, rule)
+        self.assertEqual(tracked, "", "untrack .claude/settings.local.json")
 
 
 if __name__ == "__main__":
