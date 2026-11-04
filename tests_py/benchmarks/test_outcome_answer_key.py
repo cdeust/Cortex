@@ -134,6 +134,34 @@ def test_blank_task_id_raises():
         OutcomeTask("  ", FAMILY_COMMIT, "q?", {"commit": _SHA})
 
 
+@pytest.mark.parametrize(
+    "source",
+    [
+        "benchmarks/outcome/paired_delta.py#L52",
+        "benchmarks/outcome/paired_delta.py:52-60",
+        "benchmarks/outcome/paired_delta.py:52:3",
+        "benchmarks/outcome/paired_delta.py:\u0665",
+    ],
+)
+def test_source_spellings_outside_the_documented_rule_do_not_match(source):
+    answer = {"value": "0.05", "source": source}
+    assert not verify(_value_task(), answer, resolve_commit=_no_git)
+
+
+def test_task_is_hashable_by_id():
+    task = _value_task()
+    assert hash(task) == hash(task.task_id)
+    assert {task} == {_value_task()}
+
+
+def test_load_tasks_error_names_the_file(tmp_path):
+    path = tmp_path / "tasks.json"
+    item = {"family": FAMILY_VALUE, "question": "q?", "key": {}}
+    path.write_text(json.dumps([item]), encoding="utf-8")
+    with pytest.raises(ValueError, match="tasks.json: task_id"):
+        load_tasks(path)
+
+
 def test_sha256_key_is_accepted_and_key_is_frozen():
     key = {"values": ["1"], "sources": ["a.py"]}
     task = OutcomeTask("t", FAMILY_VALUE, "q?", key)

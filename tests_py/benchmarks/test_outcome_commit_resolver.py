@@ -1,4 +1,4 @@
-"""Tests for the git commit resolver in benchmarks/outcome/answer_key.py.
+"""Tests for benchmarks/outcome/commit_resolver.py.
 
 Issue #343, slice 2. Every case runs against a real throwaway git
 repository: the candidate objects for a prefix come from git's object store,
@@ -12,12 +12,8 @@ import subprocess
 
 import pytest
 
-from benchmarks.outcome.answer_key import (
-    FAMILY_COMMIT,
-    OutcomeTask,
-    git_commit_resolver,
-    verify,
-)
+from benchmarks.outcome.answer_key import FAMILY_COMMIT, OutcomeTask, verify
+from benchmarks.outcome.commit_resolver import check_commit_keys, git_commit_resolver
 
 
 def _no_git(_name):
@@ -77,22 +73,25 @@ def test_commit_answer_resolved_by_git(repo):
 
 
 def test_hex_named_ref_does_not_stand_in_for_a_hash_prefix(repo):
-    # Codex review 4467463788 and the claude[bot] review on #858: rev-parse
-    # resolves a ref spelled in hex; the resolver consults object names only.
+    # Codex review 4467463788 and the claude[bot] reviews on #858: a general
+    # revision lookup would resolve a ref spelled in hex; the resolver lists
+    # object names only (`--disambiguate`), so neither a tag nor a branch counts.
     first = _git(repo, "rev-list", "--max-parents=0", "HEAD")
     for ref in ("deadbeef", "2024"):
         # Fixed dates make `first` deterministic; the ref must not be a real
         # prefix of it, or the case would test nothing.
         assert not first.startswith(ref)
         _git(repo, "tag", ref, first)
-        assert not verify(
-            _commit_task(first),
-            {"commit": ref},
-            resolve_commit=git_commit_resolver(repo),
-        )
+        _git(repo, "branch", f"{ref}0", first)
+        _git(repo, "tag", "-a", "-m", "m", f"{ref}1", first)
+        resolve = git_commit_resolver(repo)
+        assert not verify(_commit_task(first), {"commit": ref}, resolve_commit=resolve)
+        for name in (f"{ref}0", f"{ref}1"):
+            assert not first.startswith(name)
+            assert resolve(name) is None
 
 
-def test_non_commit_objects_sharing_the_prefix_are_ignored(repo):
+def test_full_hash_of_a_non_commit_object_names_no_commit(repo):
     first = _git(repo, "rev-list", "--max-parents=0", "HEAD")
     _git(repo, "tag", "-a", "-m", "annotated", "v1", first)
     resolve = git_commit_resolver(repo)
@@ -201,3 +200,22 @@ def test_replace_refs_do_not_change_the_answer(crowded_repo):
     _git(repo, "replace", "-f", blob, other)
     assert _git(repo, "cat-file", "-t", blob) == "commit"
     assert git_commit_resolver(repo)(commit[:4]) == commit
+
+
+def test_answer_longer_than_the_key_names_nothing(repo):
+    # Probe of git 2.43: `--disambiguate=<sha1>0` lists nothing in a SHA-1
+    # repository, so an over-length answer is incorrect rather than padded.
+    first = _git(repo, "rev-list", "--max-parents=0", "HEAD")
+    resolve = git_commit_resolver(repo)
+    assert resolve(first + "0") is None
+    assert not verify(_commit_task(first), {"commit": "a" * 65}, resolve_commit=_no_git)
+
+
+def test_check_commit_keys_rejects_a_key_outside_the_corpus(repo):
+    first = _git(repo, "rev-list", "--max-parents=0", "HEAD")
+    blob = _git(repo, "rev-parse", "HEAD:f.txt")
+    resolve = git_commit_resolver(repo)
+    check_commit_keys([_commit_task(first)], resolve)
+    for key in (blob, "0" * 40, "a" * 64):
+        with pytest.raises(ValueError, match="is not a commit of the corpus"):
+            check_commit_keys([_commit_task(key)], resolve)

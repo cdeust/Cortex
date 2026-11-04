@@ -9,9 +9,11 @@ task families; each has its own key and its own answer fields:
   it is a prefix of exactly one commit object in the corpus repository and
   that commit is the key. Refs are never consulted, so a branch or tag
   spelled in hex does not count; objects that are not commits (blobs, trees,
-  annotated tag objects) neither count nor make a prefix ambiguous; git's own
-  minimum abbreviation applies (a shorter prefix names nothing). The
-  repository, not a tuned prefix length, decides.
+  annotated tag objects) neither count nor make a prefix ambiguous, unlike
+  ``git rev-parse``, which calls such a prefix ambiguous; git's hard minimum
+  of 4 hex digits applies (a shorter prefix names nothing). The repository,
+  not a tuned prefix length, decides. The lookup lives in
+  ``commit_resolver``; the verifier only receives a ``CommitResolver``.
 - ``abandoned_approach`` — "was approach Y tried, and what was the recorded
   reason it stopped". Key: ``tried`` and, when tried, the accepted wordings
   of the recorded reason. Answer fields ``tried`` (bool) and ``reason``.
@@ -38,9 +40,7 @@ source: issue #343"""
 from __future__ import annotations
 
 import json
-import os
 import re
-import subprocess
 import unicodedata
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -57,7 +57,7 @@ FAMILIES = (FAMILY_COMMIT, FAMILY_APPROACH, FAMILY_VALUE)
 _FULL_HASH_LENGTHS = (40, 64)
 
 _HEX = re.compile(r"[0-9a-f]+")
-_LINE_SUFFIX = re.compile(r":\d+$")
+_LINE_SUFFIX = re.compile(r":[0-9]+\Z")
 
 CommitResolver = Callable[[str], "str | None"]
 
@@ -119,6 +119,11 @@ class OutcomeTask:
         # Frozen after validation, so the checked key is the key that scores.
         object.__setattr__(self, "key", _freeze(self.key))
 
+    def __hash__(self) -> int:
+        # The frozen key is a mapping, which is unhashable; equal tasks share
+        # their id, so hashing on it keeps hash consistent with equality.
+        return hash(self.task_id)
+
 
 def _check_commit_key(task_id: str, key: Mapping[str, object]) -> None:
     commit = key.get("commit")
@@ -158,12 +163,15 @@ _KEY_SCHEMAS = {
 def _task_from_json(path: Path, item: object) -> OutcomeTask:
     if not isinstance(item, dict) or not isinstance(item.get("key"), dict):
         raise ValueError(f"{path}: each task must be an object with a 'key' object")
-    return OutcomeTask(
-        task_id=item.get("id"),
-        family=item.get("family"),
-        question=item.get("question"),
-        key=item["key"],
-    )
+    try:
+        return OutcomeTask(
+            task_id=item.get("id"),
+            family=item.get("family"),
+            question=item.get("question"),
+            key=item["key"],
+        )
+    except ValueError as error:
+        raise ValueError(f"{path}: {error}") from error
 
 
 def load_tasks(path: Path) -> tuple[OutcomeTask, ...]:
@@ -233,60 +241,3 @@ def verify(
     if task.family == FAMILY_APPROACH:
         return _verify_approach(task, answer)
     return _verify_value(task, answer)
-
-
-def _git(repo: Path, args: list[str], stdin: str | None = None) -> str:
-    """Run git on ``repo`` only; any git failure raises (never scored).
-
-    ``GIT_*`` variables are dropped so an inherited ``GIT_DIR`` or
-    ``GIT_OBJECT_DIRECTORY`` cannot point the lookup at another store, and
-    ``--no-replace-objects`` stops ``refs/replace/*`` from changing the type
-    or identity git reports for an object.
-    """
-    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
-    return subprocess.run(
-        ["git", "--no-replace-objects", "-C", str(repo), *args],
-        input=stdin,
-        env=env,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout
-
-
-def git_commit_resolver(repo: Path) -> CommitResolver:
-    """Resolve a hex abbreviation to the full commit hash in ``repo``.
-
-    Only object names are consulted, never refs: a branch or tag that happens
-    to be spelled in hex cannot stand in for a hash prefix. ``None`` when the
-    prefix names no commit or more than one (git lists no candidate below its
-    minimum abbreviation, so a too-short prefix is unknown, not ambiguous).
-    A broken corpus must stop the run, not score every answer incorrect: a
-    path that is not inside a readable repository raises
-    ``CalledProcessError``, and a path that is inside one without being its
-    work-tree root (a plain subdirectory, a checkout whose ``.git`` is gone)
-    raises ``ValueError`` here, before any answer is resolved, instead of
-    silently resolving against the enclosing repository. A non-hex name
-    passed to the returned function raises ``ValueError``.
-    """
-    top = Path(_git(repo, ["rev-parse", "--show-toplevel"]).strip())
-    if top.resolve() != Path(repo).resolve():
-        raise ValueError(f"{repo} is not the root of a git work tree (found {top})")
-
-    def resolve(hex_name: str) -> str | None:
-        if not _HEX.fullmatch(hex_name):
-            raise ValueError(f"not a hex object name: {hex_name!r}")
-        candidates = _git(repo, ["rev-parse", f"--disambiguate={hex_name}"])
-        if not candidates.strip():
-            return None
-        typed = _git(
-            repo, ["cat-file", "--batch-check=%(objectname) %(objecttype)"], candidates
-        )
-        commits = [
-            name
-            for name, kind in (line.split() for line in typed.splitlines())
-            if kind == "commit"
-        ]
-        return commits[0] if len(commits) == 1 else None
-
-    return resolve

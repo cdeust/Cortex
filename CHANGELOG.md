@@ -93,8 +93,9 @@ adheres to [Semantic Versioning](https://semver.org/).
   correctness, turns and tokens, its spread across repeats, and a task-level
   percentile bootstrap 95% interval (none below 10 tasks). A single repeat is
   flagged as an anecdote; an unpairable trial raises instead of being dropped.
-- `benchmarks/outcome/answer_key.py`: task definitions and a verifier that
-  checks answers without Cortex (second slice of #343). A commit answer is
+- `benchmarks/outcome/answer_key.py` and `commit_resolver.py`: task
+  definitions and a verifier that checks answers without Cortex (second
+  slice of #343). A commit answer is
   correct when it is a prefix of exactly one commit object in the corpus
   repository and that commit is the key (refs are never consulted); reasons
   and decided values are exact-matched after normalisation against the

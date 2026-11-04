@@ -8,7 +8,8 @@ session without recall — instead of the top-1 retrieval proxy measured by
 Slice 1: ``paired_delta`` — the scoring core that pairs the two arms and
 reports the delta with a variance estimate.
 Slice 2: ``answer_key`` — task definitions for the three task families and
-a verifier that checks an answer without Cortex.
+a verifier that checks an answer without Cortex; ``commit_resolver`` — the
+git lookup that resolves commit answers against the corpus repository.
 The corpus and the two-arm runner are later slices.
 
 source: issue #343"""
