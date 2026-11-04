@@ -74,6 +74,7 @@ jobs:
           # Use the action App token instead of a persisted workflow token.
           persist-credentials: false
       - name: Install subprocess isolation
+        timeout-minutes: 5
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y bubblewrap socat
@@ -90,9 +91,11 @@ jobs:
       # the build backend, and the embedding model that tests_py/infrastructure/
       # test_embedding_live_contract.py needs under CI. source: ci.json.
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        timeout-minutes: 5
         with:
           python-version: "3.12"
       - name: Install the locked dev+sqlite+codebase set, lint and packaging groups
+        timeout-minutes: 10
         uses: ./.github/actions/uv-locked-install
         with:
           set: --extra dev --extra sqlite --extra codebase --group lint --group packaging
@@ -104,14 +107,18 @@ jobs:
       # holding write tokens (#856 reviews). test_ci_native_claude_mentions
       # checks that every build requirement is in a selected group.
       - name: Install the project
+        timeout-minutes: 3
         run: pip install --no-deps --no-build-isolation -e .
       - name: Pre-download embedding model
+        timeout-minutes: 5
         run: |
           for attempt in 1 2 3 4 5; do
             python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2', device='cpu')" && exit 0
+            [ "$attempt" -lt 5 ] || break
             echo "HF pre-download attempt ${attempt} failed; retrying in $((attempt * 10))s" >&2
             sleep $((attempt * 10))
           done
+          echo "::error::embedding model pre-download failed after 5 attempts"
           exit 1
       - uses: anthropics/claude-code-action@8041f1d17e0e7d2f2cfe35002962e9f26237c0bb # v1.0.263
         env:

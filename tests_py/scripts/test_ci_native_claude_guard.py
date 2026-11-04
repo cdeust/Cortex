@@ -13,6 +13,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 MENTIONS = ROOT / ".github/workflows/claude.yml"
 GUARD = "Authorize owner fix target"
+MISSING = object()  # Sentinel: write no event file at all.
 # The stub records every argument on its own line, answers with the fixture
 # JSON and exits as told, so the guard's reads and refusals are observable.
 GH_STUB = """#!/bin/sh
@@ -44,7 +45,7 @@ def _pull(head_repo, head_ref, default_branch="main"):
     }
 
 
-def _run_guard(pull, is_pull, gh_exit=0, repo="cdeust/Cortex", event_missing=False):
+def _run_guard(pull, is_pull, gh_exit=0, repo="cdeust/Cortex", event_body=None):
     """Run the guard step's script with a stub gh and a fixture event.
 
     Returns the completed process and the argv the stub gh recorded."""
@@ -56,10 +57,12 @@ def _run_guard(pull, is_pull, gh_exit=0, repo="cdeust/Cortex", event_missing=Fal
         log = Path(scratch) / "gh.log"
         log.touch()
         event = Path(scratch) / "event.json"
-        if not event_missing:
+        if event_body is None:
             event.write_text(
                 json.dumps({"issue": {"pull_request": {} if is_pull else None}})
             )
+        elif event_body != MISSING:
+            event.write_text(event_body)
         env = {
             "PATH": f"{scratch}:{os.environ['PATH']}",
             "GITHUB_EVENT_PATH": str(event),
@@ -139,11 +142,21 @@ class FixTargetGuardBehaviour(unittest.TestCase):
         self.assertEqual(calls, [])
 
     def test_refuses_when_the_event_cannot_be_read(self):
-        # No silent fallback: an unreadable event is a refusal, never "not a PR".
-        result, calls = _run_guard(None, is_pull=False, event_missing=True)
-        self.assertEqual(result.returncode, 1, result.stderr)
-        self.assertIn("could not read the event", result.stdout)
-        self.assertEqual(calls, [])
+        # No silent fallback: a missing, empty or non-boolean event is a
+        # refusal, never "not a PR". The empty file makes jq exit 0 with no
+        # output, so only the value check catches it.
+        cases = {
+            "missing file": MISSING,
+            "empty file": "",
+            "null": "null",
+            "no issue": "{}",
+        }
+        for name, body in cases.items():
+            with self.subTest(name):
+                result, calls = _run_guard(None, is_pull=False, event_body=body)
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertIn("could not read the event", result.stdout)
+                self.assertEqual(calls, [])
 
 
 if __name__ == "__main__":
