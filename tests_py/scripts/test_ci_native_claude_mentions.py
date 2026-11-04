@@ -1,24 +1,18 @@
 """Regression guards for the owner @claude mention workflow (claude.yml)."""
 
-import json
 import re
 import shlex
 import tomllib
 import unittest
-from pathlib import Path
 
-import yaml
+from tests_py.scripts._ci_native_claude_support import (
+    ACTION,
+    GUARD,
+    ROOT,
+    find_step,
+    mention_job,
+)
 
-ROOT = Path(__file__).resolve().parents[2]
-MENTIONS = ROOT / ".github/workflows/claude.yml"
-ACTION = "anthropics/claude-code-action@8041f1d17e0e7d2f2cfe35002962e9f26237c0bb"
-GUARD = "Authorize owner fix target"
-SETTINGS = ROOT / ".claude/settings.json"
-# .claude/settings.json allow rules the job keeps beyond --allowedTools: ruff
-# format rewrites files, which tag mode's Edit/Write already grant; python3 is
-# a second name for the interpreter the job installed (#856 review).
-SETTINGS_EXEMPT = {"ruff format", "python3 -m mcp_server.doctor"}
-_BASH_RULE = re.compile(r"^Bash\(([^()*:]+)( \*|:\*)?\)$")
 CLAUDE_ARGS = [
     "--strict-mcp-config",
     "--allowedTools",
@@ -40,52 +34,13 @@ def _canonical(requirement):
     return re.sub(r"[-_.]+", "-", name).lower()
 
 
-def _bash_rules(rules):
-    """`(prefix, wildcard)` of `Bash(cmd)`, `Bash(cmd:*)` or `Bash(cmd *)` rules.
-
-    `cmd:*` and `cmd *` are the equivalent word-bounded wildcards of Claude Code
-    (`Bash(uv:*)` covers `uv x`, not `uvx`); `Bash(cmd)` is exact. A raw
-    `Bash(cmd*)` is a string prefix, so it is rejected, as are a bare `Bash`, a
-    non-Bash tool, a `*` elsewhere and an empty command.
-    """
-    parsed = []
-    for rule in rules:
-        match = _BASH_RULE.match(rule)
-        if match is None or not match.group(1).strip():
-            raise AssertionError(f"not an exact or word-bounded Bash rule: {rule!r}")
-        parsed.append((match.group(1).strip(), match.group(2) is not None))
-    return parsed
-
-
-def _covers(cli, rule):
-    """A wildcard CLI entry covers the rule's prefix at a word boundary; an exact
-    CLI entry covers only the identical exact rule."""
-    (prefix, wildcard), (cmd, cmd_wildcard) = cli, rule
-    if not wildcard:
-        return not cmd_wildcard and cmd == prefix
-    return cmd == prefix or cmd.startswith(prefix + " ")
-
-
-def _job():
-    return yaml.safe_load(MENTIONS.read_text())["jobs"]["claude"]
-
-
-def _step(job, *, name=None, uses=None):
-    return next(
-        step
-        for step in job["steps"]
-        if (name is not None and step.get("name") == name)
-        or (uses is not None and step.get("uses", "").startswith(uses))
-    )
-
-
 class OwnerMentionTests(unittest.TestCase):
     def test_owner_mentions_keep_app_authentication(self):
-        mention = _job()
+        mention = mention_job()
         self.assertEqual(mention["permissions"]["id-token"], "write")
-        invocation = _step(mention, uses=ACTION)
+        invocation = find_step(mention, uses=ACTION)
         self.assertNotIn("github_token", invocation["with"])
-        checkout = _step(mention, uses="actions/checkout@")
+        checkout = find_step(mention, uses="actions/checkout@")
         self.assertFalse(checkout["with"]["persist-credentials"])
 
     def test_owner_mentions_inherit_tag_mode_accept_edits(self):
@@ -93,8 +48,8 @@ class OwnerMentionTests(unittest.TestCase):
         # through --permission-mode acceptEdits; base-action parse-sdk-options.ts
         # keeps the last --permission-mode, so any workflow value replaces it.
         # Runs 40645284158 and 40645479186 were refused every Edit and Write.
-        mention = _job()
-        invocation = _step(mention, uses=ACTION)
+        mention = mention_job()
+        invocation = find_step(mention, uses=ACTION)
         self.assertEqual(invocation["uses"], ACTION)
         self.assertEqual(
             set(invocation["with"]),
@@ -121,18 +76,18 @@ class OwnerMentionTests(unittest.TestCase):
             "&& (contains(github.event.issue.body, '@claude') "
             "|| contains(github.event.issue.title, '@claude'))))"
         )
-        self.assertEqual(" ".join(_job()["if"].split()), expected)
+        self.assertEqual(" ".join(mention_job()["if"].split()), expected)
 
     def test_owner_mentions_allow_the_validation_commands_only(self):
         # Tag mode supplies no shell allowlist beyond its own scoped git
         # (src/modes/tag/index.ts:158-214 at the pinned SHA); headless, anything
         # that falls through to "ask" is denied, and .claude/settings.json adds
-        # its rules (test_settings_allow_rules_map_to_allowed_denied_or_exempt).
+        # its rules (test_ci_native_claude_settings).
         # The list is CLAUDE.md's validation set, git inspection and gh run view:
         # no uv sync (the job installs the
         # environment; test_uv_lock_single_source.py), no bare interpreter, no
         # gh api, no gh pr comment (tag mode owns its tracking comment).
-        invocation = _step(_job(), uses=ACTION)
+        invocation = find_step(mention_job(), uses=ACTION)
         args = shlex.split(invocation["with"]["claude_args"])
         self.assertEqual(args, CLAUDE_ARGS)
         self.assertEqual(
@@ -150,13 +105,13 @@ class OwnerMentionTests(unittest.TestCase):
         # Python 3.12 and ci.json "regression"'s dev+sqlite+codebase extras on the
         # SQLite backend; ruff lives in the lint group; the embedding contract
         # test needs the model; the build backend comes from the packaging group.
-        job = _job()
+        job = mention_job()
         steps = job["steps"]
-        python = _step(job, uses="actions/setup-python@")
-        locked = _step(job, uses="./.github/actions/uv-locked-install")
-        project = _step(job, name="Install the project")
-        model = _step(job, name="Pre-download embedding model")
-        action = _step(job, uses=ACTION)
+        python = find_step(job, uses="actions/setup-python@")
+        locked = find_step(job, uses="./.github/actions/uv-locked-install")
+        project = find_step(job, name="Install the project")
+        model = find_step(job, name="Pre-download embedding model")
+        action = find_step(job, uses=ACTION)
         order = [steps.index(s) for s in (python, locked, project, model, action)]
         self.assertEqual(order, sorted(order))
         self.assertEqual(python["with"], {"python-version": "3.12"})
@@ -177,6 +132,7 @@ class OwnerMentionTests(unittest.TestCase):
         self.assertIn("timeout 60 python -c", model["run"])
         self.assertIn("for attempt in 1 2 3 4 5;", model["run"])
         self.assertIn("sleep $((attempt * 10))", model["run"])
+        self.assertIn('[ "$attempt" -lt 5 ] || break', model["run"])
         worst = 5 * 60 + sum(10 * a for a in range(1, 5))
         self.assertLess(worst, model["timeout-minutes"] * 60)
 
@@ -184,45 +140,20 @@ class OwnerMentionTests(unittest.TestCase):
         # Invariant behind the literal above: build-system.requires lists what
         # a wheel build needs; an editable build adds hatchling's `editables`,
         # which no selected group carries (Codex P1, Claude review on #856).
-        run = shlex.split(_step(_job(), name="Install the project")["run"])
+        run = shlex.split(find_step(mention_job(), name="Install the project")["run"])
         self.assertIn("--no-build-isolation", run)
         editable = [a for a in run if a.startswith(("-e", "--editable"))]
         self.assertEqual(editable, [], run)
-
-    def test_settings_allow_rules_map_to_allowed_denied_or_exempt(self):
-        # The pinned action loads project settings and, on a PR, restores them
-        # from the base branch (restore-config.ts), so main's .claude/settings.json
-        # applies and the effective allowlist is the union. Every allow rule of
-        # that file is a word-bounded Bash rule and falls under a prefix allowed
-        # here, a prefix denied here (deny wins over allow) or a named exemption
-        # that the file still carries; its curl deny is mirrored.
-        args = shlex.split(_step(_job(), uses=ACTION)["with"]["claude_args"])
-        # Readable on their own; CLAUDE_ARGS above pins the same facts exactly.
-        self.assertNotIn("--setting-sources", args)
-        self.assertEqual(args.count("--disallowedTools"), 1)
-        allowed = _bash_rules(args[args.index("--allowedTools") + 1].split(","))
-        denied = _bash_rules(args[args.index("--disallowedTools") + 1].split(","))
-        self.assertIn(("uv", True), denied)
-        self.assertIn(("curl", True), denied)
-        settings = json.loads(SETTINGS.read_text())
-        self.assertLessEqual(set(settings), {"$schema", "permissions"})
-        self.assertLessEqual(set(settings["permissions"]), {"allow", "deny"})
-        self.assertIn("Bash(curl:*)", settings["permissions"]["deny"])
-        rules = _bash_rules(settings["permissions"]["allow"])
-        self.assertLessEqual(SETTINGS_EXEMPT, {cmd for cmd, _ in rules})
-        for rule in rules:
-            covered = any(_covers(cli, rule) for cli in allowed + denied)
-            self.assertTrue(covered or rule[0] in SETTINGS_EXEMPT, rule)
 
     def test_non_isolated_build_takes_its_backend_from_a_selected_locked_group(self):
         # Invariant, not literal (Codex P1 on #856): with --no-build-isolation,
         # every build-system requirement must come from a dependency group the
         # set selects with --group/--only-group (an --extra is not a group).
-        job = _job()
-        project = _step(job, name="Install the project")
+        job = mention_job()
+        project = find_step(job, name="Install the project")
         self.assertIn("--no-build-isolation", project["run"])
         tokens = shlex.split(
-            _step(job, uses="./.github/actions/uv-locked-install")["with"]["set"]
+            find_step(job, uses="./.github/actions/uv-locked-install")["with"]["set"]
         )
         groups = {
             v
@@ -247,10 +178,10 @@ class OwnerMentionTests(unittest.TestCase):
         # The sender gate checks who asked, not which head the pinned action
         # checks out and pushes to (src/modes/tag/index.ts). The guard is the
         # first step, before any checkout, and carries no escape hatch.
-        job = _job()
+        job = mention_job()
         steps = job["steps"]
-        guard = _step(job, name=GUARD)
-        checkout = _step(job, uses="actions/checkout@")
+        guard = find_step(job, name=GUARD)
+        checkout = find_step(job, uses="actions/checkout@")
         self.assertIs(steps[0], guard)
         self.assertIs(steps[1], checkout)
         self.assertEqual(
@@ -269,10 +200,10 @@ class OwnerMentionTests(unittest.TestCase):
         # step before the agent carries its own bound (guard, checkout, apt,
         # python, locked install, project, model: 28 minutes in the worst
         # case), leaving the agent at least 30 of the job's 60 minutes.
-        job = _job()
+        job = mention_job()
         self.assertEqual(job["timeout-minutes"], 60)
         steps = job["steps"]
-        before_agent = steps[: steps.index(_step(job, uses=ACTION))]
+        before_agent = steps[: steps.index(find_step(job, uses=ACTION))]
         bounds = [step.get("timeout-minutes") for step in before_agent]
         self.assertEqual(bounds, [2, 3, 3, 2, 8, 3, 7])
         self.assertTrue(all(type(b) is int for b in bounds), bounds)
@@ -281,7 +212,7 @@ class OwnerMentionTests(unittest.TestCase):
     def test_owner_mentions_serialize_branch_writes(self):
         # source: https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency
         self.assertEqual(
-            _job()["concurrency"],
+            mention_job()["concurrency"],
             {
                 "group": "claude-mentions-${{ github.event.issue.number }}",
                 "cancel-in-progress": False,

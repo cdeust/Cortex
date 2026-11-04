@@ -8,11 +8,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import yaml
+from tests_py.scripts._ci_native_claude_support import GUARD, find_step, mention_job
 
-ROOT = Path(__file__).resolve().parents[2]
-MENTIONS = ROOT / ".github/workflows/claude.yml"
-GUARD = "Authorize owner fix target"
 MISSING = object()  # Sentinel: write no event file at all.
 # The stub records every argument on its own line, answers with the fixture
 # JSON and exits as told, so the guard's reads and refusals are observable.
@@ -23,19 +20,6 @@ printf '%s' "$GH_STUB_JSON"
 exit "${GH_STUB_EXIT:-0}"
 """
 TOOLS_ON_PATH = bool(shutil.which("jq") and shutil.which("bash"))
-
-
-def _job():
-    return yaml.safe_load(MENTIONS.read_text())["jobs"]["claude"]
-
-
-def _step(job, *, name=None, uses=None):
-    return next(
-        step
-        for step in job["steps"]
-        if (name is not None and step.get("name") == name)
-        or (uses is not None and step.get("uses", "").startswith(uses))
-    )
 
 
 def _pull(head_repo, head_ref, default_branch="main"):
@@ -49,7 +33,7 @@ def _run_guard(pull, is_pull, gh_exit=0, repo="cdeust/Cortex", event_body=None):
     """Run the guard step's script with a stub gh and a fixture event.
 
     Returns the completed process and the argv the stub gh recorded."""
-    script = _step(_job(), name=GUARD)["run"]
+    script = find_step(mention_job(), name=GUARD)["run"]
     with tempfile.TemporaryDirectory() as scratch:
         gh = Path(scratch) / "gh"
         gh.write_text(GH_STUB)
