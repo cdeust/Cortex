@@ -110,16 +110,16 @@ class PipelineGateTests(unittest.TestCase):
 
     def test_merge_result_guard_cannot_be_skipped(self) -> None:
         changed = self.workflow.replace(
-            "      - name: Require completed tests and review\n",
-            "      - name: Require completed tests and review\n        if: false\n",
+            "      - name: Require the test jobs of this run\n",
+            "      - name: Require the test jobs of this run\n        if: false\n",
         )
         self.assertNotEqual(changed, self.workflow)
         self.assertTrue(gate.check_runtime_contract(changed))
 
     def test_merge_result_guard_cannot_ignore_failure(self) -> None:
         changed = self.workflow.replace(
-            "      - name: Require completed tests and review\n",
-            "      - name: Require completed tests and review\n"
+            "      - name: Require the test jobs of this run\n",
+            "      - name: Require the test jobs of this run\n"
             "        continue-on-error: true\n",
         )
         self.assertNotEqual(changed, self.workflow)
@@ -158,7 +158,7 @@ class PipelineGateTests(unittest.TestCase):
         self.assertTrue(gate.check_runtime_contract(changed))
 
     def test_merge_requires_each_actual_result_binding(self) -> None:
-        for job in (*gate.REQUIRED_RESULTS, "review"):
+        for job in gate.REQUIRED_RESULTS:
             with self.subTest(job=job):
                 changed = change_job(
                     self.workflow,
@@ -181,15 +181,14 @@ class PipelineGateTests(unittest.TestCase):
                 )
                 self.assertTrue(gate.check_runtime_contract(changed))
 
-    def test_review_skip_exception_cannot_be_reintroduced(self) -> None:
+    def test_merge_cannot_wait_for_review_again(self) -> None:
+        # Owner rule 2026-10-29: merge is the aggregate of the test jobs only.
         changed = change_job(
             self.workflow,
             "merge",
-            lambda block: block.replace(
-                "success:*) ;;", "success:*|'skipped:dependabot[bot]') ;;"
-            ),
+            lambda block: block.replace("install]", "install, review]", 1),
         )
-        self.assertTrue(gate.check_runtime_contract(changed))
+        self.assertTrue(gate.check(changed))
 
     def test_merge_guard_cannot_drop_a_result_or_error_exit(self) -> None:
         for old, new in (

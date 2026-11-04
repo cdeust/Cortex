@@ -48,12 +48,49 @@ def _check_checkout(body, field, expected: str, job: str) -> list[str]:
     failures = []
     if refs != [f"ref: {expected}"]:
         failures.append(f"{job} must check out {expected}")
-    condition = "steps.guard.outputs.has_deploy_key == 'true'" if job == "tag" else ""
-    if field(step, "if") != condition or field(step, "continue-on-error") not in (
+    if field(step, "if") != "" or field(step, "continue-on-error") not in (
         "",
         "false",
     ):
         failures.append(f"{job} checkout must retain its execution and failure policy")
+    return failures
+
+
+def _check_fetch(body, field, job: str) -> list[str]:
+    """The tag job fetches the tested SHA into a bare repository and checks nothing out.
+
+    Source: zetetic-team-subagents PR237 (CodeQL actions/untrusted-checkout on
+    Cortex PR839: a checkout under the write-enabled deploy key after workflow_run).
+    """
+    steps = _steps(body)
+    if any(field(step, "uses").startswith("actions/checkout@") for step in steps):
+        return [f"{job} must not check out any commit under the deploy key"]
+    fetches = [
+        step
+        for step in steps
+        if field(step, "name") == "Fetch the tested commit into a bare repository"
+    ]
+    if len(fetches) != 1:
+        return [f"{job} must have exactly one bare fetch of the tested commit"]
+    step = fetches[0]
+    failures = []
+    env = field(step, "env")
+    key = "SSH_KEY: ${{ secrets.RELEASE_TAG_SSH_KEY }}"
+    if f"TESTED_SHA: {TESTED_REF}" not in env or key not in env:
+        failures.append(f"{job} fetch must bind the tested SHA and the deploy key")
+    run = field(step, "run")
+    for clause in (
+        "git init --quiet --bare",
+        'fetch --quiet --depth=1 origin "$TESTED_SHA"',
+        "StrictHostKeyChecking=yes",
+    ):
+        if clause not in run:
+            failures.append(f"{job} fetch must stay bare, by SHA and host-key checked")
+            break
+    if field(step, "if") != "steps.guard.outputs.has_deploy_key == 'true'" or field(
+        step, "continue-on-error"
+    ) not in ("", "false"):
+        failures.append(f"{job} fetch must retain its execution and failure policy")
     return failures
 
 
@@ -76,7 +113,7 @@ def _check_receipt(body, field) -> list[str]:
     clauses = (
         'run.get("path") == ".github/workflows/pipeline.yml" '
         'and run.get("name") == "Pipeline"',
-        'required = ["contract", "unit", "regression", "e2e", "review", "merge"]',
+        'required = ["contract", "unit", "regression", "e2e", "merge"]',
         'for category in ("environment", "install"):',
         'for runner in ("ubuntu-latest", "macos-latest", "windows-latest")',
         "len(actual) == len(expected) and set(actual) == expected",
@@ -85,7 +122,7 @@ def _check_receipt(body, field) -> list[str]:
         'job.get("status") == "completed" and allowed,',
         "_validate_run(source, repository)",
         "_validate_run(run, repository)",
-        '_validate_jobs(jobs, run.get("actor", {}).get("login"))',
+        "_validate_jobs(jobs) return run",
     )
     if any(clause not in run for clause in clauses):
         return [
@@ -115,25 +152,22 @@ def _check_record(body, field, source_ref: str) -> list[str]:
 
 
 def _check_merge_confirmation(body, field) -> list[str]:
-    """Pin the post-PUT identity and main ancestry checks in the resolver."""
+    """Pin the post-PUT identity checks in the resolver (the PR is re-read; main is never compared)."""
     run = field(_required_step(body, field, "resolve"), "run")
     clauses = (
         'pr = api.request("GET", pr_path)',
         '_pr_identity(pr, repository, original_pr["head"]["sha"])',
         'require( pr.get("merged") is True and pr.get("merge_commit_sha") == sha,',
-        '"GET", f"/repos/{repository}/compare/main...{full_sha(sha)}"',
-        'require( comparison.get("status") in ("behind", "identical") '
-        'and comparison.get("merge_base_commit", {}).get("sha") == sha,',
-        "_confirm_main_merge(pr_path, pr, sha, api) if already_merged "
+        "_confirm_pr_merge(pr_path, pr, sha, api) if already_merged "
         "and _has_push_pipeline(repository, sha, api):",
     )
     if any(clause not in run for clause in clauses):
-        return ["resolve must confirm the merged PR identity and main ancestry"]
+        return ["resolve must confirm the merged PR identity"]
     return []
 
 
 def _check_release(body, field) -> list[str]:
-    """Keep publication on trusted code while explicitly targeting the tested SHA."""
+    """Publish the tags on the explicitly tested SHA (the commit the push event built)."""
     step = _required_step(body, field, "publish")
     failures = []
     if field(step, "if") != "steps.guard.outputs.has_deploy_key == 'true'" or field(
@@ -151,14 +185,11 @@ def _check_release(body, field) -> list[str]:
         'sha = os.environ["TESTED_SHA"] validate(tags, sha) '
         "published, existing = publish(tags, sha)",
         'git("cat-file", "-t", sha).stdout.strip() != "commit"',
-        '"rev-parse", "--verify", "refs/remotes/origin/main^{commit}"',
-        'if git("rev-parse", "HEAD").stdout.strip() != trusted: raise ValueError(',
-        'git("merge-base", "--is-ancestor", sha, trusted)',
         '"tag", "-a", "-m", "Release " + tag, "--", tag, sha,',
     )
     if any(clause not in run for clause in clauses):
         failures.append(
-            "tag must verify main ancestry and publish the explicit tested SHA"
+            "tag must publish the explicit tested SHA"
         )
     return failures
 
@@ -173,9 +204,8 @@ def check_sources(bodies, field, test_jobs, post_merge=False) -> list[str]:
         failures += _check_receipt(bodies.get("resolve", []), field)
     failures += _check_record(bodies.get("contract", []), field, source_ref)
     failures += _check_release(bodies.get("tag", []), field)
-    for job in ("contract", *test_jobs, "tag"):
+    for job in ("contract", *test_jobs):
         expected = source_ref if job == "contract" else TESTED_REF
-        if job == "tag":
-            expected = "main"
         failures += _check_checkout(bodies.get(job, []), field, expected, job)
+    failures += _check_fetch(bodies.get("tag", []), field, "tag")
     return failures

@@ -7,6 +7,7 @@ The scan itself lives in scripts/tests/test_no_main_comparison.py.
 from __future__ import annotations
 
 import importlib.util
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -25,15 +26,16 @@ def _load_guard():
 class NoMainComparisonGuardTests(unittest.TestCase):
     def test_guard_script_passes(self) -> None:
         guard = _load_guard()
-        self.assertEqual(guard.find_violations(ROOT), [])
+        self.assertEqual(guard.violations(ROOT), [])
 
     def test_guard_script_detects_every_marker(self) -> None:
-        suite = unittest.defaultTestLoader.loadTestsFromName(
-            "test_guard_detects_every_forbidden_marker", _load_guard().NoMainComparisonTests
-        )
-        result = unittest.TestResult()
-        suite.run(result)
-        self.assertTrue(result.wasSuccessful(), result.failures + result.errors)
+        guard = _load_guard()
+        samples = [*guard.FORBIDDEN, "header + blob(x)", "MAIN_SHA=x"]
+        for sample in samples:
+            with self.subTest(sample=sample), tempfile.TemporaryDirectory() as tmp:
+                (Path(tmp) / "scripts").mkdir()
+                (Path(tmp) / "scripts" / "ci.sh").write_text(sample + "\n")
+                self.assertTrue(guard.violations(Path(tmp), ("scripts",)))
 
 
 if __name__ == "__main__":

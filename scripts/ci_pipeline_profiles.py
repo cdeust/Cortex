@@ -16,7 +16,8 @@ DIRECT_NEEDS = {
     "environment": ("contract", "e2e"),
     "install": ("contract", "environment"),
     "review": TEST_JOBS,
-    "merge": (*REQUIRED_RESULTS, "review"),
+    # Owner rule 2026-10-29: merge is the aggregate of the test jobs only.
+    "merge": REQUIRED_RESULTS,
     "tag": REQUIRED_RESULTS,
 }
 POST_MERGE_NEEDS = {

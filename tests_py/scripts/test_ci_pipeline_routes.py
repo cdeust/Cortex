@@ -118,7 +118,7 @@ class PipelineRoutesTests(unittest.TestCase):
         for before, after in (
             ('run.get("path") == ".github/workflows/pipeline.yml"', "True"),
             ('run.get("name") == "Pipeline"', "True"),
-            ('"regression", "e2e", "review", "merge"', '"regression", "e2e"'),
+            ('"regression", "e2e", "merge"', '"regression", "e2e"'),
             ('"ubuntu-latest", "macos-latest", "windows-latest"', '"ubuntu-latest"'),
             ("len(actual) == len(expected) and set(actual) == expected", "True"),
             ("len(matching) == 1,", "True,"),
@@ -126,7 +126,10 @@ class PipelineRoutesTests(unittest.TestCase):
             ('job.get("status") == "completed" and allowed,', "True,"),
             ("_validate_run(source, repository)", "pass"),
             ("_validate_run(run, repository)", "pass"),
-            ('_validate_jobs(jobs, run.get("actor", {}).get("login"))', "pass"),
+            (
+                "              _validate_jobs(jobs)\n              return run",
+                "              return run",
+            ),
         ):
             with self.subTest(before=before):
                 changed = change_job(
