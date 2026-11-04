@@ -1,13 +1,15 @@
-"""#683: the two groomer-coordinator failure paths that still degraded silently.
+"""#683: groomer-coordinator failure paths that could start a cycle outside the lock.
 
 1. ``is_groomer_running`` read every ``OSError`` on ``groomer.pid`` as "not
    running", so an unreadable file (EACCES, EIO) let the next SessionStart
    spawn a cycle while a live one may hold it.
 2. ``_maybe_background_consolidate`` sent ANY exception to the legacy spawn,
    which bypasses the coordinator's lock and ``groomer.pid`` guard.
+3. A spawn that raised ``OSError`` inside ``ensure_cycle`` left the lock and
+   reached that legacy spawn.
 
-Each test fails on main before the fix: the unreadable file spawned a cycle,
-and an unexpected coordinator exception took the legacy path.
+The tests named ``unreadable``, ``unexpected`` and ``failed_spawn`` fail on
+main; the others pin behaviour that stays unchanged.
 
 source: ADR-1118 (amends ADR-0527 and ADR-1097 point 5)
 """
@@ -15,6 +17,7 @@ source: ADR-1118 (amends ADR-0527 and ADR-1097 point 5)
 from __future__ import annotations
 
 import errno
+import json
 import os
 from pathlib import Path
 
@@ -30,6 +33,7 @@ from mcp_server.infrastructure.groomer_identity import GroomerPidUnreadableError
 
 @pytest.fixture
 def cache(tmp_path, monkeypatch) -> Path:
+    monkeypatch.delenv("CORTEX_CACHE_DIR", raising=False)  # wins over XDG
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path))
     return tmp_path
 
@@ -170,30 +174,58 @@ def test_coordinator_io_failure_keeps_the_documented_legacy_path(
 # ── a failed spawn inside the lock ────────────────────────────────────────
 
 
-def test_failed_spawn_inside_the_lock_never_reaches_the_legacy_path(
-    coord, tmp_path, monkeypatch
-):
-    """A Popen OSError (EAGAIN at the fork limit) used to leave ensure_cycle
-    as an OSError and start a legacy cycle outside the lock (ADR-1118 pt 4)."""
+@pytest.fixture
+def failing_spawn_hook(coord, monkeypatch):
+    """The real ``_spawn_consolidate_cycle`` with the legacy path recorded."""
     from mcp_server.hooks import session_start_consolidate as consolidate
 
     calls = {"legacy": 0, "log": []}
 
-    def fork_limit(*_args, **_kwargs):
-        raise BlockingIOError(errno.EAGAIN, "Resource temporarily unavailable")
-
     def legacy():
         calls["legacy"] += 1
 
-    monkeypatch.setattr(Path, "home", lambda: tmp_path)
-    monkeypatch.delenv("CORTEX_CLAUDE_DIR", raising=False)
-    monkeypatch.setattr(consolidate, "spawn_logged", fork_limit)
     monkeypatch.setattr(consolidate, "_legacy_background_consolidate", legacy)
     monkeypatch.setattr(consolidate, "_log", calls["log"].append)
     monkeypatch.setattr(session_registry, "find_claude_ancestor", os.getppid)
+    return consolidate, calls
+
+
+def _assert_stamped_spawn_failure(coord, calls, cause: str) -> None:
+    assert calls["legacy"] == 0, "no second spawn outside the lock"
+    assert coord.stamp_path.exists(), "the period stays stamped (ADR-1118 pt 4)"
+    assert list(coord._iter_session_files()), "the window stays registered"
+    last = json.loads(coord.log_path.read_text(encoding="utf-8").splitlines()[-1])
+    assert last["outcome"] == groomer_coordinator.SPAWN_FAILED
+    errors = _errors(calls)
+    assert len(errors) == 1 and cause in errors[0]
+
+
+def test_failed_spawn_inside_the_lock_never_reaches_the_legacy_path(
+    coord, failing_spawn_hook, monkeypatch
+):
+    """A Popen OSError (EAGAIN at the fork limit) used to leave ensure_cycle
+    as an OSError and start a legacy cycle outside the lock (ADR-1118 pt 4)."""
+    consolidate, calls = failing_spawn_hook
+
+    def fork_limit(*_args, **_kwargs):
+        raise BlockingIOError(errno.EAGAIN, "Resource temporarily unavailable")
+
+    monkeypatch.setattr(consolidate, "spawn_logged", fork_limit)
     consolidate._maybe_background_consolidate()
 
-    assert calls["legacy"] == 0, "no second spawn outside the lock"
-    assert not coord.pid_path.exists()
-    errors = _errors(calls)
-    assert len(errors) == 1 and "Resource temporarily unavailable" in errors[0]
+    _assert_stamped_spawn_failure(coord, calls, "Resource temporarily unavailable")
+
+
+def test_unresolvable_child_command_never_reaches_the_legacy_path(
+    coord, failing_spawn_hook, monkeypatch
+):
+    """``launcher.exists()`` raises EACCES on an unsearchable parent."""
+    consolidate, calls = failing_spawn_hook
+
+    def unsearchable(_module):
+        raise PermissionError(errno.EACCES, "Permission denied", "scripts")
+
+    monkeypatch.setattr(consolidate, "child_command", unsearchable)
+    consolidate._maybe_background_consolidate()
+
+    _assert_stamped_spawn_failure(coord, calls, "Permission denied")

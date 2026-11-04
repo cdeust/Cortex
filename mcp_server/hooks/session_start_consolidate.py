@@ -28,16 +28,16 @@ def _spawn_consolidate_cycle(spawn_options: dict[str, Any]) -> int | None:
     decided by the caller before it stamped the period (ADR-1102).
     postcondition: a fully-detached subprocess (own
     process group, stdio → ``consolidate.log``) is started and its pid
-    returned, or None after logging ERROR if the spawn itself failed
-    (``OSError`` from the log file or ``Popen``). It never raises
-    ``OSError``: inside ``ensure_cycle`` that would leave the lock and reach
-    the legacy spawn, a second cycle outside it (ADR-1118). The worker runs decay,
+    returned, or None after logging ERROR if building the command or the
+    ``Popen`` itself raised ``OSError``. It never raises ``OSError``: inside
+    ``ensure_cycle`` that would leave the lock and reach the legacy spawn,
+    which retries outside it (ADR-1118). The worker runs decay,
     compression, CLS, memify, cascade, homeostatic, emergence cycles plus
     autonomous wiki maintenance — this is the SAME cycle as before; #171
     changes only WHO decides to start it, never what it does.
     """
-    cmd = child_command("mcp_server.hooks.consolidate_background")
     try:
+        cmd = child_command("mcp_server.hooks.consolidate_background")
         log_path = methodology_log_path("consolidate.log")
         # source: ADR-1110 — the child's output reaches the log only redacted
         proc = spawn_logged(cmd, log_path, **spawn_options).child

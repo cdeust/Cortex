@@ -36,6 +36,7 @@ STARTED = "started"
 SKIPPED_FRESH = "skipped_fresh"  # period not yet elapsed
 SKIPPED_RUNNING = "skipped_running"  # a cycle is already in flight (single-instance)
 SKIPPED_LOCKED = "skipped_locked"  # source: ADR-0527
+SPAWN_FAILED = "spawn_failed"  # source: ADR-1118 — stamped, nothing started
 
 _SCHEMA_VERSION = 1  # registration-file schema; unknown versions ignored on read.
 
@@ -178,12 +179,14 @@ class GroomerCoordinator:
         self, *, period_hours: float, spawn_fn, now: datetime | None = None
     ) -> str:
         """precondition: ``spawn_fn()`` starts the consolidate cycle and
-                returns its pid (or None). postcondition: returns exactly one of
-                ``STARTED`` / ``SKIPPED_FRESH`` / ``SKIPPED_RUNNING`` /
-                ``SKIPPED_LOCKED``. ``spawn_fn`` is called AT MOST once, and only on
-                ``STARTED``.
+                returns its pid, or None when the spawn failed. postcondition:
+                returns exactly one of ``STARTED`` / ``SPAWN_FAILED`` /
+                ``SKIPPED_FRESH`` / ``SKIPPED_RUNNING`` / ``SKIPPED_LOCKED``.
+                ``spawn_fn`` is called AT MOST once, after the period is stamped;
+                ``SPAWN_FAILED`` keeps the stamp, so no window retries before
+                the period elapses.
 
-        source: ADR-0527"""
+        source: ADR-0527 (failed spawn: ADR-1118)"""
         self.base_dir.mkdir(parents=True, exist_ok=True)
         now = now or datetime.now(timezone.utc)
         with DecisionLock(self.lock_path) as acquired:
@@ -197,8 +200,10 @@ class GroomerCoordinator:
             # source: ADR-0527
             self._write_stamp(now)
             pid = spawn_fn()
-            if pid is not None:
-                atomic_write_text(self.pid_path, str(int(pid)))
+            if pid is None:
+                self._log_run(SPAWN_FAILED, now)
+                return SPAWN_FAILED
+            atomic_write_text(self.pid_path, str(int(pid)))
             self._log_run(STARTED, now, session_pid=pid)
             return STARTED
 
