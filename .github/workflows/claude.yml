@@ -92,17 +92,19 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
-      - name: Install the locked dev+sqlite+codebase set and the lint group
+      - name: Install the locked dev+sqlite+codebase set, lint and packaging groups
         uses: ./.github/actions/uv-locked-install
         with:
-          set: --extra dev --extra sqlite --extra codebase --group lint
+          set: --extra dev --extra sqlite --extra codebase --group lint --group packaging
           environment: ${{ env.pythonLocation }}
-      # uv-locked-install passes --no-install-project (ADR-1092). hatchling lives
-      # in the packaging group, not in this set, so the project builds in an
-      # isolated environment, as .github/actions/test-suite installs it (Codex
-      # P1 on #856: --no-build-isolation fails on a fresh setup-python).
+      # uv-locked-install passes --no-install-project (ADR-1092). The build
+      # backend (pyproject build-system.requires: hatchling) comes from the
+      # locked packaging group above, as release.yml installs it, so the project
+      # builds without isolation: no unpinned PyPI fetch outside bubblewrap in a
+      # job holding write tokens (#856 reviews). test_ci_native_claude_mentions
+      # checks that every build requirement is in a selected group.
       - name: Install the project
-        run: pip install --no-deps -e .
+        run: pip install --no-deps --no-build-isolation -e .
       - name: Pre-download embedding model
         run: |
           for attempt in 1 2 3 4 5; do
@@ -114,7 +116,7 @@ jobs:
       - uses: anthropics/claude-code-action@8041f1d17e0e7d2f2cfe35002962e9f26237c0bb # v1.0.263
         env:
           CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
-          # Same offline switches as the pipeline's pytest step: an agent-run
+          # Same offline switches as .github/actions/test-suite: an agent-run
           # pytest must not download models.
           CORTEX_RERANKER_OFFLINE: "1"
           HF_HUB_OFFLINE: "1"

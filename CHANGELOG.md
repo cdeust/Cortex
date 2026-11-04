@@ -34,10 +34,11 @@ adheres to [Semantic Versioning](https://semver.org/).
   `git status|diff|log` and `gh run view`); tag mode keeps its own scoped
   `git add|commit|push` and denies every other shell command at the pinned action.
   The job installs Python 3.12, the unit job's locked dev+sqlite+codebase extras
-  on the SQLite backend (no postgresql), the lint group and the embedding model
-  before the agent starts. A first step refuses a fix target whose head is a fork or the default
+  on the SQLite backend (no postgresql), the lint and packaging groups (ruff and
+  the build backend from the lock, no PyPI fetch) and the embedding model before
+  the agent starts. A first step refuses a fix target whose head is a fork or the default
   branch and refuses when the event cannot be read, the job is bound to 60
-  minutes, and the offline switches of the pipeline's pytest step are set
+  minutes, and the offline switches of the test-suite action are set
   (#855, #856).
 - Document ingestion reports partial wiki/summary/section writes with component
   receipts and failure reasons. Same-version retries resume missing components
