@@ -133,9 +133,9 @@ class OwnerMentionTests(unittest.TestCase):
                 "environment": "${{ env.pythonLocation }}",
             },
         )
-        self.assertEqual(
-            project["run"], "pip install --no-deps --no-build-isolation -e ."
-        )
+        # Not editable: hatchling's editable hook needs `editables`, absent
+        # from uv.lock (Codex P1 on #856); the wheel build does not.
+        self.assertEqual(project["run"], "pip install --no-deps --no-build-isolation .")
         self.assertIn("SentenceTransformer('all-MiniLM-L6-v2'", model["run"])
 
     def test_non_isolated_build_takes_its_backend_from_a_selected_locked_group(self):

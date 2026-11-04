@@ -110,9 +110,13 @@ jobs:
       # without isolation: no unpinned PyPI fetch outside bubblewrap in a job
       # holding write tokens (#856 reviews). test_ci_native_claude_mentions
       # checks that every build requirement is in a selected group.
+      # Non-editable on purpose: hatchling's editable hook imports `editables`,
+      # which uv.lock does not carry, so `-e .` dies with ModuleNotFoundError
+      # on a fresh runner (Codex P1 on #856). The agent reads the checkout, not
+      # the installed copy, so an editable install buys nothing here.
       - name: Install the project
         timeout-minutes: 3
-        run: pip install --no-deps --no-build-isolation -e .
+        run: pip install --no-deps --no-build-isolation .
       - name: Pre-download embedding model
         timeout-minutes: 5
         run: |
