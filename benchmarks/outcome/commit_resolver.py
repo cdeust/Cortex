@@ -15,20 +15,21 @@ read an object store outside the snapshot.
 
 The resolver reads whatever repository it is given. The two-arm runner
 (slice 4) must hand it a read-only, self-contained copy taken before the
-agent runs (``git clone --no-local --no-hardlinks``, or a bare mirror), and
-must call ``check_commit_keys`` on that same copy before the first trial:
-an agent with write access could otherwise prune or add objects and change
-which short prefixes are ambiguous (it still cannot make a non-prefix of
-the key pass). Make the copy with ``git clone --bare``/``--mirror`` or
-``git clone --no-local --no-hardlinks``: a ``cp -r`` of a work tree's
-``.git`` keeps ``core.bare=false`` and is rejected, and so is a ``.git``,
-``objects`` or ``objects/pack`` that is a symlink.
+agent runs, made with ``git clone --bare``/``--mirror`` or ``git clone
+--no-local --no-hardlinks``, and must call ``check_commit_keys`` on that
+same copy before the first trial: an agent with write access could
+otherwise prune or add objects and change which short prefixes are
+ambiguous (it still cannot make a non-prefix of the key pass). A ``cp -r``
+of a work tree's ``.git`` keeps ``core.bare=false`` and is rejected, and so
+is a ``.git`` that is a symlink or any symlink under ``objects/``; that walk
+is a guard, the fresh clone is the guarantee.
 
 Environment: git 2.32 or newer is required and checked; a missing ``git``
-binary raises ``FileNotFoundError``. Git reads no global or system config,
-which also means no ``safe.directory`` override: a corpus owned by another
-user fails loudly with git's "dubious ownership" message, so the snapshot
-must belong to the user running the verifier.
+binary raises ``FileNotFoundError``. Git reads no global or system config
+and never fetches a missing object lazily (``GIT_NO_LAZY_FETCH``, honoured
+from git 2.44). Without a ``safe.directory`` override, git 2.35.2 and newer
+refuse a corpus owned by another user ("dubious ownership"), so the
+snapshot must belong to the user running the verifier.
 
 source: issue #343"""
 
@@ -49,8 +50,13 @@ _LOWER_HEX = re.compile(r"[0-9a-f]+")
 _MIN_GIT = (2, 32)
 
 # Git reads no global or system config, so CI and developer machines resolve
-# identically; repository-local config still applies.
-_ISOLATED_CONFIG = {"GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+# identically (repository-local config still applies), and never runs a
+# promisor fetch for an object it does not have.
+_ISOLATED_ENV = {
+    "GIT_CONFIG_GLOBAL": os.devnull,
+    "GIT_CONFIG_NOSYSTEM": "1",
+    "GIT_NO_LAZY_FETCH": "1",
+}
 
 
 def _git(repo: Path, args: list[str], stdin: str | None = None) -> str:
@@ -66,7 +72,7 @@ def _git(repo: Path, args: list[str], stdin: str | None = None) -> str:
         return subprocess.run(
             ["git", "--no-replace-objects", "-C", str(repo), *args],
             input=stdin,
-            env={**env, **_ISOLATED_CONFIG},
+            env={**env, **_ISOLATED_ENV},
             capture_output=True,
             text=True,
             check=True,
@@ -78,9 +84,12 @@ def _git(repo: Path, args: list[str], stdin: str | None = None) -> str:
 
 
 def _check_git_version() -> None:
-    out = subprocess.run(
-        ["git", "version"], capture_output=True, text=True, check=True
-    ).stdout
+    try:
+        out = subprocess.run(
+            ["git", "version"], capture_output=True, text=True, check=True
+        ).stdout
+    except subprocess.CalledProcessError as error:
+        raise RuntimeError(f"git version failed: {error.stderr.strip()}") from error
     match = re.search(r"(\d+)\.(\d+)", out)
     if match is None or (int(match[1]), int(match[2])) < _MIN_GIT:
         raise RuntimeError(
@@ -89,7 +98,21 @@ def _check_git_version() -> None:
 
 
 def _same_path(found: str, expected: Path) -> bool:
-    return expected.exists() and os.path.samefile(found, expected)
+    return (
+        expected.exists()
+        and os.path.exists(found)
+        and os.path.samefile(found, expected)
+    )
+
+
+def _reject_symlinks(repo: Path, git_dir: Path) -> None:
+    """Any symlink at ``.git`` or under ``objects/`` could point anywhere."""
+    if (repo / ".git").is_symlink() or (git_dir / "objects").is_symlink():
+        raise ValueError(f"{repo}: .git or objects/ is a symlink")
+    for root, dirs, files in os.walk(git_dir / "objects"):
+        for name in dirs + files:
+            if os.path.islink(os.path.join(root, name)):
+                raise ValueError(f"{repo}: {os.path.join(root, name)} is a symlink")
 
 
 def _check_corpus(repo: Path) -> None:
@@ -104,15 +127,19 @@ def _check_corpus(repo: Path) -> None:
             "--git-common-dir",
         ],
     ).splitlines()
-    bare, git_dir, common_dir = info  # a wrong line count raises here
+    try:
+        bare, git_dir, common_dir = info  # one line per requested field
+    except ValueError as error:
+        raise ValueError(f"{repo}: unexpected rev-parse output {info!r}") from error
     expected = repo if bare == "true" else repo / ".git"
-    for link in (repo / ".git", expected / "objects", expected / "objects" / "pack"):
-        if link.is_symlink():
-            raise ValueError(f"{repo}: {link} is a symlink to a store outside the copy")
-    if not _same_path(git_dir, expected) or not _same_path(common_dir, expected):
+    _reject_symlinks(repo, expected)
+    if not _same_path(git_dir, expected):
         raise ValueError(
-            f"{repo} is not a self-contained repository root (git dir {git_dir}, "
-            f"common dir {common_dir})"
+            f"{repo} is not a self-contained repository root (git dir {git_dir})"
+        )
+    if not _same_path(common_dir, expected):
+        raise ValueError(
+            f"{repo} is not a self-contained repository root (common dir {common_dir})"
         )
     if (expected / "objects" / "info" / "alternates").exists():
         raise ValueError(f"{repo} borrows objects through objects/info/alternates")

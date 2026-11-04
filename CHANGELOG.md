@@ -100,7 +100,8 @@ adheres to [Semantic Versioning](https://semver.org/).
   refs and replace refs are never consulted. A corpus that is not a
   self-contained repository root, or a commit key that is not one of its
   commits (`check_commit_keys`), stops the run instead of scoring every
-  answer incorrect. Reasons and decided values are exact-matched after
+  answer incorrect. Requires git 2.32 or newer; git runs without global or
+  system config, so the corpus must belong to the user running it. Reasons and decided values are exact-matched after
   normalisation against the accepted list in the task key, with no
   similarity threshold.
 
