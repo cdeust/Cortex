@@ -3640,6 +3640,10 @@
       "mirror": "ADR-1118-an-unreadable-groomer-pid-or-a-coordinator-bug-starts-no-cycle.md",
       "path": "adr/cortex/1118-an-unreadable-groomer-pid-or-a-coordinator-bug-starts-no-cycle.md"
     },
+    "ADR-1119": {
+      "mirror": "ADR-1119-claude-reviews-are-capped-at-three-per-pull-request.md",
+      "path": "adr/cortex/1119-claude-reviews-are-capped-at-three-per-pull-request.md"
+    },
     "ADR-9852": {
       "mirror": "ADR-9852-restore-the-previous-head-when-a-superseding-memory-is-deleted.md",
       "path": "adr/cortex/9852-restore-the-previous-head-when-a-superseding-memory-is-deleted.md"
