@@ -23,7 +23,10 @@ import hashlib
 import os
 from mcp_server.infrastructure.backend_marker import effective_backend
 from mcp_server.infrastructure.memory_config import get_memory_settings
-from mcp_server.infrastructure.groomer_identity import LivenessProbeUnavailableError
+from mcp_server.infrastructure.groomer_identity import (
+    GroomerPidUnreadableError,
+    LivenessProbeUnavailableError,
+)
 from mcp_server.shared import gated_files
 
 logger = logging.getLogger(__name__)
@@ -33,6 +36,7 @@ STARTED = "started"
 SKIPPED_FRESH = "skipped_fresh"  # period not yet elapsed
 SKIPPED_RUNNING = "skipped_running"  # a cycle is already in flight (single-instance)
 SKIPPED_LOCKED = "skipped_locked"  # source: ADR-0527
+SPAWN_FAILED = "spawn_failed"  # source: ADR-1118 — stamped, nothing started
 
 _SCHEMA_VERSION = 1  # registration-file schema; unknown versions ignored on read.
 
@@ -148,15 +152,21 @@ class GroomerCoordinator:
         a bare flag).
 
         precondition: none. postcondition: False when ``groomer.pid`` is
-        missing or unparseable. Raises
+        missing or unparseable. Raises ``GroomerPidUnreadableError`` when it
+        exists but cannot be read (ADR-1118), and
         ``LivenessProbeUnavailableError`` when the liveness probe cannot read
         the process table (ADR-1097 point 3).
 
-        source: ADR-0527 (probe failure: ADR-1097)"""
+        source: ADR-0527 (probe failure: ADR-1097; unreadable file: ADR-1118)"""
         try:
             pid = int(self.pid_path.read_text(encoding="utf-8").strip())
-        except (OSError, ValueError):
+        except FileNotFoundError:
             return False
+        except ValueError:  # unparseable, including undecodable bytes
+            return False
+        except OSError as exc:
+            # must not read as "not running": a live cycle may hold the file
+            raise GroomerPidUnreadableError(str(exc)) from exc
         try:
             return pid_alive(pid)
         except OSError as exc:
@@ -169,12 +179,14 @@ class GroomerCoordinator:
         self, *, period_hours: float, spawn_fn, now: datetime | None = None
     ) -> str:
         """precondition: ``spawn_fn()`` starts the consolidate cycle and
-                returns its pid (or None). postcondition: returns exactly one of
-                ``STARTED`` / ``SKIPPED_FRESH`` / ``SKIPPED_RUNNING`` /
-                ``SKIPPED_LOCKED``. ``spawn_fn`` is called AT MOST once, and only on
-                ``STARTED``.
+                returns its pid, or None when the spawn failed. postcondition:
+                returns exactly one of ``STARTED`` / ``SPAWN_FAILED`` /
+                ``SKIPPED_FRESH`` / ``SKIPPED_RUNNING`` / ``SKIPPED_LOCKED``.
+                ``spawn_fn`` is called AT MOST once, after the period is stamped;
+                ``SPAWN_FAILED`` keeps the stamp, so no window retries before
+                the period elapses.
 
-        source: ADR-0527"""
+        source: ADR-0527 (failed spawn: ADR-1118)"""
         self.base_dir.mkdir(parents=True, exist_ok=True)
         now = now or datetime.now(timezone.utc)
         with DecisionLock(self.lock_path) as acquired:
@@ -188,8 +200,10 @@ class GroomerCoordinator:
             # source: ADR-0527
             self._write_stamp(now)
             pid = spawn_fn()
-            if pid is not None:
-                atomic_write_text(self.pid_path, str(int(pid)))
+            if pid is None:
+                self._log_run(SPAWN_FAILED, now)
+                return SPAWN_FAILED
+            atomic_write_text(self.pid_path, str(int(pid)))
             self._log_run(STARTED, now, session_pid=pid)
             return STARTED
 

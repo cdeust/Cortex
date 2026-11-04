@@ -1,12 +1,22 @@
 """Layer: infrastructure. Identity and failure types of the groomer coordinator:
-the pid that keys a window's session, and the two conditions under which a hook
+the pid that keys a window's session, and the conditions under which a hook
 fails hard instead of degrading (split from ``groomer_coordinator.py`` for size).
 
-source: ADR-1097 (coordinator: ADR-0527; window identity: ADR-0597)"""
+source: ADR-1097 and ADR-1118 (coordinator: ADR-0527; window identity: ADR-0597)"""
 
 from __future__ import annotations
 
 from mcp_server.infrastructure import session_registry
+
+
+class GroomerPidUnreadableError(RuntimeError):
+    """``groomer.pid`` exists but could not be read (any ``OSError`` other than
+    a missing file), so whether a cycle is running is unknown.
+
+    Not an ``OSError``: it must not reach the legacy degrade path, which
+    bypasses the single-instance guard that ``groomer.pid`` provides.
+
+    source: ADR-1118"""
 
 
 class WindowIdentityUnavailableError(RuntimeError):

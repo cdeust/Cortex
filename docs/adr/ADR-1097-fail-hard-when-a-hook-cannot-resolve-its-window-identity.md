@@ -12,7 +12,7 @@ title: Fail hard when a hook cannot resolve its window identity
 
 ## Status
 
-accepted
+accepted; point 5 amended by ADR-1118 (an unreadable `groomer.pid` or any exception other than `OSError` starts no cycle).
 
 ## Context
 
