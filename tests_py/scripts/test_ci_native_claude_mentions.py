@@ -190,15 +190,16 @@ class OwnerMentionTests(unittest.TestCase):
     def test_owner_mentions_bound_the_run(self):
         # source: docs.github.com workflow-syntax#jobsjob_idtimeout-minutes;
         # the default is 360 minutes and the queue serializes per thread. Every
-        # step before the agent carries its own bound, and together they leave
-        # the agent most of the job's 60 minutes.
+        # step before the agent carries its own bound (worst case 26 minutes:
+        # guard 2, checkout 3, apt 3, python 2, locked install 8, project 3,
+        # model 5), leaving the agent at least 30 of the job's 60 minutes.
         job = _job()
         self.assertEqual(job["timeout-minutes"], 60)
         steps = job["steps"]
         before_agent = steps[: steps.index(_step(job, uses=ACTION))]
         bounds = [step.get("timeout-minutes") for step in before_agent]
-        self.assertTrue(all(isinstance(b, int) and b > 0 for b in bounds), bounds)
-        self.assertLess(sum(bounds), 60)
+        self.assertTrue(all(type(b) is int and b > 0 for b in bounds), bounds)
+        self.assertGreaterEqual(job["timeout-minutes"] - sum(bounds), 30)
 
     def test_owner_mentions_serialize_branch_writes(self):
         # source: https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency

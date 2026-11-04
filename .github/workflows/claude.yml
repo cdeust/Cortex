@@ -72,13 +72,13 @@ jobs:
             fi
           fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        timeout-minutes: 5
+        timeout-minutes: 3
         with:
           fetch-depth: 0
           # Use the action App token instead of a persisted workflow token.
           persist-credentials: false
       - name: Install subprocess isolation
-        timeout-minutes: 5
+        timeout-minutes: 3
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y bubblewrap socat
@@ -95,11 +95,11 @@ jobs:
       # the build backend, and the embedding model that tests_py/infrastructure/
       # test_embedding_live_contract.py needs under CI. source: ci.json.
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        timeout-minutes: 5
+        timeout-minutes: 2
         with:
           python-version: "3.12"
       - name: Install the locked dev+sqlite+codebase set, lint and packaging groups
-        timeout-minutes: 10
+        timeout-minutes: 8
         uses: ./.github/actions/uv-locked-install
         with:
           set: --extra dev --extra sqlite --extra codebase --group lint --group packaging
