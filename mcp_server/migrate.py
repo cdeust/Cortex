@@ -36,7 +36,11 @@ def _run() -> int:
         compute_ddl_hash,
     )
 
-    url = _get_database_url()
+    try:
+        url = _get_database_url()
+    except ValueError as exc:  # source: issue #704 -- no default URL to fall back on
+        print(f"cortex-migrate: {exc}", file=sys.stderr)
+        return 1
     target_hash = compute_ddl_hash()
 
     try:

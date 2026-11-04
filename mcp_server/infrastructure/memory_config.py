@@ -46,8 +46,10 @@ class MemorySettings(BaseSettings):
     # CLAUDE_ENVIRONMENT
     RUNTIME: str = ""
 
-    # source: ADR-0534
-    DATABASE_URL: str = "postgresql://127.0.0.1:5432/cortex"
+    # source: issue #704 -- no default URL: PostgreSQL is used only when an
+    # operator names one (DATABASE_URL / CORTEX_MEMORY_DATABASE_URL) or the
+    # backend marker selects it, never because a local default answers.
+    DATABASE_URL: str = ""
     DB_PATH: str = str(METHODOLOGY_DIR / "memory.db")  # source: ADR-0534
     SQLITE_FALLBACK_PATH: str = str(METHODOLOGY_DIR / "memory.db")
     STORE_BACKEND: str = "auto"  # "auto" | "postgresql" | "sqlite"

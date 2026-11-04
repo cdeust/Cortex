@@ -52,6 +52,16 @@ adheres to [Semantic Versioning](https://semver.org/).
   table no longer claims an "identical" retrieval contract on SQLite: the tool
   interface is identical, and SQLite has only a bounded n=50 run without the
   reranker, no run comparable to the n=500 headline (#708).
+- No PostgreSQL URL is assumed in code any more (#704, library residual of
+  #804). `MemorySettings.DATABASE_URL` defaulted to
+  `postgresql://127.0.0.1:5432/cortex`, so a library caller with no URL and
+  no marker (the CLI runtime's `auto`, `python -m mcp_server.migrate`, the
+  agent-briefing hook's raw connection) connected to whatever local `cortex`
+  database answered. The setting now defaults to empty: `auto` with no named
+  URL is SQLite in every runtime and tries no connection; an explicit
+  `postgresql` backend with no URL raises instead of guessing a server;
+  `_get_database_url` refuses an empty conninfo and `cortex-migrate` reports
+  it on its exit-1 contract.
 - The groomer coordinator no longer starts a consolidate cycle outside its
   lock in three failure cases (#683, ADR-1118). An existing `groomer.pid` that
   cannot be read (permission denied, I/O error) now raises

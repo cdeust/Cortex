@@ -56,8 +56,11 @@ personal data are not redacted.
   this same server and store.
 - **PostgreSQL + pgvector (opt-in — `install-plugin.sh --postgres`, large
   stores, shared team databases):** your data is stored in **your own**
-  database, configured via the `DATABASE_URL` environment variable (default
-  `postgresql://127.0.0.1:5432/cortex`); the opt-in setup script installs
+  database, configured via the `DATABASE_URL` environment variable. There
+  is no default URL in code: with neither `DATABASE_URL` nor a PostgreSQL
+  backend marker, Cortex uses SQLite and opens no PostgreSQL connection
+  (a PostgreSQL marker with no URL uses `postgresql://localhost:5432/cortex`,
+  ADR-1104; issue #704). The opt-in setup script installs
   PostgreSQL locally on your machine, and an existing PostgreSQL install is
   detected and kept across plugin updates. Apart from its own server above,
   Cortex never provisions or connects to any database you did not configure.

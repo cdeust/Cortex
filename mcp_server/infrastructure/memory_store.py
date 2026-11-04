@@ -108,7 +108,8 @@ def _resolve_backend_url(
     settings = get_memory_settings()
     backend = settings.STORE_BACKEND
     url = database_url or os.environ.get("DATABASE_URL", "") or settings.DATABASE_URL
-    if settings.RUNTIME == "cli" and backend == "auto":
+    # source: ADR-0535 and issue #704 -- CLI auto is strict only with a named URL.
+    if settings.RUNTIME == "cli" and backend == "auto" and url:
         backend = "postgresql"
     return backend, url
 
@@ -135,24 +136,30 @@ def _construct_store(
     backend = settings.STORE_BACKEND
     url = database_url or os.environ.get("DATABASE_URL", "") or settings.DATABASE_URL
 
-    # source: ADR-0535
-    if runtime == "cli" and backend == "auto":
+    # source: ADR-0535 and issue #704 -- auto with no named URL is SQLite in every
+    # runtime: no connection is attempted to a URL nobody configured.
+    if runtime == "cli" and backend == "auto" and url:
         backend = "postgresql"
 
     if backend == "sqlite":
         return _make_sqlite(db_path or settings.SQLITE_FALLBACK_PATH, embedding_dim)
 
     if backend == "postgresql":
-        if url:
-            store, err = _try_pg_verbose(url)
-        else:
-            store, err = None, "DATABASE_URL not set"
+        if not url:
+            raise RuntimeError(
+                "CORTEX_MEMORY_STORE_BACKEND=postgresql but no database URL is "
+                "configured: set DATABASE_URL (or CORTEX_MEMORY_DATABASE_URL), "
+                "or select the sqlite backend."
+            )
+        store, err = _try_pg_verbose(url)
         if store is not None:
             return store
         # source: ADR-0535
-        allow_fallback = not url or os.environ.get(
-            "CORTEX_ALLOW_SQLITE_FALLBACK", ""
-        ).lower() in ("1", "true", "yes")
+        allow_fallback = os.environ.get("CORTEX_ALLOW_SQLITE_FALLBACK", "").lower() in (
+            "1",
+            "true",
+            "yes",
+        )
         if allow_fallback:
             logger.warning(
                 "PostgreSQL unavailable (%s); falling back to SQLite. "
