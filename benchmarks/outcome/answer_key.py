@@ -44,8 +44,8 @@ import subprocess
 import unicodedata
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from types import MappingProxyType
 from pathlib import Path, PurePosixPath
+from types import MappingProxyType
 
 FAMILY_COMMIT = "introducing_commit"
 FAMILY_APPROACH = "abandoned_approach"
@@ -239,11 +239,13 @@ def _git(repo: Path, args: list[str], stdin: str | None = None) -> str:
     """Run git on ``repo`` only; any git failure raises (never scored).
 
     ``GIT_*`` variables are dropped so an inherited ``GIT_DIR`` or
-    ``GIT_OBJECT_DIRECTORY`` cannot point the lookup at another store.
+    ``GIT_OBJECT_DIRECTORY`` cannot point the lookup at another store, and
+    ``--no-replace-objects`` stops ``refs/replace/*`` from changing the type
+    or identity git reports for an object.
     """
     env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
     return subprocess.run(
-        ["git", "-C", str(repo), *args],
+        ["git", "--no-replace-objects", "-C", str(repo), *args],
         input=stdin,
         env=env,
         capture_output=True,
@@ -259,9 +261,17 @@ def git_commit_resolver(repo: Path) -> CommitResolver:
     to be spelled in hex cannot stand in for a hash prefix. ``None`` when the
     prefix names no commit or more than one (git lists no candidate below its
     minimum abbreviation, so a too-short prefix is unknown, not ambiguous).
-    A path that is not a readable repository raises ``CalledProcessError``:
-    a broken corpus must stop the run, not score every answer incorrect.
+    A broken corpus must stop the run, not score every answer incorrect: a
+    path that is not inside a readable repository raises
+    ``CalledProcessError``, and a path that is inside one without being its
+    work-tree root (a plain subdirectory, a checkout whose ``.git`` is gone)
+    raises ``ValueError`` here, before any answer is resolved, instead of
+    silently resolving against the enclosing repository. A non-hex name
+    passed to the returned function raises ``ValueError``.
     """
+    top = Path(_git(repo, ["rev-parse", "--show-toplevel"]).strip())
+    if top.resolve() != Path(repo).resolve():
+        raise ValueError(f"{repo} is not the root of a git work tree (found {top})")
 
     def resolve(hex_name: str) -> str | None:
         if not _HEX.fullmatch(hex_name):

@@ -43,7 +43,10 @@ def _git(repo, *args, stdin=None):
         check=True,
         capture_output=True,
         text=True,
-        env={**os.environ, **_ISOLATED_GIT},
+        env={
+            **{k: v for k, v in os.environ.items() if not k.startswith("GIT_")},
+            **_ISOLATED_GIT,
+        },
     ).stdout.strip()
 
 
@@ -78,13 +81,15 @@ def test_hex_named_ref_does_not_stand_in_for_a_hash_prefix(repo):
     # resolves a ref spelled in hex; the resolver consults object names only.
     first = _git(repo, "rev-list", "--max-parents=0", "HEAD")
     for ref in ("deadbeef", "2024"):
-        if not first.startswith(ref):
-            _git(repo, "tag", ref, first)
-            assert not verify(
-                _commit_task(first),
-                {"commit": ref},
-                resolve_commit=git_commit_resolver(repo),
-            )
+        # Fixed dates make `first` deterministic; the ref must not be a real
+        # prefix of it, or the case would test nothing.
+        assert not first.startswith(ref)
+        _git(repo, "tag", ref, first)
+        assert not verify(
+            _commit_task(first),
+            {"commit": ref},
+            resolve_commit=git_commit_resolver(repo),
+        )
 
 
 def test_non_commit_objects_sharing_the_prefix_are_ignored(repo):
@@ -166,10 +171,33 @@ def test_inherited_git_dir_is_ignored(repo, tmp_path_factory, monkeypatch):
 
 
 def test_broken_corpus_raises_instead_of_scoring_incorrect(tmp_path):
-    with pytest.raises(subprocess.CalledProcessError):
+    with pytest.raises(subprocess.CalledProcessError, match="returned non-zero"):
         git_commit_resolver(tmp_path / "missing")("abcd")
 
 
 def test_resolver_refuses_non_hex(repo):
     with pytest.raises(ValueError, match="not a hex object name"):
         git_commit_resolver(repo)("HEAD")
+
+
+def test_plain_subdirectory_of_a_repo_raises(repo):
+    # claude[bot] review 6630792667 on #858: `git -C` would otherwise walk up
+    # and resolve answers against the enclosing repository.
+    (repo / "plain").mkdir()
+    with pytest.raises(ValueError, match="not the root of a git work tree"):
+        git_commit_resolver(repo / "plain")
+
+
+def test_replace_refs_do_not_change_the_answer(crowded_repo):
+    # A replace ref that dresses a blob up as a commit would otherwise make
+    # the prefix ambiguous among commits.
+    repo, by_prefix = crowded_repo
+    group = next(
+        g for g in by_prefix.values() if sorted(k for k, _ in g) == ["blob", "commit"]
+    )
+    commit = next(name for kind, name in group if kind == "commit")
+    blob = next(name for kind, name in group if kind == "blob")
+    other = _git(repo, "rev-parse", "main")
+    _git(repo, "replace", "-f", blob, other)
+    assert _git(repo, "cat-file", "-t", blob) == "commit"
+    assert git_commit_resolver(repo)(commit[:4]) == commit
