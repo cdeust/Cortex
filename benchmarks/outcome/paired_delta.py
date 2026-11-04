@@ -10,9 +10,12 @@ to one sweep; the runner (slice 4) must keep that labelling.
 
 Input is checked strictly and ``ValueError`` is raised, never a silent drop,
 because an unpaired or malformed trial would bias the delta: a malformed
-field, an unknown arm, a duplicate trial, a missing counterpart, tasks run
-with different repeats, empty input, or a resample count too small to place
-both percentile bounds.
+field, an unknown arm, an unknown metric name, a duplicate trial, a missing
+counterpart, tasks run with different repeat labels, empty input, or a
+resample count that is not an int large enough to place both percentile
+bounds (at least 40 for a 95% interval). The resample count is checked up
+front, even when too few tasks leave no interval to compute, so a bad
+configuration fails on its first run rather than on its first large one.
 
 For each metric the report gives:
 
@@ -47,9 +50,11 @@ METRICS = ("correct", "turns", "tokens")
 # same level benchmarks/lib/verification_report.py::_bootstrap_ci reports
 _CI_ALPHA = 0.05
 
-# source: ADR-0090 — the minimum sample count
+# source: borrowed, for consistency only, from the minimum sample count
 # benchmarks/lib/verification_report.py::_bootstrap_ci requires before it
-# reports any interval (_MIN_VALUES_FOR_CI); here the samples are tasks
+# reports any interval (_MIN_VALUES_FOR_CI). ADR-0090 records that value as
+# a pre-existing tuned one whose provenance was never recorded; it is not
+# justified here either. Here the samples are tasks.
 _MIN_TASKS_FOR_CI = 10
 
 # source: definition — the sample standard deviation is undefined below two
@@ -79,7 +84,10 @@ class TrialOutcome:
             raise ValueError(f"correct must be a bool: {self.correct!r}")
         for name in ("repeat", "turns", "tokens"):
             if not _is_count(getattr(self, name)):
-                raise ValueError(f"{name} must be a non-negative int")
+                raise ValueError(
+                    f"{name} must be a non-negative int: {getattr(self, name)!r}"
+                    f" for task {self.task_id!r}"
+                )
 
     def metric(self, name: str) -> float:
         if name not in METRICS:
@@ -91,6 +99,8 @@ class TrialOutcome:
 class MetricDelta:
     metric: str
     mean_delta: float
+    # Spread of one sweep's mean delta across sweeps — not the standard error
+    # of ``mean_delta``, which averages over all sweeps.
     repeat_std: float | None
     ci95: tuple[float, float] | None
 
@@ -154,6 +164,8 @@ def _grouped_means(deltas: dict[tuple[str, int], float], by: int) -> list[float]
 
 def _percentile_ranks(n_resamples: int) -> tuple[int, int]:
     """Symmetric ranks: as many resamples below ``low`` as above ``high``."""
+    if not _is_count(n_resamples):
+        raise ValueError(f"n_resamples must be a non-negative int: {n_resamples!r}")
     tail = int((_CI_ALPHA / 2) * n_resamples)
     if tail < 1:
         raise ValueError(
@@ -204,6 +216,7 @@ def summarize(
     trials: Iterable[TrialOutcome], *, n_resamples: int, seed: int
 ) -> OutcomeDeltaReport:
     """Score both arms; ``seed`` makes the bootstrap reproducible."""
+    # Checked before pairing on purpose: see the module docstring.
     _percentile_ranks(n_resamples)
     pairs = pair_trials(trials)
     n_tasks = len({task for task, _ in pairs})

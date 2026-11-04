@@ -14,6 +14,7 @@ from benchmarks.outcome.paired_delta import (
     ARM_NO_RECALL,
     ARM_RECALL,
     TrialOutcome,
+    _bootstrap_ci,
     _percentile_ranks,
     pair_trials,
     summarize,
@@ -40,12 +41,25 @@ def _two_tasks_two_repeats():
     ]
 
 
-def _ten_tasks():
-    # Task i: turn delta -i, token delta -100*i (0..9), one repeat.
+def _ten_tasks(n_tasks=10):
+    # Task i: turn delta -i, token delta -100*i, one repeat.
     trials = []
-    for i in range(10):
+    for i in range(n_tasks):
         trials.append(_trial(f"t{i}", ARM_RECALL, 0, True, 10, 1000))
         trials.append(_trial(f"t{i}", ARM_NO_RECALL, 0, True, 10 + i, 1000 + 100 * i))
+    return trials
+
+
+def _ten_tasks_two_repeats():
+    # Task i: turn deltas -i-1 (repeat 0) and -i+1 (repeat 1), so each task
+    # mean is -i, the same task means as _ten_tasks().
+    trials = []
+    for i in range(10):
+        for rep, baseline_turns in ((0, 11 + i), (1, 9 + i)):
+            trials.append(_trial(f"t{i}", ARM_RECALL, rep, True, 10, 1000))
+            trials.append(
+                _trial(f"t{i}", ARM_NO_RECALL, rep, True, baseline_turns, 1000)
+            )
     return trials
 
 
@@ -60,6 +74,10 @@ def test_mean_delta_matches_hand_computation():
     assert deltas["correct"].mean_delta == pytest.approx(0.5)
     assert deltas["turns"].mean_delta == pytest.approx(-2.0)
     assert deltas["tokens"].mean_delta == pytest.approx(-100.0)
+    # Per-sweep mean deltas are equal for every metric (turns: r0 = (-4+0)/2,
+    # r1 = (-2-2)/2; correct: 0.5 and 0.5; tokens: -100 and -100), so the
+    # spread is 0. Taken flat over pairs or grouped by task it would not be.
+    assert [d.repeat_std for d in report.deltas] == [0.0, 0.0, 0.0]
 
 
 def test_repeat_std_is_the_sample_std_of_sweep_means():
@@ -78,14 +96,26 @@ def test_repeat_std_is_the_sample_std_of_sweep_means():
 def test_below_ten_tasks_reports_no_interval():
     report = summarize(_two_tasks_two_repeats(), n_resamples=1000, seed=7)
     assert all(d.ci95 is None for d in report.deltas)
+    nine = summarize(_ten_tasks(n_tasks=9), n_resamples=1000, seed=7)
+    assert all(d.ci95 is None for d in nine.deltas)
+    ten = summarize(_ten_tasks(), n_resamples=1000, seed=7)
+    assert all(d.ci95 is not None for d in ten.deltas)
+
+
+def test_interval_resamples_task_means_not_pairs():
+    # Same task means, two repeats each: resampling tasks gives the same
+    # interval as the one-repeat run; resampling the 20 pairs would not.
+    one = _by_metric(summarize(_ten_tasks(), n_resamples=1000, seed=7))["turns"]
+    two = _by_metric(summarize(_ten_tasks_two_repeats(), n_resamples=1000, seed=7))
+    assert two["turns"].ci95 == one.ci95
 
 
 def test_interval_lies_strictly_inside_the_task_mean_range():
     turns = _by_metric(summarize(_ten_tasks(), n_resamples=1000, seed=7))["turns"]
     low, high = turns.ci95
     # Task means span [-9, 0]; their mean is -4.5. Percentile bounds of
-    # 1000 ten-task resamples cannot be the extremes, which need a resample
-    # of one task repeated ten times (probability 10 * 0.1**10 per draw).
+    # 1000 ten-task resamples are almost never the extremes: reaching -9 or
+    # 0 needs that one task drawn ten times (probability 0.1**10 per draw).
     assert -9.0 < low < -4.5 < high < 0.0
 
 
@@ -95,7 +125,8 @@ def test_interval_bounds_are_the_2_5_and_97_5_percentiles():
     # 2.5th percentile is -3; P(k = 0) = 0.349, so the 97.5th is 0. The most
     # extreme of 1000 resamples is k >= 4 (expected count 12.8), so returning
     # the resample min/max instead of the percentiles fails this test. The
-    # seed is fixed: 199 of seeds 0-199 give (-3, 0), one gives (-4, 0).
+    # seed is fixed. Empirical sweep, not a hand-worked value: 199 of seeds
+    # 0-199 gave (-3, 0) and one gave (-4, 0).
     trials = []
     for i in range(10):
         trials.append(_trial(f"t{i}", ARM_RECALL, 0, True, 0, 0))
@@ -128,6 +159,14 @@ def test_seed_controls_the_interval_and_input_order_does_not():
     assert len(intervals) > 1
 
 
+def test_bootstrap_ci_takes_ranks_1_and_38_of_40_resamples():
+    # Seed-free: 40 single-task resamples whose means are 0..39, unsorted.
+    # Ranks (1, 38) of the sorted means are 1.0 and 38.0.
+    task_means = [float(v) for v in range(40)]
+    resamples = [[v] for v in random.Random(0).sample(range(40), 40)]
+    assert _bootstrap_ci(task_means, resamples) == (1.0, 38.0)
+
+
 def test_percentile_ranks_are_symmetric():
     # 25 resamples below rank 25 and 25 above rank 974.
     assert _percentile_ranks(1000) == (25, 974)
@@ -137,6 +176,12 @@ def test_percentile_ranks_are_symmetric():
 def test_too_few_resamples_for_both_bounds_raises():
     with pytest.raises(ValueError, match="n_resamples=39"):
         summarize(_two_tasks_two_repeats(), n_resamples=39, seed=7)
+
+
+@pytest.mark.parametrize("n_resamples", [1000.0, True, "1000"])
+def test_non_int_resample_count_raises(n_resamples):
+    with pytest.raises(ValueError, match="n_resamples must be"):
+        summarize(_ten_tasks(), n_resamples=n_resamples, seed=7)
 
 
 def test_single_repeat_is_flagged_as_anecdote_without_variance():
@@ -173,6 +218,23 @@ def test_unpairable_input_raises(trials, message):
 def test_tasks_with_different_repeats_raise():
     trials = _two_tasks_two_repeats()
     trials = [t for t in trials if not (t.task_id == "t2" and t.repeat == 1)]
+    with pytest.raises(ValueError, match="different repeats"):
+        pair_trials(trials)
+
+
+def test_tasks_with_equal_counts_but_different_repeat_labels_raise():
+    # t1 ran sweeps {0, 1}, t2 ran {0, 2}: same count, different sweeps.
+    trials = [
+        TrialOutcome(
+            t.task_id,
+            t.arm,
+            2 if t.task_id == "t2" and t.repeat == 1 else t.repeat,
+            t.correct,
+            t.turns,
+            t.tokens,
+        )
+        for t in _two_tasks_two_repeats()
+    ]
     with pytest.raises(ValueError, match="different repeats"):
         pair_trials(trials)
 
