@@ -33,9 +33,9 @@ adheres to [Semantic Versioning](https://semver.org/).
   `python -m mcp_server.doctor`, `python scripts/check_craftsmanship.py`, plus
   `git status|diff|log` and `gh run view`); tag mode keeps its own scoped
   `git add|commit|push` and denies every other shell command at the pinned action.
-  The job installs the environment `ci.json`'s unit job tests in (Python 3.12,
-  locked dev+sqlite+codebase set, lint group, embedding model) before the agent
-  starts. A first step refuses a fix target whose head is a fork or the default
+  The job installs Python 3.12, the unit job's locked dev+sqlite+codebase extras
+  on the SQLite backend (no postgresql), the lint group and the embedding model
+  before the agent starts. A first step refuses a fix target whose head is a fork or the default
   branch and refuses when the event cannot be read, the job is bound to 60
   minutes, and the offline switches of the pipeline's pytest step are set
   (#855, #856).

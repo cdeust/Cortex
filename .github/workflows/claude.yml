@@ -51,8 +51,8 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           set -euo pipefail
-          is_pull="$(jq -r '.issue.pull_request != null' "$GITHUB_EVENT_PATH" 2>/dev/null || true)"
-          if [ "$is_pull" != true ] && [ "$is_pull" != false ]; then
+          if ! is_pull="$(jq -r '.issue.pull_request != null' "$GITHUB_EVENT_PATH")" \
+            || { [ "$is_pull" != true ] && [ "$is_pull" != false ]; }; then
             echo "::error::could not read the event at GITHUB_EVENT_PATH; refusing the fix target"
             exit 1
           fi
@@ -82,12 +82,13 @@ jobs:
             sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           fi
           bwrap --version
-      # The allowlisted commands need the environment ci.json's unit job tests
-      # in: Python 3.12, the locked dev+sqlite+codebase set, the lint group for
-      # ruff (pyproject [dependency-groups], as memory-exact-review.yml installs
-      # it) and the embedding model, which tests_py/infrastructure/
-      # test_embedding_live_contract.py requires offline under CI (#856 review).
-      # source: ci.json "unit", .github/actions/test-suite/action.yml.
+      # The allowlisted commands need an installed environment: Python 3.12 and
+      # the unit job's dev+sqlite+codebase extras on the SQLite backend (no
+      # postgresql: this job has no server, tests_py/conftest.py falls back to
+      # SQLite, so PG-only paths are not covered here), plus the lint group for
+      # ruff (as memory-exact-review.yml installs it) and the embedding model,
+      # which tests_py/infrastructure/test_embedding_live_contract.py requires
+      # offline under CI. source: ci.json "unit", .github/actions/test-suite.
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
