@@ -5,14 +5,14 @@ created: 2026-11-04T22:30:00Z
 kind: adr
 number: 1120
 status: accepted
-tags: [ci, codex, claude, review, amends-adr-1116]
+tags: [ci, codex, claude, review, amends-adr-1115]
 title: Codex no longer runs in the pipeline and the merge gate is the test jobs
 ---
 # ADR-1120: Codex no longer runs in the pipeline and the merge gate is the test jobs
 
 ## Status
 
-accepted. Supersedes the Codex parts of ADR-1116 (the `review` job of `pipeline.yml` and `Codex.yml`). The Codex product plugin (ADR-1081, ADR-1085) is unaffected.
+accepted. Amends ADR-1115, which lists `review` among the Pipeline jobs: the `review` job of `pipeline.yml` and `Codex.yml` (the Codex completion path of ADR-1116) are removed. The Codex product plugin (ADR-1081, ADR-1085) is unaffected.
 
 ## Context
 
@@ -30,10 +30,11 @@ Measured on main on 2026-11-04, before this change:
 1. Delete the `review` job from `pipeline.yml` and delete `.github/workflows/Codex.yml`. The Pipeline jobs are `contract`, `unit`, `regression`, `e2e`, `environment`, `install`, `merge`, `tag`.
 2. `merge` stays the aggregate of the test jobs only. `scripts/ci_pipeline_profiles.py` no longer lists a `review` job, so `check_ci_gate_complete.py` rejects its reintroduction.
 3. The only automatic reviewer is the Claude workflow (`claude-review.yml`, capped at three reviews by ADR-1119).
-4. The `scripts/ci_codex_*` modules stay: the local autopilot (`ci_autopilot_*`) still imports them. Removing the autopilot is a separate decision of the owner.
+4. The `scripts/ci_codex_*` modules stay: the local autopilot (`ci_autopilot_*`) still imports them. Their Codex resume path can no longer fire, because it looks for the removed `review` job and Codex step names (`ci_autopilot_queue.py`, `ci_codex_review_resume.py`). Removing the autopilot is a separate decision of the owner.
 
 ## Consequences
 
 - Metric: `pipeline.yml` 1690 to 799 lines; Pipeline runs with a red review job 11 of 18 to 0; scheduled runs of the Codex completion workflow (every five minutes) to 0.
 - Codex findings no longer block or delay a merge. A Codex review can still be run locally by the author before pushing.
-- Mutation testing on PRs and a bot-driven merge are separate changes (next PRs); until the first lands, mutation is not part of the PR gate.
+- `pipeline-post-merge.yml` already squash-merges a PR once its Pipeline succeeds; what remains is mutation testing on PRs (next PR). Until it lands, mutation is not part of the PR gate.
+- The pipeline files are rendered by `render-ci` in zetetic-team-subagents: the template must drop `review` too, or the next render brings it back and `check_ci_gate_complete.py` fails.
