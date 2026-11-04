@@ -75,6 +75,13 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `benchmarks/outcome/paired_delta.py`: scoring core of the longitudinal
+  outcome benchmark (first slice of #343). Pairs `recall` and `no_recall`
+  trials strictly by task and repeat, and reports the mean delta of
+  correctness, turns and tokens, its spread across repeats, and a task-level
+  percentile bootstrap 95% interval (none below 10 tasks). A single repeat is
+  flagged as an anecdote; an unpairable trial raises instead of being dropped.
+
 - Claude PR reviews use Anthropic's official direct PR workflow and its five
   upstream reviewer agents (ADR-1117). Reviewer configuration loads from trusted
   main; PR content is read through GitHub. This replaces ADR-1116's custom
