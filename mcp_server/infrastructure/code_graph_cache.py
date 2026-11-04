@@ -24,6 +24,8 @@ import logging
 import shutil
 from pathlib import Path
 
+from mcp_server.shared import gated_files
+
 logger = logging.getLogger(__name__)
 
 ROOT_MARKER = "cortex-root.json"
@@ -44,14 +46,18 @@ def default_cache_dir() -> Path:
 
 
 def write_root_marker(graph_dir: str | Path, project_root: str | Path) -> None:
-    """Record ``project_root`` (resolved) as the root ``graph_dir`` was built from."""
+    """Record ``project_root`` (resolved) as the root ``graph_dir`` was built from.
+
+    The write goes through the redaction gate (ADR-1110). If redaction altered
+    the path, the marker would name a root that does not exist and the graph
+    would be pruned; the marker is removed instead, leaving it unattributed."""
     target = Path(graph_dir).expanduser()
-    target.mkdir(parents=True, exist_ok=True)
     root = str(Path(project_root).expanduser().resolve())
-    payload = json.dumps({"project_root": root}, indent=2) + "\n"
-    tmp = target / (ROOT_MARKER + ".tmp")
-    tmp.write_text(payload, encoding="utf-8")
-    tmp.replace(target / ROOT_MARKER)
+    marker = target / ROOT_MARKER
+    gated_files.write_json(marker, {"project_root": root}, indent=2)
+    if read_root_marker(target) != root:
+        marker.unlink(missing_ok=True)
+        logger.warning("root marker for %s was altered by redaction; removed", target)
 
 
 def read_root_marker(graph_dir: Path) -> str | None:

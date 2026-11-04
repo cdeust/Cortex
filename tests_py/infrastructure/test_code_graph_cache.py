@@ -98,3 +98,23 @@ def test_prefix_sharing_project_is_not_touched(tmp_path: Path) -> None:
 def test_missing_cache_dir_is_empty_report(tmp_path: Path) -> None:
     report = cache.prune_orphan_graphs(tmp_path / "absent")
     assert report == cache.PruneReport((), (), ())
+
+
+def test_marker_altered_by_redaction_is_removed(tmp_path: Path, monkeypatch) -> None:
+    """A redacted root would name a missing path and get the graph pruned."""
+    root = tmp_path / "proj"
+    root.mkdir()
+    graph_dir = tmp_path / "cache" / "proj-6666aaaa"
+    graph_dir.mkdir(parents=True)
+    real_write = cache.gated_files.write_json
+
+    def _redacting_write(path, data, **kwargs):
+        return real_write(path, {"project_root": "REDACTED"}, **kwargs)
+
+    monkeypatch.setattr(cache.gated_files, "write_json", _redacting_write)
+    cache.write_root_marker(graph_dir, root)
+
+    assert not (graph_dir / cache.ROOT_MARKER).exists()
+    assert cache.prune_orphan_graphs(graph_dir.parent).unattributed == (
+        "proj-6666aaaa",
+    )
