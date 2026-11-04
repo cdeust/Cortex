@@ -14,7 +14,7 @@ adheres to [Semantic Versioning](https://semver.org/).
   refinement PR. The review prompt now defines a Blocker, limits Notes to three
   one-line items, reviews only the commits since the previous review on rounds
   two and three, and ends with a `Verdict:` line. The label `claude-rereview`
-  lifts the cap once. Measured on PR 856: 20 reviews, 22 of 24 comments saying
+  allows exactly one more review. Measured on PR 856: 20 reviews, 22 of 24 comments saying
   "nothing blocks merge".
 
 ### Removed

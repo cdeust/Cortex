@@ -156,7 +156,7 @@ answered with a push, which started the next review.
 - After the third review the PR is not reviewed again. The accepted part
   merges. Whatever is not accepted does not enter: cut it from the PR and open a
   refinement PR, which has a new budget of three. The label `claude-rereview`
-  lifts the cap once and belongs to the owner.
+  allows exactly one more review (a fourth, never a fifth) and belongs to the owner.
 - A PR that edits `claude-review.yml` is not reviewed by the action (it refuses
   a workflow that differs from main). Keep such a PR minimal.
 
