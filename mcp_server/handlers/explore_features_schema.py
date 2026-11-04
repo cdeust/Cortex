@@ -80,7 +80,7 @@ _OUTPUT_PROPERTIES = {
     },
     "domainCount": {
         "type": "integer",
-        "description": "Domains compared (mode=crosscoder without two domains).",
+        "description": "Domains in the profile (mode=crosscoder without two domains).",
     },
 }
 
@@ -122,7 +122,8 @@ schema = {
                 "type": "string",
                 "description": (
                     "Which interpretability lens to apply. 'features' = sparse "
-                    "dictionary activations; 'attribution' = decision tracing; "
+                    "feature dictionary and persistent features; 'attribution' "
+                    "= decision tracing; "
                     f"'persona' = {_PERSONA_DIM}D vector; 'crosscoder' = "
                     "two-domain feature persistence."
                 ),
@@ -132,8 +133,10 @@ schema = {
             "domain": {
                 "type": "string",
                 "description": (
-                    "Cognitive domain to inspect. Omit for global aggregate where "
-                    "supported."
+                    "Cognitive domain to inspect. 'attribution' uses the first "
+                    "domain when omitted (the response's `domain` names it); "
+                    "'persona' returns every domain when omitted; 'crosscoder' "
+                    "uses it only with compare_domain; 'features' ignores it."
                 ),
                 "examples": ["cortex", "auth-service"],
             },

@@ -115,7 +115,7 @@ Interpretability exploration across four modes.
 
 **Modes:**
 
-- **`features`** — Sparse dictionary features and their activations
+- **`features`** — Sparse feature dictionary and cross-domain persistent features (ignores `domain`)
 - **`attribution`** — Pipeline attribution graph via perturbation tracing
 - **`persona`** — 9D persona vector (`dimensions` names them) for one domain, or for every domain plus their session-weighted composition
 - **`crosscoder`** — Cross-domain persistent behavioral features
