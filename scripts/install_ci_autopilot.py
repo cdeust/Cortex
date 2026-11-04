@@ -29,8 +29,6 @@ RUNTIME = (
     "ci_codex_reviews.py",
     "ci_codex_review_runtime.py",
     "ci_codex_review_comments.py",
-    "ci_codex_review_reaction.py",
-    "ci_codex_review_agreement.py",
 )
 
 

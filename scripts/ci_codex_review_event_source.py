@@ -9,8 +9,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from ci_codex_review_agreement import CLAUDE, VERDICT
-from ci_codex_review_comments import RECEIPT
 from ci_codex_reviews import BOT, SUMMARY, EvidenceError, SHA_PATTERN, _api, _eligible
 
 Record = dict[str, Any]
@@ -55,29 +53,12 @@ def bot(user: Any) -> bool:
     )
 
 
-def claude_verdict(item: Any) -> bool:
-    """A Claude App comment carrying exactly one verdict marker completes a review.
-
-    Owner rule 2026-11-03 (23:29): the merge gate needs both verdicts, so a
-    Claude verdict posted after the pipeline must resume the gate like a Codex
-    completion does (Codex finding on #240: no path without the schedule).
-    """
-    user = item.get("user") if isinstance(item, dict) else None
-    return (
-        isinstance(user, dict)
-        and user.get("login") == CLAUDE
-        and user.get("type") == "Bot"
-        and isinstance(item.get("body"), str)
-        and len(VERDICT.findall(item["body"])) == 1
-    )
-
-
 def canonical(item: Any) -> bool:
     return (
         isinstance(item, dict)
         and bot(item.get("user"))
         and isinstance(item.get("body"), str)
-        and item["body"].startswith((SUMMARY, RECEIPT))
+        and item["body"].startswith(SUMMARY)
     )
 
 
@@ -111,10 +92,8 @@ def live_pr(repo: str, number: int, sha: str | None = None) -> Record | None:
         _eligible(pull, repo, head if sha is None else sha)
     except EvidenceError:
         return None
-    # Owner rule 2026-11-03: hold and autopilot:hold are not read anywhere in the
-    # gate; only the owner's holds end resumption here.
     if "do not merge" in title.casefold() or any(
-        label["name"].casefold() == "do-not-merge" for label in labels
+        label["name"].casefold() in ("hold", "do-not-merge") for label in labels
     ):
         return None
     return pull
@@ -213,14 +192,11 @@ def _comment(event: Record, repo: str) -> Record | None:
     issue, item = event.get("issue"), event.get("comment")
     if not isinstance(issue, dict) or not isinstance(issue.get("pull_request"), dict):
         return None
-    if event.get("action") not in ("created", "edited"):
-        return None
-    completion = canonical if canonical(item) else (claude_verdict if claude_verdict(item) else None)
-    if completion is None:
+    if event.get("action") not in ("created", "edited") or not canonical(item):
         return None
     number, identity = positive(issue.get("number")), positive(item.get("id"))
     actual = _api(f"repos/{repo}/issues/comments/{identity}")
-    if not completion(actual):
+    if not canonical(actual):
         return None
     if actual.get("id") != identity:
         raise EvidenceError("protocol")
@@ -268,14 +244,8 @@ def event_pr(name: str, event: Record, repo: str) -> Record | None:
         raise EvidenceError("event")
     if repository["full_name"].casefold() != repo.casefold():
         return None
-    sender = event.get("sender")
-    if name in ("issue_comment", "pull_request_review") and not (
-        bot(sender)
-        or (
-            isinstance(sender, dict)
-            and sender.get("login") == CLAUDE
-            and sender.get("type") == "Bot"
-        )
+    if name in ("issue_comment", "pull_request_review") and not bot(
+        event.get("sender")
     ):
         return None
     handler = {

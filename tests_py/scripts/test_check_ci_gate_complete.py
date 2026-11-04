@@ -181,13 +181,12 @@ class PipelineGateTests(unittest.TestCase):
                 )
                 self.assertTrue(gate.check_runtime_contract(changed))
 
-    def test_merge_cannot_drop_the_review_dependency(self) -> None:
-        # Owner rule 2026-11-03 (23:29): merge needs the review job, whose state
-        # says Codex and Claude both concluded for the head without a blocker.
+    def test_merge_cannot_wait_for_review_again(self) -> None:
+        # Owner rule 2026-10-29: merge is the aggregate of the test jobs only.
         changed = change_job(
             self.workflow,
             "merge",
-            lambda block: block.replace("install, review]", "install]", 1),
+            lambda block: block.replace("install]", "install, review]", 1),
         )
         self.assertTrue(gate.check(changed))
 

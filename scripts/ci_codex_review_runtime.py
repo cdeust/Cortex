@@ -1,9 +1,8 @@
 """Trusted Codex review I/O and nullable security-resolution proof.
 
-Sources: PR805 summary6442631163 on0134b085 and authenticated GraphQL
-reviewThreads.isResolved, resolvedBy, author.__typename and comment.databaseId.
+Sources: PR805 summary6442631163 on0134b085; authenticated GraphQL reviewThreads
+(isResolved, resolvedBy, author.__typename, comment.databaseId).
 https://docs.github.com/en/graphql/guides/using-pagination-in-the-graphql-api
-https://cli.github.com/manual/gh_api
 """
 
 from __future__ import annotations
@@ -107,8 +106,6 @@ def _outputs(result: Record) -> None:
     text = (
         f"ready={str(result['state'] == 'success').lower()}\n"
         f"state={result['state']}\nsha={result['sha']}\ncomment_id={result['comment_id']}\n"
-        # Fixed identifiers only: the merge job names why a head cannot merge yet.
-        f"reason={result['reason']}\ncauses={','.join(result.get('causes', [result['reason']]))}\n"
     )
     try:
         with Path(path).open("a", encoding="utf-8") as output:
@@ -120,19 +117,13 @@ def _outputs(result: Record) -> None:
 # first:100 is GitHub's documented maximum connection page, not a score threshold.
 THREAD_QUERY = """
 query($owner: String!, $name: String!, $number: Int!, $endCursor: String) {
-  repository(owner: $owner, name: $name) {
-    pullRequest(number: $number) {
-      headRefOid
-      reviewThreads(first:100, after:$endCursor) {
-        pageInfo { hasNextPage endCursor }
-        nodes {
-          isResolved
-          resolvedBy { login __typename }
-          comments(first:1) { nodes { databaseId body author { login __typename } } }
-        }
-      }
-    }
-  }
+  repository(owner: $owner, name: $name) { pullRequest(number: $number) {
+    headRefOid
+    reviewThreads(first:100, after:$endCursor) {
+      pageInfo { hasNextPage endCursor }
+      nodes { isResolved resolvedBy { login __typename }
+        comments(first:1) { nodes { databaseId body author { login __typename } } } }
+    } } }
 }
 """
 FINDING = "<!-- codex-security-review-finding:v1 -->"
@@ -162,8 +153,8 @@ def _trusted_resolver(resolver: Any, owner: str) -> bool:
 
     source: claude.yml tag-mode rule (ADR-1116, findings4389808387 and
     4390480666) trusts github.repository_owner alone; PR805 finding4391948358
-    forbids a PR author resolving their own findings. A missing resolver
-    (deleted account, unknown actor) is never trusted.
+    forbids a PR author resolving their own findings; a missing resolver is
+    never trusted.
     """
     if resolver is None:
         return False
@@ -227,51 +218,49 @@ def _thread_states(pages: Any, sha: str, owner: str) -> dict[int, bool]:
     return states
 
 
+def _completed_here(target, review, metadata) -> bool:
+    """The review and the security metadata both name this PR's reviewed head."""
+    repo, pr, sha = target
+    found = (review.get("status"), review.get("commit_sha")) + tuple(
+        metadata.get(k) if isinstance(metadata, dict) else None
+        for k in ("repository", "pullRequestNumber", "headSha", "status")
+    )
+    return found == ("completed", sha, repo, pr, sha, "completed")
+
+
+def review_thread_states(repo: str, pr: int, sha: str) -> dict[int, bool]:
+    """Native Codex finding threads of the PR at this head: id to resolved."""
+    if repo.count("/") != 1:
+        raise EvidenceError("protocol")
+    owner, name = repo.split("/")
+    fields = dict(query=THREAD_QUERY, owner=owner, name=name, number=pr)
+    return _thread_states(_api("graphql", paginate=True, fields=fields), sha, owner)
+
+
 def resolve_security(target, body, review, metadata):
-    """Prove findings resolved by the trusted owner, thread by thread.
+    """Reconcile one unknown verdict with positive, authenticated finding proof.
 
-    Two verdicts come here: an unknown one (null flags), and an explicit clean
-    one over findings (has_any_findings true, has_unresolved_findings false).
-    Only resolvedBy attributes a resolution, never the summary flag (PR87
-    discussion_r4412261213): an explicit clean verdict without that proof is
-    unresolved, while an unknown one without it stays None for the receipt.
+    Applies only to has_any_findings True with has_unresolved_findings None on
+    the reviewed head; returns None otherwise (the null/null case is left to
+    comments.resolve_no_findings); raises protocol when an announced finding
+    has no native review thread.
     """
-    proof = _owner_proof(target, body, review, metadata)
-    if proof is None and review.get("has_unresolved_findings") is False:
-        return {"state": "unresolved", "source": "owner_resolution_unproven"}
-    return proof
-
-
-def _owner_proof(target, body, review, metadata):
-    """Raw flags remain unchanged; incomplete pages or identities prove nothing."""
     repo, pr, sha = target
     if (
-        review.get("status") != "completed"
-        or review.get("commit_sha") != sha
+        not _completed_here(target, review, metadata)
         or review.get("has_any_findings") is not True
-        or review.get("has_unresolved_findings") not in (None, False)
-        or not isinstance(metadata, dict)
-        or metadata.get("repository") != repo
-        or metadata.get("pullRequestNumber") != pr
-        or metadata.get("headSha") != sha
-        or metadata.get("status") != "completed"
+        or review.get("has_unresolved_findings") is not None
     ):
         return None
     expected = _announced(body, repo, pr)
     if not expected:
         return None
-    owner, name = repo.split("/")
-    fields = dict(query=THREAD_QUERY, owner=owner, name=name, number=pr)
-    pages = _api("graphql", paginate=True, fields=fields)
-    states = _thread_states(pages, sha, owner)
+    states = review_thread_states(repo, pr, sha)
     if not expected.issubset(states):
         raise EvidenceError("protocol")
+    clean = all(states[identity] for identity in expected)
     return {
-        "state": (
-            "success"
-            if all(states[identity] for identity in expected)
-            else "unresolved"
-        ),
+        "state": "success" if clean else "unresolved",
         "source": "github_review_threads",
         "finding_ids": sorted(expected),
     }

@@ -55,8 +55,7 @@ jobs:
           test "$actual" = "$EXPECTED_SHA"
           echo "tested_sha=$actual" >> "$GITHUB_OUTPUT"
 
-
-      - name: Test no comparison with main
+      - name: Guard - no comparison against main (owner rule 2026-10-29)
         run: python3 -m unittest discover -s scripts/tests -p test_no_main_comparison.py -v
 
       - name: Validate ci.json
@@ -557,13 +556,13 @@ jobs:
         run: bash -eo pipefail -c "$CI_COMMAND"
 
   review:
-    # Owner rule 2026-11-03 (23:29): the merge job requires this job. A blocking
-    # finding fails it and the run; a missing verdict leaves it green with
-    # state pending, and the completion workflow re-runs it when a verdict lands.
+    # Owner rule 2026-10-29: the review posts but never blocks. A failed job
+    # fails the run, and the completion caller fires only on a successful run;
+    # the required jobs are the tests and their aggregate `merge`.
+    continue-on-error: true
     needs: [unit, regression, e2e, environment, install]
     outputs:
       state: ${{ steps.evidence.outputs.state }}
-      causes: ${{ steps.evidence.outputs.causes }}
     if: >-
       always() && !cancelled() && github.event_name == 'pull_request'
       && !github.event.pull_request.draft
@@ -583,13 +582,10 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           CODEX_COMPLETION_ONLY: 'true'
-        run: &codex_review_reader |
+        run: |
           set -euo pipefail
           args=(--repo "$GH_REPO" --pr "$PR" --sha "$HEAD_SHA" --github-output)
-          # Owner rule 2026-11-03 (23:29): a missing verdict fails this job (exit 2),
-          # so the completion workflow re-runs it, and its dependent merge job, when
-          # the verdict lands; --allow-pending (#205) kept a pending head green.
-          if [ "$CODEX_COMPLETION_ONLY" = true ]; then args+=(--require-complete); fi
+          if [ "$CODEX_COMPLETION_ONLY" = true ]; then args+=(--require-complete --allow-pending); fi
           python3 -I - "${args[@]}" <<'CODEX_REVIEW_PY'
           import sys
           from types import ModuleType
@@ -597,10 +593,9 @@ jobs:
           RUNTIME_SOURCE = r'''
           """Trusted Codex review I/O and nullable security-resolution proof.
 
-          Sources: PR805 summary6442631163 on0134b085 and authenticated GraphQL
-          reviewThreads.isResolved, resolvedBy, author.__typename and comment.databaseId.
+          Sources: PR805 summary6442631163 on0134b085; authenticated GraphQL reviewThreads
+          (isResolved, resolvedBy, author.__typename, comment.databaseId).
           https://docs.github.com/en/graphql/guides/using-pagination-in-the-graphql-api
-          https://cli.github.com/manual/gh_api
           """
 
           from __future__ import annotations
@@ -704,8 +699,6 @@ jobs:
               text = (
                   f"ready={str(result['state'] == 'success').lower()}\n"
                   f"state={result['state']}\nsha={result['sha']}\ncomment_id={result['comment_id']}\n"
-                  # Fixed identifiers only: the merge job names why a head cannot merge yet.
-                  f"reason={result['reason']}\ncauses={','.join(result.get('causes', [result['reason']]))}\n"
               )
               try:
                   with Path(path).open("a", encoding="utf-8") as output:
@@ -717,19 +710,13 @@ jobs:
           # first:100 is GitHub's documented maximum connection page, not a score threshold.
           THREAD_QUERY = """
           query($owner: String!, $name: String!, $number: Int!, $endCursor: String) {
-            repository(owner: $owner, name: $name) {
-              pullRequest(number: $number) {
-                headRefOid
-                reviewThreads(first:100, after:$endCursor) {
-                  pageInfo { hasNextPage endCursor }
-                  nodes {
-                    isResolved
-                    resolvedBy { login __typename }
-                    comments(first:1) { nodes { databaseId body author { login __typename } } }
-                  }
-                }
-              }
-            }
+            repository(owner: $owner, name: $name) { pullRequest(number: $number) {
+              headRefOid
+              reviewThreads(first:100, after:$endCursor) {
+                pageInfo { hasNextPage endCursor }
+                nodes { isResolved resolvedBy { login __typename }
+                  comments(first:1) { nodes { databaseId body author { login __typename } } } }
+              } } }
           }
           """
           FINDING = "<!-- codex-security-review-finding:v1 -->"
@@ -759,8 +746,8 @@ jobs:
 
               source: claude.yml tag-mode rule (ADR-1116, findings4389808387 and
               4390480666) trusts github.repository_owner alone; PR805 finding4391948358
-              forbids a PR author resolving their own findings. A missing resolver
-              (deleted account, unknown actor) is never trusted.
+              forbids a PR author resolving their own findings; a missing resolver is
+              never trusted.
               """
               if resolver is None:
                   return False
@@ -824,51 +811,49 @@ jobs:
               return states
 
 
+          def _completed_here(target, review, metadata) -> bool:
+              """The review and the security metadata both name this PR's reviewed head."""
+              repo, pr, sha = target
+              found = (review.get("status"), review.get("commit_sha")) + tuple(
+                  metadata.get(k) if isinstance(metadata, dict) else None
+                  for k in ("repository", "pullRequestNumber", "headSha", "status")
+              )
+              return found == ("completed", sha, repo, pr, sha, "completed")
+
+
+          def review_thread_states(repo: str, pr: int, sha: str) -> dict[int, bool]:
+              """Native Codex finding threads of the PR at this head: id to resolved."""
+              if repo.count("/") != 1:
+                  raise EvidenceError("protocol")
+              owner, name = repo.split("/")
+              fields = dict(query=THREAD_QUERY, owner=owner, name=name, number=pr)
+              return _thread_states(_api("graphql", paginate=True, fields=fields), sha, owner)
+
+
           def resolve_security(target, body, review, metadata):
-              """Prove findings resolved by the trusted owner, thread by thread.
+              """Reconcile one unknown verdict with positive, authenticated finding proof.
 
-              Two verdicts come here: an unknown one (null flags), and an explicit clean
-              one over findings (has_any_findings true, has_unresolved_findings false).
-              Only resolvedBy attributes a resolution, never the summary flag (PR87
-              discussion_r4412261213): an explicit clean verdict without that proof is
-              unresolved, while an unknown one without it stays None for the receipt.
+              Applies only to has_any_findings True with has_unresolved_findings None on
+              the reviewed head; returns None otherwise (the null/null case is left to
+              comments.resolve_no_findings); raises protocol when an announced finding
+              has no native review thread.
               """
-              proof = _owner_proof(target, body, review, metadata)
-              if proof is None and review.get("has_unresolved_findings") is False:
-                  return {"state": "unresolved", "source": "owner_resolution_unproven"}
-              return proof
-
-
-          def _owner_proof(target, body, review, metadata):
-              """Raw flags remain unchanged; incomplete pages or identities prove nothing."""
               repo, pr, sha = target
               if (
-                  review.get("status") != "completed"
-                  or review.get("commit_sha") != sha
+                  not _completed_here(target, review, metadata)
                   or review.get("has_any_findings") is not True
-                  or review.get("has_unresolved_findings") not in (None, False)
-                  or not isinstance(metadata, dict)
-                  or metadata.get("repository") != repo
-                  or metadata.get("pullRequestNumber") != pr
-                  or metadata.get("headSha") != sha
-                  or metadata.get("status") != "completed"
+                  or review.get("has_unresolved_findings") is not None
               ):
                   return None
               expected = _announced(body, repo, pr)
               if not expected:
                   return None
-              owner, name = repo.split("/")
-              fields = dict(query=THREAD_QUERY, owner=owner, name=name, number=pr)
-              pages = _api("graphql", paginate=True, fields=fields)
-              states = _thread_states(pages, sha, owner)
+              states = review_thread_states(repo, pr, sha)
               if not expected.issubset(states):
                   raise EvidenceError("protocol")
+              clean = all(states[identity] for identity in expected)
               return {
-                  "state": (
-                      "success"
-                      if all(states[identity] for identity in expected)
-                      else "unresolved"
-                  ),
+                  "state": "success" if clean else "unresolved",
                   "source": "github_review_threads",
                   "finding_ids": sorted(expected),
               }
@@ -888,10 +873,12 @@ jobs:
           '''
 
           COMMENTS_SOURCE = r'''
-          """Authenticated GitHub comment metadata and native Bot edit attribution.
+          """Authenticated GitHub comment metadata, native Bot edit attribution, and the
+          Codex +1 reaction read (REST issues/{pr}/reactions) for null verdicts.
 
           Sources: IssueComment.editor/lastEditedAt and Bot.id, returned with the body.
           https://docs.github.com/en/graphql/reference/issues#issuecomment
+          https://docs.github.com/en/rest/reactions/reactions#list-reactions-for-an-issue
           """
 
           from __future__ import annotations
@@ -900,28 +887,14 @@ jobs:
           import re
           from typing import Any
 
+          import ci_codex_review_runtime as runtime
+          from ci_codex_review_runtime import EvidenceError
+
           Record = dict[str, Any]
           # Source: native Codex summary6456275844 on2026-10-28.
           BOT = "chatgpt-codex-connector[bot]"
           SUMMARY = "<!-- codex-pull-request-review-summary -->"
           STAMP_PATTERN = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z")
-
-
-          def _runtime():
-              """The runtime module, resolved on use: runtime imports this module lazily too."""
-              import ci_codex_review_runtime as runtime  # noqa: PLC0415 - keeps the import graph acyclic
-
-              return runtime
-
-
-          def _api(*args: Any, **kwargs: Any) -> Any:
-              return _runtime()._api(*args, **kwargs)
-
-
-          def __getattr__(name: str) -> Any:
-              if name == "EvidenceError":
-                  return _runtime().EvidenceError
-              raise AttributeError(name)
 
 
           def _canonical(comment: Any) -> bool:
@@ -946,143 +919,31 @@ jobs:
               )
 
 
-          def _authenticate_editor(comment: Record, login: str = "chatgpt-codex-connector") -> None:
+          def _authenticate_editor(comment: Record) -> None:
               # source: IssueComment.editor/lastEditedAt and Bot.id, queried with the body.
               if "editor" not in comment or "lastEditedAt" not in comment:
-                  raise _runtime().EvidenceError("editor")
+                  raise EvidenceError("editor")
               identity = comment.get("user", {}).get("node_id")
               if not isinstance(identity, str) or not identity:
-                  raise _runtime().EvidenceError("editor")
+                  raise EvidenceError("editor")
               editor, edited = comment["editor"], comment["lastEditedAt"]
               if edited is None:
                   if editor is not None:
-                      raise _runtime().EvidenceError("editor")
+                      raise EvidenceError("editor")
                   return
               if not isinstance(edited, str) or STAMP_PATTERN.fullmatch(edited) is None:
-                  raise _runtime().EvidenceError("editor")
+                  raise EvidenceError("editor")
               try:
                   datetime.fromisoformat(edited.replace("Z", "+00:00"))
               except ValueError as exc:
-                  raise _runtime().EvidenceError("editor") from exc
+                  raise EvidenceError("editor") from exc
               if (
                   not isinstance(editor, dict)
                   or editor.get("__typename") != "Bot"
-                  or editor.get("login") != login
+                  or editor.get("login") != "chatgpt-codex-connector"
                   or editor.get("id") != identity
               ):
-                  raise _runtime().EvidenceError("editor")
-
-
-          # Source: native receipts6491350304 (cortex-viz PR213) and6491478435 (Cortex
-          # PR829), 2026-10-29: posted with the summary's security flags still null.
-          # Survey of 13 security receipts in 36 cdeust PRs on 2026-10-29: all state no
-          # issues; two automatic ones (spec PR163 receipt6491660443) add the suffix below.
-          RECEIPT = "<!-- codex-review-receipt:v1 -->\n"
-          SECURITY_HEADING = re.compile(
-              r"\n### 🛡️ Codex Security Review(?: · _Automatically triggered_)?\n"
-          )
-          RECEIPT_COMMIT = re.compile(r"\n\*\*Reviewed commit:\*\* `([0-9a-f]{10,40})`\n")
-          # The whole no-issues receipt, byte-identical across the six captured ones up to
-          # the commit prefix, task id and automatic suffix (Codex finding4411675624: the
-          # verdict is the exact text, never a sentence found somewhere in the body).
-          NO_ISSUES_RECEIPT = re.compile(
-              re.escape(RECEIPT)
-              + r"\n### 🛡️ Codex Security Review(?: · _Automatically triggered_)?\n\n"
-              r"Security review completed\. No security issues were found in this pull request\.\n\n"
-              r"\*\*Reviewed commit:\*\* `[0-9a-f]{10,40}`\n\n"
-              r"\[View security finding report\]"
-              r"\(https://chatgpt\.com/codex/cloud/tasks/task_e_[0-9a-f]+\)\n\n"
-              r"_Only the user who started this review can view the report in Codex\._\n\n"
-              + re.escape(
-                  "<details> <summary>ℹ️ About Codex security reviews in GitHub</summary>\n<br/>\n\n"
-                  "This is an experimental Codex feature. Security reviews are triggered when:\n"
-                  '- You comment "@codex security review"\n'
-                  '- A regular code review gets triggered (for example, "@codex review" or when a'
-                  " PR is opened), and you’re opted in so security review runs alongside code review\n\n"
-                  "Once complete, Codex will leave suggestions, or a comment if no findings are found.\n\n\n"
-                  "</details>"
-              )
-          )
-          # A completed null verdict without a receipt, or a receipt whose wording no
-          # observed receipt has, blocks under its own name (the gate never relaunches).
-          MISSING, UNRECOGNIZED = "verdict_missing", "receipt_unrecognized"
-          BLOCKING = ("failed", "unresolved", MISSING, UNRECOGNIZED)
-          BLOCKED_REASONS = (
-              ("failed", "review_failed"),
-              (MISSING, "codex_security_verdict_missing"),
-              (UNRECOGNIZED, "codex_security_receipt_unrecognized"),
-          )
-
-
-          def _receipt_head(repo: str, named: str) -> str | None:
-              """The full commit a receipt names, never a prefix match on the head.
-
-              A 10-hex prefix is 40 bits: a branch writer can make two commits share it
-              (Codex finding Cortex PR836 discussion_r4412420778). 40 hex compares exactly;
-              a shorter prefix counts only when the repository resolves it to one commit.
-              A 404, an ambiguous prefix (422) or any API failure proves nothing.
-              https://docs.github.com/en/rest/commits/commits#get-a-commit
-              """
-              if len(named) == 40:
-                  return named
-              try:
-                  commit = _api(f"repos/{repo}/commits/{named}")  # late-bound runtime API
-              except _runtime().EvidenceError:
-                  return None
-              full = commit.get("sha") if isinstance(commit, dict) else None
-              if not isinstance(full, str) or re.fullmatch(r"[0-9a-f]{40}", full) is None:
-                  return None
-              return full if full.startswith(named) else None
-
-
-          def security_receipt(comments, target, review, metadata):
-              """Native verdict for a completed security review whose flags stayed null.
-
-              Codex documents an empty result as no proof; its authenticated receipt is the
-              report it points to. Every security receipt for this head must state no
-              issues; no receipt or any other wording blocks under a named state.
-              """
-              repo, pr, sha = target
-              if (
-                  review.get("status") != "completed"
-                  or review.get("commit_sha") != sha
-                  or review.get("has_any_findings") is not None
-                  or review.get("has_unresolved_findings") is not None
-                  or not isinstance(metadata, dict)
-                  or (metadata.get("repository"), metadata.get("pullRequestNumber")) != (repo, pr)
-                  or (metadata.get("headSha"), metadata.get("status")) != (sha, "completed")
-              ):
-                  return None
-              receipts = []
-              for comment in comments:
-                  body = comment.get("body")
-                  if not (_bot_author(comment) and isinstance(body, str)):
-                      continue
-                  if not body.startswith(RECEIPT) or len(SECURITY_HEADING.findall(body)) != 1:
-                      continue
-                  commits = RECEIPT_COMMIT.findall(body)
-                  if len(commits) != 1 or _receipt_head(repo, commits[0]) != sha:
-                      continue
-                  _authenticate_editor(comment)
-                  if NO_ISSUES_RECEIPT.fullmatch(body) is None:
-                      return {"state": UNRECOGNIZED, "source": "codex_security_receipt",
-                              "receipt_ids": [comment["id"]]}
-                  receipts.append(comment["id"])
-              return {
-                  "state": "success" if receipts else MISSING,
-                  "source": "codex_security_receipt",
-                  "receipt_ids": sorted(receipts),
-              }
-
-
-          # Rule D5, 2026-10-29: Claude skips Dependabot (no Actions secrets, PR #224), so an absent
-          # marker agrees on a PR by GraphQL author dependabot/Bot on dependabot/* (prD evidence, PR212).
-          DEPENDABOT = {"login": "dependabot", "__typename": "Bot"}
-
-
-          class Comments(list):
-              """Comment rows of one PR, read with its author from the same GraphQL node."""
-              dependabot = False
+                  raise EvidenceError("editor")
 
 
           # Body and edit attribution must come from the same authenticated API node.
@@ -1091,7 +952,7 @@ jobs:
           query($owner: String!, $name: String!, $number: Int!, $endCursor: String) {
             repository(owner: $owner, name: $name) {
               pullRequest(number: $number) {
-                number headRefOid headRefName author { login __typename }
+                number headRefOid
                 comments(first:100, after:$endCursor) {
                   pageInfo { hasNextPage endCursor }
                   nodes {
@@ -1107,18 +968,27 @@ jobs:
 
 
           def _comment_row(node: Any) -> Record:
-              keys = ("databaseId", "body", "updatedAt", "author", "editor", "lastEditedAt")
-              if not isinstance(node, dict) or any(key not in node for key in keys):
-                  raise _runtime().EvidenceError("protocol")
+              if not isinstance(node, dict) or any(
+                  key not in node
+                  for key in (
+                      "databaseId",
+                      "body",
+                      "updatedAt",
+                      "author",
+                      "editor",
+                      "lastEditedAt",
+                  )
+              ):
+                  raise EvidenceError("protocol")
               identity = node["databaseId"]
               if type(identity) is not int or identity <= 0 or not isinstance(node["body"], str):
-                  raise _runtime().EvidenceError("protocol")
+                  raise EvidenceError("protocol")
               author = node["author"] or {}
               if not isinstance(author, dict):
-                  raise _runtime().EvidenceError("protocol")
+                  raise EvidenceError("protocol")
               login, kind = author.get("login"), author.get("__typename")
-              if login in ("chatgpt-codex-connector", "claude") and kind == "Bot":
-                  login += "[bot]"  # REST form; GraphQL Bot logins omit it (prD evidence).
+              if login == "chatgpt-codex-connector" and kind == "Bot":
+                  login = "chatgpt-codex-connector[bot]"
               return {
                   "id": identity,
                   "body": node["body"],
@@ -1131,43 +1001,40 @@ jobs:
 
           def _comment_pages(pages: Any, sha: str, pr: int) -> list[Record]:
               if not isinstance(pages, list) or not pages:
-                  raise _runtime().EvidenceError("protocol")
-              rows, identities, cursors = Comments(), set(), set()
+                  raise EvidenceError("protocol")
+              rows, identities, cursors = [], set(), set()
               try:
                   for index, page in enumerate(pages):
                       if page.get("errors"):
-                          raise _runtime().EvidenceError("protocol")
+                          raise EvidenceError("protocol")
                       pull = page["data"]["repository"]["pullRequest"]
-                      if index == 0:  # Same node as the comments; absent fields mean not Dependabot.
-                          who, ref = pull.get("author"), str(pull.get("headRefName"))
-                          rows.dependabot = who == DEPENDABOT and ref.startswith("dependabot/")
                       if pull["headRefOid"] != sha:
-                          raise _runtime().EvidenceError("head_moved")
+                          raise EvidenceError("head_moved")
                       if type(pull["number"]) is not int or pull["number"] != pr:
-                          raise _runtime().EvidenceError("protocol")
+                          raise EvidenceError("protocol")
                       connection = pull["comments"]
                       more, cursor = (
                           connection["pageInfo"][key] for key in ("hasNextPage", "endCursor")
                       )
                       if type(more) is not bool or more != (index < len(pages) - 1):
-                          raise _runtime().EvidenceError("protocol")
+                          raise EvidenceError("protocol")
                       if cursor is not None and (not isinstance(cursor, str) or not cursor):
-                          raise _runtime().EvidenceError("protocol")
+                          raise EvidenceError("protocol")
                       if more and (cursor is None or cursor in cursors):
-                          raise _runtime().EvidenceError("protocol")
+                          raise EvidenceError("protocol")
                       cursors.add(cursor)
                       if not isinstance(connection["nodes"], list):
-                          raise _runtime().EvidenceError("protocol")
+                          raise EvidenceError("protocol")
                       current = [_comment_row(node) for node in connection["nodes"]]
                       current_ids = [row["id"] for row in current]
                       if len(set(current_ids)) != len(current_ids) or identities.intersection(
                           current_ids
                       ):
-                          raise _runtime().EvidenceError("protocol")
+                          raise EvidenceError("protocol")
                       identities.update(current_ids)
                       rows.extend(current)
               except (KeyError, TypeError, AttributeError) as exc:
-                  raise _runtime().EvidenceError("protocol") from exc
+                  raise EvidenceError("protocol") from exc
               return rows
 
 
@@ -1175,46 +1042,9 @@ jobs:
               owner, name = repo.split("/")
               fields = dict(query=COMMENTS_QUERY, owner=owner, name=name, number=pr)
               return _comment_pages(request("graphql", paginate=True, fields=fields), sha, pr)
-          '''
-
-          REACTION_SOURCE = r'''
-          """Codex's 👍 reaction as the verdict of a clean security review with null flags.
-
-          Source: the Codex summary text, "Codex reacts with 👀 while any review is running,
-          comments if it has suggestions, and reacts with 👍 once all reviews finish with
-          no findings." Observed from 2026-10-31 on: the 👍 is present on every PR Codex
-          reviewed since then with no findings (cortex-viz PR218 06:13:28Z, PR219 and
-          PR220 07:38:47Z, PR216; Cortex PR838, PR840, PR846, PR847) and absent on every
-          PR reviewed before (cortex-viz PR207, PR212, PR217 of 2026-10-29). The
-          no-issues receipt comment that `security_receipt` reads was not posted on any
-          of them, so a clean review left `codex_security_verdict_missing` on every one
-          (cortex-viz PR216 run of 2026-11-03). Port of cdeust/Cortex PR847
-          (scripts/ci_codex_review_comments.py resolve_no_findings), 2026-11-03.
-          """
-
-          from __future__ import annotations
-
-          from datetime import datetime
-          import re
-          from typing import Any
-
-          Record = dict[str, Any]
 
 
-          def _runtime():
-              """The runtime module, resolved on use (the reader preloads its exact copy)."""
-              import ci_codex_review_runtime as runtime  # noqa: PLC0415 - keeps the import graph acyclic
-
-              return runtime
-
-
-          def _comments():
-              import ci_codex_review_comments as comments  # noqa: PLC0415 - same reason
-
-              return comments
-
-          # source: Codex summary 6600075171 (Cortex PR848): one table row per review on
-          # the reviewed head, each with a Completed stamp and the short commit.
+          # source: PR846 summary 6591745340, one table row per review on the reviewed head.
           COMPLETED_ROW = re.compile(
               r"^\|[^|\n]*\*\*(Code|Security) Review\*\* \| ✅ \*\*Completed\*\* "
               r'<relative-time datetime="([^"]+)"[^|\n]*\| `([0-9a-f]{7,40})` \|',
@@ -1222,37 +1052,30 @@ jobs:
           )
           # source: the summary lists one Code Review row and one Security Review row.
           REVIEW_KINDS = ("Code", "Security")
-          # source: runtime.FINDING and runtime._announced; any finding text voids the clean path.
-          FINDING_TEXT = ("\n### Security findings\n", "<!-- codex-security-review-finding:v1 -->")
+          # source: runtime.FINDING and _announced; any finding text voids the clean path.
+          FINDING_TEXT = (
+              "\n### Security findings\n",
+              "<!-- codex-security-review-finding:v1 -->",
+          )
 
 
           def _stamp(value: Any) -> datetime:
-              if not isinstance(value, str) or _comments().STAMP_PATTERN.fullmatch(value) is None:
-                  raise _runtime().EvidenceError("protocol")
+              if not isinstance(value, str) or STAMP_PATTERN.fullmatch(value) is None:
+                  raise EvidenceError("protocol")
               try:
                   return datetime.fromisoformat(value)
               except ValueError as exc:  # shape-valid, calendar-invalid (month 13)
-                  raise _runtime().EvidenceError("protocol") from exc
+                  raise EvidenceError("protocol") from exc
 
 
-          def _completed_here(target, review, metadata) -> bool:
-              """The review and the security metadata both name this PR's reviewed head."""
-              repo, pr, sha = target
-              found = (review.get("status"), review.get("commit_sha")) + tuple(
-                  metadata.get(k) if isinstance(metadata, dict) else None
-                  for k in ("repository", "pullRequestNumber", "headSha", "status")
-              )
-              return found == ("completed", sha, repo, pr, sha, "completed")
-
-
-          # source: Cortex PR846 +1 at 2026-11-03T00:23:49Z, after its last head's Security
-          # Review row of 00:23:45.38Z and five pushes: Codex re-dates its +1 per head. The
-          # reactions API reports that user with type "User", so only the login is read.
-          # https://docs.github.com/en/rest/reactions/reactions#list-reactions-for-an-issue
+          # source: Codex summary text, "reacts with 👍 once all reviews finish with no
+          # findings"; PR846 +1 at 2026-11-03T00:23:49Z, after its last head's Security
+          # Review row of 00:23:45.38Z and five pushes, so Codex re-dates its +1 per head.
+          # The reactions API reports that user with type "User", so only the login is read.
           def _codex_reactions(repo: str, pr: int) -> dict[str, datetime]:
-              pages = _runtime()._api(f"repos/{repo}/issues/{pr}/reactions", paginate=True)
+              pages = runtime._api(f"repos/{repo}/issues/{pr}/reactions", paginate=True)
               if not isinstance(pages, list) or any(not isinstance(p, list) for p in pages):
-                  raise _runtime().EvidenceError("protocol")
+                  raise EvidenceError("protocol")
               rows = [row for page in pages for row in page]
               if any(
                   not isinstance(row, dict)
@@ -1261,34 +1084,30 @@ jobs:
                   or not isinstance(row["user"].get("login"), str)
                   for row in rows
               ):
-                  raise _runtime().EvidenceError("protocol")
+                  raise EvidenceError("protocol")
               return {
                   row["content"]: _stamp(row.get("created_at"))
                   for row in rows
-                  if row["user"]["login"] == _comments().BOT
+                  if row["user"]["login"] == BOT
               }
 
 
           def _unresolved_findings(repo: str, pr: int, sha: str) -> bool:
-              """Native Codex finding threads of the PR that the owner has not resolved."""
-              if repo.count("/") != 1:
-                  raise _runtime().EvidenceError("protocol")
-              owner, name = repo.split("/")
-              fields = dict(query=_runtime().THREAD_QUERY, owner=owner, name=name, number=pr)
-              pages = _runtime()._api("graphql", paginate=True, fields=fields)
-              return not all(_runtime()._thread_states(pages, sha, owner).values())
+              """Native Codex finding threads on this head that the owner has not resolved."""
+              return not all(runtime.review_thread_states(repo, pr, sha).values())
 
 
           def resolve_no_findings(target, body, review, metadata):
-              """A null verdict after completion is clean only with Codex's +1 not earlier
-              than both Completed rows of this summary for this head (second precision:
-              reactions carry seconds, rows microseconds), no 👀 left, no finding text in
-              the summary and no unresolved native finding thread. A commit date would
-              not do: a later push of an older commit keeps its date (Cortex PR847 review).
+              """Null verdict after completion (PR833, PR846) is clean only with Codex's +1
+              not earlier than both Completed rows of this Bot summary for this head
+              (second precision: reactions carry seconds, rows microseconds), with no 👀
+              left, no finding text in the summary and no unresolved native finding
+              thread. A commit date would not do: a later push of an older commit keeps
+              its date (PR847 review).
               """
               repo, pr, sha = target
               flags = (review.get("has_any_findings"), review.get("has_unresolved_findings"))
-              if flags != (None, None) or not _completed_here(target, review, metadata):
+              if flags != (None, None) or not runtime._completed_here(target, review, metadata):
                   return None
               if any(marker in body for marker in FINDING_TEXT):
                   return None
@@ -1308,127 +1127,6 @@ jobs:
                   "source": "github_reaction",
                   "reacted_at": marks["+1"].strftime("%Y-%m-%dT%H:%M:%SZ"),
               }
-
-
-          def reaction_verdict(proof, target, body, review, metadata):
-              """The receipt's `verdict_missing` yields to the reaction; anything else stands."""
-              if proof is None or proof.get("state") != _comments().MISSING:
-                  return proof
-              return resolve_no_findings(target, body, review, metadata) or proof
-          '''
-
-          AGREEMENT_SOURCE = r'''
-          """Gate state for one head: both native Codex kinds, then the Claude verdict.
-
-          Owner rule 2026-10-29 (verbatim): "until the review of codex and claude (done
-          autonomously) are there, it cannot merge, the hold should be removed after
-          reviewers agree on merging". Rules of the Cortex convergence planner
-          (https://github.com/cdeust/Cortex/pull/834, scripts/ci_autopilot_converge_plan.py).
-          The Claude verdict is the marker claude-review.yml asks for (source.json adaptation
-          claude-review-verdict-marker); GraphQL author claude/Bot, prD evidence. Pure: no I/O.
-          """
-
-          from __future__ import annotations
-
-          import re
-          from typing import Any
-
-          from ci_codex_review_runtime import EvidenceError, _json
-          from ci_codex_review_comments import BLOCKED_REASONS, BLOCKING, BOT, MISSING
-          from ci_codex_review_comments import STAMP_PATTERN, UNRECOGNIZED, _authenticate_editor
-
-          Record = dict[str, Any]
-          CLAUDE = "claude[bot]"
-          VERDICT = re.compile(r"^<!-- claude-review-verdict:v1 (\{.*\}) -->$", re.MULTILINE)
-          CLAUDE_CAUSES = {"missing": "claude_verdict_missing", "refused": "claude_refused",
-                           "unreadable": "claude_verdict_unreadable"}
-          # Rule D5 (ci_codex_review_comments.DEPENDABOT): no Claude review exists there.
-          AGREED = ("merge", "not_applicable_dependabot")
-          # Rule D6, 2026-10-29: a failed kind whose latest Codex Bot comment is a usage-limit
-          # notice waits for quota, it is no finding. Real notices: cdeust/ci-autonome PR9
-          # comment6497426761 ("has reached its Codex usage limits"), cdeust/ai-architect-
-          # mcp-spec PR164 comment6497379059 and ai-architect-mcp-codebase PR469
-          # comment6497357065 ("You have reached your Codex usage limits for code reviews").
-          QUOTA = re.compile(r"\breached (?:its|your) Codex usage limits\b")
-          CODEX_CAUSES = {
-              "pending": "codex_{}_verdict_missing", "failed": "codex_{}_review_failed",
-              "unresolved": "codex_{}_findings_unresolved", MISSING: "codex_{}_verdict_missing",
-              UNRECOGNIZED: "codex_{}_receipt_unrecognized", "quota": "codex_quota_exhausted",
-          }
-
-
-          def _verdict(comment: Record, sha: str) -> bool | None:
-              """The merge flag of one Claude App marker for this head, else None."""
-              user, body, stamp = comment.get("user"), comment.get("body"), comment.get("updated_at")
-              if not isinstance(user, dict) or (user.get("login"), user.get("type")) != (CLAUDE, "Bot"):
-                  return None
-              if not isinstance(body, str) or body.count("claude-review-verdict:v1") != 1:
-                  return None
-              found = VERDICT.findall(body)
-              if len(found) != 1 or not isinstance(stamp, str) or not STAMP_PATTERN.fullmatch(stamp):
-                  return None
-              try:
-                  value = _json(found[0])
-              except EvidenceError:
-                  return None  # A malformed marker reads as absent, never as a verdict.
-              if not isinstance(value, dict) or set(value) != {"head", "merge"}:
-                  return None
-              return value["merge"] if value["head"] == sha and type(value["merge"]) is bool else None
-
-
-          def claude_verdict(comments: list[Record], sha: str) -> Record:
-              """Latest Claude verdict for this head; one edited by anyone else is unreadable."""
-              marked = [(c, merge) for c in comments if (merge := _verdict(c, sha)) is not None]
-              if not marked:
-                  verdict = "not_applicable_dependabot" if getattr(comments, "dependabot", False) is True else "missing"
-                  return {"verdict": verdict, "comment_id": 0}
-              comment, merge = max(marked, key=lambda row: (row[0]["updated_at"], row[0]["id"]))
-              try:
-                  _authenticate_editor(comment, "claude")
-              except EvidenceError:
-                  return {"verdict": "unreadable", "comment_id": comment["id"]}
-              return {"verdict": "merge" if merge else "refused", "comment_id": comment["id"]}
-
-
-          def _quota(comments: list[Record]) -> bool:
-              """True when the latest comment of the Codex Bot is a usage-limit notice."""
-              stamped = [
-                  c for c in comments
-                  if (c.get("user") or {}).get("login") == BOT and (c.get("user") or {}).get("type") == "Bot"
-                  and isinstance(c.get("updated_at"), str) and STAMP_PATTERN.fullmatch(c["updated_at"])
-              ]
-              if not stamped:
-                  return False
-              latest = max(stamped, key=lambda c: (c["updated_at"], c["id"]))
-              return isinstance(latest.get("body"), str) and QUOTA.search(latest["body"]) is not None
-
-
-          def conclude(states: list[str] | None, comments: list[Record], sha: str) -> Record:
-              """Gate state for the head: both Codex kinds (None: no summary), then Claude."""
-              claude = claude_verdict(comments, sha)
-              verdict, codex = claude["verdict"], list(states or ["pending", "pending"])
-              if "failed" in codex and _quota(comments):
-                  codex = ["quota" if state == "failed" else state for state in codex]
-              causes = list(dict.fromkeys(
-                  CODEX_CAUSES[state].format(kind)
-                  for kind, state in zip(("code", "security"), codex)
-                  if state != "success"
-              )) + ([CLAUDE_CAUSES[verdict]] if verdict not in AGREED else [])
-              if any(s in BLOCKING for s in codex):
-                  state = "blocked", next((r for s, r in BLOCKED_REASONS if s in codex), "review_unresolved")
-              elif verdict in ("refused", "unreadable"):
-                  state = "blocked", CLAUDE_CAUSES[verdict]
-              elif "quota" in codex:
-                  state = "pending", CODEX_CAUSES["quota"]
-              elif "pending" in codex:
-                  state = "pending", "review_pending" if states else "review_missing"
-              elif verdict == "missing":
-                  state = "pending", CLAUDE_CAUSES[verdict]
-              else:
-                  state = "success", "reviews_complete"
-              complete = all(s in ("success", "unresolved") for s in codex)
-              return dict(state=state[0], reason=state[1], causes=causes, claude=claude,
-                          reviews_complete=complete and verdict in (*AGREED, "refused"))
           '''
 
           READER_SOURCE = r'''
@@ -1458,10 +1156,8 @@ jobs:
               sys.path.insert(0, str(Path(__file__).resolve().parent))
           import ci_codex_review_runtime as runtime  # noqa: E402
           from ci_codex_review_runtime import _outputs  # noqa: E402
+          import ci_codex_review_comments as comments  # noqa: E402
           from ci_codex_review_comments import _authenticate_editor, _bot_author, _canonical  # noqa: E402
-          from ci_codex_review_comments import security_receipt  # noqa: E402
-          from ci_codex_review_reaction import reaction_verdict  # noqa: E402
-          from ci_codex_review_agreement import conclude  # noqa: E402
 
           Record = dict[str, Any]
           SUMMARY = "<!-- codex-pull-request-review-summary -->"
@@ -1584,7 +1280,7 @@ jobs:
               return ("unresolved" if clean["has_unresolved_findings"] else "success"), clean
 
 
-          def _reviews(latest, target, comments):
+          def _reviews(latest, target):
               expected_sha, repo, pr = target
               reviews = {}
               data = _marker(latest["body"], "codex-review-state", True)
@@ -1592,15 +1288,11 @@ jobs:
               states = []
               for kind in KINDS:
                   state, reviews[kind] = _review(data.get(kind), expected_sha)
-                  proof, attested = None, state == "success" and reviews[kind]["has_any_findings"] is True
-                  if kind == "security_review" and (state == "pending" or attested) and repo and pr:
-                      proof = runtime.resolve_security(
-                          (repo, pr, expected_sha), latest["body"], reviews[kind], security
-                      ) or security_receipt(
-                          comments, (repo, pr, expected_sha), reviews[kind], security
-                      )
-                      proof = reaction_verdict(
-                          proof, (repo, pr, expected_sha), latest["body"], reviews[kind], security
+                  proof = None
+                  if kind == "security_review" and state == "pending" and repo and pr:
+                      args = ((repo, pr, expected_sha), latest["body"], reviews[kind], security)
+                      proof = runtime.resolve_security(*args) or comments.resolve_no_findings(
+                          *args
                       )
                   if proof is not None:
                       state = proof.pop("state")
@@ -1622,7 +1314,7 @@ jobs:
                       raise EvidenceError("protocol")
                   candidates = [comment for comment in comments if _canonical(comment)]
                   if not candidates:
-                      return {**result, **conclude(None, comments, expected_sha)}
+                      return result
                   latest = max(candidates, key=_order)
                   result.update(comment_id=latest["id"], updated_at=latest["updated_at"])
                   latest_order = _order(latest)
@@ -1632,9 +1324,19 @@ jobs:
                           _authenticate_editor(item)
                   if latest["body"].count(SUMMARY) != 1:
                       raise EvidenceError("protocol")
-                  states, details = _reviews(latest, (expected_sha, repo, pr), comments)
+                  states, details = _reviews(latest, (expected_sha, repo, pr))
                   result.update(details)
-                  result.update(conclude(states, comments, expected_sha))  # Codex, then Claude.
+                  result["reviews_complete"] = all(s in ("success", "unresolved") for s in states)
+                  result["state"] = (
+                      "blocked"
+                      if any(s in ("failed", "unresolved") for s in states)
+                      else ("pending" if "pending" in states else "success")
+                  )
+                  result["reason"] = {
+                      "blocked": "review_failed" if "failed" in states else "review_unresolved",
+                      "pending": "review_pending",
+                      "success": "reviews_complete",
+                  }[result["state"]]
               except runtime.EvidenceError as exc:
                   result.update(state="blocked", reason=str(exc), reviews_complete=False)
                   if isinstance(exc, runtime.APIError):
@@ -1735,12 +1437,6 @@ jobs:
           _comments = ModuleType("ci_codex_review_comments")
           exec(compile(COMMENTS_SOURCE, "ci_codex_review_comments.py", "exec"), _comments.__dict__)
           sys.modules[_comments.__name__] = _comments
-          _reaction = ModuleType("ci_codex_review_reaction")
-          exec(compile(REACTION_SOURCE, "ci_codex_review_reaction.py", "exec"), _reaction.__dict__)
-          sys.modules[_reaction.__name__] = _reaction
-          _agreement = ModuleType("ci_codex_review_agreement")
-          exec(compile(AGREEMENT_SOURCE, "ci_codex_review_agreement.py", "exec"), _agreement.__dict__)
-          sys.modules[_agreement.__name__] = _agreement
           exec(compile(READER_SOURCE, "ci_codex_reviews.py", "exec"))
           CODEX_REVIEW_PY
 
@@ -1751,25 +1447,16 @@ jobs:
   # No checkout or merge
   # mutation here: the completed-run resolver performs the protected merge.
   merge:
-    # Owner rule 2026-11-03 (23:29): a PR is fit to merge when the test jobs of
-    # this run are green and both reviews, Codex and Claude, have concluded for
-    # this head with no blocking finding from either. The review job reads both
-    # verdicts (state: success, pending or blocked); this job is red while a
-    # verdict is missing, and the Codex completion workflow re-runs the review
-    # job of this run when a verdict lands (re-run-a-job re-runs its dependents,
-    # this job included). When it passes it arms GitHub's native auto-merge on
-    # this PR, so the merge happens with this PR's own definition in the path
-    # and nothing from main's: a PR that fixes the pipeline is merged by the
-    # pipeline it fixes. Branch protection stays the only gate GitHub applies.
-    needs: [contract, unit, regression, e2e, environment, install, review]
+    # The aggregate of the test jobs of this run: green when they all are. It reads
+    # nothing else (no main, no review state, no live PR label).
+    needs: [contract, unit, regression, e2e, environment, install]
     if: >-
       always() && !cancelled() && github.event_name == 'pull_request'
       && !github.event.pull_request.draft
       && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      pull-requests: write
+      contents: read
     steps:
       - name: Require the test jobs of this run
         env:
@@ -1792,73 +1479,6 @@ jobs:
             exit 1
           fi
           echo "## Merge: the test jobs are green on this commit" >> "$GITHUB_STEP_SUMMARY"
-
-      # The reader runs again here, live, on this head (CODEX_COMPLETION_ONLY
-      # false: pending exits 2, blocked exits 1, both with the causes in the
-      # JSON line). The review job's state is advisory; this step decides, so a
-      # re-run of this job alone (Codex completion, MERGE resumption) re-reads a
-      # finding resolved since. Step name pinned by ci_codex_review_resume.MERGE.
-      # Only PRs into main are merged by this path, and the reader's eligibility
-      # rejects any other base (ci_codex_reviews._eligible), so it runs for main
-      # only; a PR into another branch keeps its green tests (Codex on #240, P2).
-      - name: Require complete Codex reviews
-        if: github.event.pull_request.base.ref == 'main'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          PR: ${{ github.event.pull_request.number }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          CODEX_COMPLETION_ONLY: 'false'
-        run: *codex_review_reader
-
-      # This job is itself a required check and still running, so a direct merge
-      # here would be refused; auto-merge lets GitHub perform the squash the
-      # moment branch protection is satisfied. --match-head-commit binds the
-      # arming to this head: a later push disarms it until its own run passes.
-      # source: https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/incorporating-changes-from-a-pull-request/automatically-merging-a-pull-request
-      # and https://cli.github.com/manual/gh_pr_merge (--auto, --match-head-commit).
-      - name: Arm auto-merge, GitHub merges when the required checks pass
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR: ${{ github.event.pull_request.number }}
-          HEAD: ${{ github.event.pull_request.head.sha }}
-          BASE: ${{ github.event.pull_request.base.ref }}
-        run: |
-          # Only PRs into main are merged by this path, the boundary the resolve
-          # job keeps (base.ref == main). Codex finding on #238 (P2).
-          if [ "$BASE" != "main" ]; then
-            echo "## Merge: tests green; base is $BASE, not main, auto-merge not armed" >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          # Owner holds stay owner holds: a do-not-merge label or a "do not merge"
-          # title is read live before arming, the same two the resolve job reads,
-          # and a hold found here revokes any earlier arming (GitHub keeps an armed
-          # request across a writer's push). Codex findings on #238 (P1).
-          held="$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,labels \
-            --jq '[(.title | ascii_downcase | contains("do not merge")), ([.labels[].name | ascii_downcase] | index("do-not-merge") != null)] | any')"
-          if [ "$held" = "true" ]; then
-            if ! gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --disable-auto >disarm.log 2>&1; then
-              grep -qiE "not enabled|not allowed|no auto-merge|is not in auto-merge" disarm.log || { cat disarm.log; echo "::error::disarming auto-merge failed"; exit 1; }
-            fi
-            echo "## Merge: tests green, owner hold on the PR (do-not-merge label or title), auto-merge not armed, any earlier arming revoked" >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          if gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --auto --squash --match-head-commit "$HEAD" >arm.log 2>&1; then
-            echo "## Merge: auto-merge armed for $HEAD, GitHub merges when the required checks pass" >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          cat arm.log
-          if grep -qiE "already enabled|clean status|already (been )?merged" arm.log; then
-            echo "## Merge: auto-merge was already armed or the PR is already merged" >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          if grep -qiE "not allowed|not enabled" arm.log; then
-            echo "::warning::auto-merge is disabled in this repository's settings (Allow auto-merge); the completion resolver merges instead"
-            echo "## Merge: auto-merge is disabled in Settings, the completion resolver merges" >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
-          echo "::error::arming auto-merge failed"
-          exit 1
 
 
   # Decision 1: the release gate of Cortex (.github/workflows/ci.yml, ADR-0802)
