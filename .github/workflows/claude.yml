@@ -45,6 +45,7 @@ jobs:
       # owner-authored PR whose head is a fork, or main itself, must not become a
       # fix target (zetetic-team-subagents #242 review, finding 1).
       - name: Authorize owner fix target
+        timeout-minutes: 2
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -55,7 +56,7 @@ jobs:
           # event without an issue object: such an event is malformed, not a plain issue.
           if ! is_pull="$(jq -r 'if (.issue | type) == "object" then (.issue.pull_request != null) else "malformed" end' "$GITHUB_EVENT_PATH")" \
             || { [ "$is_pull" != true ] && [ "$is_pull" != false ]; }; then
-            echo "::error::could not read the event at GITHUB_EVENT_PATH; refusing the fix target"
+            echo "::error::could not read an event with an issue object at GITHUB_EVENT_PATH; refusing the fix target"
             exit 1
           fi
           if [ "$is_pull" = true ]; then
@@ -71,6 +72,7 @@ jobs:
             fi
           fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
         with:
           fetch-depth: 0
           # Use the action App token instead of a persisted workflow token.

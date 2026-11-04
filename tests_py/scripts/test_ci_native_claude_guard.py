@@ -61,7 +61,7 @@ def _run_guard(pull, is_pull, gh_exit=0, repo="cdeust/Cortex", event_body=None):
             event.write_text(
                 json.dumps({"issue": {"pull_request": {} if is_pull else None}})
             )
-        elif event_body != MISSING:
+        elif event_body is not MISSING:
             event.write_text(event_body)
         env = {
             "PATH": f"{scratch}:{os.environ['PATH']}",
@@ -155,7 +155,9 @@ class FixTargetGuardBehaviour(unittest.TestCase):
             with self.subTest(name):
                 result, calls = _run_guard(None, is_pull=False, event_body=body)
                 self.assertEqual(result.returncode, 1, result.stderr)
-                self.assertIn("could not read the event", result.stdout)
+                self.assertIn(
+                    "could not read an event with an issue object", result.stdout
+                )
                 self.assertEqual(calls, [])
 
 
