@@ -15,17 +15,36 @@ from unittest.mock import patch
 import jsonschema
 import pytest
 
+from mcp_server.core.behavioral_crosscoder import detect_persistent_features
 from mcp_server.core.persona_vector import PERSONA_DIMENSIONS
+from mcp_server.core.sparse_dictionary import build_seed_dictionary
 from mcp_server.handlers.explore_features import handler, schema
 from mcp_server.handlers.explore_features_schema import MODES
 
 _OUTPUT_SCHEMA = schema["outputSchema"]
-_PROFILES = {
-    "domains": {
-        "a": {"label": "A", "sessionCount": 3, "featureActivations": {"x": 0.4}},
-        "b": {"label": "B", "sessionCount": 1, "featureActivations": {"x": 0.1}},
-    }
+_SEED = build_seed_dictionary()
+_LABELS = [f.label for f in _SEED.features]
+_DOMAINS = {
+    "a": {"label": "A", "sessionCount": 3, "featureActivations": {_LABELS[0]: 0.8}},
+    "b": {"label": "B", "sessionCount": 1, "featureActivations": {_LABELS[0]: 0.7}},
 }
+# Computed: the handler builds the dictionary, the persistent features and the
+# personas. Stored: it reads them back as profile_assembler.py writes them.
+_COMPUTED = {"domains": _DOMAINS}
+_STORED = {
+    "domains": {
+        d_id: {**dp, "personaVector": {dim: 0.5 for dim in PERSONA_DIMENSIONS}}
+        for d_id, dp in _DOMAINS.items()
+    },
+    "featureDictionary": _SEED.model_dump(by_alias=True),
+    "persistentFeatures": [
+        pf.model_dump() for pf in detect_persistent_features(_DOMAINS, _SEED)
+    ],
+}
+_PROFILES = [
+    pytest.param(_COMPUTED, id="computed"),
+    pytest.param(_STORED, id="stored"),
+]
 
 
 def _run(args: dict, profiles: dict | None) -> dict:
@@ -57,12 +76,32 @@ _PATHS = [
 ]
 
 
+@pytest.mark.parametrize("profiles", _PROFILES)
 @pytest.mark.parametrize(("args", "status"), _PATHS)
-def test_every_profile_path_validates_and_echoes_mode(args, status):
-    result = _run(args, _PROFILES)
+def test_every_profile_path_validates_and_echoes_mode(args, status, profiles):
+    result = _run(args, profiles)
     jsonschema.validate(result, _OUTPUT_SCHEMA)
     assert result["mode"] == args["mode"]
     assert result["status"] == status
+    assert set(result) <= set(_OUTPUT_SCHEMA["properties"]), args
+
+
+@pytest.mark.parametrize(
+    ("mode", "profiles"),
+    [
+        # mode=features only reads stored persistentFeatures; crosscoder
+        # reads them back or computes them.
+        pytest.param("features", _STORED, id="features-stored"),
+        pytest.param("crosscoder", _STORED, id="crosscoder-stored"),
+        pytest.param("crosscoder", _COMPUTED, id="crosscoder-computed"),
+    ],
+)
+def test_persistent_feature_items_are_validated_non_empty(mode, profiles):
+    """The items rule is checked against real entries, not only ``[]``."""
+    result = _run({"mode": mode}, profiles)
+    jsonschema.validate(result, _OUTPUT_SCHEMA)
+    assert result["persistentFeatures"]
+    assert result["persistentFeatures"][0]["label"] == _LABELS[0]
 
 
 @pytest.mark.parametrize("mode", MODES)
@@ -75,15 +114,6 @@ def test_no_data_path_validates_and_echoes_mode(mode, profiles):
         "status": "no_data",
         "message": "No profiles built yet. Run rebuild_profiles first.",
     }
-
-
-def test_declared_payload_keys_are_the_returned_ones():
-    """Every key an ok path returns is a declared property, so the schema
-    documents the real shape rather than names no path sets."""
-    declared = set(_OUTPUT_SCHEMA["properties"])
-    for args, status in _PATHS:
-        if status == "ok":
-            assert set(_run(args, _PROFILES)) <= declared, args
 
 
 def test_input_and_output_mode_enums_match():

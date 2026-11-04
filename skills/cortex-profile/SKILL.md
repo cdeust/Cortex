@@ -42,10 +42,10 @@ Dive deeper into your behavioral profile:
 cortex:explore_features({ "mode": "persona" })
 ```
 
-Returns your 12-dimensional persona vector: exploration depth, tool diversity, session persistence, abstraction level, error recovery, etc.
+Returns the 9-dimensional persona vector of every domain and their session-weighted composition (add `"domain"` for one domain): activeReflective, sensingIntuitive, sequentialGlobal, thoroughness, autonomy, verbosity, riskTolerance, focusScope, iterationSpeed. The response's `dimensions` lists them in vector order.
 
 Other exploration modes:
-- `"mode": "features"` — What behavioral dictionary features activate for this domain
+- `"mode": "features"` — The sparse behavioral feature dictionary and the features that persist across domains
 - `"mode": "attribution"` — How the pipeline traces decisions back to behavioral signals
 - `"mode": "crosscoder"` — Behavioral patterns that persist across different project domains
 
