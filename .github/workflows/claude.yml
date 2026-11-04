@@ -96,10 +96,12 @@ jobs:
         with:
           set: --extra dev --extra sqlite --extra codebase --group lint
           environment: ${{ env.pythonLocation }}
-      # uv-locked-install passes --no-install-project (ADR-1092); hatchling is in
-      # the locked set, so the project installs without build isolation.
+      # uv-locked-install passes --no-install-project (ADR-1092). hatchling lives
+      # in the packaging group, not in this set, so the project builds in an
+      # isolated environment, as .github/actions/test-suite installs it (Codex
+      # P1 on #856: --no-build-isolation fails on a fresh setup-python).
       - name: Install the project
-        run: pip install --no-deps --no-build-isolation -e .
+        run: pip install --no-deps -e .
       - name: Pre-download embedding model
         run: |
           for attempt in 1 2 3 4 5; do
