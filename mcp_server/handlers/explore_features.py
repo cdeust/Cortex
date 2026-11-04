@@ -1,9 +1,13 @@
 """Handler for the explore_features tool — interpretability exploration.
 
-Modes: features, attribution, persona, crosscoder.
+Modes: features, attribution, persona, crosscoder. The MCP tool schema lives
+in explore_features_schema.py and is re-exported here.
 """
 
 from __future__ import annotations
+
+from collections.abc import Callable
+from typing import cast
 
 from mcp_server.core.attribution_tracer import trace_attribution
 from mcp_server.core.behavioral_crosscoder import (
@@ -16,7 +20,7 @@ from mcp_server.core.persona_vector import (
     compose_personas,
 )
 from mcp_server.core.sparse_dictionary import build_seed_dictionary
-from mcp_server.handlers._tool_meta import READ_ONLY
+from mcp_server.handlers.explore_features_schema import MODES, ExploreMode, schema
 from mcp_server.infrastructure.profile_store import load_profiles
 from mcp_server.infrastructure.scanner import discover_conversations_for_projects
 from mcp_server.shared.types_features import FeatureDictionary, PersistentFeature
@@ -24,107 +28,23 @@ from mcp_server.shared.types_features import FeatureDictionary, PersistentFeatur
 # source: ADR-0391
 ATTRIBUTION_SAMPLE_LIMIT = 20
 
-schema = {
-    "title": "Explore features (interpretability lens)",
-    "annotations": READ_ONLY,
-    "outputSchema": {
-        "type": "object",
-        "required": ["mode"],
-        "properties": {
-            "mode": {
-                "type": "string",
-                "enum": ["features", "attribution", "persona", "crosscoder"],
-            },
-            "features": {
-                "type": "array",
-                "description": (
-                    "Active sparse-dictionary behavioral features (mode=features)."
-                ),
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "name": {"type": "string"},
-                        "activation": {"type": "number"},
-                    },
-                },
-            },
-            "attribution": {
-                "type": "array",
-                "description": (
-                    "Signal → decision attribution edges (mode=attribution)."
-                ),
-                "items": {"type": "object"},
-            },
-            "persona": {
-                "type": "object",
-                "description": (
-                    "12-dimensional persona vector + drift-from-baseline "
-                    "(mode=persona)."
-                ),
-            },
-            "crosscoder": {
-                "type": "object",
-                "description": (
-                    "Cross-domain persistent-feature comparison (mode=crosscoder)."
-                ),
-            },
-        },
-    },
-    "description": (
-        "Inspect the user's cognitive profile through one of four "
-        "interpretability lenses (mechanistic-interpretability inspired, "
-        "Bricken et al. 2023): `features` returns the active sparse-"
-        "dictionary behavioral features for a domain; `attribution` "
-        "perturbation-traces which input signals drove the domain's "
-        "profile, sampling up to 20 of that domain's own recent sessions "
-        "from disk (empty graph if the domain has no indexed sessions -- "
-        "run rebuild_profiles first); `persona` returns the 12D persona "
-        "vector with drift-from-baseline; `crosscoder` compares two "
-        "domains to detect persistent behavioral features. Use this when "
-        "facing an unfamiliar pattern and you want a behavioral "
-        "explanation. Distinct from `query_methodology` (full profile, not the "
-        "interpretability internals) and `list_domains` (overview, no "
-        "analysis). Read-only on "
-        "profiles.json. Latency <100ms. Returns mode-specific JSON: "
-        "{dictionary | graph | persona | comparison}."
-    ),
-    "inputSchema": {
-        "type": "object",
-        "required": ["mode"],
-        "properties": {
-            "mode": {
-                "type": "string",
-                "description": (
-                    "Which interpretability lens to apply. 'features' = sparse "
-                    "dictionary activations; 'attribution' = decision tracing; "
-                    "'persona' = 12D vector + drift; 'crosscoder' = "
-                    "two-domain feature persistence."
-                ),
-                "enum": ["features", "attribution", "persona", "crosscoder"],
-                "examples": ["features", "persona"],
-            },
-            "domain": {
-                "type": "string",
-                "description": (
-                    "Cognitive domain to inspect. Omit for global aggregate where "
-                    "supported."
-                ),
-                "examples": ["cortex", "auth-service"],
-            },
-            "compare_domain": {
-                "type": "string",
-                "description": (
-                    "Second cognitive domain for the 'crosscoder' mode comparison."
-                ),
-                "examples": ["ai-architect"],
-            },
-        },
-    },
-}
+__all__ = ["schema", "handler"]
 
 
 async def handler(args: dict) -> dict:
-    mode = args.get("mode")
+    """Run one interpretability lens; every response carries ``mode`` (#680).
+
+    An unknown mode raises: it cannot be echoed under the declared enum, and
+    an error dict without a valid ``mode`` fails client output validation.
+    """
+    raw_mode = args.get("mode")
+    if raw_mode not in MODES:
+        raise ValueError(f"Unknown mode: {raw_mode!r}; expected one of {MODES}")
+    mode = cast(ExploreMode, raw_mode)  # narrowed by the MODES check above
+    return {"mode": mode, **_dispatch(mode, args)}
+
+
+def _dispatch(mode: ExploreMode, args: dict) -> dict:
     domain = args.get("domain")
     compare_domain = args.get("compare_domain")
 
@@ -140,15 +60,7 @@ async def handler(args: dict) -> dict:
             "message": "No profiles built yet. Run rebuild_profiles first.",
         }
 
-    if mode == "features":
-        return _handle_features(profiles)
-    if mode == "attribution":
-        return _handle_attribution(profiles, domain)
-    if mode == "persona":
-        return _handle_persona(profiles, domain)
-    if mode == "crosscoder":
-        return _handle_crosscoder(profiles, domain, compare_domain)
-    return {"status": "error", "message": f"Unknown mode: {mode}"}
+    return _HANDLERS[mode](profiles, domain, compare_domain)
 
 
 def _resolve_feature_dictionary(profiles: dict) -> FeatureDictionary:
@@ -165,7 +77,10 @@ def _resolve_feature_dictionary(profiles: dict) -> FeatureDictionary:
     return build_seed_dictionary()
 
 
-def _handle_features(profiles: dict) -> dict:
+def _handle_features(
+    profiles: dict, domain: str | None, compare_domain: str | None
+) -> dict:
+    """``domain`` and ``compare_domain`` are ignored: the dictionary is global."""
     d = _resolve_feature_dictionary(profiles)
 
     return {
@@ -206,7 +121,9 @@ def _fetch_attribution_conversations(dp: dict) -> list[dict]:
     return discover_conversations_for_projects(project_ids, ATTRIBUTION_SAMPLE_LIMIT)
 
 
-def _handle_attribution(profiles: dict, domain: str | None) -> dict:
+def _handle_attribution(
+    profiles: dict, domain: str | None, compare_domain: str | None
+) -> dict:
     domain_id = domain or next(iter(profiles.get("domains", {})), None)
     dp = profiles.get("domains", {}).get(domain_id) if domain_id else None
 
@@ -230,7 +147,9 @@ def _handle_attribution(profiles: dict, domain: str | None) -> dict:
     }
 
 
-def _handle_persona(profiles: dict, domain: str | None) -> dict:
+def _handle_persona(
+    profiles: dict, domain: str | None, compare_domain: str | None
+) -> dict:
     if domain:
         dp = profiles.get("domains", {}).get(domain)
         if not dp:
@@ -315,3 +234,13 @@ def _handle_crosscoder(
         "persistentFeatures": [pf.model_dump() for pf in persistent],
         "domainCount": len(profiles.get("domains", {})),
     }
+
+
+# One entry per mode: a mode added to MODES without a handler is a KeyError,
+# never another lens's output under its name (test_handlers_cover_every_mode).
+_HANDLERS: dict[ExploreMode, Callable[[dict, str | None, str | None], dict]] = {
+    "features": _handle_features,
+    "attribution": _handle_attribution,
+    "persona": _handle_persona,
+    "crosscoder": _handle_crosscoder,
+}
