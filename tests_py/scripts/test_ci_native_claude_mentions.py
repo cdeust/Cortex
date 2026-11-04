@@ -39,10 +39,27 @@ def _canonical(requirement):
     return re.sub(r"[-_.]+", "-", name).lower()
 
 
+_BASH_RULE = re.compile(r"^Bash\(([^()*:]+?)(:\*)?\)$")
+
+
 def _bash_prefixes(rules):
-    """Command prefixes of Bash(...) rules, in `prefix:*` or `prefix*` syntax."""
-    bodies = [r[len("Bash(") : -1] for r in rules if r.startswith("Bash(")]
-    return [b.removesuffix(":*").removesuffix("*").rstrip() for b in bodies]
+    """Command prefixes of `Bash(cmd)` / `Bash(cmd:*)` rules; anything else fails.
+
+    Only this syntax is word-bounded in Claude Code (`Bash(uv:*)` covers `uv x`,
+    not `uvx`); a raw `Bash(cmd*)`, a bare `Bash`, a non-Bash tool or a `*`
+    elsewhere is rejected so no rule can pass as narrower than it is.
+    """
+    prefixes = []
+    for rule in rules:
+        match = _BASH_RULE.match(rule)
+        if match is None:
+            raise AssertionError(f"not a word-bounded Bash rule: {rule!r}")
+        prefixes.append(match.group(1).strip())
+    return prefixes
+
+
+def _covers(prefix, rule):
+    return rule == prefix or rule.startswith(prefix + " ")
 
 
 def _job():
@@ -104,8 +121,9 @@ class OwnerMentionTests(unittest.TestCase):
 
     def test_owner_mentions_allow_the_validation_commands_only(self):
         # Tag mode supplies no shell allowlist beyond its own scoped git
-        # (src/modes/tag/index.ts:158-214 at the pinned SHA); headless, an
-        # unlisted command is denied. The list is CLAUDE.md's validation set,
+        # (src/modes/tag/index.ts:158-214 at the pinned SHA); headless, a command
+        # listed neither here nor in .claude/settings.json (next test) is denied.
+        # The list is CLAUDE.md's validation set,
         # git inspection and gh run view: no uv sync (the job installs the
         # environment; test_uv_lock_single_source.py), no bare interpreter, no
         # gh api, no gh pr comment (tag mode owns its tracking comment).
@@ -150,6 +168,10 @@ class OwnerMentionTests(unittest.TestCase):
         self.assertEqual(project["run"], "pip install --no-deps --no-build-isolation .")
         self.assertEqual(project["env"], {"PIP_DISABLE_PIP_VERSION_CHECK": "1"})
         self.assertIn("SentenceTransformer('all-MiniLM-L6-v2'", model["run"])
+        # 5 attempts of at most 60 s and sleeps of 10+20+30+40 s fit the 7 minutes.
+        self.assertIn("timeout 60 python -c", model["run"])
+        self.assertIn("for attempt in 1 2 3 4 5;", model["run"])
+        self.assertLess(5 * 60 + sum(10 * a for a in range(1, 5)), 7 * 60)
 
     def test_non_isolated_install_is_never_editable(self):
         # Invariant behind the literal above: build-system.requires lists what
@@ -160,12 +182,13 @@ class OwnerMentionTests(unittest.TestCase):
         editable = [a for a in run if a.startswith(("-e", "--editable"))]
         self.assertEqual(editable, [], run)
 
-    def test_repo_settings_cannot_widen_the_headless_allowlist(self):
+    def test_settings_allow_rules_map_to_allowed_denied_or_exempt(self):
         # The pinned action loads project settings and, on a PR, restores them
         # from the base branch (restore-config.ts), so main's .claude/settings.json
-        # applies and the effective allowlist is the union. Every Bash allow rule
-        # of that file must fall under a prefix allowed here, a prefix denied here
-        # (deny wins over allow) or a named exemption; its curl deny is mirrored.
+        # applies and the effective allowlist is the union. Every allow rule of
+        # that file is a word-bounded Bash rule and falls under a prefix allowed
+        # here, a prefix denied here (deny wins over allow) or a named exemption
+        # that the file still carries; its curl deny is mirrored.
         args = shlex.split(_step(_job(), uses=ACTION)["with"]["claude_args"])
         self.assertNotIn("--setting-sources", args)
         self.assertEqual(args.count("--disallowedTools"), 1)
@@ -176,9 +199,11 @@ class OwnerMentionTests(unittest.TestCase):
         settings = json.loads(SETTINGS.read_text())
         self.assertLessEqual(set(settings), {"$schema", "permissions"})
         self.assertLessEqual(set(settings["permissions"]), {"allow", "deny"})
-        self.assertIn("Bash(curl *)", settings["permissions"]["deny"])
-        for rule in _bash_prefixes(settings["permissions"]["allow"]):
-            covered = any(rule.startswith(p) for p in allowed + denied)
+        self.assertIn("Bash(curl:*)", settings["permissions"]["deny"])
+        rules = _bash_prefixes(settings["permissions"]["allow"])
+        self.assertLessEqual(SETTINGS_EXEMPT, set(rules))
+        for rule in rules:
+            covered = any(_covers(p, rule) for p in allowed + denied)
             self.assertTrue(covered or rule in SETTINGS_EXEMPT, rule)
 
     def test_non_isolated_build_takes_its_backend_from_a_selected_locked_group(self):

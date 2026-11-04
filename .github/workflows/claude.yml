@@ -170,12 +170,13 @@ jobs:
           # (src/entrypoints/run.ts, restore-config.ts): main's own
           # .claude/settings.json applies, and its allow rules add to this
           # allowlist (the effective list is the union; the test maps every
-          # rule of that file to a prefix here, a denied prefix or a named
-          # exemption). The project source stays loaded on purpose, it carries
-          # CLAUDE.md, .claude/agents, .claude/commands and the file's deny
-          # rules; --disallowedTools removes what that file allows and a
-          # write-token job must not run (deny wins over allow): uv (unlocked
-          # fetches, a second .venv, uv.lock rewrites), curl.
+          # Bash allow rule of that file to a prefix here, a denied prefix or
+          # a named exemption: ruff format, python3 -m mcp_server.doctor). The
+          # project source stays loaded on purpose, it carries CLAUDE.md,
+          # .claude/agents, .claude/commands and the file's deny rules;
+          # --disallowedTools denies what a write-token job must not run (deny
+          # wins over allow): uv, which that file allows (unlocked fetches, a
+          # second .venv, uv.lock rewrites), and curl, mirroring its own deny.
           claude_args: |
             --strict-mcp-config
             --allowedTools "Bash(pytest:*),Bash(ruff check:*),Bash(ruff format --check:*),Bash(python -m mcp_server.doctor:*),Bash(python scripts/check_craftsmanship.py:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(gh run view:*)"

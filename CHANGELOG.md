@@ -32,15 +32,17 @@ adheres to [Semantic Versioning](https://semver.org/).
   validation commands headlessly (`pytest`, `ruff check`, `ruff format --check`,
   `python -m mcp_server.doctor`, `python scripts/check_craftsmanship.py`, plus `git
   status|diff|log` and `gh run view`); tag mode keeps its own scoped `git
-  add|rm|commit|push`; headless, every other command falls to "ask" and is denied. The
+  add|rm|commit|push`, and main's `.claude/settings.json` adds `ruff format` and
+  `python3 -m mcp_server.doctor`; headless, every other command is denied. The
   job installs Python 3.12, the locked dev+sqlite+codebase extras of `ci.json`
   "regression" on the SQLite backend, the lint and packaging groups, the project
   as a non-editable wheel built from the locked backend (no unpinned Python
   package fetch; the apt packages and the embedding model, fetched before the
   agent starts, excepted). The action restores `.claude/` from the base branch,
   so main's `.claude/settings.json` adds its allow rules to the list; `uv` and
-  `curl` are denied outright, and a test maps every rule of that file to an
-  allowed prefix, a denied prefix or a named exemption. A first step refuses a fix
+  `curl` are denied outright, that file's rules are rewritten in word-bounded
+  `:*` form, and a test maps each of its Bash allow rules to an allowed prefix, a
+  denied prefix or a named exemption. A first step refuses a fix
   target whose head is a fork or the default branch and refuses when the event
   cannot be read or carries no issue object, the job is bound to 60 minutes, and
   the offline switches of the test-suite action are set (#855, #856).
