@@ -16,9 +16,9 @@ import jsonschema
 import pytest
 
 from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 
 from mcp_server import tool_registry_core as registry
-from mcp_server.core.behavioral_crosscoder import detect_persistent_features
 from mcp_server.core.persona_vector import PERSONA_DIMENSIONS
 from mcp_server.core.sparse_dictionary import build_seed_dictionary
 from mcp_server.handlers import explore_features
@@ -41,8 +41,15 @@ _STORED = {
         for d_id, dp in _DOMAINS.items()
     },
     "featureDictionary": _SEED.model_dump(by_alias=True),
+    # A stored-only entry, absent from what the handler would compute, proves
+    # the stored list is read back rather than recomputed.
     "persistentFeatures": [
-        pf.model_dump() for pf in detect_persistent_features(_DOMAINS, _SEED)
+        {
+            "label": "stored-only",
+            "persistence": 0.9,
+            "consistency": 0.0,
+            "domains": ["a"],
+        },
     ],
 }
 _PROFILES = [
@@ -104,8 +111,8 @@ def test_persistent_feature_items_are_validated_non_empty(mode, profiles):
     """The items rule is checked against real entries, not only ``[]``."""
     result = _run({"mode": mode}, profiles)
     jsonschema.validate(result, _OUTPUT_SCHEMA)
-    assert result["persistentFeatures"]
-    assert result["persistentFeatures"][0]["label"] == _LABELS[0]
+    expected = "stored-only" if profiles is _STORED else _LABELS[0]
+    assert result["persistentFeatures"][0]["label"] == expected
 
 
 @pytest.mark.parametrize("mode", MODES)
@@ -141,11 +148,12 @@ def test_registered_tool_rejects_an_unknown_mode_before_the_handler():
     ValueError and safe_handler's substring classifier are never reached."""
     with (
         patch("mcp_server.handlers.explore_features.handler") as called,
-        pytest.raises(Exception, match="extension"),
+        pytest.raises(ToolError, match="literal_error") as raised,
     ):
         asyncio.run(
             _registered_server().call_tool("explore_features", {"mode": "extension"})
         )
+    assert "pgvector" not in str(raised.value)
     called.assert_not_called()
 
 
