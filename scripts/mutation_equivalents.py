@@ -25,6 +25,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from ci_mutation_diff import in_scope, scope_prefixes
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 REGISTRY_PATH = REPO_ROOT / "memory" / "mutation-equivalents.json"
 
@@ -267,7 +269,10 @@ def main(argv: list[str]) -> int:
         print(f"!!! registry is malformed: {exc}", file=sys.stderr)
         return 2
 
-    survivors = parse_survivors(sys.stdin.read())
+    # ADR-1122: a pull request is gated on the functions it changed only.
+    prefixes = scope_prefixes()
+    registry = [e for e in registry if in_scope(e.mutant, prefixes)]
+    survivors = [s for s in parse_survivors(sys.stdin.read()) if in_scope(s, prefixes)]
     diffs = {name: mutant_diff(name) for name in survivors}
     verdict = classify(survivors, registry, diffs, frozenset(argv))
     print(format_report(verdict), file=sys.stderr)

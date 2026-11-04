@@ -71,3 +71,6 @@ with psycopg.connect(url, autocommit=True) as conn:
 PY
 
 python -m pytest --tb=short -q -p no:randomly --cov=mcp_server --cov-report=xml "$@"
+# source: ADR-1122. A pull request must also kill every mutant in the functions it
+# changed; outside a pull request (no GITHUB_BASE_REF) the step does nothing.
+UV_NO_SYNC=1 python scripts/ci_mutation_diff.py
