@@ -94,10 +94,11 @@ adheres to [Semantic Versioning](https://semver.org/).
   percentile bootstrap 95% interval (none below 10 tasks). A single repeat is
   flagged as an anecdote; an unpairable trial raises instead of being dropped.
 - `benchmarks/outcome/answer_key.py`: task definitions and a verifier that
-  checks answers without Cortex (second slice of #343). Commit answers are
-  resolved by git in the corpus repository; reasons and decided values are
-  exact-matched after normalisation against the accepted list in the task
-  key, with no similarity threshold.
+  checks answers without Cortex (second slice of #343). A commit answer is
+  correct when it is a prefix of exactly one commit object in the corpus
+  repository and that commit is the key (refs are never consulted); reasons
+  and decided values are exact-matched after normalisation against the
+  accepted list in the task key, with no similarity threshold.
 
 - Claude PR reviews use Anthropic's official direct PR workflow and its five
   upstream reviewer agents (ADR-1117). Reviewer configuration loads from trusted
