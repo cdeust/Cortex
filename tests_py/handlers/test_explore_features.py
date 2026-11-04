@@ -5,6 +5,8 @@ import asyncio
 import json
 from unittest.mock import patch
 
+import pytest
+
 from mcp_server.handlers.explore_features import handler, schema
 from mcp_server.shared.types_features import (
     AttributionGraph,
@@ -570,15 +572,20 @@ class TestExploreNoData:
 
 
 class TestExploreUnknownMode:
-    def test_returns_error(self):
-        result = asyncio.run(handler({"mode": "unknown_mode_xyz"}))
-        assert result["status"] in ("error", "no_data")
+    """An unknown mode is a tool error (#680): it cannot be echoed under the
+    output schema's ``mode`` enum, so no structured response can carry it."""
+
+    def test_raises(self):
+        with pytest.raises(ValueError, match="Unknown mode"):
+            asyncio.run(handler({"mode": "unknown_mode_xyz"}))
 
     def test_unknown_mode_includes_mode_name(self):
         profiles = {"domains": {"d1": {"label": "D1"}}}
-        with patch(
-            "mcp_server.handlers.explore_features.load_profiles", return_value=profiles
+        with (
+            patch(
+                "mcp_server.handlers.explore_features.load_profiles",
+                return_value=profiles,
+            ),
+            pytest.raises(ValueError, match="bogus"),
         ):
-            result = asyncio.run(handler({"mode": "bogus"}))
-        assert result["status"] == "error"
-        assert "bogus" in result["message"]
+            asyncio.run(handler({"mode": "bogus"}))

@@ -1,6 +1,7 @@
 """Handler for the explore_features tool — interpretability exploration.
 
-Modes: features, attribution, persona, crosscoder.
+Modes: features, attribution, persona, crosscoder. The MCP tool schema lives
+in explore_features_schema.py and is re-exported here.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ from mcp_server.core.persona_vector import (
     compose_personas,
 )
 from mcp_server.core.sparse_dictionary import build_seed_dictionary
-from mcp_server.handlers._tool_meta import READ_ONLY
+from mcp_server.handlers.explore_features_schema import MODES, schema
 from mcp_server.infrastructure.profile_store import load_profiles
 from mcp_server.infrastructure.scanner import discover_conversations_for_projects
 from mcp_server.shared.types_features import FeatureDictionary, PersistentFeature
@@ -24,107 +25,22 @@ from mcp_server.shared.types_features import FeatureDictionary, PersistentFeatur
 # source: ADR-0391
 ATTRIBUTION_SAMPLE_LIMIT = 20
 
-schema = {
-    "title": "Explore features (interpretability lens)",
-    "annotations": READ_ONLY,
-    "outputSchema": {
-        "type": "object",
-        "required": ["mode"],
-        "properties": {
-            "mode": {
-                "type": "string",
-                "enum": ["features", "attribution", "persona", "crosscoder"],
-            },
-            "features": {
-                "type": "array",
-                "description": (
-                    "Active sparse-dictionary behavioral features (mode=features)."
-                ),
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "name": {"type": "string"},
-                        "activation": {"type": "number"},
-                    },
-                },
-            },
-            "attribution": {
-                "type": "array",
-                "description": (
-                    "Signal → decision attribution edges (mode=attribution)."
-                ),
-                "items": {"type": "object"},
-            },
-            "persona": {
-                "type": "object",
-                "description": (
-                    "12-dimensional persona vector + drift-from-baseline "
-                    "(mode=persona)."
-                ),
-            },
-            "crosscoder": {
-                "type": "object",
-                "description": (
-                    "Cross-domain persistent-feature comparison (mode=crosscoder)."
-                ),
-            },
-        },
-    },
-    "description": (
-        "Inspect the user's cognitive profile through one of four "
-        "interpretability lenses (mechanistic-interpretability inspired, "
-        "Bricken et al. 2023): `features` returns the active sparse-"
-        "dictionary behavioral features for a domain; `attribution` "
-        "perturbation-traces which input signals drove the domain's "
-        "profile, sampling up to 20 of that domain's own recent sessions "
-        "from disk (empty graph if the domain has no indexed sessions -- "
-        "run rebuild_profiles first); `persona` returns the 12D persona "
-        "vector with drift-from-baseline; `crosscoder` compares two "
-        "domains to detect persistent behavioral features. Use this when "
-        "facing an unfamiliar pattern and you want a behavioral "
-        "explanation. Distinct from `query_methodology` (full profile, not the "
-        "interpretability internals) and `list_domains` (overview, no "
-        "analysis). Read-only on "
-        "profiles.json. Latency <100ms. Returns mode-specific JSON: "
-        "{dictionary | graph | persona | comparison}."
-    ),
-    "inputSchema": {
-        "type": "object",
-        "required": ["mode"],
-        "properties": {
-            "mode": {
-                "type": "string",
-                "description": (
-                    "Which interpretability lens to apply. 'features' = sparse "
-                    "dictionary activations; 'attribution' = decision tracing; "
-                    "'persona' = 12D vector + drift; 'crosscoder' = "
-                    "two-domain feature persistence."
-                ),
-                "enum": ["features", "attribution", "persona", "crosscoder"],
-                "examples": ["features", "persona"],
-            },
-            "domain": {
-                "type": "string",
-                "description": (
-                    "Cognitive domain to inspect. Omit for global aggregate where "
-                    "supported."
-                ),
-                "examples": ["cortex", "auth-service"],
-            },
-            "compare_domain": {
-                "type": "string",
-                "description": (
-                    "Second cognitive domain for the 'crosscoder' mode comparison."
-                ),
-                "examples": ["ai-architect"],
-            },
-        },
-    },
-}
+__all__ = ["schema", "handler"]
 
 
 async def handler(args: dict) -> dict:
+    """Run one interpretability lens; every response carries ``mode`` (#680).
+
+    An unknown mode raises: it cannot be echoed under the declared enum, and
+    an error dict without a valid ``mode`` fails client output validation.
+    """
     mode = args.get("mode")
+    if mode not in MODES:
+        raise ValueError(f"Unknown mode: {mode!r}; expected one of {MODES}")
+    return {"mode": mode, **_dispatch(mode, args)}
+
+
+def _dispatch(mode: str, args: dict) -> dict:
     domain = args.get("domain")
     compare_domain = args.get("compare_domain")
 
@@ -146,9 +62,7 @@ async def handler(args: dict) -> dict:
         return _handle_attribution(profiles, domain)
     if mode == "persona":
         return _handle_persona(profiles, domain)
-    if mode == "crosscoder":
-        return _handle_crosscoder(profiles, domain, compare_domain)
-    return {"status": "error", "message": f"Unknown mode: {mode}"}
+    return _handle_crosscoder(profiles, domain, compare_domain)
 
 
 def _resolve_feature_dictionary(profiles: dict) -> FeatureDictionary:

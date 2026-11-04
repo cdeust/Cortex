@@ -117,8 +117,11 @@ Interpretability exploration across four modes.
 
 - **`features`** — Sparse dictionary features and their activations
 - **`attribution`** — Pipeline attribution graph via perturbation tracing
-- **`persona`** — 12D persona vector with drift detection
+- **`persona`** — 9D persona vector (`dimensions` names them) for one domain, or for every domain plus their session-weighted composition
 - **`crosscoder`** — Cross-domain persistent behavioral features
+
+Every response carries `mode` and `status` (`ok`, `no_data` or `error`) beside
+the lens's payload. An unknown `mode` is a tool error.
 
 **Target Latency:** <100ms
 

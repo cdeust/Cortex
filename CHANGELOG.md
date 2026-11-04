@@ -16,6 +16,13 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `explore_features` passes client-side output validation: every response
+  carries the required `mode` and `status`, the declared `outputSchema` lists
+  the keys the handler returns (`dictionary`, `graph`, `domains`, `comparison`,
+  `persistentFeatures`…), and the description states the 9 persona dimensions
+  actually returned, without the drift it never computed. An unknown mode is
+  now a tool error rather than an error dict no schema could accept (#680).
+
 - Document ingestion reports partial wiki/summary/section writes with component
   receipts and failure reasons. Same-version retries resume missing components
   from durable rows and page content, including stored summaries with missing
