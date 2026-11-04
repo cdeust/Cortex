@@ -16,6 +16,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The README now states that both LongMemEval headline numbers (v4.14.1,
+  v4.20.0) describe the PostgreSQL store with the reranker, and the Storage
+  table no longer claims an "identical" retrieval contract on SQLite: the tool
+  interface is identical, and SQLite has no published retrieval-quality number
+  yet (#708).
 - The groomer coordinator no longer starts a consolidate cycle outside its
   lock in three failure cases (#683, ADR-1118). An existing `groomer.pid` that
   cannot be read (permission denied, I/O error) now raises
