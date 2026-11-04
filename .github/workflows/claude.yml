@@ -51,7 +51,9 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           set -euo pipefail
-          if ! is_pull="$(jq -r '.issue.pull_request != null' "$GITHUB_EVENT_PATH")" \
+          # jq propagates null, so `.issue.pull_request != null` reads false on an
+          # event without an issue object: such an event is malformed, not a plain issue.
+          if ! is_pull="$(jq -r 'if (.issue | type) == "object" then (.issue.pull_request != null) else "malformed" end' "$GITHUB_EVENT_PATH")" \
             || { [ "$is_pull" != true ] && [ "$is_pull" != false ]; }; then
             echo "::error::could not read the event at GITHUB_EVENT_PATH; refusing the fix target"
             exit 1
