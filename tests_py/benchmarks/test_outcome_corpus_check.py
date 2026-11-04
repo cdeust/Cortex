@@ -5,7 +5,8 @@ whose objects would be read from somewhere other than the snapshot it was
 given: an enclosing repository, a linked worktree's common directory, or a
 store borrowed through ``objects/info/alternates`` or a ``commondir`` file.
 It also rejects a ``cp -r`` copy of ``.git``, a symlink at ``.git`` or
-anywhere under ``objects/``, and an ``objects/`` it cannot fully list.
+anywhere under ``objects/``, and a directory under ``objects/`` the walk
+cannot list.
 A bare repository is the natural read-only snapshot and is accepted. Global
 git config never reaches the resolver, and git older than 2.32 is refused."""
 
@@ -169,14 +170,12 @@ def test_symlink_under_objects_raises(repo, tmp_path, relative):
     git(tmp_path, "clone", "-q", "--no-local", str(repo), str(clone))
     if relative == "pack-file":
         packs = sorted((clone / ".git" / "objects" / "pack").glob("pack-*.pack"))
+        assert packs, "a --no-local clone is packed"
         target = packs[0]
     else:
         target = clone / ".git" / relative
     elsewhere = tmp_path / "elsewhere"
-    if target.exists():
-        shutil.move(str(target), str(elsewhere))
-    else:
-        elsewhere.mkdir()
+    shutil.move(str(target), str(elsewhere))
     target.symlink_to(elsewhere)
     with pytest.raises(ValueError, match="symlink"):
         git_commit_resolver(clone)

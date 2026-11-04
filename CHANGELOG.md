@@ -101,10 +101,10 @@ adheres to [Semantic Versioning](https://semver.org/).
   self-contained repository root, or a commit key that is not one of its
   commits (`check_commit_keys`), stops the run instead of scoring every
   answer incorrect. Requires git 2.32 or newer. Git runs without global or
-  system config, so no `safe.directory` override applies; on git 2.35.2
-  and newer the corpus must belong to the user running it. Reasons and
-  decided values are exact-matched after normalisation against the
-  accepted list in the task key, with no similarity threshold.
+  system config, so no `safe.directory` override applies and the corpus
+  must belong to the user running it. Reasons and decided values are
+  exact-matched after normalisation against the accepted list in the task
+  key, with no similarity threshold.
 
 - Claude PR reviews use Anthropic's official direct PR workflow and its five
   upstream reviewer agents (ADR-1117). Reviewer configuration loads from trusted

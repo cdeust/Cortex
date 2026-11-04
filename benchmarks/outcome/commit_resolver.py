@@ -27,9 +27,13 @@ is a guard, the fresh clone is the guarantee.
 Environment: git 2.32 or newer is required and checked; a missing ``git``
 binary raises ``FileNotFoundError``. Git reads no global or system config
 and never fetches a missing object lazily (``GIT_NO_LAZY_FETCH``, honoured
-from git 2.44). Without a ``safe.directory`` override, git 2.35.2 and newer
-refuse a corpus owned by another user ("dubious ownership"), so the
-snapshot must belong to the user running the verifier.
+from git 2.44). No ``safe.directory`` override can reach it (global, system
+and command-line config are all excluded), so the snapshot must belong to
+the user running the verifier: git releases with the CVE-2022-24765 fix
+refuse anything else as "dubious ownership". The symlink guard is POSIX
+only (an NTFS junction is not a symlink to ``os.walk``). Shallow and
+partial clones pass the corpus check; ``check_commit_keys`` still rejects a
+key commit the snapshot does not contain.
 
 source: issue #343"""
 
@@ -39,6 +43,7 @@ import os
 import re
 import subprocess
 from collections.abc import Sequence
+from typing import NoReturn
 from pathlib import Path
 
 from benchmarks.outcome.answer_key import FAMILY_COMMIT, CommitResolver, OutcomeTask
@@ -105,7 +110,7 @@ def _same_path(found: str, expected: Path) -> bool:
     )
 
 
-def _uninspectable(error: OSError) -> None:
+def _uninspectable(error: OSError) -> NoReturn:
     raise ValueError(f"cannot inspect {error.filename}: {error}") from error
 
 
@@ -165,8 +170,8 @@ def git_commit_resolver(repo: Path) -> CommitResolver:
     A broken corpus stops the run instead of scoring every answer incorrect.
     Before any answer is resolved, a path git cannot open raises
     ``RuntimeError`` (with git's message), and a path that is not a
-    self-contained repository root (see the module docstring), an
-    uninspectable ``objects/`` or unexpected ``rev-parse`` output raises
+    self-contained repository root (see the module docstring), a directory
+    under ``objects/`` the walk cannot list or unexpected ``rev-parse`` output raises
     ``ValueError``; git older than 2.32 raises ``RuntimeError``, and a
     missing ``git`` binary ``FileNotFoundError``. The returned
     function raises ``ValueError`` for a name that is not lowercase hex
