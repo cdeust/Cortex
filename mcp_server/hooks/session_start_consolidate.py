@@ -110,7 +110,9 @@ def _ensure_coordinated_cycle(coord) -> str | None:
     table (ADR-1097 points 2, 3), an unreadable ``groomer.pid`` (ADR-1118)
     or an unreadable job state (ADR-1102) logs
     ERROR with the cause and returns None with nothing spawned or stamped;
-    the window stays registered only in the job-state case.
+    the window stays registered only in the job-state case. A failed spawn
+    returns ``SPAWN_FAILED`` with the period stamped and the window
+    registered (ADR-1118 point 4).
 
     source: ADR-1097 and ADR-1102 (unreadable groomer.pid: ADR-1118)"""
     from mcp_server.infrastructure.groomer_identity import (  # noqa: PLC0415 — hook latency boundary: see _maybe_background_consolidate

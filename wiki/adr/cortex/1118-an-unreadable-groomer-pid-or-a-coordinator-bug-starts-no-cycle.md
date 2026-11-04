@@ -10,7 +10,7 @@ title: An unreadable groomer.pid or a coordinator bug starts no cycle
 
 ## Status
 
-accepted. Amends ADR-0527 (the coordinator degrades to the legacy spawn when it is unavailable) and ADR-1097 point 5 (the legacy path remains for the coordinator failures ADR-1097 does not cover).
+accepted. Amends ADR-0527 (the coordinator degrades to the legacy spawn when it is unavailable) and ADR-1097 point 5 (the legacy path remains for the coordinator failures ADR-1097 does not cover). It also amends ADR-0527's `ensure_cycle` contract: a fifth outcome, `SPAWN_FAILED`, joins the four it lists, and `spawn_fn` is called once after the period is stamped, on `STARTED` or `SPAWN_FAILED`, no longer only on `STARTED`.
 
 ## Context
 
@@ -19,6 +19,8 @@ Issue #683: after ADR-1097, two failure paths of the groomer coordinator, and a 
 1. `GroomerCoordinator.is_groomer_running` caught `(OSError, ValueError)` and returned False. A missing or unparseable `groomer.pid` is correctly "not running", but every other `OSError` (permission denied, I/O error) read as "not running" too, so the next SessionStart spawned a cycle although a live one may hold the file.
 2. `_maybe_background_consolidate` caught `Exception` and called `_legacy_background_consolidate`, which bypasses the lock and the `groomer.pid` guard and writes a stamp, "<iso> (in-flight)", that `read_stamp` cannot parse. Any exception not handled earlier, including a bug in the coordinator, took this path. ADR-1097 point 5 gives I/O failures on the coordinator's own files as the case the legacy path remains for.
 3. A spawn that raised `OSError` inside `ensure_cycle` (from `Popen`, or from `child_command` when the launcher's parent directory cannot be searched) left the lock after the period was stamped and reached that legacy spawn.
+
+The title names the two paths of the issue; the third was found while reviewing the fix and is decided here too (point 4).
 
 The owner's rule is root cause or hard failure, no silent fallback.
 

@@ -19,6 +19,7 @@ from __future__ import annotations
 import errno
 import json
 import os
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -161,6 +162,7 @@ def test_coordinator_io_failure_keeps_the_documented_legacy_path(
     A cache root that is a regular file makes ``ensure_cycle``'s ``mkdir``
     raise a real ``OSError`` (no monkeypatch; works as root)."""
     consolidate, calls = start_hook
+    monkeypatch.delenv("CORTEX_CACHE_DIR", raising=False)  # wins over XDG
     not_a_dir = tmp_path / "cache-is-a-file"
     not_a_dir.write_text("", encoding="utf-8")
     monkeypatch.setenv("XDG_CACHE_HOME", str(not_a_dir))
@@ -172,6 +174,26 @@ def test_coordinator_io_failure_keeps_the_documented_legacy_path(
 
 
 # ── a failed spawn inside the lock ────────────────────────────────────────
+
+
+def test_spawn_returning_none_is_spawn_failed_and_keeps_the_period(coord):
+    """ADR-1118 point 4 at the coordinator: stamped before the spawn, no
+    ``groomer.pid``, not counted as a cycle, and no retry in the period."""
+    since = datetime.now(timezone.utc) - timedelta(seconds=1)
+
+    def stamped_then_fails():
+        assert coord.stamp_path.exists(), "spawn_fn runs after the stamp"
+        return
+
+    outcome = coord.ensure_cycle(period_hours=6.0, spawn_fn=stamped_then_fails)
+
+    assert outcome == groomer_coordinator.SPAWN_FAILED
+    assert not coord.pid_path.exists()
+    assert coord.count_cycles_since(since) == 0
+    retried = []
+    again = coord.ensure_cycle(period_hours=6.0, spawn_fn=lambda: retried.append(1))
+    assert again == groomer_coordinator.SKIPPED_FRESH
+    assert retried == []
 
 
 @pytest.fixture

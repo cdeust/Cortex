@@ -87,8 +87,9 @@ def hermetic_hook_env(
     """Return ``(env, project)``: ``base`` made hermetic as the module
     docstring describes, and a temp project directory to use as the cwd.
 
-    postcondition: a consolidate cycle is recorded as just run in the
-    coordinator state under ``tmp_path/home``.
+    postcondition: the consolidate period is stamped as just started in the
+    coordinator state under ``tmp_path/home`` (``runs.log`` records it as
+    ``spawn_failed``: the seed's ``spawn_fn`` starts nothing, ADR-1118).
     """
     home = tmp_path / "home"
     home.mkdir(exist_ok=True)
