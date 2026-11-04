@@ -3,6 +3,7 @@
 import json
 import re
 import shlex
+import subprocess
 import unittest
 
 from tests_py.scripts._ci_native_claude_support import (
@@ -74,9 +75,18 @@ class SettingsAgainstMentionJob(unittest.TestCase):
         denied = _bash_rules(args[args.index("--disallowedTools") + 1].split(","))
         self.assertIn(("uv", True), denied)
         self.assertIn(("curl", True), denied)
-        # The action also loads settings.local.json and restores it from the
-        # base branch, so a committed copy would reach the job unchecked.
-        self.assertFalse((ROOT / ".claude/settings.local.json").exists())
+        # The action also loads settings.local.json and restores .claude/ from
+        # the base branch, so a tracked copy (force-added past .gitignore) would
+        # reach the job unchecked; the untracked local copy is fine.
+        tracked = subprocess.run(
+            ["git", "ls-files", "--", ".claude/settings.local.json"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=30,
+        ).stdout
+        self.assertEqual(tracked, "")
         settings = json.loads(SETTINGS.read_text())
         self.assertLessEqual(set(settings), {"$schema", "permissions"})
         self.assertLessEqual(set(settings["permissions"]), {"allow", "deny"})

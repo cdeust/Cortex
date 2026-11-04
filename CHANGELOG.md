@@ -44,7 +44,8 @@ adheres to [Semantic Versioning](https://semver.org/).
   `curl` are denied outright, that file's rules are rewritten in word-bounded
   `:*` form (in effect once merged: the action restores the base branch's copy),
   and a test maps each of its Bash allow rules to an allowed prefix, a denied
-  prefix or a named exemption. A first step refuses a fix
+  prefix or a named exemption, pins the deny rules the job relies on and refuses a
+  tracked `settings.local.json`. A first step refuses a fix
   target whose head is a fork or the default branch and refuses when the event
   cannot be read or carries no issue object, the job is bound to 60 minutes, and
   the offline switches of the test-suite action are set (#855, #856).

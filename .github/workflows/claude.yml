@@ -169,10 +169,11 @@ jobs:
           # .claude/, .mcp.json and CLAUDE.md from the base branch
           # (src/entrypoints/run.ts, restore-config.ts): main's own
           # .claude/settings.json applies, and its allow rules add to this
-          # allowlist (the effective list is the union; test_ci_native_claude_
-          # settings maps every Bash allow rule of that file to a prefix here, a
-          # denied prefix or a named exemption: ruff format, python3 -m
-          # mcp_server.doctor, and pins the deny rules the job relies on). The
+          # allowlist (the effective list is the union;
+          # test_ci_native_claude_settings maps every Bash allow rule of that
+          # file to a prefix here, a denied prefix or a named exemption (ruff
+          # format, python3 -m mcp_server.doctor), and pins the deny rules the
+          # job relies on). The
           # project source stays loaded on purpose: it carries CLAUDE.md,
           # .claude/agents, .claude/commands and the file's deny rules;
           # --disallowedTools denies what a write-token job must not run (deny

@@ -128,14 +128,18 @@ class OwnerMentionTests(unittest.TestCase):
         self.assertEqual(project["run"], "pip install --no-deps --no-build-isolation .")
         self.assertEqual(project["env"], {"PIP_DISABLE_PIP_VERSION_CHECK": "1"})
         self.assertIn("SentenceTransformer('all-MiniLM-L6-v2'", model["run"])
-        # 5 attempts of at most 60 s and sleeps of 10+20+30+40 s fit the step.
-        self.assertIn("timeout 60 python -c", model["run"])
-        self.assertIn("for attempt in 1 2 3 4 5;", model["run"])
+
+    def test_model_download_retries_fit_the_step_timeout(self):
+        # 5 attempts of at most 60 s, each ending the step on success, with
+        # sleeps of 10+20+30+40 s between them, fit the step and leave room for
+        # the ::error:: line; the break must come before the sleep.
+        model = find_step(mention_job(), name="Pre-download embedding model")
         run = model["run"]
-        self.assertLess(
-            run.index('[ "$attempt" -lt 5 ] || break'), run.index("sleep $((")
-        )
-        self.assertIn("sleep $((attempt * 10))", run)
+        attempt = run.index("timeout 60 python -c")
+        self.assertIn("for attempt in 1 2 3 4 5;", run)
+        self.assertIn("device='cpu')\" && exit 0", run)
+        self.assertLess(attempt, run.index('[ "$attempt" -lt 5 ] || break'))
+        self.assertLess(run.index("|| break"), run.index("sleep $((attempt * 10))"))
         worst = 5 * 60 + sum(10 * a for a in range(1, 5))
         self.assertLess(worst, model["timeout-minutes"] * 60)
 
