@@ -2,11 +2,15 @@
 
 Spike 2026-05-13 found that recall results for design-decision queries
 were dominated by ``# Tool: Edit`` auto-captures from unrelated repos.
-The filter drops memories tagged ``auto-captured`` / ``tool:edit`` /
-``_backfill`` / ``stage-N`` etc. unless the caller opts in.
+The filter drops memories carrying a capture marker a Cortex writer emits
+(``auto-captured`` / ``tool:edit`` / ``_backfill`` etc.) unless the caller
+opts in. Words a user may choose (``audit``, ``wip``, ``stage-N``) never hide
+a memory (issue #706, ADR-1123).
 """
 
 from __future__ import annotations
+
+import pytest
 
 from mcp_server.handlers.recall_helpers import (
     LOW_SIGNAL_TAGS,
@@ -41,8 +45,31 @@ def test_backfill_import_is_dropped() -> None:
     assert dropped == 1
 
 
-def test_stage_report_is_dropped() -> None:
-    results = [_mem("stage 3 research verdict", "stage-3", "research")]
+# Tags no Cortex writer emits: before #706 each one hid the memory.
+USER_VOCABULARY_TAGS = (
+    "audit",
+    "automated",
+    "wip",
+    "progress",
+    "code-review",
+    "stage-1",
+    "stage-3",
+    "stage-11",
+)
+
+
+@pytest.mark.parametrize("tag", USER_VOCABULARY_TAGS)
+def test_user_vocabulary_tag_does_not_hide_memory(tag: str) -> None:
+    """Issue #706: a user's own memory tagged with an ordinary word is kept."""
+    results = [_mem(f"my note tagged {tag}", tag, "research")]
+    kept, dropped = filter_low_signal(results)
+    assert len(kept) == 1
+    assert dropped == 0
+
+
+def test_user_vocabulary_tag_beside_capture_marker_still_dropped() -> None:
+    """The capture marker, not the user word, decides."""
+    results = [_mem("# Tool: Bash\nls", "auto-captured", "tool:bash", "audit")]
     kept, dropped = filter_low_signal(results)
     assert kept == []
     assert dropped == 1
@@ -129,19 +156,32 @@ def test_missing_tags_key_kept() -> None:
 # ── Set membership invariants ─────────────────────────────────────────
 
 
-def test_low_signal_tags_covers_known_polluters() -> None:
-    """Pin the canonical set so a refactor can't silently shrink it."""
-    must_include = {
-        "auto-captured",
-        "tool:edit",
-        "tool:bash",
-        "_backfill",
-        "imported",
-        "session-summary",
-        "stage-1",
-        "stage-11",
-    }
-    assert must_include.issubset(LOW_SIGNAL_TAGS)
+def test_low_signal_tags_are_exactly_the_capture_markers() -> None:
+    """Pin the canonical set so a refactor can neither shrink it nor add
+    a word a user may choose (ADR-1123)."""
+    assert LOW_SIGNAL_TAGS == frozenset(
+        {
+            "auto-captured",
+            "_backfill",
+            "imported",
+            "session-summary",
+            "tool-output",
+            "tool:edit",
+            "tool:bash",
+            "tool:read",
+            "tool:write",
+            "tool:grep",
+            "tool:glob",
+            "tool:search",
+            "tool:webfetch",
+            "tool:websearch",
+            "tool:notebookedit",
+        }
+    )
+
+
+def test_low_signal_tags_exclude_user_vocabulary() -> None:
+    assert not (set(USER_VOCABULARY_TAGS) & LOW_SIGNAL_TAGS)
 
 
 def test_low_signal_tags_does_not_include_knowledge_signals() -> None:

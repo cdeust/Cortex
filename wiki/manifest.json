@@ -3659,6 +3659,10 @@
     "ADR-9852": {
       "mirror": "ADR-9852-restore-the-previous-head-when-a-superseding-memory-is-deleted.md",
       "path": "adr/cortex/9852-restore-the-previous-head-when-a-superseding-memory-is-deleted.md"
+    },
+    "ADR-1123": {
+      "mirror": "ADR-1123-user-tags-never-hide-a-memory-from-default-recall.md",
+      "path": "adr/cortex/1123-user-tags-never-hide-a-memory-from-default-recall.md"
     }
   },
   "project": "cortex",
