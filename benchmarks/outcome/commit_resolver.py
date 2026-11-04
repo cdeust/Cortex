@@ -50,8 +50,8 @@ _LOWER_HEX = re.compile(r"[0-9a-f]+")
 _MIN_GIT = (2, 32)
 
 # Git reads no global or system config, so CI and developer machines resolve
-# identically (repository-local config still applies), and never runs a
-# promisor fetch for an object it does not have.
+# identically (repository-local config still applies), and, from git 2.44,
+# never runs a promisor fetch for an object it does not have.
 _ISOLATED_ENV = {
     "GIT_CONFIG_GLOBAL": os.devnull,
     "GIT_CONFIG_NOSYSTEM": "1",
@@ -105,11 +105,18 @@ def _same_path(found: str, expected: Path) -> bool:
     )
 
 
+def _uninspectable(error: OSError) -> None:
+    raise ValueError(f"cannot inspect {error.filename}: {error}") from error
+
+
 def _reject_symlinks(repo: Path, git_dir: Path) -> None:
-    """Any symlink at ``.git`` or under ``objects/`` could point anywhere."""
+    """Any symlink at ``.git`` or under ``objects/`` could point anywhere.
+
+    A directory the walk cannot list raises instead of being skipped.
+    """
     if (repo / ".git").is_symlink() or (git_dir / "objects").is_symlink():
         raise ValueError(f"{repo}: .git or objects/ is a symlink")
-    for root, dirs, files in os.walk(git_dir / "objects"):
+    for root, dirs, files in os.walk(git_dir / "objects", onerror=_uninspectable):
         for name in dirs + files:
             if os.path.islink(os.path.join(root, name)):
                 raise ValueError(f"{repo}: {os.path.join(root, name)} is a symlink")
@@ -132,7 +139,6 @@ def _check_corpus(repo: Path) -> None:
     except ValueError as error:
         raise ValueError(f"{repo}: unexpected rev-parse output {info!r}") from error
     expected = repo if bare == "true" else repo / ".git"
-    _reject_symlinks(repo, expected)
     if not _same_path(git_dir, expected):
         raise ValueError(
             f"{repo} is not a self-contained repository root (git dir {git_dir})"
@@ -141,6 +147,9 @@ def _check_corpus(repo: Path) -> None:
         raise ValueError(
             f"{repo} is not a self-contained repository root (common dir {common_dir})"
         )
+    # After the root checks, so ``objects/`` is known to exist; `samefile`
+    # follows links, so only this walk catches a symlinked store.
+    _reject_symlinks(repo, expected)
     if (expected / "objects" / "info" / "alternates").exists():
         raise ValueError(f"{repo} borrows objects through objects/info/alternates")
 
@@ -156,8 +165,10 @@ def git_commit_resolver(repo: Path) -> CommitResolver:
     A broken corpus stops the run instead of scoring every answer incorrect.
     Before any answer is resolved, a path git cannot open raises
     ``RuntimeError`` (with git's message), and a path that is not a
-    self-contained repository root (see the module docstring) raises
-    ``ValueError``; git older than 2.32 raises ``RuntimeError``. The returned
+    self-contained repository root (see the module docstring), an
+    uninspectable ``objects/`` or unexpected ``rev-parse`` output raises
+    ``ValueError``; git older than 2.32 raises ``RuntimeError``, and a
+    missing ``git`` binary ``FileNotFoundError``. The returned
     function raises ``ValueError`` for a name that is not lowercase hex
     (``verify`` lowercases answers first) and ``RuntimeError`` if git fails
     mid-run.

@@ -3,8 +3,9 @@
 ``git_commit_resolver`` must refuse, before any answer is scored, a corpus
 whose objects would be read from somewhere other than the snapshot it was
 given: an enclosing repository, a linked worktree's common directory, or a
-store borrowed through ``objects/info/alternates``, a ``commondir`` file, a
-``cp -r`` copy of ``.git`` or a symlink at ``.git`` or under ``objects/``.
+store borrowed through ``objects/info/alternates`` or a ``commondir`` file.
+It also rejects a ``cp -r`` copy of ``.git``, a symlink at ``.git`` or
+anywhere under ``objects/``, and an ``objects/`` it cannot fully list.
 A bare repository is the natural read-only snapshot and is accepted. Global
 git config never reaches the resolver, and git older than 2.32 is refused."""
 
@@ -112,12 +113,14 @@ def test_global_config_does_not_reach_the_resolver(repo, tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(home))
     # Positive control: git < 2.38 ignores the setting, so the test would
     # prove nothing there.
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
     plain = subprocess.run(
         ["git", "-C", str(bare), "rev-parse", "--git-dir"],
         capture_output=True,
-        env={k: v for k, v in os.environ.items() if not k.startswith("GIT_")},
+        text=True,
+        env={**env, "GIT_CONFIG_NOSYSTEM": "1"},
     )
-    if plain.returncode == 0:
+    if plain.returncode == 0 or "safe.bareRepository" not in plain.stderr:
         pytest.skip("this git ignores safe.bareRepository; isolation untestable")
     head = git(repo, "rev-parse", "HEAD")
     assert git_commit_resolver(bare)(head[:8]) == head
@@ -136,15 +139,18 @@ def _fake_git_version(monkeypatch, output, returncode=0):
     monkeypatch.setattr(subprocess, "run", fake_run)
 
 
-@pytest.mark.parametrize("output", ["git version 2.31.9\n", "git version garbage\n"])
+@pytest.mark.parametrize(
+    "output", ["git version 2.31.9\n", "git version 1.99.0\n", "git version garbage\n"]
+)
 def test_old_or_unparsable_git_is_refused(monkeypatch, repo, output):
     _fake_git_version(monkeypatch, output)
     with pytest.raises(RuntimeError, match="git >= 2.32 required"):
         git_commit_resolver(repo)
 
 
-def test_git_2_32_is_accepted(monkeypatch, repo):
-    _fake_git_version(monkeypatch, "git version 2.32.0\n")
+@pytest.mark.parametrize("output", ["git version 2.32.0\n", "git version 3.0.0\n"])
+def test_git_2_32_and_later_are_accepted(monkeypatch, repo, output):
+    _fake_git_version(monkeypatch, output)
     head = git(repo, "rev-parse", "HEAD")
     assert git_commit_resolver(repo)(head[:8]) == head
 
@@ -155,11 +161,17 @@ def test_failing_git_version_raises_runtime_error(monkeypatch, repo):
         git_commit_resolver(repo)
 
 
-@pytest.mark.parametrize("relative", ["objects", "objects/pack", "objects/ab"])
+@pytest.mark.parametrize("relative", ["objects", "objects/pack", "pack-file"])
 def test_symlink_under_objects_raises(repo, tmp_path, relative):
+    # "pack-file" symlinks a file two levels down, so it pins both the
+    # recursion and the check on files, not only on directories.
     clone = tmp_path / "clone"
     git(tmp_path, "clone", "-q", "--no-local", str(repo), str(clone))
-    target = clone / ".git" / relative
+    if relative == "pack-file":
+        packs = sorted((clone / ".git" / "objects" / "pack").glob("pack-*.pack"))
+        target = packs[0]
+    else:
+        target = clone / ".git" / relative
     elsewhere = tmp_path / "elsewhere"
     if target.exists():
         shutil.move(str(target), str(elsewhere))
@@ -168,3 +180,31 @@ def test_symlink_under_objects_raises(repo, tmp_path, relative):
     target.symlink_to(elsewhere)
     with pytest.raises(ValueError, match="symlink"):
         git_commit_resolver(clone)
+
+
+def test_unlistable_objects_directory_raises(repo, monkeypatch):
+    # Running as root makes a 0o111 directory listable, so the failure is
+    # simulated: the walk must raise, not skip the directory.
+    real_scandir = os.scandir
+
+    def scandir(path="."):
+        if str(path).endswith(os.path.join(".git", "objects", "pack")):
+            raise PermissionError(13, "Permission denied", str(path))
+        return real_scandir(path)
+
+    monkeypatch.setattr(os, "scandir", scandir)
+    with pytest.raises(ValueError, match="cannot inspect"):
+        git_commit_resolver(repo)
+
+
+def test_unexpected_rev_parse_output_raises(monkeypatch, repo):
+    real_run = subprocess.run
+
+    def fake_run(args, **kwargs):
+        if "--absolute-git-dir" in args:
+            return subprocess.CompletedProcess(args, 0, "false\n/only/one\n", "")
+        return real_run(args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    with pytest.raises(ValueError, match="unexpected rev-parse output"):
+        git_commit_resolver(repo)
