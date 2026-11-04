@@ -11,10 +11,9 @@ permissions: {}
 jobs:
   review:
     name: Claude review
-    # Dependabot-triggered pull_request events receive Dependabot secrets only,
-    # so secrets.CLAUDE_CODE_OAUTH_TOKEN is empty there and the action aborts with
-    # "Environment variable validation failed" (run 41180098727, PR #844).
-    # source: https://docs.github.com/en/code-security/dependabot/working-with-dependabot/automating-dependabot-with-github-actions#responding-to-events
+    # A Dependabot-triggered run receives Dependabot secrets only, never the
+    # Actions OAuth token: skip it, as the legacy review job does. A push by a
+    # person to the same branch runs this review with the Actions secrets.
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository
       && !github.event.pull_request.draft
@@ -31,6 +30,18 @@ jobs:
           ref: main
           fetch-depth: 1
           persist-credentials: false
+      # source: pinned action src/modes/tag/index.ts#L79 fetches the PR head
+      # (src/github/operations/branch.ts#L241) before its own git auth, and
+      # src/github/operations/git-config.ts#L78-L81 unsets this local header
+      # before Claude runs. Private repositories cannot fetch anonymously.
+      - name: Authorize pinned action fetch
+        env:
+          FETCH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          basic="$(printf 'x-access-token:%s' "$FETCH_TOKEN" | base64 | tr -d '\n')"
+          echo "::add-mask::$basic"
+          git config --local "http.$GITHUB_SERVER_URL/.extraheader" "AUTHORIZATION: basic $basic"
       - name: Install subprocess isolation
         run: |
           sudo apt-get update
@@ -48,12 +59,14 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # Native progress/final publication; pinned action restores base config.
           track_progress: true
-          allowed_bots: "claude[bot],chatgpt-codex-connector[bot],dependabot[bot]"
+          allowed_bots: "claude[bot],chatgpt-codex-connector[bot]"
           prompt: |
             /review-pr REPO: ${{ github.repository }} PR_NUMBER: ${{ github.event.pull_request.number }}
             Complete all five reviews using foreground agents and wait for their actual reports.
             Use `gh pr comment` for top-level feedback and a completion summary, including when there are no findings.
             Only post GitHub comments - don't submit review text as messages.
+            End the completion summary with this exact last line, unchanged except `true` becomes `false` when any finding blocks the merge:
+            <!-- claude-review-verdict:v1 {"head":"${{ github.event.pull_request.head.sha }}","merge":true} -->
           # Scoped gh permissions are from upstream docs/solutions.md.
           claude_args: |
             --strict-mcp-config
