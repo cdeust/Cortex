@@ -30,6 +30,9 @@ def postgresql_marker(tmp_path, monkeypatch):
     monkeypatch.setattr(backend_marker, "BACKEND_MARKER_PATH", marker)
     get_memory_settings.cache_clear()
     yield marker
+    # Undo monkeypatch first: a setenv on a key popped above is recorded as
+    # absent and would be deleted after the whole restore below.
+    monkeypatch.undo()
     os.environ.clear()
     os.environ.update(saved)
     get_memory_settings.cache_clear()

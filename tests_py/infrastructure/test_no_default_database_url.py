@@ -48,6 +48,9 @@ def no_named_url(monkeypatch, tmp_path):
     )
     get_memory_settings.cache_clear()
     yield monkeypatch
+    # monkeypatch recorded the keys this fixture popped as absent; undo it first
+    # so its teardown cannot delete them again after the whole restore below.
+    monkeypatch.undo()
     os.environ.clear()
     os.environ.update(saved)
     get_memory_settings.cache_clear()
