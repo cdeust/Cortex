@@ -97,8 +97,60 @@ class DeletionTests(unittest.TestCase):
         self.assertEqual(cmd.changed_lines(diff), {"mcp_server/m.py": {3, 4}})
 
     def test_a_changed_decorator_selects_its_function(self):
-        src = "import a\n\n@a.b\ndef f():\n    return 1\n"
+        src = "\n\n@staticmethod\ndef f():\n    return 1\n"
         self.assertEqual(cmd.touched_prefixes(src, {3}, "m"), ["m.x_f__mutmut_"])
+
+
+class MethodAndDecoratorTests(unittest.TestCase):
+    CLASS = (
+        "class K:\n    def a(self):\n        return 1\n\n"
+        "    def c(self):\n        return 3\n"
+    )
+
+    def lines(self, diff):
+        lines, cuts = cmd.changed_lines_ex("+++ b/mcp_server/m.py\n" + diff)
+        return lines.get("mcp_server/m.py", set()), cuts.get("mcp_server/m.py", set())
+
+    def test_a_deleted_method_selects_neither_neighbour(self):
+        lines, cuts = self.lines(
+            "@@ -5,3 +4,0 @@\n-    def b(self):\n-        return 2\n-\n"
+        )
+        self.assertEqual(lines, set())
+        self.assertEqual(cmd.touched_prefixes(self.CLASS, lines, "m", cuts), [])
+
+    def test_a_deleted_nested_function_selects_its_enclosing_function(self):
+        src = "def f():\n    x = 1\n    return x\n"
+        lines, cuts = self.lines("@@ -2,2 +1,0 @@\n-    def g():\n-        return 2\n")
+        self.assertEqual(
+            cmd.touched_prefixes(src, lines, "m", cuts), ["m.x_f__mutmut_"]
+        )
+
+    def test_a_decorator_mutmut_cannot_handle_is_skipped_and_reported(self):
+        src = "import functools\n\n@functools.cache\ndef f():\n    return 1\n"
+        skipped = []
+        self.assertEqual(cmd.touched_prefixes(src, {5}, "m", skipped=skipped), [])
+        self.assertEqual(skipped, ["m.x_f__mutmut_"])
+
+    def test_staticmethod_and_classmethod_are_still_mutated(self):
+        src = "class K:\n    @classmethod\n    def f(cls):\n        return 1\n"
+        self.assertEqual(cmd.touched_prefixes(src, {4}, "m"), ["m.xǁKǁf__mutmut_"])
+
+    def test_plan_prints_what_mutmut_cannot_mutate_without_failing(self):
+        root = Path(tempfile.mkdtemp())
+        (root / "mcp_server").mkdir()
+        (root / "mcp_server" / "m.py").write_text(
+            "import functools\n\n@functools.cache\ndef f():\n    return 1\n"
+        )
+        diff = "+++ b/mcp_server/m.py\n@@ -5 +5 @@\n"
+        notices = []
+        self.assertEqual(cmd.plan(diff, root, notices), ([], []))
+        self.assertEqual(len(notices), 1)
+        self.assertIn("m.x_f__mutmut_", notices[0])
+
+    def test_the_mutation_sandbox_carries_the_benchmarks_tests_import(self):
+        text = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        also_copy = text.split("also_copy = [", 1)[1].split("]", 1)[0]
+        self.assertIn('"benchmarks"', also_copy)
 
 
 class UntestedMutantTests(unittest.TestCase):
