@@ -6,6 +6,11 @@ incident motivating it.
 
 from __future__ import annotations
 
+import os
+
+import pytest
+
+from benchmarks.lib import machine_load_snapshot as snapshot_module
 from benchmarks.lib.machine_load_snapshot import machine_load_snapshot
 
 _LOAD_KEYS = {
@@ -16,6 +21,7 @@ _LOAD_KEYS = {
     "concurrent_pytest_processes",
     "concurrent_docker_containers",
 }
+_LOAD_AVERAGE_KEYS = ("load_average_1m", "load_average_5m", "load_average_15m")
 
 
 class TestMachineLoadSnapshot:
@@ -23,11 +29,34 @@ class TestMachineLoadSnapshot:
         snap = machine_load_snapshot()
         assert set(snap) == _LOAD_KEYS
 
+    @pytest.mark.skipif(
+        not hasattr(os, "getloadavg"), reason="os.getloadavg is Unix-only"
+    )
     def test_load_averages_are_nonnegative_floats_on_a_posix_machine(self):
         snap = machine_load_snapshot()
-        for key in ("load_average_1m", "load_average_5m", "load_average_15m"):
+        for key in _LOAD_AVERAGE_KEYS:
             assert isinstance(snap[key], float)
             assert snap[key] >= 0.0
+
+    def test_load_averages_are_none_where_os_has_no_getloadavg(self, monkeypatch):
+        """Windows has no ``os.getloadavg`` (CPython docs: Availability:
+        Unix), so the attribute lookup itself fails. Issue #692 class 4:
+        13 benchmark tests failed on Windows with AttributeError."""
+        monkeypatch.delattr(snapshot_module.os, "getloadavg", raising=False)
+        snap = machine_load_snapshot()
+        assert [snap[key] for key in _LOAD_AVERAGE_KEYS] == [None, None, None]
+
+    def test_load_averages_are_none_when_getloadavg_raises(self, monkeypatch):
+        """CPython docs: raises OSError if the load average was unobtainable."""
+
+        def _unobtainable():
+            raise OSError("load average unobtainable")
+
+        monkeypatch.setattr(
+            snapshot_module.os, "getloadavg", _unobtainable, raising=False
+        )
+        snap = machine_load_snapshot()
+        assert [snap[key] for key in _LOAD_AVERAGE_KEYS] == [None, None, None]
 
     def test_cpu_count_is_a_positive_int(self):
         snap = machine_load_snapshot()

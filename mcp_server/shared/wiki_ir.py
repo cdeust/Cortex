@@ -5,9 +5,9 @@ source: ADR-0681"""
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Literal, get_args
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 # source: ADR-0681
@@ -23,6 +23,63 @@ ClaimType = Literal[
     "limitation",
     "reference",
 ]
+
+
+# source: ISO 8601-1:2019 §3.2 (calendar date and time-of-day components); #717
+TemporalPrecision = Literal["year", "month", "day", "hour", "minute", "second"]
+# source: datetime components finer than each TemporalPrecision, coarsest first; #717
+_FINER_COMPONENTS = ("month", "day", "hour", "minute", "second", "microsecond")
+
+
+class TimeBound(BaseModel):
+    """One end of an event's time, exactly as precise as its source stated (#717).
+
+    ``value`` is naive when the source names no zone, aware with the stated
+    offset when it does. Components finer than ``precision`` sit at their
+    minimum: "March 2026" is (2026-03-01, "month"), never a known day.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    value: datetime
+    precision: TemporalPrecision
+
+    @model_validator(mode="after")
+    def _no_invented_precision(self) -> TimeBound:
+        start = get_args(TemporalPrecision).index(self.precision)
+        for name in _FINER_COMPONENTS[start:]:
+            if getattr(self.value, name) != (1 if name in ("month", "day") else 0):
+                raise ValueError(f"{name} is finer than precision {self.precision!r}")
+        return self
+
+
+class EventTime(BaseModel):
+    """When a claim's event occurred, distinct from its extraction (#717).
+
+    ``unknown``: no bound. ``point``: ``start`` only. ``interval``: at least
+    one bound, a missing one being unknown.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["unknown", "point", "interval"] = "unknown"
+    start: TimeBound | None = None
+    end: TimeBound | None = None
+
+    @model_validator(mode="after")
+    def _bounds_match_kind(self) -> EventTime:
+        if self.kind == "unknown" and (self.start or self.end):
+            raise ValueError("an unknown event time carries no bound")
+        if self.kind == "point" and (self.start is None or self.end is not None):
+            raise ValueError("a point event time carries start only")
+        if self.kind == "interval" and self.start is None and self.end is None:
+            raise ValueError("an interval carries at least one bound")
+        if self.start and self.end:
+            if (self.start.value.tzinfo is None) != (self.end.value.tzinfo is None):
+                raise ValueError("interval bounds must both state a zone, or neither")
+            if self.start.value > self.end.value:
+                raise ValueError("interval start is after its end")
+        return self
 
 
 class ClaimEvent(BaseModel):
@@ -45,6 +102,8 @@ class ClaimEvent(BaseModel):
     confidence: float = Field(0.5, ge=0.0, le=1.0)
     supersedes: int | None = None
     extracted_at: datetime | None = None
+    # Never derived from extracted_at: a claim with no stated date stays unknown.
+    event_time: EventTime = Field(default_factory=EventTime)
 
 
 class EvidenceRef(BaseModel):

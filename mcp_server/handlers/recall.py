@@ -259,17 +259,18 @@ schema = {
             "agent_topic": {
                 "type": "string",
                 "description": (
-                    "Restrict to memories produced under a specific agent "
-                    "context tag (subagent topic isolation)."
+                    "Rank memories written under this agent context tag "
+                    "higher. A ranking boost, not a filter: other agents' "
+                    "memories still match (docs/agent-scope.md)."
                 ),
                 "examples": ["engineer", "researcher", "reviewer"],
             },
             "include_low_signal": {
                 "type": "boolean",
                 "description": (
-                    # source: ADR-0430
+                    # source: ADR-0430 (filter), ADR-1123 (scope)
                     "When false (default), drops memories tagged as auto-captures "
-                    "(``auto-captured``, ``tool:edit``, ``_backfill``, ``stage-N``, "
+                    "(``auto-captured``, ``tool:edit``, ``_backfill``, ``imported``, "
                     "``session-summary``, …) so curated content (ADRs, lessons, "
                     "conventions) surfaces in the first few results. Set true for "
                     "debugging / replay tooling that needs the raw memory feed."

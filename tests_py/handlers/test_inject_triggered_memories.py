@@ -43,6 +43,12 @@ class TestInjectionFiltering:
         out = inject_triggered_memories([], "ship the deploy", store)
         assert out == []
 
+    def test_user_vocabulary_tag_does_not_block_injection(self):
+        """Issue #706: a user's tag such as ``wip`` never hides the memory."""
+        store = _store([_trigger()], {1: _mem(tags=["wip", "stage-3"])})
+        out = inject_triggered_memories([], "ship the deploy", store)
+        assert len(out) == 1
+
     def test_clean_memory_injected_with_flag(self):
         store = _store([_trigger()], {1: _mem()})
         out = inject_triggered_memories([], "ship the deploy", store)
