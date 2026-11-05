@@ -49,6 +49,13 @@ adheres to [Semantic Versioning](https://semver.org/).
   the SessionStart session count read `$CLAUDE_CONFIG_DIR/projects` when the
   variable is set, instead of always `~/.claude/projects`. `CORTEX_CLAUDE_DIR`
   still wins, and Cortex's own data (store, profiles, wiki) does not move.
+- A user's own tags no longer hide a memory from default recall (#706,
+  ADR-1123). The low-signal filter of `recall` and of trigger injection now
+  drops only capture markers (`auto-captured`, `tool:<name>`, `_backfill`,
+  `imported`, `session-summary`, emitted by Cortex writers, and `tool-output`,
+  listed in #706);
+  `audit`, `automated`, `wip`, `progress`, `code-review` and `stage-1` to
+  `stage-11` no longer drop the memory. The wiki admission list is unchanged.
 - The benchmark machine-load snapshot records no load average on Windows
   instead of raising: `os.getloadavg` does not exist there, and the
   `AttributeError` escaped the `except OSError` (#692 class 4, 13 tests).
