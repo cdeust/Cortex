@@ -52,27 +52,38 @@ def in_scope(name: str, prefixes: list[str]) -> bool:
 _HEADER = re.compile(r"-(?:async\s+def\b|def\b|class\b)")
 
 
-def _removes_a_definition(removed: list[str]) -> bool:
-    """True when the deleted block is a whole top-level definition.
+def _is_decorator(line: str) -> bool:
+    return line.startswith("-@")
 
-    Decorator lines and blanks are skipped; the first other line must be a `def` or
-    `class` header at column 0. A lone deleted decorator leaves its function behind,
-    changed, so it is not a removed definition.
+
+def _touched_by_deletion(removed: list[str], start: int) -> set[int]:
+    """Surviving lines a pure deletion changed; `start` is the line before the cut.
+
+    - a whole top-level definition removed: nothing that survives changed, except the
+      function whose decorators ended the block, whose header is line `start + 1`;
+    - only decorators and blanks removed: the function below lost them, line
+      `start + 1`; the line before the cut belongs to whatever precedes;
+    - anything else is a cut inside a function: the anchor and the next line.
     """
-    for line in removed:
-        if not line[1:].strip() or line.startswith("-@"):
-            continue
-        return bool(_HEADER.match(line))
-    return False
+    body = [line for line in removed if line[1:].strip()]
+    header = next((i for i, line in enumerate(body) if _HEADER.match(line)), None)
+    leading = 0
+    while leading < len(body) and _is_decorator(body[leading]):
+        leading += 1
+    if header is not None and header == leading:
+        trailing = len(body) > header + 1 and _is_decorator(body[-1])
+        return {start + 1} if trailing else set()
+    if body and leading == len(body):
+        return {start + 1}
+    return {start, start + 1}
 
 
 def changed_lines(diff_text: str) -> dict[str, set[int]]:
     """Lines added or touched per Python file under mcp_server, from `git diff -U0`.
 
-    A pure deletion anchors on the line before the cut. When the deleted block is a
-    whole top-level definition nothing that survives was changed and the hunk is
-    dropped; otherwise the anchor and the next line count as touched, and
-    `touched_prefixes` lets a function own the blank lines that trail it.
+    A pure deletion anchors on the line before the cut; `_touched_by_deletion` says
+    which surviving lines it changed, and `touched_prefixes` lets a function own the
+    blank lines that trail it.
     """
     result: dict[str, set[int]] = {}
     current = None
@@ -81,11 +92,15 @@ def changed_lines(diff_text: str) -> dict[str, set[int]]:
 
     def close() -> None:
         nonlocal pending, removed
-        if pending and current and not _removes_a_definition(removed):
-            start, count = pending
-            result.setdefault(current, set()).update(
-                range(start, start + max(count, 2 if count == 0 else 1))
+        if pending and current:
+            first, count = pending
+            touched = (
+                _touched_by_deletion(removed, first)
+                if count == 0
+                else set(range(first, first + count))
             )
+            if touched:
+                result.setdefault(current, set()).update(touched)
         pending, removed = None, []
 
     for line in diff_text.splitlines():
@@ -243,7 +258,7 @@ def base_diff(base_ref: str) -> str:
 
 
 def untested(results: str, prefixes: list[str]) -> list[str]:
-    """In-scope mutants no test reached: `mutmut results` lines `name: no tests`."""
+    """In-scope mutants no test killed: `mutmut results` lines in NOT_KILLED."""
     found = []
     for line in results.splitlines():
         name, _, status = line.strip().partition(":")
@@ -257,7 +272,7 @@ def main(argv: list[str]) -> int:
         prefixes = scope_prefixes()
         names = untested(sys.stdin.read(), prefixes) if prefixes else []
         for name in names:
-            print(f"!!! mutant not killed (no test, timeout): {name}", file=sys.stderr)
+            print(f"!!! mutant not killed: {name}", file=sys.stderr)
         return 1 if names else 0
     base_ref = os.environ.get("GITHUB_BASE_REF", "")
     if not base_ref:
