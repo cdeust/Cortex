@@ -47,10 +47,18 @@ not executed.
   file stem, falling back to `session_id`
   (`session_lifecycle.py:240-241`, `mcp_server/shared/injection_markers.py:41-47`); the
   profile update is keyed by `sha256(session_id)`
-  (`session_lifecycle.py:359-372`). *Inferred:* a Codex session continued
-  into a second rollout file gets two log rows but one profile update, so
-  the second file's activity never reaches the profile — acceptance item 1
-  of #716 fails on the profile path.
+  (`session_lifecycle.py:359-372`). A Codex session continued into a
+  second rollout file is lost at two places, depending on the path:
+  - *Queued Codex delivery* (the hook path): `enqueue` keys the job by
+    `sha256(session_id)` alone, returns when that job's completed receipt
+    exists, and `os.link` keeps the first payload of a job still pending
+    (`plugins/hypermnesia-mcp-codex/scripts/session_queue.py:89-111`). The
+    second SessionEnd never reaches the lifecycle handler: no second log
+    row, no second profile update. This intake dedup is the first blocker
+    for acceptance item 1 of #716.
+  - *Direct lifecycle call* (no queue): *inferred* from the two keys above,
+    two log rows but one profile update, so the second file's activity
+    never reaches the profile.
 - **Duplicate delivery.** Log row skipped when its `sessionId` is already
   present (`session_lifecycle.py:257-258`), but only the last 1000 rows are
   kept (`:259-261`), so a replay older than that window appends again
@@ -113,9 +121,10 @@ not executed.
 ## What a later slice of #716 can reuse
 
 - ADR-1084's queue-then-receipt pattern (P1) is the only replay-safe
-  delivery in the tree; it is keyed by `session_id`, not by file, which is
-  the right key for a multi-file Codex session but is not applied to the
-  session-log row.
+  delivery in the tree. It is keyed by `session_id` alone, so it treats a
+  second rollout of the same session as a duplicate and drops it: reusing
+  it for multi-file capture needs a delivery identity that also names the
+  file (or the turns it carries), not only the session.
 - The exact-replay dedup (P2) absorbs identical replays only; it cannot
   express "turn N of session S was replaced".
 - Nothing here implements a durable cursor, prefix-rewrite detection or
