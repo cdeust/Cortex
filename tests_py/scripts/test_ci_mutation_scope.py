@@ -94,7 +94,8 @@ def _sandbox(tmp_path: Path) -> Path:
     return root
 
 
-def _gate(bash, tmp_path, *, prefixes, rc=0, stats="1", mutants=""):
+def _gate(bash, tmp_path, prefixes, **fake):
+    """Run the real script; `fake` sets the fake mutmut's rc, stats and mutants."""
     root = _sandbox(tmp_path)
     args = tmp_path / "args.txt"
     env = {
@@ -102,9 +103,9 @@ def _gate(bash, tmp_path, *, prefixes, rc=0, stats="1", mutants=""):
         "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}",
         "MUTATION_ONLY_PREFIXES": prefixes,
         "FAKE_ARGS": str(args),
-        "FAKE_RC": str(rc),
-        "FAKE_STATS": stats,
-        "FAKE_MUTANTS": mutants,
+        "FAKE_RC": str(fake.get("rc", 0)),
+        "FAKE_STATS": fake.get("stats", "1"),
+        "FAKE_MUTANTS": fake.get("mutants", ""),
     }
     script = str(root / "scripts" / "mutation_check.sh")
     done = subprocess.run(
@@ -119,14 +120,14 @@ def _gate(bash, tmp_path, *, prefixes, rc=0, stats="1", mutants=""):
 
 @pytest.mark.parametrize("bash", BASHES, ids=lambda path: f"bash={path}")
 def test_a_scoped_run_names_only_the_changed_functions(bash, tmp_path):
-    done, ran = _gate(bash, tmp_path, prefixes=PREFIX)
+    done, ran = _gate(bash, tmp_path, PREFIX)
     assert done.returncode == 0, done.stderr
     assert ran == [f"{PREFIX}*"]
 
 
 @pytest.mark.parametrize("bash", BASHES, ids=lambda path: f"bash={path}")
 def test_without_a_scope_every_mutant_runs_as_before(bash, tmp_path):
-    done, ran = _gate(bash, tmp_path, prefixes="")
+    done, ran = _gate(bash, tmp_path, "")
     assert done.returncode == 0, done.stderr
     assert ran == []
 
@@ -134,18 +135,18 @@ def test_without_a_scope_every_mutant_runs_as_before(bash, tmp_path):
 @pytest.mark.parametrize("bash", BASHES, ids=lambda path: f"bash={path}")
 def test_changed_functions_without_a_mutant_have_nothing_to_judge(bash, tmp_path):
     other = '"m.x_other__mutmut_1": null'
-    done, _ = _gate(bash, tmp_path, prefixes=PREFIX, rc=1, mutants=other)
+    done, _ = _gate(bash, tmp_path, PREFIX, rc=1, mutants=other)
     assert done.returncode == 0, done.stderr
     assert "hold no mutant" in done.stdout
 
 
 @pytest.mark.parametrize("bash", BASHES, ids=lambda path: f"bash={path}")
 def test_a_failure_before_the_stats_file_still_fails(bash, tmp_path):
-    done, _ = _gate(bash, tmp_path, prefixes=PREFIX, rc=1, stats="")
+    done, _ = _gate(bash, tmp_path, PREFIX, rc=1, stats="")
     assert done.returncode == 1
 
 
 @pytest.mark.parametrize("bash", BASHES, ids=lambda path: f"bash={path}")
 def test_a_failure_with_mutants_in_scope_still_fails(bash, tmp_path):
-    done, _ = _gate(bash, tmp_path, prefixes=PREFIX, rc=1, mutants=f'"{PREFIX}1": null')
+    done, _ = _gate(bash, tmp_path, PREFIX, rc=1, mutants=f'"{PREFIX}1": null')
     assert done.returncode == 1
