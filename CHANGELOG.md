@@ -200,6 +200,13 @@ adheres to [Semantic Versioning](https://semver.org/).
   `docs/audits/transcript-capture-producers-2026-11-05.md` lists the five
   producers, their session keys, dedups and replay behaviour. No producer keeps
   a cursor into a transcript and none discovers Codex rollouts.
+- `python -m mcp_server.doctor` names the artifact it runs (#729, slice 1). For an
+  installed wheel: its version and a sha256 over the `mcp_server` rows of its
+  `RECORD`, each member re-hashed on disk (a member that differs from the RECORD
+  fails this optional check). For a source tree or an editable install: its git
+  revision, any uncommitted `mcp_server` change and the same digest over its files,
+  labelled as source evidence, not a distributed artifact. A wheel built from a
+  revision gives the digest of that revision's tree.
 - `benchmarks/outcome/paired_delta.py`: scoring core of the longitudinal
   outcome benchmark (first slice of #343). Pairs `recall` and `no_recall`
   trials strictly by task and repeat, and reports the mean delta of
