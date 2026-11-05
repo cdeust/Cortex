@@ -8,6 +8,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Pull requests must kill every mutant in the functions they change (ADR-1122).
+  `scripts/ci_unit.sh` ends with `scripts/ci_mutation_diff.py`, which mutates the
+  changed functions of `mcp_server` with their unit tests and accepts only
+  registered equivalents; outside a PR it does nothing.
 - The Claude review verdict decides the merge (ADR-1121). The post-merge
   resolver merges a PR only when the latest `claude[bot]` verdict on its head
   is `Verdict: approve` and links the `claude-review.yml` run of that head whose

@@ -50,7 +50,7 @@ open(path, "w").write(src)
 PYEOF
 
 echo ">>> mutating: $* | tests: $TESTS"
-uv run mutmut run 2>&1 | tee "$RUN_LOG"
+uv run mutmut run ${MUTMUT_MAX_CHILDREN:+--max-children "$MUTMUT_MAX_CHILDREN"} 2>&1 | tee "$RUN_LOG"
 
 # source: ADR-0770
 TALLY="$(tr '\r' '\n' < "$RUN_LOG" | grep -oE '🙁 [0-9]+' | tail -1 | grep -oE '[0-9]+' || true)"
@@ -59,6 +59,12 @@ TALLY="${TALLY:-0}"
 echo ">>> mutmut-reported survivors (must be empty, or documented equivalents):"
 RESULTS="$(uv run mutmut results)"
 LISTED="$(printf '%s\n' "$RESULTS" | grep -cE ': *survived[[:space:]]*$' || true)"
+
+# source: ADR-1122. Inside a pull request scope, a mutant no test reaches (mutmut
+# reports it as "no tests", not as a survivor) fails the gate as well.
+if ! printf '%s\n' "$RESULTS" | python3 "$ROOT/scripts/ci_mutation_diff.py" --untested; then
+  exit 1
+fi
 
 if [ "$TALLY" != "$LISTED" ]; then
   {
