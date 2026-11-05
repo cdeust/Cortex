@@ -11,7 +11,7 @@ from typing import Any, Awaitable, Callable
 from mcp.server.mcpserver.exceptions import ToolError
 
 from mcp_server.shared.json_native import to_json_native
-from mcp_server.handlers.admission import admit
+from mcp_server.handlers.admission import run_admitted
 from mcp_server.handlers.request_transaction import handler_transaction_scope
 from mcp_server.observability import metrics
 
@@ -97,6 +97,19 @@ def _run_coroutine_on_thread(
             pass
 
 
+def _timed_handler_run(
+    tool_name: str,
+    handler_fn: Callable[..., Awaitable[dict]],
+    args: dict[str, Any],
+) -> dict:
+    """Time the handler on its worker thread, so a run whose caller was
+    cancelled is still measured (issue #728).
+
+    source: ADR-0639"""
+    with metrics.Timer("cortex_tool_duration_seconds", {"tool": tool_name}):
+        return _run_coroutine_on_thread(handler_fn, args)
+
+
 async def safe_handler(
     handler_fn: Callable[..., Awaitable[dict]],
     args: dict[str, Any],
@@ -113,14 +126,9 @@ async def safe_handler(
     source: ADR-0691"""
     try:
         if tool_name:
-            async with admit(tool_name):
-                with metrics.Timer(
-                    "cortex_tool_duration_seconds",
-                    {"tool": tool_name},
-                ):
-                    result = await asyncio.to_thread(
-                        _run_coroutine_on_thread, handler_fn, args
-                    )
+            result = await run_admitted(
+                tool_name, _timed_handler_run, tool_name, handler_fn, args
+            )
             metrics.inc_counter(
                 "cortex_tool_calls_total",
                 {"tool": tool_name, "status": "ok"},
