@@ -135,10 +135,13 @@ The only outbound network activity is:
    `gh attestation verify <archive> --repo cdeust/Cortex --source-ref refs/heads/main`
    (the workflow publishes only from main).
 2. **One-time model download.** On first use, the open-source embedding model
-   (`sentence-transformers`, all-MiniLM-L6-v2) and the reranking model
-   (`flashrank`, ms-marco-MiniLM) are downloaded from the public Hugging Face
-   model hub. These transfers fetch **model files only** — no user content is
-   sent. After the first download the models run fully offline. To forbid the
+   (`sentence-transformers`, all-MiniLM-L6-v2, about 87 MB, from the
+   `sentence-transformers/all-MiniLM-L6-v2` Hugging Face repository) and the
+   reranking model (`flashrank`, ms-marco-MiniLM-L-12-v2, about 33 MB, the
+   `ms-marco-MiniLM-L-12-v2.zip` archive of the `prithivida/flashrank` Hugging
+   Face repository) are downloaded from the public Hugging Face model hub
+   (sizes measured by the 2026-10-10 audit in issue #705). These transfers
+   fetch **model files only** — no user content is sent. After the first download the models run fully offline. To forbid the
    reranker fetch outright (air-gapped installs, or any environment where an
    unexpected outbound connection is unacceptable), set
    `CORTEX_RERANKER_OFFLINE=1`: Cortex then refuses the download when the model
