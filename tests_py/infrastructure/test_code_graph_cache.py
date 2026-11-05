@@ -18,6 +18,11 @@ def _graph(cache_dir: Path, name: str, root: Path | None) -> Path:
     return graph_dir
 
 
+def test_default_cache_dir_is_under_the_user_cache(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(Path, "home", classmethod(lambda _cls: tmp_path))
+    assert cache.default_cache_dir() == tmp_path / ".cache" / "cortex" / "code-graphs"
+
+
 def test_marker_records_the_resolved_root(tmp_path: Path) -> None:
     root = tmp_path / "proj"
     root.mkdir()
