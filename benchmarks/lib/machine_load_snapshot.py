@@ -45,15 +45,28 @@ def count_docker_containers() -> int | None:
     return len([line for line in docker_out.splitlines() if line.strip()])
 
 
+def _load_averages() -> tuple[float | None, float | None, float | None]:
+    """1/5/15-minute load averages, or three None where the OS reports none.
+
+    ``os.getloadavg`` is Unix-only: on Windows the attribute does not exist,
+    so the lookup raises AttributeError, not OSError (issue #692 class 4).
+    On Unix it raises OSError when the value is unobtainable.
+    source: CPython 3.12 docs, os.getloadavg (Availability: Unix)"""
+    getloadavg = getattr(os, "getloadavg", None)
+    if getloadavg is None:
+        return None, None, None
+    try:
+        return getloadavg()
+    except OSError:
+        return None, None, None
+
+
 def machine_load_snapshot() -> dict:
     """Load average + concurrent pytest/container counts, as this run saw
         them.
 
     source: ADR-0080"""
-    try:
-        load1, load5, load15 = os.getloadavg()
-    except OSError:  # not available on this platform (e.g. Windows)
-        load1 = load5 = load15 = None
+    load1, load5, load15 = _load_averages()
     return {
         "load_average_1m": load1,
         "load_average_5m": load5,

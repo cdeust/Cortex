@@ -84,8 +84,8 @@ class TestImportSessionsStreamsLargeFile:
     @pytest.mark.asyncio
     async def test_peak_memory_under_50mb_on_10mb_jsonl(self, large_claude_dir):
         patch_dir = patch(
-            "mcp_server.handlers.import_sessions.CLAUDE_DIR",
-            large_claude_dir,
+            "mcp_server.handlers.import_sessions.CLAUDE_PROJECTS_DIR",
+            large_claude_dir / "projects",
         )
         patch_store = patch(
             "mcp_server.handlers.import_sessions._store_memory",

@@ -114,3 +114,44 @@ class TestClaudeDirOverride:
         # CORTEX_CLAUDE_DIR=` / a compose file with no value). Treating it as
         # a path would resolve the root to the process CWD.
         assert _config_under(monkeypatch, blank).CLAUDE_DIR == Path.home() / ".claude"
+
+
+def _transcripts_under(monkeypatch, cortex_dir: str | None, host_dir: str | None):
+    """Fresh config instance under both roots; ``None`` unsets the variable."""
+    if host_dir is None:
+        monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    else:
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", host_dir)
+    return _config_under(monkeypatch, cortex_dir).CLAUDE_PROJECTS_DIR
+
+
+class TestTranscriptRoot:
+    """Transcripts are read where Claude Code writes them (issue #710)."""
+
+    def test_unset_reads_home_dot_claude_projects(self, monkeypatch):
+        expected = Path.home() / ".claude" / "projects"
+        assert _transcripts_under(monkeypatch, None, None) == expected
+
+    def test_host_config_dir_relocates_the_transcripts(self, monkeypatch, tmp_path):
+        found = _transcripts_under(monkeypatch, None, str(tmp_path))
+        assert found == tmp_path / "projects"
+
+    def test_host_config_dir_leaves_cortex_data_in_place(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path))
+        cfg = _config_under(monkeypatch, None)
+        assert cfg.CLAUDE_DIR == Path.home() / ".claude"
+        assert cfg.METHODOLOGY_DIR == Path.home() / ".claude" / "methodology"
+
+    def test_cortex_seam_wins_over_the_host_variable(self, monkeypatch, tmp_path):
+        seam, host = tmp_path / "seam", tmp_path / "host"
+        found = _transcripts_under(monkeypatch, str(seam), str(host))
+        assert found == seam / "projects"
+
+    def test_host_config_dir_is_user_expanded(self, monkeypatch):
+        found = _transcripts_under(monkeypatch, None, "~/host-config")
+        assert found == Path.home() / "host-config" / "projects"
+
+    @pytest.mark.parametrize("blank", ["", "   ", "\t\n"])
+    def test_blank_host_config_dir_falls_back(self, monkeypatch, blank):
+        expected = Path.home() / ".claude" / "projects"
+        assert _transcripts_under(monkeypatch, None, blank) == expected
