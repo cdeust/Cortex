@@ -87,14 +87,12 @@ def read_root_marker(graph_dir: Path) -> str | None:
     return root if isinstance(root, str) and root else None
 
 
-def prune_orphan_graphs(cache_dir: str | Path) -> PruneReport:
-    """Remove graphs whose recorded root is gone; report the unattributed ones."""
-    base = Path(cache_dir).expanduser()
-    removed: list[str] = []
+def _classify(base: Path) -> tuple[list[str], list[str]]:
+    """``(orphaned, unattributed)`` names under ``base``, sorted; reads markers only."""
+    orphaned: list[str] = []
     unattributed: list[str] = []
-    failed: list[str] = []
     if not base.is_dir():
-        return PruneReport((), (), ())
+        return orphaned, unattributed
     for entry in sorted(base.iterdir()):
         if not entry.is_dir():
             continue
@@ -102,12 +100,31 @@ def prune_orphan_graphs(cache_dir: str | Path) -> PruneReport:
         if root is None:
             unattributed.append(entry.name)
         elif not Path(root).exists():
-            try:
-                shutil.rmtree(entry)
-                removed.append(entry.name)
-            except OSError as exc:
-                logger.warning("could not prune orphan graph %s: %s", entry, exc)
-                failed.append(entry.name)
+            orphaned.append(entry.name)
+    return orphaned, unattributed
+
+
+def orphan_graphs(cache_dir: str | Path) -> tuple[str, ...]:
+    """Names of the graphs whose recorded root is gone; nothing is removed.
+
+    The SessionStart hook calls this to decide whether a pruning worker is
+    worth starting: it reads one small marker per entry and deletes nothing."""
+    return tuple(_classify(Path(cache_dir).expanduser())[0])
+
+
+def prune_orphan_graphs(cache_dir: str | Path) -> PruneReport:
+    """Remove graphs whose recorded root is gone; report the unattributed ones."""
+    base = Path(cache_dir).expanduser()
+    orphaned, unattributed = _classify(base)
+    removed: list[str] = []
+    failed: list[str] = []
+    for name in orphaned:
+        try:
+            shutil.rmtree(base / name)
+            removed.append(name)
+        except OSError as exc:
+            logger.warning("could not prune orphan graph %s: %s", base / name, exc)
+            failed.append(name)
     _log_report(base, removed, unattributed)
     return PruneReport(tuple(removed), tuple(unattributed), tuple(failed))
 

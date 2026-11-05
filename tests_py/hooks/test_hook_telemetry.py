@@ -184,6 +184,7 @@ def _patch_session_main(monkeypatch):
         "_refresh_session_registry",
         "_auto_wire_pipeline",
         "_maybe_background_reanalyze",
+        "_maybe_background_prune_graphs",
         "_maybe_background_consolidate",
     ):
         monkeypatch.setattr(session_start, name, lambda *args: None)

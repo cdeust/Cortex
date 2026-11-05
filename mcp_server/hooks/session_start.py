@@ -36,6 +36,7 @@ from mcp_server.hooks._telemetry import observe_hook
 from mcp_server.hooks.output_streams import use_utf8_output
 from mcp_server.hooks.session_start_background import (
     _auto_wire_pipeline,
+    _maybe_background_prune_graphs,
     _maybe_background_reanalyze,
     _refresh_session_registry,
 )
@@ -163,6 +164,9 @@ def _session_start() -> str:
 
     # source: ADR-0498
     _maybe_background_reanalyze(project_root, _lookup_cached_graph_path)
+
+    # source: issue #711
+    _maybe_background_prune_graphs()
 
     # source: ADR-0498
     _maybe_background_consolidate()
