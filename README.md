@@ -293,11 +293,15 @@ from it.
 | MRR | **0.9167** | **0.905** |
 
 Both are single runs: n=500, clean database, consolidation disabled, retrieval only. Both
-describe the **PostgreSQL** store with the cross-encoder reranker: `benchmarks/reproduce.sh`
-runs an ephemeral `pgvector/pgvector:pg16` container, and both artifacts record
-`"reranker_state": "loaded"` (the v4.20.0 manifest also records that `pg_image`). The
-default SQLite store has no published LongMemEval number through the shipped tool path yet
-([#708](https://github.com/cdeust/Cortex/issues/708)), so these figures do not describe it.
+describe the **PostgreSQL** store with the cross-encoder reranker: the harness
+(`benchmarks/lib/bench_db.py`) always builds a `PgMemoryStore` and calls `core.pg_recall`,
+and both artifacts record `"reranker_state": "loaded"`. The v4.20.0 run used the ephemeral
+`pgvector/pgvector:pg16` container of `benchmarks/reproduce.sh` (its manifest records that
+`pg_image`); the v4.14.1 run predates that gate and used the live store (CHANGELOG 4.14.1).
+The default SQLite store has no comparable run yet (n=500, reranker loaded;
+[#708](https://github.com/cdeust/Cortex/issues/708)), so these figures do not describe it.
+The only SQLite LongMemEval-S result is a bounded run without the reranker (n=50: MRR 0.609,
+Recall@10 94.0%, [benchmarks/results/semantic-fallback-169](benchmarks/results/semantic-fallback-169/MANIFEST.md)).
 
 v4.14.1, 2026-07-14: [artifact JSON](benchmarks/results/repro/20260714-v4.14.1-pretag/longmemeval-s.json);
 [code SHA](https://github.com/cdeust/Cortex/commit/28145f0b7a113fc06e22568de6feea7f8444eaf5).
@@ -339,7 +343,7 @@ bash <plugin-dir>/scripts/install-plugin.sh --postgres
 | Setup | none | pgvector >= 0.8.0, pg_trgm |
 | All 57 tools | yes | yes |
 | Retrieval tool interface | identical | identical |
-| Published retrieval quality | none yet ([#708](https://github.com/cdeust/Cortex/issues/708)) | LongMemEval-S above |
+| Published retrieval quality | n=50 without reranker only ([#708](https://github.com/cdeust/Cortex/issues/708)) | LongMemEval-S n=500 above |
 | Fusion | in-process | server-side PL/pgSQL |
 | ANN index | none | pgvector HNSW |
 | Cross-agent team decisions, preemptive context, pipeline heat bumps | no-op | active |
