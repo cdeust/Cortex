@@ -208,7 +208,10 @@ class TestExploreAttributionRealSource:
     by wiring discover_conversations_for_projects()."""
 
     def test_produces_non_empty_graph_from_real_sessions(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("mcp_server.infrastructure.scanner.CLAUDE_DIR", tmp_path)
+        monkeypatch.setattr(
+            "mcp_server.infrastructure.scanner.CLAUDE_PROJECTS_DIR",
+            tmp_path / "projects",
+        )
         projects_dir = tmp_path / "projects"
         _write_real_session(projects_dir / "proj-a", "s1.jsonl")
 
@@ -247,7 +250,10 @@ class TestExploreAttributionRealSource:
     def test_empty_graph_when_domain_has_no_indexed_projects(
         self, tmp_path, monkeypatch
     ):
-        monkeypatch.setattr("mcp_server.infrastructure.scanner.CLAUDE_DIR", tmp_path)
+        monkeypatch.setattr(
+            "mcp_server.infrastructure.scanner.CLAUDE_PROJECTS_DIR",
+            tmp_path / "projects",
+        )
         profiles = {
             "domains": {
                 "d1": {
@@ -273,7 +279,10 @@ class TestExploreAttributionRealSource:
         """The 3 categorical classifiers (problemDecomposition/
         explorationStyle/verificationBehavior) must not leak their string
         category into the numeric `activation` field."""
-        monkeypatch.setattr("mcp_server.infrastructure.scanner.CLAUDE_DIR", tmp_path)
+        monkeypatch.setattr(
+            "mcp_server.infrastructure.scanner.CLAUDE_PROJECTS_DIR",
+            tmp_path / "projects",
+        )
         projects_dir = tmp_path / "projects"
         _write_real_session(projects_dir / "proj-a", "s1.jsonl")
 

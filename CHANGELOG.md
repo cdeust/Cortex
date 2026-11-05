@@ -15,9 +15,24 @@ adheres to [Semantic Versioning](https://semver.org/).
   encoding), so a slow recall can be attributed before any optimization is
   chosen (#722, slice 1). Measurement only: ranking and responses are
   unchanged.
+- A claim keeps the time of the event it describes apart from the time it was
+  extracted (#717, slice 1). `ClaimEvent.event_time` is `unknown`, a `point`
+  or an `interval`, each bound carrying its value, its ISO 8601 precision and,
+  when the source states one, its offset. A claim with no stated date stays
+  `unknown`; it never inherits `extracted_at`. Persistence and extraction of
+  the field are later slices.
 
 ### Changed
 
+- Pull requests must kill every mutant in the functions they change (ADR-1122).
+  `scripts/ci_unit.sh` ends with `scripts/ci_mutation_diff.py`, which mutates the
+  changed functions of `mcp_server` with their unit tests and accepts only
+  registered equivalents; outside a PR it does nothing.
+  A removed method no longer selects its neighbours, the mutation sandbox copies
+  `benchmarks`, and a changed function mutmut cannot mutate (a decorator other than
+  `staticmethod`/`classmethod`) is reported as a warning instead of passing silently.
+  A comment above a removed method no longer selects its neighbours, and the next
+  file's header no longer hides a trailing decorator in the last hunk of a file.
 - The Claude review verdict decides the merge (ADR-1121). The post-merge
   resolver merges a PR only when the latest `claude[bot]` verdict on its head
   is `Verdict: approve` and links the `claude-review.yml` run of that head whose
@@ -45,6 +60,41 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- A document section memory is labelled by its full heading path
+  (`[Install > Notes]`), not its own heading alone, so the same text under two
+  parents is recalled as two distinguishable segments (#713, slice 1).
+  Top-level sections keep their label; a re-ingest of an already-ingested
+  nested document retires the old flat-labelled receipts as for any other
+  normalizer change (#714).
+- Transcript discovery honours the host's config directory (#710, slice 1).
+  Profile rebuilds, `import_sessions`, `backfill_memories`, explore features and
+  the SessionStart session count read `$CLAUDE_CONFIG_DIR/projects` when the
+  variable is set, instead of always `~/.claude/projects`. `CORTEX_CLAUDE_DIR`
+  still wins, and Cortex's own data (store, profiles, wiki) does not move.
+- A user's own tags no longer hide a memory from default recall (#706,
+  ADR-1123). The low-signal filter of `recall` and of trigger injection now
+  drops only capture markers (`auto-captured`, `tool:<name>`, `_backfill`,
+  `imported`, `session-summary`, emitted by Cortex writers, and `tool-output`,
+  listed in #706);
+  `audit`, `automated`, `wip`, `progress`, `code-review` and `stage-1` to
+  `stage-11` no longer drop the memory. The wiki admission list is unchanged.
+- The post-commit reindex hook reads its cooldown file as UTF-8, the encoding
+  `gated_files.write_json` writes it in, instead of the locale code page (cp1252 on
+  Windows). The test files that still wrote or read text in the locale code page
+  now name UTF-8 (#692, class 3).
+- The mutation sandbox copies `.claude-plugin` and `plugins`: the hook tests
+  selected for `post_commit_reindex.py` read both, so mutmut's clean run failed
+  before any mutant ran. New tests pin the cooldown window, the unknown-root
+  default and the pruning of a full cooldown file, which the diff-scoped gate
+  (ADR-1122) mutates whole.
+- The benchmark machine-load snapshot records no load average on Windows
+  instead of raising: `os.getloadavg` does not exist there, and the
+  `AttributeError` escaped the `except OSError` (#692 class 4, 13 tests).
+- The README now states that both LongMemEval headline numbers (v4.14.1,
+  v4.20.0) describe the PostgreSQL store with the reranker, and the Storage
+  table no longer claims an "identical" retrieval contract on SQLite: the tool
+  interface is identical, and SQLite has only a bounded n=50 run without the
+  reranker, no run comparable to the n=500 headline (#708).
 - The groomer coordinator no longer starts a consolidate cycle outside its
   lock in three failure cases (#683, ADR-1118). An existing `groomer.pid` that
   cannot be read (permission denied, I/O error) now raises
@@ -148,6 +198,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Transcript capture producers audited (#716, slice 1):
+  `docs/audits/transcript-capture-producers-2026-11-05.md` lists the five
+  producers, their session keys, dedups and replay behaviour. No producer keeps
+  a cursor into a transcript and none discovers Codex rollouts.
 - `benchmarks/outcome/paired_delta.py`: scoring core of the longitudinal
   outcome benchmark (first slice of #343). Pairs `recall` and `no_recall`
   trials strictly by task and repeat, and reports the mean delta of

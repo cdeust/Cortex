@@ -4,14 +4,16 @@ When the server is launched with ``CORTEX_ROOT_AGENT_TOPIC`` set, the
 ``agent_topic`` parameter is (1) stripped from the registered recall/remember
 tool schemas — so the model never sees it — and (2) forced server-side in the
 handlers regardless of what any caller passes. This mirrors supermemory's
-``x-sm-project`` capability header: the model cannot target, or accidentally
-omit, another agent's scope.
+``x-sm-project`` capability header: the model cannot choose, or accidentally
+omit, the scope it boosts and writes under. The forced topic is a ranking
+boost on search, not an eligibility filter: a rooted search still returns
+other agents' memories (``test_agent_scope_contract.py``, issue #718).
 
 External signals (handover acceptance):
   - the ``agent_topic`` field is absent from the tool schema JSON when rooted,
     and present when unrooted;
   - a rooted recall forwards the ROOT topic to retrieval even when the caller
-    passes a different one (cannot cross scopes).
+    passes a different one.
 """
 
 from __future__ import annotations
@@ -61,7 +63,7 @@ def test_rooted_strips_agent_topic_from_schema(monkeypatch):
 
 def test_rooted_recall_forces_root_topic(monkeypatch):
     """A rooted recall forwards the ROOT topic to retrieval even when the
-    caller passes a different scope — it cannot cross scopes."""
+    caller passes a different scope — it cannot pick the boosted scope."""
     monkeypatch.setenv(_ENV, _ROOT)
     captured: dict = {}
 
