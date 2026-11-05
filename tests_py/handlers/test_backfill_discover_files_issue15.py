@@ -57,7 +57,7 @@ def fake_projects_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     decoy.mkdir(parents=True)
     (decoy / "random-payload.jsonl").write_text("{}\n")
 
-    monkeypatch.setattr(backfill_helpers, "CLAUDE_DIR", claude_dir)
+    monkeypatch.setattr(backfill_helpers, "CLAUDE_PROJECTS_DIR", projects_dir)
     return projects_dir
 
 

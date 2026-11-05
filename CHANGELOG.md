@@ -44,6 +44,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Transcript discovery honours the host's config directory (#710, slice 1).
+  Profile rebuilds, `import_sessions`, `backfill_memories`, explore features and
+  the SessionStart session count read `$CLAUDE_CONFIG_DIR/projects` when the
+  variable is set, instead of always `~/.claude/projects`. `CORTEX_CLAUDE_DIR`
+  still wins, and Cortex's own data (store, profiles, wiki) does not move.
 - A user's own tags no longer hide a memory from default recall (#706,
   ADR-1123). The low-signal filter of `recall` and of trigger injection now
   drops only capture markers (`auto-captured`, `tool:<name>`, `_backfill`,

@@ -82,8 +82,8 @@ def tmp_claude_dir(tmp_path):
 
 def _patch_claude_dir(tmp_claude_dir):
     return patch(
-        "mcp_server.handlers.import_sessions.CLAUDE_DIR",
-        tmp_claude_dir,
+        "mcp_server.handlers.import_sessions.CLAUDE_PROJECTS_DIR",
+        tmp_claude_dir / "projects",
     )
 
 
