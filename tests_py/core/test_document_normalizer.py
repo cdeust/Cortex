@@ -8,6 +8,7 @@ consumer parses cannot afford a silently drifted literal (§12).
 from __future__ import annotations
 
 from mcp_server.core.document_model import (
+    DocumentAttachment,
     DocumentProvenance,
     DocumentSection,
     DocumentTable,
@@ -25,7 +26,10 @@ _PROV = DocumentProvenance(
 
 
 def _doc(sections, image_count=0, title="Doc"):
-    return ParsedDocument(title=title, sections=sections, image_count=image_count)
+    attachments = [
+        DocumentAttachment(i + 1, f"rId{i}", "H") for i in range(image_count)
+    ]
+    return ParsedDocument(title=title, sections=sections, attachments=attachments)
 
 
 def _lines(md: str) -> list[str]:
@@ -214,7 +218,8 @@ class TestImageNotice:
         n = normalize_document(
             _doc([DocumentSection("H", 1, "b")], image_count=3), _PROV
         )
-        assert n.image_count == 3
+        assert [a.reference for a in n.attachments] == ["rId0", "rId1", "rId2"]
+        assert {a.state for a in n.attachments} == {"unsupported"}
         expected = (
             "3 embedded image(s) skipped — images are not ingested "
             "(issue #192 non-goal: no OCR/image extraction)."
@@ -270,4 +275,4 @@ class TestReturnShape:
         n = normalize_document(_doc([DocumentSection("H", 1, "b")]), _PROV)
         assert isinstance(n, NormalizedDocument)
         assert n.wiki_markdown.endswith("\n")
-        assert n.image_count == 0
+        assert n.attachments == []

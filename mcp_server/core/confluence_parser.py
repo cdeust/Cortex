@@ -9,6 +9,7 @@ import re
 from xml.etree import ElementTree as ET
 
 from mcp_server.core.document_model import (
+    DocumentAttachment,
     DocumentParseError,
     DocumentSection,
     DocumentTable,
@@ -64,8 +65,38 @@ def _table_of(table: ET.Element) -> DocumentTable:
     return DocumentTable(rows=rows)
 
 
-def _count_images(root: ET.Element) -> int:
-    return sum(1 for node in root.iter() if _local(node.tag) in ("image", "img"))
+def _image_reference(image: ET.Element) -> str:
+    """What an image names: ``ri:attachment@ri:filename`` or ``ri:url@ri:value``
+    inside an ``<ac:image>``, ``@src`` on an ``<img>``, else ``""``.
+
+    source: issue #732
+    """
+    if _local(image.tag) == "img":
+        return image.get("src", "")
+    for node in image.iter():
+        value = node.get("{urn:ri}filename") or node.get("{urn:ri}value")
+        if value:
+            return value
+    return ""
+
+
+def _collect_images(
+    elem: ET.Element, heading: str, out: list[DocumentAttachment]
+) -> None:
+    """Append every ``<ac:image>``/``<img>`` under ``elem`` to ``out``, in
+    document order, tagged with its section heading.
+
+    source: ADR-0135 (issue #732)
+    """
+    for node in elem.iter():
+        if _local(node.tag) in ("image", "img"):
+            out.append(
+                DocumentAttachment(
+                    ordinal=len(out) + 1,
+                    reference=_image_reference(node),
+                    section_heading=heading,
+                )
+            )
 
 
 def parse_confluence_storage(xhtml: str, *, title: str = "") -> ParsedDocument:
@@ -80,8 +111,9 @@ def parse_confluence_storage(xhtml: str, *, title: str = "") -> ParsedDocument:
                    ``<h1>``..``<h6>`` open sections, ``<p>`` bodies and
                    ``<table>``s attach to the current section, and text
                    before the first heading is a level-0 preamble.
-                   ``image_count`` counts every ``<ac:image>``/``<img>``
-                   (skipped). An empty fragment yields an empty document.
+                   ``attachments`` lists every ``<ac:image>``/``<img>``
+                   in document order (state ``unsupported``). An empty
+                   fragment yields an empty document.
     Raises:        :class:`DocumentParseError` on malformed XHTML — loud, so
                    the caller writes nothing.
     """
@@ -95,6 +127,7 @@ def parse_confluence_storage(xhtml: str, *, title: str = "") -> ParsedDocument:
     sections: list[DocumentSection] = [preamble]
     current = preamble
     resolved_title = title.strip()
+    attachments: list[DocumentAttachment] = []
 
     for node in root:
         name = _local(node.tag)
@@ -112,6 +145,7 @@ def parse_confluence_storage(xhtml: str, *, title: str = "") -> ParsedDocument:
             text = _text_of(node)
             if text:
                 current.body = f"{current.body}\n{text}".strip()
+        _collect_images(node, current.heading, attachments)
 
     if not preamble.body.strip() and not preamble.tables and len(sections) > 1:
         sections.remove(preamble)
@@ -119,5 +153,5 @@ def parse_confluence_storage(xhtml: str, *, title: str = "") -> ParsedDocument:
     return ParsedDocument(
         title=resolved_title or "Untitled page",
         sections=sections,
-        image_count=_count_images(root),
+        attachments=attachments,
     )

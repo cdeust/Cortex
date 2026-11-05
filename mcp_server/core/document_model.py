@@ -44,6 +44,29 @@ def document_section_is_empty(section: "DocumentSection") -> bool:
     return not section.body.strip() and not section.tables
 
 
+# source: issue #732 — no embedded image is extracted or preserved yet, so every
+# image reference an adapter finds is reported in this state, never dropped.
+ATTACHMENT_UNSUPPORTED = "unsupported"
+
+
+@dataclass(frozen=True)
+class DocumentAttachment:
+    """One embedded image found in a document, in document order.
+
+    ``reference`` is what the markup names: the docx relationship id
+    (``r:embed``/``r:id``), the Confluence attachment filename or URL, or
+    ``""`` when the markup names nothing. ``section_heading`` is the heading of
+    the section the image sits in (``""`` for the preamble). ``state`` says
+    what ingestion did with it.
+
+    source: issue #732"""
+
+    ordinal: int
+    reference: str
+    section_heading: str
+    state: str = ATTACHMENT_UNSUPPORTED
+
+
 @dataclass
 class ParsedDocument:
     """The normalized shape every adapter produces.
@@ -52,7 +75,7 @@ class ParsedDocument:
 
     title: str
     sections: list[DocumentSection] = field(default_factory=list)
-    image_count: int = 0
+    attachments: list[DocumentAttachment] = field(default_factory=list)
 
 
 def parsed_document_is_empty(doc: "ParsedDocument") -> bool:

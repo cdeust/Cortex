@@ -8,6 +8,7 @@ import re
 from xml.etree import ElementTree as ET
 
 from mcp_server.core.document_model import (
+    DocumentAttachment,
     DocumentParseError,
     DocumentSection,
     DocumentTable,
@@ -15,6 +16,8 @@ from mcp_server.core.document_model import (
 )
 
 _W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+# source: ECMA-376 Part 1 §22.8 — the relationships namespace of r:embed / r:id.
+_R_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 _HEADING_RE = re.compile(r"^Heading\s*([1-9])$", re.IGNORECASE)
 
 
@@ -74,13 +77,37 @@ def _table_rows(tbl: ET.Element) -> DocumentTable:
     return DocumentTable(rows=rows)
 
 
-def _count_images(root: ET.Element) -> int:
-    """Count embedded images (``w:drawing`` + legacy ``w:pict``) in the whole document
-    — these are skipped, not ingested.
+def _image_reference(image: ET.Element) -> str:
+    """The relationship id an image element points at (``a:blip@r:embed`` for a
+    ``w:drawing``, ``v:imagedata@r:id`` for a legacy ``w:pict``), else ``""``.
 
-    source: ADR-0163
+    source: issue #732
     """
-    return sum(1 for node in root.iter() if _local(node.tag) in ("drawing", "pict"))
+    for node in image.iter():
+        for attr in (f"{{{_R_NS}}}embed", f"{{{_R_NS}}}id"):
+            value = node.get(attr)
+            if value:
+                return value
+    return ""
+
+
+def _collect_images(
+    elem: ET.Element, heading: str, out: list[DocumentAttachment]
+) -> None:
+    """Append every embedded image (``w:drawing`` + legacy ``w:pict``) under
+    ``elem`` to ``out``, in document order, tagged with its section heading.
+
+    source: ADR-0163 (issue #732)
+    """
+    for node in elem.iter():
+        if _local(node.tag) in ("drawing", "pict"):
+            out.append(
+                DocumentAttachment(
+                    ordinal=len(out) + 1,
+                    reference=_image_reference(node),
+                    section_heading=heading,
+                )
+            )
 
 
 def parse_docx_xml(document_xml: str, *, title: str = "") -> ParsedDocument:
@@ -94,9 +121,10 @@ def parse_docx_xml(document_xml: str, *, title: str = "") -> ParsedDocument:
                    document order; heading paragraphs open new sections and
                    body paragraphs/tables attach to the current one. Text
                    before the first heading becomes a level-0 preamble
-                   section. ``image_count`` reflects every embedded image
-                   (skipped, never extracted). An empty document yields a
-                   single empty preamble section (``.is_empty()`` True).
+                   section. ``attachments`` lists every embedded image in
+                   document order (state ``unsupported``: never extracted).
+                   An empty document yields a single empty preamble
+                   section (``.is_empty()`` True).
     Raises:        :class:`DocumentParseError` on malformed XML — loud, so
                    the caller writes nothing (no partial silent ingest).
     """
@@ -113,6 +141,7 @@ def parse_docx_xml(document_xml: str, *, title: str = "") -> ParsedDocument:
     sections: list[DocumentSection] = [preamble]
     current = preamble
     resolved_title = title.strip()
+    attachments: list[DocumentAttachment] = []
 
     for child in body:
         name = _local(child.tag)
@@ -133,6 +162,7 @@ def parse_docx_xml(document_xml: str, *, title: str = "") -> ParsedDocument:
                 current.body = f"{current.body}\n{text}".strip()
         elif name == "tbl":
             current.tables.append(_table_rows(child))
+        _collect_images(child, current.heading, attachments)
 
     if not preamble.body.strip() and not preamble.tables and len(sections) > 1:
         sections.remove(preamble)
@@ -140,5 +170,5 @@ def parse_docx_xml(document_xml: str, *, title: str = "") -> ParsedDocument:
     return ParsedDocument(
         title=resolved_title or "Untitled document",
         sections=sections,
-        image_count=_count_images(root),
+        attachments=attachments,
     )

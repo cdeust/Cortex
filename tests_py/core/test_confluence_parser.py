@@ -89,14 +89,42 @@ class TestPreambleAndTitle:
 
 
 class TestNamespaces:
-    def test_ac_namespace_image_counted(self):
+    def test_ac_namespace_image_inventoried_by_filename(self):
         xhtml = '<p>x</p><ac:image><ri:attachment ri:filename="a.png"/></ac:image>'
         doc = parse_confluence_storage(xhtml)
-        assert doc.image_count == 1
+        assert [
+            (a.ordinal, a.reference, a.section_heading, a.state)
+            for a in doc.attachments
+        ] == [(1, "a.png", "", "unsupported")]
 
-    def test_plain_img_counted(self):
+    def test_ac_image_url_reference(self):
+        xhtml = '<ac:image><ri:url ri:value="https://x/y.png"/></ac:image>'
+        doc = parse_confluence_storage(xhtml)
+        assert [a.reference for a in doc.attachments] == ["https://x/y.png"]
+
+    def test_images_naming_nothing_have_an_empty_reference(self):
+        doc = parse_confluence_storage("<ac:image/><img/>")
+        assert [(a.ordinal, a.reference) for a in doc.attachments] == [
+            (1, ""),
+            (2, ""),
+        ]
+
+    def test_plain_img_reference_is_src(self):
         doc = parse_confluence_storage('<p>x</p><img src="a.png"/>')
-        assert doc.image_count == 1
+        assert [a.reference for a in doc.attachments] == ["a.png"]
+
+    def test_images_keep_order_and_section_even_inside_paragraphs(self):
+        xhtml = (
+            '<h1>Arch</h1><p>see <img src="1.png"/></p>'
+            '<h2>Ops</h2><ac:image><ri:attachment ri:filename="2.png"/></ac:image>'
+        )
+        doc = parse_confluence_storage(xhtml)
+        assert [
+            (a.ordinal, a.reference, a.section_heading) for a in doc.attachments
+        ] == [
+            (1, "1.png", "Arch"),
+            (2, "2.png", "Ops"),
+        ]
 
 
 class TestTables:

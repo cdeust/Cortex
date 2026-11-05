@@ -9,6 +9,7 @@ import re
 from dataclasses import dataclass, field
 
 from mcp_server.core.document_model import (
+    DocumentAttachment,
     DocumentProvenance,
     DocumentSection,
     DocumentTable,
@@ -39,7 +40,7 @@ class NormalizedDocument:
     summary: str
     section_memories: list[SectionMemory] = field(default_factory=list)
     notices: list[str] = field(default_factory=list)
-    image_count: int = 0
+    attachments: list[DocumentAttachment] = field(default_factory=list)
 
 
 def slugify(text: str) -> str:
@@ -121,17 +122,19 @@ def normalize_document(
     Precondition: ``doc`` is a parsed document; ``prov`` identifies its
     source and version.
     Postcondition: returns a NormalizedDocument carrying source and version
-    on the wiki frontmatter and every memory. Nonzero image_count produces
-    a skipped-image notice. Empty documents yield a page, empty notice, and
-    no section memories. Headings-only sections produce no memory.
+    on the wiki frontmatter and every memory. Each embedded image is carried
+    in ``attachments``; any image produces a skipped-image notice. Empty
+    documents yield a page, empty notice, and no section memories.
+    Headings-only sections produce no memory.
     source: ADR-0162"""
     slug = slugify(doc.title)
     lines = _frontmatter(doc, prov)
 
     notices: list[str] = []
-    if doc.image_count:
+    image_count = len(doc.attachments)
+    if image_count:
         notice = (
-            f"{doc.image_count} embedded image(s) skipped — images are not "
+            f"{image_count} embedded image(s) skipped — images are not "
             "ingested (issue #192 non-goal: no OCR/image extraction)."
         )
         notices.append(notice)
@@ -156,7 +159,7 @@ def normalize_document(
     heading_names = [s.heading for s in doc.sections if s.heading]
     summary = (
         f"Document ingested: '{doc.title}' from {prov.source} "
-        f"({len(section_memories)} sections, {doc.image_count} images skipped)."
+        f"({len(section_memories)} sections, {image_count} images skipped)."
     )
     if heading_names:
         summary += " Sections: " + ", ".join(heading_names[:8]) + "."
@@ -167,5 +170,5 @@ def normalize_document(
         summary=summary,
         section_memories=section_memories,
         notices=notices,
-        image_count=doc.image_count,
+        attachments=list(doc.attachments),
     )

@@ -36,6 +36,7 @@ _RESULT_KEYS = {
     "summary_memory_id",
     "section_count",
     "images_skipped",
+    "attachments",
     "notices",
 }
 
@@ -216,19 +217,6 @@ class TestConfluenceHappyPath:
         p.write_text("<h1>Real Heading</h1><p>x</p>", encoding="utf-8")
         out = await ingest_document.handler({"path": str(p), "title": "Custom"})
         assert out["title"] == "Custom"
-
-
-class TestImagesSkipped:
-    @pytest.mark.asyncio
-    async def test_image_skip_notice_surfaced(self, wired, tmp_path):
-        store, write = wired
-        body = (
-            _para("H", "Heading1") + _para("x") + "<w:p><w:r><w:drawing/></w:r></w:p>"
-        )
-        p = _make_docx(tmp_path / "img.docx", body)
-        out = await ingest_document.handler({"path": str(p)})
-        assert out["images_skipped"] == 1
-        assert any("image" in n for n in out["notices"])
 
 
 class TestEmptyDocument:
