@@ -108,26 +108,26 @@ def touched_prefixes(
     source: str,
     lines: set[int],
     module: str,
-    cuts: set[int] = frozenset(),
+    cuts: set[tuple[int, int]] = frozenset(),
     skipped: list[str] | None = None,
 ) -> list[str]:
     """mutmut name prefixes of the top-level functions and methods holding `lines`.
 
     mutmut 3 names a function `<module>.x_<name>__mutmut_N` and a method
     `<module>.xǁ<Class>ǁ<name>__mutmut_N`; nested functions belong to their outer one.
-    `cuts` are anchors of indented definitions the diff removed: inside a function
-    that is a nested function (the function is touched), inside a class a whole
-    method (nothing that survives is). A function mutmut cannot mutate goes to
+    `cuts` are (anchor, indent) of indented definitions the diff removed: one nested
+    deeper than the member holding the anchor is a nested function (the member is
+    touched), one at the member's own indent is a whole method (nothing that survives
+    is). A function mutmut cannot mutate goes to
     `skipped` instead of the result.
     """
     members = list(_members(ast.parse(source), len(source.splitlines())))
-    touched = set(lines)
-    for owner, _, first, last in members:
-        if owner is None:
-            touched.update(c for c in cuts if first <= c <= last)
     found: list[str] = []
     for owner, node, first, last in members:
-        if not any(first <= n <= last for n in touched):
+        nested = any(
+            first <= a <= last and indent > node.col_offset for a, indent in cuts
+        )
+        if not nested and not any(first <= n <= last for n in lines):
             continue
         name = (
             f"{module}.x_{node.name}__mutmut_"
@@ -184,7 +184,8 @@ def plan(
     """
     jobs, problems = [], []
     lines_by_path, cuts_by_path = changed_lines_ex(diff_text)
-    for path, lines in sorted(lines_by_path.items()):
+    for path in sorted(lines_by_path.keys() | cuts_by_path.keys()):
+        lines = lines_by_path.get(path, set())
         file = root / path
         if not file.exists():
             continue

@@ -22,14 +22,17 @@ def _is_decorator(line: str) -> bool:
     return line[1:].lstrip().startswith("@")
 
 
-def _touched_by_deletion(removed: list[str], start: int) -> tuple[set[int], int | None]:
-    """(surviving lines a pure deletion changed, anchor of an indented definition cut).
+def _touched_by_deletion(
+    removed: list[str], start: int
+) -> tuple[set[int], tuple[int, int] | None]:
+    """(surviving lines a pure deletion changed, (anchor, indent) of an indented definition cut).
 
     `start` is the line before the cut.
     - a whole top-level definition removed: nothing that survives changed, except the
       function whose decorators ended the block, whose header is line `start + 1`;
     - an indented whole definition removed: a method or a nested function. The
-      source tells which, so the anchor is returned for `touched_prefixes`;
+      source tells which, so the anchor and the removed header's indent are returned
+      for `touched_prefixes`;
     - only decorators and blanks removed: the function below lost them, `start + 1`;
     - anything else is a cut inside a function: the anchor and the next line.
     """
@@ -41,7 +44,8 @@ def _touched_by_deletion(removed: list[str], start: int) -> tuple[set[int], int 
     if header is not None and header == leading:
         trailing = len(body) > header + 1 and _is_decorator(body[-1])
         after = {start + 1} if trailing else set()
-        return after, (None if _indent(body[header]) == 0 else start)
+        indent = _indent(body[header])
+        return after, (None if indent == 0 else (start, indent))
     if body and leading == len(body):
         return {start + 1}, None
     return {start, start + 1}, None
@@ -49,10 +53,10 @@ def _touched_by_deletion(removed: list[str], start: int) -> tuple[set[int], int 
 
 def changed_lines_ex(
     diff_text: str,
-) -> tuple[dict[str, set[int]], dict[str, set[int]]]:
+) -> tuple[dict[str, set[int]], dict[str, set[tuple[int, int]]]]:
     """(touched lines, indented-definition cuts) per Python file under mcp_server."""
     result: dict[str, set[int]] = {}
-    cuts: dict[str, set[int]] = {}
+    cuts: dict[str, set[tuple[int, int]]] = {}
     current = None
     pending: tuple[int, int] | None = None
     removed: list[str] = []

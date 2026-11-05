@@ -125,6 +125,32 @@ class MethodAndDecoratorTests(unittest.TestCase):
             cmd.touched_prefixes(src, lines, "m", cuts), ["m.x_f__mutmut_"]
         )
 
+    def test_a_nested_function_deleted_from_a_method_selects_that_method(self):
+        src = "class K:\n    def f(self):\n        x = 1\n        return x\n"
+        lines, cuts = self.lines(
+            "@@ -3,2 +2,0 @@\n-        def g():\n-            return 2\n"
+        )
+        self.assertEqual(
+            cmd.touched_prefixes(src, lines, "m", cuts), ["m.xǁKǁf__mutmut_"]
+        )
+
+    def test_a_file_whose_only_change_is_a_nested_cut_is_planned(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "mcp_server").mkdir()
+            (root / "mcp_server" / "m.py").write_text(
+                "def f():\n    x = 1\n    return x\n"
+            )
+            (root / "tests_py").mkdir()
+            (root / "tests_py" / "test_m.py").write_text("import mcp_server.m\n")
+            diff = (
+                "+++ b/mcp_server/m.py\n@@ -2,2 +1,0 @@\n"
+                "-    def g():\n-        return 2\n"
+            )
+            jobs, problems = cmd.plan(diff, root)
+        self.assertEqual(problems, [])
+        self.assertEqual([j["prefixes"] for j in jobs], [["mcp_server.m.x_f__mutmut_"]])
+
     def test_a_decorator_mutmut_cannot_handle_is_skipped_and_reported(self):
         src = "import functools\n\n@functools.cache\ndef f():\n    return 1\n"
         skipped = []
