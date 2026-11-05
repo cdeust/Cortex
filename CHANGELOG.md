@@ -17,6 +17,9 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Each LongMemEval line of `<stem>.queries.jsonl` carries the question's gold
+  `answer_session_ids` and its own `mrr` and `recall10`, so the published Recall@10
+  and MRR are recomputable from the journal alone (#708).
 - Pull requests must kill every mutant in the functions they change (ADR-1122).
   `scripts/ci_unit.sh` ends with `scripts/ci_mutation_diff.py`, which mutates the
   changed functions of `mcp_server` with their unit tests and accepts only
