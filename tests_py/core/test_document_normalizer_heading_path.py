@@ -66,6 +66,18 @@ def test_empty_parent_still_names_its_children():
     assert contents == ["[Parent > Child]\n\nx"]
 
 
+def test_empty_heading_closes_the_previous_scope():
+    contents = _contents(
+        [
+            DocumentSection("Install", 1, ""),
+            DocumentSection("Notes", 2, "A"),
+            DocumentSection("", 1, ""),
+            DocumentSection("Notes", 2, "B"),
+        ]
+    )
+    assert contents == ["[Install > Notes]\n\nA", "[Notes]\n\nB"]
+
+
 def test_preamble_keeps_document_body_label_and_no_ancestry():
     contents = _contents(
         [DocumentSection("", 0, "loose"), DocumentSection("H", 1, "h")]

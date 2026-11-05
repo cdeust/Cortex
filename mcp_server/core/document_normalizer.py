@@ -86,13 +86,17 @@ def _push_heading(
 ) -> list[tuple[int, str]]:
     """Heading ancestry after ``section``: shallower-or-equal levels close.
 
-    A preamble (no heading) leaves the ancestry untouched.
+    The level-0 preamble leaves the ancestry untouched. An empty heading at a
+    positive level (both parsers keep one) still closes same-or-deeper
+    headings, but adds no name.
     source: issue #713 — repeated text under different parents must stay
     distinguishable.
     """
-    if not section.heading:
+    if section.level <= 0:
         return stack
     kept = [(level, text) for level, text in stack if level < section.level]
+    if not section.heading:
+        return kept
     return [*kept, (section.level, section.heading)]
 
 
