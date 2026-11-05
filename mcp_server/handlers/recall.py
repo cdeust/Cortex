@@ -98,6 +98,29 @@ schema = {
                                     "format": "date-time",
                                 },
                                 "source": {"type": "string"},
+                                "document_sources": {
+                                    "type": "array",
+                                    "description": (
+                                        # source: issue #713 (slice 2)
+                                        "Present only on a segment written by "
+                                        "ingest_document: the document file, "
+                                        "the content version and the adapter "
+                                        "kind it was ingested from."
+                                    ),
+                                    "items": {
+                                        "type": "object",
+                                        "required": [
+                                            "source",
+                                            "version",
+                                            "source_kind",
+                                        ],
+                                        "properties": {
+                                            "source": {"type": "string"},
+                                            "version": {"type": "string"},
+                                            "source_kind": {"type": "string"},
+                                        },
+                                    },
+                                },
                                 "truncated": {
                                     "type": "boolean",
                                     "description": (

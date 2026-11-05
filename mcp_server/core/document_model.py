@@ -92,3 +92,25 @@ def document_provenance_source_tag(prov: "DocumentProvenance") -> str:
     source: ADR-0161
     """
     return f"doc-src:{prov.source_kind}:{prov.source}"
+
+
+_DEDUP_TAG_PREFIX = "doc-ingest:"
+
+
+def parse_document_provenance_dedup_tag(tag: str) -> "DocumentProvenance | None":
+    """Inverse of ``document_provenance_dedup_tag``; None for any other tag.
+
+    source: issue #713 (slice 2); ADR-0161
+
+    The kind never holds ':' (see ``ingest_document._resolve_format``), so the
+    first ':' after the prefix ends it; the version is a hex digest, so the
+    last '@' starts it.
+    A source path may hold either character (``C:\\a@b.docx``).
+    """
+    if not tag.startswith(_DEDUP_TAG_PREFIX):
+        return None
+    kind, sep, rest = tag[len(_DEDUP_TAG_PREFIX) :].partition(":")
+    source, at, version = rest.rpartition("@")
+    if not (kind and sep and source and at and version):
+        return None
+    return DocumentProvenance(source=source, version=version, source_kind=kind)

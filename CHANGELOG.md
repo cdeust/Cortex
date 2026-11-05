@@ -8,6 +8,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- A `recall` hit written by `ingest_document` names the document it came from
+  (#713, slice 2). Its `document_sources` lists the source file, the content
+  version and the adapter kind, read from the hit's own `doc-ingest:` tag, so a
+  caller no longer parses tags to trace a segment back to a file version. A hit
+  that is not a document segment has no `document_sources` key.
 - A claim keeps the time of the event it describes apart from the time it was
   extracted (#717, slice 1). `ClaimEvent.event_time` is `unknown`, a `point`
   or an `interval`, each bound carrying its value, its ISO 8601 precision and,
