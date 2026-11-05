@@ -473,6 +473,24 @@ def resolve_domain(input_str: str) -> str:
     return lower
 
 
+def resolve_explicit_domain(name: str) -> str:
+    """Resolve a domain the caller named explicitly, without guessing.
+
+    An explicit domain is an identity, not a hint: only an exact known
+    repository name (remote or directory name, or the family it is grouped
+    under per ADR-0647) maps to its canonical. Any other name is kept as
+    given, stripped and lowercased. ``resolve_domain`` instead returns the
+    canonical of the longest known fragment found as a substring of its
+    input, so ``scifact-comparison`` became ``harness-comparison`` through
+    the shared fragment ``comparison`` (issue #721).
+
+    source: issue #721; ADR-0647"""
+    lower = (name or "").strip().lower()
+    if not lower:
+        return ""
+    return _build_registry().name_to_canonical.get(lower, lower)
+
+
 def resolve_cwd(cwd: str) -> str:
     """Resolve a working directory to a canonical domain.
 

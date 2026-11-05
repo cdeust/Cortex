@@ -50,7 +50,11 @@ from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.profile_store import load_profiles
 from mcp_server.infrastructure.memory_exact import find_exact
 from mcp_server.handlers.remember_response import duplicate_response
-from mcp_server.shared.domain_mapping import resolve_cwd, resolve_domain as resolve_hint
+from mcp_server.shared.domain_mapping import (
+    resolve_cwd,
+    resolve_domain as resolve_hint,
+    resolve_explicit_domain,
+)
 from mcp_server.shared.wiki_page_candidate import PageCandidate
 from mcp_server.shared.content_hardening import harden_content
 
@@ -76,7 +80,7 @@ def _resolve_domain(directory: str, domain: str) -> str:
         if resolved:
             return resolved
     if domain:
-        return resolve_hint(domain)
+        return resolve_explicit_domain(domain)
     if directory:
         # Fallback to profile-based detection
         profiles = load_profiles()
