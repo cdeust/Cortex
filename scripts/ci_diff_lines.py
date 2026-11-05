@@ -11,6 +11,8 @@ import re
 SOURCE_ROOT = "mcp_server/"
 _HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
 _HEADER = re.compile(r"-\s*(?:async\s+def\b|def\b|class\b)")
+# A file header ends the hunk before it: `diff --git`, or `--- a/f` / `--- /dev/null`.
+_FILE_START = re.compile(r"(?:diff --git |--- (?:a/|/dev/null))")
 
 
 def _indent(line: str) -> int:
@@ -33,10 +35,16 @@ def _touched_by_deletion(
     - an indented whole definition removed: a method or a nested function. The
       source tells which, so the anchor and the removed header's indent are returned
       for `touched_prefixes`;
+    - comments and blank lines are ignored, so a note above a removed definition does
+      not turn it into a cut inside a function;
     - only decorators and blanks removed: the function below lost them, `start + 1`;
     - anything else is a cut inside a function: the anchor and the next line.
     """
-    body = [line for line in removed if line[1:].strip()]
+    body = [
+        line
+        for line in removed
+        if line[1:].strip() and not line[1:].lstrip().startswith("#")
+    ]
     header = next((i for i, line in enumerate(body) if _HEADER.match(line)), None)
     leading = 0
     while leading < len(body) and _is_decorator(body[leading]):
@@ -76,7 +84,9 @@ def changed_lines_ex(
         pending, removed = None, []
 
     for line in diff_text.splitlines():
-        if line.startswith("+++ "):
+        if _FILE_START.match(line):
+            close()
+        elif line.startswith("+++ "):
             close()
             path = line[4:].removeprefix("b/")
             current = (

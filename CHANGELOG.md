@@ -15,6 +15,8 @@ adheres to [Semantic Versioning](https://semver.org/).
   A removed method no longer selects its neighbours, the mutation sandbox copies
   `benchmarks`, and a changed function mutmut cannot mutate (a decorator other than
   `staticmethod`/`classmethod`) is reported as a warning instead of passing silently.
+  A comment above a removed method no longer selects its neighbours, and the next
+  file's header no longer hides a trailing decorator in the last hunk of a file.
 - The Claude review verdict decides the merge (ADR-1121). The post-merge
   resolver merges a PR only when the latest `claude[bot]` verdict on its head
   is `Verdict: approve` and links the `claude-review.yml` run of that head whose
