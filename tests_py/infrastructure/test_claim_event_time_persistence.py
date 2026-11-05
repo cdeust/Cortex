@@ -19,7 +19,7 @@ from mcp_server.infrastructure.pg_store_wiki_claims import (
     insert_claim_events,
 )
 from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
-from mcp_server.shared.wiki_ir import ClaimEvent, EventTime, TimeBound
+from mcp_server.shared.wiki_ir import ClaimEvent, EventTime, EvidenceRef, TimeBound
 from tests_py.conftest import _USE_PG
 
 _PLUS_TWO = timezone(timedelta(hours=2))
@@ -124,3 +124,35 @@ def test_an_older_sqlite_store_gains_the_column_with_existing_rows_unknown(tmp_p
         assert EventTime.model_validate(row["event_time"]) == EventTime()
     finally:
         s.close()
+
+
+def test_the_insert_payload_carries_every_claim_field_unchanged():
+    claim = ClaimEvent(
+        memory_id=41,
+        session_id="s-717",
+        text="Apollo 11 landed",
+        claim_type="observation",
+        entity_ids=[3, 5],
+        evidence_refs=[
+            EvidenceRef(kind="url", target="https://nasa.gov", context="log")
+        ],
+        confidence=0.8,
+        supersedes=9,
+        event_time=EVENT_TIMES[1],
+    )
+    assert _claim_to_dict(claim) == {
+        "memory_id": 41,
+        "session_id": "s-717",
+        "text": "Apollo 11 landed",
+        "claim_type": "observation",
+        "entity_ids": [3, 5],
+        "evidence_refs": [
+            {"kind": "url", "target": "https://nasa.gov", "context": "log"}
+        ],
+        "confidence": 0.8,
+        "supersedes": 9,
+        "event_time": {
+            "kind": "point",
+            "start": {"value": "1969-07-20T00:00:00", "precision": "day"},
+        },
+    }
