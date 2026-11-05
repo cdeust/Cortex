@@ -20,6 +20,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Each LongMemEval line of `<stem>.queries.jsonl` carries the question's gold
   `answer_session_ids` and its own `mrr` and `recall10`, so the published Recall@10
   and MRR are recomputable from the journal alone (#708).
+- The mutation gate runs only the mutants of the changed functions (ADR-1122).
+  `mutation_check.sh` passes one `<prefix>*` name per changed function to
+  `mutmut run`; it used to run every mutant of the file and judge the changed
+  functions afterwards, which held #865 for six hours. On #877's diff the gate
+  now runs 36 mutants instead of 1,164 and reaches its verdict in 21 min.
 - Pull requests must kill every mutant in the functions they change (ADR-1122).
   `scripts/ci_unit.sh` ends with `scripts/ci_mutation_diff.py`, which mutates the
   changed functions of `mcp_server` with their unit tests and accepts only

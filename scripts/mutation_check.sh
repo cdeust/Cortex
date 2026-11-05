@@ -50,7 +50,26 @@ open(path, "w").write(src)
 PYEOF
 
 echo ">>> mutating: $* | tests: $TESTS"
-uv run mutmut run ${MUTMUT_MAX_CHILDREN:+--max-children "$MUTMUT_MAX_CHILDREN"} 2>&1 | tee "$RUN_LOG"
+# source: ADR-1122. Inside a pull request scope, run only the mutants of the changed
+# functions (`<prefix>*` names); without a scope, every mutant of the files as before.
+NAMES=()
+if [ -n "${MUTATION_ONLY_PREFIXES:-}" ]; then
+  while IFS= read -r glob; do NAMES+=("$glob"); done \
+    < <(python3 "$ROOT/scripts/ci_mutation_scope.py" --globs)
+fi
+set +e
+uv run mutmut run ${MUTMUT_MAX_CHILDREN:+--max-children "$MUTMUT_MAX_CHILDREN"} \
+  ${NAMES[@]+"${NAMES[@]}"} 2>&1 | tee "$RUN_LOG"
+RUN_RC=${PIPESTATUS[0]}
+set -e
+if [ "$RUN_RC" -ne 0 ]; then
+  # mutmut asserts when no mutant matches the names; only that case is not a failure.
+  if [ -n "${MUTATION_ONLY_PREFIXES:-}" ] \
+    && python3 "$ROOT/scripts/ci_mutation_scope.py" --empty-scope "$ROOT/mutants"; then
+    exit 0
+  fi
+  exit "$RUN_RC"
+fi
 
 # source: ADR-0770
 TALLY="$(tr '\r' '\n' < "$RUN_LOG" | grep -oE '🙁 [0-9]+' | tail -1 | grep -oE '[0-9]+' || true)"
