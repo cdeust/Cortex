@@ -17,6 +17,7 @@ from mcp_server.handlers.ingest_helpers import (
     memoise_graph_path,
     normalise_mcp_payload,
 )
+from mcp_server.infrastructure import code_graph_cache
 from mcp_server.infrastructure.memory_store import MemoryStore
 
 logger = logging.getLogger(__name__)
@@ -41,7 +42,8 @@ def silent_clean_stale_graph_slot(output_dir: str) -> None:
 
 
 async def _call_analyze(project_path: str, output_dir: str, language: str) -> Any:
-    return await call_upstream(
+    """Ask upstream to build the graph, then tie ``output_dir`` to its root (#711)."""
+    payload = await call_upstream(
         _UPSTREAM_SERVER,
         "analyze_codebase",
         {
@@ -50,6 +52,8 @@ async def _call_analyze(project_path: str, output_dir: str, language: str) -> An
             "language": language,
         },
     )
+    code_graph_cache.record_root(output_dir, project_path)
+    return payload
 
 
 async def ensure_graph(
