@@ -160,6 +160,7 @@ def _claim_to_dict(claim) -> dict:
         ],
         "confidence": claim.confidence,
         "supersedes": claim.supersedes,
+        "event_time": claim.event_time.model_dump(mode="json", exclude_none=True),
     }
 
 
