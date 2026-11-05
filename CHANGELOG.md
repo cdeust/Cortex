@@ -167,6 +167,13 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `docs/audits/platform-support-matrix-2026-11-05.md` lists which combinations of
+  OS and architecture, host, backend and install channel a receipt measures, and
+  marks every other cell as not measured (#730, slice 1). Measured: four macOS
+  native journeys (one tied to the 4.23.4 release asset), the CI install probe on
+  `ubuntu-26.04`, `macos-26-arm64` and `windows-2025-vs2026`, and the managed
+  PostgreSQL lifecycle of ADR-1114. No Windows, Linux or `.mcpb` native journey
+  has a receipt.
 - `benchmarks/outcome/paired_delta.py`: scoring core of the longitudinal
   outcome benchmark (first slice of #343). Pairs `recall` and `no_recall`
   trials strictly by task and repeat, and reports the mean delta of
