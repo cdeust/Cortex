@@ -10,6 +10,8 @@ its defaults point to).
 
 from __future__ import annotations
 
+import os
+
 import pytest
 
 import mcp_server.infrastructure.memory_store as memory_store_module
@@ -17,11 +19,28 @@ from mcp_server.infrastructure.memory_config import MemorySettings, get_memory_s
 
 
 @pytest.fixture
-def no_named_url(monkeypatch):
-    """No URL from any source; every PostgreSQL attempt fails the test."""
-    for name in ("DATABASE_URL", "CORTEX_MEMORY_DATABASE_URL"):
-        monkeypatch.delenv(name, raising=False)
-    monkeypatch.delenv("CORTEX_ALLOW_SQLITE_FALLBACK", raising=False)
+def no_named_url(monkeypatch, tmp_path):
+    """No URL, backend or marker from any source; every PostgreSQL attempt
+    fails the test.
+
+    CI's unit job exports ``CORTEX_MEMORY_STORE_BACKEND=postgresql``
+    (scripts/ci_unit.sh), and commands now settle the backend marker first,
+    so both are isolated here; the environment is restored whole because
+    ``settle_backend`` writes keys of its own.
+    """
+    from mcp_server.infrastructure import backend_marker
+
+    saved = dict(os.environ)
+    for name in (
+        "DATABASE_URL",
+        "CORTEX_MEMORY_DATABASE_URL",
+        "CORTEX_MEMORY_STORE_BACKEND",
+        "CORTEX_ALLOW_SQLITE_FALLBACK",
+    ):
+        os.environ.pop(name, None)
+    fresh = tmp_path / "methodology"
+    fresh.mkdir()
+    monkeypatch.setattr(backend_marker, "BACKEND_MARKER_PATH", fresh / "backend.json")
     monkeypatch.setattr(
         memory_store_module,
         "_try_pg_verbose",
@@ -29,6 +48,8 @@ def no_named_url(monkeypatch):
     )
     get_memory_settings.cache_clear()
     yield monkeypatch
+    os.environ.clear()
+    os.environ.update(saved)
     get_memory_settings.cache_clear()
 
 
