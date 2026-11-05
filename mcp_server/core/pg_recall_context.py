@@ -14,6 +14,7 @@ from mcp_server.core.query_intent import classify_query_intent
 from mcp_server.core.recall_pipeline import familiarity_triage
 from mcp_server.core.retrieval_dispatch import untrusted_origin_factor
 from mcp_server.shared.memory_embeddings import MemoryEmbeddings
+from mcp_server.shared.telemetry_context import timed_stage
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,20 +55,25 @@ def fetch_and_triage(ctx: RecallContext) -> tuple[list[dict], RecallContext, boo
     weights = compute_pg_weights(intent, intent_info.get("weights", {}))
     # No char truncation: the embedding model enforces its own token limit
     # internally (e.g. 256 for MiniLM, 512 for bge-*, 8192 for bge-m3/jina-v3).
-    q_emb = ctx.embeddings.encode(ctx.query) if ctx.embeddings else None
+    with timed_stage("embed_query"):
+        q_emb = ctx.embeddings.encode(ctx.query) if ctx.embeddings else None
     ctx = replace(ctx, intent=intent, q_emb=q_emb)
 
-    candidates = _wrrf_fetch(ctx, weights)
+    with timed_stage("fused_search"):
+        candidates = _wrrf_fetch(ctx, weights)
     if not candidates:
         return [], ctx, True
 
-    ctx = _observe_candidate_embeddings(ctx, candidates)
-    triage = familiarity_triage(
-        candidates,
-        q_emb,
-        ctx.candidate_embeddings if ctx.candidate_embeddings is not None else ctx.store,
-        allow_shortcut=ctx.familiarity_shortcut,
-    )
+    with timed_stage("familiarity_triage"):
+        ctx = _observe_candidate_embeddings(ctx, candidates)
+        triage = familiarity_triage(
+            candidates,
+            q_emb,
+            ctx.candidate_embeddings
+            if ctx.candidate_embeddings is not None
+            else ctx.store,
+            allow_shortcut=ctx.familiarity_shortcut,
+        )
     return triage.candidates, ctx, triage.shortcut
 
 

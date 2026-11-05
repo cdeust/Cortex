@@ -96,3 +96,32 @@ def test_real_store_round_trip_records_nonempty_response_sizes(telemetry_log):
         assert sample["bytes_out"] > 0
         assert "tier" in sample and "reranked_count" in sample
     assert samples[0]["tier"] == "pg"
+
+
+def test_real_store_recall_records_a_per_stage_latency_breakdown(telemetry_log):
+    """Issue #722: each recall sample says where its time went, per call."""
+    content = "We decided to profile recall latency stage by stage on SQLite."
+    assert asyncio.run(remember.handler({"content": content, "force": True}))["stored"]
+    telemetry_log.write_text("")
+    for _ in range(2):
+        assert asyncio.run(recall.handler({"query": "recall latency stage"}))["count"]
+    samples = [json.loads(line) for line in telemetry_log.read_text().splitlines()]
+    assert [sample["op"] for sample in samples] == ["recall", "recall"]
+    for sample in samples:
+        stages = sample["stage_ms"]
+        assert {
+            "embed_query",
+            "fused_search",
+            "familiarity_triage",
+            "recollection",
+            "rerank_nudges",
+            "final_stages",
+            "enrichments",
+            "replay_tracking",
+            "response_budget",
+            "injection_receipt",
+            "response_encoding",
+        } <= set(stages)
+        assert all(value >= 0.0 for value in stages.values())
+        # Stages do not overlap, so together they fit inside the whole call.
+        assert sum(stages.values()) <= sample["latency_ms"] + 0.01

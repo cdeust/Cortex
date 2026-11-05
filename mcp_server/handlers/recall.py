@@ -47,6 +47,7 @@ from mcp_server.infrastructure.memory_config import (
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.session_registry import current_window_session
 from mcp_server.observability import silent_failure
+from mcp_server.shared.telemetry_context import timed_stage
 from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
 schema = {
@@ -613,21 +614,26 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     results = results[:max_results]
 
     # Production enrichments on top of base retrieval
-    results = inject_triggered_memories(results, query, store, max_inject=max_results)
-    _apply_co_activation(results, store, settings)
-    results = _apply_rules_and_order(results, store, settings, max_results)
+    with timed_stage("enrichments"):
+        results = inject_triggered_memories(
+            results, query, store, max_inject=max_results
+        )
+        _apply_co_activation(results, store, settings)
+        results = _apply_rules_and_order(results, store, settings, max_results)
 
     # Track access + replay for consolidation cascade
     # Biological basis: retrieval = hippocampal replay (McClelland 1995)
     # Each recall increments replay_count, driving stage advancement
-    _track_recall_replay(results, store)
+    with timed_stage("replay_tracking"):
+        _track_recall_replay(results, store)
 
     # Inline relation-walk (item 3): opt-in one-hop neighbors per surfaced
     # memory. Runs on the capped result set only, after final ordering, so
     # the fanout is bounded by max_results and stays well under the full
     # context assembler. Off by default — flat recall is unchanged.
     if include_related:
-        inline_related_neighbors(results, store)
+        with timed_stage("related_neighbors"):
+            inline_related_neighbors(results, store)
 
     # C1 read-side surfacing (source/reality monitoring): annotate each hit with
     # its stored source_attribution (now flowed through the recall_memories
@@ -649,20 +655,23 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
         "enhancements": build_enhancements(query, intent, "pg", settings),
     }
     # source: ADR-0430
-    resp = bound_payload(
-        resp,
-        [ListTarget("memories", weight_key="score")],
-        reserved_budget(settings.MAX_RESPONSE_CHARS),
-    )
+    with timed_stage("response_budget"):
+        resp = bound_payload(
+            resp,
+            [ListTarget("memories", weight_key="score")],
+            reserved_budget(settings.MAX_RESPONSE_CHARS),
+        )
     resp["count"] = len(resp["memories"])
     # source: ADR-0430
-    receipt_id = emit_injection_receipt(
-        store, resp["memories"], session_id=_resolve_session_id()
-    )
+    with timed_stage("injection_receipt"):
+        receipt_id = emit_injection_receipt(
+            store, resp["memories"], session_id=_resolve_session_id()
+        )
     if receipt_id is not None:
         resp["receipt_id"] = receipt_id
     # source: ADR-0430
-    return encode_within_budget(resp, "memories", fmt, settings.MAX_RESPONSE_CHARS)
+    with timed_stage("response_encoding"):
+        return encode_within_budget(resp, "memories", fmt, settings.MAX_RESPONSE_CHARS)
 
 
 # source: ADR-0430

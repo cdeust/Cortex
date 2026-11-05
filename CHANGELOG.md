@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Each `recall` telemetry sample now carries `stage_ms`, the milliseconds spent
+  in each stage of that call (query embedding, fused search, familiarity
+  triage, recollection, cross-encoder, rerank nudges, final stages,
+  enrichments, replay tracking, response budget, injection receipt, response
+  encoding), so a slow recall can be attributed before any optimization is
+  chosen (#722, slice 1). Measurement only: ranking and responses are
+  unchanged.
+
 ### Changed
 
 - The Claude review verdict decides the merge (ADR-1121). The post-merge
