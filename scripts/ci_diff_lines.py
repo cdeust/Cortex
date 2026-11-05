@@ -25,7 +25,7 @@ def _is_decorator(line: str) -> bool:
 def _touched_by_deletion(
     removed: list[str], start: int
 ) -> tuple[set[int], tuple[int, int] | None]:
-    """(surviving lines a pure deletion changed, (anchor, indent) of an indented definition cut).
+    """(surviving lines a pure deletion changed, (anchor, indent) of an indented cut).
 
     `start` is the line before the cut.
     - a whole top-level definition removed: nothing that survives changed, except the
