@@ -39,6 +39,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- A Codex session's `apply_patch` edits now count as edits in the incremental
+  cognitive-style observation, as Claude's `Edit`/`Write` do (#727, slice 1).
+  `core/tool_operation.py` maps each native tool name to the operation it makes
+  explicit; native names stay in `toolsUsed`, and the opaque Codex `exec` stays
+  unclassified rather than counted as a read.
 - The groomer coordinator no longer starts a consolidate cycle outside its
   lock in three failure cases (#683, ADR-1118). An existing `groomer.pid` that
   cannot be read (permission denied, I/O error) now raises
