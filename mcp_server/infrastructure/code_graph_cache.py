@@ -40,9 +40,19 @@ class PruneReport:
     failed: tuple[str, ...]
 
 
+def managed_cache_dir() -> Path:
+    """The only directory whose entries pruning may remove."""
+    return Path.home() / ".cache" / "cortex" / "code-graphs"
+
+
 def record_root(graph_dir: str | Path, project_root: str | Path) -> None:
-    """Write the marker when ``graph_dir`` exists; a failed write is logged."""
+    """Write the marker when both directories exist; a failed write is logged.
+
+    A root that is not an existing directory is never recorded: such a marker
+    would read as orphaned at once and let the next prune remove ``graph_dir``."""
     if not Path(graph_dir).expanduser().is_dir():
+        return
+    if not Path(project_root).expanduser().is_dir():
         return
     try:
         write_root_marker(graph_dir, project_root)

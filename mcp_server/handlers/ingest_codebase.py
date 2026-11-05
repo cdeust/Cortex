@@ -115,11 +115,15 @@ def _prune_precedent_graphs(output_dir: str) -> list[str]:
     A graph is orphaned when its ``cortex-root.json`` names a project root that
     no longer exists. The former rule matched siblings by name prefix: it
     deleted unrelated projects (``cortex-viz-*`` for ``cortex``) and never a
-    deleted worktree's graph. Returns the removed directory names.
+    deleted worktree's graph. Only the managed cache is pruned: an explicit
+    ``output_dir`` elsewhere never deletes its siblings. Returns the removed
+    directory names.
 
     source: issue #711"""
 
-    parent = Path(output_dir).expanduser().parent
+    parent = Path(output_dir).expanduser().resolve().parent
+    if parent != graph_cache.managed_cache_dir().resolve():
+        return []
     return list(graph_cache.prune_orphan_graphs(parent).removed)
 
 

@@ -230,3 +230,26 @@ def test_record_root_logs_a_failed_write(tmp_path: Path, monkeypatch, caplog) ->
     assert caplog.messages == [
         f"could not write root marker in {tmp_path / 'out'}: read-only"
     ]
+
+
+def test_record_root_refuses_a_root_that_is_not_a_directory(tmp_path: Path) -> None:
+    (tmp_path / "out").mkdir()
+    cache.record_root(tmp_path / "out", tmp_path / "missing")
+    (tmp_path / "file").write_text("x", encoding="utf-8")
+    cache.record_root(tmp_path / "out", tmp_path / "file")
+    assert not (tmp_path / "out" / cache.ROOT_MARKER).exists()
+
+
+def test_record_root_expands_a_tilde_root(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / "out").mkdir()
+    (tmp_path / "proj").mkdir()
+    cache.record_root(tmp_path / "out", "~/proj")
+    assert cache.read_root_marker(tmp_path / "out") == str(
+        (tmp_path / "proj").resolve()
+    )
+
+
+def test_managed_cache_dir_is_under_the_home_cache(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    assert cache.managed_cache_dir() == tmp_path / ".cache" / "cortex" / "code-graphs"

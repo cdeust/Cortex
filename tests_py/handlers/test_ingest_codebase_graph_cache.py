@@ -11,8 +11,11 @@ from mcp_server.handlers import ingest_codebase_graph as graphmod
 from mcp_server.infrastructure import code_graph_cache as graph_cache
 
 
-def test_prune_removes_orphans_beside_the_output_dir(tmp_path: Path) -> None:
+def test_prune_removes_orphans_beside_the_output_dir(
+    tmp_path: Path, monkeypatch
+) -> None:
     cache_dir = tmp_path / "cache"
+    monkeypatch.setattr(graph_cache, "managed_cache_dir", lambda: cache_dir)
     project = tmp_path / "proj"
     project.mkdir()
     graph_cache.write_root_marker(cache_dir / "proj-1", project)
@@ -31,10 +34,26 @@ def test_prune_expands_a_tilde_output_dir(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
     gone = tmp_path / "gone"
     gone.mkdir()
-    graph_cache.write_root_marker(tmp_path / "cache" / "gone-2", gone)
+    managed = tmp_path / ".cache" / "cortex" / "code-graphs"
+    graph_cache.write_root_marker(managed / "gone-2", gone)
     gone.rmdir()
 
-    assert icb._prune_precedent_graphs("~/cache/proj-1") == ["gone-2"]
+    assert icb._prune_precedent_graphs("~/.cache/cortex/code-graphs/p-1") == ["gone-2"]
+
+
+def test_prune_never_touches_siblings_outside_the_managed_cache(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """An explicit output_dir must not let a crafted marker delete a sibling."""
+    monkeypatch.setattr(graph_cache, "managed_cache_dir", lambda: tmp_path / "cache")
+    victim = tmp_path / "elsewhere" / "victim"
+    gone = tmp_path / "gone"
+    gone.mkdir()
+    graph_cache.write_root_marker(victim, gone)
+    gone.rmdir()
+
+    assert icb._prune_precedent_graphs(str(tmp_path / "elsewhere" / "out")) == []
+    assert victim.is_dir()
 
 
 @pytest.mark.asyncio
