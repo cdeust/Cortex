@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- A claim keeps the time of the event it describes apart from the time it was
+  extracted (#717, slice 1). `ClaimEvent.event_time` is `unknown`, a `point`
+  or an `interval`, each bound carrying its value, its ISO 8601 precision and,
+  when the source states one, its offset. A claim with no stated date stays
+  `unknown`; it never inherits `extracted_at`. Persistence and extraction of
+  the field are later slices.
+
 ### Changed
 
 - Pull requests must kill every mutant in the functions they change (ADR-1122).
