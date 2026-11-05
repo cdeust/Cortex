@@ -12,6 +12,9 @@ adheres to [Semantic Versioning](https://semver.org/).
   `scripts/ci_unit.sh` ends with `scripts/ci_mutation_diff.py`, which mutates the
   changed functions of `mcp_server` with their unit tests and accepts only
   registered equivalents; outside a PR it does nothing.
+  A removed method no longer selects its neighbours, the mutation sandbox copies
+  `benchmarks`, and a changed function mutmut cannot mutate (a decorator other than
+  `staticmethod`/`classmethod`) is reported as a warning instead of passing silently.
 - The Claude review verdict decides the merge (ADR-1121). The post-merge
   resolver merges a PR only when the latest `claude[bot]` verdict on its head
   is `Verdict: approve` and links the `claude-review.yml` run of that head whose

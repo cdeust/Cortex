@@ -800,6 +800,8 @@ only_mutate = ["mcp_server/shared/json_native.py"]
 also_copy = [
     ".github",
     "tests_py",
+    # source: tests_py/handlers/test_beam_anticheat.py imports benchmarks.
+    "benchmarks",
     "deps",
     "docs",
     "assets",
