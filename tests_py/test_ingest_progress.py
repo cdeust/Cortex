@@ -314,11 +314,13 @@ class TestHandlerStageOrdering:
         async def _fake_ensure_graph(*args: Any, **kwargs: Any):
             return "/tmp/graph", {"reused_cached": False, "node_count": 0}
 
+        monkeypatch.setattr(icb, "graphmod", MagicMock())
         icb.graphmod.ensure_graph = _fake_ensure_graph
 
         async def _fake_fetch_files(*args: Any, **kwargs: Any):
             return [], []
 
+        monkeypatch.setattr(icb, "cypher", MagicMock())
         icb.cypher.fetch_files = _fake_fetch_files
 
         async def _fake_ingest_entities(*args: Any, **kwargs: Any):
