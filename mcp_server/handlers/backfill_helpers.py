@@ -146,9 +146,9 @@ def discover_files(project_filter: str, max_files: int) -> list[tuple[Path, str]
             )
             if not accept:
                 continue
-            results.append((jsonl_file, slug))
             if len(results) >= limit:
                 return results
+            results.append((jsonl_file, slug))
 
     return results
 

@@ -1,9 +1,8 @@
 """scripts/setup_db.py ``_count_session_files`` reads the host's transcript root.
 
 SessionStart takes ``session_files`` from this script on its PostgreSQL setup
-fallback path (``session_start.py``); the setup scripts print it too. A count
-pinned to ``~/.claude/projects`` never saw transcripts under a relocated
-``CLAUDE_CONFIG_DIR``.
+fallback path (``session_start.py``). A count pinned to ``~/.claude/projects``
+never saw transcripts under a relocated ``CLAUDE_CONFIG_DIR``.
 
 source: issue #710; PR #864 review
 """

@@ -80,3 +80,9 @@ def test_cap_reached_at_a_project_boundary_stops_the_scan(projects):
     found = backfill_helpers.discover_files("", max_files=1)
 
     assert [slug for _, slug in found] == ["a-proj"] * 3
+
+
+def test_zero_max_files_finds_nothing(projects):
+    _sessions(projects / "a-proj", "s1.jsonl")
+
+    assert backfill_helpers.discover_files("", max_files=0) == []
