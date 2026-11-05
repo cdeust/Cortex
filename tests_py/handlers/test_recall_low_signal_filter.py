@@ -15,6 +15,7 @@ import pytest
 from mcp_server.handlers.recall_helpers import (
     LOW_SIGNAL_TAGS,
     filter_low_signal,
+    parse_tags,
 )
 
 
@@ -197,3 +198,27 @@ def test_low_signal_tags_does_not_include_knowledge_signals() -> None:
         "standard",
     }
     assert not (must_exclude & LOW_SIGNAL_TAGS)
+
+
+# ── parse_tags: every input shape the filter receives ─────────────────
+
+
+def test_parse_tags_decodes_a_json_string() -> None:
+    assert parse_tags('["auto-captured", "tool:edit"]') == [
+        "auto-captured",
+        "tool:edit",
+    ]
+
+
+def test_parse_tags_returns_empty_for_an_undecodable_string() -> None:
+    assert parse_tags("not json") == []
+
+
+def test_parse_tags_returns_a_list_unchanged() -> None:
+    tags = ["wip", "audit"]
+    assert parse_tags(tags) is tags
+
+
+@pytest.mark.parametrize("empty", [None, [], ""])
+def test_parse_tags_returns_an_empty_list_for_empty_input(empty) -> None:
+    assert parse_tags(empty) == []
