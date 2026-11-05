@@ -138,6 +138,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Visualization companion audited against Cortex's default stores (#724,
+  slice 1): `docs/audits/visualization-companion-backends-2026-11-05.md`. The
+  companion reads PostgreSQL at `127.0.0.1:5432/cortex` only, so a SQLite store
+  or the plugin-managed server (kernel-chosen port, SCRAM password) leaves it in
+  Trace-only mode with a message that says to install Cortex.
 - `benchmarks/outcome/paired_delta.py`: scoring core of the longitudinal
   outcome benchmark (first slice of #343). Pairs `recall` and `no_recall`
   trials strictly by task and repeat, and reports the mean delta of
