@@ -138,6 +138,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Transcript capture producers audited (#716, slice 1):
+  `docs/audits/transcript-capture-producers-2026-11-05.md` lists the five
+  producers, their session keys, dedups and replay behaviour. No producer keeps
+  a cursor into a transcript and none discovers Codex rollouts.
 - `benchmarks/outcome/paired_delta.py`: scoring core of the longitudinal
   outcome benchmark (first slice of #343). Pairs `recall` and `no_recall`
   trials strictly by task and repeat, and reports the mean delta of
