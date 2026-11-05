@@ -145,3 +145,154 @@ def test_memory_staleness_revalidate_reaches_the_marker_postgresql(
     with pytest.raises(StopError):
         module.main([])
     assert seen == [("postgresql", "postgresql://localhost:5432/cortex")]
+
+
+# ── settle_for_command itself (mutation gate, ADR-1122) ────────────────────
+
+
+def test_settle_for_command_settles_the_process_environment(monkeypatch):
+    from mcp_server.infrastructure import backend_resolution
+
+    seen = []
+    monkeypatch.setattr(backend_resolution, "settle_backend", seen.append)
+    assert backend_resolution.settle_for_command("prog") is True
+    assert seen == [os.environ]
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        backend_marker.BackendMarkerError("bad marker"),
+        pytest.param("managed", id="ManagedPgError"),
+        OSError("disk gone"),
+    ],
+)
+def test_settle_for_command_reports_a_backend_it_cannot_settle(
+    monkeypatch, capsys, error
+):
+    from mcp_server.infrastructure import backend_resolution, managed_pg
+
+    if error == "managed":
+        error = managed_pg.ManagedPgError("server down")
+
+    def fail(environ):
+        raise error
+
+    monkeypatch.setattr(backend_resolution, "settle_backend", fail)
+    assert backend_resolution.settle_for_command("prog") is False
+    captured = capsys.readouterr()
+    assert captured.err == f"prog: Cortex not ready: {error}\n"
+    assert captured.out == ""
+
+
+# ── portability.main end to end, store and handlers faked ──────────────────
+
+
+@pytest.fixture
+def portability_cli(monkeypatch):
+    from mcp_server import portability
+    from mcp_server.handlers import memory_portability
+    from mcp_server.infrastructure import backend_resolution
+
+    calls = []
+    store = object()
+
+    def settle(prog):
+        calls.append(("settle", prog))
+        return True
+
+    def export(*args, **kwargs):
+        calls.append(("export", args, kwargs))
+        return {"exported": 1}
+
+    def restore(*args, **kwargs):
+        calls.append(("import", args, kwargs))
+        return {"imported": 2}
+
+    monkeypatch.setattr(backend_resolution, "settle_for_command", settle)
+    monkeypatch.setattr(portability, "_store", lambda: store)
+    monkeypatch.setattr(memory_portability, "export_project", export)
+    monkeypatch.setattr(memory_portability, "import_export", restore)
+    return portability, store, calls
+
+
+@pytest.mark.parametrize("flag", [True, False])
+def test_portability_export_passes_its_arguments(portability_cli, capsys, flag):
+    portability, store, calls = portability_cli
+    argv = ["export", "/proj", "/out.jsonl", *(["--include-global"] if flag else [])]
+    assert portability.main(argv) == 0
+    assert calls == [
+        ("settle", "cortex portability"),
+        ("export", (store, "/proj", "/out.jsonl"), {"include_global": flag}),
+    ]
+    assert capsys.readouterr().out == '{"exported": 1}\n'
+
+
+@pytest.mark.parametrize("trust", [True, False])
+def test_portability_import_passes_its_arguments(portability_cli, capsys, trust):
+    portability, store, calls = portability_cli
+    argv = ["import", "/in.jsonl", "--into", "/root", *(["--trust-flags"] * trust)]
+    assert portability.main(argv) == 0
+    assert calls[1:] == [
+        (
+            "import",
+            (store, "/in.jsonl"),
+            {"into_project_root": "/root", "trust_flags": trust},
+        )
+    ]
+    assert capsys.readouterr().out == '{"imported": 2}\n'
+
+
+@pytest.mark.parametrize("error", [ValueError("not an export"), OSError("gone")])
+def test_portability_reports_a_bad_file_on_stderr(
+    portability_cli, monkeypatch, capsys, error
+):
+    from mcp_server.handlers import memory_portability
+
+    portability, _, _ = portability_cli
+
+    def fail(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr(memory_portability, "import_export", fail)
+    assert portability.main(["import", "/in.jsonl"]) == 1
+    captured = capsys.readouterr()
+    assert captured.err == f"cortex portability: {error}\n"
+    assert captured.out == ""
+
+
+# ── migrate._run around the settle step ────────────────────────────────────
+
+
+def test_migrate_reports_an_invalid_marker_on_its_exit_contract(
+    postgresql_marker, capsys
+):
+    pytest.importorskip("psycopg", reason="psycopg not installed ([postgresql] extra)")
+    from mcp_server import migrate
+
+    postgresql_marker.write_text("not json")
+    assert migrate._run() == 1
+    assert capsys.readouterr().err.startswith("cortex-migrate: Cortex not ready: ")
+
+
+def test_migrate_builds_its_store_on_the_resolved_url(monkeypatch, capsys):
+    pytest.importorskip("psycopg", reason="psycopg not installed ([postgresql] extra)")
+    from mcp_server import migrate
+    from mcp_server.infrastructure import backend_resolution, pg_store
+
+    built = []
+
+    class FakeStore:
+        def __init__(self, database_url=None):
+            built.append(database_url)
+
+        def close(self):
+            built.append("closed")
+
+    monkeypatch.setattr(backend_resolution, "settle_for_command", lambda prog: True)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://db.invalid/named")
+    monkeypatch.setattr(migrate, "_probe_was_current", lambda url, target: True)
+    monkeypatch.setattr(pg_store, "PgMemoryStore", FakeStore)
+    assert migrate._run() == 0
+    assert built == ["postgresql://db.invalid/named", "closed"]
+    assert capsys.readouterr().out == "cortex-migrate: schema up to date\n"

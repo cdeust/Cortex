@@ -129,3 +129,77 @@ def test_briefing_postgresql_without_url_opens_nothing(no_named_url):
         db_connect, "pg_connect", lambda *a, **k: pytest.fail("pg_connect called")
     )
     assert agent_briefing_query._connect() is None
+
+
+# ── _get_database_url resolution order (mutation gate, ADR-1122) ───────────
+
+
+def test_raw_url_resolver_strips_the_environment_url(no_named_url):
+    pytest.importorskip("psycopg", reason="psycopg not installed ([postgresql] extra)")
+    from mcp_server.infrastructure.pg_store_ddl import _get_database_url
+
+    no_named_url.setenv("DATABASE_URL", "  postgresql://env.invalid/a  ")
+    assert _get_database_url() == "postgresql://env.invalid/a"
+
+
+def test_raw_url_resolver_skips_an_unexpanded_placeholder(no_named_url):
+    pytest.importorskip("psycopg", reason="psycopg not installed ([postgresql] extra)")
+    from mcp_server.infrastructure.pg_store_ddl import _get_database_url
+
+    no_named_url.setenv("DATABASE_URL", "${DATABASE_URL}")
+    no_named_url.setenv("CORTEX_MEMORY_DATABASE_URL", " postgresql://named.invalid/b ")
+    assert _get_database_url() == "postgresql://named.invalid/b"
+
+
+def test_raw_url_resolver_names_both_variables_when_none_is_set(no_named_url):
+    pytest.importorskip("psycopg", reason="psycopg not installed ([postgresql] extra)")
+    from mcp_server.infrastructure.pg_store_ddl import _get_database_url
+
+    with pytest.raises(ValueError) as raised:
+        _get_database_url()
+    assert str(raised.value) == (
+        "no PostgreSQL URL configured: set DATABASE_URL (or CORTEX_MEMORY_DATABASE_URL)"
+    )
+
+
+# ── agent_briefing._connect branches (mutation gate, ADR-1122) ─────────────
+
+
+def test_briefing_sqlite_backend_ignores_a_configured_url(no_named_url):
+    from mcp_server.hooks import agent_briefing_query
+
+    sentinel = object()
+    no_named_url.setenv("CORTEX_MEMORY_STORE_BACKEND", "sqlite")
+    no_named_url.setenv("DATABASE_URL", "postgresql://db.invalid/c")
+    no_named_url.setattr(memory_store_module, "get_shared_store", lambda: sentinel)
+    assert agent_briefing_query._connect().store is sentinel
+
+
+def test_briefing_postgresql_without_url_says_why(no_named_url, capsys):
+    pytest.importorskip("psycopg", reason="psycopg not installed ([postgresql] extra)")
+    from mcp_server.hooks import agent_briefing_query
+
+    no_named_url.setenv("CORTEX_MEMORY_STORE_BACKEND", "postgresql")
+    assert agent_briefing_query._connect() is None
+    assert capsys.readouterr().err.endswith(
+        " agent_briefing: postgresql backend has no DATABASE_URL\n"
+    )
+
+
+def test_briefing_postgresql_connects_in_autocommit(no_named_url):
+    pytest.importorskip("psycopg", reason="psycopg not installed ([postgresql] extra)")
+    import mcp_server.infrastructure.db_connect as db_connect
+    from mcp_server.hooks import agent_briefing_query
+
+    calls = []
+    connection = object()
+
+    def connect(*args, **kwargs):
+        calls.append((args, kwargs))
+        return connection
+
+    no_named_url.setenv("CORTEX_MEMORY_STORE_BACKEND", "postgresql")
+    no_named_url.setenv("DATABASE_URL", "postgresql://db.invalid/d")
+    no_named_url.setattr(db_connect, "pg_connect", connect)
+    assert agent_briefing_query._connect() is connection
+    assert calls == [(("postgresql://db.invalid/d",), {"autocommit": True})]

@@ -44,6 +44,26 @@ WRITTEN_BY = "launcher (first launch, ADR-1104)"  # source: ADR-1104
 _REFUSED = "refused"  # sentinel: this address actively refused
 
 
+def settle_for_command(prog: str) -> bool:
+    """Settle the backend for a standalone ``python -m`` command, as the server does.
+
+    A command that builds a store outside the server and the hooks must read
+    the same marker first; otherwise a PostgreSQL marker with no URL in the
+    shell silently yields an empty SQLite store (issue #704, PR #865 review).
+    Returns False after printing one line when the backend cannot be settled.
+    """
+    try:
+        settle_backend(os.environ)
+    except (
+        backend_marker.BackendMarkerError,
+        managed_pg.ManagedPgError,
+        OSError,
+    ) as exc:
+        print(f"{prog}: Cortex not ready: {exc}", file=sys.stderr)
+        return False
+    return True
+
+
 def has_earlier_state(methodology_dir: Path, marker_name: str) -> bool:
     """Whether Cortex wrote anything there: not the marker, its temp file, a
     hidden file such as Finder's ``.DS_Store``, or the managed server's root
@@ -178,23 +198,3 @@ def resolve_auto_backend() -> None:
     else:
         os.environ["CORTEX_MEMORY_STORE_BACKEND"] = "postgresql"
         os.environ["DATABASE_URL"] = get_memory_settings().DATABASE_URL
-
-
-def settle_for_command(prog: str) -> bool:
-    """Settle the backend for a standalone ``python -m`` command, as the server does.
-
-    A command that builds a store outside the server and the hooks must read
-    the same marker first; otherwise a PostgreSQL marker with no URL in the
-    shell silently yields an empty SQLite store (issue #704, PR #865 review).
-    Returns False after printing one line when the backend cannot be settled.
-    """
-    try:
-        settle_backend(os.environ)
-    except (
-        backend_marker.BackendMarkerError,
-        managed_pg.ManagedPgError,
-        OSError,
-    ) as exc:
-        print(f"{prog}: Cortex not ready: {exc}", file=sys.stderr)
-        return False
-    return True
