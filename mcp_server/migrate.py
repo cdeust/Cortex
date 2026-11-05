@@ -24,8 +24,8 @@ def _probe_was_current(url: str, target_hash: str) -> bool:
 def _run() -> int:
     """Resolve DATABASE_URL, connect, and migrate schema to the code's revision.
 
-    Pre: none required from the caller; DATABASE_URL is optional (see
-    module docstring for the resolution order).
+    Pre: a database URL from DATABASE_URL, CORTEX_MEMORY_DATABASE_URL or a
+    PostgreSQL backend marker; without one the command exits 1 (issue #704).
     Post: exactly one line printed to stdout on success (return 0), or
     exactly one line to stderr on failure (return 1). Never raises —
     every exception is caught and mapped to the frozen exit contract.
@@ -36,6 +36,10 @@ def _run() -> int:
         compute_ddl_hash,
     )
 
+    from mcp_server.infrastructure.backend_resolution import settle_for_command  # noqa: PLC0415 — the marker names the URL, as for the server
+
+    if not settle_for_command("cortex-migrate"):
+        return 1
     try:
         url = _get_database_url()
     except ValueError as exc:  # source: issue #704 -- no default URL to fall back on

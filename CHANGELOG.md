@@ -58,10 +58,13 @@ adheres to [Semantic Versioning](https://semver.org/).
   no marker (the CLI runtime's `auto`, `python -m mcp_server.migrate`, the
   agent-briefing hook's raw connection) connected to whatever local `cortex`
   database answered. The setting now defaults to empty: `auto` with no named
-  URL is SQLite in every runtime and tries no connection; an explicit
-  `postgresql` backend with no URL raises instead of guessing a server;
-  `_get_database_url` refuses an empty conninfo and `cortex-migrate` reports
-  it on its exit-1 contract.
+  URL is SQLite in every runtime and tries no connection; a library caller
+  with an explicit `postgresql` backend and no URL raises instead of guessing
+  a server (the server, the hooks and the standalone `portability`,
+  `migrate` and `wiki_migrate` commands first apply ADR-1104's backend
+  resolution, which names `postgresql://localhost:5432/cortex` for a selected
+  PostgreSQL backend); `_get_database_url` refuses an empty conninfo and
+  `cortex-migrate` reports it on its exit-1 contract.
 - The groomer coordinator no longer starts a consolidate cycle outside its
   lock in three failure cases (#683, ADR-1118). An existing `groomer.pid` that
   cannot be read (permission denied, I/O error) now raises

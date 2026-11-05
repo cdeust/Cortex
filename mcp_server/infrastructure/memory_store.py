@@ -211,8 +211,8 @@ def _construct_store(
 
 
 def _database_url_is_explicit(database_url_param: str | None) -> bool:
-    """True when the resolved URL came from an operator, not the DB-less
-        inspection default.
+    """True when a URL was supplied by a caller or the environment (issue
+        #704: settings carry no default URL of their own).
 
     source: ADR-0535"""
     return (
