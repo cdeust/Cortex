@@ -80,5 +80,26 @@ class PlanAndNestedTests(unittest.TestCase):
         )
 
 
+class StringContentTests(unittest.TestCase):
+    SRC = 'def f():\n    return """a\nb"""\n\n\ndef g():\n    return 1\n'
+
+    def selected(self, hunk):
+        lines, cuts = cdl.changed_lines_ex(diff(hunk))
+        return cmd.touched_prefixes(
+            self.SRC, lines.get(PATH, set()), "m", cuts.get(PATH, set())
+        )
+
+    def test_a_comment_and_a_def_removed_from_a_string_select_its_function(self):
+        hunk = "@@ -3,3 +2,0 @@\n-# example\n-def example():\n-    pass\n"
+        self.assertEqual(self.selected(hunk), ["m.x_f__mutmut_"])
+
+    def test_a_def_only_removed_from_a_string_selects_its_function(self):
+        hunk = "@@ -3,2 +2,0 @@\n-def example():\n-    pass\n"
+        self.assertEqual(self.selected(hunk), ["m.x_f__mutmut_"])
+
+    def test_a_whole_top_level_function_removed_still_selects_nothing(self):
+        self.assertEqual(self.selected("@@ -4,2 +3,0 @@\n-def h():\n-    pass\n"), [])
+
+
 if __name__ == "__main__":
     unittest.main()

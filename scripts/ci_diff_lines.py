@@ -5,6 +5,7 @@ Split from ci_mutation_diff.py to keep both under the craftsmanship file cap.
 
 from __future__ import annotations
 
+import ast
 import re
 
 # source: pyproject.toml [tool.mutmut] source_paths = ["mcp_server"].
@@ -32,9 +33,9 @@ def _touched_by_deletion(
     `start` is the line before the cut.
     - a whole top-level definition removed: nothing that survives changed, except the
       function whose decorators ended the block, whose header is line `start + 1`;
-    - an indented whole definition removed: a method or a nested function. The
-      source tells which, so the anchor and the removed header's indent are returned
-      for `touched_prefixes`;
+    - a whole definition removed: the anchor and the removed header's indent are
+      returned for `touched_prefixes`. The source tells a method from a nested
+      function, and a string whose content looked like a definition;
     - comments and blank lines are ignored, so a note above a removed definition does
       not turn it into a cut inside a function;
     - only decorators and blanks removed: the function below lost them, `start + 1`;
@@ -53,10 +54,31 @@ def _touched_by_deletion(
         trailing = len(body) > header + 1 and _is_decorator(body[-1])
         after = {start + 1} if trailing else set()
         indent = _indent(body[header])
-        return after, (None if indent == 0 else (start, indent))
+        return after, (start, indent)
     if body and leading == len(body):
         return {start + 1}, None
     return {start, start + 1}, None
+
+
+def string_cut_lines(tree: ast.AST, cuts) -> set[int]:
+    """Lines around cuts that fall inside a multiline string.
+
+    Removed text that reads like a definition or a comment but sits in a string
+    changed the string, so the function holding it is touched.
+    """
+    spans = [
+        (n.lineno, n.end_lineno)
+        for n in ast.walk(tree)
+        if (isinstance(n, ast.JoinedStr) or isinstance(n, ast.Constant))
+        and (isinstance(n, ast.JoinedStr) or isinstance(n.value, str))
+        and n.end_lineno > n.lineno
+    ]
+    return {
+        line
+        for anchor, _ in cuts
+        if any(first <= anchor and anchor + 1 <= last for first, last in spans)
+        for line in (anchor, anchor + 1)
+    }
 
 
 def changed_lines_ex(
