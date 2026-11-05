@@ -148,9 +148,9 @@ def discover_files(project_filter: str, max_files: int) -> list[tuple[Path, str]
                 continue
             results.append((jsonl_file, slug))
             if len(results) >= limit:
-                break
+                return results
 
-    return results[:limit]
+    return results
 
 
 def slug_to_domain(slug: str) -> str:

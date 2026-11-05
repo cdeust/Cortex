@@ -397,7 +397,11 @@ def test_count_session_files_counts_jsonl_per_project(tmp_path, monkeypatch):
     (proj / "a.jsonl").write_text("{}")
     (proj / "b.jsonl").write_text("{}")
     (proj / "ignored.txt").write_text("")
-    assert ss_db._count_session_files() == 2
+    (tmp_path / "projects" / "p2").mkdir()
+    (tmp_path / "projects" / "p2" / "c.jsonl").write_text("{}")
+    (tmp_path / "projects" / "stray.jsonl").write_text("{}")
+    # Summed over projects (p1 + p2); a file at the root is not a project.
+    assert ss_db._count_session_files() == 3
 
 
 def test_detect_external_sources_empty_home_finds_nothing(tmp_path, monkeypatch):

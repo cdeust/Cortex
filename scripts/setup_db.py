@@ -249,7 +249,7 @@ def _count_memories(database_url: str) -> int:
 
 def _count_session_files() -> int:
     """Count JSONL session files under the host's transcript root (#710)."""
-    from mcp_server.infrastructure.config import CLAUDE_PROJECTS_DIR  # noqa: PLC0415 — this script runs under the hook's interpreter, which imports mcp_server; resolved at call time like the pg_schema import above
+    from mcp_server.infrastructure.config import CLAUDE_PROJECTS_DIR  # noqa: PLC0415 — reached only after _init_schema has imported mcp_server.infrastructure.pg_schema, so it adds no failure path; resolved at call time
 
     projects_dir = CLAUDE_PROJECTS_DIR
     if not projects_dir.exists():
