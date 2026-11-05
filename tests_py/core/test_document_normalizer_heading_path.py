@@ -9,6 +9,7 @@ from __future__ import annotations
 from mcp_server.core.document_model import (
     DocumentProvenance,
     DocumentSection,
+    DocumentTable,
     ParsedDocument,
 )
 from mcp_server.core.document_normalizer import normalize_document
@@ -92,3 +93,20 @@ def test_heading_field_stays_the_own_heading():
     )
     memories = normalize_document(doc, _PROV).section_memories
     assert [m.heading for m in memories] == ["P", "C"]
+
+
+def test_level_zero_section_after_headings_keeps_their_ancestry():
+    contents = _contents(
+        [
+            DocumentSection("A", 1, "a"),
+            DocumentSection("", 0, "loose"),
+            DocumentSection("B", 2, "b"),
+        ]
+    )
+    assert contents == ["[A]\n\na", "[(document body)]\n\nloose", "[A > B]\n\nb"]
+
+
+def test_table_only_section_memory_has_no_empty_body_part():
+    table = DocumentTable(rows=[["A"]])
+    contents = _contents([DocumentSection("D", 1, "", tables=[table])])
+    assert contents == ["[D]\n\n| A |\n| --- |"]
