@@ -60,8 +60,9 @@ adheres to [Semantic Versioning](https://semver.org/).
   database answered. The setting now defaults to empty: `auto` with no named
   URL is SQLite in every runtime and tries no connection; a library caller
   with an explicit `postgresql` backend and no URL raises instead of guessing
-  a server (the server, the hooks and the standalone `portability`,
-  `migrate` and `wiki_migrate` commands first apply ADR-1104's backend
+  a server (the server, the hooks, the standalone `portability`, `migrate`
+  and `wiki_migrate` commands and the `scripts/` maintenance commands that
+  open the shared store first apply ADR-1104's backend
   resolution, which names `postgresql://localhost:5432/cortex` for a selected
   PostgreSQL backend); `_get_database_url` refuses an empty conninfo and
   `cortex-migrate` reports it on its exit-1 contract.

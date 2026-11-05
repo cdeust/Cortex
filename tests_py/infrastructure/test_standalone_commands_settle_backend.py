@@ -88,3 +88,60 @@ def test_an_invalid_marker_ends_the_command_in_one_line(
     monkeypatch.setattr(portability, "_store", lambda: pytest.fail("a store was built"))
     assert portability.main(["export", "/tmp/project", "/tmp/out.jsonl"]) == 1
     assert "cortex portability: Cortex not ready" in capsys.readouterr().err
+
+
+_MAINTENANCE_SCRIPTS = (
+    "backfill_wiki_titles_2026_07_14",
+    "backfill_write_class",
+    "memory_dedup_exact",
+    "memory_domain_backfill",
+    "memory_reheat",
+    "memory_staleness_revalidate",
+    "near_dup_calibrate",
+    "provenance_sweep",
+    "wiki_citation_seed",
+)
+
+
+@pytest.mark.parametrize("name", _MAINTENANCE_SCRIPTS)
+def test_maintenance_scripts_settle_before_their_store(name):
+    """Codex review on 749bf05: the scripts under scripts/ that build the
+    shared store read the marker first (structural: the settle call precedes
+    the store construction in the same function)."""
+    from pathlib import Path
+
+    source = (
+        Path(__file__).resolve().parents[2] / "scripts" / f"{name}.py"
+    ).read_text()
+    settle = source.index(f'settle_for_command("{name}")')
+    build = source.index("get_shared_store(settings.DB_PATH")
+    assert settle < build
+
+
+def test_memory_staleness_revalidate_reaches_the_marker_postgresql(
+    postgresql_marker, monkeypatch
+):
+    import importlib.util
+    from pathlib import Path
+
+    path = (
+        Path(__file__).resolve().parents[2]
+        / "scripts"
+        / "memory_staleness_revalidate.py"
+    )
+    spec = importlib.util.spec_from_file_location("_staleness_cli", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    seen = []
+
+    class StopError(Exception):
+        """Raised where the store would be built, before any connection."""
+
+    def store(*args):
+        seen.append(_seen_backend())
+        raise StopError
+
+    monkeypatch.setattr(module, "get_shared_store", store)
+    with pytest.raises(StopError):
+        module.main([])
+    assert seen == [("postgresql", "postgresql://localhost:5432/cortex")]
