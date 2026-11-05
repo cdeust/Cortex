@@ -46,8 +46,9 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 - A user's own tags no longer hide a memory from default recall (#706,
   ADR-1123). The low-signal filter of `recall` and of trigger injection now
-  drops only capture markers a Cortex writer emits (`auto-captured`,
-  `tool:<name>`, `_backfill`, `imported`, `session-summary`, `tool-output`);
+  drops only capture markers (`auto-captured`, `tool:<name>`, `_backfill`,
+  `imported`, `session-summary`, emitted by Cortex writers, and `tool-output`,
+  listed in #706);
   `audit`, `automated`, `wip`, `progress`, `code-review` and `stage-1` to
   `stage-11` no longer drop the memory. The wiki admission list is unchanged.
 - The benchmark machine-load snapshot records no load average on Windows

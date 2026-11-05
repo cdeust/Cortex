@@ -158,9 +158,11 @@ def parse_tags(tags: Any) -> list:
 
 # Capture markers only: tags a Cortex writer puts on the memories it records
 # by itself (post_tool_capture, backfill_memories, session_extractor,
-# wiki_seed_codebase, record_session_end_memory), plus the capture tags the
-# owner lists in issue #706. Words a user may choose for their own memories
-# (audit, wip, stage-N, ...) never hide a memory from default recall.
+# wiki_seed_codebase, record_session_end_memory), plus ``tool-output``, which
+# no writer emits but issue #706 lists among the capture tags. Ordinary words
+# (audit, wip, stage-N, ...) no longer hide a memory. A user can still choose
+# a marker itself (``imported`` is also a wiki provenance alias); keying the
+# filter on a system-written field instead of tags is left on #706.
 # source: ADR-0431 (the filter), ADR-1123 (its scope), issue #706
 LOW_SIGNAL_TAGS: frozenset[str] = frozenset(
     {

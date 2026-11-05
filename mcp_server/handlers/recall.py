@@ -267,9 +267,9 @@ schema = {
             "include_low_signal": {
                 "type": "boolean",
                 "description": (
-                    # source: ADR-0430
+                    # source: ADR-0430 (filter), ADR-1123 (scope)
                     "When false (default), drops memories tagged as auto-captures "
-                    "(``auto-captured``, ``tool:edit``, ``_backfill``, ``stage-N``, "
+                    "(``auto-captured``, ``tool:edit``, ``_backfill``, ``imported``, "
                     "``session-summary``, …) so curated content (ADRs, lessons, "
                     "conventions) surfaces in the first few results. Set true for "
                     "debugging / replay tooling that needs the raw memory feed."
