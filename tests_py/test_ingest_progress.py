@@ -283,7 +283,7 @@ class TestHandlerStageOrdering:
         monkeypatch.setattr(icb, "_pull_processes", _fake_pull_processes)
         monkeypatch.setattr(icb, "_enrich_process_symbols", _fake_enrich)
         monkeypatch.setattr(icb_pages, "write_process_pages", lambda _procs: [])
-        monkeypatch.setattr(icb, "_record_and_prune_graphs", lambda *_: None)
+        monkeypatch.setattr(icb, "_prune_precedent_graphs", lambda _: [])
 
         reporter = FakeReporter()
         result = await icb.handler(
@@ -340,7 +340,7 @@ class TestHandlerStageOrdering:
         monkeypatch.setattr(icb, "_pull_processes", _fake_pull_processes)
         monkeypatch.setattr(icb, "_enrich_process_symbols", _fake_enrich)
         monkeypatch.setattr(icb_pages, "write_process_pages", lambda _procs: [])
-        monkeypatch.setattr(icb, "_record_and_prune_graphs", lambda *_: None)
+        monkeypatch.setattr(icb, "_prune_precedent_graphs", lambda _: [])
 
         np = NullProgress()
         result = await icb.handler(

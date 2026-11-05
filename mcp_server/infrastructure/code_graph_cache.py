@@ -40,9 +40,14 @@ class PruneReport:
     failed: tuple[str, ...]
 
 
-def default_cache_dir() -> Path:
-    """The cache directory ``ingest_codebase`` writes graphs into by default."""
-    return Path.home() / ".cache" / "cortex" / "code-graphs"
+def record_root(graph_dir: str | Path, project_root: str | Path) -> None:
+    """Write the marker when ``graph_dir`` exists; a failed write is logged."""
+    if not Path(graph_dir).expanduser().is_dir():
+        return
+    try:
+        write_root_marker(graph_dir, project_root)
+    except OSError as exc:
+        logger.warning("could not write root marker in %s: %s", graph_dir, exc)
 
 
 def write_root_marker(graph_dir: str | Path, project_root: str | Path) -> None:
@@ -54,19 +59,21 @@ def write_root_marker(graph_dir: str | Path, project_root: str | Path) -> None:
     target = Path(graph_dir).expanduser()
     root = str(Path(project_root).expanduser().resolve())
     marker = target / ROOT_MARKER
-    gated_files.write_json(marker, {"project_root": root}, indent=2)
+    gated_files.write_json(marker, {"project_root": root})
     if read_root_marker(target) != root:
-        marker.unlink(missing_ok=True)
+        marker.unlink()
         logger.warning("root marker for %s was altered by redaction; removed", target)
 
 
 def read_root_marker(graph_dir: Path) -> str | None:
     """The recorded project root, or None when the marker is absent or unreadable."""
     try:
-        data = json.loads((graph_dir / ROOT_MARKER).read_text(encoding="utf-8"))
+        data = json.loads((graph_dir / ROOT_MARKER).read_bytes())
     except (OSError, ValueError):
         return None
-    root = data.get("project_root") if isinstance(data, dict) else None
+    if not isinstance(data, dict):
+        return None
+    root = data.get("project_root")
     return root if isinstance(root, str) and root else None
 
 

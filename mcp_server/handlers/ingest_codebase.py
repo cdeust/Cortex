@@ -104,24 +104,23 @@ def _get_store() -> MemoryStore:
 def _default_output_dir(project_path: str) -> str:
     """Default graph location under ~/.cache/cortex/code-graphs/."""
 
-    return str(graph_cache.default_cache_dir() / project_key(project_path))
+    return str(
+        Path.home() / ".cache" / "cortex" / "code-graphs" / project_key(project_path)
+    )
 
 
-def _record_and_prune_graphs(project_path: str, output_dir: str) -> None:
-    """Tie ``output_dir`` to its project root, then prune orphaned graphs.
+def _prune_precedent_graphs(output_dir: str) -> list[str]:
+    """Remove the orphaned graphs beside ``output_dir`` once a graph is built.
 
-    Replaces the former name-prefix prune, which deleted any sibling sharing
-    the project name's first segment (``cortex-viz-*`` for ``cortex``) and
-    never removed a deleted worktree's graph (issue #711).
+    A graph is orphaned when its ``cortex-root.json`` names a project root that
+    no longer exists. The former rule matched siblings by name prefix: it
+    deleted unrelated projects (``cortex-viz-*`` for ``cortex``) and never a
+    deleted worktree's graph. Returns the removed directory names.
 
     source: issue #711"""
 
-    if Path(output_dir).expanduser().is_dir():
-        try:
-            graph_cache.write_root_marker(output_dir, project_path)
-        except OSError as exc:
-            logger.warning("could not write root marker in %s: %s", output_dir, exc)
-    graph_cache.prune_orphan_graphs(graph_cache.default_cache_dir())
+    parent = Path(output_dir).expanduser().parent
+    return list(graph_cache.prune_orphan_graphs(parent).removed)
 
 
 def _parse_int_or_none(raw: Any) -> int | None:
@@ -488,7 +487,8 @@ async def handler(
             "error": f"{type(exc).__name__}: {exc}",
         }
 
-    _record_and_prune_graphs(project_path, output_dir)
+    # source: ADR-0399
+    _prune_precedent_graphs(output_dir)
 
     diagnostics: list[Any] = []
     do_symbols = top_symbols is None or top_symbols > 0
