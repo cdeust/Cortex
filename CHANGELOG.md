@@ -167,6 +167,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Inventory of what a Cortex backup must contain (#731, slice 1):
+  `docs/audits/owned-resources-backup-2026-11-05.md`. Lists every file and
+  store a Cortex install writes, classed as user data, derived data, process
+  state or not Cortex's, per backend. Finds that the code graphs, the
+  consolidation stamp and the pipeline install are built from the home
+  directory and do not follow `CORTEX_CLAUDE_DIR`.
 - `benchmarks/outcome/paired_delta.py`: scoring core of the longitudinal
   outcome benchmark (first slice of #343). Pairs `recall` and `no_recall`
   trials strictly by task and repeat, and reports the mean delta of
