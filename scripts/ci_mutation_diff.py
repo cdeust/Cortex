@@ -35,8 +35,9 @@ NOT_UNIT_TESTS = frozenset({"scripts", "integration", "benchmarks"})
 _HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
 
 
-# source: mutmut 3.8.1 `results` statuses besides killed and survived.
-NOT_KILLED = frozenset({"no tests", "timeout", "suspicious"})
+# source: mutmut 3.8.1 `results` statuses besides killed and survived, the
+# ones where no test showed the mutant to be wrong.
+NOT_KILLED = frozenset({"no tests", "timeout", "suspicious", "not checked", "segfault"})
 
 
 def scope_prefixes(environ=os.environ) -> list[str]:
@@ -48,13 +49,21 @@ def in_scope(name: str, prefixes: list[str]) -> bool:
     return not prefixes or any(name.startswith(p) for p in prefixes)
 
 
-_DEFINITION = re.compile(r"-(?:async\s+def\b|def\b|class\b|@)")
+_HEADER = re.compile(r"-(?:async\s+def\b|def\b|class\b)")
 
 
 def _removes_a_definition(removed: list[str]) -> bool:
-    """True when a deleted block starts with a top-level def, class or decorator."""
-    first = next((r for r in removed if r[1:].strip()), "")
-    return bool(_DEFINITION.match(first)) and not first[1:].startswith(" ")
+    """True when the deleted block is a whole top-level definition.
+
+    Decorator lines and blanks are skipped; the first other line must be a `def` or
+    `class` header at column 0. A lone deleted decorator leaves its function behind,
+    changed, so it is not a removed definition.
+    """
+    for line in removed:
+        if not line[1:].strip() or line.startswith("-@"):
+            continue
+        return bool(_HEADER.match(line))
+    return False
 
 
 def changed_lines(diff_text: str) -> dict[str, set[int]]:
@@ -129,9 +138,14 @@ def touched_prefixes(source: str, lines: set[int], module: str) -> list[str]:
             if hit(node, next_start(tree.body, i)):
                 found.append(f"{module}.x_{node.name}__mutmut_")
         elif isinstance(node, ast.ClassDef):
+            class_end = next_start(tree.body, i)
             for j, item in enumerate(node.body):
+                # The last method stops where the class does, not at end of file.
+                following = (
+                    next_start(node.body, j) if j + 1 < len(node.body) else class_end
+                )
                 if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and hit(
-                    item, next_start(node.body, j)
+                    item, following
                 ):
                     found.append(f"{module}.xǁ{node.name}ǁ{item.name}__mutmut_")
     return found

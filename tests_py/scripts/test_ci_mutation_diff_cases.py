@@ -48,10 +48,30 @@ class DeletionTests(unittest.TestCase):
     )
 
     def test_a_deleted_last_statement_selects_the_shortened_function(self):
-        # `return 2` was line 4 of f; the anchor (3) is the blank line after f ends.
-        self.assertEqual(
-            cmd.touched_prefixes(self.SRC, {3, 4}, "m"), ["m.x_f__mutmut_"]
+        self.assertEqual(cmd.touched_prefixes(self.SRC, {3}, "m"), ["m.x_f__mutmut_"])
+
+    def test_a_function_owns_the_blank_line_after_it(self):
+        # `return 2` was deleted; git anchors on the blank line 4 after f ends.
+        self.assertEqual(cmd.touched_prefixes(self.SRC, {4}, "m"), ["m.x_f__mutmut_"])
+
+    def test_the_last_method_of_a_class_does_not_own_the_code_after_it(self):
+        src = (
+            "class K:\n    def n(self):\n        return 1\n\n\n"
+            "def bar():\n    return 2\n"
         )
+        self.assertEqual(cmd.touched_prefixes(src, {7}, "m"), ["m.x_bar__mutmut_"])
+        self.assertEqual(cmd.touched_prefixes(src, {4}, "m"), ["m.xǁKǁn__mutmut_"])
+
+    def test_a_deleted_lone_decorator_keeps_its_function(self):
+        diff = "+++ b/mcp_server/m.py\n@@ -10 +9,0 @@\n-@functools.cache\n"
+        self.assertEqual(cmd.changed_lines(diff), {"mcp_server/m.py": {9, 10}})
+
+    def test_a_deleted_decorated_definition_selects_nothing(self):
+        diff = (
+            "+++ b/mcp_server/m.py\n@@ -10,3 +9,0 @@\n"
+            "-@functools.cache\n-def h():\n-    return 9\n"
+        )
+        self.assertEqual(cmd.changed_lines(diff), {})
 
     def test_a_deleted_whole_function_selects_nothing(self):
         diff = "+++ b/mcp_server/m.py\n@@ -5,2 +4,0 @@\n-def h():\n-    return 9\n"
@@ -73,6 +93,10 @@ class UntestedMutantTests(unittest.TestCase):
         "    m.x_g__mutmut_1: no tests\n"
         "    m.x_f__mutmut_3: timeout\n"
     )
+
+    def test_unchecked_and_crashed_mutants_are_not_killed_either(self):
+        results = "    m.x_f__mutmut_1: not checked\n    m.x_f__mutmut_2: segfault\n"
+        self.assertEqual(len(cmd.untested(results, [])), 2)
 
     def test_in_scope_mutants_no_test_reaches_are_reported(self):
         self.assertEqual(
