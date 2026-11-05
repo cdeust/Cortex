@@ -23,11 +23,13 @@ from pathlib import Path
 
 try:
     from ci_diff_lines import SOURCE_ROOT, changed_lines, changed_lines_ex  # noqa: F401
+    from ci_diff_lines import string_cut_lines
 except ModuleNotFoundError:  # imported as scripts.ci_mutation_diff
     from scripts.ci_diff_lines import (  # noqa: F401
         SOURCE_ROOT,
         changed_lines,
         changed_lines_ex,
+        string_cut_lines,
     )
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -118,10 +120,12 @@ def touched_prefixes(
     `cuts` are (anchor, indent) of indented definitions the diff removed: one nested
     deeper than the member holding the anchor is a nested function (the member is
     touched), one at the member's own indent is a whole method (nothing that survives
-    is). A function mutmut cannot mutate goes to
-    `skipped` instead of the result.
+    is); a cut inside a multiline string touches the function holding the string.
+    A function mutmut cannot mutate goes to `skipped` instead of the result.
     """
-    members = list(_members(ast.parse(source), len(source.splitlines())))
+    tree = ast.parse(source)
+    lines = lines | string_cut_lines(tree, cuts)
+    members = list(_members(tree, len(source.splitlines())))
     found: list[str] = []
     for owner, node, first, last in members:
         nested = any(
