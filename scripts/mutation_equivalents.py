@@ -25,7 +25,10 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from ci_mutation_diff import in_scope, scope_prefixes
+try:
+    from ci_mutation_diff import in_scope, scope_prefixes
+except ModuleNotFoundError:  # imported as scripts.mutation_equivalents
+    from scripts.ci_mutation_diff import in_scope, scope_prefixes
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 REGISTRY_PATH = REPO_ROOT / "memory" / "mutation-equivalents.json"

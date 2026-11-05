@@ -64,7 +64,7 @@ class ChangedLinesTests(unittest.TestCase):
     def test_added_modified_and_deleted_lines_of_python_sources_only(self):
         lines = cmd.changed_lines(DIFF)
         self.assertEqual(list(lines), ["mcp_server/core/a.py"])
-        self.assertEqual(lines["mcp_server/core/a.py"], {4, 5, 12, 22})
+        self.assertEqual(lines["mcp_server/core/a.py"], {4, 5, 12, 22, 23})
 
     def test_a_single_line_hunk_has_an_implicit_count_of_one(self):
         diff = "+++ b/mcp_server/x.py\n@@ -5 +7 @@\n"
@@ -144,7 +144,9 @@ class SelectTestsTests(unittest.TestCase):
         root = Path(tempfile.mkdtemp())
         for sub in ("core", "scripts", "integration"):
             (root / "tests_py" / sub).mkdir(parents=True)
-            (root / "tests_py" / sub / "test_a.py").write_text("mcp_server.core.a\n")
+            (root / "tests_py" / sub / "test_a.py").write_text(
+                "import mcp_server.core.a\n"
+            )
         chosen = cmd.select_tests("mcp_server.core.a", root / "tests_py", root)
         self.assertEqual(chosen, ["tests_py/core/test_a.py"])
 
