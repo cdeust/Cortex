@@ -62,7 +62,9 @@ def calls(deps_mod, monkeypatch) -> list[tuple[str, tuple[str, ...]]]:
 
 
 def _stamp(deps_mod, deps_dir: Path, kind: str) -> dict:
-    return json.loads(Path(deps_mod._stamp_path(str(deps_dir), kind)).read_text())
+    return json.loads(
+        Path(deps_mod._stamp_path(str(deps_dir), kind)).read_text(encoding="utf-8")
+    )
 
 
 def test_lock_key_is_the_set_key_of_the_repository_uv_lock(deps_mod):
@@ -92,11 +94,11 @@ def test_stamp_misses_on_another_lock_python_or_corrupt_file(deps_mod, deps_dir)
     assert deps_mod._stamp_matches(str(deps_dir), "base", "e" * 64) is False
     assert deps_mod._stamp_matches(str(deps_dir), "ml", DIGEST) is False
     path = Path(deps_mod._stamp_path(str(deps_dir), "base"))
-    path.write_text(json.dumps({"python": "0.0", "lock": DIGEST}))
+    path.write_text(json.dumps({"python": "0.0", "lock": DIGEST}), encoding="utf-8")
     assert deps_mod._stamp_matches(str(deps_dir), "base", DIGEST) is False
     assert deps_mod._stamp(str(deps_dir), "base") == {}
     for corrupt in ("not json{", json.dumps(["lock", DIGEST])):
-        path.write_text(corrupt)
+        path.write_text(corrupt, encoding="utf-8")
         assert deps_mod._stamp_matches(str(deps_dir), "base", DIGEST) is False
 
 

@@ -65,6 +65,15 @@ adheres to [Semantic Versioning](https://semver.org/).
   listed in #706);
   `audit`, `automated`, `wip`, `progress`, `code-review` and `stage-1` to
   `stage-11` no longer drop the memory. The wiki admission list is unchanged.
+- The post-commit reindex hook reads its cooldown file as UTF-8, the encoding
+  `gated_files.write_json` writes it in, instead of the locale code page (cp1252 on
+  Windows). The test files that still wrote or read text in the locale code page
+  now name UTF-8 (#692, class 3).
+- The mutation sandbox copies `.claude-plugin` and `plugins`: the hook tests
+  selected for `post_commit_reindex.py` read both, so mutmut's clean run failed
+  before any mutant ran. New tests pin the cooldown window, the unknown-root
+  default and the pruning of a full cooldown file, which the diff-scoped gate
+  (ADR-1122) mutates whole.
 - The benchmark machine-load snapshot records no load average on Windows
   instead of raising: `os.getloadavg` does not exist there, and the
   `AttributeError` escaped the `except OSError` (#692 class 4, 13 tests).
