@@ -53,6 +53,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- A document section memory is labelled by its full heading path
+  (`[Install > Notes]`), not its own heading alone, so the same text under two
+  parents is recalled as two distinguishable segments (#713, slice 1).
+  Top-level sections keep their label; a re-ingest of an already-ingested
+  nested document retires the old flat-labelled receipts as for any other
+  normalizer change (#714).
 - Transcript discovery honours the host's config directory (#710, slice 1).
   Profile rebuilds, `import_sessions`, `backfill_memories`, explore features and
   the SessionStart session count read `$CLAUDE_CONFIG_DIR/projects` when the

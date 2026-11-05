@@ -81,7 +81,31 @@ def _render_section(section: DocumentSection) -> str:
     return "\n\n".join(parts)
 
 
-def _section_memory(section: DocumentSection) -> SectionMemory | None:
+def _push_heading(
+    stack: list[tuple[int, str]], section: DocumentSection
+) -> list[tuple[int, str]]:
+    """Heading ancestry after ``section``: shallower-or-equal levels close.
+
+    The level-0 preamble leaves the ancestry untouched. An empty heading at a
+    positive level (both parsers keep one) still closes same-or-deeper
+    headings, but adds no name.
+    source: issue #713 — repeated text under different parents must stay
+    distinguishable.
+    """
+    if section.level <= 0:
+        return stack
+    kept = [(level, text) for level, text in stack if level < section.level]
+    if not section.heading:
+        return kept
+    return [*kept, (section.level, section.heading)]
+
+
+def _section_memory(
+    section: DocumentSection, ancestry: list[tuple[int, str]]
+) -> SectionMemory | None:
+    """Memory payload labelled by the section's full heading path.
+
+    source: issue #713"""
     if document_section_is_empty(section):
         return None
     body_parts = [section.body.strip()] if section.body.strip() else []
@@ -90,8 +114,9 @@ def _section_memory(section: DocumentSection) -> SectionMemory | None:
         if rendered:
             body_parts.append(rendered)
     label = section.heading or "(document body)"
+    path = " > ".join(text for _, text in ancestry) if section.heading else label
     return SectionMemory(
-        heading=label, content=f"[{label}]\n\n" + "\n\n".join(body_parts)
+        heading=label, content=f"[{path}]\n\n" + "\n\n".join(body_parts)
     )
 
 
@@ -121,7 +146,9 @@ def normalize_document(
     Precondition: ``doc`` is a parsed document; ``prov`` identifies its
     source and version.
     Postcondition: returns a NormalizedDocument carrying source and version
-    on the wiki frontmatter and every memory. Nonzero image_count produces
+    on the wiki frontmatter and every memory; each section memory is
+    labelled by its heading path (ancestors joined by " > "). Nonzero
+    image_count produces
     a skipped-image notice. Empty documents yield a page, empty notice, and
     no section memories. Headings-only sections produce no memory.
     source: ADR-0162"""
@@ -144,12 +171,14 @@ def normalize_document(
         lines.append("")
 
     section_memories: list[SectionMemory] = []
+    ancestry: list[tuple[int, str]] = []
     for section in doc.sections:
         rendered = _render_section(section)
         if rendered:
             lines.append(rendered)
             lines.append("")
-        mem = _section_memory(section)
+        ancestry = _push_heading(ancestry, section)
+        mem = _section_memory(section, ancestry)
         if mem is not None:
             section_memories.append(mem)
 
