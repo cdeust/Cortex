@@ -14,7 +14,12 @@ import threading
 import pytest
 
 from mcp_server.handlers import memory_stats, worker_ledger
-from mcp_server.handlers.admission import _Run, reset_semaphores, run_admitted
+from mcp_server.handlers.admission import (
+    _Run,
+    current_budget,
+    reset_semaphores,
+    run_admitted,
+)
 
 # source: mcp_server/handlers/admission.py — remember is a mutating tool, budget 4.
 _TOOL = "remember"
@@ -58,9 +63,14 @@ async def _abandon(started, func) -> None:
 
 
 async def _drain() -> None:
-    """Admit one more call: its slot comes after the abandoned worker's
-    done callbacks, so the ledger has recorded the end."""
-    await asyncio.wait_for(run_admitted(_TOOL, lambda: None), _GUARD)
+    """Run the tool's whole budget at once: every call waits at one barrier
+    until all hold a slot, so every abandoned worker has released its own.
+    Its release and its ledger record are one callback (``_Run.worker_done``).
+    """
+    budget = current_budget(_TOOL)
+    barrier = threading.Barrier(budget, timeout=_GUARD)
+    calls = [run_admitted(_TOOL, barrier.wait) for _ in range(budget)]
+    await asyncio.wait_for(asyncio.gather(*calls), _GUARD)
 
 
 @pytest.mark.asyncio
@@ -117,7 +127,6 @@ async def test_two_abandoned_workers_are_counted_twice(gate):
     assert worker_ledger.report() == {_TOOL: _row(active=2, abandoned_running=2)}
 
     release.set()
-    await _drain()
     await _drain()
     assert worker_ledger.report() == {_TOOL: _row(abandoned_completed=2)}
 
