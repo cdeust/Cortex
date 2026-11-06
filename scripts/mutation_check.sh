@@ -28,9 +28,12 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# source: ADR-1122. An assignment keeps the helper's exit status, so `set -e` stops
+# on a platform with no measured isolation.
+ISOLATION="$(python3 "$ROOT/scripts/ci_mutation_scope.py" --isolation)"
 # source: ADR-0770
-python3 - "$PY" "${TEST_ARR[@]}" -- "$@" <<'PYEOF'
-import re, sys
+ISOLATION="$ISOLATION" python3 - "$PY" "${TEST_ARR[@]}" -- "$@" <<'PYEOF'
+import os, re, sys
 args = sys.argv[2:]
 sep = args.index("--")
 tests, sources = args[:sep], args[sep + 1:]
@@ -45,7 +48,9 @@ src, n2 = re.subn(r'^pytest_add_cli_args_test_selection = .*$',
                   "pytest_add_cli_args_test_selection = " + fmt(tests), src, count=1, flags=re.M)
 src, n3 = re.subn(r'^source_paths = .*$',
                   "source_paths = " + fmt(sorted(set(existing) | set(roots))), src, count=1, flags=re.M)
-assert n1 and n2 and n3, "pyproject [tool.mutmut] must define only_mutate, source_paths and pytest_add_cli_args_test_selection"
+src, n4 = re.subn(r'^process_isolation = .*$',
+                  f'process_isolation = "{os.environ["ISOLATION"]}"', src, count=1, flags=re.M)
+assert n1 and n2 and n3 and n4, "pyproject [tool.mutmut] must define only_mutate, source_paths, pytest_add_cli_args_test_selection and process_isolation"
 open(path, "w").write(src)
 PYEOF
 
