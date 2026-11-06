@@ -1,0 +1,107 @@
+"""A claim's event time, read from the date its own sentence states (#717).
+
+source: issue #717 (slice 3: "extract stated dates with their precision, never
+falling back on extracted_at"); ISO 8601-1:2019 §5.2 (calendar dates, reduced
+precision YYYY-MM), §5.3 (time of day), §5.3.4 (UTC offset).
+
+Only a date written in the sentence becomes an event time, at exactly the
+precision written: "March 2026" is a month, "2026-03-12T10:30+02:00" a minute
+with its offset. ``shared/temporal_normalize.normalize_date_to_iso`` is not
+used: it fills the components a source leaves out ("March 2026" ->
+2026-03-06 when run on 2026-11-06, "2019" -> 2019-11-06, measured 2026-11-06,
+CPython 3.11, python-dateutil from uv.lock), which is the invented precision
+``TimeBound`` refuses.
+
+Not read, so they stay ``unknown``: a bare year (indistinguishable here from a
+citation such as "Bjork 1992" or a count), relative dates ("yesterday", which
+need an anchor the sentence does not give), fractional seconds (finer than
+``TemporalPrecision``), and a sentence stating two or more different dates
+(which one is the event's is not decidable from the text; choosing one would
+invent it).
+"""
+
+from __future__ import annotations
+
+import re
+from datetime import datetime, timedelta, timezone
+
+from mcp_server.shared.wiki_ir import EventTime, TemporalPrecision, TimeBound
+
+# source: ISO 8601-1:2019 §5.2.2/§5.2.3/§5.3.1.2/§5.3.4 (extended format)
+_ISO_RE = re.compile(
+    r"(?<![\w-])(\d{4})-(\d{2})(?:-(\d{2})"
+    r"(?:T(\d{2}):(\d{2})(?::(\d{2}))?(Z|[+-]\d{2}:?\d{2})?)?)?"
+    r"(?![\w:+-]|\.\d)"
+)
+# source: Gregorian calendar month names; capitalised only, so the modal
+# "may" is never read as a month.
+_MONTHS = (
+    "January February March April May June July August September October "
+    "November December"
+).split()
+_MONTH_GROUP = "|".join(_MONTHS)
+# One alternation, longest form first, so each written date is one match.
+_NAMED_RE = re.compile(
+    rf"\b(?:(?P<day>\d{{1,2}})\s+(?P<month>{_MONTH_GROUP})"
+    rf"|(?P<month_first>{_MONTH_GROUP})\s+(?P<day_second>\d{{1,2}}),?"
+    rf"|(?P<month_only>{_MONTH_GROUP}))\s+(?P<year>\d{{4}})\b"
+)
+# source: ISO 8601-1:2019 §5.2-§5.3: the components each written form states.
+_PRECISION_BY_PARTS: dict[int, TemporalPrecision] = {
+    2: "month",
+    3: "day",
+    5: "minute",
+    6: "second",
+}
+
+
+def _offset(raw: str | None) -> timezone | None:
+    """The stated UTC offset, or None when the source states no zone."""
+    if raw is None:
+        return None
+    if raw == "Z":
+        return timezone.utc
+    digits = raw[1:].replace(":", "")
+    delta = timedelta(hours=int(digits[:2]), minutes=int(digits[2:]))
+    return timezone(-delta if raw[0] == "-" else delta)
+
+
+def _bound(parts: list[int], tz: timezone | None) -> TimeBound:
+    """A TimeBound whose precision is the last component the source stated."""
+    padded = parts + [1] * max(0, 3 - len(parts))
+    value = datetime(*padded, tzinfo=tz)  # naive when the source names no zone
+    return TimeBound(value=value, precision=_PRECISION_BY_PARTS[len(parts)])
+
+
+def _iso_bounds(sentence: str) -> list[TimeBound]:
+    bounds = []
+    for m in _ISO_RE.finditer(sentence):
+        parts = [int(g) for g in m.groups()[:6] if g is not None]
+        bounds.append(_bound(parts, _offset(m.group(7))))
+    return bounds
+
+
+def _named_bounds(sentence: str) -> list[TimeBound]:
+    bounds = []
+    for m in _NAMED_RE.finditer(sentence):
+        month = m["month"] or m["month_first"] or m["month_only"]
+        day = m["day"] or m["day_second"]
+        parts = [int(m["year"]), _MONTHS.index(month) + 1]
+        bounds.append(_bound(parts + ([int(day)] if day else []), None))
+    return bounds
+
+
+def stated_event_time(sentence: str) -> EventTime:
+    """The event time a sentence states, or ``unknown`` when it states none.
+
+    One distinct stated date is a ``point``. None, an impossible one
+    ("2026-02-30"), or several different ones leave the event time unknown.
+    """
+    try:
+        bounds = _iso_bounds(sentence) + _named_bounds(sentence)
+    except ValueError:  # an impossible calendar date or offset is not a date
+        return EventTime()
+    distinct = {(b.value, b.value.utcoffset(), b.precision): b for b in bounds}
+    if len(distinct) != 1:
+        return EventTime()
+    return EventTime(kind="point", start=next(iter(distinct.values())))

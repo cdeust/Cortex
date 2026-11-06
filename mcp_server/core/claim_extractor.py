@@ -9,6 +9,7 @@ from typing import Literal
 import re
 from dataclasses import dataclass
 
+from mcp_server.core.claim_event_time import stated_event_time
 from mcp_server.shared.wiki_ir import ClaimEvent, ClaimType, EvidenceRef
 
 
@@ -281,6 +282,7 @@ def extract_claims(
                 entity_ids=entity_ids or [],
                 evidence_refs=refs,
                 confidence=confidence,
+                event_time=stated_event_time(sent),
             )
         )
 
