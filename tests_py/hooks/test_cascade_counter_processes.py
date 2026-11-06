@@ -33,6 +33,14 @@ hook.main()
 """
 
 
+def _original_source_root() -> Path:
+    """The checkout root, also when mutmut runs this file from its mutants/ copy."""
+    root = Path(__file__).resolve().parents[2]
+    if "MUTANT_UNDER_TEST" in os.environ and root.name == "mutants":
+        return root.parent
+    return root
+
+
 class CascadeCounterProcesses(unittest.TestCase):
     def setUp(self):
         self.tree = tempfile.TemporaryDirectory(prefix="cortex-cascade-test-")
@@ -52,9 +60,16 @@ class CascadeCounterProcesses(unittest.TestCase):
 
     def child(self, event):
         env = {**os.environ, "CORTEX_CLAUDE_DIR": str(self.root), "DATABASE_URL": ""}
+        # source: mutmut 3.8.1 (file_utils.setup_source_paths, trampoline_templates)
+        # -- under the mutation gate (ADR-1122) this file runs from the mutants/
+        # copy, whose mutated modules import mutmut at load time, which the -S
+        # child cannot reach, so the gate's stats run fails. As for the hook
+        # subprocesses of #889, the child runs the original code and the
+        # in-process tests judge the mutants.
+        env.pop("MUTANT_UNDER_TEST", None)
         result = subprocess.run(
             [sys.executable, "-S", "-c", _CHILD],
-            cwd=Path(__file__).resolve().parents[2],
+            cwd=_original_source_root(),
             input=json.dumps(event),
             text=True,
             capture_output=True,
