@@ -224,6 +224,13 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `docs/audits/platform-support-matrix-2026-11-05.md` lists which combinations of
+  OS and architecture, host, backend and install channel a receipt measures, and
+  marks every other cell as not measured (#730, slice 1). Measured: four macOS
+  native journeys (one tied to the 4.23.4 release asset), the CI install probe on
+  `ubuntu-26.04`, `macos-26-arm64` and `windows-2025-vs2026`, and the managed
+  PostgreSQL lifecycle of ADR-1114. No Windows, Linux or `.mcpb` native journey
+  has a receipt.
 - Visualization companion audited against Cortex's default stores (#724,
   slice 1): `docs/audits/visualization-companion-backends-2026-11-05.md`. The
   companion reads PostgreSQL at `127.0.0.1:5432/cortex` only, so a SQLite store
