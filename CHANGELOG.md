@@ -14,6 +14,11 @@ adheres to [Semantic Versioning](https://semver.org/).
   the JSONL line rounds each value to 3 decimals like `latency_ms`. No stage is
   timed yet, so `stage_ms` is `{}` for now; the recall stages are instrumented
   in a later slice.
+- A `recall` hit written by `ingest_document` names the document it came from
+  (#713, slice 2). Its `document_sources` lists the source file, the content
+  version and the adapter kind, read from the hit's own `doc-ingest:` tag, so a
+  caller no longer parses tags to trace a segment back to a file version. A hit
+  that is not a document segment has no `document_sources` key.
 - `docs/audits/operation-consumption-inventory-2026-11-05.md` lists what the
   telemetry measures and attributes to a user operation (#733, slice 1): 10 MCP
   tools, 2 hooks and the capture worker emit samples (wall time, bytes, outcome,
