@@ -122,6 +122,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 - The benchmark machine-load snapshot records no load average on Windows
   instead of raising: `os.getloadavg` does not exist there, and the
   `AttributeError` escaped the `except OSError` (#692 class 4, 13 tests).
+- `wiki_bulk_migrate.py` and `wiki_rebucket_file_docs.py` record a page's wiki
+  path with `/` on Windows too. `str()` of the relative path gave `adr\_general\…`,
+  which the slug detectors (split on `/`) did not see, and which ended up as-is
+  in the stubs' `redirect_to`. The decision-block migration tests write their
+  fixture byte for byte: `write_text` turned `\n` into `\r\n` on Windows, and the
+  block id, a hash of the file's bytes, then named no block (#692 class 8, 23 tests).
 - The README now states that both LongMemEval headline numbers (v4.14.1,
   v4.20.0) describe the PostgreSQL store with the reranker, and the Storage
   table no longer claims an "identical" retrieval contract on SQLite: the tool
