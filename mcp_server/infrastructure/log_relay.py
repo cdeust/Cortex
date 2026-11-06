@@ -40,7 +40,10 @@ _PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 
 
 def relay_command(log_path: Path, mode: int | None = None) -> list[str]:
-    command = [python_executable(), "-m", "mcp_server.infrastructure.log_relay"]
+    """``-P`` keeps the inherited cwd (the user's project, for a hook) out of
+    ``sys.path``, so a planted ``mcp_server/infrastructure/log_relay.py`` there
+    cannot replace the relay (Codex security review on PR #897)."""
+    command = [python_executable(), "-P", "-m", "mcp_server.infrastructure.log_relay"]
     return [*command, str(log_path), *([] if mode is None else [oct(mode)])]
 
 
