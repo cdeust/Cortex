@@ -14,10 +14,14 @@ CPython 3.11, python-dateutil from uv.lock), which is the invented precision
 
 Not read, so they stay ``unknown``: a bare year (indistinguishable here from a
 citation such as "Bjork 1992" or a count), relative dates ("yesterday", which
-need an anchor the sentence does not give), fractional seconds (finer than
-``TemporalPrecision``), and a sentence stating two or more different dates
+need an anchor the sentence does not give), fractional seconds, with a
+period or ISO's comma (finer than ``TemporalPrecision``), an offset whose
+minutes exceed 59, a sentence stating two or more different dates
 (which one is the event's is not decidable from the text; choosing one would
-invent it).
+invent it), and a unit holding several sentences, as the extractor keeps a
+short paragraph, a heading or a list item whole: a date there may belong to
+the sentence that is not the claim. Known limit: a short year range such as
+"2010-11" is read as the month it also spells in ISO 8601.
 """
 
 from __future__ import annotations
@@ -27,11 +31,14 @@ from datetime import datetime, timedelta, timezone
 
 from mcp_server.shared.wiki_ir import EventTime, TemporalPrecision, TimeBound
 
+# source: ADR-0123 -- the extractor's sentence boundary, defined once here.
+SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=[A-Z\[\(\#\*\d])")
+
 # source: ISO 8601-1:2019 §5.2.2/§5.2.3/§5.3.1.2/§5.3.4 (extended format)
 _ISO_RE = re.compile(
     r"(?<![\w-])(\d{4})-(\d{2})(?:-(\d{2})"
     r"(?:T(\d{2}):(\d{2})(?::(\d{2}))?(Z|[+-]\d{2}:?\d{2})?)?)?"
-    r"(?![\w:+-]|\.\d)"
+    r"(?![\w+-]|[:.,]\d)"
 )
 # source: Gregorian calendar month names; capitalised only, so the modal
 # "may" is never read as a month.
@@ -46,6 +53,8 @@ _NAMED_RE = re.compile(
     rf"|(?P<month_first>{_MONTH_GROUP})\s+(?P<day_second>\d{{1,2}}),?"
     rf"|(?P<month_only>{_MONTH_GROUP}))\s+(?P<year>\d{{4}})\b"
 )
+# source: ISO 8601-1:2019 §5.3.4 -- the minutes of a UTC offset are 00-59
+_MAX_OFFSET_MINUTE = 59
 # source: ISO 8601-1:2019 §5.2-§5.3: the components each written form states.
 _PRECISION_BY_PARTS: dict[int, TemporalPrecision] = {
     2: "month",
@@ -62,7 +71,10 @@ def _offset(raw: str | None) -> timezone | None:
     if raw == "Z":
         return timezone.utc
     digits = raw[1:].replace(":", "")
-    delta = timedelta(hours=int(digits[:2]), minutes=int(digits[2:]))
+    hours, minutes = int(digits[:2]), int(digits[2:])
+    if minutes > _MAX_OFFSET_MINUTE:
+        raise ValueError  # caught by stated_event_time: the time stays unknown
+    delta = timedelta(hours=hours, minutes=minutes)
     return timezone(-delta if raw[0] == "-" else delta)
 
 
@@ -95,8 +107,11 @@ def stated_event_time(sentence: str) -> EventTime:
     """The event time a sentence states, or ``unknown`` when it states none.
 
     One distinct stated date is a ``point``. None, an impossible one
-    ("2026-02-30"), or several different ones leave the event time unknown.
+    ("2026-02-30"), several different ones, or a ``sentence`` that holds
+    more than one sentence leave the event time unknown.
     """
+    if len(SENTENCE_END.split(sentence)) > 1:
+        return EventTime()
     try:
         bounds = _iso_bounds(sentence) + _named_bounds(sentence)
     except ValueError:  # an impossible calendar date or offset is not a date

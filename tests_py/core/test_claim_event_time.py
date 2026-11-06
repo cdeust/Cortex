@@ -36,6 +36,8 @@ def _point(sentence: str) -> tuple[datetime, str]:
         ("In May 2025 we adopted pgvector.", _naive(2025, 5, 1), "month"),
         ("The 2026-03 release adopted pgvector.", _naive(2026, 3, 1), "month"),
         ("The run of 2026-03-12 measured 0.9.", _naive(2026, 3, 12), "day"),
+        ("2026-03-12: we decided to drop Redis.", _naive(2026, 3, 12), "day"),
+        ("Measured on 2026-03: latency was 10 ms.", _naive(2026, 3, 1), "month"),
         (
             "Deployed 2026-03-12T10:30 to staging.",
             _naive(2026, 3, 12, 10, 30),
@@ -59,6 +61,7 @@ def test_a_stated_date_keeps_exactly_its_precision(sentence, value, precision):
         ("Failed at 2026-03-12T10:30+02:00 on CI.", timedelta(hours=2)),
         ("Failed at 2026-03-12T10:30-05:00 on CI.", timedelta(hours=-5)),
         ("Failed at 2026-03-12T10:30+0530 on CI.", timedelta(hours=5, minutes=30)),
+        ("Failed at 2026-03-12T10:30+05:59 on CI.", timedelta(hours=5, minutes=59)),
     ],
 )
 def test_a_stated_offset_is_kept(sentence, offset):
@@ -85,6 +88,10 @@ def test_a_time_without_a_zone_stays_naive():
         "The 2026-13 release failed.",
         "Failed at 2026-03-12T10:30+25:00 on CI.",
         "Logged at 2026-03-12T10:30:15.123Z by the worker.",
+        "Logged at 2026-03-12T10:30:15.1 by the worker.",
+        "Logged at 2026-03-12T10:30:15,5 by the worker.",
+        "Failed at 2026-03-12T10:30+05:60 on CI.",
+        "We decided to drop Redis. On March 12, 2026 we measured throughput.",
         "The file notes-2026-03-12.md uses the cache.",
         "Tested 2026-03-12x builds only.",
         "The range 1999-2001 was measured.",
@@ -102,7 +109,7 @@ def test_no_single_stated_date_leaves_the_event_time_unknown(sentence):
 
 
 def test_the_same_date_written_twice_is_one_point():
-    assert _point("12 March 2026, i.e. 2026-03-12, we switched.") == (
+    assert _point("On 12 March 2026 (2026-03-12) we switched.") == (
         _naive(2026, 3, 12),
         "day",
     )
@@ -135,3 +142,10 @@ def test_each_claim_reads_only_its_own_sentence():
 def test_utc_is_the_utc_singleton():
     value, _ = _point("Failed at 2026-03-12T10:30Z on CI.")
     assert value.tzinfo is timezone.utc
+
+
+def test_a_date_in_a_neighbouring_sentence_does_not_date_the_claim():
+    claims, _ = extract_claims(
+        "We decided to drop Redis. On March 12, 2026 we measured throughput."
+    )
+    assert [c.event_time.kind for c in claims] == ["unknown"]

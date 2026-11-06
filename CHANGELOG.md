@@ -57,8 +57,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 - `extract_claims` reads each claim's `event_time` from the date its own
   sentence states, at the precision written (#717, slice 3): "March 2026" is a
   month, `2026-03-12T10:30+02:00` a minute with its offset. A sentence with no
-  date, a bare year, a relative or impossible date, or two different dates
-  stays `unknown`; the event time is never taken from `extracted_at`.
+  date, a bare year, a relative or impossible date, two different dates, or
+  several sentences kept as one unit (a short paragraph, heading or list item,
+  whose date may belong to the other sentence) stays `unknown`; the event time
+  is never taken from `extracted_at`.
 
 ### Changed
 
