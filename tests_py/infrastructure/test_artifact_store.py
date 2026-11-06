@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import mcp_server.infrastructure.artifact_store as artifact_store
 
@@ -81,3 +81,42 @@ def test_discard_created_artifact_removes_it_and_tolerates_absence(
     artifact_store.discard_created_artifact(path)
     assert not path.exists()
     artifact_store.discard_created_artifact(path)
+
+
+def test_a_file_published_by_another_writer_first_is_not_claimed(tmp_path, monkeypatch):
+    """Between the existence check and the write another process may publish the
+    same content; the exclusive write leaves its file alone (issue #737)."""
+    _patch_dir(tmp_path, monkeypatch)
+    real_write = artifact_store.gated_files.write_text
+
+    def concurrent_writer_first(path, text, **kwargs):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("the other writer's copy", encoding="utf-8")
+        return real_write(path, text, **kwargs)
+
+    monkeypatch.setattr(
+        artifact_store.gated_files, "write_text", concurrent_writer_first
+    )
+
+    path, created = artifact_store.write_artifact("raced content")
+
+    assert created is False
+    assert path.read_text(encoding="utf-8") == "the other writer's copy"
+
+
+def test_the_shard_is_the_utc_month(tmp_path, monkeypatch):
+    """At 23:30 UTC on 31 January it is already February in UTC+1."""
+    root = _patch_dir(tmp_path, monkeypatch)
+
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            if tz is timezone.utc:
+                return datetime(2026, 1, 31, 23, 30, tzinfo=timezone.utc)
+            return datetime(2026, 2, 1, 0, 30, tzinfo=timezone(timedelta(hours=1)))
+
+    monkeypatch.setattr(artifact_store, "datetime", Clock)
+
+    path, _ = artifact_store.write_artifact("dated by the UTC clock")
+
+    assert path.parent == root / "2026-01"
