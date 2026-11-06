@@ -6,8 +6,38 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- A claim keeps the time of the event it describes apart from the time it was
+  extracted (#717, slice 1). `ClaimEvent.event_time` is `unknown`, a `point`
+  or an `interval`, each bound carrying its value, its ISO 8601 precision and,
+  when the source states one, its offset. A claim with no stated date stays
+  `unknown`; it never inherits `extracted_at`. Persistence and extraction of
+  the field are later slices.
+
 ### Changed
 
+- An added blank or comment-only line no longer puts a function in the mutation gate's
+  scope (ADR-1122), unless it sits inside a multiline string or bytes literal or its
+  hunk replaced code. The blank lines above a new function selected the function before
+  it: #878 was asked to kill the mutants of `count_reranked`, which it did not change.
+- The mutation gate sets mutmut's process isolation per platform (ADR-1122):
+  `forkserver` on Linux, `fork` on macOS, where `forkserver` aborted the stats run in
+  torch MPS before any mutant ran. Another platform stops the gate.
+- `memory-exact-review` and `supersession-delete-parity` sync the `dev` group, so the
+  mutation gate their `ci_unit.sh` ends with finds `mutmut` (ADR-1122). Without it the
+  step failed with "Failed to spawn: mutmut" before any mutant ran (#894).
+- mutmut forks each mutant from a fork server (`process_isolation = "forkserver"`,
+  ADR-1122). Forked from the process that had run the suite, mutants hung in torch on
+  the Linux runner and timed out: #878 was cancelled at the six-hour job limit.
+- Each LongMemEval line of `<stem>.queries.jsonl` carries the question's gold
+  `answer_session_ids` and its own `mrr` and `recall10`, so the published Recall@10
+  and MRR are recomputable from the journal alone (#708).
+- The mutation gate runs only the mutants of the changed functions (ADR-1122).
+  `mutation_check.sh` passes one `<prefix>*` name per changed function to
+  `mutmut run`; it used to run every mutant of the file and judge the changed
+  functions afterwards, which held #865 for six hours. On #877's diff the gate
+  now runs 36 mutants instead of 1,164 and reaches its verdict in 21 min.
 - Pull requests must kill every mutant in the functions they change (ADR-1122).
   `scripts/ci_unit.sh` ends with `scripts/ci_mutation_diff.py`, which mutates the
   changed functions of `mcp_server` with their unit tests and accepts only
@@ -44,6 +74,24 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `rebuild_profiles` now reads Codex history too (#726, first slice). It
+  scanned `~/.claude/projects` only, and a Codex rollout parsed to zero
+  messages, so a Codex-only history created no domain. Every user-thread
+  rollout under `$CODEX_HOME/sessions` (default `~/.codex/sessions`) becomes a
+  conversation record whose project is its `session_meta` working directory,
+  named as Claude names it, so a repository worked on from both hosts is one
+  domain. Subagent, guardian-review and consolidation threads are skipped.
+- A Codex session's `apply_patch` edits now count as edits in the incremental
+  cognitive-style observation, as Claude's `Edit`/`Write` do (#727, slice 1).
+  `core/tool_operation.py` maps each native tool name to the operation it makes
+  explicit; native names stay in `toolsUsed`, and the opaque Codex `exec` stays
+  unclassified rather than counted as a read.
+- A document section memory is labelled by its full heading path
+  (`[Install > Notes]`), not its own heading alone, so the same text under two
+  parents is recalled as two distinguishable segments (#713, slice 1).
+  Top-level sections keep their label; a re-ingest of an already-ingested
+  nested document retires the old flat-labelled receipts as for any other
+  normalizer change (#714).
 - Transcript discovery honours the host's config directory (#710, slice 1).
   Profile rebuilds, `import_sessions`, `backfill_memories`, explore features and
   the SessionStart session count read `$CLAUDE_CONFIG_DIR/projects` when the
@@ -56,6 +104,15 @@ adheres to [Semantic Versioning](https://semver.org/).
   listed in #706);
   `audit`, `automated`, `wip`, `progress`, `code-review` and `stage-1` to
   `stage-11` no longer drop the memory. The wiki admission list is unchanged.
+- The post-commit reindex hook reads its cooldown file as UTF-8, the encoding
+  `gated_files.write_json` writes it in, instead of the locale code page (cp1252 on
+  Windows). The test files that still wrote or read text in the locale code page
+  now name UTF-8 (#692, class 3).
+- The mutation sandbox copies `.claude-plugin` and `plugins`: the hook tests
+  selected for `post_commit_reindex.py` read both, so mutmut's clean run failed
+  before any mutant ran. New tests pin the cooldown window, the unknown-root
+  default and the pruning of a full cooldown file, which the diff-scoped gate
+  (ADR-1122) mutates whole.
 - The benchmark machine-load snapshot records no load average on Windows
   instead of raising: `os.getloadavg` does not exist there, and the
   `AttributeError` escaped the `except OSError` (#692 class 4, 13 tests).
@@ -174,6 +231,22 @@ adheres to [Semantic Versioning](https://semver.org/).
   `ubuntu-26.04`, `macos-26-arm64` and `windows-2025-vs2026`, and the managed
   PostgreSQL lifecycle of ADR-1114. No Windows, Linux or `.mcpb` native journey
   has a receipt.
+- Visualization companion audited against Cortex's default stores (#724,
+  slice 1): `docs/audits/visualization-companion-backends-2026-11-05.md`. The
+  companion reads PostgreSQL at `127.0.0.1:5432/cortex` only, so a SQLite store
+  or the plugin-managed server (kernel-chosen port, SCRAM password) leaves it in
+  Trace-only mode with a message that says to install Cortex.
+- Transcript capture producers audited (#716, slice 1):
+  `docs/audits/transcript-capture-producers-2026-11-05.md` lists the five
+  producers, their session keys, dedups and replay behaviour. No producer keeps
+  a cursor into a transcript and none discovers Codex rollouts.
+- `python -m mcp_server.doctor` names the artifact it runs (#729, slice 1). For an
+  installed wheel: its version and a sha256 over the `mcp_server` rows of its
+  `RECORD`, each member re-hashed on disk (a member that differs from the RECORD
+  fails this optional check). For a source tree or an editable install: its git
+  revision, any uncommitted `mcp_server` change and the same digest over its files,
+  labelled as source evidence, not a distributed artifact. A wheel built from a
+  revision gives the digest of that revision's tree.
 - `benchmarks/outcome/paired_delta.py`: scoring core of the longitudinal
   outcome benchmark (first slice of #343). Pairs `recall` and `no_recall`
   trials strictly by task and repeat, and reports the mean delta of

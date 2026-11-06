@@ -58,7 +58,7 @@ def tmp_claude_dir(tmp_path):
     ]
 
     jsonl_path = proj / "session-001.jsonl"
-    with open(jsonl_path, "w") as f:
+    with open(jsonl_path, "w", encoding="utf-8") as f:
         for rec in records:
             f.write(json.dumps(rec) + "\n")
 
@@ -73,7 +73,7 @@ def tmp_claude_dir(tmp_path):
             "sessionId": "session-002",
         },
     ]
-    with open(proj2 / "session-002.jsonl", "w") as f:
+    with open(proj2 / "session-002.jsonl", "w", encoding="utf-8") as f:
         for rec in records2:
             f.write(json.dumps(rec) + "\n")
 

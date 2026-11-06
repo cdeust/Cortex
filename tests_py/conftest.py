@@ -4,9 +4,9 @@ Handler/integration tests hit PostgreSQL when available. When PG is not
 available (CI without PG, sandboxed environments), falls back to SQLite
 with per-test isolation via temporary DB files.
 
-Isolation has three roots, and ALL THREE are redirected unconditionally
-before any `mcp_server` module is imported (see `_redirect_real_data_roots`):
-the PostgreSQL URL, the SQLite file, and the `~/.claude` filesystem tree.
+Isolation has four roots, all redirected unconditionally before any
+`mcp_server` import (`_redirect_real_data_roots`): the PostgreSQL URL, the
+SQLite file, the `~/.claude` tree and `CODEX_HOME` (Codex rollouts, #726).
 """
 
 import asyncio
@@ -44,14 +44,14 @@ _TEST_CLAUDE_DIR = tempfile.mkdtemp(prefix="cortex_test_claude_")
 
 
 def _redirect_real_data_roots() -> str:
-    """Point the filesystem root and the SQLite store at a throwaway tree.
+    """Point the filesystem roots and the SQLite store at a throwaway tree.
 
-    Returns the isolated SQLite path. Unconditional by construction: an
-    exported `CORTEX_MEMORY_DB_PATH` / `CORTEX_MEMORY_SQLITE_FALLBACK_PATH`
-    is OVERWRITTEN, not respected — the backend a developer selects is their
-    choice, the physical location the suite writes to is not.
+    Returns the isolated SQLite path. Unconditional: an exported
+    `CORTEX_MEMORY_DB_PATH` / `CORTEX_MEMORY_SQLITE_FALLBACK_PATH` / `CODEX_HOME`
+    is OVERWRITTEN — the backend is the developer's choice, its location is not.
     """
     os.environ["CORTEX_CLAUDE_DIR"] = _TEST_CLAUDE_DIR
+    os.environ["CODEX_HOME"] = os.path.join(_TEST_CLAUDE_DIR, "codex")
     methodology = os.path.join(_TEST_CLAUDE_DIR, "methodology")
     os.makedirs(methodology, exist_ok=True)
     sqlite_path = os.path.join(methodology, "memory.db")

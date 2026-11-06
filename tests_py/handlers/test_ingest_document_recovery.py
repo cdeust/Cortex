@@ -259,7 +259,7 @@ def test_real_process_restart_after_each_committed_boundary(
     path = tmp_path / "page.xml"
     path.write_text("<h1>Doc</h1><p>first</p><h2>Next</h2><p>second</p>")
     if variant == "repeated":
-        path.write_text("<h1>Doc</h1><p>first</p><h2>Doc</h2><p>first</p>")
+        path.write_text("<h1>Doc</h1><p>first</p><h1>Doc</h1><p>first</p>")
     if variant == "redacted":
         path.write_text(
             "<h1>Doc</h1><p>password=fixture-only-password</p>"
