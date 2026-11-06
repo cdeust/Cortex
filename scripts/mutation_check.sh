@@ -116,7 +116,7 @@ if [ "$LISTED" -gt 0 ]; then
   [ "$REG_RC" -eq 1 ] && exit 1          # drifted or stale entry: needs a human
 
   if [ -z "$UNREGISTERED" ]; then
-    echo "  every survivor is a registered, justified equivalent 🎉"
+    echo "  every judged survivor is a registered, justified equivalent 🎉"
     exit 0
   fi
 

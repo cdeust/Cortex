@@ -109,8 +109,17 @@ def _run_child(fixed: bool, timeout: float = 5.0) -> tuple[bool, int | None, boo
     bounded wait and that its exit status is the expected one).
 
     Returns (reaped_in_time, exitcode, close_was_called).
+
+    The child is spawned, never forked (issue #801): pytest-timeout's
+    ``timeout_method = "thread"`` (pyproject.toml) arms a timer thread for
+    every test, so the parent is always multi-threaded here, and Python
+    3.12+ warns that fork() from such a process may deadlock the child
+    (multiprocessing/popen_fork.py). A spawned child starts a fresh
+    interpreter: it imports this module by name and runs ``_child_main``,
+    which installs every patch itself, so both regressions keep the same
+    inputs.
     """
-    ctx = multiprocessing.get_context("fork")
+    ctx = multiprocessing.get_context("spawn")
     close_called = ctx.Value("i", 0)
     proc = ctx.Process(target=_child_main, args=(fixed, close_called))
     proc.start()

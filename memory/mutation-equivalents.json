@@ -286,7 +286,7 @@
       "removed": "sig = _text(params, source)[:120] if params else \"\"",
       "added": "sig = _text(params, source)[:120] if params else \"XXXX\"",
       "kind": "unreachable-branch",
-      "rationale": "A Go function_declaration always carries a parameters node \u2014 `func F()` still has an empty one \u2014 so the empty-signature fallback cannot execute.",
+      "rationale": "A Go function_declaration always carries a parameters node — `func F()` still has an empty one — so the empty-signature fallback cannot execute.",
       "issue": "#369"
     },
     {
@@ -480,6 +480,70 @@
       "kind": "equivalent-by-construction",
       "rationale": "write_class's default value is read exactly once in the function body, in `write_class == \"deliberate\"` -- neither \"\" nor \"XXXX\" equals \"deliberate\", so no caller that omits the argument can ever observe which default was compiled in. Killing this would require asserting on a value the function provably never surfaces.",
       "issue": "#345"
+    },
+    {
+      "mutant": "mcp_server.infrastructure.artifact_store.x_write_artifact__mutmut_12",
+      "removed": "address = hashlib.sha256(content.encode(\"utf-8\")).hexdigest()[:_ADDRESS_LEN]",
+      "added": "address = hashlib.sha256(content.encode(\"UTF-8\")).hexdigest()[:_ADDRESS_LEN]",
+      "kind": "equivalent-by-construction",
+      "rationale": "Python's codec registry normalises encoding names before lookup (codecs.lookup lower-cases them), so 'utf-8' and 'UTF-8' select the same codec and produce the same bytes for every string; the address cannot differ.",
+      "issue": "#737"
+    },
+    {
+      "mutant": "mcp_server.hooks.post_tool_capture.x__capture__mutmut_12",
+      "removed": "content = _build_memory_content(tool_name, tool_input, body_output, cwd)",
+      "added": "content = _build_memory_content(tool_name, tool_input, body_output, None)",
+      "kind": "equivalent-by-construction",
+      "rationale": "_build_memory_content discards its cwd parameter on its first line (`_ = cwd`) and never reads it again, so the memory body is identical whatever cwd value it receives.",
+      "issue": "#737"
+    },
+    {
+      "mutant": "mcp_server.hooks.post_tool_capture.x_process_event__mutmut_34",
+      "removed": "should, reason = _should_capture(tool_name, tool_input, output)",
+      "added": "should, reason = _should_capture(tool_name, None, output)",
+      "kind": "equivalent-by-construction",
+      "rationale": "_should_capture decides from tool_name and len(output) only; its tool_input parameter is never read in its body, so passing None returns the same (should, reason) pair for every event.",
+      "issue": "#737"
+    },
+    {
+      "mutant": "mcp_server.hooks.post_tool_capture.x_process_event__mutmut_30",
+      "removed": "output = _normalize_output(event.get(\"tool_response\") or \"\")",
+      "added": "output = _normalize_output(event.get(\"tool_response\") or \"XXXX\")",
+      "kind": "equivalent-by-construction",
+      "rationale": "The default only applies to an event with no tool_response. A 4-character output is below the 50-character floor for every tool whose memory includes output (high-value and network tools are skipped), light-value tools never put output in the body, and 'xxxx' contains none of the words _build_tags looks for, so the stored memory is identical.",
+      "issue": "#737"
+    },
+    {
+      "mutant": "mcp_server.core.document_images.x__local__mutmut_4",
+      "removed": "return tag.rsplit(\"}\", 1)[-1]",
+      "added": "return tag.rsplit(\"}\", )[-1]",
+      "kind": "equivalent-by-construction",
+      "rationale": "ElementTree names a qualified tag `{uri}local` and an unqualified one without braces; a local name (an XML NCName) cannot contain `}`, and ElementTree's expat parser, which uses `}` as its namespace separator, rejects a namespace URI containing `}` (measured 2026-11-06, CPython 3.11 xml.etree: xmlns:a=\"urn:p}q\" raises ParseError, \"urn:pq\" parses). A parsed tag therefore holds at most one `}`, so splitting from the left or the right, with or without maxsplit=1, yields the same last field. No parsed input distinguishes the variants.",
+      "issue": "#732"
+    },
+    {
+      "mutant": "mcp_server.core.document_images.x__local__mutmut_5",
+      "removed": "return tag.rsplit(\"}\", 1)[-1]",
+      "added": "return tag.split(\"}\", 1)[-1]",
+      "kind": "equivalent-by-construction",
+      "rationale": "ElementTree names a qualified tag `{uri}local` and an unqualified one without braces; a local name (an XML NCName) cannot contain `}`, and ElementTree's expat parser, which uses `}` as its namespace separator, rejects a namespace URI containing `}` (measured 2026-11-06, CPython 3.11 xml.etree: xmlns:a=\"urn:p}q\" raises ParseError, \"urn:pq\" parses). A parsed tag therefore holds at most one `}`, so splitting from the left or the right, with or without maxsplit=1, yields the same last field. No parsed input distinguishes the variants.",
+      "issue": "#732"
+    },
+    {
+      "mutant": "mcp_server.core.document_images.x__local__mutmut_7",
+      "removed": "return tag.rsplit(\"}\", 1)[-1]",
+      "added": "return tag.rsplit(\"}\", 2)[-1]",
+      "kind": "equivalent-by-construction",
+      "rationale": "ElementTree names a qualified tag `{uri}local` and an unqualified one without braces; a local name (an XML NCName) cannot contain `}`, and ElementTree's expat parser, which uses `}` as its namespace separator, rejects a namespace URI containing `}` (measured 2026-11-06, CPython 3.11 xml.etree: xmlns:a=\"urn:p}q\" raises ParseError, \"urn:pq\" parses). A parsed tag therefore holds at most one `}`, so splitting from the left or the right, with or without maxsplit=1, yields the same last field. No parsed input distinguishes the variants.",
+      "issue": "#732"
+    },
+    {
+      "mutant": "mcp_server.core.document_images.x__image_references__mutmut_2",
+      "removed": "pending: int | None = None",
+      "added": "pending: int | None = \"\"",
+      "kind": "equivalent-by-construction",
+      "rationale": "`pending` is read only in the branch `if inside and pending is not None`, and `inside` becomes True only in the container branch, which assigns `pending = len(refs)` first. The initial value is therefore never read: every path that reaches the read has overwritten it, so None and \"\" are indistinguishable.",
+      "issue": "#732"
     }
   ]
 }

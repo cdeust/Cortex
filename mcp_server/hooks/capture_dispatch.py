@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import enum
 import logging
 import os
 import socket
@@ -15,12 +16,23 @@ from mcp_server.hooks.capture_worker_policy import limits, validate_payload
 from mcp_server.infrastructure import capture_spool
 from mcp_server.infrastructure.capture_client import deliver
 from mcp_server.infrastructure.capture_peer import is_supported
-from mcp_server.infrastructure.capture_transport import CaptureTransportError
+from mcp_server.infrastructure.capture_transport import (
+    CaptureHandoffUncertainError,
+    CaptureTransportError,
+)
 from mcp_server.infrastructure.config import CLAUDE_DIR
 from mcp_server.infrastructure.log_relay import LoggedSpawn, spawn_logged
 from mcp_server.shared import detached_spawn
 
 logger = logging.getLogger(__name__)
+
+
+class Handoff(enum.Enum):
+    """What :func:`dispatch` knows about the capture it was given (issue #737)."""
+
+    ADMITTED = "admitted"  # the worker acknowledged it, or it sits in the spool
+    NOT_HANDED_OVER = "not_handed_over"  # it failed before leaving the hook
+    UNCERTAIN = "uncertain"  # the worker may have admitted it
 
 
 def report_failure(
@@ -86,7 +98,16 @@ def _spool(payload: dict[str, object]) -> None:
             operation="capture_spool_stalled",
         )
     capture_spool.write(spool, payload)
-    spawn_drainer(capture_spool.log_path(spool))
+    try:
+        spawn_drainer(capture_spool.log_path(spool))
+    except OSError as exc:
+        # The payload is durable: the next capture's drainer stores it, so the
+        # capture is not skipped; the drainer that did not start is the error.
+        report_failure(
+            f"capture spooled, drainer did not start: {type(exc).__name__}: {exc}",
+            0.0,
+            operation="capture_drainer_spawn_failed",
+        )
 
 
 def _spawn(listener: socket.socket, lease: int) -> None:
@@ -110,7 +131,12 @@ def _spawn(listener: socket.socket, lease: int) -> None:
     )
 
 
-def dispatch(payload: dict[str, object]) -> bool:
+def dispatch(payload: dict[str, object]) -> Handoff:
+    """Hand the payload to the resident worker, or to the spool without one.
+
+    postcondition: NOT_HANDED_OVER only when the payload never left the hook
+    (invalid, worker unreachable, refused, spool write failed); UNCERTAIN when
+    the worker may hold it. Every failure is logged and telemetried."""
     started = time.monotonic()
     try:
         validate_payload(payload)
@@ -124,5 +150,7 @@ def dispatch(payload: dict[str, object]) -> bool:
             f"capture skipped after {elapsed:.3f}s: {type(exc).__name__}: {exc}",
             elapsed,
         )
-        return False
-    return True
+        if isinstance(exc, CaptureHandoffUncertainError):
+            return Handoff.UNCERTAIN
+        return Handoff.NOT_HANDED_OVER
+    return Handoff.ADMITTED

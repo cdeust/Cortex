@@ -17,6 +17,7 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator, Callable, TypeVar
 
+from mcp_server.handlers import abandoned_work
 from mcp_server.handlers.latency_class import DEFAULT_SEMAPHORE, classify
 
 logger = logging.getLogger(__name__)
@@ -82,8 +83,9 @@ async def run_admitted(tool_name: str, func: Callable[..., T], *args: Any) -> T:
     waiting: ``asyncio.to_thread`` cannot stop a running thread, so a cancelled
     caller that released its slot let a new request start a worker beyond the
     declared budget (issue #728: budget 4, four cancelled callers, a fifth
-    request made five active workers). A worker whose caller was cancelled has
-    its outcome logged when it ends.
+    request made five active workers). A worker whose caller was cancelled is
+    counted in ``abandoned_work`` while it runs, and its outcome is logged and
+    counted when it ends.
 
     source: issue #728"""
     sem = _get_semaphore(tool_name)
@@ -93,6 +95,7 @@ async def run_admitted(tool_name: str, func: Callable[..., T], *args: Any) -> T:
     try:
         return await asyncio.shield(worker)
     except asyncio.CancelledError:
+        abandoned_work.record_abandoned(tool_name)
         worker.add_done_callback(functools.partial(_log_abandoned, tool_name))
         raise
 
@@ -108,12 +111,21 @@ def _log_abandoned(tool_name: str, worker: asyncio.Future) -> None:
 
     source: issue #728"""
     if worker.cancelled():
-        outcome = "was cancelled"
+        outcome: abandoned_work.Outcome = "cancelled"
+        text = "was cancelled"
     elif worker.exception() is not None:
-        outcome = f"raised {type(worker.exception()).__name__}"
+        outcome = "raised"
+        text = f"raised {type(worker.exception()).__name__}"
     else:
         outcome = "completed"
-    logger.warning("%s worker %s after its caller was cancelled", tool_name, outcome)
+        text = "completed"
+    still_running = abandoned_work.record_ended(tool_name, outcome)
+    logger.warning(
+        "%s worker %s after its caller was cancelled (%d abandoned still running)",
+        tool_name,
+        text,
+        still_running,
+    )
 
 
 def current_budget(tool_name: str) -> int:

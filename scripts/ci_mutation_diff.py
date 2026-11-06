@@ -1,16 +1,11 @@
 #!/usr/bin/env python3
-"""Mutation testing scoped to the functions a pull request changes (ADR-1122).
+"""Mutation testing scoped to the lines a pull request changes (ADR-1122).
 
-mutmut mutates whole files, and a file may carry survivors older than the PR
-(the whole of ast_extractors.py fails today). Gating on the file would turn
-every PR red for code it did not touch. This module narrows the gate to the
-functions whose lines the PR changed: the diff-based mutation testing that
-Google reports at scale (Petrovic and Ivankovic, ICSE-SEIP 2018,
-doi 10.1145/3183519.3183521; Petrovic et al., arXiv 2102.11378).
-
-`run` plans from `git diff` and calls scripts/mutation_check.sh once per
-changed file with MUTATION_ONLY_PREFIXES set; mutation_equivalents.py reads
-that variable and ignores survivors and registry entries outside it.
+The diff-based mutation testing Google reports at scale (Petrovic and Ivankovic,
+ICSE-SEIP 2018, doi 10.1145/3183519.3183521). mutmut names mutants by function, so
+`run` plans the changed functions from `git diff` and calls mutation_check.sh per file
+with MUTATION_ONLY_PREFIXES and MUTATION_ONLY_LINES; the verdict keeps the mutants on
+changed lines only (ci_mutation_lines.py), here and in mutation_equivalents.py.
 """
 
 from __future__ import annotations
@@ -24,6 +19,7 @@ from pathlib import Path
 try:
     from ci_diff_lines import SOURCE_ROOT, changed_lines, changed_lines_ex  # noqa: F401
     from ci_diff_lines import drop_inert, string_cut_lines
+    from ci_mutation_lines import LINES_ENV, job_lines, keeps, scope_value
 except ModuleNotFoundError:  # imported as scripts.ci_mutation_diff
     from scripts.ci_diff_lines import (  # noqa: F401
         SOURCE_ROOT,
@@ -32,6 +28,7 @@ except ModuleNotFoundError:  # imported as scripts.ci_mutation_diff
         drop_inert,
         string_cut_lines,
     )
+    from scripts.ci_mutation_lines import LINES_ENV, job_lines, keeps, scope_value
 
 ROOT = Path(__file__).resolve().parent.parent
 # source: scripts/mutation_equivalents.py reads this name; a rename breaks both.
@@ -211,7 +208,9 @@ def plan(
         if not tests:
             problems.append(f"{path}: functions changed, no test file imports {module}")
             continue
-        jobs.append({"file": path, "tests": tests, "prefixes": prefixes})
+        cuts = cuts_by_path.get(path, set())
+        job = {"file": path, "tests": tests, "prefixes": prefixes}
+        jobs.append({**job, "lines": job_lines(lines, cuts)})
     return jobs, problems
 
 
@@ -219,6 +218,7 @@ def run_job(job: dict) -> int:
     env = {
         **os.environ,
         SCOPE_ENV: "\n".join(job["prefixes"]),
+        LINES_ENV: scope_value(job["file"], job["lines"]),
         "UV_NO_SYNC": "1",
         # source: tests_py/conftest.py _clean_all_tables() empties the one shared
         # database before every test; concurrent mutmut workers would erase each
@@ -270,6 +270,7 @@ def main(argv: list[str]) -> int:
     if argv[:1] == ["--untested"]:
         prefixes = scope_prefixes()
         names = untested(sys.stdin.read(), prefixes) if prefixes else []
+        names = [name for name in names if keeps(name, ROOT)]
         for name in names:
             print(f"!!! mutant not killed: {name}", file=sys.stderr)
         return 1 if names else 0

@@ -14,6 +14,19 @@ adheres to [Semantic Versioning](https://semver.org/).
   the JSONL line rounds each value to 3 decimals like `latency_ms`. No stage is
   timed yet, so `stage_ms` is `{}` for now; the recall stages are instrumented
   in a later slice.
+- `python -m mcp_server.doctor` checks the Claude plugin/runtime pairing
+  (#729, slice 3). Launched with `CLAUDE_PLUGIN_ROOT`, the optional
+  `Plugin/runtime pairing` check fails when the process imports `mcp_server`
+  from outside that plugin directory, or when `.claude-plugin/plugin.json`
+  declares a version other than the running code's (installed wheel, else
+  `pyproject.toml`). Without `CLAUDE_PLUGIN_ROOT` it passes and says no plugin
+  launched it; the Codex runtime keeps its own launch-time version check.
+- `docs/audits/model-identity-inventory-2026-11-06.md` lists which embedding
+  and reranker identity facts a local run records and where (#734, slice 1):
+  the embedding revision is pinned but its bytes are never hashed, the reranker
+  sha256 is recorded but never verified, and the benchmark manifest records the
+  pinned `embedding_model_revision` even when the run served fallback
+  embeddings (probe in the document).
 - A `recall` hit written by `ingest_document` names the document it came from
   (#713, slice 2). Its `document_sources` lists the source file, the content
   version and the adapter kind, read from the hit's own `doc-ingest:` tag, so a
@@ -34,6 +47,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- The mutation gate judges only the mutants on the lines a pull request changed, not
+  every mutant of each changed function (ADR-1122 item 6, owner decision 2026-11-06).
+  Survivors on untouched lines are counted on the log; #865 and #878 were asked to kill
+  102 and 273 survivors that predated them.
 - An added blank or comment-only line no longer puts a function in the mutation gate's
   scope (ADR-1122), unless it sits inside a multiline string or bytes literal or its
   hunk replaced code. The blank lines above a new function selected the function before
@@ -90,6 +107,35 @@ adheres to [Semantic Versioning](https://semver.org/).
   protected merge resolver remain active.
 
 ### Fixed
+
+- On Windows, a hook whose intermediate `bash.exe` has already exited finds its
+  window again (#835, first slice; ADR-1124). The ancestor walk stops at the
+  missing parent, so SessionStart started no consolidate cycle and wrote no
+  registry entry. The window's `claude.exe` pid is now read from `CLAUDE_PID`
+  first, used only when it names a `claude.exe` not younger than the hook,
+  and the walk answers otherwise.
+- `narrative` reads the domain identity `remember` writes (#721, slice 4). It
+  passed an explicit `domain` unresolved to `get_memories_for_domain`, so
+  `narrative(domain="cortex-cowork")` narrated a scope no write used
+  (`remember` stores it under `cortex`) and `domain="SciFact"` missed
+  `scifact`. It now resolves the domain with `resolve_explicit_domain`, like
+  `remember`, `recall` and `recall_hierarchical`; a blank domain counts as no
+  domain.
+- `recall_hierarchical` reads the domain identity `remember` writes (#721, slice 3).
+  It passed an explicit `domain` unresolved to `get_memories_for_domain`, so
+  `recall_hierarchical(domain="cortex-cowork")` read a scope no write used
+  (`remember` stores it under `cortex`) and `domain="SciFact"` missed
+  `scifact`. It now resolves the domain with `resolve_explicit_domain`, like
+  `remember` and `recall`; a blank domain counts as no domain.
+- The doctor's `Runtime artifact identity` check (#729, slice 2, review notes on
+  #887). In a git checkout the digest covers the files git keeps in the tree
+  (tracked, or untracked and not ignored): an ignored `.DS_Store` under
+  `mcp_server/` no longer changes it, as hatchling leaves it out of the wheel
+  too. A tree without `.git` is named `outside git` and passes on its digest,
+  where it used to fail with a `git status` fix that could not help. An
+  installed wheel whose `RECORD` is gone now fails instead of being described as
+  a source tree. The reinstall fix names `--python <interpreter>`, as
+  `runtime.py setup` does.
 
 - `rebuild_profiles` now reads Codex history too (#726, first slice). It
   scanned `~/.claude/projects` only, and a Codex rollout parsed to zero
