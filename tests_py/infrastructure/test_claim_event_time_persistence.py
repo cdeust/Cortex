@@ -84,6 +84,14 @@ def test_each_event_time_kind_round_trips_with_precision_and_offset(store):
     assert stored[1].start is not None and stored[1].start.value.tzinfo is None
 
 
+def test_the_event_time_column_leaves_the_session_column_in_place(store):
+    mid = store.insert_memory({"content": "session #717", "domain": "t717"})
+    claim = ClaimEvent(memory_id=mid, session_id="s-717", text="dated claim")
+    insert_claim_events(store._conn, [_claim_to_dict(claim)])
+    [row] = get_claims_for_memory(store._conn, mid)
+    assert (row["session_id"], row["text"]) == ("s-717", "dated claim")
+
+
 def test_a_historical_event_keeps_its_date_beside_a_recent_extraction(store):
     claim = ClaimEvent(
         text="Apollo 11 landed",
