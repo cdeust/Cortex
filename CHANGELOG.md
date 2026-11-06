@@ -85,6 +85,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `recall_hierarchical` reads the domain identity `remember` writes (#721, slice 3).
+  It passed an explicit `domain` unresolved to `get_memories_for_domain`, so
+  `recall_hierarchical(domain="cortex-cowork")` read a scope no write used
+  (`remember` stores it under `cortex`) and `domain="SciFact"` missed
+  `scifact`. It now resolves the domain with `resolve_explicit_domain`, like
+  `remember` and `recall`; a blank domain counts as no domain.
 - The doctor's `Runtime artifact identity` check (#729, slice 2, review notes on
   #887). In a git checkout the digest covers the files git keeps in the tree
   (tracked, or untracked and not ignored): an ignored `.DS_Store` under
