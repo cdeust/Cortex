@@ -182,15 +182,16 @@ def artifact_identity(check: Callable[..., Any]) -> Any:
     try:
         return _identify(check)
     except (OSError, RuntimeError, ValueError) as exc:
-        # Path.resolve() raises RuntimeError on a symlink loop up to Python
-        # 3.12 (OSError from 3.13): either is this check's failure, not doctor's.
+        # A symlink loop is this check's failure, not doctor's. Up to Python 3.12
+        # resolve() raises RuntimeError on one; from 3.13 only strict=True raises
+        # (OSError), so the path is resolved strictly.
         return check(
             NAME, False, f"cannot read the running artifact: {exc}", optional=True
         )
 
 
 def _identify(check: Callable[..., Any]) -> Any:
-    root = Path(mcp_server.__file__).resolve().parent
+    root = Path(mcp_server.__file__).parent.resolve(strict=True)
     try:
         dist = metadata.distribution(DISTRIBUTION)
     except metadata.PackageNotFoundError:

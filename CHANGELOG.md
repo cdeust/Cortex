@@ -106,8 +106,11 @@ adheres to [Semantic Versioning](https://semver.org/).
   `CLAUDE_PLUGIN_ROOT` or in the path it imports `mcp_server` from (#729,
   slice 4). Up to Python 3.12 `Path.resolve()` raises `RuntimeError` on a loop;
   the `Plugin/runtime pairing` and `Runtime artifact identity` checks caught
-  only `OSError` and `ValueError`, so the loop aborted every other check. Each
-  of these two optional checks now fails alone and names the loop.
+  only `OSError` and `ValueError`, so the loop aborted every other check. From
+  3.13 a non-strict `resolve()` raises nothing, and the artifact check passed
+  with 0 files. Both checks now resolve these paths with `strict=True` and
+  catch `RuntimeError`, so on every supported Python each fails alone and names
+  the loop.
 - On Windows, a hook whose intermediate `bash.exe` has already exited finds its
   window again (#835, first slice; ADR-1124). The ancestor walk stops at the
   missing parent, so SessionStart started no consolidate cycle and wrote no
