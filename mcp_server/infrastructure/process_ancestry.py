@@ -13,12 +13,17 @@ bash.exe -> bash.exe -> bash.exe -> python.exe`` and the MCP server runs
 desktop app, also named ``Claude.exe``, so only the NEAREST match is the
 window's own CLI.
 
-source: ADR-1096"""
+Before the walk, ``window_claude_pid`` reads ``CLAUDE_PID`` (issue #835): in a
+real hook the walk can meet an intermediate ``bash.exe`` that has already
+exited, and the chain is broken; the desktop app exports the window's
+``claude.exe`` pid to the processes it starts.
+
+source: ADR-1124 (walk: ADR-1096)"""
 
 from __future__ import annotations
 
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 
 from mcp_server.shared import win32_process
 from mcp_server.shared.win32_process import ProcessRow
@@ -26,6 +31,12 @@ from mcp_server.shared.win32_process import ProcessRow
 # source: GitHub issue cdeust/Cortex#665 (process names measured on Windows 11
 #   Pro 26200 with Git Bash); Windows file names are case-insensitive
 _CLAUDE_EXE_NAME = "claude.exe"
+
+# source: GitHub issue cdeust/Cortex#835 (seen in desktop-app hooks, Claude
+#   Code 2.1.289 to 2.1.309; 879 of 892 window lookups, 2026-10-21 to
+#   2026-10-29, on the reporter's Windows host); not documented by the host,
+#   so its value is checked against the process table before it is used
+_CLAUDE_PID_ENV = "CLAUDE_PID"
 
 Snapshot = Callable[[], list[ProcessRow]]
 Creation = Callable[[int], int | None]
@@ -41,6 +52,27 @@ def _is_older_or_equal(parent_pid: int, child_pid: int, created: Creation) -> bo
     if parent_time is None or child_time is None:
         return False
     return parent_time <= child_time
+
+
+def _walk(
+    table: dict[int, ProcessRow], start_pid: int, max_depth: int, created: Creation
+) -> int | None:
+    """The ancestor walk of ``claude_ancestor_pid`` over an already read table."""
+    current = table.get(start_pid)
+    for _ in range(max_depth):
+        if current is None:
+            return None
+        parent = table.get(current.ppid)
+        if parent is None or parent.pid == current.pid:
+            return None
+        if not _is_older_or_equal(parent.pid, current.pid, created):
+            return None
+        # Name match only: a chain with just the shared desktop ``Claude.exe``
+        # and no session CLI returns the desktop pid (ADR-1096 point 7).
+        if parent.exe_name.lower() == _CLAUDE_EXE_NAME:
+            return parent.pid
+        current = parent
+    return None
 
 
 def claude_ancestor_pid(
@@ -63,22 +95,56 @@ def claude_ancestor_pid(
     source: ADR-1096"""
     rows = (snapshot or win32_process.snapshot_rows)()
     created = creation or win32_process.creation_filetime
+    return _walk({row.pid: row for row in rows}, start_pid, max_depth, created)
+
+
+def _env_claude_pid(
+    table: dict[int, ProcessRow],
+    start_pid: int,
+    environ: Mapping[str, str],
+    created: Creation,
+) -> int | None:
+    """``CLAUDE_PID`` when it names a ``claude.exe`` not younger than ``start_pid``.
+
+    A process created after ``start_pid`` cannot be the window that started
+    it: that pid was recycled after the window's ``claude.exe`` exited."""
+    if _CLAUDE_PID_ENV not in environ:
+        return None
+    try:
+        pid = int(environ[_CLAUDE_PID_ENV])
+    except ValueError:
+        return None
+    row = table.get(pid)
+    if row is None or row.exe_name.lower() != _CLAUDE_EXE_NAME:
+        return None
+    return pid if _is_older_or_equal(pid, start_pid, created) else None
+
+
+def window_claude_pid(
+    start_pid: int,
+    max_depth: int,
+    *,
+    environ: Mapping[str, str] | None = None,
+    snapshot: Snapshot | None = None,
+    creation: Creation | None = None,
+) -> int | None:
+    """The window's ``claude.exe`` pid: ``CLAUDE_PID`` first, then the walk.
+
+    precondition: none. postcondition: returns ``CLAUDE_PID`` when it parses
+    as an integer and names a live ``claude.exe`` row (case-insensitive) whose
+    creation time is known and not later than ``start_pid``'s; otherwise the
+    result of the ancestor walk of ``claude_ancestor_pid`` over the same
+    table read. The table is read once. ``OSError`` from the reader propagates.
+
+    source: ADR-1124 (walk: ADR-1096)"""
+    rows = (snapshot or win32_process.snapshot_rows)()
+    created = creation or win32_process.creation_filetime
     table = {row.pid: row for row in rows}
-    current = table.get(start_pid)
-    for _ in range(max_depth):
-        if current is None:
-            return None
-        parent = table.get(current.ppid)
-        if parent is None or parent.pid == current.pid:
-            return None
-        if not _is_older_or_equal(parent.pid, current.pid, created):
-            return None
-        # Name match only: a chain with just the shared desktop ``Claude.exe``
-        # and no session CLI returns the desktop pid (ADR-1096 point 7).
-        if parent.exe_name.lower() == _CLAUDE_EXE_NAME:
-            return parent.pid
-        current = parent
-    return None
+    env = os.environ if environ is None else environ
+    from_env = _env_claude_pid(table, start_pid, env, created)
+    if from_env is not None:
+        return from_env
+    return _walk(table, start_pid, max_depth, created)
 
 
 def start_signature(pid: int, *, creation: Creation | None = None) -> str | None:

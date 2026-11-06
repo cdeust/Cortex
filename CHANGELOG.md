@@ -64,6 +64,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- On Windows, a hook whose intermediate `bash.exe` has already exited finds its
+  window again (#835, first slice; ADR-1124). The ancestor walk stops at the
+  missing parent, so SessionStart started no consolidate cycle and wrote no
+  registry entry. The window's `claude.exe` pid is now read from `CLAUDE_PID`
+  first, used only when it names a `claude.exe` not younger than the hook,
+  and the walk answers otherwise.
 - `rebuild_profiles` now reads Codex history too (#726, first slice). It
   scanned `~/.claude/projects` only, and a Codex rollout parsed to zero
   messages, so a Codex-only history created no domain. Every user-thread
