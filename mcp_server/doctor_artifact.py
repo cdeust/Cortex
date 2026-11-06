@@ -181,7 +181,9 @@ def artifact_identity(check: Callable[..., Any]) -> Any:
     it; the other doctor checks still run)."""
     try:
         return _identify(check)
-    except (OSError, ValueError) as exc:
+    except (OSError, RuntimeError, ValueError) as exc:
+        # Path.resolve() raises RuntimeError on a symlink loop up to Python
+        # 3.12 (OSError from 3.13): either is this check's failure, not doctor's.
         return check(
             NAME, False, f"cannot read the running artifact: {exc}", optional=True
         )

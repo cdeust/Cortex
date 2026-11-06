@@ -101,7 +101,9 @@ def plugin_pairing(
         return check(NAME, True, detail, optional=True)
     try:
         return _pair(check, Path(plugin).resolve())
-    except (OSError, ValueError) as exc:
+    except (OSError, RuntimeError, ValueError) as exc:
+        # Path.resolve() raises RuntimeError on a symlink loop up to Python
+        # 3.12 (OSError from 3.13): either is this check's failure, not doctor's.
         detail = f"cannot read the Claude plugin pairing: {exc}"
         return check(NAME, False, detail, _REINSTALL, optional=True)
 

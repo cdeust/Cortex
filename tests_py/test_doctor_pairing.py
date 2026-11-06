@@ -1,6 +1,7 @@
 """Plugin/runtime pairing check contracts. Source: issue #729 (slice 3)."""
 
 import json
+import sys
 from importlib import metadata
 from pathlib import Path
 
@@ -162,3 +163,37 @@ def test_this_checkout_is_a_supported_pairing():
 def test_both_check_lists_run_the_pairing_check():
     assert doctor._plugin_pairing in doctor.CHECKS
     assert doctor._plugin_pairing in doctor.SQLITE_CHECKS
+
+
+def _symlink_loop(tmp_path):
+    """Two links naming each other; resolve() raises RuntimeError up to 3.12."""
+    (tmp_path / "loop-a").symlink_to(tmp_path / "loop-b")
+    (tmp_path / "loop-b").symlink_to(tmp_path / "loop-a")
+    return tmp_path / "loop-a"
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="symlink privilege is not assumed on Windows"
+)
+def test_a_plugin_root_in_a_symlink_loop_fails_the_check_only(tmp_path):
+    loop = _symlink_loop(tmp_path)
+    detail = _check({"CLAUDE_PLUGIN_ROOT": str(loop)}, ok=False, fix=REINSTALL)
+    assert detail.startswith("cannot read the Claude plugin pairing: ")
+    assert str(loop) in detail
+
+
+def test_a_distribution_installed_elsewhere_reads_the_pyproject(tmp_path, monkeypatch):
+    """A hypermnesia-mcp wheel in another site-packages does not speak for the
+    plugin's own code: the version comes from the plugin's pyproject."""
+    plugin = _plugin(tmp_path)
+    site = tmp_path / "site"
+    (site / "mcp_server").mkdir(parents=True)
+    info = site / "hypermnesia_mcp-9.9.9.dist-info"
+    info.mkdir()
+    (info / "METADATA").write_text("Name: hypermnesia-mcp\nVersion: 9.9.9\n")
+    _runs_from(monkeypatch, plugin / "mcp_server", metadata.PathDistribution(info))
+    detail = _check({"CLAUDE_PLUGIN_ROOT": str(plugin)}, ok=True)
+    assert detail == (
+        "Claude plugin 1.2.3 runs its own mcp_server 1.2.3 "
+        f"({plugin.resolve() / 'pyproject.toml'})"
+    )
