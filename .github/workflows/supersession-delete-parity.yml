@@ -30,7 +30,7 @@ jobs:
         uses: ./.github/actions/uv-locked-install
         with:
           environment: ${{ github.workspace }}/.venv
-          set: --extra dev --extra sqlite --extra codebase --extra postgresql --group lint
+          set: --extra dev --extra sqlite --extra codebase --extra postgresql --group lint --group dev
       - name: Check the proposed sources and decision mirror
         run: |
           export PATH="$HOME/.local/bin:$PATH"

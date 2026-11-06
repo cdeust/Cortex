@@ -1,8 +1,9 @@
-"""mutmut forks each mutant from a fork server, not from the suite (ADR-1122).
+"""mutmut's process isolation is chosen per platform by the gate (ADR-1122).
 
-With mutmut's default ``fork`` isolation every mutant is forked from the process that
-already ran the suite; on the Linux runner it then hangs in torch autograd until
-mutmut times it out, and a timeout fails the gate (#877, #878).
+mutation_check.sh rewrites `process_isolation` from ci_mutation_scope.py, so the line
+must exist in pyproject.toml and hold a value mutmut 3.8.1 accepts. With "fork" on
+Linux mutants hung in torch autograd until they timed out (#877, #878); with
+"forkserver" on macOS the stats run aborts in torch MPS.
 """
 
 from __future__ import annotations
@@ -15,7 +16,6 @@ from mutmut.configuration import ProcessIsolation
 PYPROJECT = Path(__file__).resolve().parents[2] / "pyproject.toml"
 
 
-def test_mutmut_forks_mutants_from_a_clean_fork_server():
+def test_pyproject_declares_the_line_the_gate_rewrites():
     config = tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))["tool"]["mutmut"]
-    isolation = ProcessIsolation(config["process_isolation"])
-    assert isolation is ProcessIsolation.FORKSERVER
+    assert ProcessIsolation(config["process_isolation"]) is ProcessIsolation.FORKSERVER
