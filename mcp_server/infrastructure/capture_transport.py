@@ -83,8 +83,11 @@ def acknowledge(connection: socket.socket, accepted: bool) -> None:
 def send(connection: socket.socket, frame: bytes, deadline: float) -> None:
     """Send one frame and wait for the worker's verdict.
 
-    postcondition: CaptureTransportError when nothing was sent or the worker
-    refused; CaptureHandoffUncertainError when sending or the reply failed."""
+    postcondition: TimeoutError when the deadline passed before anything was
+    sent; CaptureHandoffUncertainError for every later failure, a refusal
+    included: CaptureServer._receive also refuses when its acknowledgement
+    fails after the payload was queued, so a refusal does not prove the
+    capture was dropped (review of PR #907)."""
     connection.settimeout(remaining(deadline))
     try:
         connection.sendall(frame)
@@ -94,4 +97,4 @@ def send(connection: socket.socket, frame: bytes, deadline: float) -> None:
             f"capture handoff unconfirmed: {exc}"
         ) from exc
     if reply != _ACCEPTED:
-        raise CaptureTransportError("worker refused capture admission")
+        raise CaptureHandoffUncertainError("worker refused capture admission")

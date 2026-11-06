@@ -60,14 +60,15 @@ class TestCaptureTransport(unittest.TestCase):
                 send(connection, b"frame", time.monotonic() + 1)
             connection.sendall.assert_called_once_with(b"frame")
 
-    def test_a_refusal_is_certain_and_a_lost_reply_is_not(self):
-        """Issue #737: only a refusal proves the worker did not keep the capture."""
+    def test_a_refusal_or_a_lost_reply_is_uncertain(self):
+        """The worker may refuse after queueing (review of PR #907), so neither
+        a refusal nor a lost reply proves the capture was dropped."""
         refused = mock.Mock()
         refused.recv.return_value = b"\x00"
-        with self.assertRaises(CaptureTransportError) as caught:
+        with self.assertRaisesRegex(
+            CaptureHandoffUncertainError, "^worker refused capture admission$"
+        ):
             send(refused, b"frame", time.monotonic() + 1)
-        self.assertNotIsInstance(caught.exception, CaptureHandoffUncertainError)
-        self.assertEqual(str(caught.exception), "worker refused capture admission")
         for failure in (b"", ConnectionResetError("reset")):
             lost = mock.Mock()
             lost.recv.side_effect = [failure]
