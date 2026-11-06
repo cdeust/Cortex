@@ -8,6 +8,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `memory_stats` returns `tool_workers`: per tool, the workers running in the
+  server process, those still running after their caller was cancelled, and
+  how abandoned workers ended since the process started (completed, raised,
+  cancelled) (#728, slice 2). An abandoned mutating call that completed applied
+  its writes although its caller never received the result.
 - A claim keeps the time of the event it describes apart from the time it was
   extracted (#717, slice 1). `ClaimEvent.event_time` is `unknown`, a `point`
   or an `interval`, each bound carrying its value, its ISO 8601 precision and,

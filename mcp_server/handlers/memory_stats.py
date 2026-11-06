@@ -15,6 +15,7 @@ from mcp_server.core.grooming_health import (
 )
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
+from mcp_server.handlers import worker_ledger
 from mcp_server.handlers._tool_meta import READ_ONLY
 
 # ── Schema ────────────────────────────────────────────────────────────────
@@ -38,12 +39,19 @@ schema = {
         "{total_memories, episodic_count, semantic_count, active_count, "
         "archived_count, stale_count, protected_count, avg_heat, "
         "total_entities, total_relationships, active_triggers, "
-        "last_consolidation, has_vector_search, grooming_staleness}. "
+        "last_consolidation, has_vector_search, grooming_staleness, "
+        "tool_workers}. "
         "`grooming_staleness` carries last-run age (days) for the three "
         "judgment-level grooming kinds (wiki/distillation/promotion) "
         "against a sourced threshold -- ages only, no backlog counts "
         "(those cost ~1s combined; call `get_grooming_health` for the "
-        "full picture)."
+        "full picture). `tool_workers` reports, per tool, the workers "
+        "running in this server process now (`active`), those still running "
+        "after their caller was cancelled (`abandoned_running`), and how "
+        "abandoned workers ended since the process started "
+        "(`abandoned_completed`, `abandoned_raised`, `abandoned_cancelled`): "
+        "an abandoned mutating call that completed applied its writes "
+        "although its caller never received the result."
     ),
     "inputSchema": {
         "type": "object",
@@ -102,4 +110,5 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         "has_vector_search": store.has_vec,
         "grooming_staleness": grooming_staleness,
         "grooming_staleness_threshold_days": GROOMING_STALENESS_THRESHOLD_DAYS,
+        "tool_workers": worker_ledger.report(),
     }

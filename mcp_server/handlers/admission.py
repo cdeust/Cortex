@@ -12,11 +12,12 @@ source: ADR-0329"""
 from __future__ import annotations
 
 import asyncio
-import functools
 import logging
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from typing import Any, AsyncIterator, Callable, TypeVar
 
+from mcp_server.handlers import worker_ledger
 from mcp_server.handlers.latency_class import DEFAULT_SEMAPHORE, classify
 
 logger = logging.getLogger(__name__)
@@ -83,37 +84,67 @@ async def run_admitted(tool_name: str, func: Callable[..., T], *args: Any) -> T:
     caller that released its slot let a new request start a worker beyond the
     declared budget (issue #728: budget 4, four cancelled callers, a fifth
     request made five active workers). A worker whose caller was cancelled has
-    its outcome logged when it ends.
+    its outcome logged and recorded in ``worker_ledger`` when it ends.
 
     source: issue #728"""
     sem = _get_semaphore(tool_name)
     await sem.acquire()
     worker = asyncio.ensure_future(asyncio.to_thread(func, *args))
-    worker.add_done_callback(functools.partial(_release_slot, sem))
+    worker_ledger.worker_started(tool_name)
+    run = _Run(tool_name, sem, worker)
+    worker.add_done_callback(run.worker_done)
     try:
         return await asyncio.shield(worker)
     except asyncio.CancelledError:
-        worker.add_done_callback(functools.partial(_log_abandoned, tool_name))
+        run.caller_cancelled()
         raise
 
 
-def _release_slot(sem: asyncio.Semaphore, _worker: asyncio.Future) -> None:
-    sem.release()
+@dataclass
+class _Run:
+    """One admitted worker: its slot, and whether its caller stopped waiting.
+
+    Done callbacks run on the event loop after the worker ends, so the caller
+    can be cancelled before (the worker runs on, abandoned) or after it (the
+    result existed but never reached the caller). Both count as abandoned.
+
+    source: issue #728"""
+
+    tool_name: str
+    sem: asyncio.Semaphore
+    worker: asyncio.Future
+    abandoned: bool = False
+    ended: bool = False
+
+    def worker_done(self, _worker: asyncio.Future) -> None:
+        self.ended = True
+        self.sem.release()
+        outcome = _outcome(self.tool_name, self.worker) if self.abandoned else None
+        worker_ledger.worker_ended(self.tool_name, outcome)
+
+    def caller_cancelled(self) -> None:
+        self.abandoned = True
+        if self.ended:
+            outcome = _outcome(self.tool_name, self.worker)
+            worker_ledger.abandoned_after_end(self.tool_name, outcome)
+        else:
+            worker_ledger.caller_abandoned(self.tool_name)
 
 
-def _log_abandoned(tool_name: str, worker: asyncio.Future) -> None:
-    """Report how a worker ended after its caller was cancelled.
+def _outcome(tool_name: str, worker: asyncio.Future) -> str:
+    """Name and log how a worker ended after its caller was cancelled.
 
     Reading ``exception()`` here is what retrieves it: no caller awaits it.
 
     source: issue #728"""
     if worker.cancelled():
-        outcome = "was cancelled"
+        outcome, detail = "cancelled", "was cancelled"
     elif worker.exception() is not None:
-        outcome = f"raised {type(worker.exception()).__name__}"
+        outcome, detail = "raised", f"raised {type(worker.exception()).__name__}"
     else:
-        outcome = "completed"
-    logger.warning("%s worker %s after its caller was cancelled", tool_name, outcome)
+        outcome, detail = "completed", "completed"
+    logger.warning("%s worker %s after its caller was cancelled", tool_name, detail)
+    return outcome
 
 
 def current_budget(tool_name: str) -> int:
