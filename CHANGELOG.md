@@ -17,6 +17,9 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- mutmut forks each mutant from a fork server (`process_isolation = "forkserver"`,
+  ADR-1122). Forked from the process that had run the suite, mutants hung in torch on
+  the Linux runner and timed out: #878 was cancelled at the six-hour job limit.
 - Each LongMemEval line of `<stem>.queries.jsonl` carries the question's gold
   `answer_session_ids` and its own `mrr` and `recall10`, so the published Recall@10
   and MRR are recomputable from the journal alone (#708).
