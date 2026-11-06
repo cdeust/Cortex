@@ -45,6 +45,11 @@ def write_artifact(
     memory may refer to it and only reference-counted removal may delete it
     (ADR-0503). The file is published exclusively, so two writers of the same
     content cannot both report ``created`` (issue #737).
+
+    ``created`` does not make a removal safe on its own: a concurrent capture
+    of the same content gets ``(path, False)`` and may hand over its pointer
+    before the creator's capture fails and removes the file. That race stays
+    open until the sweep of unreferenced artifacts replaces removal at capture.
     """
     # source: ADR-1110 — the address is taken over the redacted text, so the
     # name of the file is not derived from a secret either.

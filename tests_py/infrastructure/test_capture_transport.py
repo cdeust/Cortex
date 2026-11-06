@@ -9,6 +9,7 @@ import unittest
 from unittest import mock
 
 from mcp_server.infrastructure.capture_transport import (
+    CaptureHandoffUncertainError,
     CaptureTransportError,
     encode,
     receive,
@@ -58,6 +59,35 @@ class TestCaptureTransport(unittest.TestCase):
             with self.assertRaises(CaptureTransportError):
                 send(connection, b"frame", time.monotonic() + 1)
             connection.sendall.assert_called_once_with(b"frame")
+
+    def test_a_refusal_is_certain_and_a_lost_reply_is_not(self):
+        """Issue #737: only a refusal proves the worker did not keep the capture."""
+        refused = mock.Mock()
+        refused.recv.return_value = b"\x00"
+        with self.assertRaises(CaptureTransportError) as caught:
+            send(refused, b"frame", time.monotonic() + 1)
+        self.assertNotIsInstance(caught.exception, CaptureHandoffUncertainError)
+        self.assertEqual(str(caught.exception), "worker refused capture admission")
+        for failure in (b"", ConnectionResetError("reset")):
+            lost = mock.Mock()
+            lost.recv.side_effect = [failure]
+            with self.subTest(failure=failure):
+                with self.assertRaisesRegex(
+                    CaptureHandoffUncertainError, "^capture handoff unconfirmed: "
+                ):
+                    send(lost, b"frame", time.monotonic() + 1)
+
+    def test_a_failed_send_is_uncertain(self):
+        connection = mock.Mock()
+        connection.sendall.side_effect = BrokenPipeError("pipe")
+        with self.assertRaises(CaptureHandoffUncertainError):
+            send(connection, b"frame", time.monotonic() + 1)
+
+    def test_an_expired_deadline_is_certain(self):
+        connection = mock.Mock()
+        with self.assertRaises(TimeoutError):
+            send(connection, b"frame", time.monotonic() - 1)
+        connection.sendall.assert_not_called()
 
     def test_encoding_refuses_oversize_instead_of_truncating(self):
         with self.assertRaises(CaptureTransportError):

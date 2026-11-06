@@ -169,7 +169,7 @@ def _gist_or_full(output: str) -> tuple[str, str | None, Path | None]:
 
 
 def _discard_undelivered_artifact(path: Path | None) -> None:
-    """Remove the artifact this capture created when its memory was not handed over.
+    """Remove the artifact this capture created when its memory never left the hook.
 
     source: issue #737 — the artifact was written before the memory, and a
     declined dispatch left a file no memory refers to, which recall cannot
@@ -282,9 +282,9 @@ def _load_remember():
 def _store_memory(tool_name: str, content: str, tags: list[str], cwd: str) -> bool:
     """Admit the unchanged remember payload to the resident worker.
 
-    Post: True when the payload was handed over (worker or durable spool),
-    False when dispatch declined it."""
-    from mcp_server.hooks.capture_dispatch import dispatch  # noqa: PLC0415 — hook filtering precedes all worker infrastructure imports
+    Post: False only when dispatch is certain the payload never left the hook;
+    True when it was handed over or may have been (issue #737)."""
+    from mcp_server.hooks.capture_dispatch import Handoff, dispatch  # noqa: PLC0415 — hook filtering precedes all worker infrastructure imports
 
     payload: dict[str, object] = {
         "content": content,
@@ -296,9 +296,11 @@ def _store_memory(tool_name: str, content: str, tags: list[str], cwd: str) -> bo
         "write_class": "auto",
         "force": False,
     }
-    if not dispatch(payload):
+    handoff = dispatch(payload)
+    if handoff is Handoff.NOT_HANDED_OVER:
         return False
-    _log(f"queued {tool_name} for capture (persistence pending)")
+    if handoff is Handoff.ADMITTED:
+        _log(f"queued {tool_name} for capture (persistence pending)")
     return True
 
 
@@ -404,12 +406,14 @@ def _capture(tool_name: str, tool_input: dict[str, Any], output: str, cwd: str) 
     # source: ADR-0495 (content shape); ADR-1110 — the hook redacts it once
     content = redact_text(content)
 
-    delivered = False
     try:
-        delivered = _store_memory(tool_name, content, tags, cwd)
+        handed_over = _store_memory(tool_name, content, tags, cwd)
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
+        # Where it failed is unknown, so the payload may have left: keep the
+        # artifact rather than risk a memory whose pointer leads nowhere.
         _log(f"capture failed (non-fatal): {exc}")
-    if not delivered:
+        return
+    if not handed_over:
         _discard_undelivered_artifact(created)
 
 

@@ -118,7 +118,8 @@ def test_declined_dispatch_removes_the_artifact_it_created(tmp_path, monkeypatch
     assert _artifacts(tmp_path) == []
 
 
-def test_failing_dispatch_removes_the_artifact_it_created(tmp_path, monkeypatch):
+def test_raising_dispatch_keeps_the_artifact(tmp_path, monkeypatch):
+    """Where it failed is unknown: the payload may have left, so the file stays."""
     monkeypatch.setattr(artifact_store, "ARTIFACTS_DIR", tmp_path / "artifacts")
 
     def boom(*args):
@@ -128,7 +129,7 @@ def test_failing_dispatch_removes_the_artifact_it_created(tmp_path, monkeypatch)
 
     hook.process_event(_bash_event(_big_stdout("raised")))
 
-    assert _artifacts(tmp_path) == []
+    assert len(_artifacts(tmp_path)) == 1
 
 
 def test_declined_dispatch_keeps_an_artifact_it_did_not_create(tmp_path, monkeypatch):
