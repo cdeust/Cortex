@@ -61,6 +61,13 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `rebuild_profiles` now reads Codex history too (#726, first slice). It
+  scanned `~/.claude/projects` only, and a Codex rollout parsed to zero
+  messages, so a Codex-only history created no domain. Every user-thread
+  rollout under `$CODEX_HOME/sessions` (default `~/.codex/sessions`) becomes a
+  conversation record whose project is its `session_meta` working directory,
+  named as Claude names it, so a repository worked on from both hosts is one
+  domain. Subagent, guardian-review and consolidation threads are skipped.
 - A Codex session's `apply_patch` edits now count as edits in the incremental
   cognitive-style observation, as Claude's `Edit`/`Write` do (#727, slice 1).
   `core/tool_operation.py` maps each native tool name to the operation it makes

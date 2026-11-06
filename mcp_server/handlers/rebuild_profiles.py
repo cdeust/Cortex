@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 
 from mcp_server.core.profile_assembler import build_domain_profiles
 from mcp_server.infrastructure.brain_index_store import load_brain_index
+from mcp_server.infrastructure.codex_history import discover_codex_conversations
 from mcp_server.infrastructure.profile_store import load_profiles, save_profiles
 from mcp_server.infrastructure.scanner import (
     discover_all_memories,
@@ -19,10 +20,13 @@ schema = {
     "title": "Rebuild profiles",
     "annotations": DESTRUCTIVE,
     "description": (
-        "Full rescan of Claude Code session data to rebuild methodology "
-        "profiles. Walks ~/.claude/projects/, parses JSONL transcripts, "
-        "groups by project, and re-derives per-domain cognitive style "
-        "(Felder-Silverman), entry patterns, blind spots, and cross-domain "
+        "Full rescan of Claude Code and Codex session data to rebuild "
+        "methodology profiles. Walks ~/.claude/projects/ and Codex rollouts "
+        "under $CODEX_HOME/sessions/ (default ~/.codex/sessions/), parses "
+        "the JSONL transcripts, groups both by project (a Codex rollout's "
+        "working directory names its project), and re-derives per-domain "
+        "cognitive style (Felder-Silverman), entry patterns, blind spots, "
+        "and cross-domain "
         "bridges via the profile_assembler pipeline. Use this on first "
         "install, after a major workflow change, or when `query_methodology` "
         "returns coldStart=true. Skipped automatically if profiles are <1h "
@@ -127,7 +131,8 @@ async def handler(args: dict | None = None) -> dict:
 
     start_time = time.monotonic()
     memories = discover_all_memories()
-    conversations = discover_conversations()
+    # source: issue #726 — a Codex-only history must create its domain too.
+    conversations = discover_conversations() + discover_codex_conversations()
     by_project = group_by_project(conversations)
 
     build = build_domain_profiles(
