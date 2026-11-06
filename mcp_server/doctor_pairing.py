@@ -56,7 +56,8 @@ def manifest_version(plugin: Path) -> str:
 
     Raises OSError when the manifest cannot be read, ValueError when it is not
     JSON or names no string version."""
-    data = json.loads((plugin / MANIFEST).read_text(encoding="utf-8"))
+    # json reads bytes as UTF-8 (RFC 8259 section 8.1), whatever the locale.
+    data = json.loads((plugin / MANIFEST).read_bytes())
     version = data.get("version") if isinstance(data, dict) else None
     if not isinstance(version, str) or not version:
         raise ValueError(f"{plugin / MANIFEST} declares no version")
@@ -76,7 +77,8 @@ def runtime_version(root: Path) -> tuple[str, str]:
     if dist is not None and Path(str(dist.locate_file(PACKAGE))).resolve() == root:
         return dist.version, f"installed {DISTRIBUTION}"
     pyproject = root.parent / "pyproject.toml"
-    project = tomllib.loads(pyproject.read_text(encoding="utf-8")).get("project", {})
+    with pyproject.open("rb") as file:  # tomllib reads binary files only
+        project = tomllib.load(file).get("project")
     version = project.get("version") if isinstance(project, dict) else None
     if not isinstance(version, str) or not version:
         raise ValueError(f"{pyproject} declares no [project] version")
@@ -93,7 +95,7 @@ def plugin_pairing(
     set and the process imports ``mcp_server`` from elsewhere, when the
     manifest's version differs from the running code's, or when either cannot
     be read (the failure names it)."""
-    plugin = environ.get(ROOT_ENV, "")
+    plugin = environ.get(ROOT_ENV)
     if not plugin:
         detail = f"{ROOT_ENV} unset: not launched by the Claude plugin, no pairing"
         return check(NAME, True, detail, optional=True)
