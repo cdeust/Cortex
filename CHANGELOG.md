@@ -108,6 +108,13 @@ adheres to [Semantic Versioning](https://semver.org/).
   registry entry. The window's `claude.exe` pid is now read from `CLAUDE_PID`
   first, used only when it names a `claude.exe` not younger than the hook,
   and the walk answers otherwise.
+- `get_project_story` reads the domain identity `remember` writes (#721,
+  slice 5). It passed an explicit `domain` unresolved to
+  `get_memories_for_domain`, so `get_project_story(domain="cortex-cowork")`
+  told the story of a scope no write used (`remember` stores it under
+  `cortex`) and `domain="SciFact"` missed `scifact`. It now resolves the domain
+  with `resolve_explicit_domain`, like `remember`, `recall`,
+  `recall_hierarchical` and `narrative`; a blank domain counts as no domain.
 - `narrative` reads the domain identity `remember` writes (#721, slice 4). It
   passed an explicit `domain` unresolved to `get_memories_for_domain`, so
   `narrative(domain="cortex-cowork")` narrated a scope no write used
