@@ -59,8 +59,9 @@ adheres to [Semantic Versioning](https://semver.org/).
   month, `2026-03-12T10:30+02:00` a minute with its offset. A sentence with no
   date, a bare year, a relative or impossible date, two different dates, or
   several sentences kept as one unit (a short paragraph, heading or list item,
-  whose date may belong to the other sentence) stays `unknown`; the event time
-  is never taken from `extracted_at`.
+  whose date may belong to the other sentence), or interval wording ("from 10
+  to 12 March 2026", "since 2026-01") stays `unknown`; a date inside a URL or
+  a path is not read, and the event time is never taken from `extracted_at`.
 
 ### Changed
 

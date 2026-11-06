@@ -18,10 +18,14 @@ need an anchor the sentence does not give), fractional seconds, with a
 period or ISO's comma (finer than ``TemporalPrecision``), an offset whose
 minutes exceed 59, a sentence stating two or more different dates
 (which one is the event's is not decidable from the text; choosing one would
-invent it), and a unit holding several sentences, as the extractor keeps a
-short paragraph, a heading or a list item whole: a date there may belong to
-the sentence that is not the claim. Known limit: a short year range such as
-"2010-11" is read as the month it also spells in ISO 8601.
+invent it), and a unit holding several sentences or lines, as the extractor
+keeps a short paragraph, a heading or a list item whole: a date there may belong to
+the sentence that is not the claim. Interval wording next to a date ("from 10
+to 12 March 2026", "since 2026-01", "until March 2026") stays unknown until
+intervals are extracted, and a date inside a URL, a path or a file name
+("./2026-03-12/report.md") is a reference, not a stated date. Known limit: a
+short year range such as "2010-11" is read as the month it also spells in ISO
+8601.
 """
 
 from __future__ import annotations
@@ -53,6 +57,14 @@ _NAMED_RE = re.compile(
     rf"|(?P<month_first>{_MONTH_GROUP})\s+(?P<day_second>\d{{1,2}}),?"
     rf"|(?P<month_only>{_MONTH_GROUP}))\s+(?P<year>\d{{4}})\b"
 )
+# source: #717 -- interval wording next to a date ("from 10 to 12 March",
+# "since 2026-01", "10-12 March"): until intervals are extracted, it is unknown.
+_RANGE_RE = re.compile(
+    rf"(?i:\b(?:from|between|since|until|till|through))\s+(?:\d|(?:{_MONTH_GROUP})\b)"
+    rf"|\b\d{{1,2}}\s*(?:-|\u2013|\u2014|to|and)\s*\d{{1,2}}\s+(?:{_MONTH_GROUP})\b"
+)
+# Punctuation that may wrap a date written as its own word: "(2026-03-12)."
+_OPENERS, _CLOSERS = "([{\"'", ")]}\"'.,;:!?"
 # source: ISO 8601-1:2019 §5.3.4 -- the minutes of a UTC offset are 00-59
 _MAX_OFFSET_MINUTE = 59
 # source: ISO 8601-1:2019 §5.2-§5.3: the components each written form states.
@@ -85,9 +97,18 @@ def _bound(parts: list[int], tz: timezone | None) -> TimeBound:
     return TimeBound(value=value, precision=_PRECISION_BY_PARTS[len(parts)])
 
 
+def _is_own_word(sentence: str, m: re.Match[str]) -> bool:
+    """False when the date sits inside a URL, a path or a file name."""
+    before = re.split(r"\s", sentence[: m.start()])[-1]
+    after = re.split(r"\s", sentence[m.end() :])[0]
+    return not before.strip(_OPENERS) and not after.strip(_CLOSERS)
+
+
 def _iso_bounds(sentence: str) -> list[TimeBound]:
     bounds = []
     for m in _ISO_RE.finditer(sentence):
+        if not _is_own_word(sentence, m):
+            continue
         parts = [int(g) for g in m.groups()[:6] if g is not None]
         bounds.append(_bound(parts, _offset(m.group(7))))
     return bounds
@@ -107,10 +128,12 @@ def stated_event_time(sentence: str) -> EventTime:
     """The event time a sentence states, or ``unknown`` when it states none.
 
     One distinct stated date is a ``point``. None, an impossible one
-    ("2026-02-30"), several different ones, or a ``sentence`` that holds
-    more than one sentence leave the event time unknown.
+    ("2026-02-30"), several different ones, interval wording, or a
+    ``sentence`` that holds more than one sentence leave the event time
+    unknown. A date inside a URL, a path or a file name is not stated.
     """
-    if len(SENTENCE_END.split(sentence)) > 1:
+    several = "\n" in sentence or len(SENTENCE_END.split(sentence)) > 1
+    if several or _RANGE_RE.search(sentence):
         return EventTime()
     try:
         bounds = _iso_bounds(sentence) + _named_bounds(sentence)

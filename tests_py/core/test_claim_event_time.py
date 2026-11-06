@@ -37,6 +37,11 @@ def _point(sentence: str) -> tuple[datetime, str]:
         ("The 2026-03 release adopted pgvector.", _naive(2026, 3, 1), "month"),
         ("The run of 2026-03-12 measured 0.9.", _naive(2026, 3, 12), "day"),
         ("2026-03-12: we decided to drop Redis.", _naive(2026, 3, 12), "day"),
+        ("We shipped the fix on 2026-03-12.", _naive(2026, 3, 12), "day"),
+        ("On 2026-03-12, we switched to SQLite.", _naive(2026, 3, 12), "day"),
+        ("We switched from Redis on 2026-03-12.", _naive(2026, 3, 12), "day"),
+        ("We decided (2026-03-12) to drop Redis.", _naive(2026, 3, 12), "day"),
+        ("See ./2026-01-05/log for the 2026-03-12 run.", _naive(2026, 3, 12), "day"),
         ("Measured on 2026-03: latency was 10 ms.", _naive(2026, 3, 1), "month"),
         (
             "Deployed 2026-03-12T10:30 to staging.",
@@ -92,6 +97,17 @@ def test_a_time_without_a_zone_stays_naive():
         "Logged at 2026-03-12T10:30:15,5 by the worker.",
         "Failed at 2026-03-12T10:30+05:60 on CI.",
         "We decided to drop Redis. On March 12, 2026 we measured throughput.",
+        "We decided to use https://example.org/2026-03-12/redis.",
+        "We decided to use ./2026-03-12/report.md as the source.",
+        "We decided to keep 2026-03-12.md as the source.",
+        "We measured throughput from 10 to 12 March 2026.",
+        "Between 10 and 12 March 2026 we measured throughput.",
+        "We measured throughput 10-12 March 2026.",
+        "We measured throughput 10\u201312 March 2026.",
+        "Since 2026-01 we use SQLite.",
+        "# Release 2026-03\nWe decided to drop Redis.",
+        "Outages on 2026-03-12,2026-03-13.",
+        "We used Redis until March 2026.",
         "The file notes-2026-03-12.md uses the cache.",
         "Tested 2026-03-12x builds only.",
         "The range 1999-2001 was measured.",
@@ -149,3 +165,10 @@ def test_a_date_in_a_neighbouring_sentence_does_not_date_the_claim():
         "We decided to drop Redis. On March 12, 2026 we measured throughput."
     )
     assert [c.event_time.kind for c in claims] == ["unknown"]
+
+
+def test_list_items_kept_as_one_unit_do_not_lend_their_dates():
+    claims, _ = extract_claims(
+        "- We decided to drop Redis\n- Cache outage on 2026-03-12 broke recall"
+    )
+    assert claims and all(c.event_time.kind == "unknown" for c in claims)
