@@ -558,10 +558,7 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
         )
 
     query = args["query"]
-    # Same identity as remember's write (#721): a family member maps to its
-    # canonical, any other name is kept, lowercased; "" stays unscoped.
-    domain = resolve_explicit_domain(args.get("domain") or "") or None
-    directory = args.get("directory")
+    domain, directory = args.get("domain"), args.get("directory")
     agent_topic = args.get("agent_topic")
     # Connection-rooted scoping: when the server is launched with
     # CORTEX_ROOT_AGENT_TOPIC, force that scope regardless of what the
@@ -670,5 +667,22 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     return encode_within_budget(resp, "memories", fmt, settings.MAX_RESPONSE_CHARS)
 
 
+async def _scoped_by_explicit_domain(
+    args: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Search the domain identity ``remember`` writes, then run the handler.
+
+    ``remember`` resolves an explicit domain with ``resolve_explicit_domain``
+    (an exact family member maps to its canonical, any other name is kept,
+    lowercased); recall passed the raw name, so the two disagreed on scope.
+    A missing or empty domain is left as given. The caller's dict is copied,
+    never changed.
+
+    source: issue #721"""
+    if args and args.get("domain"):
+        args = {**args, "domain": resolve_explicit_domain(args["domain"]) or None}
+    return await _handler_impl(args)
+
+
 # source: ADR-0430
-handler = instrument("recall", _handler_impl, result_count_key="memories")
+handler = instrument("recall", _scoped_by_explicit_domain, result_count_key="memories")

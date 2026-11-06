@@ -5,7 +5,9 @@
 ``recall`` passed the raw argument to the store, so ``cortex-cowork`` or
 ``SciFact`` searched a scope no write ever used. Each test rebuilds the
 repository registry from real directories under ``tmp_path`` and reads the
-domain the public ``recall`` handler hands to the retrieval pipeline.
+domain the public ``recall`` handler hands to the retrieval pipeline. The
+resolution lives in ``_scoped_by_explicit_domain``, the function the public
+``handler`` wraps, so ``_handler_impl`` is unchanged.
 
 source: issue #721; ADR-0647"""
 
@@ -50,9 +52,9 @@ def scoped_domain(tmp_path, monkeypatch):
 
     monkeypatch.setattr(recall, "pg_recall", fake_pg_recall)
 
-    def run(domain):
+    def run(domain, entry=recall._scoped_by_explicit_domain):
         with pytest.raises(_StopError):
-            asyncio.run(recall._handler_impl({"query": "q", "domain": domain}))
+            asyncio.run(entry({"query": "q", "domain": domain}))
         return seen["domain"]
 
     yield run
@@ -73,5 +75,25 @@ def test_recall_scope_equals_remember_write_scope(scoped_domain, name):
 
 
 @pytest.mark.parametrize("domain", [None, ""])
-def test_no_domain_stays_unscoped(scoped_domain, domain):
-    assert scoped_domain(domain) is None
+def test_missing_or_empty_domain_is_left_as_given(scoped_domain, domain):
+    assert scoped_domain(domain) == domain
+
+
+def test_blank_domain_becomes_unscoped(scoped_domain):
+    assert scoped_domain("   ") is None
+
+
+def test_public_handler_resolves_the_domain(scoped_domain):
+    assert scoped_domain("cortex-cowork", entry=recall.handler) == "cortex"
+
+
+def test_caller_arguments_are_not_changed(scoped_domain):
+    args = {"query": "q", "domain": "Cortex-Cowork"}
+    with pytest.raises(_StopError):
+        asyncio.run(recall._scoped_by_explicit_domain(args))
+    assert args == {"query": "q", "domain": "Cortex-Cowork"}
+
+
+def test_no_arguments_reach_the_handler_unscoped():
+    result = asyncio.run(recall._scoped_by_explicit_domain(None))
+    assert result["count"] == 0 and result["memories"] == []
