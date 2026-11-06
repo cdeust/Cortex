@@ -21,6 +21,9 @@ adheres to [Semantic Versioning](https://semver.org/).
   scope (ADR-1122), unless it sits inside a multiline string or bytes literal or its
   hunk replaced code. The blank lines above a new function selected the function before
   it: #878 was asked to kill the mutants of `count_reranked`, which it did not change.
+- `memory-exact-review` and `supersession-delete-parity` sync the `dev` group, so the
+  mutation gate their `ci_unit.sh` ends with finds `mutmut` (ADR-1122). Without it the
+  step failed with "Failed to spawn: mutmut" before any mutant ran (#894).
 - mutmut forks each mutant from a fork server (`process_isolation = "forkserver"`,
   ADR-1122). Forked from the process that had run the suite, mutants hung in torch on
   the Linux runner and timed out: #878 was cancelled at the six-hour job limit.
