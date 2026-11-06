@@ -34,9 +34,14 @@ def closer(responses):
     return namespace, calls
 
 
-def graphql(merged, issues):
-    nodes = [{"number": n, "state": state} for n, state in issues]
-    pull = {"merged": merged, "closingIssuesReferences": {"nodes": nodes}}
+def graphql(merged, issues, merger="github-actions", more=False):
+    nodes = [
+        {"number": n, "state": state, "repository": {"nameWithOwner": repo}}
+        for n, state, repo in ((*i, REPO) if len(i) == 2 else i for i in issues)
+    ]
+    links = {"pageInfo": {"hasNextPage": more}, "nodes": nodes}
+    pull = {"merged": merged, "mergedBy": {"login": merger}}
+    pull["closingIssuesReferences"] = links
     return {("POST", "graphql"): {"data": {"repository": {"pullRequest": pull}}}}
 
 
@@ -48,21 +53,33 @@ class CloseIssuesTests(unittest.TestCase):
             ns["main"]()
         return calls
 
-    def test_each_open_linked_issue_is_commented_then_closed(self):
+    def test_each_open_linked_issue_is_closed_then_commented(self):
         calls = self.run_main(graphql(True, [(801, "OPEN")]))
         writes = [
             (m, u.removeprefix("https://api.github.com"), p) for m, u, p in calls[1:]
         ]
-        self.assertEqual(writes[0][:2], ("POST", f"/repos/{REPO}/issues/801/comments"))
-        self.assertIn("Closed by #908", writes[0][2]["body"])
         self.assertEqual(
-            writes[1],
+            writes[0],
             (
                 "PATCH",
                 f"/repos/{REPO}/issues/801",
                 {"state": "closed", "state_reason": "completed"},
             ),
         )
+        self.assertEqual(writes[1][:2], ("POST", f"/repos/{REPO}/issues/801/comments"))
+        self.assertIn("Closed by #908", writes[1][2]["body"])
+
+    def test_an_issue_of_another_repository_is_left_alone(self):
+        calls = self.run_main(graphql(True, [(12, "OPEN", "someone/other")]))
+        self.assertEqual([m for m, _, _ in calls], ["POST"])  # the query only
+
+    def test_more_than_fifty_linked_issues_stop_the_job(self):
+        with self.assertRaises(SystemExit):
+            self.run_main(graphql(True, [(801, "OPEN")], more=True))
+
+    def test_a_merge_by_a_person_is_left_to_github(self):
+        calls = self.run_main(graphql(True, [(801, "OPEN")], merger="cdeust"))
+        self.assertEqual([m for m, _, _ in calls], ["POST"])  # the query only
 
     def test_an_issue_already_closed_is_left_alone(self):
         calls = self.run_main(graphql(True, [(801, "CLOSED")]))

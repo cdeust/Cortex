@@ -490,12 +490,18 @@ jobs:
           from urllib.request import Request, urlopen
 
           API = "https://api.github.com"
+          # source: the GraphQL login of the GITHUB_TOKEN actor that the resolver merges as.
+          RESOLVER = "github-actions"
           QUERY = """
           query($owner: String!, $name: String!, $number: Int!) {
             repository(owner: $owner, name: $name) {
               pullRequest(number: $number) {
                 merged
-                closingIssuesReferences(first: 50) { nodes { number state } }
+                mergedBy { login }
+                closingIssuesReferences(first: 50) {
+                  pageInfo { hasNextPage }
+                  nodes { number state repository { nameWithOwner } }
+                }
               }
             }
           }
@@ -531,17 +537,29 @@ jobs:
               pull = data["data"]["repository"]["pullRequest"]
               if pull["merged"] is not True:
                   raise SystemExit(f"close-issues: PR #{number} is not merged")
-              issues = pull["closingIssuesReferences"]["nodes"]
-              for issue in issues:
+              merger = (pull.get("mergedBy") or {}).get("login")
+              if merger != RESOLVER:
+                  # GitHub closes the issues itself when a person merges.
+                  print(f"PR #{number} merged by {merger}: GitHub closes its issues")
+                  return 0
+              links = pull["closingIssuesReferences"]
+              if links["pageInfo"]["hasNextPage"]:
+                  raise SystemExit(f"close-issues: PR #{number} links over 50 issues")
+              for issue in links["nodes"]:
+                  owner_repo = issue["repository"]["nameWithOwner"]
+                  if owner_repo != repository:
+                      print(f"{owner_repo}#{issue['number']}: another repository, left alone")
+                      continue
                   if issue["state"] != "OPEN":
                       print(f"#{issue['number']} already {issue['state'].lower()}")
                       continue
                   path = f"{API}/repos/{repository}/issues/{issue['number']}"
+                  # Close first: a failed close must not leave a "Closed by" comment.
+                  call("PATCH", path, {"state": "closed", "state_reason": "completed"})
                   body = f"Closed by #{number}, merged by the resolver (its GITHUB_TOKEN merge does not trigger GitHub's closing keywords)."
                   call("POST", f"{path}/comments", {"body": body})
-                  call("PATCH", path, {"state": "closed", "state_reason": "completed"})
                   print(f"#{issue['number']} closed by #{number}")
-              if not issues:
+              if not links["nodes"]:
                   print(f"PR #{number} names no issue to close")
               return 0
 
