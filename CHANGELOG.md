@@ -102,6 +102,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The preemptive-context hook tests send an event path that is absolute on the
+  running platform (#692 class 5, 9 Windows failures in run 38008915302):
+  `/a.py` has no drive on Windows, so `_event_paths` rightly dropped it as a
+  relative path with no `cwd` and nothing was primed. The expired-cooldown test
+  now seeds the real `[project, path]` cooldown key; it seeded `"/a.py"`, which
+  no lookup reads, and passed even with a fresh cooldown.
 - On Windows, a hook whose intermediate `bash.exe` has already exited finds its
   window again (#835, first slice; ADR-1124). The ancestor walk stops at the
   missing parent, so SessionStart started no consolidate cycle and wrote no

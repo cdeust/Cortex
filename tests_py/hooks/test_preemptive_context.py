@@ -12,12 +12,21 @@ from __future__ import annotations
 import json
 import sys
 import time
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from mcp_server.hooks import preemptive_context as hook
 from tests_py.hooks.stdin_support import utf8_stdin
+
+# An event path must be absolute on the running platform: ``/a.py`` has no
+# drive on Windows, so ``_event_paths`` rightly rejects it there as a relative
+# path with no ``cwd`` (#692, class 5). The filesystem root resolves to the
+# current drive on Windows and to ``/`` elsewhere.
+_ROOT = Path("/").resolve()
+A_PY = str(_ROOT / "a.py")
+B_PY = str(_ROOT / "b.py")
 
 
 @pytest.fixture(autouse=True)
@@ -33,15 +42,15 @@ def _isolated_cooldown(tmp_path, monkeypatch):
 @pytest.mark.parametrize("tool", ["Bash", "Grep", "Task", ""])
 def test_non_file_tools_never_prime(tool):
     with patch.object(hook, "_prime_file_memories") as prime:
-        hook.process_event({"tool_name": tool, "tool_input": {"file_path": "/a.py"}})
+        hook.process_event({"tool_name": tool, "tool_input": {"file_path": A_PY}})
     prime.assert_not_called()
 
 
 @pytest.mark.parametrize("tool", ["Edit", "Write", "Read"])
 def test_file_tools_prime_the_touched_path(tool):
     with patch.object(hook, "_prime_file_memories", return_value=2) as prime:
-        hook.process_event({"tool_name": tool, "tool_input": {"file_path": "/a.py"}})
-    prime.assert_called_once_with("/a.py", None)
+        hook.process_event({"tool_name": tool, "tool_input": {"file_path": A_PY}})
+    prime.assert_called_once_with(A_PY, None)
 
 
 def test_missing_tool_input_does_not_prime():
@@ -67,24 +76,24 @@ def test_empty_file_path_does_not_prime():
 
 def test_second_event_within_the_window_is_skipped():
     with patch.object(hook, "_prime_file_memories", return_value=3) as prime:
-        hook.process_event({"tool_name": "Edit", "tool_input": {"file_path": "/a.py"}})
-        hook.process_event({"tool_name": "Edit", "tool_input": {"file_path": "/a.py"}})
+        hook.process_event({"tool_name": "Edit", "tool_input": {"file_path": A_PY}})
+        hook.process_event({"tool_name": "Edit", "tool_input": {"file_path": A_PY}})
     assert prime.call_count == 1
 
 
 def test_cooldown_is_per_file():
     with patch.object(hook, "_prime_file_memories", return_value=3) as prime:
-        hook.process_event({"tool_name": "Edit", "tool_input": {"file_path": "/a.py"}})
-        hook.process_event({"tool_name": "Edit", "tool_input": {"file_path": "/b.py"}})
+        hook.process_event({"tool_name": "Edit", "tool_input": {"file_path": A_PY}})
+        hook.process_event({"tool_name": "Edit", "tool_input": {"file_path": B_PY}})
     assert prime.call_count == 2
 
 
 def test_expired_cooldown_primes_again():
     stale = time.time() - hook._COOLDOWN_SECONDS - 1
-    hook._COOLDOWN_FILE.write_text(json.dumps({"/a.py": stale}))
+    hook._COOLDOWN_FILE.write_text(json.dumps({hook._cooldown_key(A_PY, None): stale}))
 
     with patch.object(hook, "_prime_file_memories", return_value=1) as prime:
-        hook.process_event({"tool_name": "Read", "tool_input": {"file_path": "/a.py"}})
+        hook.process_event({"tool_name": "Read", "tool_input": {"file_path": A_PY}})
 
     prime.assert_called_once()
 
@@ -92,7 +101,7 @@ def test_expired_cooldown_primes_again():
 def test_priming_nothing_sets_the_cooldown():
     """A miss is a completed scan and must respect the same cooldown."""
     with patch.object(hook, "_prime_file_memories", return_value=0):
-        hook.process_event({"tool_name": "Edit", "tool_input": {"file_path": "/a.py"}})
+        hook.process_event({"tool_name": "Edit", "tool_input": {"file_path": A_PY}})
 
     assert hook._COOLDOWN_FILE.exists()
 
@@ -100,7 +109,10 @@ def test_priming_nothing_sets_the_cooldown():
 def test_successful_prime_reports_the_file_it_primed(capsys):
     with patch.object(hook, "_prime_file_memories", return_value=4):
         hook.process_event(
-            {"tool_name": "Edit", "tool_input": {"file_path": "/deep/path/store.py"}}
+            {
+                "tool_name": "Edit",
+                "tool_input": {"file_path": str(_ROOT / "deep" / "path" / "store.py")},
+            }
         )
 
     err = capsys.readouterr().err
@@ -164,7 +176,7 @@ def test_failed_update_is_logged_with_its_cause(capsys):
 
 
 def test_storage_failure_does_not_suppress_recovered_read():
-    event = {"tool_name": "Read", "tool_input": {"file_path": "/a.py"}}
+    event = {"tool_name": "Read", "tool_input": {"file_path": A_PY}}
     with (
         patch(
             "mcp_server.infrastructure.memory_store.get_shared_store",
@@ -204,7 +216,7 @@ def test_main_ignores_malformed_json(monkeypatch):
 
 
 def test_main_forwards_a_valid_event(monkeypatch):
-    event = {"tool_name": "Edit", "tool_input": {"file_path": "/a.py"}}
+    event = {"tool_name": "Edit", "tool_input": {"file_path": A_PY}}
     monkeypatch.setattr(sys, "stdin", utf8_stdin(json.dumps(event)))
     with patch.object(hook, "process_event") as processed:
         hook.main()
