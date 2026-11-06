@@ -21,6 +21,9 @@ adheres to [Semantic Versioning](https://semver.org/).
   scope (ADR-1122), unless it sits inside a multiline string or bytes literal or its
   hunk replaced code. The blank lines above a new function selected the function before
   it: #878 was asked to kill the mutants of `count_reranked`, which it did not change.
+- The mutation gate sets mutmut's process isolation per platform (ADR-1122):
+  `forkserver` on Linux, `fork` on macOS, where `forkserver` aborted the stats run in
+  torch MPS before any mutant ran. Another platform stops the gate.
 - `memory-exact-review` and `supersession-delete-parity` sync the `dev` group, so the
   mutation gate their `ci_unit.sh` ends with finds `mutmut` (ADR-1122). Without it the
   step failed with "Failed to spawn: mutmut" before any mutant ran (#894).
