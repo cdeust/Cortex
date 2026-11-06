@@ -8,6 +8,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `docs/audits/operation-consumption-inventory-2026-11-05.md` lists what the
+  telemetry measures and attributes to a user operation (#733, slice 1): 10 MCP
+  tools, 2 hooks and the capture worker emit samples (wall time, bytes, outcome,
+  retrieval route); no sample carries an operation identity or CPU time, and the
+  headless authoring cost reads only `total_cost_usd`, reported as `0.0` when
+  the CLI gives none.
 - A claim keeps the time of the event it describes apart from the time it was
   extracted (#717, slice 1). `ClaimEvent.event_time` is `unknown`, a `point`
   or an `interval`, each bound carrying its value, its ISO 8601 precision and,
@@ -230,6 +236,13 @@ adheres to [Semantic Versioning](https://semver.org/).
   state or not Cortex's, per backend. Finds that the code graphs, the
   consolidation stamp and the pipeline install are built from the home
   directory and do not follow `CORTEX_CLAUDE_DIR`.
+- `docs/audits/platform-support-matrix-2026-11-05.md` lists which combinations of
+  OS and architecture, host, backend and install channel a receipt measures, and
+  marks every other cell as not measured (#730, slice 1). Measured: four macOS
+  native journeys (one tied to the 4.23.4 release asset), the CI install probe on
+  `ubuntu-26.04`, `macos-26-arm64` and `windows-2025-vs2026`, and the managed
+  PostgreSQL lifecycle of ADR-1114. No Windows, Linux or `.mcpb` native journey
+  has a receipt.
 - Visualization companion audited against Cortex's default stores (#724,
   slice 1): `docs/audits/visualization-companion-backends-2026-11-05.md`. The
   companion reads PostgreSQL at `127.0.0.1:5432/cortex` only, so a SQLite store
