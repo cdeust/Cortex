@@ -41,6 +41,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- The mutation gate judges only the mutants on the lines a pull request changed, not
+  every mutant of each changed function (ADR-1122 item 6, owner decision 2026-11-06).
+  Survivors on untouched lines are counted on the log; #865 and #878 were asked to kill
+  102 and 273 survivors that predated them.
 - An added blank or comment-only line no longer puts a function in the mutation gate's
   scope (ADR-1122), unless it sits inside a multiline string or bytes literal or its
   hunk replaced code. The blank lines above a new function selected the function before
