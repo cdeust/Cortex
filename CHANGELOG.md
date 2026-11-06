@@ -230,6 +230,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Inventory of what a Cortex backup must contain (#731, slice 1):
+  `docs/audits/owned-resources-backup-2026-11-05.md`. Lists every file and
+  store a Cortex install writes, classed as user data, derived data, process
+  state or not Cortex's, per backend. Finds that the code graphs, the
+  consolidation stamp and the pipeline install are built from the home
+  directory and do not follow `CORTEX_CLAUDE_DIR`.
 - `docs/audits/platform-support-matrix-2026-11-05.md` lists which combinations of
   OS and architecture, host, backend and install channel a receipt measures, and
   marks every other cell as not measured (#730, slice 1). Measured: four macOS
