@@ -215,7 +215,7 @@ def plan(wiki_root: Path) -> list[Pollution]:
         rel = md.relative_to(wiki_root)
         if rel.parts and rel.parts[0].startswith("."):
             continue
-        rel_str = str(rel)
+        rel_str = rel.as_posix()  # wiki paths use "/" on every OS (#692)
 
         is_double, double_target = _detect_double_md(rel_str)
         is_timestamp = _detect_timestamp_slug(rel_str)

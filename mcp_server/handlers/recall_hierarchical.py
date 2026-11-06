@@ -23,6 +23,7 @@ from mcp_server.handlers._tool_meta import NON_IDEMPOTENT_WRITE
 from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.handlers.replay_tracking import track_replay_event
 from mcp_server.handlers.recall import handler as flat_recall
+from mcp_server.shared.domain_mapping import resolve_explicit_domain
 
 # ── Schema ────────────────────────────────────────────────────────────────
 
@@ -314,5 +315,27 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     }
 
 
+async def _scoped_by_explicit_domain(
+    args: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build the hierarchy over the domain identity ``remember`` writes.
+
+    ``remember`` and ``recall`` resolve an explicit domain with
+    ``resolve_explicit_domain`` (an exact family member maps to its canonical,
+    any other name is kept, lowercased); recall_hierarchical passed the raw
+    name to ``get_memories_for_domain``, so ``cortex-cowork`` or ``SciFact``
+    read a scope no write ever used. A blank domain resolves to ``""``, which
+    the bounded-scope contract (ADR-0045 R3) then treats as no domain. A
+    missing or empty domain is left as given. The caller's dict is copied,
+    never changed.
+
+    source: issue #721"""
+    if args and args.get("domain"):
+        args = {**args, "domain": resolve_explicit_domain(args["domain"])}
+    return await _handler_impl(args)
+
+
 # source: ADR-0432
-handler = instrument("recall_hierarchical", _handler_impl, result_count_key="results")
+handler = instrument(
+    "recall_hierarchical", _scoped_by_explicit_domain, result_count_key="results"
+)
