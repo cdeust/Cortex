@@ -186,6 +186,13 @@ adheres to [Semantic Versioning](https://semver.org/).
   in the stubs' `redirect_to`. The decision-block migration tests write their
   fixture byte for byte: `write_text` turned `\n` into `\r\n` on Windows, and the
   block id, a hash of the file's bytes, then named no block (#692 class 8, 23 tests).
+- `scripts/measure_pipeline_hook.py` passes `USERPROFILE` to the hook it
+  measures, as the hermetic hook env and the test sandboxes now do:
+  `Path.home()` reads `USERPROFILE` on Windows, so an environment naming `HOME`
+  only made the hook die with "Could not determine home directory" (#692 class 7).
+  The shared-host-store test waits on its worker pipes with a thread, since
+  Windows `select` accepts sockets only, and the worker-log test runs only where
+  the capture worker exists (#692 class 6).
 - The README now states that both LongMemEval headline numbers (v4.14.1,
   v4.20.0) describe the PostgreSQL store with the reranker, and the Storage
   table no longer claims an "identical" retrieval contract on SQLite: the tool
