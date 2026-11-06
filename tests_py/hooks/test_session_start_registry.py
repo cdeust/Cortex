@@ -73,6 +73,8 @@ class TestMainCallsRegistryRefresh:
             patch("mcp_server.hooks.session_start._read_event", return_value={}),
             patch("mcp_server.hooks.session_start._auto_wire_pipeline"),
             patch("mcp_server.hooks.session_start._maybe_background_reanalyze"),
+            # issue #711: never prune the real ~/.cache/cortex/code-graphs
+            patch("mcp_server.hooks.session_start._maybe_background_prune_graphs"),
             patch("mcp_server.hooks.session_start._maybe_background_consolidate"),
             # ADR-1112: never touch the real ~/.cache/cortex from a test
             patch("mcp_server.hooks.session_start.harden_at_startup"),

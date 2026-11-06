@@ -954,6 +954,7 @@ class TestSpawnConsolidateCycleInterpreterResolution:
 
         assert captured["cmd"] == [
             sys.executable,
+            "-P",
             "-m",
             "mcp_server.hooks.consolidate_background",
         ]
@@ -1210,6 +1211,8 @@ def _patched_main(**overrides):
         "_refresh_session_registry": MagicMock(),
         "_auto_wire_pipeline": MagicMock(),
         "_maybe_background_reanalyze": MagicMock(),
+        # issue #711: never prune the real ~/.cache/cortex/code-graphs
+        "_maybe_background_prune_graphs": MagicMock(),
         "_maybe_background_consolidate": MagicMock(),
         # ADR-1112: never touch the real ~/.cache/cortex from a test
         "harden_at_startup": MagicMock(),

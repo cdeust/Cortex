@@ -13,7 +13,10 @@ def block(label="rationale"):
 
 
 def apply(tmp_path, source, **kwargs):
-    (tmp_path / "module.py").write_text(source)
+    # Byte-exact: apply_selected reads the file's bytes, and the block id is a
+    # hash of them. write_text would translate "\n" to "\r\n" on Windows, so
+    # the id taken from `source` would name no block of the file (#692).
+    (tmp_path / "module.py").write_bytes(source.encode("utf-8"))
     chosen = inventory(source)[0]
     return apply_selected(
         tmp_path,

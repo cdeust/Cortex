@@ -9,6 +9,7 @@ from typing import Any
 
 from mcp_server.core import thermodynamics
 from mcp_server.core.enrichment import build_expanded_query
+from mcp_server.core.document_reference import annotate_document_sources
 from mcp_server.shared.code_tokenize import expand_fts_query
 from mcp_server.core.prospective import check_trigger
 from mcp_server.core.query_intent import QueryIntent
@@ -456,13 +457,16 @@ def annotate_source_attribution(results: list[dict[str, Any]]) -> None:
             inferred/told/unknown makes no external-grounding promise and is never
             flagged.
 
+          - ``document_sources`` — the file, version and adapter kind of a hit
+            written by ingest_document, read from its own tags (issue #713).
+
     source: ADR-0431"""
 
+    annotate_document_sources(results)
     gate_on = not is_mechanism_disabled(Mechanism.CONFABULATION_GATE)
     for mem in results:
         attribution = mem.get("source_attribution") or "unknown"
         mem["source_attribution"] = attribution
         mem["confabulation_risk"] = bool(
-            gate_on
-            and recall_confabulation_risk(mem.get("content", "") or "", attribution)
+            gate_on and recall_confabulation_risk(mem.get("content"), attribution)
         )
