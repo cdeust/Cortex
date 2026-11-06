@@ -8,6 +8,13 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `python -m mcp_server.doctor` checks the Claude plugin/runtime pairing
+  (#729, slice 3). Launched with `CLAUDE_PLUGIN_ROOT`, the optional
+  `Plugin/runtime pairing` check fails when the process imports `mcp_server`
+  from outside that plugin directory, or when `.claude-plugin/plugin.json`
+  declares a version other than the running code's (installed wheel, else
+  `pyproject.toml`). Without `CLAUDE_PLUGIN_ROOT` it passes and says no plugin
+  launched it; the Codex runtime keeps its own launch-time version check.
 - `docs/audits/model-identity-inventory-2026-11-06.md` lists which embedding
   and reranker identity facts a local run records and where (#734, slice 1):
   the embedding revision is pinned but its bytes are never hashed, the reranker
@@ -34,6 +41,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- The mutation gate judges only the mutants on the lines a pull request changed, not
+  every mutant of each changed function (ADR-1122 item 6, owner decision 2026-11-06).
+  Survivors on untouched lines are counted on the log; #865 and #878 were asked to kill
+  102 and 273 survivors that predated them.
 - An added blank or comment-only line no longer puts a function in the mutation gate's
   scope (ADR-1122), unless it sits inside a multiline string or bytes literal or its
   hunk replaced code. The blank lines above a new function selected the function before
@@ -91,6 +102,19 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- On Windows, a hook whose intermediate `bash.exe` has already exited finds its
+  window again (#835, first slice; ADR-1124). The ancestor walk stops at the
+  missing parent, so SessionStart started no consolidate cycle and wrote no
+  registry entry. The window's `claude.exe` pid is now read from `CLAUDE_PID`
+  first, used only when it names a `claude.exe` not younger than the hook,
+  and the walk answers otherwise.
+- `narrative` reads the domain identity `remember` writes (#721, slice 4). It
+  passed an explicit `domain` unresolved to `get_memories_for_domain`, so
+  `narrative(domain="cortex-cowork")` narrated a scope no write used
+  (`remember` stores it under `cortex`) and `domain="SciFact"` missed
+  `scifact`. It now resolves the domain with `resolve_explicit_domain`, like
+  `remember`, `recall` and `recall_hierarchical`; a blank domain counts as no
+  domain.
 - `recall_hierarchical` reads the domain identity `remember` writes (#721, slice 3).
   It passed an explicit `domain` unresolved to `get_memories_for_domain`, so
   `recall_hierarchical(domain="cortex-cowork")` read a scope no write used

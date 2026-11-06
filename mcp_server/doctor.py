@@ -21,6 +21,7 @@ from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 from mcp_server.infrastructure.backend_marker import effective_backend
 from mcp_server.doctor_artifact import artifact_identity
+from mcp_server.doctor_pairing import plugin_pairing
 from mcp_server.doctor_capture import capture_verdict
 from mcp_server.doctor_managed import managed_server, selected as managed_selected
 from mcp_server.doctor_mcp import run_mcp
@@ -559,9 +560,15 @@ def _artifact_identity() -> Check:
     return artifact_identity(Check)
 
 
+def _plugin_pairing() -> Check:
+    """source: issue #729 — is the running code the Claude plugin's own."""
+    return plugin_pairing(Check)
+
+
 CHECKS: list[Callable[[], Check]] = [
     _python_version,
     _artifact_identity,  # optional — names the running artifact (#729)
+    _plugin_pairing,  # optional — Claude plugin/runtime pairing (#729)
     _pg_driver,
     _database_url,
     _pg_connection,
@@ -578,6 +585,7 @@ CHECKS: list[Callable[[], Check]] = [
 SQLITE_CHECKS: list[Callable[[], Check]] = [
     _python_version,
     _artifact_identity,  # optional — names the running artifact (#729)
+    _plugin_pairing,  # optional — Claude plugin/runtime pairing (#729)
     _sqlite_store,
     _sqlite_vector_search,
     _methodology_dir,

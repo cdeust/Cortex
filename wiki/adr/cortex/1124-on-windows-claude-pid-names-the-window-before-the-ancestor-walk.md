@@ -1,0 +1,35 @@
+---
+created: 2026-11-06T10:00:00Z
+kind: adr
+number: 1124
+status: accepted
+tags: [windows, session-registry, window-identity, issue-835, amends-adr-1096]
+title: On Windows, CLAUDE_PID names the window before the ancestor walk
+---
+# ADR-1124: On Windows, CLAUDE_PID names the window before the ancestor walk
+
+## Status
+
+accepted. Amends ADR-1096 point 4: on Windows the reader tries `CLAUDE_PID` before it walks to the `claude.exe` ancestor. The walk of ADR-1096 point 3 is unchanged.
+
+## Context
+
+Issue #835: in a real hook the ADR-1096 walk can meet an intermediate `bash.exe` that has already exited. `process_ancestry.claude_ancestor_pid` then returns `None` (pinned by `test_parent_missing_from_table_returns_none`), `groomer_identity.window_pid` raises `WindowIdentityUnavailableError`, SessionStart starts no consolidate cycle (ADR-1097) and the per-window registry is not written. The reporter logged the chain `python.exe <- bash.exe <- <exited pid>` on 2026-10-07, running the hook command of `.claude-plugin/plugin.json`.
+
+The reporter also saw the desktop app export `CLAUDE_PID`, the pid of the window's `claude.exe`, to the processes it starts (Claude Code 2.1.289 to 2.1.309). With a local patch that reads it first, 879 of 892 window lookups logged from 2026-10-21 to 2026-10-29 went through a live `CLAUDE_PID`, and none failed. The variable is not documented by the host, and terminal sessions with the CLI 2.1.140 did not have it.
+
+## Decision
+
+1. On Windows, `session_registry.find_claude_ancestor` calls `process_ancestry.window_claude_pid`. It reads the process table once and returns `CLAUDE_PID` when all of these hold: the value parses as an integer; the table has a row for that pid; its executable is `claude.exe` (case-insensitive); its creation time and the caller's are both readable and the `claude.exe` is not younger than the caller.
+2. Otherwise it returns the ADR-1096 walk over the same table read. A rejected `CLAUDE_PID` is not an error: the walk is the identity source ADR-1096 already accepted, and when it fails too, `window_pid` still raises as ADR-1097 requires.
+3. The creation-time check rejects a recycled pid: a process created after the caller cannot be the window that started it.
+4. POSIX is unchanged; `CLAUDE_PID` is read only on Windows.
+5. Not decided here, left on #835: the SessionEnd of a window whose `claude.exe` has already exited (the reporter accepts an exited `CLAUDE_PID` at SessionEnd only), and terminal sessions without `CLAUDE_PID` (the reporter's process-table scan is described as a workaround for one machine, not a proposal).
+
+## Consequences
+
+Positive: a hook whose `bash.exe` has exited still resolves its window when the host exports `CLAUDE_PID`, so SessionStart starts its consolidate cycle and the registry is written.
+
+Negative: Cortex now reads an undocumented host variable. If a host stops exporting it, or exports another value, the check of point 1 rejects it and the behaviour is the ADR-1096 walk, as before this decision. Two gaps remain. A `CLAUDE_PID` naming the shared desktop `Claude.exe` is accepted, the same shared-identity limit as ADR-1096 point 7; the reporter's 101 distinct windows say the host does not do that. A recycled pid taken by another `claude.exe` after the window's `claude.exe` exited, but before the caller was created, also passes the check.
+
+Not verified in this session: no real Windows host, no real hook. The tests run over a fake process table on every platform: `tests_py/infrastructure/test_process_ancestry_claude_pid.py` and `test_hook_with_an_exited_bash_finds_the_window_through_claude_pid` in `tests_py/infrastructure/test_session_registry_windows.py`.
