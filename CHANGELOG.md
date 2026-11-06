@@ -17,6 +17,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- An added blank or comment-only line no longer puts a function in the mutation gate's
+  scope (ADR-1122), unless it sits inside a multiline string or bytes literal or its
+  hunk replaced code. The blank lines above a new function selected the function before
+  it: #878 was asked to kill the mutants of `count_reranked`, which it did not change.
 - The mutation gate sets mutmut's process isolation per platform (ADR-1122):
   `forkserver` on Linux, `fork` on macOS, where `forkserver` aborted the stats run in
   torch MPS before any mutant ran. Another platform stops the gate.
