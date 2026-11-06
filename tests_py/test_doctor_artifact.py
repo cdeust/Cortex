@@ -256,3 +256,12 @@ def test_a_package_path_in_a_symlink_loop_fails_the_check_only(monkeypatch, tmp_
     assert (check.name, check.ok, check.optional) == (doctor_artifact.NAME, False, True)
     assert check.detail.startswith("cannot read the running artifact: ")
     assert str(tmp_path / "loop-a") in check.detail
+
+
+def test_a_missing_package_directory_fails_the_check_only(monkeypatch, tmp_path):
+    # A package path that does not exist is not an empty source tree.
+    _without_distribution(monkeypatch, tmp_path / "gone" / "mcp_server")
+    check = doctor_artifact.artifact_identity(doctor.Check)
+    assert (check.name, check.ok, check.optional) == (doctor_artifact.NAME, False, True)
+    assert check.detail.startswith("cannot read the running artifact: ")
+    assert "gone" in check.detail

@@ -197,3 +197,13 @@ def test_a_distribution_installed_elsewhere_reads_the_pyproject(tmp_path, monkey
         "Claude plugin 1.2.3 runs its own mcp_server 1.2.3 "
         f"({plugin.resolve() / 'pyproject.toml'})"
     )
+
+
+def test_a_missing_plugin_root_is_named_not_its_manifest(tmp_path):
+    """The strict resolve fails on the root itself, so the failure names the
+    directory that is missing, not a manifest path inside it."""
+    missing = tmp_path / "no-such-plugin"
+    detail = _check({"CLAUDE_PLUGIN_ROOT": str(missing)}, ok=False, fix=REINSTALL)
+    assert detail.startswith("cannot read the Claude plugin pairing: ")
+    assert missing.name in detail
+    assert "plugin.json" not in detail
