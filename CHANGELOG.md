@@ -61,6 +61,16 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The doctor's `Runtime artifact identity` check (#729, slice 2, review notes on
+  #887). In a git checkout the digest covers the files git keeps in the tree
+  (tracked, or untracked and not ignored): an ignored `.DS_Store` under
+  `mcp_server/` no longer changes it, as hatchling leaves it out of the wheel
+  too. A tree without `.git` is named `outside git` and passes on its digest,
+  where it used to fail with a `git status` fix that could not help. An
+  installed wheel whose `RECORD` is gone now fails instead of being described as
+  a source tree. The reinstall fix names `--python <interpreter>`, as
+  `runtime.py setup` does.
+
 - `rebuild_profiles` now reads Codex history too (#726, first slice). It
   scanned `~/.claude/projects` only, and a Codex rollout parsed to zero
   messages, so a Codex-only history created no domain. Every user-thread
