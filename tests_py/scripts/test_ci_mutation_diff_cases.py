@@ -214,13 +214,14 @@ class UntestedMutantTests(unittest.TestCase):
         text = (ROOT / "scripts/mutation_check.sh").read_text()
         self.assertIn('ci_mutation_diff.py" --untested', text)
         self.assertIn("--max-children", text)
-        job = {"file": "f.py", "tests": ["t.py"], "prefixes": ["p"]}
+        job = {"file": "f.py", "tests": ["t.py"], "prefixes": ["p"], "lines": [3, 7]}
         from unittest import mock
 
         with mock.patch.object(cmd.subprocess, "run") as run:
             run.return_value.returncode = 0
             cmd.run_job(job)
         self.assertEqual(run.call_args.kwargs["env"][cmd.MAX_CHILDREN_ENV], "1")
+        self.assertEqual(run.call_args.kwargs["env"][cmd.LINES_ENV], "f.py=3,7")
 
 
 class BaseDiffTests(unittest.TestCase):
