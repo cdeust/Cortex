@@ -59,6 +59,32 @@ class InertLineTests(unittest.TestCase):
             [["mcp_server.m.x_a__mutmut_"]],
         )
 
+    def test_a_blank_line_inside_a_multiline_bytes_literal_touches_its_function(self):
+        src = 'def a():\n    return b"""x\n\n"""\n'
+        self.assertEqual(
+            _plan(src, "@@ -2,0 +3 @@\n+\n"), [["mcp_server.m.x_a__mutmut_"]]
+        )
+
+    def test_a_blank_line_inside_a_multiline_f_string_touches_its_function(self):
+        src = 'def a(v):\n    return f"""{v}\n\n"""\n'
+        self.assertEqual(
+            _plan(src, "@@ -2,0 +3 @@\n+\n"), [["mcp_server.m.x_a__mutmut_"]]
+        )
+
+    def test_a_comment_replaced_by_code_and_a_blank_touches_its_function(self):
+        src = "def a():\n    x = 1\n\n    return x\n"
+        self.assertEqual(
+            _plan(src, "@@ -2 +2,2 @@\n-    # x\n+    x = 1\n+\n"),
+            [["mcp_server.m.x_a__mutmut_"]],
+        )
+
+    def test_a_form_feed_inside_an_added_line_does_not_shift_the_next_lines(self):
+        # str.splitlines() would cut `+Y = '\x0c+#'` in two, and the extra `+#'`
+        # piece would shift `def b():` onto an inert position and drop it.
+        src = "X = 1\nY = '\x0c+#'\n\n\ndef b():\n    return 2\n"
+        hunk = "@@ -1,0 +2,4 @@\n+Y = '\x0c+#'\n+\n+\n+def b():\n"
+        self.assertEqual(_plan(src, hunk), [["mcp_server.m.x_b__mutmut_"]])
+
 
 if __name__ == "__main__":
     unittest.main()

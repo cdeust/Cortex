@@ -61,12 +61,12 @@ def _touched_by_deletion(
 
 
 def _string_spans(tree: ast.AST) -> list[tuple[int, int]]:
-    """(first, last) line of every string literal that spans several lines."""
+    """(first, last) line of every str, bytes or f-string literal spanning lines."""
     return [
         (n.lineno, n.end_lineno)
         for n in ast.walk(tree)
         if (isinstance(n, ast.JoinedStr) or isinstance(n, ast.Constant))
-        and (isinstance(n, ast.JoinedStr) or isinstance(n.value, str))
+        and (isinstance(n, ast.JoinedStr) or isinstance(n.value, (str, bytes)))
         and n.end_lineno > n.lineno
     ]
 
@@ -145,7 +145,7 @@ def changed_lines_ex(
                 cuts.setdefault(current, set()).add(cut)
         pending, removed, added = None, [], []
 
-    for line in diff_text.splitlines():
+    for line in diff_text.split("\n"):
         if _FILE_START.match(line):
             close()
         elif line.startswith("+++ "):
