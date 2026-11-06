@@ -13,7 +13,7 @@ from mcp_server.handlers import backfill_memories as backfill
 @pytest.fixture
 def machine(monkeypatch, tmp_path):
     root = tmp_path / "claude"
-    monkeypatch.setattr(backfill_helpers, "CLAUDE_DIR", root)
+    monkeypatch.setattr(backfill_helpers, "CLAUDE_PROJECTS_DIR", root / "projects")
     store, encoder = Mock(), Mock()
     store.get_entity_by_name.return_value = {"id": 90}
     monkeypatch.setattr(backfill, "get_shared_store", lambda *args: store)

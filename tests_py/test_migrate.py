@@ -53,7 +53,7 @@ class TestUrlResolution:
 
         source = Path(
             __import__("mcp_server.migrate", fromlist=["__file__"]).__file__
-        ).read_text()
+        ).read_text(encoding="utf-8")
         tree = ast.parse(source)
         imported_names = {
             alias.name

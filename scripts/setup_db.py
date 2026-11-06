@@ -20,7 +20,6 @@ import re
 import shutil
 import subprocess
 import sys
-from pathlib import Path
 
 
 def _safe_ident(name: str) -> str:
@@ -249,9 +248,10 @@ def _count_memories(database_url: str) -> int:
 
 
 def _count_session_files() -> int:
-    """Count JSONL session files in ~/.claude/projects/."""
+    """Count JSONL session files under the host's transcript root (#710)."""
+    from mcp_server.infrastructure.config import CLAUDE_PROJECTS_DIR  # noqa: PLC0415 — reached only after _init_schema has imported mcp_server.infrastructure.pg_schema, so it adds no failure path; resolved at call time
 
-    projects_dir = Path.home() / ".claude" / "projects"
+    projects_dir = CLAUDE_PROJECTS_DIR
     if not projects_dir.exists():
         return 0
     count = 0

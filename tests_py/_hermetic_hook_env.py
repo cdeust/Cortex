@@ -94,6 +94,12 @@ def hermetic_hook_env(
     home = tmp_path / "home"
     home.mkdir(exist_ok=True)
     env = dict(base)
+    # source: mutmut 3.8.1 mutation/trampoline.py -- a hook subprocess that
+    # inherits the parent's MUTANT_UNDER_TEST runs mutmut's trampoline in a cwd
+    # with no [tool.mutmut] config and dies ("Could not figure out where the
+    # code to mutate is"), so the gate's stats run fails (ADR-1122). Mutants are
+    # judged by the in-process tests; the hook process runs the original code.
+    env.pop("MUTANT_UNDER_TEST", None)
     env["HOME"] = str(home)
     env["CORTEX_AUTO_INSTALL_PIPELINE"] = "0"
     # source: ADR-0489 (capture worker idle window), ADR-0519 (embedding opt-out)
