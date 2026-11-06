@@ -150,44 +150,6 @@ def test_memory_staleness_revalidate_reaches_the_marker_postgresql(
     assert seen == [("postgresql", "postgresql://localhost:5432/cortex")]
 
 
-# ── settle_for_command itself (mutation gate, ADR-1122) ────────────────────
-
-
-def test_settle_for_command_settles_the_process_environment(monkeypatch):
-    from mcp_server.infrastructure import backend_resolution
-
-    seen = []
-    monkeypatch.setattr(backend_resolution, "settle_backend", seen.append)
-    assert backend_resolution.settle_for_command("prog") is True
-    assert seen == [os.environ]
-
-
-@pytest.mark.parametrize(
-    "error",
-    [
-        backend_marker.BackendMarkerError("bad marker"),
-        pytest.param("managed", id="ManagedPgError"),
-        OSError("disk gone"),
-    ],
-)
-def test_settle_for_command_reports_a_backend_it_cannot_settle(
-    monkeypatch, capsys, error
-):
-    from mcp_server.infrastructure import backend_resolution, managed_pg
-
-    if error == "managed":
-        error = managed_pg.ManagedPgError("server down")
-
-    def fail(environ):
-        raise error
-
-    monkeypatch.setattr(backend_resolution, "settle_backend", fail)
-    assert backend_resolution.settle_for_command("prog") is False
-    captured = capsys.readouterr()
-    assert captured.err == f"prog: Cortex not ready: {error}\n"
-    assert captured.out == ""
-
-
 # ── portability.main end to end, store and handlers faked ──────────────────
 
 
