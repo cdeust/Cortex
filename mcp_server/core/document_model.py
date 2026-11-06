@@ -4,7 +4,7 @@ source: ADR-0161"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 
 class DocumentParseError(Exception):
@@ -44,6 +44,30 @@ def document_section_is_empty(section: "DocumentSection") -> bool:
     return not section.body.strip() and not section.tables
 
 
+# source: issue #732 — no embedded image is extracted or preserved yet, so every
+# image reference an adapter finds is reported in this state, never dropped.
+ATTACHMENT_UNSUPPORTED = "unsupported"
+
+
+@dataclass(frozen=True)
+class DocumentAttachment:
+    """One embedded image found in a document, in document order.
+
+    ``reference`` is what the markup names: the docx relationship id
+    (``r:embed``/``r:id``), the Confluence attachment filename or URL, or
+    ``""`` when the markup names nothing. ``section_index`` is the 0-based
+    position, in ``ParsedDocument.sections``, of the section the image sits in:
+    an index, not the heading text, so a long heading is not copied once per
+    image into the result. ``state`` says what ingestion did with it.
+
+    source: issue #732"""
+
+    ordinal: int
+    reference: str
+    section_index: int
+    state: str = ATTACHMENT_UNSUPPORTED
+
+
 @dataclass
 class ParsedDocument:
     """The normalized shape every adapter produces.
@@ -52,7 +76,24 @@ class ParsedDocument:
 
     title: str
     sections: list[DocumentSection] = field(default_factory=list)
-    image_count: int = 0
+    attachments: list[DocumentAttachment] = field(default_factory=list)
+
+
+def drop_empty_preamble(
+    sections: list[DocumentSection], attachments: list[DocumentAttachment]
+) -> tuple[list[DocumentSection], list[DocumentAttachment]]:
+    """Drop the level-0 preamble (``sections[0]``) when it holds no text, no
+    table and no image and a heading section follows; shift every attachment's
+    ``section_index`` so it still names its section.
+
+    source: ADR-0161 (preamble rule), issue #732 (attachment indices)
+    """
+    preamble, *rest = sections
+    has_image = any(a.section_index == 0 for a in attachments)
+    if has_image or not rest or not document_section_is_empty(preamble):
+        return sections, attachments
+    shifted = [replace(a, section_index=a.section_index - 1) for a in attachments]
+    return rest, shifted
 
 
 def parsed_document_is_empty(doc: "ParsedDocument") -> bool:

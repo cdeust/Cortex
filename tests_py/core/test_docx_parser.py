@@ -140,20 +140,93 @@ class TestTables:
         assert section.tables[0].rows == [["line1 line2"]]
 
 
+_R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+_A = "http://schemas.openxmlformats.org/drawingml/2006/main"
+
+
+def _drawing(rid: str) -> str:
+    blip = f'<a:blip xmlns:a="{_A}" xmlns:r="{_R}" r:embed="{rid}"/>'
+    return f"<w:p><w:r><w:drawing>{blip}</w:drawing></w:r></w:p>"
+
+
 class TestImages:
-    def test_drawing_counted_and_skipped(self):
+    def test_drawing_inventoried_unsupported(self):
         body = _para("x") + "<w:p><w:r><w:drawing/></w:r></w:p>"
         doc = parse_docx_xml(_doc(body))
-        assert doc.image_count == 1
+        assert [
+            (a.ordinal, a.reference, a.section_index, a.state) for a in doc.attachments
+        ] == [(1, "", 0, "unsupported")]
 
-    def test_legacy_pict_counted(self):
-        body = "<w:p><w:r><w:pict/></w:r></w:p>"
+    def test_legacy_pict_reference_is_its_imagedata_id(self):
+        pict = (
+            f'<w:pict><v:imagedata xmlns:v="urn:schemas-microsoft-com:vml" '
+            f'xmlns:r="{_R}" r:id="rId9"/></w:pict>'
+        )
+        doc = parse_docx_xml(_doc(f"<w:p><w:r>{pict}</w:r></w:p>"))
+        assert [a.reference for a in doc.attachments] == ["rId9"]
+
+    def test_images_keep_document_order_and_their_section(self):
+        body = (
+            _drawing("rId1")
+            + _para("Design", "Heading1")
+            + _drawing("rId2")
+            + _para("Rollout", "Heading2")
+            + _drawing("rId3")
+        )
         doc = parse_docx_xml(_doc(body))
-        assert doc.image_count == 1
+        # The preamble holds an image, so it is kept and the indices stay 0..2.
+        assert [
+            (a.ordinal, a.reference, doc.sections[a.section_index].heading)
+            for a in doc.attachments
+        ] == [
+            (1, "rId1", ""),
+            (2, "rId2", "Design"),
+            (3, "rId3", "Rollout"),
+        ]
+        assert [a.section_index for a in doc.attachments] == [0, 1, 2]
 
-    def test_no_images_counts_zero(self):
+    def test_dropping_an_empty_preamble_shifts_the_section_indices(self):
+        body = (
+            _para("A", "Heading1")
+            + _drawing("rId1")
+            + _para("B", "Heading1")
+            + _drawing("rId2")
+        )
+        doc = parse_docx_xml(_doc(body))
+        assert [s.heading for s in doc.sections] == ["A", "B"]
+        assert [a.section_index for a in doc.attachments] == [0, 1]
+
+    def test_a_picture_hyperlink_is_not_taken_for_the_image(self):
+        link = f'<a:hlinkClick xmlns:a="{_A}" xmlns:r="{_R}" r:id="rId8"/>'
+        doc_pr = f'<wp:docPr xmlns:wp="urn:wp" id="1" name="p">{link}</wp:docPr>'
+        blip = f'<a:blip xmlns:a="{_A}" xmlns:r="{_R}" r:embed="rId5"/>'
+        body = f"<w:p><w:r><w:drawing>{doc_pr}{blip}</w:drawing></w:r></w:p>"
+        doc = parse_docx_xml(_doc(body))
+        assert [a.reference for a in doc.attachments] == ["rId5"]
+
+    def test_a_blip_without_embed_has_an_empty_reference(self):
+        blip = f'<a:blip xmlns:a="{_A}"/>'
+        doc = parse_docx_xml(
+            _doc(f"<w:p><w:r><w:drawing>{blip}</w:drawing></w:r></w:p>")
+        )
+        assert [a.reference for a in doc.attachments] == [""]
+
+    def test_imagedata_without_id_has_an_empty_reference(self):
+        pict = '<w:pict><v:imagedata xmlns:v="urn:schemas-microsoft-com:vml"/></w:pict>'
+        doc = parse_docx_xml(_doc(f"<w:p><w:r>{pict}</w:r></w:p>"))
+        assert [a.reference for a in doc.attachments] == [""]
+
+    def test_image_inside_a_table_is_inventoried(self):
+        tbl = f"<w:tbl><w:tr><w:tc>{_drawing('rId4')}</w:tc></w:tr></w:tbl>"
+        doc = parse_docx_xml(_doc(_para("T", "Heading1") + tbl))
+        assert [(a.reference, a.section_index) for a in doc.attachments] == [
+            ("rId4", 0)
+        ]
+        assert doc.sections[0].heading == "T"
+
+    def test_no_images_no_attachments(self):
         doc = parse_docx_xml(_doc(_para("x")))
-        assert doc.image_count == 0
+        assert doc.attachments == []
 
 
 class TestEdgeCases:
