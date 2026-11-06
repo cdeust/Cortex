@@ -69,7 +69,9 @@ def test_setup_installs_both_sets_stamps_them_and_downloads_the_model(
     assert setup.run(deps, "launcher.py") == 0
     assert installed == [tuple(deps_mod._sets.BASE), tuple(deps_mod._sets.ML)]
     assert deps_mod.set_ready(deps, "base") and deps_mod.set_ready(deps, "ml")
-    stamp = json.loads(Path(deps_mod._stamp_path(deps, "ml")).read_text())
+    stamp = json.loads(
+        Path(deps_mod._stamp_path(deps, "ml")).read_text(encoding="utf-8")
+    )
     assert stamp["lock"] == deps_mod.lock_key()
     assert warmed == [deps]
     assert setup.outcome(deps) == {"status": "ready", "error": ""}
@@ -131,7 +133,7 @@ def test_a_successful_setup_clears_the_base_job_failure(setup_env, monkeypatch):
     _warm(monkeypatch, setup)
     stamp = Path(f"{deps}.base-job.failed")
     stamp.parent.mkdir(parents=True)
-    stamp.write_text("{}")
+    stamp.write_text("{}", encoding="utf-8")
     setup.run(deps, "launcher.py")
     assert not stamp.exists()
 

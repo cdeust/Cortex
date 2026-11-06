@@ -13,7 +13,9 @@ def hermetic_claude_dirs(tmp_path, monkeypatch):
     stored profiles under ``<root>/methodology/``.
     """
     methodology = tmp_path / "methodology"
-    monkeypatch.setattr("mcp_server.infrastructure.scanner.CLAUDE_DIR", tmp_path)
+    monkeypatch.setattr(
+        "mcp_server.infrastructure.scanner.CLAUDE_PROJECTS_DIR", tmp_path / "projects"
+    )
     monkeypatch.setattr(
         "mcp_server.infrastructure.brain_index_store.BRAIN_INDEX_PATH",
         tmp_path / "brain-index.json",

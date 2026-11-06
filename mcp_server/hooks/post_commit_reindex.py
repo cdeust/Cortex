@@ -169,7 +169,7 @@ def _check_cooldown(root: str) -> bool:
     """True when this repo was re-analysed within the cooldown window."""
     try:
         if _COOLDOWN_FILE.exists():
-            data = json.loads(_COOLDOWN_FILE.read_text())
+            data = json.loads(_COOLDOWN_FILE.read_text(encoding="utf-8"))
             last = data.get(root, 0)
             return (time.time() - last) < _cooldown_seconds()
     except (OSError, ValueError, TypeError):
@@ -187,7 +187,7 @@ def _update_cooldown(root: str) -> None:
     try:
         data = {}
         if _COOLDOWN_FILE.exists():
-            data = json.loads(_COOLDOWN_FILE.read_text())
+            data = json.loads(_COOLDOWN_FILE.read_text(encoding="utf-8"))
         data[root] = time.time()
         if len(data) > _MAX_COOLDOWN_ENTRIES:
             newest = sorted(data.items(), key=lambda kv: kv[1], reverse=True)
