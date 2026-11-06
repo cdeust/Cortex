@@ -38,9 +38,12 @@ DISTRIBUTION = "hypermnesia-mcp"  # source: pyproject.toml [project] name
 PACKAGE = "mcp_server"  # source: pyproject.toml [tool.hatch.build.targets.wheel]
 # source: doctor.py _WORKTREE_LIST_TIMEOUT_S (validate_memory.py:29 precedent)
 _GIT_TIMEOUT_S = 2.0
+# source: plugins/hypermnesia-mcp-codex/scripts/runtime.py requirement(); a plain
+# `runtime.py setup` keeps an installed version as it is, so the fix forces it.
 _REINSTALL = (
-    "Reinstall the runtime: `python plugins/hypermnesia-mcp-codex/scripts/"
-    "runtime.py setup` (Codex) or reinstall the plugin (Claude)"
+    "Reinstall the runtime: `uv tool install --reinstall --no-build "
+    '"hypermnesia-mcp[postgresql,sqlite]=={version}"` (Codex) or reinstall the '
+    "plugin (Claude)"
 )
 
 
@@ -74,7 +77,10 @@ def wheel_members(dist: Any) -> list[tuple[str, str]]:
     RECORD is read as written: from Python 3.12, ``Distribution.files`` omits
     the files absent from disk, which would hide a deleted member."""
     rows = []
-    for path, digest, *_ in csv.reader((dist.read_text("RECORD") or "").splitlines()):
+    for row in csv.reader((dist.read_text("RECORD") or "").splitlines()):
+        if not row:
+            continue
+        path, digest, *_ = row
         if digest and path.startswith(f"{PACKAGE}/"):
             rows.append((path, digest))
     return rows
@@ -92,7 +98,8 @@ def _installed(check: Callable[..., Any], dist: Any, rows: list) -> Any:
     )
     if altered:
         detail += f"; {len(altered)} differ from its RECORD, first {altered[0]}"
-        return check(NAME, False, detail, _REINSTALL, optional=True)
+        fix = _REINSTALL.format(version=dist.version)
+        return check(NAME, False, detail, fix, optional=True)
     return check(NAME, True, detail, optional=True)
 
 
@@ -110,6 +117,11 @@ def _source_tree(check: Callable[..., Any], root: Path, version: str) -> Any:
         f"{len(members)} {PACKAGE} files, digest {members_digest(members)}; "
         "source evidence, not a distributed artifact"
     )
+    if changes is None:
+        # git failed or timed out: the tree is not known to match the revision.
+        detail += "; revision state unknown: `git status` failed"
+        fix = f"Run `git -C {root.parent} status` to see why git cannot answer"
+        return check(NAME, False, detail, fix, optional=True)
     return check(NAME, True, detail, optional=True)
 
 
@@ -117,8 +129,19 @@ def artifact_identity(check: Callable[..., Any]) -> Any:
     """Name the artifact this process imports ``mcp_server`` from.
 
     Pre-condition: ``check`` is doctor's ``Check`` constructor.
-    Post-condition: an optional check; it fails only when an installed wheel's
-    files differ from its own RECORD."""
+    Post-condition: an optional check; it fails when an installed wheel's
+    files differ from its own RECORD, when git cannot state a source tree's
+    revision state, or when a file or RECORD cannot be read (the failure names
+    it; the other doctor checks still run)."""
+    try:
+        return _identify(check)
+    except (OSError, ValueError) as exc:
+        return check(
+            NAME, False, f"cannot read the running artifact: {exc}", optional=True
+        )
+
+
+def _identify(check: Callable[..., Any]) -> Any:
     root = Path(mcp_server.__file__).resolve().parent
     try:
         dist = metadata.distribution(DISTRIBUTION)

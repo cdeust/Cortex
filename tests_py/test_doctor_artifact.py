@@ -126,7 +126,11 @@ def test_installed_file_differing_from_record_fails(monkeypatch, tmp_path):
     assert (check.name, check.ok, check.optional) == (doctor_artifact.NAME, False, True)
     assert check.detail.startswith("installed hypermnesia-mcp 9.9.9, 1 mcp_server")
     assert check.detail.endswith("; 1 differ from its RECORD, first mcp_server/a.py")
-    assert "runtime.py setup" in check.fix
+    assert check.fix == (
+        "Reinstall the runtime: `uv tool install --reinstall --no-build "
+        '"hypermnesia-mcp[postgresql,sqlite]==9.9.9"` (Codex) or reinstall the '
+        "plugin (Claude)"
+    )
 
 
 def test_wheel_installed_elsewhere_describes_the_imported_tree(monkeypatch, tmp_path):
@@ -164,6 +168,54 @@ def test_source_tree_without_git_says_so(monkeypatch, tmp_path):
     _git_replies(monkeypatch, None, None)
     check = doctor_artifact.artifact_identity(doctor.Check)
     assert check.detail.startswith(f"source tree {package.parent} at no git revision (")
+
+
+def test_failed_git_status_is_not_a_clean_tree(monkeypatch, tmp_path):
+    # rev-parse answers, status times out: the tree is not known to match it.
+    package = _source_package(tmp_path)
+    _without_distribution(monkeypatch, package)
+    _git_replies(monkeypatch, "abc123", None)
+    check = doctor_artifact.artifact_identity(doctor.Check)
+    assert (check.name, check.ok, check.optional) == (doctor_artifact.NAME, False, True)
+    assert "at abc123 (version unknown)" in check.detail
+    assert check.detail.endswith(
+        f"{SUFFIX}; revision state unknown: `git status` failed"
+    )
+    assert check.fix == (
+        f"Run `git -C {package.parent} status` to see why git cannot answer"
+    )
+
+
+def test_unreadable_member_fails_the_check_only(monkeypatch, tmp_path):
+    package, dist = _wheel_install(tmp_path)
+    _imported_from(monkeypatch, package, dist)
+
+    def denied(self):
+        raise PermissionError(13, "Permission denied", str(self))
+
+    monkeypatch.setattr(doctor_artifact.Path, "read_bytes", denied)
+    check = doctor_artifact.artifact_identity(doctor.Check)
+    assert (check.name, check.ok, check.optional) == (doctor_artifact.NAME, False, True)
+    assert check.detail == (
+        "cannot read the running artifact: [Errno 13] Permission denied: "
+        f"'{package / 'a.py'}'"
+    )
+
+
+def test_malformed_record_fails_the_check_only(monkeypatch, tmp_path):
+    package, dist = _wheel_install(tmp_path)
+    (dist._path / "RECORD").write_text("garbage\n")
+    _imported_from(monkeypatch, package, dist)
+    check = doctor_artifact.artifact_identity(doctor.Check)
+    assert (check.name, check.ok, check.optional) == (doctor_artifact.NAME, False, True)
+    assert check.detail.startswith("cannot read the running artifact: ")
+
+
+def test_blank_record_lines_are_skipped(tmp_path):
+    _, dist = _wheel_install(tmp_path)
+    record = dist._path / "RECORD"
+    record.write_text("\n" + record.read_text())
+    assert doctor_artifact.wheel_members(dist) == [("mcp_server/a.py", X1)]
 
 
 def test_editable_install_is_a_source_tree():
