@@ -480,6 +480,22 @@
       "kind": "equivalent-by-construction",
       "rationale": "write_class's default value is read exactly once in the function body, in `write_class == \"deliberate\"` -- neither \"\" nor \"XXXX\" equals \"deliberate\", so no caller that omits the argument can ever observe which default was compiled in. Killing this would require asserting on a value the function provably never surfaces.",
       "issue": "#345"
+    },
+    {
+      "mutant": "mcp_server.infrastructure.memory_store.x__construct_store__mutmut_55",
+      "removed": "allow_fallback = os.environ.get(\"CORTEX_ALLOW_SQLITE_FALLBACK\", \"\").lower() in (",
+      "added": "allow_fallback = os.environ.get(\"CORTEX_ALLOW_SQLITE_FALLBACK\", \"XXXX\").lower() in (",
+      "kind": "equivalent-by-construction",
+      "rationale": "`.lower() in (\"1\", \"true\", \"yes\")` is False for an unset variable whether the default is \"\" or \"XXXX\" (\"xxxx\" is not an opt-in value), so the default string cannot change allow_fallback. Every opt-in spelling and the unset case are pinned by tests_py/infrastructure/test_construct_store_selection.py.",
+      "issue": "#704"
+    },
+    {
+      "mutant": "mcp_server.infrastructure.memory_store.x__construct_store__mutmut_110",
+      "removed": "\"CORTEX_ALLOW_SQLITE_FALLBACK\", \"\"",
+      "added": "\"CORTEX_ALLOW_SQLITE_FALLBACK\", \"XXXX\"",
+      "kind": "equivalent-by-construction",
+      "rationale": "`.lower() in (\"1\", \"true\", \"yes\")` is False for an unset variable whether the default is \"\" or \"XXXX\" (\"xxxx\" is not an opt-in value), so the default string cannot change allow_fallback. Every opt-in spelling and the unset case are pinned by tests_py/infrastructure/test_construct_store_selection.py.",
+      "issue": "#704"
     }
   ]
 }

@@ -107,7 +107,7 @@ def _resolve_backend_url(
 
     settings = get_memory_settings()
     backend = settings.STORE_BACKEND
-    url = database_url or os.environ.get("DATABASE_URL", "") or settings.DATABASE_URL
+    url = database_url or os.environ.get("DATABASE_URL") or settings.DATABASE_URL
     # source: ADR-0535 and issue #704 -- CLI auto is strict only with a named URL.
     if settings.RUNTIME == "cli" and backend == "auto" and url:
         backend = "postgresql"
@@ -134,7 +134,7 @@ def _construct_store(
     settings = get_memory_settings()
     runtime = settings.RUNTIME
     backend = settings.STORE_BACKEND
-    url = database_url or os.environ.get("DATABASE_URL", "") or settings.DATABASE_URL
+    url = database_url or os.environ.get("DATABASE_URL") or settings.DATABASE_URL
 
     # source: ADR-0535 and issue #704 -- auto with no named URL is SQLite in every
     # runtime: no connection is attempted to a URL nobody configured.
@@ -169,7 +169,7 @@ def _construct_store(
             )
             return _make_sqlite(db_path or settings.SQLITE_FALLBACK_PATH, embedding_dim)
         raise RuntimeError(
-            f"PostgreSQL connection failed (url={url or '<unset>'}): {err}\n"
+            f"PostgreSQL connection failed (url={url}): {err}\n"
             "Cortex requires PostgreSQL in CLI mode.\n"
             "Run: bash setup.sh to configure PostgreSQL.\n"
             "If DATABASE_URL is set, verify it points to a reachable Postgres instance "
