@@ -27,8 +27,6 @@ META_SUFFIX = ".meta"
 MUTANTS_KEY = "exit_code_by_key"
 # source: scripts/ci_mutation_diff.py SCOPE_ENV, the variable both scripts read.
 SCOPE_ENV = "MUTATION_ONLY_PREFIXES"
-# source: the CLI below, `--empty-scope <mutants dir>`.
-EMPTY_SCOPE_ARGS = 2
 
 
 def name_globs(prefixes: list[str]) -> list[str]:
@@ -36,12 +34,19 @@ def name_globs(prefixes: list[str]) -> list[str]:
     return [f"{prefix}*" for prefix in prefixes]
 
 
-def in_scope_count(mutants_dir: Path, prefixes: list[str]) -> int | None:
-    """Generated mutants in scope; None when mutmut did not get past its stats run."""
-    if not (mutants_dir / STATS_FILE).is_file():
+def in_scope_count(
+    mutants_dir: Path, prefixes: list[str], sources: list[str]
+) -> int | None:
+    """Generated mutants in scope; None without the stats or a target's meta file.
+
+    A missing `.meta` for a mutated file means mutmut did not generate it as expected
+    (or named it differently), so nothing can be concluded about the scope.
+    """
+    metas = [mutants_dir / f"{source}{META_SUFFIX}" for source in sources]
+    if not (mutants_dir / STATS_FILE).is_file() or not all(m.is_file() for m in metas):
         return None
     count = 0
-    for meta in mutants_dir.rglob(f"*{META_SUFFIX}"):
+    for meta in metas:
         names = json.loads(meta.read_text(encoding="utf-8"))[MUTANTS_KEY]
         count += sum(1 for name in names if name.startswith(tuple(prefixes)))
     return count
@@ -52,14 +57,16 @@ def main(argv: list[str]) -> int:
     if argv[:1] == ["--globs"]:
         print("\n".join(name_globs(prefixes)))
         return 0
-    if argv[:1] != ["--empty-scope"] or len(argv) != EMPTY_SCOPE_ARGS or not prefixes:
+    # mutation_check.sh forwards its `-- <source>...` tail as given.
+    sources = [arg for arg in argv[2:] if arg != "--"]
+    if argv[:1] != ["--empty-scope"] or not sources or not prefixes:
         print(
             "usage: MUTATION_ONLY_PREFIXES=... ci_mutation_scope.py "
-            "--globs | --empty-scope <mutants dir>",
+            "--globs | --empty-scope <mutants dir> <source>...",
             file=sys.stderr,
         )
         return 2
-    count = in_scope_count(Path(argv[1]), prefixes)
+    count = in_scope_count(Path(argv[1]), prefixes, sources)
     if count == 0:
         print(">>> mutation: the changed functions hold no mutant; nothing to judge")
         return 0

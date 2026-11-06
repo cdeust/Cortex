@@ -69,15 +69,30 @@ def _mutants(tmp_path: Path, names: list[str], stats: bool = True) -> Path:
     return root
 
 
+SOURCES = ["mcp_server/a.py"]
+
+
 def test_the_in_scope_count_reads_mutmuts_meta_files(tmp_path):
     root = _mutants(tmp_path, [f"{PREFIX}1", f"{PREFIX}2", "m.x_other__mutmut_1"])
-    assert scope.in_scope_count(root, [PREFIX]) == 2
-    assert scope.in_scope_count(root, ["m.x_none__mutmut_"]) == 0
+    assert scope.in_scope_count(root, [PREFIX], SOURCES) == 2
+    assert scope.in_scope_count(root, ["m.x_none__mutmut_"], SOURCES) == 0
 
 
 def test_no_stats_file_means_mutmut_failed_before_judging(tmp_path):
     root = _mutants(tmp_path, ["m.x_other__mutmut_1"], stats=False)
-    assert scope.in_scope_count(root, [PREFIX]) is None
+    assert scope.in_scope_count(root, [PREFIX], SOURCES) is None
+
+
+def test_an_empty_source_list_is_a_usage_error(tmp_path, monkeypatch):
+    monkeypatch.setenv(scope.SCOPE_ENV, PREFIX)
+    root = _mutants(tmp_path, ["m.x_other__mutmut_1"])
+    assert scope.main(["--empty-scope", str(root), "--"]) == 2
+    assert scope.main(["--empty-scope", str(root), "--", *SOURCES]) == 0
+
+
+def test_a_missing_meta_for_a_target_concludes_nothing(tmp_path):
+    root = _mutants(tmp_path, ["m.x_other__mutmut_1"])
+    assert scope.in_scope_count(root, [PREFIX], [*SOURCES, "mcp_server/b.py"]) is None
 
 
 def _sandbox(tmp_path: Path) -> Path:
@@ -94,13 +109,12 @@ def _sandbox(tmp_path: Path) -> Path:
     return root
 
 
-def _gate(bash, tmp_path, prefixes, **fake):
-    """Run the real script; `fake` sets the fake mutmut's rc, stats and mutants."""
-    root = _sandbox(tmp_path)
-    args = tmp_path / "args.txt"
+def _run(bash, root, prefixes, fake):
+    """Run the sandboxed script; `fake` sets the fake mutmut's rc, stats and mutants."""
+    args = root.parent / "args.txt"
     env = {
         **os.environ,
-        "PATH": f"{tmp_path / 'bin'}{os.pathsep}{os.environ['PATH']}",
+        "PATH": f"{root.parent / 'bin'}{os.pathsep}{os.environ['PATH']}",
         "MUTATION_ONLY_PREFIXES": prefixes,
         "FAKE_ARGS": str(args),
         "FAKE_RC": str(fake.get("rc", 0)),
@@ -116,6 +130,10 @@ def _gate(bash, tmp_path, prefixes, **fake):
     )
     ran = args.read_text(encoding="utf-8").split() if args.exists() else None
     return done, ran
+
+
+def _gate(bash, tmp_path, prefixes, **fake):
+    return _run(bash, _sandbox(tmp_path), prefixes, fake)
 
 
 @pytest.mark.parametrize("bash", BASHES, ids=lambda path: f"bash={path}")
@@ -142,11 +160,22 @@ def test_changed_functions_without_a_mutant_have_nothing_to_judge(bash, tmp_path
 
 @pytest.mark.parametrize("bash", BASHES, ids=lambda path: f"bash={path}")
 def test_a_failure_before_the_stats_file_still_fails(bash, tmp_path):
-    done, _ = _gate(bash, tmp_path, PREFIX, rc=1, stats="")
-    assert done.returncode == 1
+    done, _ = _gate(bash, tmp_path, PREFIX, rc=3, stats="")
+    assert done.returncode == 3
 
 
 @pytest.mark.parametrize("bash", BASHES, ids=lambda path: f"bash={path}")
 def test_a_failure_with_mutants_in_scope_still_fails(bash, tmp_path):
-    done, _ = _gate(bash, tmp_path, PREFIX, rc=1, mutants=f'"{PREFIX}1": null')
-    assert done.returncode == 1
+    done, _ = _gate(bash, tmp_path, PREFIX, rc=3, mutants=f'"{PREFIX}1": null')
+    assert done.returncode == 3
+
+
+@pytest.mark.parametrize("bash", BASHES, ids=lambda path: f"bash={path}")
+def test_a_failing_glob_helper_stops_the_gate_before_mutmut(bash, tmp_path):
+    root = _sandbox(tmp_path)
+    (root / "scripts" / "ci_mutation_scope.py").write_text(
+        "raise SystemExit(5)\n", encoding="utf-8"
+    )
+    done, ran = _run(bash, root, PREFIX, {})
+    assert done.returncode == 5
+    assert ran is None

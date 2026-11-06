@@ -54,8 +54,9 @@ echo ">>> mutating: $* | tests: $TESTS"
 # functions (`<prefix>*` names); without a scope, every mutant of the files as before.
 NAMES=()
 if [ -n "${MUTATION_ONLY_PREFIXES:-}" ]; then
-  while IFS= read -r glob; do NAMES+=("$glob"); done \
-    < <(python3 "$ROOT/scripts/ci_mutation_scope.py" --globs)
+  # An assignment keeps the helper's exit status, so `set -e` stops on its failure.
+  GLOBS="$(python3 "$ROOT/scripts/ci_mutation_scope.py" --globs)"
+  while IFS= read -r glob; do NAMES+=("$glob"); done <<< "$GLOBS"
 fi
 set +e
 uv run mutmut run ${MUTMUT_MAX_CHILDREN:+--max-children "$MUTMUT_MAX_CHILDREN"} \
@@ -65,7 +66,7 @@ set -e
 if [ "$RUN_RC" -ne 0 ]; then
   # mutmut asserts when no mutant matches the names; only that case is not a failure.
   if [ -n "${MUTATION_ONLY_PREFIXES:-}" ] \
-    && python3 "$ROOT/scripts/ci_mutation_scope.py" --empty-scope "$ROOT/mutants"; then
+    && python3 "$ROOT/scripts/ci_mutation_scope.py" --empty-scope "$ROOT/mutants" "$@"; then
     exit 0
   fi
   exit "$RUN_RC"
