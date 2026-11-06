@@ -60,19 +60,37 @@ def _touched_by_deletion(
     return {start, start + 1}, None
 
 
-def string_cut_lines(tree: ast.AST, cuts) -> set[int]:
-    """Lines around cuts that fall inside a multiline string.
-
-    Removed text that reads like a definition or a comment but sits in a string
-    changed the string, so the function holding it is touched.
-    """
-    spans = [
+def _string_spans(tree: ast.AST) -> list[tuple[int, int]]:
+    """(first, last) line of every string literal that spans several lines."""
+    return [
         (n.lineno, n.end_lineno)
         for n in ast.walk(tree)
         if (isinstance(n, ast.JoinedStr) or isinstance(n, ast.Constant))
         and (isinstance(n, ast.JoinedStr) or isinstance(n.value, str))
         and n.end_lineno > n.lineno
     ]
+
+
+def drop_inert(source: str, lines: set[int], inert: set[int]) -> set[int]:
+    """`lines` without the `inert` ones that lie outside every multiline string.
+
+    An added blank or comment-only line changes no behaviour, so it must not touch the
+    function whose span it falls in (the blank lines above a new function fall in the
+    span of the one before it). Inside a multiline string it changes the string.
+    """
+    spans = _string_spans(ast.parse(source))
+    return lines - {
+        n for n in inert if not any(first < n <= last for first, last in spans)
+    }
+
+
+def string_cut_lines(tree: ast.AST, cuts) -> set[int]:
+    """Lines around cuts that fall inside a multiline string.
+
+    Removed text that reads like a definition or a comment but sits in a string
+    changed the string, so the function holding it is touched.
+    """
+    spans = _string_spans(tree)
     return {
         line
         for anchor, _ in cuts
@@ -81,29 +99,51 @@ def string_cut_lines(tree: ast.AST, cuts) -> set[int]:
     }
 
 
+def _is_inert(line: str) -> bool:
+    """A diff line (with its +/- sign) that is blank or only a comment."""
+    return not line[1:].strip() or line[1:].lstrip().startswith("#")
+
+
+def _hunk_effect(first: int, count: int, removed: list[str], added: list[str]):
+    """(touched lines, cut or None, inert added lines) of one `-U0` hunk.
+
+    An added line is inert when blank or only a comment, in a hunk that removed no
+    code; a hunk that replaced code keeps every line it touched.
+    """
+    if not count:
+        return *_touched_by_deletion(removed, first), set()
+    replaced_code = not all(_is_inert(line) for line in removed)
+    inert = (
+        set()
+        if replaced_code
+        else {first + i for i, line in enumerate(added) if _is_inert(line)}
+    )
+    return set(range(first, first + count)), None, inert
+
+
 def changed_lines_ex(
-    diff_text: str,
+    diff_text: str, inert: dict[str, set[int]] | None = None
 ) -> tuple[dict[str, set[int]], dict[str, set[tuple[int, int]]]]:
-    """(touched lines, indented-definition cuts) per Python file under mcp_server."""
+    """(touched lines, indented-definition cuts) per Python file under mcp_server;
+    `inert` collects the inert added lines of `_hunk_effect`, see `drop_inert`."""
     result: dict[str, set[int]] = {}
     cuts: dict[str, set[tuple[int, int]]] = {}
     current = None
     pending: tuple[int, int] | None = None
     removed: list[str] = []
+    added: list[str] = []
 
     def close() -> None:
-        nonlocal pending, removed
+        nonlocal pending, removed, added
         if pending and current:
-            first, count = pending
-            if count:
-                touched, cut = set(range(first, first + count)), None
-            else:
-                touched, cut = _touched_by_deletion(removed, first)
+            touched, cut, blank = _hunk_effect(*pending, removed, added)
+            if inert is not None and blank:
+                inert.setdefault(current, set()).update(blank)
             if touched:
                 result.setdefault(current, set()).update(touched)
             if cut is not None:
                 cuts.setdefault(current, set()).add(cut)
-        pending, removed = None, []
+        pending, removed, added = None, [], []
 
     for line in diff_text.splitlines():
         if _FILE_START.match(line):
@@ -118,8 +158,8 @@ def changed_lines_ex(
             close()
             count = 1 if hunk.group(2) is None else int(hunk.group(2))
             pending = (int(hunk.group(1)), count)
-        elif pending and line.startswith("-") and pending[1] == 0:
-            removed.append(line)
+        elif pending and line[:1] in ("-", "+"):
+            (removed if line[0] == "-" else added).append(line)
     close()
     return result, cuts
 

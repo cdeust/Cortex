@@ -17,6 +17,9 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- An added blank or comment-only line no longer puts a function in the mutation gate's
+  scope (ADR-1122). The blank lines above a new function selected the function before
+  it: #878 was asked to kill the mutants of `count_reranked`, which it did not change.
 - mutmut forks each mutant from a fork server (`process_isolation = "forkserver"`,
   ADR-1122). Forked from the process that had run the suite, mutants hung in torch on
   the Linux runner and timed out: #878 was cancelled at the six-hour job limit.
