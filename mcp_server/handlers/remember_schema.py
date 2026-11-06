@@ -294,8 +294,9 @@ schema = {
             "agent_topic": {
                 "type": "string",
                 "description": (
-                    "Subagent context tag for topic isolation; recall can scope "
-                    "to a single agent persona."
+                    "Subagent context tag stored with the memory; a recall "
+                    "with the same agent_topic ranks it higher. Not a privacy "
+                    "boundary (docs/agent-scope.md)."
                 ),
                 "examples": ["engineer", "researcher", "reviewer"],
             },

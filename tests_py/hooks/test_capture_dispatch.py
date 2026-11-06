@@ -26,6 +26,12 @@ class TestCaptureDispatch(unittest.TestCase):
         from mcp_server.core import telemetry
 
         self.dispatch = capture_dispatch
+        # The variable above reaches child processes only: capture_dispatch read
+        # CLAUDE_DIR at import, so the spool path of an unsupported platform
+        # (Windows) wrote to the suite's shared root (issue #693).
+        mock.patch.object(
+            capture_dispatch, "CLAUDE_DIR", Path(self.temporary.name)
+        ).start()
         self.record = mock.patch.object(telemetry, "record").start()
 
     def tearDown(self):
@@ -52,8 +58,14 @@ class TestCaptureDispatch(unittest.TestCase):
         self.assertIn("persistence pending", log.call_args.args[0])
 
     def test_spawn_or_transport_failure_is_logged_and_telemetried(self):
-        with mock.patch.object(
-            self.dispatch, "deliver", side_effect=OSError("fixture spawn failed")
+        # the resident-worker path on every platform: without the pin, Windows
+        # took the spool path and started a real detached drainer (issue #693)
+        supported = mock.patch.object(self.dispatch, "is_supported", return_value=True)
+        with (
+            supported,
+            mock.patch.object(
+                self.dispatch, "deliver", side_effect=OSError("fixture spawn failed")
+            ),
         ):
             with mock.patch.object(
                 self.dispatch.time, "monotonic", side_effect=[4.0, 4.25]
@@ -64,6 +76,22 @@ class TestCaptureDispatch(unittest.TestCase):
         self.record.assert_called_once_with(
             "capture_skipped", latency_ms=250.0, ok=False, skipped=True
         )
+
+    def test_spool_path_writes_only_under_the_test_root(self):
+        from mcp_server.infrastructure import capture_spool
+        from mcp_server.infrastructure.config import CLAUDE_DIR
+
+        shared = capture_spool.spool_directory(CLAUDE_DIR)
+        before = capture_spool.pending(shared)
+        unsupported = mock.patch.object(
+            self.dispatch, "is_supported", return_value=False
+        )
+        with unsupported, mock.patch.object(self.dispatch, "spawn_drainer") as spawn:
+            self.assertTrue(self.dispatch.dispatch(payload()))
+        local = capture_spool.spool_directory(Path(self.temporary.name))
+        self.assertEqual(len(capture_spool.pending(local)), 1)
+        self.assertEqual(capture_spool.pending(shared), before)
+        spawn.assert_called_once_with(capture_spool.log_path(local))
 
     def test_invalid_payload_never_reaches_spawn_or_transport(self):
         with mock.patch.object(self.dispatch, "deliver") as deliver:

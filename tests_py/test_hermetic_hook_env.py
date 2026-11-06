@@ -258,3 +258,14 @@ def test_hermetic_env_bounds_the_worker_idle_window_and_embedding_download(
     env, _ = hermetic.hermetic_hook_env({"PATH": ""}, tmp_path)
     assert env["CORTEX_CAPTURE_IDLE_SECONDS"] == "1"
     assert env["CORTEX_EMBEDDING_ZERO_DOWNLOAD"] == "1"
+
+
+@posix_only
+def test_hook_env_does_not_hand_the_parents_mutant_to_the_hook(tmp_path: Path):
+    """Under the mutation gate (ADR-1122) the parent runs with MUTANT_UNDER_TEST
+    set; a hook subprocess started in the temp project would run mutmut's
+    trampoline with no [tool.mutmut] config in its cwd and fail to start."""
+    env, _ = hermetic.hermetic_hook_env(
+        {"PATH": "", "MUTANT_UNDER_TEST": "stats"}, tmp_path
+    )
+    assert "MUTANT_UNDER_TEST" not in env
