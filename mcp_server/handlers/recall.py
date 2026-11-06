@@ -259,8 +259,9 @@ schema = {
             "agent_topic": {
                 "type": "string",
                 "description": (
-                    "Restrict to memories produced under a specific agent "
-                    "context tag (subagent topic isolation)."
+                    "Rank memories written under this agent context tag "
+                    "higher. A ranking boost, not a filter: other agents' "
+                    "memories still match (docs/agent-scope.md)."
                 ),
                 "examples": ["engineer", "researcher", "reviewer"],
             },

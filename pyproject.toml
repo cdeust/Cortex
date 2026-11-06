@@ -799,6 +799,8 @@ only_mutate = ["mcp_server/shared/json_native.py"]
 #
 also_copy = [
     ".github",
+    ".claude-plugin",
+    "plugins",
     "tests_py",
     # source: tests_py/handlers/test_beam_anticheat.py imports benchmarks.
     "benchmarks",
@@ -821,3 +823,7 @@ also_copy = [
 ]
 pytest_add_cli_args_test_selection = ["tests_py/shared/test_json_native.py"]
 use_setproctitle = false
+# source: ADR-1122. scripts/mutation_check.sh rewrites this line per platform from
+# scripts/ci_mutation_scope.py ISOLATION_BY_SYSTEM ("forkserver" on Linux, where "fork"
+# hangs in torch autograd; "fork" on macOS, where "forkserver" aborts in torch MPS).
+process_isolation = "forkserver"
