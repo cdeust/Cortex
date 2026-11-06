@@ -5,12 +5,16 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import Mock
 
+import pytest
+
 from mcp_server.core import reranker, retrieval_dispatch
+from mcp_server.shared import telemetry_context
 from mcp_server.shared.telemetry_context import (
     count_reranked,
     operation_metrics,
     retrieval_metrics,
     set_retrieval_tier,
+    timed_stage,
 )
 
 
@@ -69,3 +73,37 @@ def test_legacy_dispatch_records_executed_tier_without_changing_output(monkeypat
         observed = retrieval_dispatch.dispatch_retrieval(*args)
     assert observed == original
     assert measured.tier == observed[1]
+
+
+def test_timed_stage_accumulates_and_records_a_failed_stage(monkeypatch):
+    clock = iter([10.0, 10.25, 20.0, 20.5, 30.0, 30.125])
+    monkeypatch.setattr(telemetry_context, "perf_counter", lambda: next(clock))
+    with operation_metrics() as measured:
+        with timed_stage("cross_encoder"):
+            pass
+        with timed_stage("cross_encoder"):
+            pass
+        with pytest.raises(RuntimeError, match="fixture stage failure"):
+            with timed_stage("fused_search"):
+                raise RuntimeError("fixture stage failure")
+    assert measured.stage_ms == {"cross_encoder": 750.0, "fused_search": 125.0}
+
+
+def test_timed_stage_outside_an_operation_runs_the_block_and_records_nothing():
+    ran = []
+    with timed_stage("embed_query"):
+        ran.append(True)
+    assert ran == [True]
+    with operation_metrics() as measured:
+        pass
+    assert measured.stage_ms == {}
+
+
+def test_each_operation_starts_with_an_empty_breakdown():
+    with operation_metrics() as first:
+        with timed_stage("fused_search"):
+            pass
+    with operation_metrics() as second:
+        pass
+    assert set(first.stage_ms) == {"fused_search"}
+    assert second.stage_ms == {}

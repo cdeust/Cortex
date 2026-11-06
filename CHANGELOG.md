@@ -8,6 +8,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Every telemetry sample now carries `stage_ms`, the milliseconds its own
+  operation spent in each stage timed with `timed_stage(name)` (#722, slice 1).
+  A stage entered twice accumulates, a stage that raises is still counted, and
+  the JSONL line rounds each value to 3 decimals like `latency_ms`. No stage is
+  timed yet, so `stage_ms` is `{}` for now; the recall stages are instrumented
+  in a later slice.
 - `memory_stats` returns `abandoned_workers`, the `abandoned_work` registry of
   #903: per tool, the workers still running after their caller was cancelled
   (`in_flight`) and how abandoned workers ended since the process started
