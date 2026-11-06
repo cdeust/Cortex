@@ -8,6 +8,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `docs/audits/model-identity-inventory-2026-11-06.md` lists which embedding
+  and reranker identity facts a local run records and where (#734, slice 1):
+  the embedding revision is pinned but its bytes are never hashed, the reranker
+  sha256 is recorded but never verified, and the benchmark manifest records the
+  pinned `embedding_model_revision` even when the run served fallback
+  embeddings (probe in the document).
 - A `recall` hit written by `ingest_document` names the document it came from
   (#713, slice 2). Its `document_sources` lists the source file, the content
   version and the adapter kind, read from the hit's own `doc-ingest:` tag, so a
