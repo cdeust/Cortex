@@ -31,7 +31,7 @@ jobs:
         uses: ./.github/actions/uv-locked-install
         with:
           environment: ${{ github.workspace }}/.venv
-          set: --extra dev --extra sqlite --extra codebase --extra postgresql --group lint
+          set: --extra dev --extra sqlite --extra codebase --extra postgresql --group lint --group dev
       - name: Check final Python sources
         run: |
           export PATH="$HOME/.local/bin:$PATH"
