@@ -8,6 +8,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `docs/audits/model-identity-inventory-2026-11-06.md` lists which embedding
+  and reranker identity facts a local run records and where (#734, slice 1):
+  the embedding revision is pinned but its bytes are never hashed, the reranker
+  sha256 is recorded but never verified, and the benchmark manifest records the
+  pinned `embedding_model_revision` even when the run served fallback
+  embeddings (probe in the document).
 - A claim keeps the time of the event it describes apart from the time it was
   extracted (#717, slice 1). `ClaimEvent.event_time` is `unknown`, a `point`
   or an `interval`, each bound carrying its value, its ISO 8601 precision and,
