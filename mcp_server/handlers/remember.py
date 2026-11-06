@@ -85,7 +85,7 @@ def _resolve_domain(directory: str, domain: str) -> str:
         # Fallback to profile-based detection
         profiles = load_profiles()
         detection = detect_domain({"cwd": directory}, profiles)
-        detected = detection.get("domain", "") or ""
+        detected = detection.get("domain") or ""
         return resolve_hint(detected) if detected else ""
     return ""
 

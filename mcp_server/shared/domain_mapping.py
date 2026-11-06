@@ -485,7 +485,7 @@ def resolve_explicit_domain(name: str) -> str:
     the shared fragment ``comparison`` (issue #721).
 
     source: issue #721; ADR-0647"""
-    lower = (name or "").strip().lower()
+    lower = name.strip().lower()
     if not lower:
         return ""
     return _build_registry().name_to_canonical.get(lower, lower)
