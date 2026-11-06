@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from mcp_server.infrastructure.config import CLAUDE_DIR
+from mcp_server.infrastructure.config import CLAUDE_PROJECTS_DIR
 from mcp_server.infrastructure.file_io import list_dir, read_text_file, stat_file
 from mcp_server.infrastructure.transcript_activity import transcript_activity
 from mcp_server.infrastructure.scanner_parse import (
@@ -112,7 +112,7 @@ def _parse_memory_file(
 
 def discover_all_memories() -> list[dict[str, Any]]:
     """Discover all memory files across Claude project directories."""
-    projects_dir = CLAUDE_DIR / "projects"
+    projects_dir = CLAUDE_PROJECTS_DIR
     entries = list_dir(projects_dir, with_file_types=True)
     if not entries:
         return []
@@ -210,7 +210,7 @@ def _scan_project_conversations(
 
 def discover_conversations() -> list[dict[str, Any]]:
     """Discover all conversation JSONL files across Claude project directories."""
-    projects_dir = CLAUDE_DIR / "projects"
+    projects_dir = CLAUDE_PROJECTS_DIR
     entries = list_dir(projects_dir, with_file_types=True)
     if not entries:
         return []
@@ -235,16 +235,16 @@ def discover_conversations_for_projects(
 
     Precondition: project_ids names project directories as produced by
         discover_conversations()/group_by_project() (entries under
-        CLAUDE_DIR/projects); limit > 0. Postcondition: returns at most `limit`
+        CLAUDE_PROJECTS_DIR); limit > 0. Postcondition: returns at most `limit`
         conversation records, drawn
         only from JSONL files under the given project directories -- every
-        other project directory under CLAUDE_DIR/projects is left unscanned.
+        other project directory under CLAUDE_PROJECTS_DIR is left unscanned.
 
     source: ADR-0595"""
     if not project_ids or limit <= 0:
         return []
 
-    projects_dir = CLAUDE_DIR / "projects"
+    projects_dir = CLAUDE_PROJECTS_DIR
     conversations: list[dict[str, Any]] = []
 
     for project_id in project_ids:

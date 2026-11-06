@@ -51,7 +51,7 @@ from mcp_server.infrastructure.staging_resolve_sink import (
     build_entity_sink,
 )
 from mcp_server.shared.progress import NullProgress, ProgressReporter
-import shutil
+from mcp_server.infrastructure import code_graph_cache as graph_cache
 
 logger = logging.getLogger(__name__)
 
@@ -110,31 +110,21 @@ def _default_output_dir(project_path: str) -> str:
 
 
 def _prune_precedent_graphs(output_dir: str) -> list[str]:
-    """Remove stale graphs for the SAME project once a fresh one is built.
+    """Remove the orphaned graphs beside ``output_dir`` once a graph is built.
 
-    Remove stale sibling graph directories sharing the current project name prefix,
-    preserving the graph just written. Returns removed directory names.
+    A graph is orphaned when its ``cortex-root.json`` names a project root that
+    no longer exists. The former rule matched siblings by name prefix: it
+    deleted unrelated projects (``cortex-viz-*`` for ``cortex``) and never a
+    deleted worktree's graph. Only the managed cache is pruned: an explicit
+    ``output_dir`` elsewhere never deletes its siblings. Returns the removed
+    directory names.
 
-    source: ADR-0399"""
+    source: issue #711"""
 
-    cur = Path(output_dir)
-    parent = cur.parent
-    if not parent.is_dir():
+    parent = Path(output_dir).expanduser().resolve().parent
+    if parent != graph_cache.managed_cache_dir().resolve():
         return []
-    # Project name = key minus the trailing ``-<hash>`` segment.
-    prefix = cur.name.rsplit("-", 1)[0] + "-"
-    removed: list[str] = []
-    for sib in parent.iterdir():
-        if sib == cur or not sib.is_dir() or not sib.name.startswith(prefix):
-            continue
-        try:
-            shutil.rmtree(sib)
-            removed.append(sib.name)
-        except OSError as exc:
-            logger.warning("could not prune precedent graph %s: %s", sib, exc)
-    if removed:
-        logger.info("pruned %d precedent graph(s): %s", len(removed), removed)
-    return removed
+    return list(graph_cache.prune_orphan_graphs(parent).removed)
 
 
 def _parse_int_or_none(raw: Any) -> int | None:

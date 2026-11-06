@@ -85,7 +85,7 @@ def test_import_sessions_stores_no_secret_in_rows_or_artifacts(tmp_path):
     (project / "gate-session.jsonl").write_text(
         "\n".join(json.dumps(r) for r in records) + "\n", encoding="utf-8"
     )
-    with patch.object(import_sessions, "CLAUDE_DIR", tmp_path):
+    with patch.object(import_sessions, "CLAUDE_PROJECTS_DIR", tmp_path / "projects"):
         result = asyncio.run(import_sessions.handler({"min_importance": 0.0}))
     assert result["imported"] >= 1, result
     _assert_store_clean()
