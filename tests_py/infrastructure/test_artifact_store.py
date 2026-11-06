@@ -59,3 +59,25 @@ def test_different_content_different_path(tmp_path, monkeypatch):
     p1 = artifact_store.store_artifact("content A", created_at=when)
     p2 = artifact_store.store_artifact("content B", created_at=when)
     assert p1 != p2
+
+
+def test_write_artifact_reports_whether_it_created_the_file(tmp_path, monkeypatch):
+    """Only the first writer of a content owns it (issue #737)."""
+    _patch_dir(tmp_path, monkeypatch)
+    when = datetime(2026, 11, 6, tzinfo=timezone.utc)
+    p1, created1 = artifact_store.write_artifact("owned once", created_at=when)
+    p2, created2 = artifact_store.write_artifact("owned once", created_at=when)
+    assert created1 is True
+    assert created2 is False
+    assert p1 == p2
+
+
+def test_discard_created_artifact_removes_it_and_tolerates_absence(
+    tmp_path, monkeypatch
+):
+    _patch_dir(tmp_path, monkeypatch)
+    path, created = artifact_store.write_artifact("to be discarded")
+    assert created is True
+    artifact_store.discard_created_artifact(path)
+    assert not path.exists()
+    artifact_store.discard_created_artifact(path)

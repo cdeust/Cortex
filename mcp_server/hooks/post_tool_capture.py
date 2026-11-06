@@ -13,7 +13,7 @@ import json
 import os
 import sys
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from mcp_server.hooks.output_streams import use_utf8_output
 from mcp_server.hooks.stdin_event import read_event_text
@@ -26,6 +26,9 @@ from mcp_server.core.gist_extraction import (
 from mcp_server.hooks._capture_mode import capture_skip_reason
 from mcp_server.hooks._capture_mode import HIGH_VALUE_TOOLS as _HIGH_VALUE_TOOLS
 from mcp_server.shared.redaction_gate import redact_text
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 _LOG_PREFIX = "[cortex-post-tool-capture]"
 
@@ -138,30 +141,50 @@ def _build_memory_content(
     return "\n".join(parts)
 
 
-def _gist_or_full(output: str) -> tuple[str, str | None]:
-    """Return (body_output, pointer_line) for the memory body.
+def _gist_or_full(output: str) -> tuple[str, str | None, Path | None]:
+    """Return (body_output, pointer_line, created_artifact) for the memory body.
 
     Pre: output is the normalized tool output string.
-    Post: when ``output`` fits GIST_BUDGET, returns (output, None) — stored as
-    today. When it exceeds the budget, the FULL raw output is written to a
-    content-addressed artifact and we return (gist, pointer_line) so the body
-    carries a bounded gist plus a loadable pointer to the full artifact.
+    Post: when ``output`` fits GIST_BUDGET, returns (output, None, None) — stored
+    as today. When it exceeds the budget, the FULL raw output is written to a
+    content-addressed artifact and we return (gist, pointer_line, path) so the
+    body carries a bounded gist plus a loadable pointer to the full artifact;
+    ``path`` is None when the file already existed (issue #737).
 
     Non-blocking contract: artifact write failure must NOT lose the capture —
-    on any exception we fall back to (output, None) and log via _log, i.e. the
-    legacy full-output behavior.
+    on any exception we fall back to (output, None, None) and log via _log, i.e.
+    the legacy full-output behavior.
     """
     if not needs_gist(output):
-        return output, None
+        return output, None, None
     try:
-        from mcp_server.infrastructure.artifact_store import store_artifact  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
+        from mcp_server.infrastructure.artifact_store import write_artifact  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
 
-        path = store_artifact(output)
+        path, created = write_artifact(output)
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"artifact write failed (non-fatal, full output kept): {exc}")
-        return output, None
+        return output, None, None
     pointer = format_artifact_pointer(str(path), len(output))
-    return extract_gist(output), pointer
+    return extract_gist(output), pointer, path if created else None
+
+
+def _discard_undelivered_artifact(path: Path | None) -> None:
+    """Remove the artifact this capture created when its memory was not handed over.
+
+    source: issue #737 — the artifact was written before the memory, and a
+    declined dispatch left a file no memory refers to, which recall cannot
+    surface and forget cannot reach. Only a file this capture created is
+    removed: an existing one may be another memory's artifact (ADR-0503)."""
+    if path is None:
+        return
+    from mcp_server.infrastructure.artifact_store import discard_created_artifact  # noqa: PLC0415 — hook latency boundary, as in _gist_or_full
+
+    try:
+        discard_created_artifact(path)
+    except OSError as exc:
+        _log(f"undelivered capture: artifact {path} could not be removed: {exc}")
+        return
+    _log(f"undelivered capture: artifact {path} removed")
 
 
 def _build_tags(tool_name: str, output: str) -> list[str]:
@@ -256,8 +279,11 @@ def _load_remember():
         sys.exit(1)
 
 
-def _store_memory(tool_name: str, content: str, tags: list[str], cwd: str) -> None:
-    """Admit the unchanged remember payload to the resident worker."""
+def _store_memory(tool_name: str, content: str, tags: list[str], cwd: str) -> bool:
+    """Admit the unchanged remember payload to the resident worker.
+
+    Post: True when the payload was handed over (worker or durable spool),
+    False when dispatch declined it."""
     from mcp_server.hooks.capture_dispatch import dispatch  # noqa: PLC0415 — hook filtering precedes all worker infrastructure imports
 
     payload: dict[str, object] = {
@@ -270,8 +296,10 @@ def _store_memory(tool_name: str, content: str, tags: list[str], cwd: str) -> No
         "write_class": "auto",
         "force": False,
     }
-    if dispatch(payload):
-        _log(f"queued {tool_name} for capture (persistence pending)")
+    if not dispatch(payload):
+        return False
+    _log(f"queued {tool_name} for capture (persistence pending)")
+    return True
 
 
 # ── Periodic cascade advancement ──────────────────────────────────────
@@ -361,20 +389,28 @@ def process_event(event: dict[str, Any]) -> None:
     if needs_gist(output):
         output = redact_text(output)
 
+    _capture(tool_name, tool_input, output, cwd)
+
+
+def _capture(tool_name: str, tool_input: dict[str, Any], output: str, cwd: str) -> None:
+    """Build the memory, hand it over, and leave no artifact it does not reach."""
     # Tags are derived from the FULL output so signal tags (error/test/
     # success) survive even when the body is gisted.
     tags = _build_tags(tool_name, output)
-    body_output, pointer = _gist_or_full(output)
+    body_output, pointer, created = _gist_or_full(output)
     content = _build_memory_content(tool_name, tool_input, body_output, cwd)
     if pointer:
         content = f"{content}\n\n{pointer}"
     # source: ADR-0495 (content shape); ADR-1110 — the hook redacts it once
     content = redact_text(content)
 
+    delivered = False
     try:
-        _store_memory(tool_name, content, tags, cwd)
+        delivered = _store_memory(tool_name, content, tags, cwd)
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"capture failed (non-fatal): {exc}")
+    if not delivered:
+        _discard_undelivered_artifact(created)
 
 
 def main(dispatch: Callable[[dict[str, Any]], None] | None = None) -> None:
