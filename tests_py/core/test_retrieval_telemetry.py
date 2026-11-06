@@ -89,9 +89,21 @@ def test_timed_stage_accumulates_and_records_a_failed_stage(monkeypatch):
     assert measured.stage_ms == {"cross_encoder": 750.0, "fused_search": 125.0}
 
 
-def test_timed_stage_outside_an_operation_records_nothing():
+def test_timed_stage_outside_an_operation_runs_the_block_and_records_nothing():
     ran = []
     with timed_stage("embed_query"):
         ran.append(True)
     assert ran == [True]
-    assert retrieval_metrics().stage_ms == {}
+    with operation_metrics() as measured:
+        pass
+    assert measured.stage_ms == {}
+
+
+def test_each_operation_starts_with_an_empty_breakdown():
+    with operation_metrics() as first:
+        with timed_stage("fused_search"):
+            pass
+    with operation_metrics() as second:
+        pass
+    assert set(first.stage_ms) == {"fused_search"}
+    assert second.stage_ms == {}

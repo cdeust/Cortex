@@ -8,13 +8,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- Each `recall` telemetry sample now carries `stage_ms`, the milliseconds spent
-  in each stage of that call (query embedding, fused search, familiarity
-  triage, recollection, cross-encoder, rerank nudges, final stages,
-  enrichments, replay tracking, response budget, injection receipt, response
-  encoding), so a slow recall can be attributed before any optimization is
-  chosen (#722, slice 1). Measurement only: ranking and responses are
-  unchanged.
+- Every telemetry sample now carries `stage_ms`, the milliseconds its own
+  operation spent in each stage timed with `timed_stage(name)` (#722, slice 1).
+  A stage entered twice accumulates, a stage that raises is still counted, and
+  the JSONL line rounds each value to 3 decimals like `latency_ms`. No stage is
+  timed yet, so `stage_ms` is `{}` for now; the recall stages are instrumented
+  in a later slice.
 - A claim keeps the time of the event it describes apart from the time it was
   extracted (#717, slice 1). `ClaimEvent.event_time` is `unknown`, a `point`
   or an `interval`, each bound carrying its value, its ISO 8601 precision and,

@@ -16,7 +16,6 @@ from types import SimpleNamespace
 
 from benchmarks.reranker_matrix.runtime import fetched
 from mcp_server.handlers.decision_recall import exact_lookup
-from mcp_server.shared.telemetry_context import timed_stage
 
 
 class ProbeFinishedError(Exception):
@@ -76,7 +75,6 @@ def fetch_stage(multiplier: int, observations: dict):
     ns = {
         "trusted_origins_at_read": lambda: (),
         "untrusted_origin_factor": lambda: 1.0,
-        "timed_stage": timed_stage,
     }
     original = source_function(
         "mcp_server/core/pg_recall_context.py", "_wrrf_fetch", ns
@@ -109,7 +107,6 @@ def pipeline(multiplier: int, observations: dict):
         "set_retrieval_tier": lambda tier: None,
         "fetch_and_triage": fetch_stage(multiplier, observations),
         "apply_rerank_nudges": rerank,
-        "timed_stage": timed_stage,
     }
     for name in (
         "apply_recollection_pipeline",
@@ -157,7 +154,6 @@ def handler_globals(multiplier: int, observations: dict) -> dict:
         "pg_recall": recall,
         "filter_low_signal": filtered,
         "inject_triggered_memories": finish,
-        "timed_stage": timed_stage,
     }
 
 

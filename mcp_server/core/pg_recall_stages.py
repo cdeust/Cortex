@@ -4,7 +4,7 @@ source: ADR-0220"""
 
 from __future__ import annotations
 
-from mcp_server.shared.telemetry_context import set_retrieval_tier, timed_stage
+from mcp_server.shared.telemetry_context import set_retrieval_tier
 from mcp_server.shared.memory_rows import MemoryRows
 from mcp_server.core.pg_recall_context import RecallContext, fetch_and_triage
 from mcp_server.core.pg_recall_signals import (
@@ -99,10 +99,9 @@ def apply_rerank_nudges(candidates: list[dict], ctx: RecallContext) -> list[dict
     if ctx.rerank and len(candidates) > 1:
         ranked_pairs = [(c["memory_id"], c.get("score", 0.0)) for c in candidates]
         content_map = {c["memory_id"]: c["content"] for c in candidates}
-        with timed_stage("cross_encoder"):
-            reranked = rerank_results(
-                ctx.query, ranked_pairs, content_map, alpha=ctx.rerank_alpha
-            )
+        reranked = rerank_results(
+            ctx.query, ranked_pairs, content_map, alpha=ctx.rerank_alpha
+        )
         cand_map = {c["memory_id"]: c for c in candidates}
         candidates = []
         for mid, score in reranked:
@@ -111,11 +110,10 @@ def apply_rerank_nudges(candidates: list[dict], ctx: RecallContext) -> list[dict
                 c["score"] = score
                 candidates.append(c)
 
-    with timed_stage("rerank_nudges"):
-        candidates = value_priority_rerank(candidates)
-        candidates = conflict_monitor_rerank(candidates, ctx.store)
-        candidates = goal_maintenance_rerank(candidates, _get_active_goal(ctx.store))
-        return attentional_focus_rerank(candidates, ctx.query)
+    candidates = value_priority_rerank(candidates)
+    candidates = conflict_monitor_rerank(candidates, ctx.store)
+    candidates = goal_maintenance_rerank(candidates, _get_active_goal(ctx.store))
+    return attentional_focus_rerank(candidates, ctx.query)
 
 
 # source: ADR-0220
@@ -197,10 +195,8 @@ def run_recall_pipeline(ctx: RecallContext) -> list[dict]:
     if early_return:
         return candidates[:top_k]
 
-    with timed_stage("recollection"):
-        candidates = apply_recollection_pipeline(candidates, ctx)
+    candidates = apply_recollection_pipeline(candidates, ctx)
     candidates = apply_rerank_nudges(candidates, ctx)
-    with timed_stage("final_stages"):
-        candidates = reserve_typed_pool(candidates, ctx)
-        candidates = apply_final_stages(candidates, ctx)
+    candidates = reserve_typed_pool(candidates, ctx)
+    candidates = apply_final_stages(candidates, ctx)
     return candidates[:top_k]
