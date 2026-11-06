@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 
 from mcp_server.core.persona_vector import build_persona_vector
 from mcp_server.core.style_classifier_ema import update_style_ema
+from mcp_server.core.tool_operation import EDIT, READ, count_operation
 
 # ---------------------------------------------------------------------------
 # Incremental session update
@@ -90,7 +91,12 @@ def _build_style_observation(
     duration: int | None,
     tools_used: list[str],
 ) -> dict[str, float]:
-    """Build a cognitive style observation from session signals."""
+    """Build a cognitive style observation from session signals.
+
+    ``activeReflective`` is one of {0.5, 0.0, -0.5} plus at most +0.3 and
+    -0.3, so it stays within [-0.8, 0.8] and needs no clamp here;
+    ``update_style_ema`` clamps the blended value to [-1, 1].
+    """
     observation: dict[str, float] = {}
 
     if duration is not None:
@@ -102,8 +108,8 @@ def _build_style_observation(
             observation["activeReflective"] = 0.0
 
     if tools_used:
-        edit_count = sum(1 for t in tools_used if t in ("Edit", "Write"))
-        read_count = sum(1 for t in tools_used if t in ("Read", "Grep"))
+        edit_count = count_operation(tools_used, EDIT)
+        read_count = count_operation(tools_used, READ)
         total = len(tools_used)
         if edit_count / total > _TOOL_MIX_DOMINANCE:
             observation["activeReflective"] = (
@@ -113,11 +119,6 @@ def _build_style_observation(
             observation["activeReflective"] = (
                 observation.get("activeReflective", 0) - 0.3
             )
-
-    if "activeReflective" in observation:
-        observation["activeReflective"] = max(
-            -1, min(1, observation["activeReflective"])
-        )
 
     return observation
 

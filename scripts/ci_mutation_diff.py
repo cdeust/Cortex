@@ -23,12 +23,13 @@ from pathlib import Path
 
 try:
     from ci_diff_lines import SOURCE_ROOT, changed_lines, changed_lines_ex  # noqa: F401
-    from ci_diff_lines import string_cut_lines
+    from ci_diff_lines import drop_inert, string_cut_lines
 except ModuleNotFoundError:  # imported as scripts.ci_mutation_diff
     from scripts.ci_diff_lines import (  # noqa: F401
         SOURCE_ROOT,
         changed_lines,
         changed_lines_ex,
+        drop_inert,
         string_cut_lines,
     )
 
@@ -43,7 +44,6 @@ MUTABLE_DECORATORS = frozenset({"staticmethod", "classmethod"})
 # source: tests_py layout; these directories test scripts, benchmarks or the
 # running system, not the unit behaviour of a module.
 NOT_UNIT_TESTS = frozenset({"scripts", "integration", "benchmarks"})
-
 
 # source: mutmut 3.8.1 `results` statuses besides killed and survived, the
 # ones where no test showed the mutant to be wrong.
@@ -186,17 +186,18 @@ def plan(
     MUTABLE_DECORATORS): they are reported, not gated, because no test could kill a
     mutant that does not exist.
     """
-    jobs, problems = [], []
-    lines_by_path, cuts_by_path = changed_lines_ex(diff_text)
+    jobs, problems, inert = [], [], {}
+    lines_by_path, cuts_by_path = changed_lines_ex(diff_text, inert)
     for path in sorted(lines_by_path.keys() | cuts_by_path.keys()):
-        lines = lines_by_path.get(path, set())
         file = root / path
         if not file.exists():
             continue
+        text = file.read_text(encoding="utf-8")
+        lines = drop_inert(text, lines_by_path.get(path, set()), inert.get(path, set()))
         module = module_name(path)
         skipped: list[str] = []
         prefixes = touched_prefixes(
-            file.read_text(encoding="utf-8"),
+            text,
             lines,
             module,
             cuts_by_path.get(path, set()),
