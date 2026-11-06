@@ -103,9 +103,11 @@ def find_claude_ancestor(max_depth: int = _MAX_ANCESTOR_DEPTH) -> int | None:
     claude. Return None for no match, reaching a root process, or exhausting
     max_depth. A failed process-table probe raises OSError for caller logging.
 
-    source: ADR-1096 (Windows branch; POSIX: ADR-0597)"""
+    On Windows ``CLAUDE_PID`` is tried before the walk (ADR-1124).
+
+    source: ADR-1096 (Windows branch; CLAUDE_PID first: ADR-1124; POSIX: ADR-0597)"""
     if host_platform.IS_WINDOWS:
-        return process_ancestry.claude_ancestor_pid(os.getpid(), max_depth)
+        return process_ancestry.window_claude_pid(os.getpid(), max_depth)
     pid = os.getppid()
     for _ in range(max_depth):
         info = _ppid_and_comm(pid)

@@ -91,6 +91,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- On Windows, a hook whose intermediate `bash.exe` has already exited finds its
+  window again (#835, first slice; ADR-1124). The ancestor walk stops at the
+  missing parent, so SessionStart started no consolidate cycle and wrote no
+  registry entry. The window's `claude.exe` pid is now read from `CLAUDE_PID`
+  first, used only when it names a `claude.exe` not younger than the hook,
+  and the walk answers otherwise.
 - `recall_hierarchical` reads the domain identity `remember` writes (#721, slice 3).
   It passed an explicit `domain` unresolved to `get_memories_for_domain`, so
   `recall_hierarchical(domain="cortex-cowork")` read a scope no write used
