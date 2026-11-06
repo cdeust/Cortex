@@ -286,7 +286,7 @@
       "removed": "sig = _text(params, source)[:120] if params else \"\"",
       "added": "sig = _text(params, source)[:120] if params else \"XXXX\"",
       "kind": "unreachable-branch",
-      "rationale": "A Go function_declaration always carries a parameters node \u2014 `func F()` still has an empty one \u2014 so the empty-signature fallback cannot execute.",
+      "rationale": "A Go function_declaration always carries a parameters node — `func F()` still has an empty one — so the empty-signature fallback cannot execute.",
       "issue": "#369"
     },
     {
@@ -480,6 +480,38 @@
       "kind": "equivalent-by-construction",
       "rationale": "write_class's default value is read exactly once in the function body, in `write_class == \"deliberate\"` -- neither \"\" nor \"XXXX\" equals \"deliberate\", so no caller that omits the argument can ever observe which default was compiled in. Killing this would require asserting on a value the function provably never surfaces.",
       "issue": "#345"
+    },
+    {
+      "mutant": "mcp_server.core.document_images.x__local__mutmut_4",
+      "removed": "return tag.rsplit(\"}\", 1)[-1]",
+      "added": "return tag.rsplit(\"}\", )[-1]",
+      "kind": "equivalent-by-construction",
+      "rationale": "ElementTree names a qualified tag `{uri}local` and an unqualified one without braces; a local name (an XML NCName) cannot contain `}`, and ElementTree's expat parser, which uses `}` as its namespace separator, rejects a namespace URI containing `}` (measured 2026-11-06, CPython 3.11 xml.etree: xmlns:a=\"urn:p}q\" raises ParseError, \"urn:pq\" parses). A parsed tag therefore holds at most one `}`, so splitting from the left or the right, with or without maxsplit=1, yields the same last field. No parsed input distinguishes the variants.",
+      "issue": "#732"
+    },
+    {
+      "mutant": "mcp_server.core.document_images.x__local__mutmut_5",
+      "removed": "return tag.rsplit(\"}\", 1)[-1]",
+      "added": "return tag.split(\"}\", 1)[-1]",
+      "kind": "equivalent-by-construction",
+      "rationale": "ElementTree names a qualified tag `{uri}local` and an unqualified one without braces; a local name (an XML NCName) cannot contain `}`, and ElementTree's expat parser, which uses `}` as its namespace separator, rejects a namespace URI containing `}` (measured 2026-11-06, CPython 3.11 xml.etree: xmlns:a=\"urn:p}q\" raises ParseError, \"urn:pq\" parses). A parsed tag therefore holds at most one `}`, so splitting from the left or the right, with or without maxsplit=1, yields the same last field. No parsed input distinguishes the variants.",
+      "issue": "#732"
+    },
+    {
+      "mutant": "mcp_server.core.document_images.x__local__mutmut_7",
+      "removed": "return tag.rsplit(\"}\", 1)[-1]",
+      "added": "return tag.rsplit(\"}\", 2)[-1]",
+      "kind": "equivalent-by-construction",
+      "rationale": "ElementTree names a qualified tag `{uri}local` and an unqualified one without braces; a local name (an XML NCName) cannot contain `}`, and ElementTree's expat parser, which uses `}` as its namespace separator, rejects a namespace URI containing `}` (measured 2026-11-06, CPython 3.11 xml.etree: xmlns:a=\"urn:p}q\" raises ParseError, \"urn:pq\" parses). A parsed tag therefore holds at most one `}`, so splitting from the left or the right, with or without maxsplit=1, yields the same last field. No parsed input distinguishes the variants.",
+      "issue": "#732"
+    },
+    {
+      "mutant": "mcp_server.core.document_images.x__image_references__mutmut_2",
+      "removed": "pending: int | None = None",
+      "added": "pending: int | None = \"\"",
+      "kind": "equivalent-by-construction",
+      "rationale": "`pending` is read only in the branch `if inside and pending is not None`, and `inside` becomes True only in the container branch, which assigns `pending = len(refs)` first. The initial value is therefore never read: every path that reaches the read has overwritten it, so None and \"\" are indistinguishable.",
+      "issue": "#732"
     }
   ]
 }

@@ -7,6 +7,7 @@ from __future__ import annotations
 import re
 from xml.etree import ElementTree as ET
 
+from mcp_server.core.document_images import ImageMarkup, collect_images
 from mcp_server.core.document_model import (
     DocumentAttachment,
     DocumentParseError,
@@ -78,42 +79,14 @@ def _table_rows(tbl: ET.Element) -> DocumentTable:
     return DocumentTable(rows=rows)
 
 
-def _image_reference(image: ET.Element) -> str:
-    """The relationship id of the picture itself: ``a:blip@r:embed`` for a
-    ``w:drawing``, ``v:imagedata@r:id`` for a legacy ``w:pict``, else ``""``.
-
-    Only those two elements name the image part; other descendants carry
-    relationship ids too (``a:hlinkClick@r:id`` in ``wp:docPr`` is the
-    picture's hyperlink and precedes the blip), so they are never read.
-
-    source: ECMA-376 Part 1 §20.1.8.13 (blip), §14.1.2.11 (imagedata); issue #732
-    """
-    for node in image.iter():
-        name = _local(node.tag)
-        if name == "blip":
-            return node.get(f"{{{_R_NS}}}embed", "")
-        if name == "imagedata":
-            return node.get(f"{{{_R_NS}}}id", "")
-    return ""
-
-
-def _collect_images(
-    elem: ET.Element, section_index: int, out: list[DocumentAttachment]
-) -> None:
-    """Append every embedded image (``w:drawing`` + legacy ``w:pict``) under
-    ``elem`` to ``out``, in document order, tagged with the index of its section.
-
-    source: ADR-0163 (issue #732)
-    """
-    for node in elem.iter():
-        if _local(node.tag) in ("drawing", "pict"):
-            out.append(
-                DocumentAttachment(
-                    ordinal=len(out) + 1,
-                    reference=_image_reference(node),
-                    section_index=section_index,
-                )
-            )
+# source: ECMA-376 Part 1 §17.3.3.9 (drawing), §17.3.3.19 (pict) contain the
+# picture; §20.1.8.13 a:blip@r:embed and §14.1.2.11 v:imagedata@r:id name its
+# part. Other relationship ids under a drawing (a:hlinkClick@r:id in wp:docPr,
+# the picture's hyperlink) are never read.
+_DOCX_IMAGES = ImageMarkup(
+    containers=frozenset({"drawing", "pict"}),
+    leaves={"blip": f"{{{_R_NS}}}embed", "imagedata": f"{{{_R_NS}}}id"},
+)
 
 
 def parse_docx_xml(document_xml: str, *, title: str = "") -> ParsedDocument:
@@ -168,7 +141,7 @@ def parse_docx_xml(document_xml: str, *, title: str = "") -> ParsedDocument:
                 current.body = f"{current.body}\n{text}".strip()
         elif name == "tbl":
             current.tables.append(_table_rows(child))
-        _collect_images(child, len(sections) - 1, attachments)
+        collect_images(child, len(sections) - 1, _DOCX_IMAGES, attachments)
 
     sections, attachments = drop_empty_preamble(sections, attachments)
 

@@ -68,7 +68,8 @@ schema = {
         "section_memory_ids, expected_components, completed_components, "
         "failures, retired_receipt_ids, images_skipped, attachments "
         "([{ordinal, reference, section_index, state}] per embedded image, "
-        "state 'unsupported' until extraction exists), notices, title, "
+        "state 'unsupported' until extraction exists), section_headings "
+        "(heading of each parsed section, indexed by section_index), notices, title, "
         "source, source_kind, version}."
     ),
     "inputSchema": {
@@ -243,6 +244,9 @@ async def _persist(
     result.update(
         title=parsed.title, source=prov.source, source_kind=kind, version=prov.version
     )
+    # source: issue #732 — one heading per parsed section, the table that
+    # attachments[].section_index points into (headings are emitted once).
+    result["section_headings"] = [s.heading for s in parsed.sections]
     return result
 
 

@@ -49,6 +49,7 @@ async def test_each_skipped_image_is_named_with_its_section(wired, tmp_path):  #
     p = _make_docx(tmp_path / "two.docx", body)
     out = await ingest_document.handler({"path": str(p)})
     assert out["images_skipped"] == 2
+    assert out["section_headings"] == ["Design", "Rollout"]
     assert out["attachments"] == [
         {
             "ordinal": 1,

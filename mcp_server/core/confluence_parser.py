@@ -8,6 +8,7 @@ import html.entities
 import re
 from xml.etree import ElementTree as ET
 
+from mcp_server.core.document_images import ImageMarkup, collect_images
 from mcp_server.core.document_model import (
     DocumentAttachment,
     DocumentParseError,
@@ -66,38 +67,19 @@ def _table_of(table: ET.Element) -> DocumentTable:
     return DocumentTable(rows=rows)
 
 
-def _image_reference(image: ET.Element) -> str:
-    """What an image names: ``ri:attachment@ri:filename`` or ``ri:url@ri:value``
-    inside an ``<ac:image>``, ``@src`` on an ``<img>``, else ``""``.
-
-    source: issue #732
-    """
-    if _local(image.tag) == "img":
-        return image.get("src", "")
-    for node in image.iter():
-        value = node.get("{urn:ri}filename") or node.get("{urn:ri}value")
-        if value:
-            return value
-    return ""
-
-
-def _collect_images(
-    elem: ET.Element, section_index: int, out: list[DocumentAttachment]
-) -> None:
-    """Append every ``<ac:image>``/``<img>`` under ``elem`` to ``out``, in
-    document order, tagged with the index of its section.
-
-    source: ADR-0135 (issue #732)
-    """
-    for node in elem.iter():
-        if _local(node.tag) in ("image", "img"):
-            out.append(
-                DocumentAttachment(
-                    ordinal=len(out) + 1,
-                    reference=_image_reference(node),
-                    section_index=section_index,
-                )
-            )
+# source: Confluence storage format — an <ac:image> holds a ri:attachment
+# (ri:filename) or ri:url (ri:value) naming the image; an XHTML <img> names it
+# by src, inside or outside an <ac:image>. The ri: prefix is bound to urn:ri
+# by _WRAP_OPEN.
+_CONFLUENCE_IMAGES = ImageMarkup(
+    containers=frozenset({"image"}),
+    leaves={
+        "attachment": "{urn:ri}filename",
+        "url": "{urn:ri}value",
+        "img": "src",
+    },
+    standalone=frozenset({"img"}),
+)
 
 
 def parse_confluence_storage(xhtml: str, *, title: str = "") -> ParsedDocument:
@@ -146,7 +128,7 @@ def parse_confluence_storage(xhtml: str, *, title: str = "") -> ParsedDocument:
             text = _text_of(node)
             if text:
                 current.body = f"{current.body}\n{text}".strip()
-        _collect_images(node, len(sections) - 1, attachments)
+        collect_images(node, len(sections) - 1, _CONFLUENCE_IMAGES, attachments)
 
     sections, attachments = drop_empty_preamble(sections, attachments)
 

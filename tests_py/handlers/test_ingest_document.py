@@ -37,6 +37,7 @@ _RESULT_KEYS = {
     "section_count",
     "images_skipped",
     "attachments",
+    "section_headings",
     "notices",
 }
 
