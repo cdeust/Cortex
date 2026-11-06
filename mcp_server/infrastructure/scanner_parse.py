@@ -72,7 +72,7 @@ def _extract_tools_from_content(content: Any, tool_sequence: list[str]) -> None:
 
 
 # source: ADR-0596
-MAX_USER_TEXT_CHARS = 4000
+_MAX_USER_TEXT_CHARS = 4000
 
 
 def extract_message_stats(raw_records: list[dict]) -> dict[str, Any]:
@@ -94,8 +94,8 @@ def extract_message_stats(raw_records: list[dict]) -> dict[str, Any]:
                 if text and not text.startswith("[Request interrupted"):
                     if not first_message:
                         first_message = text
-                    if all_text_len < MAX_USER_TEXT_CHARS:
-                        chunk = text[: MAX_USER_TEXT_CHARS - all_text_len]
+                    if all_text_len < _MAX_USER_TEXT_CHARS:
+                        chunk = text[: _MAX_USER_TEXT_CHARS - all_text_len]
                         all_text_parts.append(chunk)
                         all_text_len += len(chunk)
 

@@ -42,7 +42,7 @@ from pathlib import Path
 from typing import Any
 
 from mcp_server.infrastructure.scanner_parse import (
-    MAX_USER_TEXT_CHARS,
+    _MAX_USER_TEXT_CHARS,  # same prompt-text cap as the Claude reader, ADR-0596
     build_conversation_record,
     extract_metadata_fields,
 )
@@ -55,7 +55,7 @@ _USER_THREAD_SOURCE = "user"
 
 def codex_sessions_dir() -> Path:
     """`$CODEX_HOME/sessions`, `CODEX_HOME` defaulting to `~/.codex`."""
-    home = os.environ.get("CODEX_HOME", "")
+    home = os.environ.get("CODEX_HOME")
     root = Path(home).expanduser() if home else Path.home() / ".codex"
     return root / "sessions"
 
@@ -83,8 +83,10 @@ def _prompt_text(payload: dict) -> str | None:
 
 
 def _read_records(path: Path) -> list[dict]:
+    """Every JSON-object line; a line that is not UTF-8 JSON is skipped, as a
+    malformed line is (`json.loads` decodes bytes itself, RFC 8259 §8.1)."""
     records: list[dict] = []
-    with path.open(encoding="utf-8", errors="replace") as stream:
+    with path.open("rb") as stream:
         for line in stream:
             try:
                 record = json.loads(line)
@@ -118,7 +120,7 @@ def _prompts(records: list[dict]) -> list[str]:
 def _message_stats(prompts: list[str], path: Path) -> dict[str, Any]:
     """The `extract_message_stats` shape, read from a rollout."""
     activity = rollout_activity(path, MAX_TOOL_SEQUENCE)
-    all_text = " ".join(prompts)[:MAX_USER_TEXT_CHARS]
+    all_text = " ".join(prompts)[:_MAX_USER_TEXT_CHARS]
     return {
         "user_count": len(prompts),
         "assistant_count": activity["turn_count"],
