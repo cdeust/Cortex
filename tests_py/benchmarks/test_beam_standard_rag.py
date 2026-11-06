@@ -30,7 +30,7 @@ SOURCE_PATH = Path(retriever_baselines.__file__)
 
 
 def _source() -> str:
-    return SOURCE_PATH.read_text()
+    return SOURCE_PATH.read_text(encoding="utf-8")
 
 
 def test_no_recall_handler_import():
