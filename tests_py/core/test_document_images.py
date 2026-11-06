@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+from xml.etree import ElementTree as ET
+
 from mcp_server.core.confluence_parser import parse_confluence_storage
+from mcp_server.core.document_images import ImageMarkup, collect_images
+from mcp_server.core.document_model import DocumentAttachment
 from mcp_server.core.docx_parser import parse_docx_xml
 
 _W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
@@ -81,3 +85,26 @@ def test_each_container_takes_its_own_first_reference():
     third = f"<w:pict>{_imagedata('rId3')}</w:pict>"
     run = first + "<w:pict/>" + third
     assert _refs(_docx(run)) == [(1, "rId1"), (2, ""), (3, "rId3")]
+
+
+def test_collect_images_numbers_after_existing_entries_and_tags_the_section():
+    markup = ImageMarkup(
+        containers=frozenset({"box"}),
+        leaves={"pic": "ref", "loose": "ref"},
+        standalone=frozenset({"loose"}),
+    )
+    elem = ET.fromstring(
+        '<root><box><pic ref="a"/></box><pic ref="ignored"/><loose ref="b"/></root>'
+    )
+    out = [DocumentAttachment(1, "earlier", 0)]
+    collect_images(elem, 3, markup, out)
+    assert [(a.ordinal, a.reference, a.section_index) for a in out] == [
+        (1, "earlier", 0),
+        (2, "a", 3),
+        (3, "b", 3),
+    ]
+
+
+def test_a_leaf_without_its_attribute_has_an_empty_reference():
+    doc = parse_confluence_storage("<ac:image><ri:attachment/></ac:image><img/>")
+    assert _refs(doc) == [(1, ""), (2, "")]
