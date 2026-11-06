@@ -27,13 +27,17 @@ contract; Linux qualification is deferred and does not block a macOS release.
 | # | OS / arch | Hosts | Cortex / channel | Backend | Checks with a receipt | Receipt |
 | --- | --- | --- | --- | --- | --- | --- |
 | N1 | macOS, arch not recorded | Claude Code 2.1.280, Codex CLI 0.155.1 | 4.23.4, Claude plugin + Codex plugin | shared local PostgreSQL | Claude→Codex and Codex→Claude blind transfer; project exclusion on both hosts; reader prompts omit the target payload; automatic startup context on both hosts; 12 persisted trusted hook entries | release asset `native-host-verification-4.23.4.json`, sha256 `6e30b48139d4d2206e21a07a64f9d9affaa59f991f7f5d8d27d9e83d987248de` (matches the published `.sha256`) |
-| N2 | macOS, arch not recorded | Claude Code 2.1.280, Codex CLI 0.155.1 | 4.23.2 MCP, 4.23.3 hook package | shared PostgreSQL | the same transfer and exclusion checks; native startup context on both hosts; 12 Cortex hook entries trusted in Codex | `docs/verification/claude-codex-handoff-2026-09-22/` |
+| N2 | macOS, arch not recorded | Claude Code 2.1.280, Codex CLI 0.155.1 | 4.23.2 MCP; hook package 4.23.3 (Codex), 4.23.2 (Claude) | shared PostgreSQL | the same transfer and exclusion checks; native startup context on both hosts; 12 Cortex hook entries trusted in Codex | `docs/verification/claude-codex-handoff-2026-09-22/` |
 | N3 | macOS arm64 | Codex 0.154.0 | 4.23.2 pinned wheel | explicit SQLite scratch | child briefing delivery; file-cue heat priming (project-scoped); one SessionEnd log entry and receipt, no pending job | `docs/verification/codex-native-4.23.2.md` |
 | N4 | macOS ARM | Codex CLI 0.160.0 | 4.23.5 hooks | PostgreSQL | 28 hook definitions trusted across four plugins, 11 of them Cortex hooks; SessionStart, UserPromptSubmit, PostToolUse and SessionEnd completed natively | `docs/verification/codex-hooks-20261002.md` |
 
-N1 and N3 ran a published artifact (N1 the 4.23.4 plugins; N3's follow-up the published
-4.23.2 wheel, which matched all 659 runtime Python files at `c8827be`); none of N1–N4
-records the artifact digest inside its receipt (issue #730, last acceptance item, and #729).
+N1 and N3 ran a published artifact: N1 the 4.23.4 plugins; N3's follow-up the published
+4.23.2 wheel (all 659 runtime Python files matched `c8827be`), where briefing delivery
+and SessionEnd passed but file-cue priming did not (the memory stayed at 0.3, #629). Only
+N2 records a digest of what ran: the installed Codex hook file matched the released
+artifact, sha256 `a25ce6d2358ebd72969483e5e051a1c54674c3e33be27ae4ed988239c5464f3a`. No
+receipt binds every check to the digest of the artifact it ran (issue #730, last
+acceptance item, and #729).
 
 ## CI install probe and environment check (level P), run 42058911839
 
