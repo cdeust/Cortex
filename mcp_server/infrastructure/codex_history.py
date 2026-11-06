@@ -44,7 +44,6 @@ from typing import Any
 from mcp_server.infrastructure.scanner_parse import (
     _MAX_USER_TEXT_CHARS,  # same prompt-text cap as the Claude reader, ADR-0596
     build_conversation_record,
-    extract_metadata_fields,
 )
 from mcp_server.infrastructure.transcript_activity import MAX_TOOL_SEQUENCE
 from mcp_server.infrastructure.transcript_rollout import rollout_activity
@@ -105,6 +104,17 @@ def _session_meta(records: list[dict]) -> dict | None:
     return payload if isinstance(payload, dict) else None
 
 
+def _time_span(records: list[dict]) -> dict[str, str | None]:
+    """First and last ISO timestamp. A `timestamp` that is not a string is
+    skipped: comparing it with a string raised `TypeError` and aborted the
+    whole rebuild, Claude profiles included (#881 review)."""
+    stamps = [r["timestamp"] for r in records if isinstance(r.get("timestamp"), str)]
+    return {
+        "first_timestamp": min(stamps, default=None),
+        "last_timestamp": max(stamps, default=None),
+    }
+
+
 def _prompts(records: list[dict]) -> list[str]:
     prompts: list[str] = []
     for record in records:
@@ -153,8 +163,7 @@ def parse_rollout_conversation(path: Path) -> dict[str, Any] | None:
     stats = _message_stats(_prompts(records), path)
     if stats["user_count"] + stats["assistant_count"] == 0:
         return None
-    fields = extract_metadata_fields(records)
-    fields["cwd"] = cwd
+    fields = {"slug": None, "cwd": cwd, **_time_span(records)}
     record = build_conversation_record(fields, stats, path, project)
     record["source"] = "codex"
     return record
@@ -163,9 +172,10 @@ def parse_rollout_conversation(path: Path) -> dict[str, Any] | None:
 def discover_codex_conversations() -> list[dict[str, Any]]:
     """Every user-thread rollout under `codex_sessions_dir()`, path order.
 
-    A missing directory is an empty history. A rollout that cannot be read
-    is reported to stderr and skipped, as `scanner` does for a Claude
-    transcript.
+    A missing directory is an empty history. A rollout that cannot be read,
+    or holds a line nested deeper than `json.loads` can recurse (it raises
+    `RecursionError` here and in `rollout_activity`), is reported to stderr and
+    skipped, as `scanner` does for a Claude transcript (#881 review).
     """
     root = codex_sessions_dir()
     if not root.is_dir():
@@ -174,7 +184,7 @@ def discover_codex_conversations() -> list[dict[str, Any]]:
     for path in sorted(root.rglob("rollout-*.jsonl")):
         try:
             record = parse_rollout_conversation(path)
-        except OSError as exc:
+        except (OSError, RecursionError) as exc:  # a too-deeply nested line
             print(
                 f"[methodology-agent] Failed to read rollout {path}: {exc}",
                 file=sys.stderr,

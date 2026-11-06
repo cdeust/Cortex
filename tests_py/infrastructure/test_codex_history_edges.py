@@ -125,3 +125,36 @@ def test_an_unreadable_rollout_is_reported_and_the_scan_goes_on(
     assert "Failed to read rollout" in captured.err
     assert "rollout-a.jsonl" in captured.err
     assert captured.out == ""
+
+
+def test_a_timestamp_that_is_not_a_string_is_skipped(tmp_path):
+    late = {**_ASSISTANT, "timestamp": "2026-09-01T00:05:00Z"}
+    odd = {**_prompt("kept"), "timestamp": 1}
+    early = {**_ASSISTANT, "timestamp": "2026-08-31T23:59:00Z"}
+    record = _parse(tmp_path, [_META, late, odd, early])
+    assert record["startedAt"] == "2026-08-31T23:59:00Z"
+    assert record["endedAt"] == "2026-09-01T00:05:00Z"
+    assert record["userCount"] == 1
+
+
+def test_no_string_timestamp_gives_no_time_span(tmp_path):
+    meta = {"type": "session_meta", "payload": {"cwd": "/work/repo"}}
+    record = _parse(tmp_path, [meta, {**_prompt("kept"), "timestamp": None}])
+    assert (record["startedAt"], record["endedAt"], record["duration"]) == (
+        None,
+        None,
+        None,
+    )
+
+
+def test_a_too_deeply_nested_line_skips_its_rollout_only(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path))
+    day = tmp_path / "sessions" / "2026" / "09" / "01"
+    deep = b"[" * 200_000 + b"]" * 200_000  # source: past CPython's recursion limit
+    _lines(day / "rollout-a.jsonl", [_META, deep, _prompt("lost"), _ASSISTANT])
+    _lines(day / "rollout-b.jsonl", [_META, _prompt("kept"), _ASSISTANT])
+
+    found = discover_codex_conversations()
+
+    assert [r["firstMessage"] for r in found] == ["kept"]
+    assert "rollout-a.jsonl" in capsys.readouterr().err
