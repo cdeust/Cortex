@@ -15,6 +15,7 @@ def _capture_store(monkeypatch):
 
     def fake_store(tool_name, content, tags, cwd):
         captured.append({"tool": tool_name, "content": content, "tags": tags})
+        return True
 
     monkeypatch.setattr(hook, "_store_memory", fake_store)
     return captured
@@ -84,7 +85,7 @@ def test_artifact_store_failure_falls_back_to_full_content(tmp_path, monkeypatch
     def boom(content, **kwargs):
         raise OSError("disk full")
 
-    monkeypatch.setattr(artifact_store, "store_artifact", boom)
+    monkeypatch.setattr(artifact_store, "write_artifact", boom)
 
     big_stdout = "\n".join(f"line {i} content padding here" for i in range(2000))
     assert len(big_stdout) > GIST_BUDGET
@@ -95,6 +96,55 @@ def test_artifact_store_failure_falls_back_to_full_content(tmp_path, monkeypatch
     # Fallback: full output kept, no pointer line.
     assert "**Artifact:**" not in content
     assert "line 1999 content padding here" in content
+
+
+# ── An undelivered capture leaves no artifact behind (issue #737) ─────────
+
+
+def _big_stdout(tag: str) -> str:
+    return "\n".join(f"{tag}-{i} build output padding" for i in range(2000))
+
+
+def _artifacts(tmp_path) -> list:
+    return list((tmp_path / "artifacts").rglob("*.md"))
+
+
+def test_declined_dispatch_removes_the_artifact_it_created(tmp_path, monkeypatch):
+    monkeypatch.setattr(artifact_store, "ARTIFACTS_DIR", tmp_path / "artifacts")
+    monkeypatch.setattr(hook, "_store_memory", lambda *args: False)
+
+    hook.process_event(_bash_event(_big_stdout("declined")))
+
+    assert _artifacts(tmp_path) == []
+
+
+def test_raising_dispatch_keeps_the_artifact(tmp_path, monkeypatch):
+    """Where it failed is unknown: the payload may have left, so the file stays."""
+    monkeypatch.setattr(artifact_store, "ARTIFACTS_DIR", tmp_path / "artifacts")
+
+    def boom(*args):
+        raise RuntimeError("worker unreachable")
+
+    monkeypatch.setattr(hook, "_store_memory", boom)
+
+    hook.process_event(_bash_event(_big_stdout("raised")))
+
+    assert len(_artifacts(tmp_path)) == 1
+
+
+def test_declined_dispatch_keeps_an_artifact_it_did_not_create(tmp_path, monkeypatch):
+    """Content addressing dedups: an existing file may be another memory's."""
+    monkeypatch.setattr(artifact_store, "ARTIFACTS_DIR", tmp_path / "artifacts")
+    captured = _capture_store(monkeypatch)
+    stdout = _big_stdout("shared")
+    hook.process_event(_bash_event(stdout))
+    assert len(captured) == 1
+    [existing] = _artifacts(tmp_path)
+
+    monkeypatch.setattr(hook, "_store_memory", lambda *args: False)
+    hook.process_event(_bash_event(stdout))
+
+    assert _artifacts(tmp_path) == [existing]
 
 
 # ── Capture must not be decided by the captured content (issue #365) ───────

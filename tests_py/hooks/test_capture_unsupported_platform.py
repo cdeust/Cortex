@@ -212,8 +212,9 @@ class TestHookOnUnsupportedPlatform(unittest.TestCase):
             mock.patch.object(capture_dispatch.subprocess, "Popen") as popen,
             mock.patch.object(capture_dispatch, "report_failure") as report,
         ):
-            self.assertFalse(
-                capture_dispatch.dispatch({**payload(), "origin_tool": "Unknown"})
+            self.assertIs(
+                capture_dispatch.dispatch({**payload(), "origin_tool": "Unknown"}),
+                capture_dispatch.Handoff.NOT_HANDED_OVER,
             )
         popen.assert_not_called()
         self.assertEqual(
