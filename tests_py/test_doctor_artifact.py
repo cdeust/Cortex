@@ -1,6 +1,8 @@
-"""Runtime artifact identity check contracts. Source: issue #729 (slice 1)."""
+"""Runtime artifact identity check contracts. Source: issue #729 (slices 1-2)."""
 
+import sys
 from importlib import metadata
+from pathlib import Path
 
 from mcp_server import doctor, doctor_artifact
 
@@ -9,6 +11,12 @@ from mcp_server import doctor, doctor_artifact
 X1 = "sha256=nia_NpkRxFwkPGhBR7I_yeHc_PJX0pmhxjIBam_NM_Q"
 SOURCE = b"x = 1\n"
 SUFFIX = "; source evidence, not a distributed artifact"
+REINSTALL = (
+    "Reinstall the runtime: `uv tool install --reinstall --python "
+    f"{Path(sys.executable).resolve()} --no-build "
+    '"hypermnesia-mcp[postgresql,sqlite]==9.9.9"` (Codex) or reinstall the '
+    "plugin (Claude)"
+)
 
 
 def _wheel_install(tmp_path, *, tamper: bool = False):
@@ -40,12 +48,12 @@ def _imported_from(monkeypatch, package, dist):
     monkeypatch.setattr(doctor_artifact.metadata, "distribution", lambda name: dist)
 
 
-def _git_replies(monkeypatch, revision, changes):
+def _git_replies(monkeypatch, revision, changes, listed="mcp_server/a.py\0"):
     calls = []
 
     def fake(cmd, **kwargs):
         calls.append((cmd, kwargs))
-        return {"rev-parse": revision, "status": changes}[cmd[1]]
+        return {"rev-parse": revision, "status": changes, "ls-files": listed}[cmd[1]]
 
     monkeypatch.setattr(doctor_artifact, "run_with_hard_timeout", fake)
     return calls
@@ -60,9 +68,11 @@ def _without_distribution(monkeypatch, package):
     monkeypatch.setattr(doctor_artifact.metadata, "distribution", _raise_absent)
 
 
-def _source_package(tmp_path):
+def _source_package(tmp_path, *, git: bool = True):
     package = tmp_path / "checkout" / "mcp_server"
     (package / "__pycache__").mkdir(parents=True)
+    if git:
+        (package.parent / ".git").mkdir()
     (package / "__pycache__" / "a.cpython-311.pyc").write_bytes(b"\0")
     (package / "__pycache__" / "notes.txt").write_bytes(b"\0")
     (package / "stray.pyc").write_bytes(b"\0")
@@ -126,11 +136,18 @@ def test_installed_file_differing_from_record_fails(monkeypatch, tmp_path):
     assert (check.name, check.ok, check.optional) == (doctor_artifact.NAME, False, True)
     assert check.detail.startswith("installed hypermnesia-mcp 9.9.9, 1 mcp_server")
     assert check.detail.endswith("; 1 differ from its RECORD, first mcp_server/a.py")
-    assert check.fix == (
-        "Reinstall the runtime: `uv tool install --reinstall --no-build "
-        '"hypermnesia-mcp[postgresql,sqlite]==9.9.9"` (Codex) or reinstall the '
-        "plugin (Claude)"
-    )
+    assert check.fix == REINSTALL
+
+
+def test_installed_wheel_without_record_fails(monkeypatch, tmp_path):
+    # Review note on #887: a RECORD-less install was described as a source tree.
+    package, dist = _wheel_install(tmp_path)
+    (dist._path / "RECORD").unlink()
+    _imported_from(monkeypatch, package, dist)
+    check = doctor_artifact.artifact_identity(doctor.Check)
+    assert (check.name, check.ok, check.optional) == (doctor_artifact.NAME, False, True)
+    assert check.detail == "installed hypermnesia-mcp 9.9.9 has no RECORD"
+    assert check.fix == REINSTALL
 
 
 def test_wheel_installed_elsewhere_describes_the_imported_tree(monkeypatch, tmp_path):
@@ -156,18 +173,12 @@ def test_source_tree_names_revision_and_changes(monkeypatch, tmp_path):
         f"(version unknown), 1 mcp_server files, digest {digest}{SUFFIX}"
     )
     kwargs = {"cwd": package.parent, "timeout": 2.0}
+    listing = ["--cached", "--others", "--exclude-standard", "--", "mcp_server"]
     assert calls == [
         (["git", "rev-parse", "HEAD"], kwargs),
         (["git", "status", "--porcelain", "--", "mcp_server"], kwargs),
+        (["git", "ls-files", "-z", *listing], kwargs),
     ]
-
-
-def test_source_tree_without_git_says_so(monkeypatch, tmp_path):
-    package = _source_package(tmp_path)
-    _without_distribution(monkeypatch, package)
-    _git_replies(monkeypatch, None, None)
-    check = doctor_artifact.artifact_identity(doctor.Check)
-    assert check.detail.startswith(f"source tree {package.parent} at no git revision (")
 
 
 def test_failed_git_status_is_not_a_clean_tree(monkeypatch, tmp_path):
