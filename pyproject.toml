@@ -823,3 +823,8 @@ also_copy = [
 ]
 pytest_add_cli_args_test_selection = ["tests_py/shared/test_json_native.py"]
 use_setproctitle = false
+# source: mutmut 3.8.1 configuration.py ProcessIsolation.FORKSERVER, "for test setups
+# that are not fork-safe (gevent, grpc, torch)"; ADR-1122. With the default "fork",
+# each mutant is forked from the process that already ran the suite, and on Linux it
+# hangs in torch autograd (titans_memory.py) until mutmut times it out (#877, #878).
+process_isolation = "forkserver"
