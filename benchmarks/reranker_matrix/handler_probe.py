@@ -16,6 +16,7 @@ from types import SimpleNamespace
 
 from benchmarks.reranker_matrix.runtime import fetched
 from mcp_server.handlers.decision_recall import exact_lookup
+from mcp_server.shared.domain_mapping import resolve_explicit_domain
 
 
 class ProbeFinishedError(Exception):
@@ -143,6 +144,7 @@ def handler_globals(multiplier: int, observations: dict) -> dict:
     )
     return {
         "exact_lookup": exact_lookup,
+        "resolve_explicit_domain": resolve_explicit_domain,
         "parse_format": lambda fmt: fmt,
         "root_agent_topic": lambda: None,
         "get_memory_settings": lambda: SimpleNamespace(WRRF_K=60),
