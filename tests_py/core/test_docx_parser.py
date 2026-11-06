@@ -183,6 +183,26 @@ class TestImages:
             (3, "rId3", "Rollout"),
         ]
 
+    def test_a_picture_hyperlink_is_not_taken_for_the_image(self):
+        link = f'<a:hlinkClick xmlns:a="{_A}" xmlns:r="{_R}" r:id="rId8"/>'
+        doc_pr = f'<wp:docPr xmlns:wp="urn:wp" id="1" name="p">{link}</wp:docPr>'
+        blip = f'<a:blip xmlns:a="{_A}" xmlns:r="{_R}" r:embed="rId5"/>'
+        body = f"<w:p><w:r><w:drawing>{doc_pr}{blip}</w:drawing></w:r></w:p>"
+        doc = parse_docx_xml(_doc(body))
+        assert [a.reference for a in doc.attachments] == ["rId5"]
+
+    def test_a_blip_without_embed_has_an_empty_reference(self):
+        blip = f'<a:blip xmlns:a="{_A}"/>'
+        doc = parse_docx_xml(
+            _doc(f"<w:p><w:r><w:drawing>{blip}</w:drawing></w:r></w:p>")
+        )
+        assert [a.reference for a in doc.attachments] == [""]
+
+    def test_imagedata_without_id_has_an_empty_reference(self):
+        pict = '<w:pict><v:imagedata xmlns:v="urn:schemas-microsoft-com:vml"/></w:pict>'
+        doc = parse_docx_xml(_doc(f"<w:p><w:r>{pict}</w:r></w:p>"))
+        assert [a.reference for a in doc.attachments] == [""]
+
     def test_image_inside_a_table_is_inventoried(self):
         tbl = f"<w:tbl><w:tr><w:tc>{_drawing('rId4')}</w:tc></w:tr></w:tbl>"
         doc = parse_docx_xml(_doc(_para("T", "Heading1") + tbl))

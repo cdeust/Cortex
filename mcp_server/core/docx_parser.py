@@ -78,16 +78,21 @@ def _table_rows(tbl: ET.Element) -> DocumentTable:
 
 
 def _image_reference(image: ET.Element) -> str:
-    """The relationship id an image element points at (``a:blip@r:embed`` for a
-    ``w:drawing``, ``v:imagedata@r:id`` for a legacy ``w:pict``), else ``""``.
+    """The relationship id of the picture itself: ``a:blip@r:embed`` for a
+    ``w:drawing``, ``v:imagedata@r:id`` for a legacy ``w:pict``, else ``""``.
 
-    source: issue #732
+    Only those two elements name the image part; other descendants carry
+    relationship ids too (``a:hlinkClick@r:id`` in ``wp:docPr`` is the
+    picture's hyperlink and precedes the blip), so they are never read.
+
+    source: ECMA-376 Part 1 §20.1.8.13 (blip), §14.1.2.11 (imagedata); issue #732
     """
     for node in image.iter():
-        for attr in (f"{{{_R_NS}}}embed", f"{{{_R_NS}}}id"):
-            value = node.get(attr)
-            if value:
-                return value
+        name = _local(node.tag)
+        if name == "blip":
+            return node.get(f"{{{_R_NS}}}embed", "")
+        if name == "imagedata":
+            return node.get(f"{{{_R_NS}}}id", "")
     return ""
 
 
