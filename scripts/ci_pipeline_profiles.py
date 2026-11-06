@@ -23,6 +23,8 @@ POST_MERGE_NEEDS = {
     "resolve": (),
     **{job: needs for job, needs in DIRECT_NEEDS.items() if job != "merge"},
     "contract": ("resolve",),
+    # Closes the issues of the merged PR; outside the test chain (#801 after #908).
+    "close-issues": ("resolve",),
 }
 # Source: existing same-repository, non-draft PR merge policy.
 PR_CONDITION = (
@@ -52,6 +54,10 @@ def conditions(post_merge: bool) -> dict[str, str]:
             "&& needs.resolve.result == 'success' "
             "&& needs.resolve.outputs.run_tests == 'true'",
             tag="!cancelled() && github.event_name == 'workflow_run'",
+            **{
+                "close-issues": "!cancelled() && github.event_name == 'workflow_run' "
+                "&& needs.resolve.result == 'success'"
+            },
         )
     else:
         result.update(

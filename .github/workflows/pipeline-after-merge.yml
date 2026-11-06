@@ -24,6 +24,7 @@ jobs:
       contents: write
       pull-requests: write
       actions: read
+      issues: write
     uses: ./.github/workflows/pipeline-post-merge.yml
     secrets:
       RELEASE_TAG_SSH_KEY: ${{ secrets.RELEASE_TAG_SSH_KEY }}

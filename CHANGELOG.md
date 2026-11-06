@@ -41,6 +41,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- The post-merge engine closes the issues a resolver-merged PR names with a closing
+  keyword (`close-issues` job, `issues: write` only). GitHub ignores those keywords when
+  the merge is made with the workflow's `GITHUB_TOKEN`: all 8 resolver merges with
+  `Closes #N` left their issue open, while merges by a person closed theirs (#801).
 - The mutation gate judges only the mutants on the lines a pull request changed, not
   every mutant of each changed function (ADR-1122 item 6, owner decision 2026-11-06).
   Survivors on untouched lines are counted on the log; #865 and #878 were asked to kill
