@@ -29,7 +29,7 @@ def _isolated_env(sandbox: Path) -> dict[str, str]:
     db_path = str(sandbox / "memory.db")
     env = {
         key: os.environ[key]
-        for key in ("HOME", "PATH", "SYSTEMROOT", "WINDIR")
+        for key in ("HOME", "USERPROFILE", "PATH", "SYSTEMROOT", "WINDIR")
         if key in os.environ
     }
     env.update(

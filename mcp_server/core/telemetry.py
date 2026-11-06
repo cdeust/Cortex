@@ -29,7 +29,7 @@ class TelemetryExporter(Protocol):
       - ``export`` receives the same dict shape written to the JSONL log
         (``ts``, ``op``, ``latency_ms``, ``bytes_in``, ``bytes_out``,
         ``result_count``, ``ok``, ``skipped``, ``tier``,
-        ``reranked_count``). ``skipped`` is true only on a declined
+        ``reranked_count``, ``stage_ms``). ``skipped`` is true only on a declined
         operation (``ok`` is then false): it is not an error.
       - ``export`` MUST NOT raise for control flow that reaches the
         caller -- ``record()`` catches any exception defensively, but a
@@ -85,6 +85,7 @@ class TelemetrySample(TypedDict):
     skipped: bool
     tier: str | None
     reranked_count: int
+    stage_ms: dict[str, float]
 
 
 @dataclass
@@ -149,6 +150,7 @@ def record(
         "skipped": skipped,
         "tier": retrieval.tier,
         "reranked_count": retrieval.reranked_count,
+        "stage_ms": dict(retrieval.stage_ms),
     }
     captured = _capture.get()
     with _lock:
@@ -191,7 +193,11 @@ def publish_record(sample: TelemetrySample) -> None:
         return
     _update_counters(sample)
     # source: ADR-0282
-    record_line = {**sample, "latency_ms": round(sample["latency_ms"], 3)}
+    record_line = {
+        **sample,
+        "latency_ms": round(sample["latency_ms"], 3),
+        "stage_ms": {k: round(v, 3) for k, v in sample["stage_ms"].items()},
+    }
     try:
         line = json.dumps(record_line) + "\n"
         with open_rotating_log(_LOG_PATH, len(line.encode("utf-8"))) as f:

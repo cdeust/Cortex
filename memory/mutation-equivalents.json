@@ -544,6 +544,54 @@
       "kind": "equivalent-by-construction",
       "rationale": "`pending` is read only in the branch `if inside and pending is not None`, and `inside` becomes True only in the container branch, which assigns `pending = len(refs)` first. The initial value is therefore never read: every path that reaches the read has overwritten it, so None and \"\" are indistinguishable.",
       "issue": "#732"
+    },
+    {
+      "mutant": "mcp_server.handlers.get_project_story.x_handler__mutmut_5",
+      "removed": "directory = args.get(\"directory\", \"\")",
+      "added": "directory = args.get(\"directory\", None)",
+      "kind": "equivalent-by-construction",
+      "rationale": "`directory` is read only by `_fetch_memories`, through `if directory:`; None and \"\" are both falsy, so a call without `directory` takes the domain or hot-memory branch either way and no store method sees the value. No input distinguishes the two defaults.",
+      "issue": "#721"
+    },
+    {
+      "mutant": "mcp_server.handlers.get_project_story.x_handler__mutmut_7",
+      "removed": "directory = args.get(\"directory\", \"\")",
+      "added": "directory = args.get(\"directory\", )",
+      "kind": "equivalent-by-construction",
+      "rationale": "`directory` is read only by `_fetch_memories`, through `if directory:`; None and \"\" are both falsy, so a call without `directory` takes the domain or hot-memory branch either way and no store method sees the value. No input distinguishes the two defaults.",
+      "issue": "#721"
+    },
+    {
+      "mutant": "mcp_server.handlers.get_project_story.x_handler__mutmut_20",
+      "removed": "period = args.get(\"period\", \"week\")",
+      "added": "period = args.get(\"period\", None)",
+      "kind": "equivalent-by-construction",
+      "rationale": "`handler` replaces any `period` outside (\"day\", \"week\", \"month\", \"all\") with \"week\" on the next statement. A missing `period` defaulting to None, \"XXweekXX\" or \"WEEK\" therefore leaves the guard as \"week\", exactly as the \"week\" default does, so every later read of `period` sees the same value. No input distinguishes the variants.",
+      "issue": "#721"
+    },
+    {
+      "mutant": "mcp_server.handlers.get_project_story.x_handler__mutmut_22",
+      "removed": "period = args.get(\"period\", \"week\")",
+      "added": "period = args.get(\"period\", )",
+      "kind": "equivalent-by-construction",
+      "rationale": "`handler` replaces any `period` outside (\"day\", \"week\", \"month\", \"all\") with \"week\" on the next statement. A missing `period` defaulting to None, \"XXweekXX\" or \"WEEK\" therefore leaves the guard as \"week\", exactly as the \"week\" default does, so every later read of `period` sees the same value. No input distinguishes the variants.",
+      "issue": "#721"
+    },
+    {
+      "mutant": "mcp_server.handlers.get_project_story.x_handler__mutmut_25",
+      "removed": "period = args.get(\"period\", \"week\")",
+      "added": "period = args.get(\"period\", \"XXweekXX\")",
+      "kind": "equivalent-by-construction",
+      "rationale": "`handler` replaces any `period` outside (\"day\", \"week\", \"month\", \"all\") with \"week\" on the next statement. A missing `period` defaulting to None, \"XXweekXX\" or \"WEEK\" therefore leaves the guard as \"week\", exactly as the \"week\" default does, so every later read of `period` sees the same value. No input distinguishes the variants.",
+      "issue": "#721"
+    },
+    {
+      "mutant": "mcp_server.handlers.get_project_story.x_handler__mutmut_26",
+      "removed": "period = args.get(\"period\", \"week\")",
+      "added": "period = args.get(\"period\", \"WEEK\")",
+      "kind": "equivalent-by-construction",
+      "rationale": "`handler` replaces any `period` outside (\"day\", \"week\", \"month\", \"all\") with \"week\" on the next statement. A missing `period` defaulting to None, \"XXweekXX\" or \"WEEK\" therefore leaves the guard as \"week\", exactly as the \"week\" default does, so every later read of `period` sees the same value. No input distinguishes the variants.",
+      "issue": "#721"
     }
   ]
 }

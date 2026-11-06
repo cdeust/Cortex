@@ -30,7 +30,8 @@ CREATE TABLE IF NOT EXISTS wiki_claim_events (
                     CHECK (confidence >= 0.0 AND confidence <= 1.0),
     embedding       BLOB,
     supersedes      INTEGER REFERENCES wiki_claim_events(id) ON DELETE SET NULL,
-    extracted_at    TEXT NOT NULL DEFAULT (datetime('now'))
+    extracted_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    event_time      JSON NOT NULL DEFAULT '{"kind": "unknown"}'
 );
 """
 
