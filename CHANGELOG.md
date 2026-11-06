@@ -44,6 +44,10 @@ adheres to [Semantic Versioning](https://semver.org/).
   when the source states one, its offset. A claim with no stated date stays
   `unknown`; it never inherits `extracted_at`. Persistence and extraction of
   the field are later slices.
+- `wiki.claim_events` stores each claim's `event_time` (#717, slice 2), as the
+  JSON of `EventTime` in PostgreSQL (`JSONB`) and SQLite (`JSON`), so a naive
+  bound stays naive and an aware one keeps its stated offset. Existing rows
+  migrate once to `{"kind": "unknown"}`; `wiki_extract` writes the field.
 
 ### Changed
 

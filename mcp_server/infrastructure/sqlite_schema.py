@@ -450,6 +450,12 @@ MIGRATIONS: list[tuple[str, str, str]] = [
     ("prospective_memories", "source_memory_id", "INTEGER"),
     # source: ADR-0602
     ("memories", "embedding_model", "TEXT DEFAULT ''"),
+    # source: #717 (event time kept apart from extraction time)
+    (
+        "wiki_claim_events",
+        "event_time",
+        'JSON NOT NULL DEFAULT \'{"kind": "unknown"}\'',
+    ),
 ]
 
 # source: ADR-0602
