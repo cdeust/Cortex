@@ -293,6 +293,14 @@ def run_benchmark(
                 # Run production retrieval
                 with log.phase("recall", qid):
                     results = db.recall(question, top_k=10, domain="longmemeval")
+                retrieved_sids = [source_map.get(r["memory_id"], "") for r in results]
+
+                # Compute metrics
+                mrr = compute_mrr(retrieved_sids, answer_sids)
+                r10 = recall_at_k_binary(retrieved_sids, answer_sids)
+
+                # The row carries the gold sessions and its own scores, so
+                # the headline is recomputable from the journal alone (#708).
                 log.record(
                     qid,
                     results,
@@ -303,13 +311,11 @@ def run_benchmark(
                         "haystack_bytes": sum(
                             len(m["content"].encode("utf-8")) for m in memories
                         ),
+                        "answer_session_ids": list(answer_sids),
+                        "mrr": mrr,
+                        "recall10": r10,
                     },
                 )
-                retrieved_sids = [source_map.get(r["memory_id"], "") for r in results]
-
-                # Compute metrics
-                mrr = compute_mrr(retrieved_sids, answer_sids)
-                r10 = recall_at_k_binary(retrieved_sids, answer_sids)
 
                 all_mrr.append(mrr)
                 all_recall10.append(r10)
