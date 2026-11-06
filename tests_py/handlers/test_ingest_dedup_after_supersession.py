@@ -71,7 +71,6 @@ def test_a_superseded_document_summary_is_not_ingested_again(store):
         summary="Document ingested: 'D'.",
         section_memories=[SectionMemory("Intro", "[Intro]\n\nbody")],
         notices=[],
-        image_count=0,
     )
     written = write_document_memories(
         DocumentMemoryContext(store, prov, "ingest-dedup", "dir"), normalized

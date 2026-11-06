@@ -114,6 +114,21 @@ async def test_chapter_limit_keeps_recent_buckets_in_chronological_order(store):
 
 
 @pytest.mark.asyncio
+async def test_defaults_bucket_the_last_week_by_day_and_keep_five_chapters(store):
+    now = FrozenClock.now()
+    days = [now - timedelta(days=d, hours=1) for d in range(6)]
+    store.get_hot_memories.return_value = [
+        memory(d, dt.isoformat()) for d, dt in enumerate(days)
+    ]
+    result = await story.handler({})
+    assert result["period"] == "week"
+    assert result["total_memories"] == 6
+    assert [c["bucket_key"] for c in result["chapters"]] == [
+        dt.strftime("%Y%m%d") for dt in reversed(days[:5])
+    ]
+
+
+@pytest.mark.asyncio
 async def test_chapter_entries_preserve_provenance_and_rank_decisions(store):
     rows = [memory(i, "2026-10-23T11:00:00Z", importance=i / 20) for i in range(11)]
     rows[-1].update(
@@ -142,9 +157,10 @@ async def test_chapter_entries_preserve_provenance_and_rank_decisions(store):
 
 
 @pytest.mark.asyncio
-async def test_invalid_period_falls_back_and_distinguishes_expired_rows(store):
+@pytest.mark.parametrize("period", ["decade", "WEEK", "XXweekXX"])
+async def test_invalid_period_falls_back_and_distinguishes_expired_rows(store, period):
     store.get_hot_memories.return_value = [memory(1, "2001-01-01T00:00:00Z")]
-    result = await story.handler({"period": "decade"})
+    result = await story.handler({"period": period})
     assert result == {
         "period": "week",
         "chapters": [],

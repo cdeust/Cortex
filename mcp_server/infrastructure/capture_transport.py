@@ -27,6 +27,13 @@ class CaptureTransportError(RuntimeError):
     """Capture was not confirmed admitted; do not retry uncertain delivery."""
 
 
+class CaptureHandoffUncertainError(CaptureTransportError):
+    """The frame was being sent, so the worker may have admitted the capture.
+
+    Raised for a failure after the first byte may have left: the caller cannot
+    tell a lost frame from a lost acknowledgement (issue #737)."""
+
+
 def encode(payload: dict[str, object], max_bytes: int) -> bytes:
     body = json.dumps(
         payload, ensure_ascii=False, separators=(",", ":"), allow_nan=False
@@ -74,7 +81,20 @@ def acknowledge(connection: socket.socket, accepted: bool) -> None:
 
 
 def send(connection: socket.socket, frame: bytes, deadline: float) -> None:
+    """Send one frame and wait for the worker's verdict.
+
+    postcondition: TimeoutError when the deadline passed before anything was
+    sent; CaptureHandoffUncertainError for every later failure, a refusal
+    included: CaptureServer._receive also refuses when its acknowledgement
+    fails after the payload was queued, so a refusal does not prove the
+    capture was dropped (review of PR #907)."""
     connection.settimeout(remaining(deadline))
-    connection.sendall(frame)
-    if _read_exact(connection, len(_ACCEPTED), deadline) != _ACCEPTED:
-        raise CaptureTransportError("worker refused capture admission")
+    try:
+        connection.sendall(frame)
+        reply = _read_exact(connection, len(_ACCEPTED), deadline)
+    except (OSError, CaptureTransportError) as exc:
+        raise CaptureHandoffUncertainError(
+            f"capture handoff unconfirmed: {exc}"
+        ) from exc
+    if reply != _ACCEPTED:
+        raise CaptureHandoffUncertainError("worker refused capture admission")

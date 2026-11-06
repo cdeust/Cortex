@@ -27,8 +27,10 @@ from pathlib import Path
 
 try:
     from ci_mutation_diff import in_scope, scope_prefixes
+    from ci_mutation_lines import judged, keeps
 except ModuleNotFoundError:  # imported as scripts.mutation_equivalents
     from scripts.ci_mutation_diff import in_scope, scope_prefixes
+    from scripts.ci_mutation_lines import judged, keeps
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 REGISTRY_PATH = REPO_ROOT / "memory" / "mutation-equivalents.json"
@@ -272,10 +274,15 @@ def main(argv: list[str]) -> int:
         print(f"!!! registry is malformed: {exc}", file=sys.stderr)
         return 2
 
-    # ADR-1122: a pull request is gated on the functions it changed only.
+    # ADR-1122: a pull request is gated on the lines it changed only.
     prefixes = scope_prefixes()
-    registry = [e for e in registry if in_scope(e.mutant, prefixes)]
-    survivors = [s for s in parse_survivors(sys.stdin.read()) if in_scope(s, prefixes)]
+    registry = [
+        e
+        for e in registry
+        if in_scope(e.mutant, prefixes) and keeps(e.mutant, REPO_ROOT)
+    ]
+    listed = [s for s in parse_survivors(sys.stdin.read()) if in_scope(s, prefixes)]
+    survivors = judged(listed, REPO_ROOT)
     diffs = {name: mutant_diff(name) for name in survivors}
     verdict = classify(survivors, registry, diffs, frozenset(argv))
     print(format_report(verdict), file=sys.stderr)

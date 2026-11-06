@@ -189,6 +189,7 @@ not exist." The registered tools are listed in `docs/mcp-tools.md`.
 
 *Document Ingestion (issue #192):*
 - `document_model.py` — Typed model for ingested documents (`ParsedDocument`/`DocumentSection`/`DocumentTable`/`DocumentProvenance`) — the shared normalization seam every adapter and the live-Confluence REST connector (enterprise-backlog#28) target
+- `document_images.py` — Pure image inventory shared by the document parsers (one entry per image-naming element, linear in the input; issue #732)
 - `docx_parser.py` — Pure OOXML WordprocessingML parser (`word/document.xml` string → `ParsedDocument`); stdlib `xml.etree` only
 - `confluence_parser.py` — Pure Confluence storage-format XHTML parser (entities + ac:/ri: namespaces pre-resolved) → `ParsedDocument`
 - `document_normalizer.py` — `ParsedDocument` + provenance → wiki page markdown + memory payloads (skipped-image/empty notices, provenance stamping)

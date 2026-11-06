@@ -9,8 +9,12 @@ from pathlib import Path
 from unittest import mock
 
 from mcp_server.hooks import capture_worker_logging as logs
+from mcp_server.infrastructure.capture_peer import is_supported
 
 
+# The worker log exists only where the capture worker runs (Linux/macOS Unix
+# sockets, ADR-0486); elsewhere capture_dispatch spools instead.
+@unittest.skipUnless(is_supported(), "no capture worker on this platform")
 class TestCaptureWorkerLogging(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()

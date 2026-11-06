@@ -48,7 +48,6 @@ def _normalized() -> NormalizedDocument:
         summary="Document ingested: 'D'.",
         section_memories=[SectionMemory("Intro", "[Intro]\n\nbody")],
         notices=[],
-        image_count=0,
     )
 
 

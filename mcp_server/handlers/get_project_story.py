@@ -16,6 +16,7 @@ from typing import Any
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.handlers._tool_meta import READ_ONLY
+from mcp_server.shared.domain_mapping import resolve_explicit_domain
 
 # ── Schema ────────────────────────────────────────────────────────────────────
 
@@ -231,7 +232,10 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Generate period-based autobiographical narrative."""
     args = args or {}
     directory = args.get("directory", "")
-    domain = args.get("domain", "")
+    # source: issue #721 -- read the domain identity ``remember`` writes
+    # (an exact family member maps to its canonical, any other name is kept,
+    # lowercased); a blank domain counts as no domain.
+    domain = resolve_explicit_domain(args.get("domain") or "")
     period = args.get("period", "week")
     max_chapters = int(args.get("max_chapters", 5))
 

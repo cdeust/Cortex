@@ -5,6 +5,7 @@ source: ADR-0408"""
 from __future__ import annotations
 
 import logging
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any, cast
 
@@ -65,7 +66,10 @@ schema = {
         "idempotent_skip, wiki_path (null when the wiki write failed), "
         "summary_memory_id, section_count (sections written), "
         "section_memory_ids, expected_components, completed_components, "
-        "failures, retired_receipt_ids, images_skipped, notices, title, "
+        "failures, retired_receipt_ids, images_skipped, attachments "
+        "([{ordinal, reference, section_index, state}] per embedded image, "
+        "state 'unsupported' until extraction exists), section_headings "
+        "(heading of each parsed section, indexed by section_index), notices, title, "
         "source, source_kind, version}."
     ),
     "inputSchema": {
@@ -240,6 +244,9 @@ async def _persist(
     result.update(
         title=parsed.title, source=prov.source, source_kind=kind, version=prov.version
     )
+    # source: issue #732 — one heading per parsed section, the table that
+    # attachments[].section_index points into (headings are emitted once).
+    result["section_headings"] = [s.heading for s in parsed.sections]
     return result
 
 
@@ -276,7 +283,8 @@ def _ingestion_result(
         "completed_components": completed,
         "failures": failures,
         "retired_receipt_ids": written["retired_receipt_ids"],
-        "images_skipped": normalized.image_count,
+        "images_skipped": len(normalized.attachments),
+        "attachments": [asdict(a) for a in normalized.attachments],
         "notices": normalized.notices,
     }
 

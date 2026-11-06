@@ -3663,6 +3663,10 @@
     "ADR-1123": {
       "mirror": "ADR-1123-user-tags-never-hide-a-memory-from-default-recall.md",
       "path": "adr/cortex/1123-user-tags-never-hide-a-memory-from-default-recall.md"
+    },
+    "ADR-1124": {
+      "mirror": "ADR-1124-on-windows-claude-pid-names-the-window-before-the-ancestor-walk.md",
+      "path": "adr/cortex/1124-on-windows-claude-pid-names-the-window-before-the-ancestor-walk.md"
     }
   },
   "project": "cortex",
