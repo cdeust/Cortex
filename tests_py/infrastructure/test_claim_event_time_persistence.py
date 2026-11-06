@@ -84,12 +84,38 @@ def test_each_event_time_kind_round_trips_with_precision_and_offset(store):
     assert stored[1].start is not None and stored[1].start.value.tzinfo is None
 
 
-def test_the_event_time_column_leaves_the_session_column_in_place(store):
-    mid = store.insert_memory({"content": "session #717", "domain": "t717"})
-    claim = ClaimEvent(memory_id=mid, session_id="s-717", text="dated claim")
-    insert_claim_events(store._conn, [_claim_to_dict(claim)])
-    [row] = get_claims_for_memory(store._conn, mid)
-    assert (row["session_id"], row["text"]) == ("s-717", "dated claim")
+def _columns(row: dict) -> tuple:
+    keys = ("session_id", "text", "claim_type", "entity_ids", "evidence_refs")
+    return (*(row[k] for k in keys), row["confidence"], row["supersedes"])
+
+
+def test_the_event_time_column_leaves_every_other_column_in_place(store):
+    mid = store.insert_memory({"content": "columns #717", "domain": "t717"})
+    [first] = insert_claim_events(store._conn, [{"memory_id": mid, "text": "old"}])
+    ref = {"kind": "url", "target": "https://nasa.gov", "context": None}
+    claim = {
+        "memory_id": mid,
+        "session_id": "s-717",
+        "text": "x" * 1950,
+        "claim_type": "decision",
+        "entity_ids": [3, 5],
+        "evidence_refs": [ref],
+        "confidence": 0.75,
+        "supersedes": first,
+    }
+    insert_claim_events(store._conn, [claim])
+    rows = get_claims_for_memory(store._conn, mid)
+    assert first == rows[0]["id"]
+    assert _columns(rows[0]) == ("", "old", "assertion", [], [], 0.5, None)
+    assert _columns(rows[1]) == (
+        "s-717",
+        "x" * 1900,
+        "decision",
+        [3, 5],
+        [ref],
+        0.75,
+        first,
+    )
 
 
 def test_a_historical_event_keeps_its_date_beside_a_recent_extraction(store):
