@@ -46,6 +46,7 @@ from mcp_server.infrastructure.memory_config import (
 )
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.session_registry import current_window_session
+from mcp_server.shared.domain_mapping import resolve_explicit_domain
 from mcp_server.observability import silent_failure
 from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
@@ -557,7 +558,10 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
         )
 
     query = args["query"]
-    domain, directory = args.get("domain"), args.get("directory")
+    # Same identity as remember's write (#721): a family member maps to its
+    # canonical, any other name is kept, lowercased; "" stays unscoped.
+    domain = resolve_explicit_domain(args.get("domain") or "") or None
+    directory = args.get("directory")
     agent_topic = args.get("agent_topic")
     # Connection-rooted scoping: when the server is launched with
     # CORTEX_ROOT_AGENT_TOPIC, force that scope regardless of what the
