@@ -42,7 +42,7 @@ def _parse_args() -> argparse.Namespace:
 def _environment(repo: Path, sandbox: Path) -> dict[str, str]:
     env = {
         key: os.environ[key]
-        for key in ("HOME", "PATH", "SYSTEMROOT", "WINDIR")
+        for key in ("HOME", "USERPROFILE", "PATH", "SYSTEMROOT", "WINDIR")
         if key in os.environ
     }
     project = sandbox / "project"

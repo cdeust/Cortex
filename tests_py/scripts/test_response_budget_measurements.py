@@ -102,6 +102,10 @@ class Collector(unittest.TestCase):
             "CORTEX_MEMORY_DATABASE_URL": f"postgresql://{socket}/cortex_budget_fixture",
             "CORTEX_MEMORY_STORE_BACKEND": "sqlite",
             "CORTEX_EMBEDDING_ZERO_DOWNLOAD": "1",
+            # Path.home() needs HOME on POSIX and USERPROFILE on Windows; an
+            # environment cleared of both cannot name a home on Windows.
+            "HOME": str(self.root / "home"),
+            "USERPROFILE": str(self.root / "home"),
         }
 
     def test_environment_requires_explicit_isolation_before_runtime_import(self):
