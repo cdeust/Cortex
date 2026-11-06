@@ -823,3 +823,7 @@ also_copy = [
 ]
 pytest_add_cli_args_test_selection = ["tests_py/shared/test_json_native.py"]
 use_setproctitle = false
+# source: ADR-1122. scripts/mutation_check.sh rewrites this line per platform from
+# scripts/ci_mutation_scope.py ISOLATION_BY_SYSTEM ("forkserver" on Linux, where "fork"
+# hangs in torch autograd; "fork" on macOS, where "forkserver" aborts in torch MPS).
+process_isolation = "forkserver"
