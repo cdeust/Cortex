@@ -43,8 +43,8 @@ not need it). Class **X** = not Cortex's to back up.
 | Backend marker (which store this install uses) | `<root>/methodology/backend.json` | A | `mcp_server/infrastructure/backend_marker.py:48` |
 | Wiki pages on disk | `<root>/methodology/wiki/` | A | `mcp_server/infrastructure/config.py:42`; `mcp_server/handlers/ingest_findings_writers.py:173` |
 | Raw-output artifacts | `<root>/methodology/artifacts/` | A | `mcp_server/infrastructure/artifact_store.py:19` |
-| Cognitive profiles | `<root>/methodology/domains/<id>.json`, `index.json`; legacy `profiles.json`, `profiles.json.v1_backup` | D (rebuilt from transcripts by `rebuild_profiles`) | `mcp_server/infrastructure/profile_store.py:20-22`, `:49`; `mcp_server/infrastructure/config.py:38` |
-| Session log | `<root>/methodology/session-log.json` | D | `mcp_server/infrastructure/config.py:39` |
+| Cognitive profiles | `<root>/methodology/domains/<id>.json`, `index.json`; legacy `profiles.json`, `profiles.json.v1_backup` | A (`record_session_end` accumulates each session into them; once Claude Code has deleted a transcript, `rebuild_profiles` cannot restore its share, and it keeps the stored profile for that reason) | `mcp_server/infrastructure/profile_store.py:20-22`, `:49`; `mcp_server/infrastructure/config.py:38`; `mcp_server/handlers/record_session_end.py:265-287`; `mcp_server/core/profile_rebuild_policy.py:1-15` |
+| Session log | `<root>/methodology/session-log.json` | A (one entry appended per ended session, not rebuilt from transcripts) | `mcp_server/infrastructure/config.py:39`; `mcp_server/handlers/record_session_end.py:257`, `:322`; `mcp_server/hooks/session_lifecycle.py:254`, `:356` |
 | MCP connection list | `<root>/methodology/mcp-connections.json` | A | `mcp_server/infrastructure/config.py:41` |
 | Brain index | `<root>/brain-index.json` | D | `mcp_server/infrastructure/config.py:40` |
 | Capture spool (transcripts queued, not yet ingested) | `<root>/.capture-worker/spool` | A while non-empty | `mcp_server/infrastructure/capture_spool.py:62-65`, `:73-79` |
@@ -63,8 +63,9 @@ not need it). Class **X** = not Cortex's to back up.
 
 - **SQLite install.** The class A set is `memory.db` (taken as one consistent
   copy with its `-wal`, not three separate file copies; the method is a later
-  slice), `backend.json`, `wiki/`, `artifacts/`, `mcp-connections.json`, and the
-  capture spool when it is not empty.
+  slice), `backend.json`, `wiki/`, `artifacts/`, `mcp-connections.json`, the cognitive
+  profiles (`domains/`, `index.json` and any legacy `profiles.json*`),
+  `session-log.json`, and the capture spool when it is not empty.
 - **Managed PostgreSQL install.** Same set, with the cluster in place of
   `memory.db`. A copy of `managed-pg/cluster` taken while the server runs is not
   a consistent backup (*inferred* from PostgreSQL's file-level backup rules,
