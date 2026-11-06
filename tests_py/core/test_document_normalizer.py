@@ -26,9 +26,7 @@ _PROV = DocumentProvenance(
 
 
 def _doc(sections, image_count=0, title="Doc"):
-    attachments = [
-        DocumentAttachment(i + 1, f"rId{i}", "H") for i in range(image_count)
-    ]
+    attachments = [DocumentAttachment(i + 1, f"rId{i}", 0) for i in range(image_count)]
     return ParsedDocument(title=title, sections=sections, attachments=attachments)
 
 

@@ -17,7 +17,7 @@ def _normalized() -> NormalizedDocument:
         wiki_rel_path="documents/d.md",
         wiki_markdown="# D\n",
         summary="s",
-        attachments=[DocumentAttachment(1, "rId1", "H")],
+        attachments=[DocumentAttachment(1, "rId1", 0)],
     )
 
 

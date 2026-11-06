@@ -14,6 +14,7 @@ from mcp_server.core.document_model import (
     DocumentSection,
     DocumentTable,
     ParsedDocument,
+    drop_empty_preamble,
 )
 
 _XML_BUILTIN_ENTITIES = {"amp", "lt", "gt", "quot", "apos"}
@@ -81,10 +82,10 @@ def _image_reference(image: ET.Element) -> str:
 
 
 def _collect_images(
-    elem: ET.Element, heading: str, out: list[DocumentAttachment]
+    elem: ET.Element, section_index: int, out: list[DocumentAttachment]
 ) -> None:
     """Append every ``<ac:image>``/``<img>`` under ``elem`` to ``out``, in
-    document order, tagged with its section heading.
+    document order, tagged with the index of its section.
 
     source: ADR-0135 (issue #732)
     """
@@ -94,7 +95,7 @@ def _collect_images(
                 DocumentAttachment(
                     ordinal=len(out) + 1,
                     reference=_image_reference(node),
-                    section_heading=heading,
+                    section_index=section_index,
                 )
             )
 
@@ -145,10 +146,9 @@ def parse_confluence_storage(xhtml: str, *, title: str = "") -> ParsedDocument:
             text = _text_of(node)
             if text:
                 current.body = f"{current.body}\n{text}".strip()
-        _collect_images(node, current.heading, attachments)
+        _collect_images(node, len(sections) - 1, attachments)
 
-    if not preamble.body.strip() and not preamble.tables and len(sections) > 1:
-        sections.remove(preamble)
+    sections, attachments = drop_empty_preamble(sections, attachments)
 
     return ParsedDocument(
         title=resolved_title or "Untitled page",

@@ -154,9 +154,8 @@ class TestImages:
         body = _para("x") + "<w:p><w:r><w:drawing/></w:r></w:p>"
         doc = parse_docx_xml(_doc(body))
         assert [
-            (a.ordinal, a.reference, a.section_heading, a.state)
-            for a in doc.attachments
-        ] == [(1, "", "", "unsupported")]
+            (a.ordinal, a.reference, a.section_index, a.state) for a in doc.attachments
+        ] == [(1, "", 0, "unsupported")]
 
     def test_legacy_pict_reference_is_its_imagedata_id(self):
         pict = (
@@ -175,13 +174,27 @@ class TestImages:
             + _drawing("rId3")
         )
         doc = parse_docx_xml(_doc(body))
+        # The preamble holds an image, so it is kept and the indices stay 0..2.
         assert [
-            (a.ordinal, a.reference, a.section_heading) for a in doc.attachments
+            (a.ordinal, a.reference, doc.sections[a.section_index].heading)
+            for a in doc.attachments
         ] == [
             (1, "rId1", ""),
             (2, "rId2", "Design"),
             (3, "rId3", "Rollout"),
         ]
+        assert [a.section_index for a in doc.attachments] == [0, 1, 2]
+
+    def test_dropping_an_empty_preamble_shifts_the_section_indices(self):
+        body = (
+            _para("A", "Heading1")
+            + _drawing("rId1")
+            + _para("B", "Heading1")
+            + _drawing("rId2")
+        )
+        doc = parse_docx_xml(_doc(body))
+        assert [s.heading for s in doc.sections] == ["A", "B"]
+        assert [a.section_index for a in doc.attachments] == [0, 1]
 
     def test_a_picture_hyperlink_is_not_taken_for_the_image(self):
         link = f'<a:hlinkClick xmlns:a="{_A}" xmlns:r="{_R}" r:id="rId8"/>'
@@ -206,9 +219,10 @@ class TestImages:
     def test_image_inside_a_table_is_inventoried(self):
         tbl = f"<w:tbl><w:tr><w:tc>{_drawing('rId4')}</w:tc></w:tr></w:tbl>"
         doc = parse_docx_xml(_doc(_para("T", "Heading1") + tbl))
-        assert [(a.reference, a.section_heading) for a in doc.attachments] == [
-            ("rId4", "T")
+        assert [(a.reference, a.section_index) for a in doc.attachments] == [
+            ("rId4", 0)
         ]
+        assert doc.sections[0].heading == "T"
 
     def test_no_images_no_attachments(self):
         doc = parse_docx_xml(_doc(_para("x")))

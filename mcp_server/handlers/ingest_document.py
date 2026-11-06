@@ -67,7 +67,7 @@ schema = {
         "summary_memory_id, section_count (sections written), "
         "section_memory_ids, expected_components, completed_components, "
         "failures, retired_receipt_ids, images_skipped, attachments "
-        "([{ordinal, reference, section_heading, state}] per embedded image, "
+        "([{ordinal, reference, section_index, state}] per embedded image, "
         "state 'unsupported' until extraction exists), notices, title, "
         "source, source_kind, version}."
     ),

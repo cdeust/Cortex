@@ -8,6 +8,8 @@ number.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from mcp_server.handlers import ingest_document
@@ -51,13 +53,13 @@ async def test_each_skipped_image_is_named_with_its_section(wired, tmp_path):  #
         {
             "ordinal": 1,
             "reference": "rId7",
-            "section_heading": "Design",
+            "section_index": 0,
             "state": "unsupported",
         },
         {
             "ordinal": 2,
             "reference": "",
-            "section_heading": "Rollout",
+            "section_index": 1,
             "state": "unsupported",
         },
     ]
@@ -68,3 +70,14 @@ async def test_a_document_without_images_reports_none(wired, tmp_path):  # noqa:
     p = _make_docx(tmp_path / "plain.docx", _para("H", "Heading1") + _para("x"))
     out = await ingest_document.handler({"path": str(p)})
     assert (out["images_skipped"], out["attachments"]) == (0, [])
+
+
+@pytest.mark.asyncio
+async def test_a_long_heading_is_not_copied_once_per_image(wired, tmp_path):  # noqa: F811
+    heading = "H" * 5000
+    body = _para(heading, "Heading1") + "<w:p><w:r><w:drawing/></w:r></w:p>" * 50
+    p = _make_docx(tmp_path / "many.docx", body)
+    out = await ingest_document.handler({"path": str(p)})
+    assert out["images_skipped"] == 50
+    assert {a["section_index"] for a in out["attachments"]} == {0}
+    assert heading not in json.dumps(out["attachments"])
