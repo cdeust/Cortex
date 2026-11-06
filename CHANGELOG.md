@@ -8,6 +8,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `memory_stats` returns `abandoned_workers`, the `abandoned_work` registry of
+  #903: per tool, the workers still running after their caller was cancelled
+  (`in_flight`) and how abandoned workers ended since the process started
+  (`ended`: completed, raised, cancelled) (#728, slice 2). An abandoned mutating
+  call that completed applied its writes although its caller never received the
+  result.
 - `python -m mcp_server.doctor` checks the Claude plugin/runtime pairing
   (#729, slice 3). Launched with `CLAUDE_PLUGIN_ROOT`, the optional
   `Plugin/runtime pairing` check fails when the process imports `mcp_server`
