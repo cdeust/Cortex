@@ -8,6 +8,13 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `python -m mcp_server.doctor` checks the Claude plugin/runtime pairing
+  (#729, slice 3). Launched with `CLAUDE_PLUGIN_ROOT`, the optional
+  `Plugin/runtime pairing` check fails when the process imports `mcp_server`
+  from outside that plugin directory, or when `.claude-plugin/plugin.json`
+  declares a version other than the running code's (installed wheel, else
+  `pyproject.toml`). Without `CLAUDE_PLUGIN_ROOT` it passes and says no plugin
+  launched it; the Codex runtime keeps its own launch-time version check.
 - `docs/audits/model-identity-inventory-2026-11-06.md` lists which embedding
   and reranker identity facts a local run records and where (#734, slice 1):
   the embedding revision is pinned but its bytes are never hashed, the reranker
