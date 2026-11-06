@@ -17,6 +17,9 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- mutmut forks each mutant from a fork server (`process_isolation = "forkserver"`,
+  ADR-1122). Forked from the process that had run the suite, mutants hung in torch on
+  the Linux runner and timed out: #878 was cancelled at the six-hour job limit.
 - Each LongMemEval line of `<stem>.queries.jsonl` carries the question's gold
   `answer_session_ids` and its own `mrr` and `recall10`, so the published Recall@10
   and MRR are recomputable from the journal alone (#708).
@@ -61,6 +64,18 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `rebuild_profiles` now reads Codex history too (#726, first slice). It
+  scanned `~/.claude/projects` only, and a Codex rollout parsed to zero
+  messages, so a Codex-only history created no domain. Every user-thread
+  rollout under `$CODEX_HOME/sessions` (default `~/.codex/sessions`) becomes a
+  conversation record whose project is its `session_meta` working directory,
+  named as Claude names it, so a repository worked on from both hosts is one
+  domain. Subagent, guardian-review and consolidation threads are skipped.
+- A Codex session's `apply_patch` edits now count as edits in the incremental
+  cognitive-style observation, as Claude's `Edit`/`Write` do (#727, slice 1).
+  `core/tool_operation.py` maps each native tool name to the operation it makes
+  explicit; native names stay in `toolsUsed`, and the opaque Codex `exec` stays
+  unclassified rather than counted as a read.
 - A document section memory is labelled by its full heading path
   (`[Install > Notes]`), not its own heading alone, so the same text under two
   parents is recalled as two distinguishable segments (#713, slice 1).
@@ -208,6 +223,13 @@ adheres to [Semantic Versioning](https://semver.org/).
   `docs/audits/transcript-capture-producers-2026-11-05.md` lists the five
   producers, their session keys, dedups and replay behaviour. No producer keeps
   a cursor into a transcript and none discovers Codex rollouts.
+- `python -m mcp_server.doctor` names the artifact it runs (#729, slice 1). For an
+  installed wheel: its version and a sha256 over the `mcp_server` rows of its
+  `RECORD`, each member re-hashed on disk (a member that differs from the RECORD
+  fails this optional check). For a source tree or an editable install: its git
+  revision, any uncommitted `mcp_server` change and the same digest over its files,
+  labelled as source evidence, not a distributed artifact. A wheel built from a
+  revision gives the digest of that revision's tree.
 - `benchmarks/outcome/paired_delta.py`: scoring core of the longitudinal
   outcome benchmark (first slice of #343). Pairs `recall` and `no_recall`
   trials strictly by task and repeat, and reports the mean delta of

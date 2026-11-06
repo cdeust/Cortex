@@ -38,4 +38,6 @@ def hermetic_claude_dirs(tmp_path, monkeypatch):
         "mcp_server.infrastructure.profile_store.LEGACY_BACKUP_PATH",
         methodology / "profiles.json.v1_backup",
     )
+    # Codex rollouts are scanned too (issue #726): <root>/codex/sessions/.
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex"))
     return tmp_path
