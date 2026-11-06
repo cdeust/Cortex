@@ -61,6 +61,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- A Codex session's `apply_patch` edits now count as edits in the incremental
+  cognitive-style observation, as Claude's `Edit`/`Write` do (#727, slice 1).
+  `core/tool_operation.py` maps each native tool name to the operation it makes
+  explicit; native names stay in `toolsUsed`, and the opaque Codex `exec` stays
+  unclassified rather than counted as a read.
 - A document section memory is labelled by its full heading path
   (`[Install > Notes]`), not its own heading alone, so the same text under two
   parents is recalled as two distinguishable segments (#713, slice 1).

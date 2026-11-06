@@ -73,6 +73,7 @@ not exist." The registered tools are listed in `docs/mcp-tools.md`.
 - `bridge_finder.py` — Cross-domain connection detection (structural + analogical)
 - `blindspot_detector.py` — Category, tool, and pattern gap analysis
 - `profile_builder.py` — Profile orchestration (assembles all core modules)
+- `tool_operation.py` — Common operation (edit/read) a native tool name stands for, so Claude `Edit` and Codex `apply_patch` count alike; opaque `exec` stays unclassified (issue #727)
 - `profile_assembler.py` — Profile assembly from extracted components
 - `blindspot_patterns.py` — Blind spot pattern definitions
 - `session_shape.py` — Session shape analysis
