@@ -48,7 +48,7 @@ class TestMemoryStatsHandler:
             "has_vector_search",
             "grooming_staleness",
             "grooming_staleness_threshold_days",
-            "tool_workers",
+            "abandoned_workers",
         }
         assert set(result.keys()) == expected_keys
 

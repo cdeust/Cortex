@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -37,6 +38,7 @@ shift 2
 if [ "$1" = run ]; then
   shift
   printf '%s\\n' "$@" > "$FAKE_ARGS"
+  grep '^process_isolation' pyproject.toml > "$FAKE_ARGS.isolation"
   mkdir -p mutants/mcp_server/core
   [ -n "$FAKE_STATS" ] && echo '{}' > mutants/mutmut-stats.json
   meta=mutants/mcp_server/core/a.py.meta
@@ -49,6 +51,7 @@ PYPROJECT = """[tool.mutmut]
 source_paths = ["mcp_server"]
 only_mutate = ["x"]
 pytest_add_cli_args_test_selection = ["x"]
+process_isolation = "forkserver"
 """
 
 
@@ -179,3 +182,22 @@ def test_a_failing_glob_helper_stops_the_gate_before_mutmut(bash, tmp_path):
     done, ran = _run(bash, root, PREFIX, {})
     assert done.returncode == 5
     assert ran is None
+
+
+@pytest.mark.parametrize("bash", BASHES, ids=lambda path: f"bash={path}")
+def test_mutmut_sees_the_isolation_of_this_platform(bash, tmp_path):
+    done, _ = _gate(bash, tmp_path, PREFIX)
+    assert done.returncode == 0, done.stderr
+    seen = (tmp_path / "args.txt.isolation").read_text(encoding="utf-8")
+    expected = scope.process_isolation(platform.system())
+    assert seen == f'process_isolation = "{expected}"\n'
+
+
+def test_each_measured_platform_has_its_isolation():
+    assert scope.process_isolation("Linux") == "forkserver"
+    assert scope.process_isolation("Darwin") == "fork"
+
+
+def test_an_unmeasured_platform_stops_the_gate():
+    with pytest.raises(SystemExit, match="no mutmut process isolation measured"):
+        scope.process_isolation("Windows")

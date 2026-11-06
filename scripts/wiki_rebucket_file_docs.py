@@ -201,7 +201,7 @@ def plan(wiki_root: Path) -> list[FileDocMove]:
 
     for md in (wiki_root / "notes").rglob("*-file-*.md"):
         rel = md.relative_to(wiki_root)
-        rel_str = str(rel)
+        rel_str = rel.as_posix()  # wiki paths use "/" on every OS (#692)
         domain = _is_file_doc_path(rel_str)
         if domain is None:
             continue

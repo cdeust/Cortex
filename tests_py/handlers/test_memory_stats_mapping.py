@@ -12,7 +12,7 @@ import asyncio
 
 import pytest
 
-from mcp_server.handlers import memory_stats, worker_ledger
+from mcp_server.handlers import abandoned_work, memory_stats
 
 _COUNTS = {
     "total": 11,
@@ -56,7 +56,7 @@ class _Store:
 
 @pytest.fixture
 def stats(monkeypatch):
-    worker_ledger.reset()
+    abandoned_work.reset()
     monkeypatch.setattr(
         memory_stats, "days_since", lambda iso: 1.23456 if iso else None
     )
@@ -67,10 +67,13 @@ def stats(monkeypatch):
         return asyncio.run(memory_stats.handler())
 
     yield run
-    worker_ledger.reset()
+    abandoned_work.reset()
 
 
 def test_each_reading_reaches_its_field(stats):
+    for _ in range(2):
+        abandoned_work.record_abandoned("remember")
+    abandoned_work.record_ended("remember", "completed")
     result = stats(_COUNTS)
     assert result == {
         "total_memories": 11,
@@ -101,7 +104,10 @@ def test_each_reading_reaches_its_field(stats):
         "grooming_staleness_threshold_days": (
             memory_stats.GROOMING_STALENESS_THRESHOLD_DAYS
         ),
-        "tool_workers": {},
+        "abandoned_workers": {
+            "in_flight": {"remember": 1},
+            "ended": {"remember": {"completed": 1, "raised": 0, "cancelled": 0}},
+        },
     }
 
 

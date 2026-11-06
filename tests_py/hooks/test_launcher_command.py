@@ -31,7 +31,27 @@ def test_with_a_launcher_the_child_runs_through_it(tmp_path, monkeypatch):
 def test_without_a_launcher_the_child_runs_the_module(tmp_path, monkeypatch):
     monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(tmp_path / "wheel-runtime"))
 
-    assert child_command("pkg.mod") == [sys.executable, "-m", "pkg.mod"]
+    assert child_command("pkg.mod") == [sys.executable, "-P", "-m", "pkg.mod"]
+
+
+def test_without_a_launcher_a_module_in_the_cwd_is_not_run(tmp_path, monkeypatch):
+    """A hook's cwd is the user's project: a planted package there must not
+    shadow the worker (Codex security review on PR #897)."""
+    monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(tmp_path / "wheel-runtime"))
+    project = tmp_path / "project"
+    (project / "planted_pkg").mkdir(parents=True)
+    (project / "planted_pkg" / "__init__.py").write_text("")
+    marker = tmp_path / "ran"
+    (project / "planted_pkg" / "mod.py").write_text(
+        f"open({str(marker)!r}, 'w').close()\n"
+    )
+
+    result = subprocess.run(
+        child_command("planted_pkg.mod"), cwd=project, capture_output=True
+    )
+
+    assert result.returncode != 0
+    assert not marker.exists()
 
 
 def test_the_unset_plugin_root_resolves_to_this_checkouts_launcher(monkeypatch):

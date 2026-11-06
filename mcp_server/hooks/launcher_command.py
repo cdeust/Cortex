@@ -59,13 +59,19 @@ def child_command(module: str, *arguments: str) -> list[str]:
     hook does. Without a launcher (the wheel runtime of the Codex plugin,
     ``mcp_server.hooks.entry``, whose interpreter is the uvx-managed virtual
     environment with no ``deps/`` and no user site) the command is
-    ``[python, "-m", module, *arguments]``; the module's own ``__main__``
-    block wires the composition root there.
+    ``[python, "-P", "-m", module, *arguments]``; the module's own
+    ``__main__`` block wires the composition root there.
 
-    source: issue #667, ADR-0498
+    ``-P`` (Python 3.11+, CPython ``Doc/using/cmdline.rst``) keeps the current
+    directory out of ``sys.path``. A hook's cwd is the user's project, so with
+    plain ``-m`` a repository that ships ``mcp_server/hooks/<module>.py`` ran
+    its own code in place of the worker (Codex security review on PR #897).
+
+    source: issue #667, ADR-0498, PR #897
     """
     return launcher_child_command(module, *arguments) or [
         python_executable(),
+        "-P",
         "-m",
         module,
         *arguments,
