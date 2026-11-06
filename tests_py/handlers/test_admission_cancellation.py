@@ -127,6 +127,7 @@ async def test_abandoned_worker_success_is_logged(workers, warnings_):
     await _admitted(lambda: None)
     assert warnings_() == [
         "consolidate worker completed after its caller was cancelled"
+        " (0 abandoned still running)"
     ]
 
 
@@ -137,6 +138,7 @@ async def test_abandoned_worker_error_is_logged_and_retrieved(workers, warnings_
     await _admitted(lambda: None)
     assert warnings_() == [
         "consolidate worker raised RuntimeError after its caller was cancelled"
+        " (0 abandoned still running)"
     ]
 
 
@@ -156,5 +158,6 @@ async def test_abandoned_worker_cancelled_by_loop_teardown_is_logged(
         await worker
     assert warnings_() == [
         "consolidate worker was cancelled after its caller was cancelled"
+        " (0 abandoned still running)"
     ]
     workers.release.set()
