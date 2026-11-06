@@ -592,22 +592,6 @@
       "kind": "equivalent-by-construction",
       "rationale": "`handler` replaces any `period` outside (\"day\", \"week\", \"month\", \"all\") with \"week\" on the next statement. A missing `period` defaulting to None, \"XXweekXX\" or \"WEEK\" therefore leaves the guard as \"week\", exactly as the \"week\" default does, so every later read of `period` sees the same value. No input distinguishes the variants.",
       "issue": "#721"
-    },
-    {
-      "mutant": "mcp_server.handlers.get_project_story.x_handler__mutmut_39",
-      "removed": "if period not in (\"day\", \"week\", \"month\", \"all\"):",
-      "added": "if period not in (\"day\", \"XXweekXX\", \"month\", \"all\"):",
-      "kind": "equivalent-by-construction",
-      "rationale": "The guard maps any `period` outside its tuple to \"week\". Removing \"week\" from the tuple only changes what happens to `period == \"week\"`, which the guard then rewrites to \"week\": the same value. Every other input takes the same branch as before, so no input distinguishes the variants.",
-      "issue": "#721"
-    },
-    {
-      "mutant": "mcp_server.handlers.get_project_story.x_handler__mutmut_40",
-      "removed": "if period not in (\"day\", \"week\", \"month\", \"all\"):",
-      "added": "if period not in (\"day\", \"WEEK\", \"month\", \"all\"):",
-      "kind": "equivalent-by-construction",
-      "rationale": "The guard maps any `period` outside its tuple to \"week\". Removing \"week\" from the tuple only changes what happens to `period == \"week\"`, which the guard then rewrites to \"week\": the same value. Every other input takes the same branch as before, so no input distinguishes the variants.",
-      "issue": "#721"
     }
   ]
 }
