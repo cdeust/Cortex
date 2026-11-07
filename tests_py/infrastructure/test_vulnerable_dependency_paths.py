@@ -15,6 +15,8 @@ those platforms by construction, and these tests keep the construction:
 from __future__ import annotations
 
 import re
+import sys
+import types
 from pathlib import Path
 from unittest import mock
 
@@ -76,7 +78,8 @@ def test_the_model_is_built_from_safetensors_only():
     assert built["revision"] == lifecycle.DEFAULT_MODEL_REVISION
 
 
-def test_the_background_download_fetches_safetensors_only():
+def test_the_background_download_fetches_safetensors_only(monkeypatch):
+    """Run the child's own program against a fake sentence_transformers."""
     spawned = []
     with (
         mock.patch.object(
@@ -86,5 +89,21 @@ def test_the_background_download_fetches_safetensors_only():
             embedding_downloads, "_spawn_detached", lambda cmd, _: spawned.append(cmd)
         ),
     ):
-        embedding_downloads.trigger_background_model_download("m", "r", None)
-    assert "model_kwargs={'use_safetensors': True}" in spawned[0][3]
+        embedding_downloads.trigger_background_model_download("m", "r", "/cache")
+    program, argv = spawned[0][3], spawned[0][3:]
+    built = []
+    fake = types.ModuleType("sentence_transformers")
+    fake.SentenceTransformer = lambda name, **kwargs: built.append((name, kwargs))
+    monkeypatch.setitem(sys.modules, "sentence_transformers", fake)
+    monkeypatch.setattr(sys, "argv", ["-c", *argv[1:]])
+    exec(compile(program, "<download child>", "exec"), {})
+    assert built == [
+        (
+            "m",
+            {
+                "revision": "r",
+                "cache_folder": "/cache",
+                "model_kwargs": {"use_safetensors": True},
+            },
+        )
+    ]
