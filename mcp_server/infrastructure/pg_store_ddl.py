@@ -53,12 +53,20 @@ def read_schema_hash(conn: psycopg.Connection[DictRow]) -> str | None:
 
 
 def _get_database_url() -> str:
-    """Get DATABASE_URL from environment or MemorySettings default.
+    """Get DATABASE_URL from the environment or CORTEX_MEMORY_DATABASE_URL.
+
+    Raises ValueError when neither names a URL: an empty libpq conninfo
+    would connect to whatever local server the defaults reach (issue #704).
 
     source: ADR-0545"""
     url = os.environ.get("DATABASE_URL", "").strip()
     if not url or "${" in url:
-        url = get_memory_settings().DATABASE_URL
+        url = get_memory_settings().DATABASE_URL.strip()
+    if not url:
+        raise ValueError(
+            "no PostgreSQL URL configured: set DATABASE_URL "
+            "(or CORTEX_MEMORY_DATABASE_URL)"
+        )
     return url
 
 
