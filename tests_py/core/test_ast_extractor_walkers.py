@@ -16,7 +16,7 @@ scope.
 
 Every expectation below was measured against the implementation, not
 predicted, then read back against the source to confirm it is the intended
-contract rather than a bug being frozen. Three measured behaviours are
+contract rather than a bug being frozen. Two measured behaviours are
 surprising enough to name explicitly, and are pinned here as *current*
 behaviour so that changing them becomes a deliberate act with a failing test,
 not an accident:
@@ -24,8 +24,6 @@ not an accident:
 * Swift `enum`/`struct` report kind ``class``. tree-sitter-swift parses all
   three as ``class_declaration``, so ``_SWIFT_KIND_MAP``'s
   ``enum_declaration`` and ``struct_declaration`` entries never match.
-* Kotlin ``object O { ... }`` emits no entry for ``O``, and its members are
-  attributed to no type (``o``/``function``, not ``O.o``/``method``).
 * Ruby ``def self.name`` is not emitted at all — it parses as
   ``singleton_method``, which the walker does not handle.
 
