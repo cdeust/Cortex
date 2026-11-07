@@ -178,7 +178,7 @@ def _resolve_domain(
 ) -> str:
     """Resolve domain ID from explicit arg, cwd, or project."""
     if domain:
-        return domain
+        return domain_id_from_label(domain) or "unknown"
 
     if not (cwd or project):
         return "unknown"

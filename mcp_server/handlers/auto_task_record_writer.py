@@ -220,7 +220,10 @@ def maybe_write_task_record(
     try:
         adr_num = _next_adr_number(wiki_root, domain)
         record = build_task_record(inputs, adr_number=adr_num)
-        page_path = wiki_root / record.suggested_path
+        page_path = (wiki_root / record.suggested_path).resolve()
+        # source: GHSA-5w3v-7v7h-q9x4: an explicit domain must not leave the wiki.
+        if not page_path.is_relative_to(wiki_root.resolve()):
+            raise ValueError("task record path escapes wiki root")
         gated_files.write_text(page_path, record.body)
         return {
             "status": "written",
