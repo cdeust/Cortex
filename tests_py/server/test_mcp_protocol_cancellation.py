@@ -7,17 +7,21 @@ client's ``notifications/cancelled`` (the caller task is cancelled) or the
 client leaving (the transport closes). ``mode="legacy"`` is what puts the
 in-process server behind ``InMemoryTransport`` and JSON-RPC: the default
 ``"auto"`` mode uses the SDK's ``DirectDispatcher``, where cancellation is a
-direct await and no notification crosses a transport. The handler writes one row to an
-SQLite file of its own under ``tmp_path``.
+direct await and no notification crosses a transport. The handler writes one
+row to an SQLite file of its own under ``tmp_path``.
 
-What the tests pin, for both paths:
+What both tests pin:
 - the worker keeps its admission slot until it ends, not until the cancel;
 - ``abandoned_work`` counts it while it runs and records ``completed``;
-- its write lands after the client stopped listening (in-flight mutation
-  semantics: a started write is not rolled back by a cancel);
-- teardown does not wait on, nor kill, the worker thread.
+- a handler still running at the cancel, blocked before its write, makes that
+  write after the client stopped listening: the cancel does not stop it.
 
-Orderings are driven by ``threading.Event``, never by elapsed time. The store
+The cancel test also pins that the session serves a new call afterwards. The
+disconnect test also pins that teardown neither waits on nor kills the worker
+thread: the client exits while the worker is still blocked.
+
+Orderings are driven by ``threading.Event``. Waits on loop-side effects poll
+until the effect holds, bounded only by a deadlock guard. The store
 is a plain SQLite file, not a Cortex store: the tests pin the protocol and
 admission boundary, not a particular handler's writes.
 
@@ -125,13 +129,13 @@ async def _until(condition: Callable[[], bool]) -> None:
 
 def _slot_returned() -> bool:
     sem = _get_semaphore(_TOOL)
-    return sem._value == current_budget(_TOOL)  # noqa: SLF001
+    return sem._value == current_budget(_TOOL)
 
 
 def _assert_abandoned_and_held() -> None:
     assert abandoned_work.snapshot()["in_flight"] == {_TOOL: 1}
     sem = _get_semaphore(_TOOL)
-    assert sem._value == current_budget(_TOOL) - 1  # noqa: SLF001
+    assert sem._value == current_budget(_TOOL) - 1
 
 
 async def _finish_worker(writer: _WritingHandler) -> None:

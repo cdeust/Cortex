@@ -81,9 +81,11 @@ adheres to [Semantic Versioning](https://semver.org/).
   transport) while its handler runs, once by `notifications/cancelled` and once by the
   client disconnecting (#728, slice 3). In both paths the worker keeps its
   admission slot until it ends, `abandoned_work` counts it then records it
-  `completed`, its SQLite write lands after the client stopped listening, and
-  teardown neither waits on nor kills the worker thread. Releasing the slot at
-  the cancel turns both tests red.
+  `completed`, and a handler still running at the cancel makes its SQLite write
+  after the client stopped listening. The cancel test also shows the session
+  serves a new call; the disconnect test also shows teardown neither waits on
+  nor kills the worker thread. Releasing the slot at the cancel turns both
+  tests red.
 
 ### Changed
 
