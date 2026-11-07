@@ -104,6 +104,11 @@ adheres to [Semantic Versioning](https://semver.org/).
   `completed`, and the memory row lands with the sent content after the client
   stopped listening, with nothing written before. Releasing the slot at the
   cancel turns both tests red.
+- ADR-1125 records the cancellation semantics of #728: Cortex has no
+  cooperative cancellation boundary, a cancelled tool call's worker runs to its
+  end inside its admission slot, and its outcome is reported in
+  `memory_stats.abandoned_workers`. A handler that wants to stop early has to
+  amend it (#728, slice 5).
 
 ### Changed
 

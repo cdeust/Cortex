@@ -3667,6 +3667,10 @@
     "ADR-1124": {
       "mirror": "ADR-1124-on-windows-claude-pid-names-the-window-before-the-ancestor-walk.md",
       "path": "adr/cortex/1124-on-windows-claude-pid-names-the-window-before-the-ancestor-walk.md"
+    },
+    "ADR-1125": {
+      "mirror": "ADR-1125-a-cancelled-tool-call-s-worker-runs-to-completion-inside-its-admission-slot.md",
+      "path": "adr/cortex/1125-a-cancelled-tool-call-s-worker-runs-to-completion-inside-its-admission-slot.md"
     }
   },
   "project": "cortex",
