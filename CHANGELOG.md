@@ -18,6 +18,13 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `scripts/native_receipt.py` validates a native host receipt against the
+  `cortex-native-receipt/1` schema (#730, slice 2). Every check carries the
+  `members_digest` of the artifact it ran (the digest `cortex doctor` reports) and
+  the host that ran it, so a receipt cannot merge checks run on two artifacts or
+  hosts. The report says whether the receipt is distributed evidence (an unmodified
+  wheel) or source evidence, and which of #730's required journeys it passed,
+  failed or lacks.
 - Every telemetry sample now carries `stage_ms`, the milliseconds its own
   operation spent in each stage timed with `timed_stage(name)` (#722, slice 1).
   A stage entered twice accumulates, a stage that raises is still counted, and
