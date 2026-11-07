@@ -32,6 +32,11 @@ from mcp_server.shared.platform import cache_dir as _base_cache_dir
 
 # source: ADR-0523
 DEFAULT_MODEL_REVISION = "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
+# source: transformers PreTrainedModel.from_pretrained(use_safetensors=True) loads
+# only *.safetensors and raises when the revision has none; a pickled
+# pytorch_model.bin goes through torch.load, the path of GHSA-53q9-r3pm-6pq6 and
+# GHSA-63cw-57p8-fm3p that torch 2.2.2 (the last macOS Intel wheel) cannot patch.
+SAFETENSORS_ONLY = {"use_safetensors": True}
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +147,7 @@ class _EmbeddingLifecycleMixin:
             "revision": self._revision,
             # source: ADR-0523
             "cache_folder": cache_folder,
+            "model_kwargs": dict(SAFETENSORS_ONLY),
         }
         if local:
             kwargs["local_files_only"] = True

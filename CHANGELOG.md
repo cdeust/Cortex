@@ -473,6 +473,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+- The embedding model loads only `*.safetensors` (`use_safetensors=True`), including
+  in its background download. macOS Intel stops at torch 2.2.2, so the `torch.load`
+  advisories (GHSA-53q9-r3pm-6pq6, GHSA-63cw-57p8-fm3p) cannot be patched there by
+  version: a pickled checkpoint is now refused before it reaches `torch.load`. A test
+  keeps every other unpatchable advisory's function out of `mcp_server/`.
 - Pillow now requires version 13.0.0 or newer to address the advisories affecting
   12.3.0, including GHSA-5x8w-8jj5-q52h. Pillow 13 requires Python 3.11+, so
   Python 3.10 users must upgrade. The plugin bootstrap selects its managed
