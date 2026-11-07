@@ -17,6 +17,8 @@ from mcp_server.hooks.host_event import HostEventError
 from mcp_server.hooks.host_patch import patch_events
 
 SECRET = "outside-the-project secret"
+# The exact message: a reworded or wrapped one is a different contract.
+ESCAPE = r"^Patch path escapes the working directory$"
 
 
 def _event(cwd, patch):
@@ -38,20 +40,20 @@ def test_a_relative_traversal_is_refused(project, operation):
     patch = f"*** {operation}: ../secret.txt\n-{SECRET}\n+x"
     if operation == "Delete File":
         patch = f"*** {operation}: ../secret.txt"
-    with pytest.raises(HostEventError, match="escapes the working directory"):
+    with pytest.raises(HostEventError, match=ESCAPE):
         patch_events(_event(project, patch))
 
 
 def test_an_absolute_path_outside_is_refused(project):
     outside = project.parent / "secret.txt"
-    with pytest.raises(HostEventError, match="escapes"):
+    with pytest.raises(HostEventError, match=ESCAPE):
         patch_events(_event(project, f"*** Delete File: {outside}"))
 
 
 @pytest.mark.skipif(not hasattr(os, "symlink"), reason="no symlinks")
 def test_a_symlink_leading_out_is_refused(project):
     (project / "link.txt").symlink_to(project.parent / "secret.txt")
-    with pytest.raises(HostEventError, match="escapes"):
+    with pytest.raises(HostEventError, match=ESCAPE):
         patch_events(_event(project, "*** Delete File: link.txt"))
 
 
