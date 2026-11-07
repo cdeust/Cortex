@@ -86,6 +86,14 @@ adheres to [Semantic Versioning](https://semver.org/).
   serves a new call; the disconnect test also shows teardown neither waits on
   nor kills the worker thread. Releasing the slot at the cancel turns both
   tests red.
+- `tests_py/server/test_mcp_protocol_cancellation_remember.py` runs the same
+  cancel and disconnect over JSON-RPC with the real `remember` tool, registered
+  by `tool_registry_memory.register`, on the suite's isolated Cortex SQLite
+  store (#728, slice 4). The handler blocks right before the store's exact
+  insert; the worker keeps the `remember` slot, `abandoned_work` records it
+  `completed`, and the memory row lands with the sent content after the client
+  stopped listening, with nothing written before. Releasing the slot at the
+  cancel turns both tests red.
 
 ### Changed
 
