@@ -1,0 +1,59 @@
+---
+created: 2026-10-21T01:22:29Z
+kind: adr
+number: 1111
+status: accepted
+tags: [privacy, gdpr, erasure, storage, zero-trust]
+title: A hard forget erases every stored copy of the memory
+---
+# ADR-1111: A hard forget erases every stored copy of the memory
+
+## Status
+
+accepted
+
+## Context
+
+Amends ADR-0392 (what a hard forget removes) and supersedes its claim that the memory row, its wiki claims and its artifact file are every substrate holding the content.
+
+The three-pillar audit of 2026-10-21 (E15) measured on `main` at `df3a4479`: after the hard-delete path (`handlers/forget.py:131`, `store.delete_memory`), 0 rows in `memories` and 1 row with the full original text in `memory_archives`. `memory_archives` has no foreign key (`pg_schema.py:483-490`, `sqlite_schema.py:230`) and compression writes the original there (`handlers/consolidation/compression.py:118,168,190`). PRIVACY.md:140-146 promised removal "across every substrate".
+
+A schema survey of both backends lists the other copies a hard delete left behind:
+
+- `wiki.claim_events`, `wiki.drafts`, `wiki.citations` and `wiki.pages` reference the memory `ON DELETE SET NULL`: the claim text, the draft lead and sections, and a page compiled from the memory survive with a NULL link and can no longer be found by memory id.
+- `prospective_memories.source_memory_id` and `memory_rules.source_memory_id` (triggers and rules mined from the memory's text) have no foreign key.
+- `entities` extracted from the text (`origin = 'text_concept'`) stay after their only link (`memory_entities`, cascade) is gone, with their relationships.
+- `injection_receipt_items` and `stage_transitions` keep the id (the latter cascades on PostgreSQL only).
+- A page promoted from the memory (`handlers/wiki_memory_sync.py`, file `<id>-<slug>.md` with `memory_id: <id>` in its front matter) stays on disk, and the wiki index lists its title.
+- SQLite keeps a deleted row's bytes in free pages, in FTS5 index segments and in the WAL until something overwrites them (measured: the text was readable in `memory.db-wal` after `main`'s hard forget).
+- The handler deleted claims in a separate step whose failure was only logged (`forget.py:150-160`), then deleted the row anyway: a partial erasure reported as success.
+
+A foreign key `ON DELETE CASCADE` on `memory_archives` would need a schema migration; schema handling is being moved under the connection broker (its ADR on branch `fix/idle-transaction-lock`), so this change does not touch the migration layer.
+
+## Decision
+
+1. `store.erase_memory(memory_id)` (both backends; shared statement list in `infrastructure/memory_erasure.py`, `sqlite_store_erasure.py`, `pg_store_erasure.py`) runs in one transaction: delete `memory_archives` by `original_memory_id`; `wiki.claim_events`, `wiki.drafts`, `wiki.citations` by `memory_id`; `prospective_memories`, `memory_rules` by `source_memory_id`; `injection_receipt_items`, `stage_transitions` by `memory_id`; the `wiki.pages` row compiled from the memory, unless the memory is itself a pointer at an authored page (`is_pointer_source`: the page is then the source, the memory the copy); entities extracted from text, linked to this memory and to no other, with their relationships (a code symbol, `origin = 'ast_symbol'`, and a concept another memory cites are kept); the id from `wiki.concepts.grounding_memory_ids`; the FTS5 and vector rows (SQLite); then the memory row. Any failure rolls back everything and raises; nothing is logged-and-continued.
+2. SQLite physical erasure: every store connection runs `PRAGMA secure_delete = ON` (freed pages are zeroed); the FTS5 index gets its `secure-delete` option before the first erasure (SQLite 3.42+; on an older library an FTS5 `optimize` merge rewrites the index without the deleted entries, and the result says which ran, `fts_method`); a `wal_checkpoint(TRUNCATE)` follows the commit, and its result is read: `wal_truncated` is false when another connection's open snapshot kept old WAL frames (they are dropped at a later checkpoint), so the result never claims the bytes are gone when they are not.
+3. Files: the page files compiled or promoted from the memory are removed (`infrastructure/wiki_memory_pages.py`: the rows' `rel_path`s, plus `<id>-*.md` files whose front matter declares `memory_id: <id>`, contained in the wiki root), then the wiki index is rebuilt strictly (`wiki_reindex_io.reindex`, which raises, unlike the best-effort `try_reindex`). The raw-output artifact is deleted when no other memory refers to it, looked up from both `content` and `original_content` (compression moves the pointer).
+4. The tool result reports what was erased (`erased` counts per table, `pages_removed`, `fts_method`, `wal_truncated`, `artifact_deleted`).
+
+The PostgreSQL foreign key `ON DELETE CASCADE` for `memory_archives` is planned with the broker's migration path; the explicit statement list stays the guarantee either way and the test below fails if a table is missed.
+
+## Consequences
+
+Evidence (2026-10-21, `tests_py/handlers/test_forget_erasure.py`, SQLite temporary file and PostgreSQL 17.9 private cluster): a marker unique to the run, written through the real write paths (memory with FTS/vector index, compression archive, claim, draft, citation, compiled page row, prospective trigger, rule, extracted entity, promoted page file), is then searched in every text column of every table read from the catalog, in the wiki tree and, on SQLite, in the bytes of `memory.db` and its WAL. On `main`, the same ten tests: 8 fail (archive and page rows, page files, WAL bytes, non-atomic failure path, unreported WAL state); only the soft-forget control passes, on both backends. With this change: 10 of 10 pass, including atomicity (a failing statement leaves the memory and its archive intact and raises), the guards (an unrelated memory, a shared concept and a code symbol survive) and a reader holding a snapshot, which makes the result report `wal_truncated: false`.
+
+Limits:
+
+- PostgreSQL keeps dead tuples until VACUUM reclaims their space, and reclaimed space is not zeroed; the text is unreachable through SQL once the transaction commits. Immediate physical removal needs `VACUUM (FULL)` on the affected tables, an operator action.
+- Copies that do not reference the memory are not found: a semantic memory consolidated from several episodes (CLS), cortical schema signatures (aggregated entity names), predictions that quote it, other versions in a supersession chain (each is a memory of its own and is forgotten by its own id), backups, logs written before ADR-1110, and anything outside Cortex's store.
+- `soft=true` keeps everything by design (recoverable).
+
+
+## Addendum (2026-10-21): review of PR #775 (N4)
+
+On SQLite the FTS5 `optimize` merge (used when the library lacks `secure-delete`) and the WAL truncation ran after the commit, as did the removal of page files and artifacts in the handler. A failure there raised once the rows were deleted, so the caller read "nothing was erased".
+
+- The `optimize` merge now runs inside the erasure transaction: it fails like any other statement and everything rolls back.
+- What can only follow the commit (WAL truncation, page files, artifact) runs through `ErasureReport.after_commit`: a failure is recorded in `residue` (`{"step", "error"}`) and `complete` is false. The `forget` result carries `deleted`, `complete` and `residue`.
+- Fault-injection tests: `tests_py/handlers/test_forget_residue.py` (optimize failure erases nothing and raises; WAL, page-file and artifact failures return `deleted: true, complete: false` with the error).

@@ -26,13 +26,13 @@ def _connect():
         return SqliteBriefingConnection(get_shared_store())
     try:
         import psycopg  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
-        from psycopg.rows import DictRow, dict_row  # noqa: PLC0415 — optional-feature probe: ImportError here is a handled degraded mode
     except ImportError:
         return None
+    from mcp_server.infrastructure.db_connect import pg_connect  # noqa: PLC0415 — after the optional-extra probe
+
     try:
-        return psycopg.Connection[DictRow].connect(
+        return pg_connect(
             os.environ.get("DATABASE_URL") or get_memory_settings().DATABASE_URL,
-            row_factory=dict_row,
             autocommit=True,
         )
     except psycopg.Error:

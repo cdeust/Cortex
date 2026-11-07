@@ -4,8 +4,8 @@
 
 - **Cortex (BASELINE, integrated stack at calibrated equilibrium): MRR = 0.9124, R@10 = 0.984** on LongMemEval-S (n = 500).
 - vs. published baseline (CLAUDE.md established): MRR = 0.882, R@10 = 0.978 → **+3.0% MRR, +0.6% R@10**.
-- This is the §6.3 paper-bearing claim: the calibrated integrated stack beats the strongest published baseline by a non-trivial margin on a 500-question evaluation.
-- The 17-row ablation table demonstrates that **this gain is not attributable to any single mechanism** — it is the property of the calibrated stack at plateau equilibrium.
+- This comparison describes reported integrated-system scores; it does not isolate the cause of their difference.
+- The 17-row ablation table does not establish that the neuroscience mechanisms collectively improve retrieval. Several rows are null and ablating adaptive decay improves MRR. A null single-mechanism ablation does not demonstrate a collective or interaction benefit.
 
 ## Method
 
@@ -68,7 +68,7 @@ This isolated-haystack design **forecloses three classes of mechanism by constru
 3. **Longitudinal mechanisms (ADAPTIVE_DECAY, CO_ACTIVATION, RECONSOLIDATION, schema/consolidation rows).**
    These require persistence across multiple recalls of the same memory. `db.clear()` per question wipes heat / co-access / reconsolidation state. ADAPTIVE_DECAY's slightly-negative contribution (ΔMRR = -0.0014, the largest absolute in the table) is **mechanism-consistent**: decay penalizes recently-loaded memories on a benchmark where every memory is recently-loaded.
 
-This is a property of the benchmark, not the mechanisms. **Paper recommendation:**
+These design constraints limit what the benchmark can establish; they do not demonstrate that the mechanisms help in another setting. **Paper recommendation:**
 
 - LME-S row count for §6.3: **17 rows (this run)**.
 - LoCoMo half (task #55): **10 rows** for the consolidation-only mechanisms — CASCADE, INTERFERENCE, HOMEOSTATIC_PLASTICITY, SYNAPTIC_PLASTICITY, MICROGLIAL_PRUNING, TWO_STAGE_MODEL, EMOTIONAL_DECAY, TRIPARTITE_SYNAPSE, SCHEMA_ENGINE, plus baseline. LoCoMo's multi-session boundaries match the consolidation cadence and is the right benchmark for those rows.
@@ -84,7 +84,7 @@ This is a property of the benchmark, not the mechanisms. **Paper recommendation:
 - **Single seed.** Per-question noise averages down by √n; with n = 500 the per-row noise is ~3× tighter than Phase A's n = 50. Per-row noise floor empirically ~±0.001 MRR.
 - **17 of 26 enum mechanisms reportable on this benchmark.** The remaining 9 consolidation-only rows are routed to LoCoMo (see Architectural Finding above).
 - **The 13 rows showing ΔMRR = ±0.0000 are NOT broken.** They were verified wired correctly by the Feynman audit (call sites verified) and post-wiring smoke (behavior confirmed). They are not stress-tested by the isolated-haystack architecture, which by construction provides no longitudinal state, no write-time pressure, and no affect signal.
-- **The integrated +3.0% MRR over published baseline is the meaningful claim.** The ablation table demonstrates that this gain is the property of the *calibrated stack at plateau equilibrium*, not attributable to any single mechanism.
+- **The integrated +3.0% MRR over the historical comparator is descriptive.** These ablations do not attribute that difference to the neuroscience mechanisms, individually or collectively. A longitudinal real-data evaluation with per-mechanism ablations and per-question results remains necessary (issue #343).
 - **No causal claim from this single-seed run.** ΔMRR magnitudes below ~±0.001 are at the noise floor. The architectural finding (which classes of mechanism are foreclosed by the benchmark) is the load-bearing result, not the row-level numerical deltas.
 
 ## Reproducibility

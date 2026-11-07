@@ -1,8 +1,8 @@
 """S110 sweep (issue #197, first family): handler-layer try/except/pass sites.
 
-Each test forces the guarded operation to fail and asserts the
-now-visible ``silent_failure`` signal AND that the pre-existing fallback
-behaviour is unchanged.
+Tests force the guarded operation to fail and assert its fallback signal.
+The #685 freshness and curation paths now propagate failures instead, and their
+regressions require exceptions without a fallback counter entry.
 """
 
 from __future__ import annotations
@@ -272,8 +272,8 @@ class TestConsolidationSites:
 
 
 class TestRebuildProfilesFreshnessCheck:
-    def test_malformed_timestamp_degrades_to_rebuild_and_is_logged(
-        self, caplog, monkeypatch
+    def test_malformed_timestamp_raises_instead_of_authorizing_rebuild(
+        self, monkeypatch
     ):
         from mcp_server.handlers import rebuild_profiles
 
@@ -282,29 +282,22 @@ class TestRebuildProfilesFreshnessCheck:
             "load_profiles",
             lambda: {"updatedAt": "not-a-timestamp", "domains": {"d": {}}},
         )
-        with caplog.at_level("WARNING", logger=WARN_LOGGER):
-            assert rebuild_profiles._check_skip(force=False) is None
-        assert any(
-            "rebuild_profiles.freshness_check" in r.message for r in caplog.records
-        )
-        _assert_noted("rebuild_profiles.freshness_check", "not-a-timestamp")
+        with pytest.raises(ValueError, match="force=true"):
+            rebuild_profiles._check_skip(force=False)
+        assert "rebuild_profiles.freshness_check" not in silent_failure.status()
 
 
 class TestRememberCurationDedup:
-    def test_search_failure_degrades_to_create_and_is_logged(self, caplog):
+    def test_search_failure_raises_instead_of_authorizing_create(self):
         from mcp_server.handlers.remember_helpers import try_curation
 
         store = MagicMock()
-        store.search_vectors.side_effect = RuntimeError("vector index gone")
-        with caplog.at_level("WARNING", logger=WARN_LOGGER):
-            action, target = try_curation(
-                "content", [0.1, 0.2], False, store, MagicMock(), [], 0.5
-            )
-        assert (action, target) == ("create", None)
-        assert any(
-            "remember_helpers.curation_dedup" in r.message for r in caplog.records
-        )
-        _assert_noted("remember_helpers.curation_dedup", "vector index gone")
+        error = RuntimeError("vector index gone")
+        store.search_vectors.side_effect = error
+        with pytest.raises(RuntimeError, match="vector index gone") as caught:
+            try_curation("content", [0.1, 0.2], False, store, MagicMock(), [], 0.5)
+        assert caught.value is error
+        assert "remember_helpers.curation_dedup" not in silent_failure.status()
 
 
 class TestUpdateStageEnteredHappyPath:

@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 
 from mcp_server.core.profile_assembler import build_domain_profiles
 from mcp_server.infrastructure.brain_index_store import load_brain_index
+from mcp_server.infrastructure.codex_history import discover_codex_conversations
 from mcp_server.infrastructure.profile_store import load_profiles, save_profiles
 from mcp_server.infrastructure.scanner import (
     discover_all_memories,
@@ -14,21 +15,25 @@ from mcp_server.infrastructure.scanner import (
     group_by_project,
 )
 from mcp_server.handlers._tool_meta import DESTRUCTIVE
-from mcp_server.observability import silent_failure
 
 schema = {
     "title": "Rebuild profiles",
     "annotations": DESTRUCTIVE,
     "description": (
-        "Full rescan of Claude Code session data to rebuild methodology "
-        "profiles. Walks ~/.claude/projects/, parses JSONL transcripts, "
-        "groups by project, and re-derives per-domain cognitive style "
-        "(Felder-Silverman), entry patterns, blind spots, and cross-domain "
+        "Full rescan of Claude Code and Codex session data to rebuild "
+        "methodology profiles. Walks ~/.claude/projects/ and Codex rollouts "
+        "under $CODEX_HOME/sessions/ (default ~/.codex/sessions/), parses "
+        "the JSONL transcripts, groups both by project (a Codex rollout's "
+        "working directory names its project), and re-derives per-domain "
+        "cognitive style (Felder-Silverman), entry patterns, blind spots, "
+        "and cross-domain "
         "bridges via the profile_assembler pipeline. Use this on first "
         "install, after a major workflow change, or when `query_methodology` "
         "returns coldStart=true. Skipped automatically if profiles are <1h "
         "old unless force=true, which only bypasses that freshness check and "
-        "never replaces a profile. Transcripts on disk are a sliding window "
+        "never replaces a profile. A present but unparseable or timezone-naive "
+        "updatedAt raises an error; rerun with force=true to bypass freshness "
+        "metadata. Transcripts on disk are a sliding window "
         "(Claude Code deletes old ones) while a stored profile accumulates "
         "one session per `record_session_end`, so a domain whose scan sees "
         "fewer sessions than its stored profile records is KEPT unchanged "
@@ -87,7 +92,7 @@ _PROFILE_FRESH_MS = 3600000
 
 
 def _check_skip(force: bool) -> dict | None:
-    """Return a skip response if profiles are recent and force is False."""
+    """Skip recent profiles; reject a present but unusable freshness timestamp."""
     if force:
         return None
     profiles = load_profiles()
@@ -99,17 +104,20 @@ def _check_skip(force: bool) -> dict | None:
             datetime.now(timezone.utc)
             - datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
         ).total_seconds() * 1000
-        if age_ms < _PROFILE_FRESH_MS and len(profiles.get("domains", {})) > 0:
-            return {
-                "skipped": True,
-                "reason": (
-                    "Profiles updated less than 1 hour ago. Use force=true to override."
-                ),
-                "domains": list(profiles.get("domains", {}).keys()),
-                "updatedAt": updated_at,
-            }
-    except Exception as exc:  # noqa: BLE001 — freshness check failure degrades to a rebuild
-        silent_failure.note("rebuild_profiles.freshness_check", exc)
+    except (TypeError, ValueError, AttributeError) as exc:
+        raise ValueError(
+            f"Cannot determine profile freshness from updatedAt={updated_at!r}; "
+            "rerun rebuild_profiles with force=true."
+        ) from exc
+    if age_ms < _PROFILE_FRESH_MS and len(profiles.get("domains", {})) > 0:
+        return {
+            "skipped": True,
+            "reason": (
+                "Profiles updated less than 1 hour ago. Use force=true to override."
+            ),
+            "domains": list(profiles.get("domains", {}).keys()),
+            "updatedAt": updated_at,
+        }
     return None
 
 
@@ -123,7 +131,8 @@ async def handler(args: dict | None = None) -> dict:
 
     start_time = time.monotonic()
     memories = discover_all_memories()
-    conversations = discover_conversations()
+    # source: issue #726 — a Codex-only history must create its domain too.
+    conversations = discover_conversations() + discover_codex_conversations()
     by_project = group_by_project(conversations)
 
     build = build_domain_profiles(

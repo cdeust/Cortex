@@ -42,7 +42,8 @@ def project(tmp_path, monkeypatch):
     monkeypatch.delenv("CORTEX_CLAUDE_DIR", raising=False)
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
     spawned = MagicMock(return_value=MagicMock())
-    monkeypatch.setattr(background.subprocess, "Popen", spawned)
+    # source: ADR-1110 — the hook spawns through the redaction relay
+    monkeypatch.setattr(background, "spawn_logged", spawned)
     root = tmp_path / "app"
     root.mkdir()
     yield str(root), store, spawned

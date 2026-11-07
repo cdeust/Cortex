@@ -7,11 +7,12 @@ from __future__ import annotations
 import json
 import os
 import sys
-import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
 from mcp_server.shared.process_liveness import pid_alive as pid_alive
+from mcp_server.shared import gated_files
+from mcp_server.shared.private_paths import open_lock_file
 
 
 def parse_iso(raw: str | None) -> datetime | None:
@@ -36,15 +37,7 @@ def atomic_write_text(path: Path, text: str) -> bool:
 
     source: ADR-0528"""
     try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        fd, tmp = tempfile.mkstemp(prefix=path.name + ".tmp.", dir=str(path.parent))
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as fh:
-                fh.write(text)
-        except Exception:
-            os.unlink(tmp)
-            raise
-        os.replace(tmp, path)
+        gated_files.write_text(path, text, mode=0o600)
     except OSError:
         return False
     return True
@@ -67,7 +60,7 @@ class DecisionLock:
     def __enter__(self) -> bool:
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)
-            self._fd = os.open(str(self._path), os.O_RDWR | os.O_CREAT, 0o644)
+            self._fd = open_lock_file(self._path)
         except OSError:
             self._fd = None
             return False

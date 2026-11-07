@@ -148,7 +148,11 @@ class PgQueryMixin(PgStoreHost):
         return [self._normalize_memory_row(r) for r in rows]
 
     def get_memories_by_tag(
-        self, tag: str, limit: int = 20, heads_only: bool = True
+        self,
+        tag: str,
+        limit: int = 20,
+        heads_only: bool = True,
+        source: str | None = None,
     ) -> list[dict[str, Any]]:
         """Most-recent-first chain heads carrying ``tag`` (ADR-1100);
         ``heads_only=False`` reads the physical chain for the idempotency
@@ -158,14 +162,16 @@ class PgQueryMixin(PgStoreHost):
         (bounded-I/O audit 2026-06-09). Recency correctness is guaranteed
         by the ORDER BY; ``limit`` only bounds the scan — callers that
         skip dead entries (e.g. graph memos whose path was deleted) get
-        ``limit`` candidates of headroom.
+        ``limit`` candidates of headroom. ``source`` keeps only one writer's
+        rows before the limit applies (issue #714).
         """
         src = "current_memories" if heads_only else "memories"
         rows = self._execute(
             f"SELECT * FROM {src} "  # noqa: S608 — src is one of two literals
             "WHERE tags @> %s::jsonb AND NOT is_stale "
+            "AND (%s::TEXT IS NULL OR source = %s) "
             "ORDER BY created_at DESC LIMIT %s",
-            (json.dumps([tag]), limit),
+            (json.dumps([tag]), source, source, limit),
         ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]
 

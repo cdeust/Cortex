@@ -33,6 +33,13 @@ updates:
         update-types: ["minor", "patch"]
     commit-message:
       prefix: "ci"
+    ignore:
+      # tests_py/scripts/test_ci_native_claude.py pins this action's SHA on
+      # purpose: its assertions cite upstream source lines at that commit, so a
+      # bump is a reviewed change, not an automatic one. Every grouped bump
+      # that carried it failed the unit job (PR #841, run 41179901348). Its
+      # security alerts still show in the Security tab and are bumped by hand.
+      - dependency-name: "anthropics/claude-code-action"
 
   # source: ADR-0801
 

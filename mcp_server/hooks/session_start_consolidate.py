@@ -5,14 +5,15 @@ source: ADR-0498"""
 from __future__ import annotations
 
 import os
-import subprocess
 from datetime import datetime as _dt, timezone as _tz
 from typing import Any
 
 from mcp_server.hooks.launcher_command import child_command
 from mcp_server.hooks.session_start_common import _log
 from mcp_server.shared import detached_spawn
-from mcp_server.shared.log_rotation import methodology_log_path, open_rotating_log
+from mcp_server.infrastructure.log_relay import spawn_logged
+from mcp_server.shared.log_rotation import methodology_log_path
+from mcp_server.shared import gated_files
 
 
 _CONSOLIDATE_TTL_HOURS: float = float(
@@ -27,22 +28,22 @@ def _spawn_consolidate_cycle(spawn_options: dict[str, Any]) -> int | None:
     decided by the caller before it stamped the period (ADR-1102).
     postcondition: a fully-detached subprocess (own
     process group, stdio → ``consolidate.log``) is started and its pid
-    returned, or None if the spawn itself failed. The worker runs decay,
+    returned, or None after logging ERROR if building the command or the
+    ``Popen`` itself raised ``OSError``. It never raises ``OSError``: inside
+    ``ensure_cycle`` that would leave the lock and reach the legacy spawn,
+    which retries outside it (ADR-1118). The worker runs decay,
     compression, CLS, memify, cascade, homeostatic, emergence cycles plus
     autonomous wiki maintenance — this is the SAME cycle as before; #171
     changes only WHO decides to start it, never what it does.
     """
-    cmd = child_command("mcp_server.hooks.consolidate_background")
-
-    log_path = methodology_log_path("consolidate.log")
-    with open_rotating_log(log_path) as log:
-        proc = subprocess.Popen(  # noqa: S603 — cmd built from trusted sources
-            cmd,
-            stdin=subprocess.DEVNULL,
-            stdout=log,
-            stderr=subprocess.STDOUT,
-            **spawn_options,
-        )
+    try:
+        cmd = child_command("mcp_server.hooks.consolidate_background")
+        log_path = methodology_log_path("consolidate.log")
+        # source: ADR-1110 — the child's output reaches the log only redacted
+        proc = spawn_logged(cmd, log_path, **spawn_options).child
+    except OSError as exc:
+        _log(f"ERROR: background consolidate spawn failed ({exc}); no cycle started")
+        return None
     _log(f"background consolidate spawned → {log_path}")
     return proc.pid
 
@@ -56,9 +57,11 @@ def _maybe_background_consolidate() -> None:
     logs an ERROR and starts no cycle. It does NOT take the legacy path,
     which bypasses the coordinator's lock and ``groomer.pid`` guard and would
     let overlapping windows spawn duplicate cycles (the race #171 removed).
-    The legacy path remains for other coordinator failures (I/O).
+    The legacy path remains only for ``OSError`` on the coordinator's own
+    files; any other exception (a bug) logs ERROR and starts no cycle.
 
-    source: ADR-1097 (coordinator: ADR-0527; consolidate period: ADR-0498)"""
+    source: ADR-1097 and ADR-1118 (coordinator: ADR-0527; consolidate period:
+    ADR-0498)"""
     try:
         from mcp_server.infrastructure.groomer_coordinator import (  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
             GroomerCoordinator,
@@ -69,12 +72,17 @@ def _maybe_background_consolidate() -> None:
         outcome = _ensure_coordinated_cycle(coord)
         if outcome is not None:
             _log(f"groomer coordinator: {outcome}")
-    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
+    except OSError as exc:  # I/O on the coordinator's files (ADR-1097 point 5)
         _log(
             f"NOTICE: groomer coordinator unavailable ({exc}); falling back "
             "to legacy per-session consolidate spawn"
         )
         _legacy_background_consolidate()
+    except Exception as exc:  # noqa: BLE001 — hook boundary: logged at ERROR, the hook stays non-fatal, and no cycle starts outside the lock (ADR-1118)
+        _log(
+            f"ERROR: groomer coordinator failed ({type(exc).__name__}: {exc}); "
+            "no consolidate cycle started this session"
+        )
 
 
 def _consolidate_spawn_options() -> dict[str, Any] | None:
@@ -99,13 +107,15 @@ def _ensure_coordinated_cycle(coord) -> str | None:
     """Register this window and ensure the cycle; None on a hard failure.
 
     postcondition: on an unresolved window identity, an unreadable process
-    table (ADR-1097 points 2, 3) or an unreadable job state (ADR-1102) logs
+    table (ADR-1097 points 2, 3), an unreadable ``groomer.pid`` (ADR-1118)
+    or an unreadable job state (ADR-1102) logs
     ERROR with the cause and returns None with nothing spawned or stamped;
-    the window stays registered only in the job-state case.
+    the window stays registered only in the job-state case. A failed spawn
+    returns ``SPAWN_FAILED`` with the period stamped and the window
+    registered (ADR-1118 point 4).
 
-    source: ADR-1097 and ADR-1102"""
+    source: ADR-1097 and ADR-1102 (unreadable groomer.pid: ADR-1118)"""
     from mcp_server.infrastructure.groomer_identity import (  # noqa: PLC0415 — hook latency boundary: see _maybe_background_consolidate
-        LivenessProbeUnavailableError,
         WindowIdentityUnavailableError,
         window_pid,
     )
@@ -122,15 +132,32 @@ def _ensure_coordinated_cycle(coord) -> str | None:
     spawn_options = _consolidate_spawn_options()
     if spawn_options is None:
         return None
+    return _ensure_cycle_or_fail(coord, session_pid, spawn_options)
+
+
+def _ensure_cycle_or_fail(coord, session_pid: int, spawn_options) -> str | None:
+    """Run the coordinator's gate; None on a hard failure.
+
+    postcondition: when it cannot tell whether a cycle is running (the
+    process table or ``groomer.pid`` is unreadable), the window is
+    deregistered, the cause logged at ERROR and nothing spawned or stamped.
+
+    source: ADR-1097 point 3 and ADR-1118"""
+    from mcp_server.infrastructure.groomer_identity import (  # noqa: PLC0415 — hook latency boundary: see _maybe_background_consolidate
+        GroomerPidUnreadableError,
+        LivenessProbeUnavailableError,
+    )
+
     try:
         return coord.ensure_cycle(
             period_hours=_CONSOLIDATE_TTL_HOURS,
             spawn_fn=lambda: _spawn_consolidate_cycle(spawn_options),
         )
-    except LivenessProbeUnavailableError as exc:
+    except (LivenessProbeUnavailableError, GroomerPidUnreadableError) as exc:
         coord.deregister(session_pid)
         _log(
-            f"ERROR: groomer coordinator: liveness probe failed ({exc}); "
+            f"ERROR: groomer coordinator: cannot tell whether a cycle is "
+            f"running ({type(exc).__name__}: {exc}); "
             "no consolidate cycle started this session"
         )
         return None
@@ -139,11 +166,11 @@ def _ensure_coordinated_cycle(coord) -> str | None:
 def _legacy_background_consolidate() -> None:
     """Pre-#171 per-session stamp spawn — the honest degrade path.
 
-    Kept as the fallback the coordinator degrades to (never a silent skip).
-    Spawns the cycle when the global ``.last_consolidate`` stamp is older
-    than the TTL. Retains the crude ``"(in-flight)"`` marker: under this
-    path (coordinator wholly unavailable) it is still strictly better than
-    no guard at all.
+    Kept as the fallback the coordinator degrades to on an ``OSError`` on
+    its own files (ADR-1118 point 3), never a silent skip. Spawns the cycle
+    when the global ``.last_consolidate`` stamp is older than the TTL.
+    Retains the crude ``"(in-flight)"`` marker: under this path it is still
+    strictly better than no guard at all.
     """
     try:
         from mcp_server.hooks.consolidate_background import (  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
@@ -160,13 +187,12 @@ def _legacy_background_consolidate() -> None:
         # decided before the in-flight stamp, like the coordinated path
         spawn_options = detached_spawn.options()
         try:
-            STAMP_PATH.parent.mkdir(parents=True, exist_ok=True)
-            STAMP_PATH.write_text(
+            gated_files.write_text(
+                STAMP_PATH,
                 __import__("datetime")
                 .datetime.now(__import__("datetime").timezone.utc)
                 .isoformat(timespec="seconds")
                 + " (in-flight)",
-                encoding="utf-8",
             )
         except OSError:
             pass

@@ -26,6 +26,12 @@ class TestCaptureDispatch(unittest.TestCase):
         from mcp_server.core import telemetry
 
         self.dispatch = capture_dispatch
+        # The variable above reaches child processes only: capture_dispatch read
+        # CLAUDE_DIR at import, so the spool path of an unsupported platform
+        # (Windows) wrote to the suite's shared root (issue #693).
+        mock.patch.object(
+            capture_dispatch, "CLAUDE_DIR", Path(self.temporary.name)
+        ).start()
         self.record = mock.patch.object(telemetry, "record").start()
 
     def tearDown(self):
@@ -37,7 +43,9 @@ class TestCaptureDispatch(unittest.TestCase):
         from mcp_server.hooks import post_tool_capture as hook
 
         expected = payload("the full capture", "/fixture", ["auto-captured"])
-        with mock.patch.object(self.dispatch, "dispatch", return_value=True) as send:
+        with mock.patch.object(
+            self.dispatch, "dispatch", return_value=self.dispatch.Handoff.ADMITTED
+        ) as send:
             with mock.patch.object(
                 hook, "_load_remember", side_effect=AssertionError("in-process")
             ):
@@ -52,25 +60,138 @@ class TestCaptureDispatch(unittest.TestCase):
         self.assertIn("persistence pending", log.call_args.args[0])
 
     def test_spawn_or_transport_failure_is_logged_and_telemetried(self):
-        with mock.patch.object(
-            self.dispatch, "deliver", side_effect=OSError("fixture spawn failed")
+        # the resident-worker path on every platform: without the pin, Windows
+        # took the spool path and started a real detached drainer (issue #693)
+        supported = mock.patch.object(self.dispatch, "is_supported", return_value=True)
+        with (
+            supported,
+            mock.patch.object(
+                self.dispatch, "deliver", side_effect=OSError("fixture spawn failed")
+            ),
         ):
             with mock.patch.object(
                 self.dispatch.time, "monotonic", side_effect=[4.0, 4.25]
             ):
                 with self.assertLogs(self.dispatch.logger, level="ERROR") as logs:
-                    self.assertFalse(self.dispatch.dispatch(payload()))
-        self.assertIn("fixture spawn failed", " ".join(logs.output))
+                    self.assertIs(
+                        self.dispatch.dispatch(payload()),
+                        self.dispatch.Handoff.NOT_HANDED_OVER,
+                    )
+        self.assertIn(
+            "capture skipped after 0.250s: OSError: fixture spawn failed",
+            " ".join(logs.output),
+        )
         self.record.assert_called_once_with(
             "capture_skipped", latency_ms=250.0, ok=False, skipped=True
         )
 
+    def test_spool_path_writes_only_under_the_test_root(self):
+        from mcp_server.infrastructure import capture_spool
+        from mcp_server.infrastructure.config import CLAUDE_DIR
+
+        shared = capture_spool.spool_directory(CLAUDE_DIR)
+        before = capture_spool.pending(shared)
+        unsupported = mock.patch.object(
+            self.dispatch, "is_supported", return_value=False
+        )
+        with unsupported, mock.patch.object(self.dispatch, "spawn_drainer") as spawn:
+            self.assertIs(
+                self.dispatch.dispatch(payload()), self.dispatch.Handoff.ADMITTED
+            )
+        local = capture_spool.spool_directory(Path(self.temporary.name))
+        self.assertEqual(len(capture_spool.pending(local)), 1)
+        self.assertEqual(capture_spool.pending(shared), before)
+        spawn.assert_called_once_with(capture_spool.log_path(local))
+
     def test_invalid_payload_never_reaches_spawn_or_transport(self):
         with mock.patch.object(self.dispatch, "deliver") as deliver:
             with self.assertLogs(self.dispatch.logger, level="ERROR"):
-                self.assertFalse(self.dispatch.dispatch({}))
+                self.assertIs(
+                    self.dispatch.dispatch({}), self.dispatch.Handoff.NOT_HANDED_OVER
+                )
         deliver.assert_not_called()
         self.record.assert_called_once()
+
+    def test_the_worker_receives_the_payload_with_its_limits_and_spawner(self):
+        sent = payload()
+        supported = mock.patch.object(self.dispatch, "is_supported", return_value=True)
+        with supported, mock.patch.object(self.dispatch, "deliver") as deliver:
+            self.assertIs(self.dispatch.dispatch(sent), self.dispatch.Handoff.ADMITTED)
+        deliver.assert_called_once_with(
+            Path(self.temporary.name),
+            sent,
+            self.dispatch.limits(),
+            self.dispatch._spawn,
+        )
+
+    def test_a_backlog_is_stalled_only_beyond_the_threshold(self):
+        from mcp_server.infrastructure import capture_spool
+
+        stall = capture_spool.STALL_SECONDS
+        unsupported = mock.patch.object(
+            self.dispatch, "is_supported", return_value=False
+        )
+        for age, reported in ((stall, False), (stall + 1, True)):
+            self.record.reset_mock()
+            with (
+                self.subTest(age=age),
+                unsupported,
+                mock.patch.object(self.dispatch, "spawn_drainer"),
+                mock.patch.object(
+                    self.dispatch.capture_spool, "oldest_pending_age", return_value=age
+                ),
+                mock.patch.object(self.dispatch, "logger") as logger,
+            ):
+                self.dispatch.dispatch(payload())
+            if not reported:
+                self.record.assert_not_called()
+                continue
+            self.record.assert_called_once_with(
+                "capture_spool_stalled",
+                latency_ms=age * 1000.0,
+                ok=False,
+                skipped=False,
+            )
+            self.assertIn(
+                f"capture spool stalled: oldest pending file is {age:.0f}s old",
+                logger.error.call_args.args[-1],
+            )
+
+    def test_an_unconfirmed_send_is_an_uncertain_handoff(self):
+        from mcp_server.infrastructure.capture_transport import (
+            CaptureHandoffUncertainError,
+        )
+
+        supported = mock.patch.object(self.dispatch, "is_supported", return_value=True)
+        lost_ack = CaptureHandoffUncertainError("capture handoff unconfirmed: reset")
+        with (
+            supported,
+            mock.patch.object(self.dispatch, "deliver", side_effect=lost_ack),
+        ):
+            with self.assertLogs(self.dispatch.logger, level="ERROR"):
+                self.assertIs(
+                    self.dispatch.dispatch(payload()), self.dispatch.Handoff.UNCERTAIN
+                )
+
+    def test_a_spooled_capture_whose_drainer_fails_is_admitted(self):
+        unsupported = mock.patch.object(
+            self.dispatch, "is_supported", return_value=False
+        )
+        no_spawn = mock.patch.object(
+            self.dispatch, "spawn_drainer", side_effect=OSError("no spawn")
+        )
+        with unsupported, no_spawn:
+            with self.assertLogs(self.dispatch.logger, level="ERROR") as logs:
+                self.assertIs(
+                    self.dispatch.dispatch(payload()), self.dispatch.Handoff.ADMITTED
+                )
+        self.assertIn(
+            "capture spooled, drainer did not start: OSError: no spawn",
+            " ".join(logs.output),
+        )
+        self.record.assert_called_once_with(
+            "capture_drainer_spawn_failed", latency_ms=0.0, ok=False, skipped=False
+        )
 
     def test_lifecycle_error_uses_its_own_event_and_measured_duration(self):
         with self.assertLogs(self.dispatch.logger, level="ERROR"):

@@ -95,17 +95,18 @@ class TestProcessEvent:
         with patch("mcp_server.hooks.session_lifecycle._spawn_consolidation") as spawn:
             yield spawn
 
-    @patch("mcp_server.hooks.session_lifecycle.save_profile")
-    @patch("mcp_server.hooks.session_lifecycle.save_session_log")
-    @patch(
-        "mcp_server.hooks.session_lifecycle.load_session_log",
-        return_value=_session_log(),
-    )
-    @patch(
-        "mcp_server.hooks.session_lifecycle.load_profiles",
-        return_value=_profiles_with_domain(),
-    )
-    def test_updates_existing_domain(self, mock_lp, mock_lsl, mock_ssl, mock_sp, spawn):
+    def test_updates_existing_domain(self, spawn):
+        hooks = "mcp_server.hooks.session_lifecycle"
+        with (
+            patch(f"{hooks}.load_profiles", return_value=_profiles_with_domain()),
+            patch(f"{hooks}.load_session_log", return_value=_session_log()),
+            patch(f"{hooks}.save_session_log") as mock_ssl,
+            patch(f"{hooks}.save_profile") as mock_sp,
+        ):
+            self._run_existing_domain_session(spawn, mock_ssl, mock_sp)
+
+    @staticmethod
+    def _run_existing_domain_session(spawn, mock_ssl, mock_sp):
         event = {
             "session_id": "test-123",
             "cwd": "/Users/dev/my-project",
@@ -290,7 +291,7 @@ class TestSpawnConsolidation:
     subprocess so a Codex SessionEnd (1 s soft / 3 s hard timeout) is not
     blocked by a consolidation cycle (ADR-1082)."""
 
-    @patch("mcp_server.hooks.session_lifecycle.subprocess.Popen")
+    @patch("mcp_server.infrastructure.log_relay.subprocess.Popen")
     def test_the_launcher_gets_the_same_mode_the_turn_count_earns(
         self, mock_popen, tmp_path, monkeypatch
     ):
@@ -310,7 +311,7 @@ class TestSpawnConsolidation:
         # exactly the bug this spawn replaces.
         mock_popen.return_value.wait.assert_not_called()
 
-    @patch("mcp_server.hooks.session_lifecycle.subprocess.Popen")
+    @patch("mcp_server.infrastructure.log_relay.subprocess.Popen")
     def test_the_dream_cycle_starts_through_the_launcher_not_python_dash_m(
         self, mock_popen, tmp_path, monkeypatch
     ):
@@ -335,7 +336,7 @@ class TestSpawnConsolidation:
             "full",
         ]
 
-    @patch("mcp_server.hooks.session_lifecycle.subprocess.Popen")
+    @patch("mcp_server.infrastructure.log_relay.subprocess.Popen")
     def test_a_spawn_failure_does_not_raise(self, mock_popen, tmp_path, monkeypatch):
         monkeypatch.setenv("CORTEX_CLAUDE_DIR", str(tmp_path))
         mock_popen.side_effect = OSError("no such file or directory")
@@ -343,7 +344,7 @@ class TestSpawnConsolidation:
         _spawn_consolidation(turn_count=1)  # must not raise
 
     @patch(
-        "mcp_server.hooks.session_lifecycle.subprocess.Popen",
+        "mcp_server.infrastructure.log_relay.subprocess.Popen",
         side_effect=OSError("simulated launcher failure"),
     )
     @patch("mcp_server.hooks.session_lifecycle.save_profile")

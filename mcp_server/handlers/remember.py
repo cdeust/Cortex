@@ -41,13 +41,20 @@ from mcp_server.handlers.remember_prepared import PreparedEncoding, PreparedWrit
 from mcp_server.handlers import wiki_memory_sync
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.embedding_engine import get_embedding_engine
+from mcp_server.shared.redaction_gate import redact_text
 from mcp_server.infrastructure.memory_config import (
     get_memory_settings,
     root_agent_topic,
 )
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.profile_store import load_profiles
-from mcp_server.shared.domain_mapping import resolve_cwd, resolve_domain as resolve_hint
+from mcp_server.infrastructure.memory_exact import find_exact
+from mcp_server.handlers.remember_response import duplicate_response
+from mcp_server.shared.domain_mapping import (
+    resolve_cwd,
+    resolve_domain as resolve_hint,
+    resolve_explicit_domain,
+)
 from mcp_server.shared.wiki_page_candidate import PageCandidate
 from mcp_server.shared.content_hardening import harden_content
 
@@ -73,12 +80,12 @@ def _resolve_domain(directory: str, domain: str) -> str:
         if resolved:
             return resolved
     if domain:
-        return resolve_hint(domain)
+        return resolve_explicit_domain(domain)
     if directory:
         # Fallback to profile-based detection
         profiles = load_profiles()
         detection = detect_domain({"cwd": directory}, profiles)
-        detected = detection.get("domain", "") or ""
+        detected = detection.get("domain") or ""
         return resolve_hint(detected) if detected else ""
     return ""
 
@@ -127,7 +134,9 @@ def _harden_args(args: dict[str, Any] | None) -> bool:
     """Preserve ingestion hardening and connection-rooted scope before validation."""
     if not args or not args.get("content"):
         return False
-    args["content"] = harden_content(args["content"])
+    # source: ADR-1110 — redacted before any derivation (gist, entities,
+    # tags, hash, embedding) so no derived copy carries a secret either.
+    args["content"] = redact_text(harden_content(args["content"]))
     if not args["content"]:
         return False
     root = root_agent_topic()
@@ -174,6 +183,30 @@ def _prepare_request(args: dict, store: MemoryStore, write_class: str) -> GateRe
     )
 
 
+def _exact_record(args: dict[str, Any], request: GateRequest) -> dict[str, Any]:
+    options = request.options
+    is_global, _ = resolve_global_scope(
+        request.content, request.tags, explicit=bool(args.get("is_global", False))
+    )
+    return {
+        "content": request.content,
+        "tags": request.tags,
+        "domain": (options.domain or "").lower().strip(),
+        "directory_context": args.get("directory", ""),
+        "agent_context": args.get("agent_topic", ""),
+        "source": args.get("source", "user"),
+        "write_class": options.write_class,
+        "capture_origin": options.origin,
+        "is_global": is_global,
+        "is_team_decision": is_team_decision(
+            request.content,
+            options.origin,
+            options.write_class,
+            args.get("agent_topic", ""),
+        ),
+    }
+
+
 def prepare_write(args: dict[str, Any] | None) -> PreparedWrite | dict:
     """Run the original pre-encode phase in order; never construct the encoder."""
     if not _harden_args(args):
@@ -188,6 +221,10 @@ def prepare_write(args: dict[str, Any] | None) -> PreparedWrite | dict:
     if rejection is not None:
         return rejection
     request = _prepare_request(args, store, write_class)
+    if supersedes_id is None:
+        duplicate_id = find_exact(store, _exact_record(args, request))
+        if duplicate_id is not None:
+            return duplicate_response(duplicate_id)
     observed = prepare_gate(request, observe_gate)
     if observed is not None:
         rejection = bound_rejection(request, observed)
@@ -203,6 +240,12 @@ async def _handler_impl(
     """Store a memory, optionally continuing an explicitly prepared internal write."""
     if prepared_encoding is not None:
         prepared = prepared_encoding.checked()
+        if isinstance(prepared, PreparedWrite) and prepared.supersedes_id is None:
+            duplicate_id = find_exact(
+                prepared.request.store, _exact_record(args or {}, prepared.request)
+            )
+            if duplicate_id is not None:
+                return duplicate_response(duplicate_id)
     else:
         prepared = prepare_write(args)
     if isinstance(prepared, dict):
@@ -306,6 +349,9 @@ async def _handler_impl(
                 "reason": "block-replica-refreshed",
             }
 
+        duplicate_id = find_exact(store, _exact_record(args or {}, request))
+        if duplicate_id is not None:
+            return duplicate_response(duplicate_id)
         action, mid = try_curation(
             content, embedding, force, store, emb_engine, tags, mod["heat"]
         )

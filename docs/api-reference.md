@@ -54,8 +54,10 @@ Full rescan of session data to rebuild cognitive profiles. The transcripts on di
 | Field | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `domain` | string | No | — | Rebuild only this domain |
-| `force` | boolean | No | `false` | Bypass the 1-hour freshness check only; never replaces a profile |
+| `force` | boolean | No | `false` | Bypass the 1-hour freshness check, including invalid timestamp metadata; never replaces a profile |
 | `replace_accumulated_profiles` | boolean | No | `false` | Destructive: replace a domain's stored profile with the smaller scan when the scan sees fewer sessions than the profile records |
+
+A present but unparseable or timezone-naive `updatedAt` raises an error before scanning. Rerun with `force=true` to bypass that freshness check. Missing, empty, or null timestamps permit a rebuild. The existing JSON reader logs corrupt or unreadable files to stderr and treats them as absent; changing that file-read policy is outside #685.
 
 **Returns:** `domains`, `totalSessions`, `totalMemories`, `duration`, and `domainOutcomes`, one entry per scanned domain: `{domain, action, storedSessions, scannedSessions, resultingSessions}` where `action` is `created`, `rebuilt` (scan saw at least as many sessions), `kept` (scan saw fewer; stored profile unchanged) or `replaced` (scan saw fewer and `replace_accumulated_profiles` was set).
 
@@ -113,10 +115,18 @@ Interpretability exploration across four modes.
 
 **Modes:**
 
-- **`features`** — Sparse dictionary features and their activations
+- **`features`** — Sparse feature dictionary and cross-domain persistent features (ignores `domain`)
 - **`attribution`** — Pipeline attribution graph via perturbation tracing
-- **`persona`** — 12D persona vector with drift detection
-- **`crosscoder`** — Cross-domain persistent behavioral features
+- **`persona`** — 9D persona vector (`dimensions` names them) for one domain, or for every domain plus their session-weighted composition
+- **`crosscoder`** — Active features shared by and unique to `domain` and `compare_domain`; without both, the features persistent across all domains
+
+Every response carries `mode` and `status` (`ok`, `no_data` or `error`).
+`ok` adds the lens's keys: `features` → `dictionary`, `persistentFeatures`;
+`attribution` → `domain`, `graph`; `persona` → `domain`, `persona`,
+`dimensions` (or `domains`, `global`, `dimensions` without `domain`);
+`crosscoder` → `comparison` (or `persistentFeatures`, `domainCount` without both
+domains). `no_data` and `error` add only `message`. An unknown `mode` is
+rejected as invalid input (an MCP input-validation error).
 
 **Target Latency:** <100ms
 
@@ -586,3 +596,14 @@ The server uses a typed error hierarchy:
 | `StorageError` | Filesystem/database persistence failures |
 | `AnalysisError` | Core analysis failures |
 | `McpConnectionError` | MCP client connection failures |
+
+
+### Exact replay responses
+
+`remember` returns `{stored: false, action: "rejected", reason: "exact_duplicate",
+memory_id: existing_id}` for an exact replay in the same write scope, including a forced
+write. An explicit `supersedes_id` correction still posts its atomic supersession edge.
+Automatic capture uses the same check. Benchmark rows cannot reject a production write.
+
+`consolidate` reports the number of retained duplicate rows it superseded in
+`exact_duplicates.superseded_total`. A duplicate-free pass takes no table write lock.

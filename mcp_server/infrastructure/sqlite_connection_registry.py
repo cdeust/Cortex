@@ -12,6 +12,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from mcp_server.infrastructure.db_connect import sqlite_connect
+from mcp_server.shared.private_paths import create_private_file
 from mcp_server.infrastructure.sqlite_request_scope import (
     register_request_connection,
 )
@@ -117,7 +119,12 @@ class SqliteConnectionRegistry:
         return True
 
     def _open_locked(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(
+        if not self._uri:
+            # source: ADR-1112 — created 0600 before SQLite opens it; the WAL
+            # and shared-memory files take the database file's mode
+            create_private_file(self._target)
+        # source: ADR-1110 — every connection comes gated from db_connect
+        connection = sqlite_connect(
             self._target,
             uri=self._uri,
             check_same_thread=False,
@@ -198,6 +205,8 @@ def _configure(
                 "SQLite requested WAL but retained journal_mode=%s", actual_mode
             )
     connection.execute("PRAGMA foreign_keys=ON")
+    # source: ADR-1111 — freed pages are zeroed, so a deleted row leaves no bytes
+    connection.execute("PRAGMA secure_delete=ON")
 
 
 def _load_extension(connection: sqlite3.Connection, loader: _VectorLoader) -> None:

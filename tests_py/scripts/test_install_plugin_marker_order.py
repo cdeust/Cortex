@@ -20,20 +20,18 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import stat
 import subprocess
 import sys
 from pathlib import Path
 
-import pytest
+from mcp_server.shared.platform import resolve_bash
+
+# A bare "bash" on Windows is the System32 WSL stub. source: ADR-1101
+BASH = resolve_bash()
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 INSTALLER_PATH = REPO_ROOT / "scripts" / "install-plugin.sh"
-
-pytestmark = pytest.mark.skipif(
-    shutil.which("bash") is None, reason="bash is required to drive the installer"
-)
 
 
 def _write_setup_py_stub(bin_dir: Path, *, exit_code: int) -> None:
@@ -131,7 +129,7 @@ def _run_installer(
         "CORTEX_BACKEND": cortex_backend,
     }
     return subprocess.run(
-        ["bash", str(INSTALLER_PATH)],
+        [BASH, str(INSTALLER_PATH)],
         env=env,
         capture_output=True,
         text=True,

@@ -5,6 +5,10 @@ import os
 import re
 import subprocess
 
+from mcp_server.shared.platform import resolve_bash
+
+# A bare "bash" on Windows is the System32 WSL stub. source: ADR-1101
+BASH = resolve_bash()
 
 REPO = Path(__file__).resolve().parents[2]
 ACTION = REPO / ".github/actions/test-suite/action.yml"
@@ -57,7 +61,7 @@ sleep() { :; }
 
     for stage in ("update", "install"):
         result = subprocess.run(
-            ["bash", "-c", harness + apt_loops],
+            [BASH, "-c", harness + apt_loops],
             capture_output=True,
             text=True,
             env={
@@ -98,7 +102,7 @@ sleep() { :; }
 
     for stage in ("update", "install"):
         result = subprocess.run(
-            ["bash", "-c", harness + apt_loops],
+            [BASH, "-c", harness + apt_loops],
             capture_output=True,
             text=True,
             env={**os.environ, "FAIL_STAGE": stage},

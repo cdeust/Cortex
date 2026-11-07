@@ -71,3 +71,49 @@ def test_a_successful_hook_still_splits_stdout_from_stderr(tmp_path):
     assert outcome["status"] == 0
     assert "Cortex ready" in outcome["stdout"]
     assert outcome["stderr"] == "note"
+
+
+def test_setup_logs_preserve_errors_and_redact_sensitive_content(tmp_path):
+    data = tmp_path / "data"
+    data.mkdir()
+    (data / "setup.log").write_text(
+        "ImportError: missing native library\n"
+        "download https://person:private@example.test/wheel?auth=hidden#private\n"
+        "Authorization: Bearer private\nPASSWORD=private\nGH_TOKEN=private\n",
+        encoding="utf-8",
+    )
+    (data / "deps-install.log").write_text("uv failed: missing wheel\n")
+    (data / "unrelated.json").write_text("private unrelated state")
+    found = _evidence().setup_failure_logs(data, tmp_path)
+    assert set(found) == {"setup.log", "deps-install.log"}
+    assert "ImportError: missing native library" in found["setup.log"]
+    assert "https://example.test/wheel" in found["setup.log"]
+    assert "private" not in str(found) and "hidden" not in str(found)
+    assert found["deps-install.log"] == "uv failed: missing wheel\n"
+
+
+def test_setup_logs_do_not_follow_links_outside_the_owned_work(tmp_path):
+    work = tmp_path / "work"
+    data = work / "data"
+    data.mkdir(parents=True)
+    external = tmp_path / "private.log"
+    external.write_text("unrelated private state")
+    (data / "setup.log").symlink_to(external)
+    found = _evidence().setup_failure_logs(data, work)
+    assert "unrelated private state" not in str(found)
+    assert "refused" in found["setup.log"]
+    assert "refused" in _evidence().setup_failure_logs(tmp_path, work)["error"]
+
+
+def test_missing_setup_logs_are_explicit_and_do_not_search_elsewhere(tmp_path):
+    assert _evidence().setup_failure_logs(tmp_path / "missing", tmp_path) == {
+        "error": "no Setup or dependency log was written"
+    }
+
+
+def test_malformed_url_cannot_mask_the_original_setup_error(tmp_path):
+    (tmp_path / "setup.log").write_text(
+        "install failed: https://person:private@[broken/wheel\n", encoding="utf-8"
+    )
+    found = _evidence().setup_failure_logs(tmp_path, tmp_path)
+    assert found["setup.log"] == "install failed: [redacted malformed URL]\n"

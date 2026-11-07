@@ -1,0 +1,25 @@
+---
+created: 2026-10-28T10:59:07Z
+kind: adr
+number: 9852
+status: proposed
+tags: [memory, supersession, sqlite, issue-699]
+title: Restore the previous head when a superseding memory is deleted
+---
+# ADR-9852: Restore the previous head when a superseding memory is deleted
+
+## Status
+
+proposed
+
+## Context
+
+Issue #699: PostgreSQL memories.superseded_by_id and supersedes_id use ON DELETE SET NULL; SQLite migrated both as plain INTEGER and retains dangling links after deletion. Verified on remote main ee450957ae0e6a07dfd77807df09cee6db47b265. ADR-1100 paragraph 6 explicitly leaves this choice open.
+
+## Decision
+
+Preserve PostgreSQL behavior: deleting a memory clears every surviving superseded_by_id and supersedes_id reference to that row in the same transaction. Deleting a head therefore exposes its immediate predecessors in current_memories; deleting an intermediate version does not reconnect the surviving versions. SQLite uses an AFTER DELETE trigger installed after the column migrations, covering delete_memory, hard erasure, and direct SQL deletes. During schema initialization, clear existing links only when their referenced memory is absent; preserve valid links. This amends ADR-1100 paragraph 6 for issue #699.
+
+## Consequences
+
+Deleting a head can expose text previously superseded by that head, on both backends. This is already PostgreSQL behavior. Whole-chain removal was rejected because it deletes additional user data and changes PostgreSQL behavior. The SQLite repair is idempotent and does not remove memories. Hosted regression tests must cover both stores, chain deletion positions, rollback, hard erasure, and reopening a legacy database; no candidate execution occurs on the operator host.

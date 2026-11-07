@@ -166,7 +166,11 @@ class SqliteQueryMixin:
         return [self._normalize_memory_row(r) for r in rows]
 
     def get_memories_by_tag(
-        self, tag: str, limit: int = 20, heads_only: bool = True
+        self,
+        tag: str,
+        limit: int = 20,
+        heads_only: bool = True,
+        source: str | None = None,
     ) -> list[dict[str, Any]]:
         """Most-recent-first chain heads carrying ``tag`` (ADR-1100);
         ``heads_only=False`` reads the physical chain for the idempotency
@@ -176,15 +180,16 @@ class SqliteQueryMixin:
         SQLite lacks the ``@>`` jsonb containment operator; ``json_each``
         (JSON1 — already a baseline: the compat translator expands
         ``= ANY(...)`` through it) gives the same containment predicate
-        without a full-table Python filter.
+        without a full-table Python filter. ``source`` keeps only one
+        writer's rows before the limit applies (issue #714).
         """
         src = "current_memories" if heads_only else "memories"
         rows = self._conn.execute(
             f"SELECT m.* FROM {src} m "  # noqa: S608 — src is one of two literals
-            "WHERE m.is_stale = 0 AND EXISTS ("
+            "WHERE m.is_stale = 0 AND (? IS NULL OR m.source = ?) AND EXISTS ("
             "  SELECT 1 FROM json_each(m.tags) je WHERE je.value = ?"
             ") ORDER BY m.created_at DESC LIMIT ?",
-            (tag, limit),
+            (source, source, tag, limit),
         ).fetchall()
         return [self._normalize_memory_row(r) for r in rows]
 

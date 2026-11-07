@@ -4,14 +4,14 @@ source: ADR-0498"""
 
 from __future__ import annotations
 
-import subprocess
 from collections.abc import Callable
 
-from mcp_server.hooks.launcher_command import launcher_child_command
+from mcp_server.hooks.launcher_command import child_command, launcher_child_command
 from mcp_server.hooks.session_start_common import _log
 from mcp_server.shared import detached_spawn
 from mcp_server.shared.injection_markers import session_id_from_transcript
-from mcp_server.shared.log_rotation import methodology_log_path, open_rotating_log
+from mcp_server.infrastructure.log_relay import spawn_logged
+from mcp_server.shared.log_rotation import methodology_log_path
 
 
 def _auto_wire_pipeline(project_root: str | None) -> None:
@@ -95,15 +95,34 @@ def _spawn_reanalysis(project_root: str) -> None:
 
     # Rotate before spawn; the inherited fd stays open for the worker.
     log_path = methodology_log_path("pipeline_reanalyze.log")
-    with open_rotating_log(log_path) as log:
-        subprocess.Popen(  # noqa: S603 — cmd built from trusted sources
-            cmd,
-            stdin=subprocess.DEVNULL,
-            stdout=log,
-            stderr=subprocess.STDOUT,
-            **detached_spawn.options(),
-        )
+    # source: ADR-1110 — the child's output reaches the log only redacted
+    spawn_logged(cmd, log_path, **detached_spawn.options())
     _log(f"background pipeline reanalysis spawned → {log_path}")
+
+
+def _maybe_background_prune_graphs() -> None:
+    """Start the detached pruning worker when the code-graph cache holds an orphan.
+
+    Before this, orphans were pruned only after an ingest built a graph, so a
+    session that ingested nothing left every deleted worktree's graph behind.
+    The hook only reads one marker per cache entry; the removal itself runs in
+    ``code_graph_prune_background``, outside the hook's time budget. Failures
+    are logged, never raised.
+
+    source: issue #711"""
+    try:
+        from mcp_server.infrastructure import code_graph_cache  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
+
+        orphans = code_graph_cache.orphan_graphs(code_graph_cache.managed_cache_dir())
+        if not orphans:
+            return
+        cmd = child_command("mcp_server.hooks.code_graph_prune_background")
+        log_path = methodology_log_path("code_graph_prune.log")
+        # source: ADR-1110 — the child's output reaches the log only redacted
+        spawn_logged(cmd, log_path, **detached_spawn.options())
+        _log(f"code-graph prune spawned for {len(orphans)} orphan(s) → {log_path}")
+    except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
+        _log(f"code-graph prune skipped: {exc}")
 
 
 def _refresh_session_registry(event: dict) -> None:

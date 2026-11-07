@@ -34,6 +34,7 @@ _CMD_EXE_PID = 50
 @pytest.fixture
 def table(monkeypatch, tmp_path):
     fake = FakeProcessTable()
+    monkeypatch.delenv("CLAUDE_PID", raising=False)  # the host's, if any
     monkeypatch.setattr(host_platform, "IS_WINDOWS", True)
     monkeypatch.setattr(win32_process, "snapshot_rows", fake.snapshot)
     monkeypatch.setattr(win32_process, "creation_filetime", fake.creation)
@@ -58,6 +59,17 @@ def _as_process(monkeypatch, own_pid: int, parent_pid: int) -> None:
 
 def test_hook_finds_claude_exe_without_ps(table, monkeypatch):
     _as_process(monkeypatch, HOOK_PID, 32)
+    assert sr.find_claude_ancestor() == CLAUDE_PID
+
+
+def test_hook_with_an_exited_bash_finds_the_window_through_claude_pid(
+    table, monkeypatch
+):
+    # issue #835: bash.exe(32) has exited, so python.exe(40) has no parent row
+    table.rows = [row for row in table.rows if row[0] != 32]
+    _as_process(monkeypatch, HOOK_PID, 32)
+    assert sr.find_claude_ancestor() is None
+    monkeypatch.setenv("CLAUDE_PID", str(CLAUDE_PID))
     assert sr.find_claude_ancestor() == CLAUDE_PID
 
 

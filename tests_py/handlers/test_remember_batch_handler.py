@@ -42,6 +42,7 @@ def handler_patches(store, engine, action):
     )
     return [
         (remember, "_get_store", store),
+        (remember, "find_exact", None),
         (remember, "get_embedding_engine", engine),
         (remember, "_resolve_domain", "fixture"),
         (remember, "root_agent_topic", None),

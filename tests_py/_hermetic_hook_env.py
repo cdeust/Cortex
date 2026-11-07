@@ -18,9 +18,9 @@ isolated here through the production contract, never a test-only branch:
   ``../ai-architect-mcp-codebase`` exists on a contributor's machine
   (the 2026-10-14 leak). ``discover_pipeline_command`` returns None and
   the hook returns.
-* consolidate: the coordinator's public ``ensure_cycle`` records a cycle as
-  just run (a ``spawn_fn`` that starts nothing), so the hook sees
-  ``skipped_fresh`` for the 6 h period.
+* consolidate: the coordinator's public ``ensure_cycle`` stamps the period as
+  just started (a ``spawn_fn`` that starts nothing, so ``runs.log`` records
+  ``spawn_failed``), and the hook sees ``skipped_fresh`` for the 6 h period.
 
 A third worker is the resident capture worker (ADR-0486, ADR-0508): a real
 PostToolUse hook run admits its capture to a worker that, by design, outlives
@@ -32,7 +32,8 @@ the idle window to one second (the production variable), and
 ``await_capture_worker_exit`` blocks until the worker PROCESS has exited: first
 on its lifetime lease (the kernel ``flock``, released by ``capture_worker.main``
 before the interpreter shuts down, so the lease alone is NOT proof of exit),
-then on the process itself through the kernel (Linux ``pidfd_open``, macOS
+then on the process itself through the kernel (Linux ``pidfd_open`` through
+Python or libc, macOS
 ``kqueue`` with ``NOTE_EXIT``). The pid comes from the leak guard's own token
 listing, because the hook starts the worker detached, so no handle exists. No
 sleep or poll decides anything.
@@ -43,6 +44,7 @@ source: this PR; spawn sites mcp_server/hooks/session_start.py
 
 from __future__ import annotations
 
+import ctypes
 import os
 import select
 import subprocess
@@ -85,13 +87,23 @@ def hermetic_hook_env(
     """Return ``(env, project)``: ``base`` made hermetic as the module
     docstring describes, and a temp project directory to use as the cwd.
 
-    postcondition: a consolidate cycle is recorded as just run in the
-    coordinator state under ``tmp_path/home``.
+    postcondition: the consolidate period is stamped as just started in the
+    coordinator state under ``tmp_path/home`` (``runs.log`` records it as
+    ``spawn_failed``: the seed's ``spawn_fn`` starts nothing, ADR-1118).
     """
     home = tmp_path / "home"
     home.mkdir(exist_ok=True)
     env = dict(base)
+    # source: mutmut 3.8.1 mutation/trampoline.py -- a hook subprocess that
+    # inherits the parent's MUTANT_UNDER_TEST runs mutmut's trampoline in a cwd
+    # with no [tool.mutmut] config and dies ("Could not figure out where the
+    # code to mutate is"), so the gate's stats run fails (ADR-1122). Mutants are
+    # judged by the in-process tests; the hook process runs the original code.
+    env.pop("MUTANT_UNDER_TEST", None)
+    # Path.home() reads HOME on POSIX and USERPROFILE on Windows (ntpath.
+    # expanduser); naming one only leaves the other pointing at the real home.
     env["HOME"] = str(home)
+    env["USERPROFILE"] = str(home)
     env["CORTEX_AUTO_INSTALL_PIPELINE"] = "0"
     # source: ADR-0489 (capture worker idle window), ADR-0519 (embedding opt-out)
     env["CORTEX_CAPTURE_IDLE_SECONDS"] = "1"
@@ -119,19 +131,47 @@ _WORKER_EXIT_DEADLINE_SECONDS = 30.0
 _WORKER_MODULE = "mcp_server.hooks.capture_worker"
 
 
+def _open_linux_pidfd(pid: int) -> int:
+    """Open the same kernel handle even when Python omits its optional binding.
+
+    source: glibc 2.36 release notes and sys/pidfd.h declare
+    ``int pidfd_open(pid_t, unsigned int)`` with flags zero:
+    https://sourceware.org/pipermail/libc-alpha/2022-August/141193.html
+    https://github.com/bminor/glibc/blob/glibc-2.36/sysdeps/unix/sysv/linux/sys/pidfd.h
+    ctypes use_errno preserves the syscall error, including ESRCH.
+    """
+    native_open = getattr(os, "pidfd_open", None)
+    if native_open is not None:
+        return native_open(pid)
+    libc = ctypes.CDLL(None, use_errno=True)
+    try:
+        open_pidfd = libc.pidfd_open
+    except AttributeError as exc:
+        raise RuntimeError(
+            "waiting for Linux process exit requires os.pidfd_open or libc.pidfd_open"
+        ) from exc
+    open_pidfd.argtypes = (ctypes.c_int, ctypes.c_uint)
+    open_pidfd.restype = ctypes.c_int
+    handle = open_pidfd(pid, 0)
+    if handle == -1:
+        code = ctypes.get_errno()
+        raise OSError(code, os.strerror(code))
+    return handle
+
+
 def wait_for_process_exit(pid: int, deadline: float) -> None:
     """Block until process ``pid`` has exited, through the kernel, not a poll.
 
     postcondition: returns when ``pid`` is gone (also when it was already gone
     at registration); raises ``TimeoutError`` at the ``time.monotonic()``
-    ``deadline``. Linux: ``os.pidfd_open`` readable on exit. macOS/BSD:
+    ``deadline``. Linux: Python or libc ``pidfd_open`` readable on exit. macOS/BSD:
     ``kqueue`` ``KQ_NOTE_EXIT``. Windows has no capture worker (ADR-0486).
 
     source: pidfd_open(2); kqueue(2) EVFILT_PROC NOTE_EXIT"""
     timeout = max(0.0, deadline - time.monotonic())
     if sys.platform.startswith("linux"):
         try:
-            handle = os.pidfd_open(pid)
+            handle = _open_linux_pidfd(pid)
         except ProcessLookupError:
             return
         try:

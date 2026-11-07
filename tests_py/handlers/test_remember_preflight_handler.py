@@ -30,6 +30,7 @@ class HandlerPreflight(unittest.TestCase):
         )
         mocks = [
             (remember, "_get_store", {"return_value": self.store}),
+            (remember, "find_exact", {"return_value": None}),
             (remember, "get_embedding_engine", {"return_value": self.engine}),
             (remember, "_resolve_domain", {"return_value": "fixture"}),
             (remember, "root_agent_topic", {"return_value": None}),

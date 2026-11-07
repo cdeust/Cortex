@@ -7,7 +7,7 @@ from pathlib import Path
 
 from mcp_server.shared.wiki_frontmatter_validation import normalize_frontmatter
 import os
-import tempfile
+from mcp_server.shared import gated_files
 
 WriteMode = str  # "create" | "append" | "replace"
 
@@ -181,16 +181,6 @@ def _atomic_write_bytes_str(safe_path: str, content: str) -> int:
 
     source: ADR-0630"""
 
-    parent = os.path.dirname(safe_path)
-    if parent and not os.path.isdir(parent):
-        os.makedirs(parent, exist_ok=True)
-    # source: ADR-0056
-    descriptor, temporary = tempfile.mkstemp(prefix=".wiki-write-", dir=parent)
-    data = content.encode("utf-8")
-    try:
-        with os.fdopen(descriptor, "wb") as stream:
-            stream.write(data)
-        os.replace(temporary, safe_path)
-    finally:
-        Path(temporary).unlink(missing_ok=True)
-    return len(data)
+    # source: ADR-0056 (atomic), ADR-1110 (redacted), ADR-1112 (0600 under
+    # the data roots; a project wiki page keeps the repository's umask)
+    return len(gated_files.write_text(safe_path, content))

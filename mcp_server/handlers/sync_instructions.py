@@ -18,6 +18,7 @@ from typing import Any
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
+from mcp_server.shared import gated_files
 
 # ── Schema ────────────────────────────────────────────────────────────────────
 
@@ -157,7 +158,7 @@ def _update_claude_md(
     if not claude_md_path.exists():
         if dry_run:
             return {"action": "would_create", "path": str(claude_md_path)}
-        claude_md_path.write_text(section + "\n", encoding="utf-8")
+        gated_files.write_text(claude_md_path, section + "\n")
         return {"action": "created", "path": str(claude_md_path)}
 
     original = claude_md_path.read_text(encoding="utf-8")
@@ -190,7 +191,7 @@ def _update_claude_md(
             "preview": section,
         }
 
-    claude_md_path.write_text(updated, encoding="utf-8")
+    gated_files.write_text(claude_md_path, updated)
     return {"action": action, "path": str(claude_md_path)}
 
 

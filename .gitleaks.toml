@@ -1,0 +1,41 @@
+# source: ADR-1110 (gitleaks 8.30.1 default rules; triaged exceptions below)
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "32-hex content hashes in the i6d1 dedup campaign record"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^docs/campaigns/i6d1_memory_dedup_exact_apply_20260710T141823Z\.json$''']
+regexes = ['''^[0-9a-f]{32}$''']
+
+[[allowlists]]
+description = "SHA-256 digest in the green-w3-3 prefix observations"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^docs/provenance/green-w3-3-prefix-observations\.json$''']
+regexes = ['''^[0-9a-f]{64}$''']
+
+[[allowlists]]
+description = "git commit ids quoted in the claude-codex handoff trace"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^docs/verification/claude-codex-handoff-2026-09-22/trace\.json$''']
+regexes = ['''^[0-9a-f]{40}\.?$''']
+
+[[allowlists]]
+description = "Anthropic model identifiers (claude-<family>-<version>-<yyyymmdd>)"
+targetRules = ["generic-api-key"]
+regexes = ['''^claude-[a-z0-9-]+-[0-9]{8}$''']
+
+[[allowlists]]
+description = "embedding model config literal in the prefix guard test"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^tests_py/infrastructure/test_embedding_prefix_guard\.py$''']
+regexes = ['''^max_seq_length=[0-9]+$''']
+
+[[allowlists]]
+description = "the translated gitleaks rule set itself (gitleaks allowlists its own gitleaks.toml the same way)"
+paths = ['''^mcp_server/shared/redaction_rules/gitleaks\.json$''']

@@ -6,6 +6,26 @@ and downloading model weights behind a corporate proxy / inspection CA.
 
 ---
 
+## Windows: WSL recommended, Git for Windows required natively
+
+WSL is the recommended way to run Cortex on Windows. Native Windows remains
+supported with [Git for Windows](https://git-scm.com/download/win) installed;
+its Bash shell is required for the Claude plugin hooks and shell-based tooling.
+
+Python callers resolve Bash to an absolute path through
+`mcp_server.shared.platform.resolve_bash()`. The resolver refuses the WSL launcher
+stubs under System32 and WindowsApps, finds Bash beside Git when PATH contains
+only Git's `cmd` directory, and raises an error naming Git for Windows if no
+usable shell exists. Install Git for Windows before using the native plugin.
+
+The plugin manifest hook commands begin with `bash` and depend on the host's
+hook launcher supplying Git Bash. Under PowerShell with Bash absent from PATH,
+they fail at shell lookup before the Python launcher can run; this is a missing
+prerequisite, not a successful hook execution. The Windows Pipeline environment
+leg exercises every manifest hook command in that condition and checks the
+resolver's installation guidance separately (issue #689, owner decision
+2026-10-13).
+
 ## WSL (Windows Subsystem for Linux)
 
 Cortex runs as a Linux process under WSL — no Windows-specific code paths are

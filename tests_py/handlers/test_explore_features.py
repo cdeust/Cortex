@@ -5,6 +5,8 @@ import asyncio
 import json
 from unittest.mock import patch
 
+import pytest
+
 from mcp_server.handlers.explore_features import handler, schema
 from mcp_server.shared.types_features import (
     AttributionGraph,
@@ -206,7 +208,10 @@ class TestExploreAttributionRealSource:
     by wiring discover_conversations_for_projects()."""
 
     def test_produces_non_empty_graph_from_real_sessions(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("mcp_server.infrastructure.scanner.CLAUDE_DIR", tmp_path)
+        monkeypatch.setattr(
+            "mcp_server.infrastructure.scanner.CLAUDE_PROJECTS_DIR",
+            tmp_path / "projects",
+        )
         projects_dir = tmp_path / "projects"
         _write_real_session(projects_dir / "proj-a", "s1.jsonl")
 
@@ -245,7 +250,10 @@ class TestExploreAttributionRealSource:
     def test_empty_graph_when_domain_has_no_indexed_projects(
         self, tmp_path, monkeypatch
     ):
-        monkeypatch.setattr("mcp_server.infrastructure.scanner.CLAUDE_DIR", tmp_path)
+        monkeypatch.setattr(
+            "mcp_server.infrastructure.scanner.CLAUDE_PROJECTS_DIR",
+            tmp_path / "projects",
+        )
         profiles = {
             "domains": {
                 "d1": {
@@ -271,7 +279,10 @@ class TestExploreAttributionRealSource:
         """The 3 categorical classifiers (problemDecomposition/
         explorationStyle/verificationBehavior) must not leak their string
         category into the numeric `activation` field."""
-        monkeypatch.setattr("mcp_server.infrastructure.scanner.CLAUDE_DIR", tmp_path)
+        monkeypatch.setattr(
+            "mcp_server.infrastructure.scanner.CLAUDE_PROJECTS_DIR",
+            tmp_path / "projects",
+        )
         projects_dir = tmp_path / "projects"
         _write_real_session(projects_dir / "proj-a", "s1.jsonl")
 
@@ -570,15 +581,20 @@ class TestExploreNoData:
 
 
 class TestExploreUnknownMode:
-    def test_returns_error(self):
-        result = asyncio.run(handler({"mode": "unknown_mode_xyz"}))
-        assert result["status"] in ("error", "no_data")
+    """An unknown mode is a tool error (#680): it cannot be echoed under the
+    output schema's ``mode`` enum, so no structured response can carry it."""
+
+    def test_raises(self):
+        with pytest.raises(ValueError, match="Unknown mode"):
+            asyncio.run(handler({"mode": "unknown_mode_xyz"}))
 
     def test_unknown_mode_includes_mode_name(self):
         profiles = {"domains": {"d1": {"label": "D1"}}}
-        with patch(
-            "mcp_server.handlers.explore_features.load_profiles", return_value=profiles
+        with (
+            patch(
+                "mcp_server.handlers.explore_features.load_profiles",
+                return_value=profiles,
+            ),
+            pytest.raises(ValueError, match="bogus"),
         ):
-            result = asyncio.run(handler({"mode": "bogus"}))
-        assert result["status"] == "error"
-        assert "bogus" in result["message"]
+            asyncio.run(handler({"mode": "bogus"}))

@@ -9,11 +9,11 @@ from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
-import select
+import queue
 import subprocess
 import sys
 import tempfile
-import time
+import threading
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -26,27 +26,44 @@ PROTOCOL_TIMEOUT = 30
 CLEANUP_TIMEOUT = 5
 
 
+def _bounded(operation, what):
+    """Run a blocking pipe operation within PROTOCOL_TIMEOUT.
+
+    A thread waits instead of ``select.select``: on Windows ``select`` accepts
+    sockets only, and a pipe raises WinError 10038 (issue #692, class 6).
+    """
+    outcome = queue.Queue(maxsize=1)
+
+    def run():
+        try:
+            outcome.put((True, operation()))
+        except BaseException as error:  # re-raised in the caller below
+            outcome.put((False, error))
+
+    threading.Thread(target=run, daemon=True).start()
+    try:
+        succeeded, value = outcome.get(timeout=PROTOCOL_TIMEOUT)
+    except queue.Empty:
+        raise AssertionError(f"shared-store worker {what} timed out") from None
+    if not succeeded:
+        raise value
+    return value
+
+
 def _readline(process):
-    deadline = time.monotonic() + PROTOCOL_TIMEOUT
-    line = bytearray()
-    while not line.endswith(b"\n"):
-        remaining = deadline - time.monotonic()
-        ready, _, _ = select.select([process.stdout], [], [], max(0, remaining))
-        assert ready and remaining > 0, "shared-store worker response timed out"
-        chunk = os.read(process.stdout.fileno(), 1)
-        assert chunk, "shared-store worker exited without acknowledgement"
-        line.extend(chunk)
+    line = _bounded(process.stdout.readline, "response")
+    assert line.endswith(b"\n"), "shared-store worker exited without acknowledgement"
     return json.loads(line)
+
+
+def _send(process, data):
+    while data:
+        data = data[os.write(process.stdin.fileno(), data) :]
 
 
 def _exchange(process, payload):
     data = (json.dumps(payload) + "\n").encode()
-    deadline = time.monotonic() + PROTOCOL_TIMEOUT
-    while data:
-        remaining = deadline - time.monotonic()
-        _, ready, _ = select.select([], [process.stdin], [], max(0, remaining))
-        assert ready and remaining > 0, "shared-store worker request timed out"
-        data = data[os.write(process.stdin.fileno(), data) :]
+    _bounded(lambda: _send(process, data), "request")
     return _readline(process)
 
 

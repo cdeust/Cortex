@@ -25,6 +25,7 @@ from mcp_server.core.auto_task_record import (
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.shared.subprocess_safe import run_with_hard_timeout
 from mcp_server.observability import silent_failure
+from mcp_server.shared import gated_files
 
 logger = logging.getLogger(__name__)
 
@@ -220,10 +221,10 @@ def maybe_write_task_record(
         adr_num = _next_adr_number(wiki_root, domain)
         record = build_task_record(inputs, adr_number=adr_num)
         page_path = (wiki_root / record.suggested_path).resolve()
+        # source: GHSA-5w3v-7v7h-q9x4: an explicit domain must not leave the wiki.
         if not page_path.is_relative_to(wiki_root.resolve()):
             raise ValueError("task record path escapes wiki root")
-        page_path.parent.mkdir(parents=True, exist_ok=True)
-        page_path.write_text(record.body, encoding="utf-8")
+        gated_files.write_text(page_path, record.body)
         return {
             "status": "written",
             "path": record.suggested_path,

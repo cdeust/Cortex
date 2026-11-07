@@ -28,9 +28,12 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# source: ADR-1122. An assignment keeps the helper's exit status, so `set -e` stops
+# on a platform with no measured isolation.
+ISOLATION="$(python3 "$ROOT/scripts/ci_mutation_scope.py" --isolation)"
 # source: ADR-0770
-python3 - "$PY" "${TEST_ARR[@]}" -- "$@" <<'PYEOF'
-import re, sys
+ISOLATION="$ISOLATION" python3 - "$PY" "${TEST_ARR[@]}" -- "$@" <<'PYEOF'
+import os, re, sys
 args = sys.argv[2:]
 sep = args.index("--")
 tests, sources = args[:sep], args[sep + 1:]
@@ -45,12 +48,34 @@ src, n2 = re.subn(r'^pytest_add_cli_args_test_selection = .*$',
                   "pytest_add_cli_args_test_selection = " + fmt(tests), src, count=1, flags=re.M)
 src, n3 = re.subn(r'^source_paths = .*$',
                   "source_paths = " + fmt(sorted(set(existing) | set(roots))), src, count=1, flags=re.M)
-assert n1 and n2 and n3, "pyproject [tool.mutmut] must define only_mutate, source_paths and pytest_add_cli_args_test_selection"
+src, n4 = re.subn(r'^process_isolation = .*$',
+                  f'process_isolation = "{os.environ["ISOLATION"]}"', src, count=1, flags=re.M)
+assert n1 and n2 and n3 and n4, "pyproject [tool.mutmut] must define only_mutate, source_paths, pytest_add_cli_args_test_selection and process_isolation"
 open(path, "w").write(src)
 PYEOF
 
 echo ">>> mutating: $* | tests: $TESTS"
-uv run mutmut run 2>&1 | tee "$RUN_LOG"
+# source: ADR-1122. Inside a pull request scope, run only the mutants of the changed
+# functions (`<prefix>*` names); without a scope, every mutant of the files as before.
+NAMES=()
+if [ -n "${MUTATION_ONLY_PREFIXES:-}" ]; then
+  # An assignment keeps the helper's exit status, so `set -e` stops on its failure.
+  GLOBS="$(python3 "$ROOT/scripts/ci_mutation_scope.py" --globs)"
+  while IFS= read -r glob; do NAMES+=("$glob"); done <<< "$GLOBS"
+fi
+set +e
+uv run mutmut run ${MUTMUT_MAX_CHILDREN:+--max-children "$MUTMUT_MAX_CHILDREN"} \
+  ${NAMES[@]+"${NAMES[@]}"} 2>&1 | tee "$RUN_LOG"
+RUN_RC=${PIPESTATUS[0]}
+set -e
+if [ "$RUN_RC" -ne 0 ]; then
+  # mutmut asserts when no mutant matches the names; only that case is not a failure.
+  if [ -n "${MUTATION_ONLY_PREFIXES:-}" ] \
+    && python3 "$ROOT/scripts/ci_mutation_scope.py" --empty-scope "$ROOT/mutants" "$@"; then
+    exit 0
+  fi
+  exit "$RUN_RC"
+fi
 
 # source: ADR-0770
 TALLY="$(tr '\r' '\n' < "$RUN_LOG" | grep -oE '🙁 [0-9]+' | tail -1 | grep -oE '[0-9]+' || true)"
@@ -59,6 +84,12 @@ TALLY="${TALLY:-0}"
 echo ">>> mutmut-reported survivors (must be empty, or documented equivalents):"
 RESULTS="$(uv run mutmut results)"
 LISTED="$(printf '%s\n' "$RESULTS" | grep -cE ': *survived[[:space:]]*$' || true)"
+
+# source: ADR-1122. Inside a pull request scope, a mutant no test reaches (mutmut
+# reports it as "no tests", not as a survivor) fails the gate as well.
+if ! printf '%s\n' "$RESULTS" | python3 "$ROOT/scripts/ci_mutation_diff.py" --untested; then
+  exit 1
+fi
 
 if [ "$TALLY" != "$LISTED" ]; then
   {
@@ -85,7 +116,7 @@ if [ "$LISTED" -gt 0 ]; then
   [ "$REG_RC" -eq 1 ] && exit 1          # drifted or stale entry: needs a human
 
   if [ -z "$UNREGISTERED" ]; then
-    echo "  every survivor is a registered, justified equivalent 🎉"
+    echo "  every judged survivor is a registered, justified equivalent 🎉"
     exit 0
   fi
 

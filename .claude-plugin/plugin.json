@@ -1,6 +1,6 @@
 {
   "name": "hypermnesia-mcp",
-  "description": "Cortex — persistent memory for Claude Code that remembers across sessions automatically. Install and forget. Scientific retrieval backed by 97 published references. (Renamed from the 'cortex' plugin to match the PyPI/MCP-registry identity.)",
+  "description": "Cortex — persistent memory for Claude Code that remembers across sessions automatically. Install and forget. Inspectable neuroscience-inspired mechanisms with published references; committed ablations do not establish a retrieval gain from all 36 mechanisms. (Renamed from the 'cortex' plugin to match the PyPI/MCP-registry identity.)",
   "version": "4.23.5",
   "author": {
     "name": "Clement Deust",

@@ -108,8 +108,10 @@ jobs:
           cat > "${TARGET}/README.md" <<EOF
           # Cortex
 
-          Persistent memory for Claude Code — scientific retrieval backed by
-          41 published papers. This directory is a mirror of the
+          Persistent memory for Claude Code with inspectable neuroscience-inspired
+          mechanisms. Committed ablations do not establish a retrieval gain from
+          all 36 mechanisms; see the canonical README Verification section.
+          This directory is a mirror of the
           [cdeust/Cortex](https://github.com/cdeust/Cortex) plugin manifest;
           see the canonical repository for documentation, benchmarks, and
           the full change log.

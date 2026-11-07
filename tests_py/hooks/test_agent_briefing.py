@@ -161,16 +161,18 @@ class _FakePgError(Exception):
 
 
 def test_connect_with_unreachable_database_returns_none(monkeypatch):
+    from mcp_server.infrastructure import db_connect
+
     monkeypatch.setenv("CORTEX_MEMORY_STORE_BACKEND", "postgresql")
     module = MagicMock()
     module.Error = _FakePgError
-    # The hook connects via psycopg.Connection[DictRow].connect(...) so the
-    # returned connection is typed with dict rows; mirror that call path.
-    module.Connection.__getitem__.return_value.connect.side_effect = _FakePgError(
-        "connection refused"
-    )
     monkeypatch.setitem(sys.modules, "psycopg", module)
+    # The hook connects through the gated factory (ADR-1110); the driver's
+    # error class is what its typed except pins.
+    refused = MagicMock(side_effect=_FakePgError("connection refused"))
+    monkeypatch.setattr(db_connect, "pg_connect", refused)
     assert hook._connect() is None
+    assert refused.called
 
 
 # ── Briefing queries ──────────────────────────────────────────────────

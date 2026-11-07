@@ -10,13 +10,15 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
+from mcp_server.shared.private_paths import open_lock_file
+
 
 @contextmanager
 def counter_lock(path: Path) -> Iterator[None]:
     """Serialize read/modify/replace without dropping contending ticks."""
     path.parent.mkdir(parents=True, exist_ok=True)
     # source: ADR-0530
-    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+    fd = open_lock_file(path)
     try:
         _acquire(fd)
         try:

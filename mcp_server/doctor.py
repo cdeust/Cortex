@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import sqlite3
 import sys
 import time
 from pathlib import Path
@@ -19,11 +20,17 @@ from mcp_server.handlers.admission import DEFAULT_SEMAPHORE
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 from mcp_server.infrastructure.backend_marker import effective_backend
+from mcp_server.doctor_artifact import artifact_identity
+from mcp_server.doctor_pairing import plugin_pairing
 from mcp_server.doctor_capture import capture_verdict
+from mcp_server.doctor_managed import managed_server, selected as managed_selected
 from mcp_server.doctor_mcp import run_mcp
 from mcp_server.doctor_pgvector import pgvector_iterative_scan
 from mcp_server.infrastructure.config import CLAUDE_DIR
 from mcp_server.shared.subprocess_safe import run_with_hard_timeout
+from mcp_server.shared import gated_files
+from mcp_server.shared.redaction_gate import redact_text
+from mcp_server.observability import silent_failure
 
 # source: validate_memory.py:29 precedent (_GIT_CHECK_TIMEOUT_S)
 _WORKTREE_LIST_TIMEOUT_S = 2.0
@@ -71,17 +78,18 @@ class Check:
         self.optional = optional
 
 
+# source: pyproject.toml requires-python, Pillow 13 PyPI metadata
 def _python_version() -> Check:
     ver = sys.version_info
-    if ver >= (3, 10):
+    if ver >= (3, 11):
         return Check(
-            "Python >= 3.10", True, f"Python {ver.major}.{ver.minor}.{ver.micro}"
+            "Python >= 3.11", True, f"Python {ver.major}.{ver.minor}.{ver.micro}"
         )
     return Check(
-        "Python >= 3.10",
+        "Python >= 3.11",
         False,
         f"Python {ver.major}.{ver.minor}.{ver.micro}",
-        "Upgrade Python: install Python 3.10+ via the official installer "
+        "Upgrade Python: install Python 3.11+ via the official installer "
         "(https://www.python.org/downloads/) or your platform's package manager.",
     )
 
@@ -131,16 +139,18 @@ def _database_url() -> Check:
 
 def _pg_connection() -> Check:
     try:
-        import psycopg  # noqa: PLC0415 — source: ADR-0322
+        import psycopg  # noqa: PLC0415, F401 — source: ADR-0322 (availability probe)
+
+        from mcp_server.infrastructure.db_connect import pg_connect  # noqa: PLC0415 — source: ADR-1110
     except ImportError:
         return Check("PG connection", False, "psycopg not installed", "")
     url = os.environ.get("DATABASE_URL", "")
     if not url:
         return Check("PG connection", False, "DATABASE_URL not set", "")
     try:
-        with psycopg.connect(url, connect_timeout=5) as conn:
-            row = conn.execute("SELECT version()").fetchone()
-            return Check("PG connection", True, row[0] if row else "ok")
+        with pg_connect(url, connect_timeout=5) as conn:
+            row = conn.execute("SELECT version() AS v").fetchone()
+            return Check("PG connection", True, row["v"] if row else "ok")
     except Exception as exc:  # noqa: BLE001 — source: ADR-0322
         return Check(
             "PG connection",
@@ -153,7 +163,9 @@ def _pg_connection() -> Check:
 
 def _pg_extensions() -> Check:
     try:
-        import psycopg  # noqa: PLC0415 — source: ADR-0322
+        import psycopg  # noqa: PLC0415, F401 — source: ADR-0322 (availability probe)
+
+        from mcp_server.infrastructure.db_connect import pg_connect  # noqa: PLC0415 — source: ADR-1110
     except ImportError:
         return Check(
             "pgvector + pg_trgm extensions", False, "psycopg not installed", ""
@@ -162,12 +174,12 @@ def _pg_extensions() -> Check:
     if not url:
         return Check("pgvector + pg_trgm extensions", False, "DATABASE_URL not set", "")
     try:
-        with psycopg.connect(url, connect_timeout=5) as conn:
+        with pg_connect(url, connect_timeout=5) as conn:
             rows = conn.execute(
                 "SELECT extname FROM pg_extension "
                 "WHERE extname IN ('vector', 'pg_trgm')"
             ).fetchall()
-            names = {r[0] for r in rows}
+            names = {r["extname"] for r in rows}
             missing = {"vector", "pg_trgm"} - names
             if missing:
                 return Check(
@@ -199,7 +211,7 @@ def _methodology_dir() -> Check:
     try:
         path.mkdir(parents=True, exist_ok=True)
         probe = path / ".write_probe"
-        probe.write_text("ok")
+        gated_files.write_text(probe, "ok")
         probe.unlink()
         return Check("~/.claude/methodology writable", True, str(path))
     except Exception as exc:  # noqa: BLE001 — source: ADR-0322
@@ -480,6 +492,20 @@ def _sqlite_vector_search() -> Check:
             "Restart Claude Code to let the launcher install it, or run: "
             "python3 scripts/launcher.py mcp_server --install-deps",
         )
+    if not hasattr(sqlite3.Connection, "enable_load_extension"):
+        return Check(
+            "SQLite vector search",
+            False,
+            "sqlite3.Connection.enable_load_extension is unavailable — "
+            "semantic recall falls back to full-text search only",
+            "Use Homebrew Python or a uv-managed Python built with loadable "
+            "SQLite extensions, then reinstall with that interpreter.",
+        )
+    return _sqlite_vector_probe()
+
+
+def _sqlite_vector_probe() -> Check:
+    """Probe the store after package and interpreter checks (ADR-1089)."""
     try:
         store = SqliteMemoryStore(db_path=get_memory_settings().SQLITE_FALLBACK_PATH)
         try:
@@ -502,13 +528,47 @@ def _sqlite_vector_search() -> Check:
         "was likely built without loadable-extension support (common on "
         "macOS system/Framework Python) — semantic recall falls back to "
         "full-text search only",
-        "Use a Python built with extension loading enabled (python.org "
-        "installer, pyenv, or Homebrew python), then reinstall.",
+        "Use a Python built with extension loading enabled (Homebrew or "
+        "uv-managed Python), then reinstall with that interpreter.",
     )
+
+
+def _recorded_failures() -> Check:
+    """Report historical fallback failures recorded in this process.
+
+    A separate doctor process has its own counters; this is not a persistent
+    health history. Source: issue #685, silent_failure.status contract.
+    """
+    failures = silent_failure.status()
+    detail = "; ".join(
+        redact_text(f"{component}: {entry['count']} failure(s), {entry['last_error']}")
+        for component, entry in sorted(failures.items())
+    )
+    return Check(
+        "Recorded component failures",
+        not failures,
+        detail or "No failures recorded in this process",
+        "Inspect the reported fallbacks; lifetime counts do not show current health."
+        if failures
+        else "",
+        optional=True,
+    )
+
+
+def _artifact_identity() -> Check:
+    """source: issue #729 — which artifact the checks below describe."""
+    return artifact_identity(Check)
+
+
+def _plugin_pairing() -> Check:
+    """source: issue #729 — is the running code the Claude plugin's own."""
+    return plugin_pairing(Check)
 
 
 CHECKS: list[Callable[[], Check]] = [
     _python_version,
+    _artifact_identity,  # optional — names the running artifact (#729)
+    _plugin_pairing,  # optional — Claude plugin/runtime pairing (#729)
     _pg_driver,
     _database_url,
     _pg_connection,
@@ -519,10 +579,13 @@ CHECKS: list[Callable[[], Check]] = [
     _i10_config,
     _codebase_pipeline,  # optional — doesn't fail doctor
     _worktree_locations,  # optional — doesn't fail doctor
+    _recorded_failures,  # historical warning, not a readiness verdict
 ]
 
 SQLITE_CHECKS: list[Callable[[], Check]] = [
     _python_version,
+    _artifact_identity,  # optional — names the running artifact (#729)
+    _plugin_pairing,  # optional — Claude plugin/runtime pairing (#729)
     _sqlite_store,
     _sqlite_vector_search,
     _methodology_dir,
@@ -530,17 +593,26 @@ SQLITE_CHECKS: list[Callable[[], Check]] = [
     _i10_config,
     _codebase_pipeline,  # optional — doesn't fail doctor
     _worktree_locations,  # optional — doesn't fail doctor
+    _recorded_failures,  # historical warning, not a readiness verdict
 ]
+
+
+def _managed_server() -> Check:
+    """source: ADR-1114 — attaches first, so the checks after it use the server."""
+    return managed_server(Check)
 
 
 def active_checks() -> list[Callable[[], Check]]:
     """Backend-appropriate check list (single point of truth).
 
-    source: ADR-0322"""
+    source: ADR-0322
+    source: ADR-1114 (a managed marker: the server check first)"""
     # A BackendMarkerError propagates: the doctor names the corrupt marker
     # instead of running the other backend's checks (source: ADR-1104).
     if effective_backend(os.environ) == "sqlite":
         return SQLITE_CHECKS
+    if managed_selected(os.environ):
+        return [_managed_server, *CHECKS]
     return CHECKS
 
 

@@ -2,7 +2,7 @@
 
 Claude Code starts every hook and the MCP server with the first ``python3`` on
 PATH. On a Mac with only the Command Line Tools that is Python 3.9.6, below
-``requires-python`` (``>=3.10``, pyproject.toml), and the locked dependency
+``requires-python`` (``>=3.11``, pyproject.toml), and the locked dependency
 sets cannot install for it. Rather than ask the user to install a Python, the
 launcher has the pinned uv (``launcher_uv``, bootstrapped with pip, which runs
 on 3.9) install one pinned CPython into the plugin's data directory, then
@@ -25,8 +25,8 @@ import launcher_layout as _layout
 import launcher_uv as _uv
 from launcher_sets import MANAGED_PYTHON
 
-# source: pyproject.toml requires-python = ">=3.10"
-SUPPORTED = (3, 10)
+# source: pyproject.toml requires-python = ">=3.11"
+SUPPORTED = (3, 11)
 
 
 class InterpreterError(RuntimeError):
@@ -78,8 +78,7 @@ def provide(deps_dir: str) -> str:
     found = _uv_python(deps_dir, "find")
     if found.returncode:
         print(
-            f"[cortex-launcher] Python {sys.version.split()[0]} is older than "
-            f"{SUPPORTED[0]}.{SUPPORTED[1]}; installing Python {MANAGED_PYTHON} "
+            f"[cortex-launcher] installing managed Python {MANAGED_PYTHON} "
             f"into {managed_dir(deps_dir)}",
             file=sys.stderr,
         )

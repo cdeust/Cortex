@@ -7,14 +7,19 @@ from __future__ import annotations
 import re
 from xml.etree import ElementTree as ET
 
+from mcp_server.core.document_images import ImageMarkup, collect_images
 from mcp_server.core.document_model import (
+    DocumentAttachment,
     DocumentParseError,
     DocumentSection,
     DocumentTable,
     ParsedDocument,
+    drop_empty_preamble,
 )
 
 _W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+# source: ECMA-376 Part 1 §22.8 — the relationships namespace of r:embed / r:id.
+_R_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 _HEADING_RE = re.compile(r"^Heading\s*([1-9])$", re.IGNORECASE)
 
 
@@ -74,13 +79,14 @@ def _table_rows(tbl: ET.Element) -> DocumentTable:
     return DocumentTable(rows=rows)
 
 
-def _count_images(root: ET.Element) -> int:
-    """Count embedded images (``w:drawing`` + legacy ``w:pict``) in the whole document
-    — these are skipped, not ingested.
-
-    source: ADR-0163
-    """
-    return sum(1 for node in root.iter() if _local(node.tag) in ("drawing", "pict"))
+# source: ECMA-376 Part 1 §17.3.3.9 (drawing), §17.3.3.19 (pict) contain the
+# picture; §20.1.8.13 a:blip@r:embed and §14.1.2.11 v:imagedata@r:id name its
+# part. Other relationship ids under a drawing (a:hlinkClick@r:id in wp:docPr,
+# the picture's hyperlink) are never read.
+_DOCX_IMAGES = ImageMarkup(
+    containers=frozenset({"drawing", "pict"}),
+    leaves={"blip": f"{{{_R_NS}}}embed", "imagedata": f"{{{_R_NS}}}id"},
+)
 
 
 def parse_docx_xml(document_xml: str, *, title: str = "") -> ParsedDocument:
@@ -94,9 +100,10 @@ def parse_docx_xml(document_xml: str, *, title: str = "") -> ParsedDocument:
                    document order; heading paragraphs open new sections and
                    body paragraphs/tables attach to the current one. Text
                    before the first heading becomes a level-0 preamble
-                   section. ``image_count`` reflects every embedded image
-                   (skipped, never extracted). An empty document yields a
-                   single empty preamble section (``.is_empty()`` True).
+                   section. ``attachments`` lists every embedded image in
+                   document order (state ``unsupported``: never extracted).
+                   An empty document yields a single empty preamble
+                   section (``.is_empty()`` True).
     Raises:        :class:`DocumentParseError` on malformed XML — loud, so
                    the caller writes nothing (no partial silent ingest).
     """
@@ -113,6 +120,7 @@ def parse_docx_xml(document_xml: str, *, title: str = "") -> ParsedDocument:
     sections: list[DocumentSection] = [preamble]
     current = preamble
     resolved_title = title.strip()
+    attachments: list[DocumentAttachment] = []
 
     for child in body:
         name = _local(child.tag)
@@ -133,12 +141,12 @@ def parse_docx_xml(document_xml: str, *, title: str = "") -> ParsedDocument:
                 current.body = f"{current.body}\n{text}".strip()
         elif name == "tbl":
             current.tables.append(_table_rows(child))
+        collect_images(child, len(sections) - 1, _DOCX_IMAGES, attachments)
 
-    if not preamble.body.strip() and not preamble.tables and len(sections) > 1:
-        sections.remove(preamble)
+    sections, attachments = drop_empty_preamble(sections, attachments)
 
     return ParsedDocument(
         title=resolved_title or "Untitled document",
         sections=sections,
-        image_count=_count_images(root),
+        attachments=attachments,
     )

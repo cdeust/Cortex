@@ -23,15 +23,12 @@ from mcp_server.infrastructure.wiki_store import (
     WriteResult,
     safe_join,
 )
+from mcp_server.shared import gated_files
 
 
 def _atomic_write_bytes(target: Path, content: str) -> int:
     ensure_dir(target.parent)
-    tmp = target.with_suffix(target.suffix + ".tmp")
-    data = content.encode("utf-8")
-    tmp.write_bytes(data)
-    tmp.replace(target)
-    return len(data)
+    return len(gated_files.write_text(target, content))
 
 
 def append_section(

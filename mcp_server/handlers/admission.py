@@ -3,23 +3,26 @@
 Per-tool semaphore that bounds concurrency so one client cannot
 exhaust the pool or the thread executor by hammering a single tool.
 
-Usage (server registration wraps each handler):
-
-    from mcp_server.handlers.admission import admit
-
-    async def wrapped_handler(args):
-        async with admit("recall"):
-            return await original_handler(args)
+Tool calls go through ``run_admitted`` (``safe_handler``), which keeps the
+slot until the worker thread ends, even when the caller is cancelled
+(issue #728). ``admit`` holds a slot for the duration of a ``with`` block.
 
 source: ADR-0329"""
 
 from __future__ import annotations
 
 import asyncio
+import functools
+import logging
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
+from typing import Any, AsyncIterator, Callable, TypeVar
 
+from mcp_server.handlers import abandoned_work
 from mcp_server.handlers.latency_class import DEFAULT_SEMAPHORE, classify
+
+logger = logging.getLogger(__name__)
+
+T = TypeVar("T")
 
 # source: ADR-0329
 _OVERRIDES: dict[str, int] = {
@@ -71,6 +74,58 @@ async def admit(tool_name: str) -> AsyncIterator[None]:
     sem = _get_semaphore(tool_name)
     async with sem:
         yield
+
+
+async def run_admitted(tool_name: str, func: Callable[..., T], *args: Any) -> T:
+    """Run ``func(*args)`` on a worker thread inside the tool's admission budget.
+
+    The slot is released when the worker finishes, not when the caller stops
+    waiting: ``asyncio.to_thread`` cannot stop a running thread, so a cancelled
+    caller that released its slot let a new request start a worker beyond the
+    declared budget (issue #728: budget 4, four cancelled callers, a fifth
+    request made five active workers). A worker whose caller was cancelled is
+    counted in ``abandoned_work`` while it runs, and its outcome is logged and
+    counted when it ends.
+
+    source: issue #728"""
+    sem = _get_semaphore(tool_name)
+    await sem.acquire()
+    worker = asyncio.ensure_future(asyncio.to_thread(func, *args))
+    worker.add_done_callback(functools.partial(_release_slot, sem))
+    try:
+        return await asyncio.shield(worker)
+    except asyncio.CancelledError:
+        abandoned_work.record_abandoned(tool_name)
+        worker.add_done_callback(functools.partial(_log_abandoned, tool_name))
+        raise
+
+
+def _release_slot(sem: asyncio.Semaphore, _worker: asyncio.Future) -> None:
+    sem.release()
+
+
+def _log_abandoned(tool_name: str, worker: asyncio.Future) -> None:
+    """Report how a worker ended after its caller was cancelled.
+
+    Reading ``exception()`` here is what retrieves it: no caller awaits it.
+
+    source: issue #728"""
+    if worker.cancelled():
+        outcome: abandoned_work.Outcome = "cancelled"
+        text = "was cancelled"
+    elif worker.exception() is not None:
+        outcome = "raised"
+        text = f"raised {type(worker.exception()).__name__}"
+    else:
+        outcome = "completed"
+        text = "completed"
+    still_running = abandoned_work.record_ended(tool_name, outcome)
+    logger.warning(
+        "%s worker %s after its caller was cancelled (%d abandoned still running)",
+        tool_name,
+        text,
+        still_running,
+    )
 
 
 def current_budget(tool_name: str) -> int:

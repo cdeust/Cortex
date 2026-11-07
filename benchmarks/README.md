@@ -123,7 +123,10 @@ next to `<stem>.json`:
 - `<stem>.queries.jsonl` — one line per scored query: the retrieved items'
   ids, sources, scores, UTF-8 bytes, code points and sha256 (and the text,
   with `--query-log-content`). LongMemEval lines also carry the bytes of the
-  question's whole haystack.
+  question's whole haystack, its gold `answer_session_ids` and the question's
+  own `mrr` and `recall10`: the mean of those columns over the lines of one
+  `run` is the run's MRR and Recall@10, so the headline is recomputable from
+  the journal alone (`tests_py/benchmarks/test_longmemeval_journal_rows.py`).
 - `<stem>.phases.jsonl` — wall-clock start and end of every `ingest` and
   `recall` phase.
 

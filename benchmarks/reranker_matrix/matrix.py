@@ -12,15 +12,17 @@ import uuid
 
 from benchmarks.reranker_matrix.cache import durable_root, verify
 from benchmarks.reranker_matrix.pins import cell
+from mcp_server.shared.platform import resolve_bash
 
 # source: ADR-0863
 CELLS = ("l12-3x", "l12-2x", "l2-3x", "l2-2x")
 
 
 def commands(output: Path) -> list[list[str]]:
+    bash = resolve_bash()  # source: ADR-1101
     return [
         [
-            "bash",
+            bash,
             "benchmarks/reproduce.sh",
             "--no-ablation",
             "--reranker-cell",

@@ -36,8 +36,8 @@ PYPROJECT_TOML = REPO_ROOT / "pyproject.toml"
 
 # The `sqlite = [...]` TOML array under [project.optional-dependencies]:
 # captures its bracketed body across lines. Not a general TOML parser --
-# `tomllib` is 3.11+ and this repo's floor is 3.10 (pyproject.toml
-# requires-python); pyproject.toml's own [sqlite] extra is a short,
+# This bootstrap utility also runs before the managed Python is selected.
+# pyproject.toml's own [sqlite] extra is a short,
 # single-key array, so a scoped regex avoids a version-gated stdlib import
 # or a new third-party dependency for one list.
 _SQLITE_EXTRA_RE = re.compile(r"^sqlite\s*=\s*\[(.*?)\]", re.MULTILINE | re.DOTALL)

@@ -10,8 +10,6 @@ import ast
 from datetime import datetime, timezone
 import os
 from pathlib import Path
-import sys
-from types import ModuleType
 from unittest.mock import Mock, patch
 
 import pytest
@@ -108,21 +106,13 @@ def test_session_start_disables_jit_on_its_connection_without_environment_change
         namespace,
     )
     environment = dict(os.environ)
+    from mcp_server.infrastructure import db_connect
+
+    # the hook connects through the gated factory (ADR-1110)
     connect = Mock()
-
-    class Connection:
-        @classmethod
-        def __class_getitem__(cls, row_type):
-            return cls
-
-    Connection.connect = connect
-    driver = ModuleType("psycopg")
-    driver.Connection = Connection
-    rows = ModuleType("psycopg.rows")
-    rows.DictRow = dict
-    rows.dict_row = Mock()
-    with patch.dict(sys.modules, {"psycopg": driver, "psycopg.rows": rows}):
+    with patch.object(db_connect, "pg_connect", connect):
         assert namespace["_connect_pg"]() is connect.return_value
+    assert connect.call_args.args[0] == "postgresql://test.invalid/banner"
     assert connect.call_args.kwargs["options"] == "-c jit=off"
     assert connect.call_args.kwargs["autocommit"] is True
     assert dict(os.environ) == environment

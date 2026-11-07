@@ -26,6 +26,14 @@ python3 "<installed-plugin>/scripts/runtime.py" setup
 The dispatcher checks the wheel version and isolates Python imports. Hooks
 never resolve dependencies or compile packages.
 
+Storage: when the Claude Code plugin on the same account runs its own
+PostgreSQL server (`~/.claude/methodology/backend.json` says `managed`), the
+Codex server and hooks attach to that same server, so both hosts share one
+store; it is started when neither host has it running and stopped when the
+last process using it exits (ADR-1114). If the Claude Code plugin's binaries
+were removed, run `claude --init-only` once to reinstall them; the memories in
+`~/.claude/methodology/managed-pg/` are kept.
+
 ## What it exposes
 
 `.mcp.json` starts `hypermnesia-mcp` over stdio with no `--profile` flag, so

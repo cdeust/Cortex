@@ -9,26 +9,23 @@ source: ADR-1096 (Windows; POSIX: ADR-0597)"""
 
 from __future__ import annotations
 
-import json
 import os
-import subprocess
-import tempfile
 import time
 from pathlib import Path
 
+from mcp_server.shared.private_paths import cortex_cache_dir
 from mcp_server.infrastructure import process_ancestry
+from mcp_server.infrastructure.posix_ps import ps_output as _ps
 from mcp_server.infrastructure.file_io import read_json
 from mcp_server.shared import platform as host_platform
 from mcp_server.shared.process_liveness import pid_alive as _pid_alive
+from mcp_server.shared import gated_files
 
 # source: ADR-0597
 _SCHEMA_VERSION = 1
 
 # source: ADR-0597
 _MAX_ANCESTOR_DEPTH = 15
-
-# source: ADR-0597
-_PS_TIMEOUT_S = 1.0
 
 # source: ADR-0597
 _PPID_COMM_PARTS = 2
@@ -38,7 +35,7 @@ def registry_dir() -> Path:
     """Return the session registry directory.
 
     source: ADR-0597"""
-    return Path.home() / ".cache" / "cortex" / "session-registry"
+    return cortex_cache_dir() / "session-registry"  # source: ADR-1112
 
 
 def registry_path(claude_pid: int) -> Path:
@@ -69,24 +66,6 @@ def _cached_process_start_signature(pid: int) -> str | None:
     return sig
 
 
-def _ps(columns: str, pid: int) -> str | None:
-    """stdout of POSIX ``ps -o <columns> -p <pid>``; None when it cannot run.
-
-    The encoding is named: ``ps`` runs under a UTF-8 locale (PEP 540)."""
-    try:
-        out = subprocess.run(
-            ["ps", "-o", columns, "-p", str(pid)],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            timeout=_PS_TIMEOUT_S,
-            check=False,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return None
-    return out.stdout
-
-
 def _process_start_signature(pid: int) -> str | None:
     """Opaque per-process start-time token.
 
@@ -108,7 +87,7 @@ def _process_start_signature(pid: int) -> str | None:
 
 def _ppid_and_comm(pid: int) -> tuple[int, str] | None:
     """One ancestor-walk step: ``(parent pid, comm)`` of ``pid``, or
-    None on any probe failure (dead pid, unsupported platform)."""
+    None for an empty or malformed result; OSError on a failed ps probe."""
     parts = (_ps("ppid=,comm=", pid) or "").strip().split(None, 1)
     if len(parts) != _PPID_COMM_PARTS:
         return None
@@ -121,12 +100,14 @@ def _ppid_and_comm(pid: int) -> tuple[int, str] | None:
 
 def find_claude_ancestor(max_depth: int = _MAX_ANCESTOR_DEPTH) -> int | None:
     """Walk ancestors from os.getppid() and return the nearest process named
-    claude. Return None on probe failure, reaching a root process, or exhausting
-    max_depth. Intended for hook processes.
+    claude. Return None for no match, reaching a root process, or exhausting
+    max_depth. A failed process-table probe raises OSError for caller logging.
 
-    source: ADR-1096 (Windows branch; POSIX: ADR-0597)"""
+    On Windows ``CLAUDE_PID`` is tried before the walk (ADR-1124).
+
+    source: ADR-1096 (Windows branch; CLAUDE_PID first: ADR-1124; POSIX: ADR-0597)"""
     if host_platform.IS_WINDOWS:
-        return process_ancestry.claude_ancestor_pid(os.getpid(), max_depth)
+        return process_ancestry.window_claude_pid(os.getpid(), max_depth)
     pid = os.getppid()
     for _ in range(max_depth):
         info = _ppid_and_comm(pid)
@@ -146,15 +127,7 @@ def _atomic_write(path: Path, payload: dict) -> bool:
 
     source: ADR-0597"""
     try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        fd, tmp = tempfile.mkstemp(prefix=path.name + ".tmp.", dir=str(path.parent))
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump(payload, f)
-        except Exception:
-            os.unlink(tmp)
-            raise
-        os.replace(tmp, path)
+        gated_files.write_json(path, payload, mode=0o600)
     except OSError:
         return False
     return True

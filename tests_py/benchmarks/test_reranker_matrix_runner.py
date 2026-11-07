@@ -5,6 +5,10 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import subprocess
+from mcp_server.shared.platform import resolve_bash
+
+# A bare "bash" on Windows is the System32 WSL stub. source: ADR-1101
+BASH = resolve_bash()
 
 
 def run_driver(tmp_path: Path, flags: list[str]):
@@ -23,7 +27,7 @@ def run_driver(tmp_path: Path, flags: list[str]):
         W4_DOCKER_MARKER=str(tmp_path / "docker-called"),
     )
     return subprocess.run(
-        ["bash", "benchmarks/reproduce.sh", *flags],
+        [BASH, "benchmarks/reproduce.sh", *flags],
         env=environment,
         capture_output=True,
         text=True,

@@ -7,13 +7,15 @@ Protected memories require explicit force=True to remove.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any
 
 from mcp_server.core.gist_extraction import parse_artifact_pointer
 from mcp_server.infrastructure.artifact_gc import delete_artifact_if_unreferenced
 from mcp_server.infrastructure.memory_config import get_memory_settings
+from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
-from mcp_server.infrastructure.pg_store_wiki import delete_claims_for_memory
+from mcp_server.infrastructure.wiki_memory_pages import remove_derived_pages
 from mcp_server.handlers._tool_meta import DESTRUCTIVE
 from mcp_server.handlers._telemetry_wrap import instrument
 
@@ -119,45 +121,47 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
             "artifact_deleted": False,
         }
 
-    # source: ADR-0392
-    artifact_path = parse_artifact_pointer(mem.get("content") or "")
+    # source: ADR-0392 — compression keeps the original in original_content
+    artifact_paths = {
+        parse_artifact_pointer(mem.get(field) or "")
+        for field in ("content", "original_content")
+    } - {None}
 
-    # Wiki claims must go BEFORE the row: wiki.claim_events.memory_id is
-    # ON DELETE SET NULL (infrastructure/pg_schema.py), so once the memory row
-    # is deleted the claim survives with a NULL link and can no longer be
-    # found by memory_id at all.
-    claims_deleted = _delete_derived_claims(store, memory_id)
-
-    deleted = store.delete_memory(memory_id)
-
-    # source: ADR-0392
-    artifact_deleted = (
-        delete_artifact_if_unreferenced(store._conn, artifact_path)
-        if deleted
-        else False
-    )
+    # source: ADR-1111 — one transaction over every copy; raises, never partial
+    report = store.erase_memory(memory_id)
+    pages_removed, artifact_deleted = 0, False
+    if report.deleted:
+        # after the commit: a failure here is residue, not "nothing erased"
+        pages_removed = report.after_commit(
+            "pages",
+            lambda: remove_derived_pages(Path(WIKI_ROOT), memory_id, report.page_paths),
+            0,
+        )
+        artifact_deleted = report.after_commit(
+            "artifact",
+            lambda: any(
+                [
+                    delete_artifact_if_unreferenced(store._conn, p)
+                    for p in artifact_paths
+                ]
+            ),
+            False,
+        )
 
     return {
-        "deleted": deleted,
+        "deleted": report.deleted,
         "method": "hard",
         "memory_id": memory_id,
         "content_preview": mem["content"][:80],
         "artifact_deleted": artifact_deleted,
-        "claims_deleted": claims_deleted,
+        "claims_deleted": report.counts.get("claims", 0),
+        "erased": report.counts,
+        "pages_removed": pages_removed,
+        "fts_method": report.fts_method,
+        "wal_truncated": report.wal_truncated,
+        "complete": report.complete,
+        "residue": report.residue,
     }
-
-
-def _delete_derived_claims(store: MemoryStore, memory_id: int) -> int:
-    """Remove wiki claim_events derived from ``memory_id``; return the count.
-
-    source: ADR-0392"""
-    try:
-        return int(delete_claims_for_memory(store._conn, memory_id))
-    except Exception as exc:  # noqa: BLE001 — mechanism boundary, see docstring
-        logger.warning(
-            "wiki claims for memory %s could not be removed: %s", memory_id, exc
-        )
-        return 0
 
 
 # source: ADR-0392

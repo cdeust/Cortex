@@ -28,10 +28,10 @@ class TestMaintenanceUrl:
             == "postgresql://host:5432/postgres"
         )
 
-    def test_drops_any_query_string(self) -> None:
+    def test_preserves_connection_options(self) -> None:
         assert (
             throwaway.maintenance_url("postgresql://host/cortex_test?sslmode=require")
-            == "postgresql://host/postgres"
+            == "postgresql://host/postgres?sslmode=require"
         )
 
     def test_query_string_is_removed_before_finding_the_last_slash(self) -> None:
@@ -40,7 +40,7 @@ class TestMaintenanceUrl:
         has to happen BEFORE the "/" rpartition, not after."""
         assert (
             throwaway.maintenance_url("postgresql://host/cortex_test?options=/tmp/foo")
-            == "postgresql://host/postgres"
+            == "postgresql://host/postgres?options=/tmp/foo"
         )
 
 

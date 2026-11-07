@@ -36,6 +36,7 @@ from mcp_server.hooks._telemetry import observe_hook
 from mcp_server.hooks.output_streams import use_utf8_output
 from mcp_server.hooks.session_start_background import (
     _auto_wire_pipeline,
+    _maybe_background_prune_graphs,
     _maybe_background_reanalyze,
     _refresh_session_registry,
 )
@@ -63,6 +64,7 @@ from mcp_server.hooks.session_start_fetch import (
 )
 from mcp_server.hooks.session_start_sources import _print_external_sources
 from mcp_server.hooks.session_start_sqlite import _backend_is_sqlite, _sqlite_context
+from mcp_server.shared.private_paths import harden_at_startup
 from mcp_server.shared.injection_markers import session_id_from_transcript
 from mcp_server.shared.project_scope import resolve_project_root
 
@@ -146,6 +148,9 @@ def main() -> None:
 def _session_start() -> str:
     """Print the context block; return the status line."""
 
+    # source: ADR-1112 — existing installs become owner-only
+    harden_at_startup()
+
     # source: ADR-0498
     event = _read_event()
 
@@ -159,6 +164,9 @@ def _session_start() -> str:
 
     # source: ADR-0498
     _maybe_background_reanalyze(project_root, _lookup_cached_graph_path)
+
+    # source: issue #711
+    _maybe_background_prune_graphs()
 
     # source: ADR-0498
     _maybe_background_consolidate()

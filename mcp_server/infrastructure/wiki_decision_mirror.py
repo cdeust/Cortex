@@ -6,6 +6,7 @@ from pathlib import Path
 
 from mcp_server.infrastructure.project_wiki import contained_file, load_manifest
 from mcp_server.infrastructure.wiki_decision_index import decision_index
+from mcp_server.shared import gated_files
 
 
 def mirror_bytes(identifier: str, source: str, content: bytes) -> bytes:
@@ -81,9 +82,6 @@ def generate_mirror(project_root: Path) -> dict[str, object]:
         target = contained_file(project_root.resolve(), "docs/adr/" + name)
         if target.exists() and target.read_bytes() == content:
             continue
-        target.parent.mkdir(parents=True, exist_ok=True)
-        temporary = contained_file(project_root.resolve(), "docs/adr/" + name + ".tmp")
-        temporary.write_bytes(content)
-        temporary.replace(target)
+        gated_files.write_bytes(target, content)
         changed.append(name)
     return {"mirror_pages": len(expected), "mirror_changed": changed}

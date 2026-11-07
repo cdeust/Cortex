@@ -11,10 +11,13 @@ import os
 from pathlib import Path
 
 from mcp_server.hooks.session_start_common import _DATABASE_URL, _PLUGIN_ROOT, _log
+from mcp_server.infrastructure.config import CLAUDE_PROJECTS_DIR
 
 
 def _try_setup_db() -> dict | None:
     """Run setup_db.py and return its result, or None on failure."""
+    if not _DATABASE_URL:
+        return None
     setup_script = (
         Path(__file__).resolve().parent.parent.parent / "scripts" / "setup_db.py"
     )
@@ -42,19 +45,15 @@ def _try_setup_db() -> dict | None:
 
 
 def _connect_pg():
-    """Try to connect to PostgreSQL. Returns connection or None."""
+    """Try configured PostgreSQL. Returns connection or None."""
+    if not _DATABASE_URL:
+        return None
     try:
-        import psycopg  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
-        from psycopg.rows import DictRow, dict_row  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
+        from mcp_server.infrastructure.db_connect import pg_connect  # noqa: PLC0415 — optional dependency ([postgresql] extra); imported where used so environments without it keep working
 
         # source: docs/verification/codex-session-start-query-20261002.md
         # The short-lived hook cannot amortize JIT compilation for banner SQL.
-        return psycopg.Connection[DictRow].connect(
-            _DATABASE_URL,
-            row_factory=dict_row,
-            autocommit=True,
-            options="-c jit=off",
-        )
+        return pg_connect(_DATABASE_URL, autocommit=True, options="-c jit=off")
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"PostgreSQL connect failed: {exc}")
         return None
@@ -114,8 +113,8 @@ def _count_memories(conn) -> int:
 
 
 def _count_session_files() -> int:
-    """Count JSONL session files in ~/.claude/projects/."""
-    projects_dir = Path.home() / ".claude" / "projects"
+    """Count JSONL session files under the host's transcript root."""
+    projects_dir = CLAUDE_PROJECTS_DIR
     if not projects_dir.exists():
         return 0
     count = 0

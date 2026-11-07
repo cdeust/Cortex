@@ -31,7 +31,6 @@ LOCK = tomllib.loads((REPO / "uv.lock").read_text(encoding="utf-8"))
 PYPROJECT = tomllib.loads((REPO / "pyproject.toml").read_text(encoding="utf-8"))
 UV_PINS = (
     ".github/actions/uv-locked-install/action.yml",
-    ".github/workflows/ci.yml",
     ".github/workflows/release.yml",
 )
 UV_IMAGES = (
@@ -40,6 +39,9 @@ UV_IMAGES = (
     ".devcontainer/Dockerfile",
     ".clusterfuzzlite/Dockerfile",
 )
+
+
+PYTHON_IMAGES = ("Dockerfile", "docker/Dockerfile", ".devcontainer/Dockerfile")
 
 
 def _registry_packages() -> list[dict]:
@@ -71,6 +73,35 @@ def test_images_copy_the_uv_the_launcher_bootstraps(path: str) -> None:
     text = (REPO / path).read_text(encoding="utf-8")
     tags = re.findall(r"COPY --from=ghcr\.io/astral-sh/uv:([^@\s]+)@sha256:", text)
     assert tags == [launcher_uv.UV_VERSION]
+
+
+def _installs_on(wheel_url: str, minor: str) -> bool:
+    py, abi, _platform = wheel_url.rsplit("/", 1)[-1][: -len(".whl")].split("-")[-3:]
+    if "py3" in py.split(".") or (py == f"cp{minor}" and abi == f"cp{minor}"):
+        return True
+    return abi == "abi3" and py.startswith("cp3") and int(py[2:]) <= int(minor)
+
+
+@pytest.mark.parametrize("path", PYTHON_IMAGES)
+def test_images_run_a_python_every_locked_wheel_ships_for(path: str) -> None:
+    """A binary-only package without a wheel for the image's Python stops ``uv sync``.
+
+    psycopg-binary 3.3.5 ships no sdist and no cp315 wheel (Dependabot PR #849)."""
+    text = (REPO / path).read_text(encoding="utf-8")
+    minors = set(re.findall(r"^FROM python:3\.(\d+)-", text, re.MULTILINE))
+    assert len(minors) == 1, minors
+    minor = f"3{minors.pop()}"
+    missing = [
+        f"{package['name']}=={package['version']}"
+        for package in _registry_packages()
+        if "sdist" not in package
+        for linux in [
+            [w["url"] for w in package.get("wheels", [])
+             if re.search(r"manylinux[^/]*x86_64\.whl$", w["url"])]
+        ]
+        if linux and not any(_installs_on(url, minor) for url in linux)
+    ]  # fmt: skip
+    assert missing == []
 
 
 def _group(name: str) -> list[str]:

@@ -34,10 +34,15 @@ from mcp_server.infrastructure.sqlite_schema import (
     MEMORIES_VEC_DDL,
     MIGRATIONS,
     POST_MIGRATION_INDEXES_DDL,
+    POST_MIGRATION_REPAIRS_DDL,
+    SUPERSESSION_DELETE_TRIGGER_DDL,
+    SUPERSESSION_REPAIRS,
     get_all_ddl,
 )
 from mcp_server.infrastructure.sqlite_store_auxiliary import SqliteAuxiliaryMixin
 from mcp_server.infrastructure.sqlite_store_entities import SqliteEntityMixin
+from mcp_server.infrastructure.sqlite_store_erasure import SqliteErasureMixin
+from mcp_server.infrastructure.sqlite_store_exact import SqliteExactMixin
 from mcp_server.infrastructure.sqlite_store_entity_merge import (
     SqliteEntityMergeMixin,
 )
@@ -57,6 +62,7 @@ from mcp_server.infrastructure.sqlite_store_spread import SqliteSpreadActivation
 from mcp_server.infrastructure.sqlite_store_stats import SqliteStatsMixin
 from mcp_server.observability import silent_failure
 from mcp_server.shared.code_tokenize import augment_content
+from mcp_server.shared.redaction_gate import redact_text
 from mcp_server.infrastructure.embedding_engine import current_embedding_mode
 from mcp_server.infrastructure.team_scope_backfill import (
     TEAM_DECISION_BACKFILL_SQLITE,
@@ -74,7 +80,7 @@ def _fts_augment(content: str) -> str:
 
     source: ADR-0605"""
 
-    return augment_content(content or "")
+    return augment_content(redact_text(content or ""))  # source: ADR-1110
 
 
 _json_codec_registered = False
@@ -100,7 +106,9 @@ _CHAIN_HEAD_MAX_DEPTH = 100_000
 
 
 class SqliteMemoryStore(
+    SqliteExactMixin,
     SqliteEntityMixin,
+    SqliteErasureMixin,
     SqliteEntityMergeMixin,
     SqliteRelationshipMixin,
     SqliteQueryMixin,
@@ -143,8 +151,12 @@ class SqliteMemoryStore(
                 logger.debug("DDL statement skipped: %s", exc)
         self._run_migrations()
         # Indexes over migrated columns (ADR-1109).
-        for ddl in POST_MIGRATION_INDEXES_DDL:
+        for ddl in (*POST_MIGRATION_REPAIRS_DDL, *POST_MIGRATION_INDEXES_DDL):
             self._conn.execute(ddl)
+        # source: ADR-9852 — columns and indexes must exist before the repair.
+        self._conn.execute(SUPERSESSION_DELETE_TRIGGER_DDL)
+        for repair in SUPERSESSION_REPAIRS:
+            self._conn.execute(repair)
         # source: ADR-0605
         self._conn.execute(CURRENT_MEMORIES_VIEW_DDL)
         self._conn.commit()

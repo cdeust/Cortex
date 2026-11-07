@@ -38,13 +38,22 @@ verbatim (the caller has taken responsibility for isolation).
 from __future__ import annotations
 
 import os
+from urllib.parse import unquote
 
 
 def maintenance_url(url: str) -> str:
     """Same host/creds as `url`, database swapped to the `postgres` maintenance DB."""
-    base, _, _query = url.partition("?")
+    base, _, query = url.partition("?")
     prefix, _, _dbname = base.rpartition("/")
-    return f"{prefix}/postgres"
+    # Query host/service/TLS settings are part of the original endpoint.
+    # Only dbname must change; libpq lets that parameter override the URI path.
+    params = [
+        part
+        for part in query.split("&")
+        if unquote(part.partition("=")[0], errors="strict") != "dbname"
+    ]
+    suffix = "?" + "&".join(params) if query and params else ""
+    return f"{prefix}/postgres{suffix}"
 
 
 def _orphan_pid(name: str) -> int | None:

@@ -8,11 +8,14 @@ import html.entities
 import re
 from xml.etree import ElementTree as ET
 
+from mcp_server.core.document_images import ImageMarkup, collect_images
 from mcp_server.core.document_model import (
+    DocumentAttachment,
     DocumentParseError,
     DocumentSection,
     DocumentTable,
     ParsedDocument,
+    drop_empty_preamble,
 )
 
 _XML_BUILTIN_ENTITIES = {"amp", "lt", "gt", "quot", "apos"}
@@ -64,8 +67,19 @@ def _table_of(table: ET.Element) -> DocumentTable:
     return DocumentTable(rows=rows)
 
 
-def _count_images(root: ET.Element) -> int:
-    return sum(1 for node in root.iter() if _local(node.tag) in ("image", "img"))
+# source: Confluence storage format — an <ac:image> holds a ri:attachment
+# (ri:filename) or ri:url (ri:value) naming the image; an XHTML <img> names it
+# by src, inside or outside an <ac:image>. The ri: prefix is bound to urn:ri
+# by _WRAP_OPEN.
+_CONFLUENCE_IMAGES = ImageMarkup(
+    containers=frozenset({"image"}),
+    leaves={
+        "attachment": "{urn:ri}filename",
+        "url": "{urn:ri}value",
+        "img": "src",
+    },
+    standalone=frozenset({"img"}),
+)
 
 
 def parse_confluence_storage(xhtml: str, *, title: str = "") -> ParsedDocument:
@@ -80,8 +94,9 @@ def parse_confluence_storage(xhtml: str, *, title: str = "") -> ParsedDocument:
                    ``<h1>``..``<h6>`` open sections, ``<p>`` bodies and
                    ``<table>``s attach to the current section, and text
                    before the first heading is a level-0 preamble.
-                   ``image_count`` counts every ``<ac:image>``/``<img>``
-                   (skipped). An empty fragment yields an empty document.
+                   ``attachments`` lists every ``<ac:image>``/``<img>``
+                   in document order (state ``unsupported``). An empty
+                   fragment yields an empty document.
     Raises:        :class:`DocumentParseError` on malformed XHTML — loud, so
                    the caller writes nothing.
     """
@@ -95,6 +110,7 @@ def parse_confluence_storage(xhtml: str, *, title: str = "") -> ParsedDocument:
     sections: list[DocumentSection] = [preamble]
     current = preamble
     resolved_title = title.strip()
+    attachments: list[DocumentAttachment] = []
 
     for node in root:
         name = _local(node.tag)
@@ -112,12 +128,12 @@ def parse_confluence_storage(xhtml: str, *, title: str = "") -> ParsedDocument:
             text = _text_of(node)
             if text:
                 current.body = f"{current.body}\n{text}".strip()
+        collect_images(node, len(sections) - 1, _CONFLUENCE_IMAGES, attachments)
 
-    if not preamble.body.strip() and not preamble.tables and len(sections) > 1:
-        sections.remove(preamble)
+    sections, attachments = drop_empty_preamble(sections, attachments)
 
     return ParsedDocument(
         title=resolved_title or "Untitled page",
         sections=sections,
-        image_count=_count_images(root),
+        attachments=attachments,
     )

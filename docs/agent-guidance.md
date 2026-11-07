@@ -12,7 +12,7 @@ are loaded on demand by the host's skills and agents.
 # Cortex — Persistent Memory MCP Server
 
 Persistent memory and cognitive profiling MCP server for Claude Code.
-Python 3.10+, FastMCP, Pydantic, numpy. Storage: SQLite by default
+Python 3.11+, FastMCP, Pydantic, numpy. Storage: SQLite by default
 (plugin installs, `.mcpb`/Cowork sandboxed launches) or
 PostgreSQL+pgvector as the opt-in upgrade (`install-plugin.sh
 --postgres`, CLI/dev mode, team databases) — see `PRIVACY.md` for the
@@ -34,7 +34,8 @@ coding write gates, causal graphs, and intent-aware retrieval.
   resolving from the `pyproject.toml` ranges instead gives you versions CI never
   had (issue #253).
 - Environment preflight: `python -m mcp_server.doctor` (backend-aware check list, fix message per check)
-- Tests: `pytest` (full suite — current count: `assets/badge-tests.svg`, or run `pytest --collect-only -q`) · `pytest tests_py/core/` (one layer) · `pytest --cov=mcp_server --cov-report=term-missing`- Lint BEFORE every commit: `ruff check && ruff format --check` — the CI enforces **both**; passing only `ruff check` is not enough.
+- Tests: `pytest` (full suite, current count: `assets/badge-tests.svg`, or run `pytest --collect-only -q`) · `pytest tests_py/core/` (one layer) · `pytest --cov=mcp_server --cov-report=term-missing`.
+- Lint before every commit: `ruff check && ruff format --check`. Run both commands locally.
 - Type gate (pyright, zero-diagnostic): resolve its environment from `uv.lock`
   (`uv sync --no-default-groups --extra … --group typecheck`), never from the
   `pyproject.toml` ranges — a range-resolved env reads a different type surface
@@ -46,11 +47,6 @@ coding write gates, causal graphs, and intent-aware retrieval.
   same-machine checks against it drift ±0.003 on LoCoMo MRR intra-day
   (measured 2026-07-14, `benchmarks/results/repro/20260714-floors-rebaseline/`)
   and nearly false-failed a floor that passes cleanly under `reproduce.sh`.
-  The published `FLOOR_*` check inside `reproduce.sh` is non-blocking
-  (source: main no longer clears them — see the script's own `FLOOR_*`
-  comment, cdeust/Cortex PR #492): gate a PR with `--no-regression` instead,
-  which fails only if HEAD is worse than its own `--baseline-ref` (default
-  `origin/main`), not against a published number nothing currently clears.
 - Iteration benchmarks: `python3 benchmarks/{longmemeval,locomo,beam}/run_benchmark.py`
   ⚠ Consolidation is OFF by default → scores collapse to ≈0%. This is a
   harness artifact (every candidate is prefiltered by the read-path heat
@@ -121,23 +117,19 @@ separate **cortex-viz** MCP (reads this same store read-only).
 - **Enforced by `scripts/check_craftsmanship.py`**, run in CI on every push
   and PR (`.github/workflows/ci.yml`, `craftsmanship` job) and locally via
   `python scripts/check_craftsmanship.py`. It checks the four rules above,
-  by AST, on the files a diff touches — never the whole repository. The
-  layer whitelist is *parsed* from `docs/module-inventory.md`'s own table
-  at run time (`scripts/craftsmanship_layer_table.py`), never a second
-  hardcoded copy that could silently diverge from it.
-  The comparison baseline is read via `git show <base-ref>:.craftsmanship-baseline.json`
-  — the PR's BASE ref, immutable to the PR's own commits — never the
-  working tree: a working-tree-only baseline is self-service (add a
-  violation, run `--write-baseline` in the same tree, the gate would pass
-  on it — this exact exploit is reproduced and closed in
-  `tests_py/scripts/test_check_craftsmanship.py::SneakyLimitExploitTests`).
-  The gate fails the diff on: any violation absent from that base-ref
-  baseline (new debt); any base-ref-baselined entry whose violation no
-  longer reproduces (fixed but not pruned); or any entry present in the
-  working-tree `.craftsmanship-baseline.json` but absent from the base
-  ref's (the file may only SHRINK within a PR — an addition is refused
-  outright, matched or not, because debt discovered mid-PR gets fixed at
-  the source, not grandfathered). Regenerate with
+  by AST, on every tracked `.py` file. The layer whitelist is *parsed* from
+  `docs/module-inventory.md`'s own table at run time
+  (`scripts/craftsmanship_layer_table.py`), never a second hardcoded copy
+  that could silently diverge from it.
+  The comparison baseline is the `.craftsmanship-baseline.json` committed in
+  the SAME tree as the code measured: the measure of the working tree must
+  be at most that baseline. No ref is read, so what `main` holds, or when it
+  moved, cannot change the verdict (reproduced in
+  `tests_py/scripts/test_check_craftsmanship_exploits.py::RatchetBehaviourTests`).
+  The gate fails on: any violation absent from that baseline (new debt,
+  including one whose baseline line was hand-deleted); or any baseline entry
+  whose violation no longer reproduces (fixed but not pruned — a PR that
+  improves the measure lowers the baseline in its own diff). Regenerate with
   `python scripts/check_craftsmanship.py --write-baseline` only to prune
   entries whose violations you actually fixed. Previously "enforced by
   code review today; no automated pre-commit hook checks this yet" (issue
@@ -147,6 +139,26 @@ separate **cortex-viz** MCP (reads this same store read-only).
   `wiki_classifier.py`, `wiki_schema_loader.py`, found 2026-07-14 during
   #114) now live in the baseline like any other pre-existing debt, not as
   separate prose here.
+
+## Review rounds
+
+Owner rule 2026-11-04 (ADR-1119): three Claude reviews per PR, at most. PR 856
+took 20 because 22 of 24 reviews said "nothing blocks merge" and each was still
+answered with a push, which started the next review.
+
+- Push on a **Blocker** only: a defect traced or reproduced in the diff that
+  makes CI, security or a CLAUDE.md non-negotiable wrong. A Note (wording,
+  docstring, wrap width, an extra assertion) is not a reason to push.
+- Fix every Blocker of a round in **one** push. Do not push once per finding.
+- Post no "pushed X for the review" comment. The commit message is the record.
+- Keep a PR to its stated object. A test added to answer a Low finding is new
+  surface for the next review: do not add it.
+- After the third review the PR is not reviewed again. The accepted part
+  merges. Whatever is not accepted does not enter: cut it from the PR and open a
+  refinement PR, which has a new budget of three. The label `claude-rereview`
+  allows exactly one more review (a fourth, never a fifth) and belongs to the owner.
+- A PR that edits `claude-review.yml` is not reviewed by the action (it refuses
+  a workflow that differs from main). Keep such a PR minimal.
 
 ## What NOT to do
 
@@ -165,7 +177,7 @@ separate **cortex-viz** MCP (reads this same store read-only).
   `--worktree`) puts them and the directory its cleanup sweep looks at.
   Owner correction 2026-09-08, after 76 outside worktrees (43 detached + 33 on
   branches, all under `/private/tmp/cortex-green-*`) had to be removed by hand.
-  `scripts/spawn-agent.sh` and `benchmarks/lib/bench_regression.sh` follow this.
+  `scripts/spawn-agent.sh` follows this.
 
 ## Scientific Implementation Standard (Zetetic Principle)
 

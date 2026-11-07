@@ -21,6 +21,8 @@ from mcp_server.handlers._tool_meta import READ_ONLY
 from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import get_shared_store
+from mcp_server.shared.domain_mapping import resolve_cwd
+from mcp_server.shared.domain_mapping import resolve_domain as resolve_hint
 
 logger = logging.getLogger(__name__)
 
@@ -125,37 +127,48 @@ def _is_noise_memory(memory: dict) -> bool:
 def _get_hot_memories(
     domain: str, directory: str, limit: int = 10
 ) -> list[dict[str, Any]]:
-    """Retrieve hottest memories for this domain/directory context."""
+    """Retrieve hot memories; failures after opening the store propagate."""
     store = _try_get_memory_store()
     if store is None:
         return []
 
-    try:
-        if domain:
-            mems = store.get_memories_for_domain(domain, min_heat=0.1, limit=limit)
-        elif directory:
-            mems = store.get_memories_for_directory(directory, min_heat=0.1)[:limit]
-        else:
-            mems = store.get_hot_memories(min_heat=0.3, limit=limit)
+    if domain:
+        mems = store.get_memories_for_domain(domain, min_heat=0.1, limit=limit)
+    elif directory:
+        mems = store.get_memories_for_directory(directory, min_heat=0.1)[:limit]
+    else:
+        mems = store.get_hot_memories(min_heat=0.3, limit=limit)
 
-        return [
-            {
-                # id ships so items truncated by the response budget stay
-                # retrievable in full via recall(memory_id=...).
-                "id": m.get("id"),
-                "content": m["content"],
-                "heat": round(m.get("heat", 0), 4),
-                "domain": m.get("domain", ""),
-                "tags": _normalize_tags(m.get("tags", [])),
-                "importance": m.get("importance", 0.5),
-                "created_at": m.get("created_at", ""),
-            }
-            for m in mems
-            if not _is_noise_memory(m)
-        ]
-    except Exception as e:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
-        logger.debug("Failed to retrieve hot memories: %s", e)
-        return []
+    return [
+        {
+            # id ships so items truncated by the response budget stay
+            # retrievable in full via recall(memory_id=...).
+            "id": m.get("id"),
+            "content": m["content"],
+            "heat": round(m.get("heat", 0), 4),
+            "domain": m.get("domain", ""),
+            "tags": _normalize_tags(m.get("tags", [])),
+            "importance": m.get("importance", 0.5),
+            "created_at": m.get("created_at", ""),
+        }
+        for m in mems
+        if not _is_noise_memory(m)
+    ]
+
+
+def _memory_scope(cwd: str, profile_domain: str) -> str:
+    """The domain ``remember`` writes a memory under for this session.
+
+    ``detect_domain`` returns a cognitive-profile id, not a memory scope.
+    ``remember`` without an explicit domain writes under ``resolve_cwd(cwd)``
+    and, outside a known repository, under the detected profile resolved as a
+    hint (``remember._resolve_domain``). Reading hot memories under the raw
+    profile id listed a scope no write used whenever the two differ. Without
+    a ``cwd`` the profile (detected from ``project`` or ``first_message``) is
+    resolved as a hint too; no profile gives no domain.
+
+    source: issue #721; ADR-0647"""
+    return resolve_cwd(cwd) or resolve_hint(profile_domain)
 
 
 def _get_fired_triggers(directory: str, first_message: str) -> list[dict[str, Any]]:
@@ -318,7 +331,7 @@ async def handler(args: dict | None = None) -> dict:
 
     domain_id = detection.get("domain")
     profile = profiles.get("domains", {}).get(domain_id) if domain_id else None
-    hot_memories = _get_hot_memories(domain_id or "", cwd)
+    hot_memories = _get_hot_memories(_memory_scope(cwd, domain_id or ""), cwd)
     fired_triggers = _get_fired_triggers(cwd, first_message)
 
     if not profile:

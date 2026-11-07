@@ -33,6 +33,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 import launcher_layout  # noqa: E402 — sibling module, resolvable only once SCRIPT_DIR is on sys.path
+import setup_sqlite  # noqa: E402 — sibling preflight, stdlib only
 import launcher_site  # noqa: E402 — sibling module, resolvable only once SCRIPT_DIR is on sys.path
 
 PROJECT_DIR = SCRIPT_DIR.parent
@@ -131,9 +132,9 @@ def run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
 # ── Step 1: Python version check ──────────────────────────────────────
 
 
-# source: ADR-0782
+# source: pyproject.toml requires-python, Pillow 13 PyPI metadata
 _MIN_PY_MAJOR = 3
-_MIN_PY_MINOR = 10
+_MIN_PY_MINOR = 11
 
 # source: ADR-0782
 _REQUIRED_PG_EXTENSIONS = 2
@@ -145,7 +146,7 @@ def check_python() -> None:
     if v.major < _MIN_PY_MAJOR or (
         v.major == _MIN_PY_MAJOR and v.minor < _MIN_PY_MINOR
     ):
-        fail(f"Python 3.10+ required (found {v.major}.{v.minor})")
+        fail(f"Python 3.11+ required (found {v.major}.{v.minor})")
     ok(f"Python {v.major}.{v.minor}.{v.micro}")
 
 
@@ -452,6 +453,7 @@ def main() -> None:
 
     check_python()
     if SKIP_POSTGRES:
+        setup_sqlite.check_sqlite_extension_loading(fail)
         ok(
             "SQLite backend (zero-config default) — no PostgreSQL install, "
             "no schema step (auto-creates on first use). Upgrade anytime: "

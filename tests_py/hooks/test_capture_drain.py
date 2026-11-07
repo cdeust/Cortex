@@ -15,6 +15,8 @@ import sys
 import tempfile
 import time
 import unittest
+
+from mcp_server.shared.process_liveness import pid_alive
 from pathlib import Path
 from unittest import mock
 
@@ -189,27 +191,32 @@ class TestDrain(_Spool):
 
 # The intermediate process plays the hook: it starts the drainer through the
 # production ``spawn_drainer`` (real platform options: Windows creationflags on the
-# Windows leg), handing it its own stderr pipe, and exits at once.
+# Windows leg; output through the redaction relay into the drain log, ADR-1110),
+# and exits at once.
 HOOK = (
     "import sys\n"
+    "from pathlib import Path\n"
     "from mcp_server.hooks.capture_dispatch import spawn_drainer\n"
-    "spawn_drainer(sys.stderr.buffer)\n"
+    "spawned = spawn_drainer(Path(sys.argv[1]))\n"
+    "print(spawned.child.pid, spawned.relay.pid)\n"
 )
+# source: ADR-1110 — upper bound for a detached drainer to store one line; the
+# test returns as soon as the effect is observed.
+DRAIN_DEADLINE_S = 120.0
 
 
 class TestDetachedDrainer(unittest.TestCase):
-    def test_drainer_outlives_its_parent_and_stores_the_spooled_line(self):
-        spool = capture_spool.spool_directory(capture_dispatch.CLAUDE_DIR)
-        self.assertEqual(capture_spool.pending(spool), [])
-        capture_spool.write(spool, EXPECTED)
-        before = _stored_rows()
-        repo_root = Path(capture_dispatch.__file__).resolve().parents[2]
-        # The drainer is started through the plugin launcher (issue #667). The
-        # real launcher installs deps/ over the network; this test is about
-        # detachment, so a stand-in launcher with the same argv contract runs
-        # the module (the real one is exercised by test_launcher_command).
-        plugin_root = Path(tempfile.mkdtemp())
-        self.addCleanup(shutil.rmtree, plugin_root, True)
+    def _temporary_directory(self) -> Path:
+        directory = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, directory, True)
+        return directory
+
+    def _stand_in_plugin_root(self, repo_root: Path) -> Path:
+        """The drainer is started through the plugin launcher (issue #667). The
+        real launcher installs deps/ over the network; this test is about
+        detachment, so a stand-in launcher with the same argv contract runs
+        the module (the real one is exercised by test_launcher_command)."""
+        plugin_root = self._temporary_directory()
         (plugin_root / "scripts").mkdir()
         (plugin_root / "scripts" / "launcher.py").write_text(
             "import runpy, sys\n"
@@ -217,18 +224,41 @@ class TestDetachedDrainer(unittest.TestCase):
             "sys.argv = sys.argv[1:]\n"
             "runpy.run_module(sys.argv[0], run_name='__main__', alter_sys=True)\n"
         )
+        return plugin_root
+
+    def test_drainer_outlives_its_parent_and_stores_the_spooled_line(self):
+        # Own capture root (issue #693): the suite-wide CORTEX_CLAUDE_DIR is shared,
+        # so a spool file left by an earlier test made this test order dependent.
+        # The hook and the drainer it detaches inherit this root through the
+        # environment; the store stays the suite's (CORTEX_MEMORY_DB_PATH).
+        claude_dir = self._temporary_directory()
+        spool = capture_spool.spool_directory(claude_dir)
+        self.assertEqual(capture_spool.pending(spool), [])
+        capture_spool.write(spool, EXPECTED)
+        before = _stored_rows()
+        repo_root = Path(capture_dispatch.__file__).resolve().parents[2]
+        plugin_root = self._stand_in_plugin_root(repo_root)
+        log = capture_spool.log_path(spool)
         hook = subprocess.Popen(
-            [sys.executable, "-c", HOOK],
+            [sys.executable, "-c", HOOK, str(log)],
+            stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             cwd=repo_root,
-            env={**os.environ, "CLAUDE_PLUGIN_ROOT": str(plugin_root)},
+            env={
+                **os.environ,
+                "CLAUDE_PLUGIN_ROOT": str(plugin_root),
+                "CORTEX_CLAUDE_DIR": str(claude_dir),
+            },
         )
-        self.assertEqual(hook.wait(), 0)  # the parent is gone ...
-        assert hook.stderr is not None
-        # ... EOF on the pipe arrives only when the drainer, the last holder of its
-        # write end, has exited: no delay decides anything.
-        diagnostics = hook.stderr.read()
-        hook.stderr.close()
+        out, diagnostics = hook.communicate()
+        self.assertEqual(hook.returncode, 0, diagnostics)  # the parent is gone ...
+        pids = [int(p) for p in out.split()]
+        deadline = time.monotonic() + DRAIN_DEADLINE_S
+        # the relay exits last: at end of input, once the drainer has exited
+        while time.monotonic() < deadline and any(pid_alive(p) for p in pids):
+            time.sleep(0.1)
+        self.assertFalse(any(pid_alive(p) for p in pids), "drainer or relay hung")
+        # ... and the detached drainer still stored the line
         self.assertEqual(capture_spool.pending(spool), [], diagnostics)
         self.assertEqual(_stored_rows(), before + 1, diagnostics)
 

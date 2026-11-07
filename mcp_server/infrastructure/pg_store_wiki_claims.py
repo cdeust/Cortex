@@ -18,6 +18,9 @@ import json
 
 from mcp_server.infrastructure.pg_store_wiki_common import _returning_id
 
+# source: #717 — the default of shared.wiki_ir.EventTime: no stated date stays unknown
+_UNKNOWN_EVENT_TIME = {"kind": "unknown"}
+
 
 def insert_claim_events(conn: StoreConnection, claims: list[dict]) -> list[int]:
     """Bulk insert ClaimEvent rows. Returns the new ids in order.
@@ -31,11 +34,11 @@ def insert_claim_events(conn: StoreConnection, claims: list[dict]) -> list[int]:
     sql = """
     INSERT INTO wiki.claim_events (
         memory_id, session_id, text, claim_type, entity_ids,
-        evidence_refs, confidence, supersedes
+        evidence_refs, confidence, supersedes, event_time
     ) VALUES (
         %(memory_id)s, %(session_id)s, %(text)s, %(claim_type)s,
         %(entity_ids)s, %(evidence_refs)s::jsonb, %(confidence)s,
-        %(supersedes)s
+        %(supersedes)s, %(event_time)s::jsonb
     ) RETURNING id;
     """
     out: list[int] = []
@@ -50,6 +53,7 @@ def insert_claim_events(conn: StoreConnection, claims: list[dict]) -> list[int]:
                 "evidence_refs": json.dumps(c.get("evidence_refs", [])),
                 "confidence": c.get("confidence", 0.5),
                 "supersedes": c.get("supersedes"),
+                "event_time": json.dumps(c.get("event_time", _UNKNOWN_EVENT_TIME)),
             }
             cur.execute(sql, params)
             out.append(_returning_id(cur.fetchone()))

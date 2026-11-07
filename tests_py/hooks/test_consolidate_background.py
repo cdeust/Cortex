@@ -76,16 +76,12 @@ def test_stamp_write_and_read_use_explicit_utf8(tmp_path, monkeypatch):
     target = tmp_path / ".last_consolidate"
     monkeypatch.setattr(consolidate_background, "STAMP_PATH", target)
 
-    write_calls: list[dict] = []
-    real_write_text = type(target).write_text
-
-    def spy_write_text(self, data, encoding=None, **kwargs):
-        write_calls.append({"encoding": encoding})
-        return real_write_text(self, data, encoding=encoding, **kwargs)
-
-    monkeypatch.setattr(type(target), "write_text", spy_write_text)
-    consolidate_background._write_stamp()
-    assert write_calls == [{"encoding": "utf-8"}]
+    # The stamp goes through the gated writer (ADR-1110), which encodes
+    # explicitly: a non-ASCII stamp must land as UTF-8 bytes whatever the
+    # locale says.
+    stamp = "2026-10-21T00:00:00+00:00 é"
+    consolidate_background._write_stamp(stamp)
+    assert target.read_bytes() == stamp.encode("utf-8")
 
     read_calls: list[dict] = []
     real_read_text = type(target).read_text

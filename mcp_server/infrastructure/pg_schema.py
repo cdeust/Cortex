@@ -189,7 +189,9 @@ CREATE TABLE IF NOT EXISTS wiki.claim_events (
                     CHECK (confidence >= 0.0 AND confidence <= 1.0),
     embedding       vector(384),
     supersedes      BIGINT REFERENCES wiki.claim_events(id) ON DELETE SET NULL,
-    extracted_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    extracted_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    -- source: #717 — shared.wiki_ir.EventTime as JSON, never derived from extracted_at
+    event_time      JSONB NOT NULL DEFAULT '{"kind": "unknown"}'::jsonb
 );
 
 -- source: ADR-0537
@@ -1393,6 +1395,9 @@ $$ LANGUAGE plpgsql STABLE;
 # ── Migrations ───────────────────────────────────────────────────────────
 
 MIGRATIONS_DDL = """
+-- source: #717 (event time kept apart from extraction time)
+ALTER TABLE wiki.claim_events ADD COLUMN IF NOT EXISTS
+    event_time JSONB NOT NULL DEFAULT '{"kind": "unknown"}'::jsonb;
 -- source: ADR-1083
 ALTER TABLE memories ADD COLUMN IF NOT EXISTS
     is_team_decision BOOLEAN NOT NULL DEFAULT FALSE;

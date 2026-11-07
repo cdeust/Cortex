@@ -5,9 +5,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/cdeust/Cortex/actions/workflows/ci.yml"><img src="https://github.com/cdeust/Cortex/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/cdeust/Cortex/actions/workflows/pipeline.yml"><img src="https://github.com/cdeust/Cortex/actions/workflows/pipeline.yml/badge.svg" alt="Pipeline"></a>
   <a href="LICENSE"><img src="assets/badge-license.svg" alt="License: MIT"></a>
-  <img src="assets/badge-python.svg" alt="Python 3.10+">
+  <img src="assets/badge-python.svg" alt="Python 3.11+">
   <img src="assets/badge-tests.svg" alt="tests passing">
   <img src="assets/badge-references.svg" alt="97 referenced papers">
   <img src="assets/badge-version.svg" alt="Version 4.23.5">
@@ -42,7 +42,11 @@ files. We hold that intent to the
 publish **no CO₂ or energy figure**, because we have not measured one.
 [What we do and do not claim ↓](#green-software-engineering)
 
-> **36 neuroscience mechanisms · 57 memory tools · 11 lifecycle hooks · a self-curating per-project wiki — all local, all open-source, MIT.**
+> **36 implemented, inspectable neuroscience-inspired mechanisms · 57 memory tools · 11 lifecycle hooks · a self-curating per-project wiki — all local, all open-source, MIT.**
+>
+> The committed ablations do not establish that these 36 mechanisms improve retrieval
+> collectively or individually. Published neuroscience references explain their design;
+> retrieval benefits require measurements in Cortex. See [Verification](#verification).
 
 ## Install
 
@@ -107,14 +111,27 @@ the same one, once done) shows `Cortex ready: <store>, <n> memories; <how recall
 everything before the first session; only with it does that session start ready. To work
 without Cortex, offline or not, run `claude plugin disable hypermnesia-mcp@cortex-plugins`.
 
-The first use creates a local SQLite store under `~/.claude/methodology/`. Models are downloaded
+On macOS and Linux (glibc 2.36 or later, x86_64 or arm64: Ubuntu 24.04 and 26.04, Debian 12 and
+later; not Ubuntu 22.04 or RHEL 9), `claude --init-only` on a fresh install also gives the plugin its own
+PostgreSQL server with pgvector and pg_trgm: pinned, sha256-checked binaries (about 13 MB on macOS,
+40 MB on Linux, where they bundle their libraries; pgvector is compiled by Cortex's CI, with build
+provenance attested) on 127.0.0.1, with no Homebrew or system PostgreSQL needed. Its data lives in
+`~/.claude/methodology/managed-pg/`, so uninstalling the plugin never deletes your memories. It
+becomes the store only after it has started and its schema exists; if it cannot start (a Linux
+distribution with glibc older than 2.36, for example) the SQLite store is used, as it is on Windows,
+and the session start says why (`SQLite fallback: ...`). A store already on that server is never
+switched to SQLite: Setup fails and names the cause. The Codex
+plugin on the same account attaches to the same server. An existing SQLite store is not moved
+(ADR-1114).
+
+Otherwise the first use creates a local SQLite store under `~/.claude/methodology/`. Models are downloaded
 once when needed and then run offline. The embedding and reranking model files are both fetched
 on first use. Optional integrations, remote PostgreSQL, and OTLP telemetry use the network only
 when explicitly configured. [PRIVACY.md](PRIVACY.md) lists the exact scope.
 
 An existing PostgreSQL setup is kept: a configured `database_url` option (or `DATABASE_URL`),
-or the backend marker `install-plugin.sh --postgres` writes, always wins over the SQLite
-default. An install that ran before on the local `cortex` database with nothing configured
+or the backend marker `install-plugin.sh --postgres` writes, always wins over the plugin's own
+server and the SQLite default. An install that ran before on the local `cortex` database with nothing configured
 keeps it: on its first launch Cortex moves to SQLite only when nothing listens on
 localhost:5432 and no `PG*` variable configures PostgreSQL, records the choice, and prints it. A fresh install never connects to a database nothing configured.
 
@@ -160,9 +177,16 @@ happens when a decision changes, and what can fade over time.
 
 ### What gets in
 
-A write passes a local novelty check (the implementation calls it a predictive-coding gate) against
-what is already stored. Novel content is written; a near-duplicate is merged into the memory it
-restates rather than filed beside it.
+The `remember` handler and automatic capture check for exact replays after hardening
+and redaction. Matching domain, directory, agent topic, source, write class, capture origin,
+and global/team flags produce `reason: "exact_duplicate"` with the existing memory id.
+Forced writes retain this check; explicit `supersedes_id` corrections retain their atomic
+supersession path. Benchmark rows are isolated, and `memory-replica` block replicas keep
+their path identity. Direct store inserts do not use this handler check.
+Consolidation supersedes existing exact duplicates within that scope and preserves their rows
+and protection flags. This differs from the optional normalized-text maintenance pass.
+Near-duplicate curation uses the thresholds in `core/curation.py`; deliberate writes bypass
+the novelty threshold and can be stored separately when curation does not merge them.
 
 ```js
 // Illustrative project decision:
@@ -170,8 +194,9 @@ remember({ content: "Keep session state in Redis so TTL expiry is handled consis
 // → { stored: true, action: "stored" }
 ```
 
-Deliberate writes are never rejected for being unsurprising. Unattended capture is, which is
-what keeps automatic capture from burying the memories you meant to keep.
+Deliberate writes can be refused as exact replays; novelty alone does not reject them.
+Unattended capture must also pass the novelty check, which keeps automatic capture from
+burying the memories you meant to keep.
 
 ### Whether it can be checked
 
@@ -267,7 +292,18 @@ from it.
 | Recall@10 | **98.2%** | **97.8%** |
 | MRR | **0.9167** | **0.905** |
 
-Both are single runs: n=500, clean database, consolidation disabled, retrieval only.
+Both are single runs: n=500, consolidation disabled, retrieval only. Both describe the
+**PostgreSQL** store with the cross-encoder reranker: the harness (`benchmarks/lib/bench_db.py`)
+always builds a `PgMemoryStore` and calls `core.pg_recall`, and both artifacts record
+`"reranker_state": "loaded"`. The v4.20.0 run used a clean database in the ephemeral
+`pgvector/pgvector:pg16` container of `benchmarks/reproduce.sh` (its manifest records that
+`pg_image`); the v4.14.1 run did not use that container and ran against the live PostgreSQL
+store (CHANGELOG 4.14.1, "Verified").
+The default SQLite store has no comparable run yet (n=500, reranker loaded;
+[#708](https://github.com/cdeust/Cortex/issues/708)), so these figures do not describe it.
+The best SQLite LongMemEval-S result is a bounded run without the reranker (n=50,
+sentence-transformers embeddings: MRR 0.609, Recall@10 94.0%,
+[benchmarks/results/semantic-fallback-169](benchmarks/results/semantic-fallback-169/MANIFEST.md)).
 
 v4.14.1, 2026-07-14: [artifact JSON](benchmarks/results/repro/20260714-v4.14.1-pretag/longmemeval-s.json);
 [code SHA](https://github.com/cdeust/Cortex/commit/28145f0b7a113fc06e22568de6feea7f8444eaf5).
@@ -279,10 +315,8 @@ dirty=false. A single run of the LongMemEval-S leg alone (`benchmarks/reproduce.
 --no-ablation`) in an isolated ephemeral PostgreSQL container, reranker loaded, consolidation
 disabled. Against v4.14.1 the change is 0.4 points of Recall@10 and 0.012 of MRR. The run's own
 floor check reports Recall@10 within the 0.005 tolerance of the July floor (0.982) and MRR
-0.0093 below its floor (0.914), which the script treats as non-blocking by design;
-[docs/agent-guidance.md](docs/agent-guidance.md) records that `main` no longer clears those
-floors and that the release gate is `--no-regression` against `origin/main`. The same tree has
-no LoCoMo or BEAM figure yet.
+0.0093 below its floor (0.914), which the script treats as non-blocking by design. The same
+tree has no LoCoMo or BEAM figure yet.
 
 Reproduce with `benchmarks/reproduce.sh`, which runs in an isolated ephemeral container, never
 against a live store.
@@ -298,7 +332,8 @@ and BEAM results, the ablations and the floor gates are in [benchmarks/](benchma
 
 ## Storage
 
-SQLite by default. PostgreSQL is one configuration field, worth it for very large stores or a
+SQLite by default, or the plugin's own PostgreSQL server on a fresh macOS or Linux install (see
+Install). Your own PostgreSQL is one configuration field, worth it for very large stores or a
 database shared across a team.
 
 ```bash
@@ -309,7 +344,8 @@ bash <plugin-dir>/scripts/install-plugin.sh --postgres
 |---|---|---|
 | Setup | none | pgvector >= 0.8.0, pg_trgm |
 | All 57 tools | yes | yes |
-| Retrieval contract | identical | identical |
+| Retrieval tool interface | identical | identical |
+| Published retrieval quality | n=50 without reranker only ([#708](https://github.com/cdeust/Cortex/issues/708)) | LongMemEval-S n=500 above |
 | Fusion | in-process | server-side PL/pgSQL |
 | ANN index | none | pgvector HNSW |
 | Cross-agent team decisions, preemptive context, pipeline heat bumps | no-op | active |
@@ -485,12 +521,31 @@ measured one.
 
 ## Verification
 
-The v4.14.1 figures above are backed by a per-mechanism ablation campaign — full *n*, single-seed, with code SHAs, dirty flags, manifests, and per-row JSON preserved; the v4.20.0 figures are a single measurement without one:
+The retrieval scores above describe particular runs of the integrated system. They do not
+establish a causal retrieval benefit from the 36 mechanisms. The committed evidence is mixed:
 
-- **LongMemEval-S, 17 rows, n=500** — `docs/benchmarks/e1-v3-results.md`. Per-mechanism deltas at the calibrated equilibrium + category-specialization analysis.
-- **LoCoMo, 14 rows, n=1986** — `docs/benchmarks/e1-v3-locomo-results.md` (pre-fix) and `docs/benchmarks/e1-v3-locomo-results-post-fix.md` (post plasticity result-shape fix). Two-baseline design (NO_CONSOLIDATION / WITH_CONSOLIDATION).
+- **LongMemEval-S, 17 rows, n=500** — [report](docs/benchmarks/e1-v3-results.md)
+  and [summary CSV](benchmarks/results/ablation/longmemeval-s_v3/summary.csv).
+  Spreading activation has the same reported MRR and R@10 as baseline; ablating adaptive
+  decay raises MRR from 0.9124 to 0.9138. Several mechanisms have identical scores.
+  These isolated-haystack runs do not establish benefits from longitudinal state.
+- **LoCoMo, 14 rows, n=1986** — [pre-fix report](docs/benchmarks/e1-v3-locomo-results.md)
+  and [run manifest](benchmarks/results/ablation/locomo_v3/manifest.json).
+  Some rows favor a mechanism and others favor its ablation; this is not evidence that
+  every mechanism helps. The [post-fix report](docs/benchmarks/e1-v3-locomo-results-post-fix.md)
+  is explicitly unverified because its named result artifacts are not committed.
+- **BEAM decay sweep** — the [June 11 control summary](benchmarks/results/decay_sweep/20260611T080828Z/summary.csv)
+  reports MRR 0.694 for both lambda 0.95 and 1.0. This run shows no retrieval gain from decay.
 
-The full per-mechanism evidence lives in the thermodynamic paper (§6.3); the BEAM decay dose-response (§6.4) documents a re-scoped negative result after a dirty-store confound was caught and traced. **[Thermodynamic Memory vs. Flat-Importance Stores (PDF, 34 pages)](docs/arxiv-thermodynamic/main.pdf)** · **[Stage-Aware Context Assembly (PDF, 39 pages)](docs/arxiv-context-assembly/main.pdf)**.
+Mechanisms remain available for inspection and evaluation. A claim that they improve
+retrieval requires a longitudinal evaluation on real data, with per-mechanism ablations
+and per-question results; that work is tracked in [#343](https://github.com/cdeust/Cortex/issues/343).
+A null result under these conditions neither proves general benefit nor proves a mechanism
+cannot help in another setting.
+
+The thermodynamic paper (§6.3–6.4) discusses these experiments, including a negative decay
+result after a dirty-store confound. Its design rationale does not replace empirical
+evidence. **[Thermodynamic Memory vs. Flat-Importance Stores (PDF, 34 pages)](docs/arxiv-thermodynamic/main.pdf)** · **[Stage-Aware Context Assembly (PDF, 39 pages)](docs/arxiv-context-assembly/main.pdf)**.
 
 ---
 

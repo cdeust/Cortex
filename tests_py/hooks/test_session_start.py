@@ -35,7 +35,8 @@ from mcp_server.hooks import session_start_db as ss_db
 from mcp_server.hooks import session_start_fetch as ss_fetch
 from mcp_server.hooks import session_start_sources as ss_sources
 from mcp_server.hooks import session_start_sqlite as ss_sqlite
-from mcp_server.shared import detached_spawn, log_rotation
+from mcp_server.shared import detached_spawn
+from tests_py.hooks._spawn_logged_fake import fake_spawn
 from tests_py.hooks.stdin_support import utf8_stdin
 from tests_py._windows_spawn_fake import (
     as_windows_in_breakaway_job,
@@ -389,14 +390,18 @@ def test_count_pending_curations_empty_sample_short_circuits(monkeypatch):
 
 
 def test_count_session_files_counts_jsonl_per_project(tmp_path, monkeypatch):
-    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(ss_db, "CLAUDE_PROJECTS_DIR", tmp_path / "projects")
     assert ss_db._count_session_files() == 0
-    proj = tmp_path / ".claude" / "projects" / "p1"
+    proj = tmp_path / "projects" / "p1"
     proj.mkdir(parents=True)
     (proj / "a.jsonl").write_text("{}")
     (proj / "b.jsonl").write_text("{}")
     (proj / "ignored.txt").write_text("")
-    assert ss_db._count_session_files() == 2
+    (tmp_path / "projects" / "p2").mkdir()
+    (tmp_path / "projects" / "p2" / "c.jsonl").write_text("{}")
+    (tmp_path / "projects" / "stray.jsonl").write_text("{}")
+    # Summed over projects (p1 + p2); a file at the root is not a project.
+    assert ss_db._count_session_files() == 3
 
 
 def test_detect_external_sources_empty_home_finds_nothing(tmp_path, monkeypatch):
@@ -643,17 +648,18 @@ def test_cold_start_populated_db_yields_no_message():
 # ── SQLite banner path ────────────────────────────────────────────────
 
 
-def _row(mem_id, tags=(), protected=False, heat=0.9, is_global=True):
+def _row(mem_id, **overrides):
     """is_global defaults True: these fixtures drive tag/limit logic, not
-    the project-scoping predicate (covered separately below, issue #604)."""
+    the project-scoping predicate (covered separately below, issue #604).
+    ``overrides`` may set tags, protected, heat and is_global."""
     return {
         "id": mem_id,
         "content": f"content {mem_id}",
         "domain": "",
-        "heat": heat,
-        "tags": list(tags),
-        "is_protected": protected,
-        "is_global": is_global,
+        "heat": overrides.get("heat", 0.9),
+        "tags": list(overrides.get("tags", ())),
+        "is_protected": overrides.get("protected", False),
+        "is_global": overrides.get("is_global", True),
         "directory_context": "",
     }
 
@@ -734,7 +740,7 @@ def test_sqlite_context_empty_store_prints_cold_start(capsys, monkeypatch, tmp_p
     store = MagicMock()
     store.count_memories.return_value = {"total": 0}
     monkeypatch.setattr(memory_store, "get_shared_store", lambda: store)
-    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(ss_db, "CLAUDE_PROJECTS_DIR", tmp_path / "projects")
 
     ss_sqlite._sqlite_context({}, _unexpected_backfill, MagicMock())
 
@@ -882,22 +888,6 @@ def test_auto_backfill_failure_is_logged_and_returns_zero(capsys, monkeypatch):
 # first — on Windows that hits the Microsoft Store stub and disables spawning.
 
 
-def _tracking_open(monkeypatch):
-    """Record rotating-writer log paths, delegating to the real open.
-    String comparisons remain case-sensitive on every OS; Path.exists cannot
-    distinguish .claude from .CLAUDE on default case-insensitive macOS APFS.
-    """
-    opened: list[str] = []
-    real_open = open
-
-    def _open(path, *args, **kwargs):
-        opened.append(str(path))
-        return real_open(path, *args, **kwargs)
-
-    monkeypatch.setattr(log_rotation, "open", _open, raising=False)
-    return opened
-
-
 class TestSpawnConsolidateCycleInterpreterResolution:
     def _write_launcher(self, tmp_path, monkeypatch):
         plugin_root = tmp_path / "plugin"
@@ -917,7 +907,6 @@ class TestSpawnConsolidateCycleInterpreterResolution:
         """
         plugin_root = self._write_launcher(tmp_path, monkeypatch)
         monkeypatch.setattr("shutil.which", lambda name: f"/fake/store-stub/{name}")
-        opened = _tracking_open(monkeypatch)
         captured = {}
 
         def _fake_popen(cmd, **kwargs):
@@ -925,7 +914,7 @@ class TestSpawnConsolidateCycleInterpreterResolution:
             captured["kwargs"] = kwargs
             return MagicMock(pid=4242)
 
-        monkeypatch.setattr(ss_consolidate.subprocess, "Popen", _fake_popen)
+        fake_spawn(monkeypatch, ss_consolidate, popen=_fake_popen)
         as_windows_in_breakaway_job(monkeypatch)
 
         assert ss_consolidate._spawn_consolidate_cycle(detached_spawn.options()) == 4242
@@ -936,12 +925,10 @@ class TestSpawnConsolidateCycleInterpreterResolution:
             "mcp_server.hooks.consolidate_background",
         ]
         assert "store-stub" not in captured["cmd"][0]
-        assert captured["kwargs"]["stdin"] == ss_consolidate.subprocess.DEVNULL
-        assert captured["kwargs"]["stderr"] == ss_consolidate.subprocess.STDOUT
         assert_detached_on_windows(captured["kwargs"])
         log_path = tmp_path / ".claude" / "methodology" / "consolidate.log"
-        assert opened == [str(log_path)]
-        assert captured["kwargs"]["stdout"].name == str(log_path)
+        # source: ADR-1110 — the log is written by the redaction relay
+        assert captured["kwargs"]["log_path"] == log_path
 
         # A second cycle's spawn must also succeed (mkdir exist_ok=True).
         assert ss_consolidate._spawn_consolidate_cycle(detached_spawn.options()) == 4242
@@ -961,12 +948,13 @@ class TestSpawnConsolidateCycleInterpreterResolution:
             captured["cmd"] = cmd
             return MagicMock(pid=99)
 
-        monkeypatch.setattr(ss_consolidate.subprocess, "Popen", _fake_popen)
+        fake_spawn(monkeypatch, ss_consolidate, popen=_fake_popen)
 
         ss_consolidate._spawn_consolidate_cycle(detached_spawn.options())
 
         assert captured["cmd"] == [
             sys.executable,
+            "-P",
             "-m",
             "mcp_server.hooks.consolidate_background",
         ]
@@ -983,7 +971,7 @@ class TestSpawnConsolidateCycleInterpreterResolution:
             captured["cmd"] = cmd
             return MagicMock(pid=1)
 
-        monkeypatch.setattr(ss_consolidate.subprocess, "Popen", _fake_popen)
+        fake_spawn(monkeypatch, ss_consolidate, popen=_fake_popen)
 
         ss_consolidate._spawn_consolidate_cycle(detached_spawn.options())
         expected_launcher = (
@@ -1035,7 +1023,6 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
         plugin_root = self._write_launcher(tmp_path, monkeypatch)
         stale_mock, lookup_mock = self._mock_pipeline(monkeypatch)
         monkeypatch.setattr("shutil.which", lambda name: f"/fake/store-stub/{name}")
-        opened = _tracking_open(monkeypatch)
         captured = {}
 
         def _fake_popen(cmd, **kwargs):
@@ -1043,7 +1030,7 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
             captured["kwargs"] = kwargs
             return MagicMock()
 
-        monkeypatch.setattr(ss_background.subprocess, "Popen", _fake_popen)
+        fake_spawn(monkeypatch, ss_background, popen=_fake_popen)
         as_windows_in_breakaway_job(monkeypatch)
 
         ss_background._maybe_background_reanalyze("/the/project", self.lookup_mock)
@@ -1056,12 +1043,10 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
             "/the/project",
         ]
         assert "store-stub" not in captured["cmd"][0]
-        assert captured["kwargs"]["stdin"] == ss_background.subprocess.DEVNULL
-        assert captured["kwargs"]["stderr"] == ss_background.subprocess.STDOUT
         assert_detached_on_windows(captured["kwargs"])
         log_path = tmp_path / ".claude" / "methodology" / "pipeline_reanalyze.log"
-        assert opened == [str(log_path)]
-        assert captured["kwargs"]["stdout"].name == str(log_path)
+        # source: ADR-1110 — the log is written by the redaction relay
+        assert captured["kwargs"]["log_path"] == log_path
         # The cached-graph lookup result must actually flow into the
         # staleness check — not a look-alike constant.
         lookup_mock.assert_called_once_with("/the/project")
@@ -1094,7 +1079,7 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
             captured["cmd"] = cmd
             return MagicMock()
 
-        monkeypatch.setattr(ss_background.subprocess, "Popen", _fake_popen)
+        fake_spawn(monkeypatch, ss_background, popen=_fake_popen)
 
         ss_background._maybe_background_reanalyze("/the/project", self.lookup_mock)
 
@@ -1118,7 +1103,7 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
             captured["cmd"] = cmd
             return MagicMock()
 
-        monkeypatch.setattr(ss_background.subprocess, "Popen", _fake_popen)
+        fake_spawn(monkeypatch, ss_background, popen=_fake_popen)
 
         ss_background._maybe_background_reanalyze("/the/event-cwd", self.lookup_mock)
 
@@ -1128,7 +1113,7 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
     def test_unresolved_project_root_spawns_nothing(self, monkeypatch, capsys):
         self._mock_pipeline(monkeypatch)
 
-        with patch.object(ss_background.subprocess, "Popen") as popen:
+        with patch.object(ss_background, "spawn_logged") as popen:
             ss_background._maybe_background_reanalyze(None, self.lookup_mock)
 
         popen.assert_not_called()
@@ -1138,7 +1123,7 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
     def test_skips_when_graph_fresh(self, tmp_path, monkeypatch):
         self._mock_pipeline(monkeypatch, stale=False)
 
-        with patch.object(ss_background.subprocess, "Popen") as popen:
+        with patch.object(ss_background, "spawn_logged") as popen:
             ss_background._maybe_background_reanalyze("/the/project", self.lookup_mock)
 
         popen.assert_not_called()
@@ -1147,7 +1132,7 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
         monkeypatch.setenv("CLAUDE_PLUGIN_ROOT", str(tmp_path / "no-scripts-dir"))
         self._mock_pipeline(monkeypatch)
 
-        with patch.object(ss_background.subprocess, "Popen") as popen:
+        with patch.object(ss_background, "spawn_logged") as popen:
             ss_background._maybe_background_reanalyze("/the/project", self.lookup_mock)
 
         popen.assert_not_called()
@@ -1159,7 +1144,7 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
         def _boom(cmd, **kwargs):
             raise OSError("no such interpreter")
 
-        monkeypatch.setattr(ss_background.subprocess, "Popen", _boom)
+        fake_spawn(monkeypatch, ss_background, popen=_boom)
 
         ss_background._maybe_background_reanalyze(
             "/the/project", self.lookup_mock
@@ -1172,9 +1157,7 @@ class TestMaybeBackgroundReanalyzeInterpreterResolution:
     def test_success_logs_the_log_path(self, tmp_path, monkeypatch, capsys):
         self._write_launcher(tmp_path, monkeypatch)
         self._mock_pipeline(monkeypatch)
-        monkeypatch.setattr(
-            ss_background.subprocess, "Popen", lambda *a, **k: MagicMock()
-        )
+        fake_spawn(monkeypatch, ss_background)
 
         ss_background._maybe_background_reanalyze("/the/project", self.lookup_mock)
 
@@ -1228,7 +1211,11 @@ def _patched_main(**overrides):
         "_refresh_session_registry": MagicMock(),
         "_auto_wire_pipeline": MagicMock(),
         "_maybe_background_reanalyze": MagicMock(),
+        # issue #711: never prune the real ~/.cache/cortex/code-graphs
+        "_maybe_background_prune_graphs": MagicMock(),
         "_maybe_background_consolidate": MagicMock(),
+        # ADR-1112: never touch the real ~/.cache/cortex from a test
+        "harden_at_startup": MagicMock(),
     }
     defaults.update(overrides)
     return [patch.object(hook, name, m) for name, m in defaults.items()]

@@ -25,7 +25,7 @@ from mcp_server.core.session_extractor import (
     extract_memorable_items,
     extract_session_summary,
 )
-from mcp_server.infrastructure.config import CLAUDE_DIR
+from mcp_server.infrastructure.config import CLAUDE_PROJECTS_DIR
 from mcp_server.infrastructure.scanner import read_head_tail
 from mcp_server.handlers._tool_meta import NON_IDEMPOTENT_WRITE
 from mcp_server.handlers.backfill_helpers import gist_oversized_content
@@ -109,7 +109,7 @@ def _discover_jsonl_files(
     project_filter: str,
 ) -> list[tuple[Path, str]]:
     """Find all JSONL conversation files, optionally filtered by project."""
-    projects_dir = CLAUDE_DIR / "projects"
+    projects_dir = CLAUDE_PROJECTS_DIR
     if not projects_dir.exists():
         return []
 

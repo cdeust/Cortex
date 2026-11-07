@@ -110,7 +110,8 @@ class PgEntityMixin(PgStoreHost):
         """
         rows = self._execute(
             "SELECT * FROM entities WHERE domain = %s "
-            "ORDER BY heat DESC, mention_count DESC LIMIT %s",
+            # source: ADR-1106 — equal heat is ordered by the newer entity.
+            "ORDER BY heat DESC, id DESC LIMIT %s",
             (domain_slug, limit),
         ).fetchall()
         return [dict(r) for r in rows]

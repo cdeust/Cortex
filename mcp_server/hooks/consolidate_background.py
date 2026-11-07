@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Any
 
 from mcp_server.hooks.output_streams import use_utf8_output
+from mcp_server.shared import gated_files
 
 logger = logging.getLogger(__name__)
 
@@ -38,9 +39,8 @@ STAMP_PATH: Path = Path.home() / ".claude" / "methodology" / ".last_consolidate"
 
 def _write_stamp(now: str | None = None) -> None:
     """Record a successful consolidate at ``now`` (or current UTC)."""
-    STAMP_PATH.parent.mkdir(parents=True, exist_ok=True)
     iso = now or datetime.now(timezone.utc).isoformat(timespec="seconds")
-    STAMP_PATH.write_text(iso, encoding="utf-8")
+    gated_files.write_text(STAMP_PATH, iso)
 
 
 def read_stamp() -> datetime | None:

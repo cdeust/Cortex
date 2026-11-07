@@ -18,6 +18,7 @@ from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.handlers._tool_meta import NON_IDEMPOTENT_WRITE
 from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.handlers.replay_tracking import track_replay_event
+from mcp_server.shared.domain_mapping import resolve_explicit_domain
 
 # ── Schema ────────────────────────────────────────────────────────────────
 
@@ -179,7 +180,11 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
         return {"children": [], "cluster_id": None}
 
     cluster_id = args["cluster_id"]
-    domain = args.get("domain", "")
+    # The cluster IDs come from recall_hierarchical, which builds its tree over
+    # resolve_explicit_domain(domain) (the scope remember writes); rebuilding
+    # over the raw name gave another tree, so its IDs pointed nowhere.
+    # source: issue #721
+    domain = resolve_explicit_domain(args.get("domain") or "")
     min_heat = float(args.get("min_heat", 0.05))
 
     hierarchy = _build_hierarchy_from_store(domain, min_heat)

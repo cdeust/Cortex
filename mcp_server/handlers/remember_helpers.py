@@ -44,6 +44,8 @@ from mcp_server.handlers.remember_response import build_response
 from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore
+from mcp_server.infrastructure.memory_exact import insert_exact
+from mcp_server.handlers.remember_response import duplicate_response
 from mcp_server.observability import silent_failure
 from mcp_server.core import capture_origin
 from mcp_server.core import knowledge_graph, source_monitoring, habituation
@@ -442,40 +444,33 @@ def try_curation(
     tags: list[str],
     heat: float,
 ) -> tuple[str, int | None]:
-    """Decide curation action: create, merge, or link."""
-    try:
-        if not embedding or force:
-            return "create", None
-        hits = store.search_vectors(embedding, top_k=3, min_heat=0.0)
+    """Decide create, merge, or link; search and merge failures propagate."""
+    if not embedding or force:
+        return "create", None
+    hits = store.search_vectors(embedding, top_k=3, min_heat=0.0)
+    # source: ADR-0438
+    rows = MemoryRows.read(store, [mid for mid, _d in hits]) if hits else MemoryRows({})
+    for cand_id, _d in hits:
+        cand = rows.get_memory(cand_id)
+        if not cand or not cand.get("embedding"):
+            continue
         # source: ADR-0438
-        rows = (
-            MemoryRows.read(store, [mid for mid, _d in hits])
-            if hits
-            else MemoryRows({})
+        if cand.get("superseded_by_id") is not None:
+            continue
+        sim = emb_engine.similarity(embedding, cand["embedding"])
+        overlap = (
+            curation.compute_textual_overlap(content, cand["content"])
+            > _TEXTUAL_OVERLAP_THRESHOLD
         )
-        for cand_id, _d in hits:
-            cand = rows.get_memory(cand_id)
-            if not cand or not cand.get("embedding"):
-                continue
+        action = curation.decide_curation_action(sim, overlap)
+        if action == "merge":
             # source: ADR-0438
-            if cand.get("superseded_by_id") is not None:
-                continue
-            sim = emb_engine.similarity(embedding, cand["embedding"])
-            overlap = (
-                curation.compute_textual_overlap(content, cand["content"])
-                > _TEXTUAL_OVERLAP_THRESHOLD
-            )
-            action = curation.decide_curation_action(sim, overlap)
-            if action == "merge":
-                # source: ADR-0438
-                if curation.detect_contradictions(content, [cand]):
-                    return "supersede", cand_id
-                _do_merge(cand, cand_id, content, embedding, heat, store, emb_engine)
-                return "merge", cand_id
-            if action == "link":
-                return "link", cand_id
-    except Exception as exc:  # noqa: BLE001 — dedup failure degrades to plain create
-        silent_failure.note("remember_helpers.curation_dedup", exc)
+            if curation.detect_contradictions(content, [cand]):
+                return "supersede", cand_id
+            _do_merge(cand, cand_id, content, embedding, heat, store, emb_engine)
+            return "merge", cand_id
+        if action == "link":
+            return "link", cand_id
     return "create", None
 
 
@@ -676,6 +671,19 @@ def _grade_content_best_effort(content: str, *, directory: str) -> _GradeContext
     )
 
 
+def _persist_record(
+    store: MemoryStore, record: dict[str, Any], action: str, merged_id: int | None
+) -> tuple[int | dict[str, Any], int | None]:
+    """Keep supersession atomic; exact replays never reach post-store enrichment."""
+    if action == "supersede" and merged_id is not None:
+        mem_id, head = store.supersede_atomic(record, merged_id)
+        if mem_id is None:
+            return _build_supersede_conflict(merged_id, head), head
+        return mem_id, head
+    mem_id, inserted = insert_exact(store, record)
+    return (mem_id if inserted else duplicate_response(mem_id)), None
+
+
 def insert_and_post_process(
     content: str,
     embedding: Any,
@@ -747,18 +755,10 @@ def insert_and_post_process(
     record["write_class"] = write_class
     # source: ADR-0438
     record["capture_origin"] = origin
-    superseded_head: int | None = None
-    if action == "supersede" and merged_id is not None:
-        # Atomic insert + supersession edge (biomimetic reconsolidation): the
-        # new row and the head's back-pointer commit as ONE transaction, so a
-        # lost compare-and-set rolls the insert back — never an orphaned,
-        # disconnected row. On a race the write rebases onto the current head;
-        # only pathological contention returns a conflict (nothing committed).
-        mem_id, superseded_head = store.supersede_atomic(record, merged_id)
-        if mem_id is None:
-            return _build_supersede_conflict(merged_id, superseded_head)
-    else:
-        mem_id = store.insert_memory(record)
+    persisted, superseded_head = _persist_record(store, record, action, merged_id)
+    if isinstance(persisted, dict):
+        return persisted
+    mem_id = persisted
     tids, tagged, slot = _run_post_store(
         mem_id,
         content,

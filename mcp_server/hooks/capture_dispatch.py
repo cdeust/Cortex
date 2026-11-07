@@ -2,24 +2,37 @@
 
 from __future__ import annotations
 
+import enum
 import logging
 import os
 import socket
 import subprocess
 import time
 from pathlib import Path
-from typing import IO, Any
+from typing import Any
 
 from mcp_server.hooks.launcher_command import child_command
 from mcp_server.hooks.capture_worker_policy import limits, validate_payload
 from mcp_server.infrastructure import capture_spool
 from mcp_server.infrastructure.capture_client import deliver
 from mcp_server.infrastructure.capture_peer import is_supported
-from mcp_server.infrastructure.capture_transport import CaptureTransportError
+from mcp_server.infrastructure.capture_transport import (
+    CaptureHandoffUncertainError,
+    CaptureTransportError,
+)
 from mcp_server.infrastructure.config import CLAUDE_DIR
+from mcp_server.infrastructure.log_relay import LoggedSpawn, spawn_logged
 from mcp_server.shared import detached_spawn
 
 logger = logging.getLogger(__name__)
+
+
+class Handoff(enum.Enum):
+    """What :func:`dispatch` knows about the capture it was given (issue #737)."""
+
+    ADMITTED = "admitted"  # the worker acknowledged it, or it sits in the spool
+    NOT_HANDED_OVER = "not_handed_over"  # it failed before leaving the hook
+    UNCERTAIN = "uncertain"  # the worker may have admitted it
 
 
 def report_failure(
@@ -43,18 +56,16 @@ def report_failure(
     )
 
 
-def popen_options(stream: IO[Any], detach: dict[str, Any]) -> dict[str, Any]:
+def popen_options(detach: dict[str, Any]) -> dict[str, Any]:
     """Options that start the drainer fully detached from the hook process.
 
-    postcondition: stdin is closed, stdout and stderr go to ``stream``
-    (the drainer's one log, so a crash before its logging exists is not lost), and
-    the child does not die with the hook: ``detach`` is
+    postcondition: the child does not die with the hook: ``detach`` is
     ``detached_spawn.platform_options`` (a new session on POSIX, creation flags
-    on Windows, where ``start_new_session`` is ignored and ``pass_fds`` absent)."""
+    on Windows, where ``start_new_session`` is ignored and ``pass_fds`` absent).
+    stdin is closed and stdout+stderr reach the drainer's one log through the
+    redaction relay (``log_relay.spawn_logged``), so a crash before its logging
+    exists is not lost and no line reaches disk unredacted (ADR-1110)."""
     return {
-        "stdin": subprocess.DEVNULL,
-        "stdout": stream,
-        "stderr": stream,
         "close_fds": True,
         "cwd": Path(__file__).resolve().parents[2],
         "env": dict(os.environ),
@@ -62,12 +73,13 @@ def popen_options(stream: IO[Any], detach: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def spawn_drainer(stream: IO[Any]) -> subprocess.Popen[Any]:
+def spawn_drainer(log_path: Path) -> LoggedSpawn:
     """Start ``capture_drain`` and do not wait for it.
 
-    source: ADR-1094 and ADR-1102"""
+    source: ADR-1094 and ADR-1102 and ADR-1110"""
     command = child_command("mcp_server.hooks.capture_drain")
-    return subprocess.Popen(command, **popen_options(stream, detached_spawn.options()))
+    options = popen_options(detached_spawn.options())
+    return spawn_logged(command, log_path, mode=capture_spool.PRIVATE_FILE, **options)
 
 
 def _spool(payload: dict[str, object]) -> None:
@@ -86,8 +98,16 @@ def _spool(payload: dict[str, object]) -> None:
             operation="capture_spool_stalled",
         )
     capture_spool.write(spool, payload)
-    with capture_spool.open_log(spool) as stream:
-        spawn_drainer(stream)
+    try:
+        spawn_drainer(capture_spool.log_path(spool))
+    except OSError as exc:
+        # The payload is durable: the next capture's drainer stores it, so the
+        # capture is not skipped; the drainer that did not start is the error.
+        report_failure(
+            f"capture spooled, drainer did not start: {type(exc).__name__}: {exc}",
+            0.0,
+            operation="capture_drainer_spawn_failed",
+        )
 
 
 def _spawn(listener: socket.socket, lease: int) -> None:
@@ -111,7 +131,12 @@ def _spawn(listener: socket.socket, lease: int) -> None:
     )
 
 
-def dispatch(payload: dict[str, object]) -> bool:
+def dispatch(payload: dict[str, object]) -> Handoff:
+    """Hand the payload to the resident worker, or to the spool without one.
+
+    postcondition: NOT_HANDED_OVER only when the payload never left the hook
+    (invalid, worker unreachable, refused, spool write failed); UNCERTAIN when
+    the worker may hold it. Every failure is logged and telemetried."""
     started = time.monotonic()
     try:
         validate_payload(payload)
@@ -125,5 +150,7 @@ def dispatch(payload: dict[str, object]) -> bool:
             f"capture skipped after {elapsed:.3f}s: {type(exc).__name__}: {exc}",
             elapsed,
         )
-        return False
-    return True
+        if isinstance(exc, CaptureHandoffUncertainError):
+            return Handoff.UNCERTAIN
+        return Handoff.NOT_HANDED_OVER
+    return Handoff.ADMITTED

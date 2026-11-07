@@ -33,14 +33,13 @@ def pgvector_iterative_scan(check: Callable[..., Any]) -> Any:
     if not url:
         return check(_NAME, False, "DATABASE_URL not set", "")
     try:
-        import psycopg  # noqa: PLC0415 — source: ADR-0322
-        from psycopg.rows import DictRow, dict_row  # noqa: PLC0415 — source: ADR-0322
+        import psycopg  # noqa: PLC0415, F401 — source: ADR-0322 (availability probe)
+
+        from mcp_server.infrastructure.db_connect import pg_connect  # noqa: PLC0415 — source: ADR-1110
     except ImportError:
         return check(_NAME, False, "psycopg not installed", "")
     try:
-        with psycopg.Connection[DictRow].connect(
-            url, connect_timeout=5, row_factory=dict_row
-        ) as conn:
+        with pg_connect(url, connect_timeout=5) as conn:
             require_iterative_scan(conn.cursor())
             row = conn.execute(
                 "SELECT extversion FROM pg_extension WHERE extname = 'vector'"

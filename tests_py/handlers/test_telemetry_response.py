@@ -11,7 +11,12 @@ from pydantic_core import to_json
 from mcp_server.core import telemetry
 from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.handlers import recall, remember
-from mcp_server.shared.telemetry_context import count_reranked, set_retrieval_tier
+from mcp_server.shared import telemetry_context
+from mcp_server.shared.telemetry_context import (
+    count_reranked,
+    set_retrieval_tier,
+    timed_stage,
+)
 
 
 @pytest.fixture
@@ -96,3 +101,30 @@ def test_real_store_round_trip_records_nonempty_response_sizes(telemetry_log):
         assert sample["bytes_out"] > 0
         assert "tier" in sample and "reranked_count" in sample
     assert samples[0]["tier"] == "pg"
+
+
+def test_sample_publishes_stage_breakdown_rounded_and_per_call(
+    telemetry_log, monkeypatch
+):
+    """Issue #722: a sample carries the stages its own call timed, nothing more."""
+    clock = iter([1.0, 1.0001234567, 2.0, 2.5])
+    monkeypatch.setattr(telemetry_context, "perf_counter", lambda: next(clock))
+
+    async def timed(args):
+        with timed_stage(args["stage"]):
+            pass
+        return {}
+
+    handler = instrument("recall", timed)
+    asyncio.run(handler({"stage": "fused_search"}))
+    asyncio.run(handler({"stage": "cross_encoder"}))
+    samples = [json.loads(line) for line in telemetry_log.read_text().splitlines()]
+    assert [sample["stage_ms"] for sample in samples] == [
+        {"fused_search": 0.123},
+        {"cross_encoder": 500.0},
+    ]
+
+
+def test_sample_without_timed_stages_publishes_an_empty_breakdown(telemetry_log):
+    asyncio.run(recall.handler({}))
+    assert json.loads(telemetry_log.read_text())["stage_ms"] == {}

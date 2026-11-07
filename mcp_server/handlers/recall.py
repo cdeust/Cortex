@@ -46,6 +46,7 @@ from mcp_server.infrastructure.memory_config import (
 )
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.session_registry import current_window_session
+from mcp_server.shared.domain_mapping import resolve_explicit_domain
 from mcp_server.observability import silent_failure
 from mcp_server.core.ablation import Mechanism, is_mechanism_disabled
 
@@ -98,6 +99,29 @@ schema = {
                                     "format": "date-time",
                                 },
                                 "source": {"type": "string"},
+                                "document_sources": {
+                                    "type": "array",
+                                    "description": (
+                                        # source: issue #713 (slice 2)
+                                        "Present only on a segment written by "
+                                        "ingest_document: the document file, "
+                                        "the content version and the adapter "
+                                        "kind it was ingested from."
+                                    ),
+                                    "items": {
+                                        "type": "object",
+                                        "required": [
+                                            "source",
+                                            "version",
+                                            "source_kind",
+                                        ],
+                                        "properties": {
+                                            "source": {"type": "string"},
+                                            "version": {"type": "string"},
+                                            "source_kind": {"type": "string"},
+                                        },
+                                    },
+                                },
                                 "truncated": {
                                     "type": "boolean",
                                     "description": (
@@ -259,17 +283,18 @@ schema = {
             "agent_topic": {
                 "type": "string",
                 "description": (
-                    "Restrict to memories produced under a specific agent "
-                    "context tag (subagent topic isolation)."
+                    "Rank memories written under this agent context tag "
+                    "higher. A ranking boost, not a filter: other agents' "
+                    "memories still match (docs/agent-scope.md)."
                 ),
                 "examples": ["engineer", "researcher", "reviewer"],
             },
             "include_low_signal": {
                 "type": "boolean",
                 "description": (
-                    # source: ADR-0430
+                    # source: ADR-0430 (filter), ADR-1123 (scope)
                     "When false (default), drops memories tagged as auto-captures "
-                    "(``auto-captured``, ``tool:edit``, ``_backfill``, ``stage-N``, "
+                    "(``auto-captured``, ``tool:edit``, ``_backfill``, ``imported``, "
                     "``session-summary``, …) so curated content (ADRs, lessons, "
                     "conventions) surfaces in the first few results. Set true for "
                     "debugging / replay tooling that needs the raw memory feed."
@@ -665,5 +690,22 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     return encode_within_budget(resp, "memories", fmt, settings.MAX_RESPONSE_CHARS)
 
 
+async def _scoped_by_explicit_domain(
+    args: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Search the domain identity ``remember`` writes, then run the handler.
+
+    ``remember`` resolves an explicit domain with ``resolve_explicit_domain``
+    (an exact family member maps to its canonical, any other name is kept,
+    lowercased); recall passed the raw name, so the two disagreed on scope.
+    A missing or empty domain is left as given. The caller's dict is copied,
+    never changed.
+
+    source: issue #721"""
+    if args and args.get("domain"):
+        args = {**args, "domain": resolve_explicit_domain(args["domain"]) or None}
+    return await _handler_impl(args)
+
+
 # source: ADR-0430
-handler = instrument("recall", _handler_impl, result_count_key="memories")
+handler = instrument("recall", _scoped_by_explicit_domain, result_count_key="memories")

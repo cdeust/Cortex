@@ -8,6 +8,566 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Every telemetry sample now carries `stage_ms`, the milliseconds its own
+  operation spent in each stage timed with `timed_stage(name)` (#722, slice 1).
+  A stage entered twice accumulates, a stage that raises is still counted, and
+  the JSONL line rounds each value to 3 decimals like `latency_ms`. No stage is
+  timed yet, so `stage_ms` is `{}` for now; the recall stages are instrumented
+  in a later slice.
+- `memory_stats` returns `abandoned_workers`, the `abandoned_work` registry of
+  #903: per tool, the workers still running after their caller was cancelled
+  (`in_flight`) and how abandoned workers ended since the process started
+  (`ended`: completed, raised, cancelled) (#728, slice 2). An abandoned mutating
+  call that completed applied its writes although its caller never received the
+  result.
+- `python -m mcp_server.doctor` checks the Claude plugin/runtime pairing
+  (#729, slice 3). Launched with `CLAUDE_PLUGIN_ROOT`, the optional
+  `Plugin/runtime pairing` check fails when the process imports `mcp_server`
+  from outside that plugin directory, or when `.claude-plugin/plugin.json`
+  declares a version other than the running code's (installed wheel, else
+  `pyproject.toml`). Without `CLAUDE_PLUGIN_ROOT` it passes and says no plugin
+  launched it; the Codex runtime keeps its own launch-time version check.
+- `docs/audits/model-identity-inventory-2026-11-06.md` lists which embedding
+  and reranker identity facts a local run records and where (#734, slice 1):
+  the embedding revision is pinned but its bytes are never hashed, the reranker
+  sha256 is recorded but never verified, and the benchmark manifest records the
+  pinned `embedding_model_revision` even when the run served fallback
+  embeddings (probe in the document).
+- A `recall` hit written by `ingest_document` names the document it came from
+  (#713, slice 2). Its `document_sources` lists the source file, the content
+  version and the adapter kind, read from the hit's own `doc-ingest:` tag, so a
+  caller no longer parses tags to trace a segment back to a file version. A hit
+  that is not a document segment has no `document_sources` key.
+- `docs/audits/operation-consumption-inventory-2026-11-05.md` lists what the
+  telemetry measures and attributes to a user operation (#733, slice 1): 10 MCP
+  tools, 2 hooks and the capture worker emit samples (wall time, bytes, outcome,
+  retrieval route); no sample carries an operation identity or CPU time, and the
+  headless authoring cost reads only `total_cost_usd`, reported as `0.0` when
+  the CLI gives none.
+- A claim keeps the time of the event it describes apart from the time it was
+  extracted (#717, slice 1). `ClaimEvent.event_time` is `unknown`, a `point`
+  or an `interval`, each bound carrying its value, its ISO 8601 precision and,
+  when the source states one, its offset. A claim with no stated date stays
+  `unknown`; it never inherits `extracted_at`. Persistence and extraction of
+  the field are later slices.
+- `wiki.claim_events` stores each claim's `event_time` (#717, slice 2), as the
+  JSON of `EventTime` in PostgreSQL (`JSONB`) and SQLite (`JSON`), so a naive
+  bound stays naive and an aware one keeps its stated offset. Existing rows
+  migrate once to `{"kind": "unknown"}`; `wiki_extract` writes the field.
+- `extract_claims` reads each claim's `event_time` from the date its own
+  sentence states, at the precision written (#717, slice 3): "March 2026" is a
+  month, `2026-03-12T10:30+02:00` a minute with its offset. A sentence with no
+  date, a bare year, a relative or impossible date, two different dates, or
+  several sentences kept as one unit (a short paragraph, heading or list item,
+  whose date may belong to the other sentence), or interval wording ("from 10
+  to 12 March 2026"; full-date intervals are read since slice 4) stays
+  `unknown`; a date inside a URL or a path is not read, and the event time is
+  never taken from `extracted_at`.
+- `extract_claims` reads stated intervals into `event_time` (#717, slice 4):
+  "from D1 to|until|till|through D2" and "between D1 and D2" give both bounds,
+  "since D" a start with an unknown end, "until|till D" an end with an unknown
+  start, each bound at its own written precision and zone. Abbreviated ranges
+  ("from 10 to 12 March 2026", "10-12 March 2026"), an end before the start,
+  and a pair where only one end states a zone stay `unknown`.
+- `tests_py/handlers/test_claim_event_time_supersession.py` runs
+  `wiki_extract` then `wiki_resolve` on SQLite over a correction and two
+  contradictory dates (#717, slice 5, acceptance criterion 3). Resolution
+  writes `supersedes` and memos and leaves every `event_time` as its sentence
+  stated it: the superseded claim keeps its older date, both contradictory
+  dates survive with their precision under a `conflict_candidate` memo, and an
+  undated claim stays `unknown`.
+- `tests_py/server/test_mcp_protocol_cancellation.py` cancels a `tools/call`
+  over JSON-RPC (SDK `Client(mode="legacy")` and server on the in-memory
+  transport) while its handler runs, once by `notifications/cancelled` and once by the
+  client disconnecting (#728, slice 3). In both paths the worker keeps its
+  admission slot until it ends, `abandoned_work` counts it then records it
+  `completed`, and a handler still running at the cancel makes its SQLite write
+  after the client stopped listening. The cancel test also shows the session
+  serves a new call; the disconnect test also shows teardown neither waits on
+  nor kills the worker thread. Releasing the slot at the cancel turns both
+  tests red.
+
+### Changed
+
+- The post-merge engine closes the issues a resolver-merged PR names with a closing
+  keyword (`close-issues` job, `issues: write` only). GitHub ignores those keywords when
+  the merge is made with the workflow's `GITHUB_TOKEN`: all 8 resolver merges with
+  `Closes #N` left their issue open, while merges by a person closed theirs (#801).
+- The mutation gate judges only the mutants on the lines a pull request changed, not
+  every mutant of each changed function (ADR-1122 item 6, owner decision 2026-11-06).
+  Survivors on untouched lines are counted on the log; #865 and #878 were asked to kill
+  102 and 273 survivors that predated them.
+- An added blank or comment-only line no longer puts a function in the mutation gate's
+  scope (ADR-1122), unless it sits inside a multiline string or bytes literal or its
+  hunk replaced code. The blank lines above a new function selected the function before
+  it: #878 was asked to kill the mutants of `count_reranked`, which it did not change.
+- The mutation gate sets mutmut's process isolation per platform (ADR-1122):
+  `forkserver` on Linux, `fork` on macOS, where `forkserver` aborted the stats run in
+  torch MPS before any mutant ran. Another platform stops the gate.
+- `memory-exact-review` and `supersession-delete-parity` sync the `dev` group, so the
+  mutation gate their `ci_unit.sh` ends with finds `mutmut` (ADR-1122). Without it the
+  step failed with "Failed to spawn: mutmut" before any mutant ran (#894).
+- mutmut forks each mutant from a fork server (`process_isolation = "forkserver"`,
+  ADR-1122). Forked from the process that had run the suite, mutants hung in torch on
+  the Linux runner and timed out: #878 was cancelled at the six-hour job limit.
+- Each LongMemEval line of `<stem>.queries.jsonl` carries the question's gold
+  `answer_session_ids` and its own `mrr` and `recall10`, so the published Recall@10
+  and MRR are recomputable from the journal alone (#708).
+- The mutation gate runs only the mutants of the changed functions (ADR-1122).
+  `mutation_check.sh` passes one `<prefix>*` name per changed function to
+  `mutmut run`; it used to run every mutant of the file and judge the changed
+  functions afterwards, which held #865 for six hours. On #877's diff the gate
+  now runs 36 mutants instead of 1,164 and reaches its verdict in 21 min.
+- Pull requests must kill every mutant in the functions they change (ADR-1122).
+  `scripts/ci_unit.sh` ends with `scripts/ci_mutation_diff.py`, which mutates the
+  changed functions of `mcp_server` with their unit tests and accepts only
+  registered equivalents; outside a PR it does nothing.
+  A removed method no longer selects its neighbours, the mutation sandbox copies
+  `benchmarks`, and a changed function mutmut cannot mutate (a decorator other than
+  `staticmethod`/`classmethod`) is reported as a warning instead of passing silently.
+  A comment above a removed method no longer selects its neighbours, and the next
+  file's header no longer hides a trailing decorator in the last hunk of a file.
+- The Claude review verdict decides the merge (ADR-1121). The post-merge
+  resolver merges a PR only when the latest `claude[bot]` verdict on its head
+  is `Verdict: approve` and links the `claude-review.yml` run of that head whose
+  `PR Review` step succeeded; a block, a verdict of another head or a missing
+  verdict holds the merge.
+- Codex no longer runs in the CI (ADR-1120). The 891-line `review` job of
+  `pipeline.yml` and `Codex.yml` are removed; `merge` remains the aggregate of
+  the test jobs and the Claude workflow is the only automatic reviewer.
+- Automatic Claude reviews are capped at three per PR (ADR-1119). A read-only
+  `budget` job counts the reviews already published and skips the fourth
+  without a comment; the accepted part merges and the rest moves to a
+  refinement PR. The review prompt now defines a Blocker, limits Notes to three
+  one-line items, reviews only the commits since the previous review on rounds
+  two and three, and ends with a `Verdict:` line. The label `claude-rereview`
+  allows exactly one more review. Measured on PR 856: 20 reviews, 22 of 24 comments saying
+  "nothing blocks merge".
+
+### Removed
+
+- The former Claude repair actions are removed following the owner decision.
+  Automatic Claude review remains review-only; owner mentions retain the
+  separate implementation workflow described below and in ADR-1117.
+- Duplicate legacy CI workflows are retired. Pipeline, required CodeQL and the
+  protected merge resolver remain active.
+
+### Fixed
+
+- Four `validate_memory` tests write their file references the way the
+  platform writes paths (#692 class 5, 4 Windows failures in run 38008915302).
+  `f"{tmp_path}/a.py"` mixes `\` and `/` on Windows, and the extractor reads
+  no reference from it; `existing_paths={str(f)}` named a native path where
+  the handler passes extracted references, which use `/` on every platform.
+  The tests now build `tmp_path / "a.py"` and pass `f.as_posix()`.
+- `python -m mcp_server.doctor` no longer stops on a symlink loop in
+  `CLAUDE_PLUGIN_ROOT` or in the path it imports `mcp_server` from (#729,
+  slice 4). Up to Python 3.12 `Path.resolve()` raises `RuntimeError` on a loop;
+  the `Plugin/runtime pairing` and `Runtime artifact identity` checks caught
+  only `OSError` and `ValueError`, so the loop aborted every other check. From
+  3.13 a non-strict `resolve()` raises nothing, and the artifact check passed
+  with 0 files. Both checks now resolve these paths with `strict=True` and
+  catch `RuntimeError`, so on every supported Python each fails alone and names
+  the loop.
+- The preemptive-context hook tests send an event path that is absolute on the
+  running platform (#692 class 5, 9 Windows failures in run 38008915302):
+  `/a.py` has no drive on Windows, so `_event_paths` rightly dropped it as a
+  relative path with no `cwd` and nothing was primed. The expired-cooldown test
+  now seeds the real `[project, path]` cooldown key; it seeded `"/a.py"`, which
+  no lookup reads, and passed even with a fresh cooldown.
+- On Windows, a hook whose intermediate `bash.exe` has already exited finds its
+  window again (#835, first slice; ADR-1124). The ancestor walk stops at the
+  missing parent, so SessionStart started no consolidate cycle and wrote no
+  registry entry. The window's `claude.exe` pid is now read from `CLAUDE_PID`
+  first, used only when it names a `claude.exe` not younger than the hook,
+  and the walk answers otherwise.
+- `query_methodology` lists the hot memories of the domain `remember` writes
+  (#721, slice 9). It read them under the cognitive-profile id `detect_domain`
+  returns, while `remember` without an explicit domain writes under the
+  session's repository (`resolve_cwd`) and, outside a known repository, under
+  the detected profile resolved as a hint. A profile id that differs from that
+  scope (a legacy id, or `cortex-cowork` outside its checkout) listed a scope no
+  write used. It now reads the scope `remember` would write for the same `cwd`.
+  `detect_gaps` was checked and needs no change: it reads only domains taken
+  from the store.
+- `validate_memory` validates the domain identity `remember` writes (#721,
+  slice 8). It passed an explicit `domain` unresolved to
+  `get_memories_for_domain`, so `validate_memory(domain="cortex-cowork")`
+  validated a scope no write used (`remember` stores it under `cortex`) and
+  `domain="SciFact"` missed `scifact`, both reporting `validated: 0`. It now
+  resolves the domain with `resolve_explicit_domain`; a blank domain counts as
+  no domain.
+- `assess_coverage` scores the domain identity `remember` writes (#721,
+  slice 7). It passed an explicit `domain` unresolved to
+  `get_memories_for_domain`, so `assess_coverage(domain="cortex-cowork")`
+  scored a scope no write used (`remember` stores it under `cortex`) and
+  `domain="SciFact"` missed `scifact`. It now resolves the domain with
+  `resolve_explicit_domain`; a blank domain counts as no domain, and the
+  returned `domain` is the resolved name.
+- `drill_down` rebuilds its hierarchy over the domain identity `remember`
+  writes (#721, slice 6). `recall_hierarchical`, which hands out the cluster
+  IDs, builds its tree over the resolved domain, but `drill_down` rebuilt it
+  over the raw argument, so `drill_down("L2-0", domain="cortex-cowork")` read a
+  scope no write used and the ID pointed nowhere. It now resolves the domain
+  with `resolve_explicit_domain`; a blank domain counts as no domain.
+- `get_project_story` reads the domain identity `remember` writes (#721,
+  slice 5). It passed an explicit `domain` unresolved to
+  `get_memories_for_domain`, so `get_project_story(domain="cortex-cowork")`
+  told the story of a scope no write used (`remember` stores it under
+  `cortex`) and `domain="SciFact"` missed `scifact`. It now resolves the domain
+  with `resolve_explicit_domain`, like `remember`, `recall`,
+  `recall_hierarchical` and `narrative`; a blank domain counts as no domain.
+- `narrative` reads the domain identity `remember` writes (#721, slice 4). It
+  passed an explicit `domain` unresolved to `get_memories_for_domain`, so
+  `narrative(domain="cortex-cowork")` narrated a scope no write used
+  (`remember` stores it under `cortex`) and `domain="SciFact"` missed
+  `scifact`. It now resolves the domain with `resolve_explicit_domain`, like
+  `remember`, `recall` and `recall_hierarchical`; a blank domain counts as no
+  domain.
+- `recall_hierarchical` reads the domain identity `remember` writes (#721, slice 3).
+  It passed an explicit `domain` unresolved to `get_memories_for_domain`, so
+  `recall_hierarchical(domain="cortex-cowork")` read a scope no write used
+  (`remember` stores it under `cortex`) and `domain="SciFact"` missed
+  `scifact`. It now resolves the domain with `resolve_explicit_domain`, like
+  `remember` and `recall`; a blank domain counts as no domain.
+- The doctor's `Runtime artifact identity` check (#729, slice 2, review notes on
+  #887). In a git checkout the digest covers the files git keeps in the tree
+  (tracked, or untracked and not ignored): an ignored `.DS_Store` under
+  `mcp_server/` no longer changes it, as hatchling leaves it out of the wheel
+  too. A tree without `.git` is named `outside git` and passes on its digest,
+  where it used to fail with a `git status` fix that could not help. An
+  installed wheel whose `RECORD` is gone now fails instead of being described as
+  a source tree. The reinstall fix names `--python <interpreter>`, as
+  `runtime.py setup` does.
+
+- `rebuild_profiles` now reads Codex history too (#726, first slice). It
+  scanned `~/.claude/projects` only, and a Codex rollout parsed to zero
+  messages, so a Codex-only history created no domain. Every user-thread
+  rollout under `$CODEX_HOME/sessions` (default `~/.codex/sessions`) becomes a
+  conversation record whose project is its `session_meta` working directory,
+  named as Claude names it, so a repository worked on from both hosts is one
+  domain. Subagent, guardian-review and consolidation threads are skipped.
+- A Codex session's `apply_patch` edits now count as edits in the incremental
+  cognitive-style observation, as Claude's `Edit`/`Write` do (#727, slice 1).
+  `core/tool_operation.py` maps each native tool name to the operation it makes
+  explicit; native names stay in `toolsUsed`, and the opaque Codex `exec` stays
+  unclassified rather than counted as a read.
+- A document section memory is labelled by its full heading path
+  (`[Install > Notes]`), not its own heading alone, so the same text under two
+  parents is recalled as two distinguishable segments (#713, slice 1).
+  Top-level sections keep their label; a re-ingest of an already-ingested
+  nested document retires the old flat-labelled receipts as for any other
+  normalizer change (#714).
+- Transcript discovery honours the host's config directory (#710, slice 1).
+  Profile rebuilds, `import_sessions`, `backfill_memories`, explore features and
+  the SessionStart session count read `$CLAUDE_CONFIG_DIR/projects` when the
+  variable is set, instead of always `~/.claude/projects`. `CORTEX_CLAUDE_DIR`
+  still wins, and Cortex's own data (store, profiles, wiki) does not move.
+- A user's own tags no longer hide a memory from default recall (#706,
+  ADR-1123). The low-signal filter of `recall` and of trigger injection now
+  drops only capture markers (`auto-captured`, `tool:<name>`, `_backfill`,
+  `imported`, `session-summary`, emitted by Cortex writers, and `tool-output`,
+  listed in #706);
+  `audit`, `automated`, `wip`, `progress`, `code-review` and `stage-1` to
+  `stage-11` no longer drop the memory. The wiki admission list is unchanged.
+- The post-commit reindex hook reads its cooldown file as UTF-8, the encoding
+  `gated_files.write_json` writes it in, instead of the locale code page (cp1252 on
+  Windows). The test files that still wrote or read text in the locale code page
+  now name UTF-8 (#692, class 3).
+- The mutation sandbox copies `.claude-plugin` and `plugins`: the hook tests
+  selected for `post_commit_reindex.py` read both, so mutmut's clean run failed
+  before any mutant ran. New tests pin the cooldown window, the unknown-root
+  default and the pruning of a full cooldown file, which the diff-scoped gate
+  (ADR-1122) mutates whole.
+- The benchmark machine-load snapshot records no load average on Windows
+  instead of raising: `os.getloadavg` does not exist there, and the
+  `AttributeError` escaped the `except OSError` (#692 class 4, 13 tests).
+- `wiki_bulk_migrate.py` and `wiki_rebucket_file_docs.py` record a page's wiki
+  path with `/` on Windows too. `str()` of the relative path gave `adr\_general\…`,
+  which the slug detectors (split on `/`) did not see, and which ended up as-is
+  in the stubs' `redirect_to`. The decision-block migration tests write their
+  fixture byte for byte: `write_text` turned `\n` into `\r\n` on Windows, and the
+  block id, a hash of the file's bytes, then named no block (#692 class 8, 23 tests).
+- `scripts/measure_pipeline_hook.py` passes `USERPROFILE` to the hook it
+  measures, as the hermetic hook env and the test sandboxes now do:
+  `Path.home()` reads `USERPROFILE` on Windows, so an environment naming `HOME`
+  only made the hook die with "Could not determine home directory" (#692 class 7).
+  The shared-host-store test waits on its worker pipes with a thread, since
+  Windows `select` accepts sockets only, and the worker-log test runs only where
+  the capture worker exists (#692 class 6).
+- The README now states that both LongMemEval headline numbers (v4.14.1,
+  v4.20.0) describe the PostgreSQL store with the reranker, and the Storage
+  table no longer claims an "identical" retrieval contract on SQLite: the tool
+  interface is identical, and SQLite has only a bounded n=50 run without the
+  reranker, no run comparable to the n=500 headline (#708).
+- The groomer coordinator no longer starts a consolidate cycle outside its
+  lock in three failure cases (#683, ADR-1118). An existing `groomer.pid` that
+  cannot be read (permission denied, I/O error) now raises
+  `GroomerPidUnreadableError` instead of reading as "not running"; SessionStart
+  logs it at ERROR and starts no cycle. Only an `OSError` on the coordinator's
+  files still takes the legacy spawn; any other exception at SessionStart is
+  logged at ERROR and starts no cycle. A failed spawn of the cycle (building
+  the command or `Popen` raising `OSError`, e.g. EAGAIN) is logged at ERROR
+  and recorded as `spawn_failed` instead of `started`, rather than leaving the
+  lock and retrying through the legacy spawn.
+- `explore_features` passes client-side output validation: every response
+  carries the required `mode` and `status`, the declared `outputSchema` lists
+  the keys the handler returns (`dictionary`, `graph`, `domains`, `comparison`,
+  `persistentFeatures`…), and the description states the 9 persona dimensions
+  actually returned, without the drift it never computed. An unknown mode is
+  now rejected as invalid input rather than answered with an error dict no
+  schema could accept (#680).
+  The registered wrapper types `mode` as a `Literal`, so the published input
+  schema carries the enum and the MCP SDK rejects any other value before the
+  handler runs. **Breaking:** a caller that read `{"status": "error"}` for an
+  unknown mode now receives an MCP input-validation error.
+
+- Owner `@claude` mentions (`.github/workflows/claude.yml`) can run CLAUDE.md's
+  validation commands headlessly (`pytest`, `ruff check`, `ruff format --check`,
+  `python -m mcp_server.doctor`, `python scripts/check_craftsmanship.py`, plus `git
+  status|diff|log` and `gh run view`); tag mode keeps its own scoped `git
+  add|rm|commit|push`, and main's `.claude/settings.json` adds `ruff format` and
+  `python3 -m mcp_server.doctor`; headless, anything that falls through to "ask"
+  is denied. The job installs Python 3.12, the locked dev+sqlite+codebase extras of `ci.json`
+  "regression" on the SQLite backend, the lint and packaging groups, the project
+  as a non-editable wheel built from the locked backend (no unpinned Python
+  package fetch; the apt packages and the embedding model, fetched before the
+  agent starts, excepted). The action restores `.claude/` from the base branch,
+  so main's `.claude/settings.json` adds its allow rules to the list; `uv` and
+  `curl` are denied outright, that file's rules are rewritten in word-bounded
+  `:*` form (in effect once merged: the action restores the base branch's copy),
+  and a test maps each of its Bash allow rules to an allowed prefix, a denied
+  prefix or a named exemption, pins the deny rules the job relies on and refuses a
+  tracked `settings.local.json`. A first step refuses a fix target whose head is
+  a fork or the default branch and refuses when the event cannot be read or
+  carries no issue object; the job is bound to 60 minutes and every step before
+  the agent has its own bound (28 minutes in the worst case), so the agent keeps
+  at least 30; the offline switches of the test-suite action are set (#855,
+  #856).
+- Document ingestion reports partial wiki/summary/section writes with component
+  receipts and failure reasons. Same-version retries resume missing components
+  from durable rows and page content, including stored summaries with missing
+  sections, without duplicating successful writes (#714). Summary and section
+  memories a same-version ingest wrote for another normalized output (a
+  different `title` override, a normalizer or redaction change) are marked
+  stale and listed in `retired_receipt_ids`, so they never block a later resume.
+  Only the ingester's own rows are read (`get_memories_by_tag(source=...)` on
+  both backends), and a compressed section is matched by its original text.
+
+- Exact remember replays return the existing id within the same write scope;
+  explicit corrections still post supersession edges. Consolidation retains
+  and supersedes legacy copies, preserves protection flags, and excludes
+  benchmark rows and block replicas (#707). The new counter is
+  `exact_duplicates.superseded_total`. SQLite writers need no registered `md5()`.
+  Replays refresh source hashes without resetting heat, and identical deliberate
+  batch items are refused before curation. Hard forget erases retained exact twins.
+
+- Surface named dedup, SQLite recall-signal, profile freshness, and hot-memory
+  read failures to callers instead of continuing with partial results (#685).
+  Doctor and check_setup expose process-local historical fallback counts as
+  optional warnings; these lifetime counters do not block readiness.
+  Capture workers roll back unfinished SQLite writes when a handler raises.
+  A broken SQLite vector index now rejects captures at the novelty lookup;
+  failed captures are not retried by the resident capture worker.
+
+- Owner @claude mentions inherit the official action's tag-mode workspace edit
+  approval instead of overriding it with auto mode (#822). Requests on the same
+  thread run one at a time with up to 100 pending requests retained; automatic
+  reviews keep their separate permission mode.
+
+- The managed PostgreSQL server starts on Ubuntu 25.10 and 26.04, which ship
+  no `libxml2.so.2`: Linux GNU now runs theseus 18.6.1, which bundles its
+  runtime libraries (about 40 MB instead of 12 MB); macOS keeps 18.6.0. The
+  published pgvector 0.8.7 archives load into it unchanged. 18.6.1 needs
+  glibc 2.36, so Ubuntu 22.04 and RHEL 9 no longer get the managed server:
+  Setup refuses them before the download, a new store stays on SQLite with
+  that reason shown, a store already on it makes Setup fail with that cause
+  (ADR-1114, owner decision 2026-10-28;
+  Pipeline run 40649407965 failed on an ubuntu-latest runner on 26.04).
+- Session registry POSIX `ps` probes report nonzero exits and invalid UTF-8
+  as named errors with the command and stderr; hooks log the actual cause
+  without starting a legacy consolidate worker (#682).
+
+- Share the launcher's first-launch backend policy with wheel hooks and direct
+  MCP startup: a fresh unconfigured HOME records SQLite before settings bind;
+  explicit URLs and managed PostgreSQL keep their existing precedence (#703, #704).
+- Stop installing the optional code-intelligence server during hook discovery;
+  installation remains in explicit `scripts/setup.sh` and is disclosed in
+  `PRIVACY.md` (#705).
+
+- The `merge` job of `.github/workflows/pipeline.yml` sets `GH_REPO: ${{ github.repository }}` on its `gh pr merge` step: the job runs without a checkout, so gh could not infer the repository and failed with `fatal: not a git repository` after every stage was green (session-optimizer #65, run 39756969927, 2026-10-22).
+
+- CI requires completed native Codex code and security reviews on the current
+  head. Unresolved findings block protected integration. Partial reruns retain
+  successful prerequisites and supersede obsolete skipped matrix placeholders.
+
+### Added
+
+- Inventory of what a Cortex backup must contain (#731, slice 1):
+  `docs/audits/owned-resources-backup-2026-11-05.md`. Lists every file and
+  store a Cortex install writes, classed as user data, derived data, process
+  state or not Cortex's, per backend. Finds that the code graphs, the
+  consolidation stamp and the pipeline install are built from the home
+  directory and do not follow `CORTEX_CLAUDE_DIR`.
+- `docs/audits/platform-support-matrix-2026-11-05.md` lists which combinations of
+  OS and architecture, host, backend and install channel a receipt measures, and
+  marks every other cell as not measured (#730, slice 1). Measured: four macOS
+  native journeys (one tied to the 4.23.4 release asset), the CI install probe on
+  `ubuntu-26.04`, `macos-26-arm64` and `windows-2025-vs2026`, and the managed
+  PostgreSQL lifecycle of ADR-1114. No Windows, Linux or `.mcpb` native journey
+  has a receipt.
+- Visualization companion audited against Cortex's default stores (#724,
+  slice 1): `docs/audits/visualization-companion-backends-2026-11-05.md`. The
+  companion reads PostgreSQL at `127.0.0.1:5432/cortex` only, so a SQLite store
+  or the plugin-managed server (kernel-chosen port, SCRAM password) leaves it in
+  Trace-only mode with a message that says to install Cortex.
+- Transcript capture producers audited (#716, slice 1):
+  `docs/audits/transcript-capture-producers-2026-11-05.md` lists the five
+  producers, their session keys, dedups and replay behaviour. No producer keeps
+  a cursor into a transcript and none discovers Codex rollouts.
+- `python -m mcp_server.doctor` names the artifact it runs (#729, slice 1). For an
+  installed wheel: its version and a sha256 over the `mcp_server` rows of its
+  `RECORD`, each member re-hashed on disk (a member that differs from the RECORD
+  fails this optional check). For a source tree or an editable install: its git
+  revision, any uncommitted `mcp_server` change and the same digest over its files,
+  labelled as source evidence, not a distributed artifact. A wheel built from a
+  revision gives the digest of that revision's tree.
+- `benchmarks/outcome/paired_delta.py`: scoring core of the longitudinal
+  outcome benchmark (first slice of #343). Pairs `recall` and `no_recall`
+  trials strictly by task and repeat, and reports the mean delta of
+  correctness, turns and tokens, its spread across repeats, and a task-level
+  percentile bootstrap 95% interval (none below 10 tasks). A single repeat is
+  flagged as an anecdote; an unpairable trial raises instead of being dropped.
+- `benchmarks/outcome/answer_key.py` and `commit_resolver.py`: task
+  definitions and a verifier that checks answers without Cortex (second
+  slice of #343). A commit answer is correct when it is a prefix of exactly
+  one commit object in the corpus repository and that commit is the key;
+  refs and replace refs are never consulted. A corpus that is not a
+  self-contained repository root, or a commit key that is not one of its
+  commits (`check_commit_keys`), stops the run instead of scoring every
+  answer incorrect. Requires git 2.32 or newer. Git runs without global or
+  system config, so no `safe.directory` override applies and the corpus
+  must belong to the user running it. Reasons and decided values are
+  exact-matched after normalisation against the accepted list in the task
+  key, with no similarity threshold.
+
+- Claude PR reviews use Anthropic's official direct PR workflow and its five
+  upstream reviewer agents (ADR-1117). Reviewer configuration loads from trusted
+  main; PR content is read through GitHub. This replaces ADR-1116's custom
+  workflow_run marker protocol. Codex retains its native review checks.
+  Evidence: `docs/verification/claude-bot-ci-20261027.md`.
+
+- **The single CI pipeline, run by the Claude bot (ADR-1115).**
+  `.github/workflows/pipeline.yml` runs contract, unit (the SQLite-backed
+  pytest suite, 90 % of lines from `coverage.xml`), regression
+  (`tests_py/integration`), e2e (`scripts/docker_smoke.sh`), environment
+  (`cortex-doctor` after a `pip install .` into a fresh venv on ubuntu, macOS
+  and Windows, bare runner plus the pinned Claude Code CLI 2.1.296) and
+  install (`scripts/install_e2e/run.py` on the three OS, the Windows leg new),
+  then the bot's review and fix, then a squash auto-merge that fails
+  explicitly instead of skipping; the release tag on push to main keeps
+  ADR-0802's gate with `canonical_version`. The commands live in `ci.json`.
+  `claude-review.yml` is retired (the pipeline's review job replaces it);
+  `ci.yml` and the other workflows are untouched. Red on day one: coverage
+  82 % under the 90 % floor, and the Windows install leg.
+
+### Security
+
+- Pillow now requires version 13.0.0 or newer to address the advisories affecting
+  12.3.0, including GHSA-5x8w-8jj5-q52h. Pillow 13 requires Python 3.11+, so
+  Python 3.10 users must upgrade. The plugin bootstrap selects its managed
+  Python on older interpreters; direct package installations require 3.11+.
+
+- The Claude Code workflows are aligned with the documented Claude Code GitHub Actions setup (https://code.claude.com/docs/en/github-actions, "Run a skill" and "Respond to @claude mentions"): the PR review runs the code-review plugin skill with `--comment` under read-only review permissions, and no checkout names the PR head ref, which clears CodeQL `actions/untrusted-checkout`.
+- The Claude Code PR review no longer checks out PR code in a privileged workflow (CodeQL `actions/untrusted-checkout/high`, `actions/untrusted-checkout-toctou/high`): the review job moves to `.github/workflows/claude-review.yml`, triggered by `pull_request` only, and `.github/workflows/claude.yml` keeps only the `@claude` job on its comment, review and issue triggers, with no PR head checkout.
+- **Personal data is stored owner-only (ADR-1112).** The 2026-10-21 audit
+  (E18) measured `memory.db`, logs and telemetry at 0644/0664 in 0755/0775
+  directories. Under `~/.claude/methodology`, the capture worker directory,
+  `brain-index.json` and the cache root (`~/.cache/cortex`, which now follows a
+  relocated `CORTEX_CLAUDE_DIR` like the rest of Cortex's data), files are now created 0600 and
+  directories 0700 (the SQLite database before SQLite opens it, so its WAL and
+  shared-memory files follow); existing installs are tightened once at server
+  or session start (directories 0700, files lose group/other bits, symlinks
+  untouched), and on Windows the roots get a user-only inherited ACL. Files
+  written into a user's repository keep the umask.
+- **A hard `forget` erases every stored copy of the memory (ADR-1111).** The
+  2026-10-21 audit (E15) found the full original text left in
+  `memory_archives` after a hard forget. `store.erase_memory` now deletes, in
+  one transaction on both backends, the row with its FTS and vector entries,
+  its archives, the wiki claims, drafts, citations and compiled page derived
+  from it, the reminders and rules mined from it, its receipts and stage
+  history, and the text entities only it referenced; page files compiled or
+  promoted from it are removed and the wiki index rebuilt. A failing step
+  rolls everything back and raises (the old handler logged a failed claim
+  deletion and deleted the row anyway). SQLite runs with `secure_delete`, FTS5
+  `secure-delete` and a WAL truncation, so the bytes leave the file too. The
+  result reports what was erased.
+- **One redaction gate on every write into storage (ADR-1110).** The 2026-10-21
+  audit (E16) found the secret scrubber on the capture hook only, missing
+  GitHub, Anthropic and OpenAI keys and JWTs, while `remember`, session import
+  and session end stored text unfiltered. Now:
+  - the detector is the gitleaks 8.30.1 default rule set, vendored byte-identical
+    under `third_party/gitleaks/v8.30.1/` (sha256-pinned, MIT, in the release
+    SBOM), translated to Python by `scripts/vendor_gitleaks_rules.py` (217 of
+    222 rules; the five that need a file name cannot apply to text) and applied by a port of
+    gitleaks' decision procedure, with exact parity against the binary on the
+    repository tree and on a real-format fake-credential corpus
+    (`scripts/redaction_parity.py`, run in CI); a second pass catches keys
+    followed by sentence punctuation, which six gitleaks rules miss;
+  - SQLite and PostgreSQL store connections are built gated: every write
+    statement, through any helper, pool, cursor, `executemany` or COPY, binds
+    redacted parameters; embeddings, the SQLite FTS augmentation and artifact
+    addresses are derived from redacted text;
+  - files are written only through `shared/gated_files.py`, child processes log
+    through a redacting relay, file log handlers carry a redacting filter; an
+    architecture test fails on any other storage primitive in `mcp_server/`;
+  - `.pre-commit-config.yaml` (gitleaks hook) and a blocking `secret-scan` CI job
+    (full history and tree, pinned and checksum-verified binary).
+
+### Added
+
+- `.github/workflows/claude.yml`: every push to a PR runs a Claude Code review (`/code-review` then `/security-review`, one cycle), applies the findings and arms squash auto-merge; `@claude` in a comment or issue runs Claude on that request. Action pinned by SHA (anthropics/claude-code-action v1.0.256).
+- **Per-project export and import of memories (ADR-1113, GDPR art. 20).**
+  `python -m mcp_server.portability export <project-root> <file>` writes the
+  current memories of a project and its subdirectories (never a sibling or the
+  parent; global memories with `--include-global`) as JSON Lines with a
+  versioned header, every value redacted, file mode 0600;
+  `import <file> [--into <root>]` validates the file, relocates directories,
+  recomputes embeddings and skips memories already present.
+
+- **The Claude Code plugin runs its own PostgreSQL server (#744, #740;
+  ADR-1114).** On macOS (arm64, x86_64) and Linux glibc (x86_64, aarch64),
+  Setup (`claude --init-only`) on a fresh install downloads the pinned
+  theseus-rs PostgreSQL 18.6.0 and a pgvector 0.8.7 archive (sha256-checked,
+  about 13 MB), runs `initdb --pwfile`, starts the server on 127.0.0.1 with
+  its cluster in `~/.claude/methodology/managed-pg` (uninstalling the plugin
+  never deletes memories), creates `vector`, `pg_trgm` and the schema, and
+  only then selects it. No Homebrew or system PostgreSQL is needed: the macOS
+  binaries carry their own OpenSSL (pg0, used by the earlier draft of this
+  change, loaded Homebrew's and failed in dyld on a Mac without it). The
+  pgvector archives are compiled by Cortex's CI (`pgvector.yml`: pinned
+  upstream commit, built and load-tested against the pinned PostgreSQL on each
+  platform, build provenance attested) and published from main only as a
+  release of this repository. The server is started and stopped on kernel events (ready in
+  `postmaster.pid`, process exit), never on a timer, and a postmaster is
+  adopted or signalled only when its PID and kernel start time are the ones
+  recorded at spawn and it authenticates with the cluster's password (a
+  wrong server signature, a foreign nonce, trust or a cleartext request is
+  refused). A postmaster that dies under live clients is started again on the
+  same port, and a client never takes a `running` status whose postmaster is
+  dead; one whose supervisor died before recording it is adopted once it
+  proves itself; a live postmaster of the cluster that Cortex did not start
+  is named and left alone, its `postmaster.pid` never removed. The Codex hook entry and `hypermnesia-mcp` stop in one line
+  (`Cortex not ready: ...`) when the server cannot run. The
+  Codex plugin, `hypermnesia-mcp` and `cortex-doctor` attach to the same
+  server, so Claude and Codex on one account share one store. A configured
+  `database_url` (`CLAUDE_PLUGIN_OPTION_DATABASE_URL` for hooks and Setup)
+  always wins, in Setup too; a server that cannot start leaves the SQLite
+  store selected, recorded as `sqlite_fallback` in the Setup outcome and shown
+  at session start as `SQLite fallback: <cause>`; Windows, musl and Linux
+  hosts missing `libxml2.so.2` or OpenSSL 3 keep SQLite. Existing SQLite
+  stores are not migrated. `setup_db.py` now fails when a schema statement
+  fails instead of reporting ready with warnings.
 - **Benchmark refresh preparation: pinned datasets, a per-query journal,
   offline token counting and energy per scored query.** Scores and retrieval
   are unchanged; nothing here runs a scored benchmark.
@@ -35,6 +595,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The `@claude` mention workflow (`.github/workflows/claude.yml`) checks out full history and can run git, gh and the test runners.
 - **No hook installs dependencies any more; run `claude --init-only` after
   `claude plugin install` and after `claude plugin update`** (ADR-1108,
   replacing ADR-1104 decision 4). Every hook used to install whenever its
@@ -275,13 +836,7 @@ adheres to [Semantic Versioning](https://semver.org/).
   Product code that decodes a child process's output names the encoding (`uv`,
   `git`, the Codex session queue). The decision is ADR-1098.
 
-- **`benchmarks/lib/bench_regression.sh` runs under the macOS system bash
-  3.2.57** (#690). The baseline worktree cleanup trap expanded a function-local
-  `wt_dir` when it fired; under `bash -c` and 3.2 the locals are already gone
-  then, so `set -u` aborted with `wt_dir: unbound variable`, the worktree was
-  left behind and the runner's exit status was lost. The trap body is now built
-  when it is set. `test_bench_regression_datasets.py` runs under `/bin/bash` and
-  the first `bash` on `PATH`.
+- [Retiré 2026-10-29 : porte de non-régression contre main supprimée sur ordre de l'owner ; les benchmarks sont une mesure, pas une porte.]
 - **`scripts/mutation_check.sh` refuses an empty test list** (#690 sibling
   search). The first argument empty used to exit 0 under `/bin/bash` 3.2.57
   (mutmut ran on one empty test name) and exit 1 under bash 5.3 (no tests to
@@ -326,6 +881,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- `.github/workflows/claude.yml`: the @claude mention workflow can run ruff, uv, pipx, coverage, tsc, shellcheck and the Claude CLI.
 - **`uv.lock` is the only dependency source (ADR-1092).** The thirteen
   generated `requirements/*.txt` exports, their generator and the launcher's
   hand-kept pins are gone. CI jobs, the three Docker images and the
@@ -895,8 +1451,7 @@ adheres to [Semantic Versioning](https://semver.org/).
   measure the un-ablated system, so it fails loudly instead. The background
   consolidation spawned by SessionStart now reports the dashboard outcome
   (`dashboards=written=N` or the error) instead of defaulting to `ok`. Measured
-  with `benchmarks/reproduce.sh --no-regression --no-ablation` against the
-  previous `main`: LongMemEval-S R@10 0.9800 (+0.0000), MRR 0.9057 (+0.0005);
+  with `benchmarks/reproduce.sh --no-ablation`: LongMemEval-S R@10 0.9800 (+0.0000), MRR 0.9057 (+0.0005);
   LoCoMo R@10 0.8890 (-0.0005), MRR 0.7801 (-0.0014), within tolerance.
 
 - **The documentation describes the recall fusion the code runs (#562).**
@@ -1113,10 +1668,7 @@ adheres to [Semantic Versioning](https://semver.org/).
   inherited an already-failing gate. `check_floors` stays informational
   (rounds `got` to the same 4-decimal precision it prints before comparing,
   matching what's on screen) but no longer `exit 1`s — same disposition as
-  the pyright ratchet (issue #188). Added `--no-regression` /
-  `--baseline-ref`: the blocking gate a PR should use instead of lowering
-  `FLOOR_*`, comparing HEAD against a baseline ref's own measured scores
-  rather than a fixed number.
+  the pyright ratchet (issue #188). [Retiré 2026-10-29 : porte de non-régression contre main supprimée sur ordre de l'owner ; les benchmarks sont une mesure, pas une porte.]
 
 - **`mcp_server/core/provenance.py`'s 43 surviving mutants, closed** (#389). A
   scoped `scripts/mutation_check.sh` run left 43 genuine survivors out of 232

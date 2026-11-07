@@ -9,7 +9,7 @@ the canonical list) backing the algorithms. Every change is held to that bar.
 
 ## What this project is
 
-A Python 3.10+ MCP server with **57 standalone tools** (60 with the optional
+A Python 3.11+ MCP server with **57 standalone tools** (60 with the optional
 ai-architect-mcp-codebase + prd-spec-generator integrations) and **9 automatic
 hooks**, persisting to a local SQLite store by default or to PostgreSQL +
 pgvector when configured. Implements rate-distortion forgetting,
@@ -23,7 +23,7 @@ results (LongMemEval Recall@10 = 98.2%, LoCoMo Recall@10 = 94.2%, BEAM-10M
 
 ## Dev setup
 
-**Prerequisites:** Python 3.10+ and `uv` with `uvx` (`pip install uv` or `pipx install uv`).
+**Prerequisites:** Python 3.11+ and `uv` with `uvx` (`pip install uv` or `pipx install uv`).
 `uv` itself must be on `PATH` for `pytest`, not only `uvx`: once psycopg is
 installed, pytest's start-up check (`scripts/check_venv_lock_parity.py`) runs
 `uv export` to compare your venv with `uv.lock`, and stops with an explicit
@@ -40,13 +40,13 @@ cd Cortex
 # 2026-07-28 on a tree without them, 12 tests skipped [not-a-count-claim: tests]
 # locally that CI runs (8 tree-sitter, 1 leidenalg — both `codebase`;
 # 3 sqlite-vec — `sqlite`).
-# CI's SQLite job installs ".[dev,sqlite,codebase]"; its PG job adds
-# `postgresql`. Install all of them so your run is the stricter one.
+# ci.json unit/regression install dev, sqlite and codebase. PostgreSQL
+# and benchmarks below are additional dependencies for local checks.
 # `uv sync`, not `pip install -e`: sync resolves from uv.lock, which is what
 # CI installs (`uv sync --locked`, hash-verified). Resolving
 # from the pyproject.toml ranges instead lands you on versions CI never had —
 # issue #253, where that gap cost a contributor a phantom type error.
-uv sync --no-default-groups \
+uv sync --locked --no-default-groups \
   --extra postgresql --extra sqlite --extra codebase --extra benchmarks --extra dev
 
 # Optional: the setup script provisions PostgreSQL + pgvector and inits the DB
@@ -78,27 +78,28 @@ uv lock --upgrade-package torch      # each platform moves within its range
 pytest tests_py/scripts/test_launcher_platform_coverage.py
 ```
 
-### Reproducing the pyright gate locally
+### Running pyright locally
 
-The gate is zero-diagnostic, so its answer only means something if your
-environment is CI's. Build it from `uv.lock` — the same lock CI's Type Check
-job installs from with `uv sync --locked`:
+Pyright is an optional local diagnostic, not a CI gate. Use the managed Python
+version and locked base extras from `ci.json`, plus the PostgreSQL and telemetry
+extras and the pinned `typecheck` group needed to inspect the full type surface:
 
 ```bash
-uv sync --no-default-groups \
+uv python install 3.12
+uv sync --locked --managed-python --python 3.12 --no-default-groups \
   --extra dev --extra postgresql --extra sqlite --extra codebase --extra otel \
   --group typecheck
-.venv/bin/python -m pyright mcp_server/
+uv run --no-sync python -m pyright mcp_server/
 ```
 
 Do **not** resolve this environment from the `pyproject.toml` ranges
 (`pip install -e ".[dev,...]"`): the ranges admit versions whose type surface
-differs, so the gate reports one thing to you and another to CI. That is issue
-#253 — a contributor chasing a `tree-sitter-language-pack` diagnostic CI never
-saw. The extras above are not a hand-kept list: they are asserted equal to the
-`set:` CI's Type Check job installs by
-`tests_py/scripts/test_typecheck_env_parity.py`, which fails if this block and
-CI's install ever drift apart.
+differs. That caused issue #253, where a contributor chased a
+`tree-sitter-language-pack` diagnostic absent from the locked environment.
+`tests_py/scripts/test_typecheck_env_parity.py` checks the locked Python test
+commands in `ci.json`, their use by `pipeline.yml`, and this local diagnostic's
+shared interpreter and base extras. The additional typecheck dependencies stay
+local; they do not add a pipeline job.
 
 ---
 
@@ -109,26 +110,19 @@ CI's install ever drift apart.
 - One mechanism per PR when adding new biological mechanisms.
 - Conventional commit messages preferred.
 
-### The one required status check
+### The CI contract
 
-Branch protection on `main` names a single `ci.yml` context, **`CI Green`**
-(plus `CodeQL`, which GitHub reports from its own default setup). `CI Green`
-is the `ci-green` job at the bottom of `.github/workflows/ci.yml`: it needs
-every other job in that workflow and fails on any result other than
-`success`, except for the jobs listed in its `ALLOWED_SKIPS` — which may
-contain only jobs carrying a job-level `if:`, each with its reason.
+`.github/workflows/pipeline.yml` reads the five test commands from `ci.json`:
+unit, regression, e2e, environment and installation (`install`). Unit tests
+produce `coverage.xml`; the pipeline enforces the 90% coverage floor. Claude
+handles PR review and corrections, and the merge job checks the current PR head
+and required statuses before merging. Main pushes run the tests before the tag
+job. Pyright and Ruff remain available locally; they are not separate CI gates.
 
-Naming individual jobs in the protection settings instead put the contract
-outside git, where no diff shows it and every rename breaks it: extracting
-the test steps into a reusable workflow (issue #336) renamed the four matrix
-legs to `Test (Python X.Y) / Test (Python X.Y)`, the four bare contexts
-`main` required were never reported again, and a fully green PR sat BLOCKED
-(#387). With one aggregate context, renaming a job, resizing the matrix, or
-delegating steps costs nothing.
-
-**Adding a job to `ci.yml` means adding it to `ci-green.needs`.**
-`scripts/check_ci_gate_complete.py` (run by `lint`) fails the build
-otherwise — an ungated job could fail without blocking a merge.
+The pipeline is generated by `zetetic-team-subagents`' `render-ci` command.
+Change repository test commands in `ci.json`; change pipeline behavior in the
+shared template and regenerate it. Branch-protection settings must match the
+contexts emitted by this pipeline, rather than the retired `CI Green` workflow.
 
 ### Issue ownership
 
@@ -198,10 +192,8 @@ reranker. Changes here:
 
 ## Coding standards (excerpt)
 
-Standard Python style, enforced in CI by `ruff format --check .` and
-`ruff check .` (ruff pinned at 0.15.20 in
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml)), plus
-project-specific rules:
+Check Python style locally with `ruff format --check .` and `ruff check .`
+using the version locked in `uv.lock`, plus these project-specific rules:
 
 - **No `Any`** in production code. Use `Protocol` or generic typing.
 - **§8 Source discipline.** Every numeric constant ≥3 significant digits
@@ -209,10 +201,9 @@ project-specific rules:
 - **No mutable default arguments.** No globals except for read-once
   configuration objects.
 - **No bare `except:`.** Catch the specific exception you mean.
-- **Type-checked at zero.** `pyright` (pinned 1.1.410, `typeCheckingMode:
-  "standard"`) runs over `mcp_server/` and ANY diagnostic fails the build —
-  the 568-diagnostic ratchet backlog was burned to zero in issue #197
-  (2026-07-28) and the ratchet retired. History:
+- **Local type diagnostics.** The pinned `typecheck` dependency group runs
+  pyright over `mcp_server/` with `typeCheckingMode: "standard"`, using the
+  command above. It is not a pipeline gate. The historical remediation is in
   [`docs/provenance/pyright-remediation-plan.md`](docs/provenance/pyright-remediation-plan.md).
 - **File ≤300 lines, function ≤40 lines** — this repo's local tightening of
   coding-standards.md §4.1/§4.2 (≤500/≤50); see docs/agent-guidance.md § Code Style for
@@ -300,11 +291,16 @@ This project follows [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md).
 
 See [`SECURITY.md`](SECURITY.md). The memory engine handles potentially
 sensitive user data (PII in conversation transcripts); any data-exposure
-or injection issue is high-priority. In-repo, the defence is
-[`mcp_server/shared/redaction.py`](mcp_server/shared/redaction.py), which
-masks credentials in URLs and scrubs well-known secret shapes before content
-is stored — new code paths that capture or persist text must route through
-it. (The `pre-tool-secret-shield` file gate some maintainers run is part of
+or injection issue is high-priority. In-repo, the defence is one redaction
+gate (ADR-1110, [`mcp_server/shared/redaction_gate.py`](mcp_server/shared/redaction_gate.py))
+on every storage primitive: store connections are built gated, files are
+written only through [`mcp_server/shared/gated_files.py`](mcp_server/shared/gated_files.py),
+and child-process output goes through `mcp_server/infrastructure/log_relay.py`.
+New code that persists text uses these;
+`tests_py/architecture/test_storage_redaction_gate.py` fails on any other write
+primitive. Secrets are also kept out of git: run `pre-commit install` once
+(gitleaks 8.30.1, `.pre-commit-config.yaml`); CI's `secret-scan` job scans every
+commit and the tree and blocks the merge. (The `pre-tool-secret-shield` file gate some maintainers run is part of
 their local agent tooling, not of Cortex; do not rely on it.) The security
 argument, its trust boundaries and its limits are in
 [`docs/ASSURANCE-CASE.md`](docs/ASSURANCE-CASE.md).

@@ -1,0 +1,7 @@
+(version 1)
+; source: issue #740 - the org-managed Mac as Cortex meets it: no Homebrew.
+; Nothing under /opt/homebrew or /usr/local is read, run or loaded by dyld,
+; and no connection reaches a PostgreSQL on the default port.
+(allow default)
+(deny file-read* (subpath "/opt/homebrew") (subpath "/usr/local"))
+(deny network-outbound (remote tcp "*:5432"))

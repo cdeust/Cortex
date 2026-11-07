@@ -19,6 +19,7 @@ from mcp_server.infrastructure.wiki_store import write_page
 from mcp_server.shared.log_file_lock import log_file_lock
 from mcp_server.shared.wiki_layout import adr_filename, slugify
 from mcp_server.shared.wiki_pages import build_adr
+from mcp_server.shared import gated_files
 
 
 def _snapshot(project: Path, page: Path) -> dict[Path, bytes | None]:
@@ -48,8 +49,7 @@ def _restore(project: Path, before: dict[Path, bytes | None]) -> None:
         if content is None:
             path.unlink(missing_ok=True)
         else:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(content)
+            gated_files.write_bytes(path, content)
     # Rollback itself changes directory metadata: old freshness stamps are invalid.
     write_decision_index(project / "wiki")
 

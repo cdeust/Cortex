@@ -10,6 +10,7 @@ source: ADR-0298 (issue #560)
 from __future__ import annotations
 
 from pathlib import Path
+from mcp_server.shared import gated_files
 
 
 def count_curation_gaps_under(domain_dir: str) -> tuple[int, int]:
@@ -92,7 +93,7 @@ def write_dashboard_pages(wiki_root: str, pages: dict[str, str]) -> dict[str, st
     for domain, page in pages.items():
         path = target_dir / f"{domain}.md"
         try:
-            path.write_text(page, encoding="utf-8")
+            gated_files.write_text(path, page)
             out[domain] = str(path)
         except OSError:
             continue
@@ -114,7 +115,7 @@ def write_dashboard_pages(wiki_root: str, pages: dict[str, str]) -> dict[str, st
     for d in sorted(out.keys()):
         index.append(f"| {d} | [`_dashboards/{d}.md`](_dashboards/{d}.md) |")
     try:
-        (target_dir / "_index.md").write_text("\n".join(index) + "\n", encoding="utf-8")
+        gated_files.write_text(target_dir / "_index.md", "\n".join(index) + "\n")
     except OSError:
         pass
     return out

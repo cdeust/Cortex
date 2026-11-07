@@ -30,6 +30,10 @@ from pathlib import Path
 import pytest
 
 from tests_py.scripts import _fake_uv
+from mcp_server.shared.platform import resolve_bash
+
+# A bare "bash" on Windows is the System32 WSL stub. source: ADR-1101
+BASH = resolve_bash()
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS_DIR = REPO_ROOT / "scripts"
@@ -158,9 +162,7 @@ def _run_setup_sh_step(layout: dict[str, Path]) -> subprocess.CompletedProcess:
     python_bin = str(Path(sys.executable).parent)
     path = os.pathsep.join([str(layout["fake_uv"]), python_bin, "/usr/bin", "/bin"])
     env = {"PATH": path, "HOME": os.environ["HOME"]}
-    return subprocess.run(
-        ["bash", "-c", script], capture_output=True, text=True, env=env
-    )
+    return subprocess.run([BASH, "-c", script], capture_output=True, text=True, env=env)
 
 
 def _run_setup_py_install_deps(layout: dict[str, Path], monkeypatch) -> None:

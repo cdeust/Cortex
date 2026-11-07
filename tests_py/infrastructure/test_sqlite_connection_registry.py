@@ -9,6 +9,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from tests_py._sqlite_vec import require_sqlite_vec
+
 from mcp_server.infrastructure.sqlite_connection_registry import (
     SqliteConnectionRegistry,
 )
@@ -62,10 +64,11 @@ def test_registry_owns_and_closes_every_thread_connection(tmp_path: Path) -> Non
 
 
 def test_future_worker_loads_enabled_vector_extension() -> None:
-    pytest.importorskip("sqlite_vec")
+    require_sqlite_vec()
     store = SqliteMemoryStore()
     if not store.has_vec:
-        pytest.skip("sqlite-vec cannot be loaded on this SQLite build")
+        store.close()
+        pytest.fail("sqlite-vec failed to load despite enable_load_extension support")
     observed: list[tuple[int, int]] = []
     errors: list[Exception] = []
 

@@ -47,8 +47,10 @@ from mcp_server.hooks.output_streams import use_utf8_output
 from mcp_server.hooks.launcher_command import launcher_child_command
 from mcp_server.hooks.stdin_event import read_event_text
 from mcp_server.shared import detached_spawn
-from mcp_server.shared.log_rotation import methodology_log_path, open_rotating_log
+from mcp_server.infrastructure.log_relay import spawn_logged
+from mcp_server.shared.log_rotation import methodology_log_path
 from mcp_server.shared.project_scope import resolve_project_root
+from mcp_server.shared import gated_files
 
 _LOG_PREFIX = "[post-commit-reindex]"
 _COOLDOWN_FILE = Path("/tmp/cortex_reindex_cooldown.json")
@@ -167,7 +169,7 @@ def _check_cooldown(root: str) -> bool:
     """True when this repo was re-analysed within the cooldown window."""
     try:
         if _COOLDOWN_FILE.exists():
-            data = json.loads(_COOLDOWN_FILE.read_text())
+            data = json.loads(_COOLDOWN_FILE.read_text(encoding="utf-8"))
             last = data.get(root, 0)
             return (time.time() - last) < _cooldown_seconds()
     except (OSError, ValueError, TypeError):
@@ -185,12 +187,12 @@ def _update_cooldown(root: str) -> None:
     try:
         data = {}
         if _COOLDOWN_FILE.exists():
-            data = json.loads(_COOLDOWN_FILE.read_text())
+            data = json.loads(_COOLDOWN_FILE.read_text(encoding="utf-8"))
         data[root] = time.time()
         if len(data) > _MAX_COOLDOWN_ENTRIES:
             newest = sorted(data.items(), key=lambda kv: kv[1], reverse=True)
             data = dict(newest[:_MAX_COOLDOWN_ENTRIES])
-        _COOLDOWN_FILE.write_text(json.dumps(data))
+        gated_files.write_json(_COOLDOWN_FILE, data)
     except (OSError, ValueError, TypeError):
         # Cooldown cache is disposable: a failed write only means the next
         # run skips the cooldown, which is safe.
@@ -225,14 +227,8 @@ def _spawn_reanalyze(root: str) -> bool:
 
     log_path = methodology_log_path("pipeline_reanalyze.log")
     try:
-        with open_rotating_log(log_path) as log:
-            subprocess.Popen(  # noqa: S603 — cmd built from trusted sources
-                cmd,
-                stdin=subprocess.DEVNULL,
-                stdout=log,
-                stderr=subprocess.STDOUT,
-                **detached_spawn.options(),
-            )
+        # source: ADR-1110 — the child's output reaches the log only redacted
+        spawn_logged(cmd, log_path, **detached_spawn.options())
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"spawn failed: {exc}")
         return False

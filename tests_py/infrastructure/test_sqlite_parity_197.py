@@ -54,7 +54,10 @@ def _sqlite_vec_available() -> bool:
 _HAS_VEC = _sqlite_vec_available()
 _needs_vec = pytest.mark.skipif(
     not _HAS_VEC,
-    reason="sqlite-vec not installed ([sqlite] extra); vector path unavailable",
+    reason=(
+        "sqlite-vec unavailable; requires sqlite3.Connection.enable_load_extension "
+        "and an installed, loadable sqlite-vec package"
+    ),
 )
 
 

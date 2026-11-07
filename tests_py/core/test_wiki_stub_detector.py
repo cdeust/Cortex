@@ -132,7 +132,7 @@ class TestPurgeCap:
         for i in range(n):
             path = os.path.join(root, "lessons", "p", f"stub-{i:03d}.md")
             os.makedirs(os.path.dirname(path), exist_ok=True)
-            with open(path, "w") as f:
+            with open(path, "w", encoding="utf-8") as f:
                 f.write(f"---\ntitle: stub {i}\nkind: lesson\n---\n\n{body}")
 
     def test_cap_limits_per_cycle_purges(self, tmp_path, monkeypatch):

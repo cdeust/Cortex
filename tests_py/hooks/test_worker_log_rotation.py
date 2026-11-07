@@ -1,9 +1,16 @@
-"""Verify each worker spawn rotates its log before handing off the fd."""
+"""Verify each worker spawn hands its output to the redaction relay.
+
+Before ADR-1110 the hook rotated the log and handed the child the open file;
+now no hook opens the log: the child's stdout+stderr are the relay's stdin
+pipe and the relay appends (and rotates) under the gate. Relay rotation and
+redaction are pinned in tests_py/infrastructure/test_log_relay.py."""
 
 from __future__ import annotations
 
 import importlib
+import io
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -11,7 +18,7 @@ from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from unittest.mock import patch
 
-from mcp_server.shared import detached_spawn, log_rotation
+from mcp_server.shared import detached_spawn
 
 
 class TestWorkerLogRotation(unittest.TestCase):
@@ -42,38 +49,39 @@ class TestWorkerLogRotation(unittest.TestCase):
         )
         self.commit = importlib.import_module("mcp_server.hooks.post_commit_reindex")
 
-    def assert_spawn_rotates(self, filename: str, spawn) -> None:
+    def assert_spawn_routes_through_relay(self, filename: str, spawn) -> None:
         path = self.root / "isolated-claude/methodology" / filename
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("old\n", encoding="utf-8")
-        captured = []
+        calls = []
 
         def popen(command, **options):
-            self.assertEqual(path.with_name(filename + ".1").read_text(), "old\n")
-            self.assertFalse(options["stdout"].closed)
-            options["stdout"].write("new\n")
-            captured.append(options["stdout"])
-            return SimpleNamespace(pid=42)
+            calls.append((command, options))
+            return SimpleNamespace(pid=42, stdin=io.BytesIO())
 
-        with patch.object(log_rotation, "MAX_LOG_BYTES", len("old\n")):
-            with patch("subprocess.Popen", side_effect=popen):
-                spawn()
-        self.assertEqual(path.read_text(), "new\n")
-        self.assertEqual(len(captured), 1)
-        self.assertTrue(captured[0].closed)
+        with patch("subprocess.Popen", side_effect=popen):
+            spawn()
+        self.assertEqual(len(calls), 2)
+        (relay_cmd, relay_opts), (child_cmd, child_opts) = calls
+        self.assertEqual(
+            relay_cmd[-2:], ["mcp_server.infrastructure.log_relay", str(path)]
+        )
+        self.assertEqual(relay_opts["stdin"], subprocess.PIPE)
+        self.assertIsInstance(child_opts["stdout"], io.BytesIO)  # the relay's stdin
+        self.assertTrue(child_opts["stdout"].closed)  # parent kept no copy
+        self.assertEqual(child_opts["stderr"], subprocess.STDOUT)
+        self.assertFalse(path.exists())  # the hook itself opened nothing
 
-    def test_consolidate_spawn_rotates_and_closes_parent_descriptor(self) -> None:
-        self.assert_spawn_rotates(
+    def test_consolidate_spawn_routes_output_through_the_redaction_relay(self) -> None:
+        self.assert_spawn_routes_through_relay(
             "consolidate.log",
             lambda: self.consolidate._spawn_consolidate_cycle(detached_spawn.options()),
         )
 
-    def test_post_commit_spawn_rotates_and_closes_parent_descriptor(self) -> None:
-        self.assert_spawn_rotates(
+    def test_post_commit_spawn_routes_output_through_the_redaction_relay(self) -> None:
+        self.assert_spawn_routes_through_relay(
             "pipeline_reanalyze.log", lambda: self.commit._spawn_reanalyze("fixture")
         )
 
-    def test_session_reanalyze_rotates_and_closes_parent_descriptor(self) -> None:
+    def test_session_reanalyze_routes_output_through_the_redaction_relay(self) -> None:
         discovery = ModuleType("mcp_server.infrastructure.pipeline_discovery")
         discovery.discover_pipeline_command = lambda project_root: ["fixture"]
         ttl = ModuleType("mcp_server.infrastructure.pipeline_graph_ttl")
@@ -82,7 +90,7 @@ class TestWorkerLogRotation(unittest.TestCase):
         with patch.dict(
             sys.modules, {discovery.__name__: discovery, ttl.__name__: ttl}
         ):
-            self.assert_spawn_rotates(
+            self.assert_spawn_routes_through_relay(
                 "pipeline_reanalyze.log",
                 lambda: self.background._maybe_background_reanalyze(
                     "fixture", lambda project_root: "fixture"

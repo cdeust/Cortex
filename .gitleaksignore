@@ -1,0 +1,15 @@
+# source: ADR-1110 — synthetic fixture corpus committed in 3bf44168 (2026-04-25),
+# untracked in a735f0a4; its header states the values are placeholders. Not rewritten.
+3bf441685fe7eec3e1daf1e9403a6109723785bb:.claude/memory/pii-fixtures/tp-known-secrets.txt:aws-access-token:16
+3bf441685fe7eec3e1daf1e9403a6109723785bb:.claude/memory/pii-fixtures/tp-known-secrets.txt:generic-api-key:68
+3bf441685fe7eec3e1daf1e9403a6109723785bb:.claude/memory/pii-fixtures/tp-known-secrets.txt:generic-api-key:69
+3bf441685fe7eec3e1daf1e9403a6109723785bb:.claude/memory/pii-fixtures/tp-known-secrets.txt:generic-api-key:70
+3bf441685fe7eec3e1daf1e9403a6109723785bb:.claude/memory/pii-fixtures/tp-known-secrets.txt:generic-api-key:71
+3bf441685fe7eec3e1daf1e9403a6109723785bb:.claude/memory/pii-fixtures/tp-known-secrets.txt:generic-api-key:72
+3bf441685fe7eec3e1daf1e9403a6109723785bb:.claude/memory/pii-fixtures/tp-known-secrets.txt:generic-api-key:74
+3bf441685fe7eec3e1daf1e9403a6109723785bb:.claude/memory/pii-fixtures/tp-known-secrets.txt:github-app-token:29
+3bf441685fe7eec3e1daf1e9403a6109723785bb:.claude/memory/pii-fixtures/tp-known-secrets.txt:github-app-token:30
+3bf441685fe7eec3e1daf1e9403a6109723785bb:.claude/memory/pii-fixtures/tp-known-secrets.txt:github-oauth:28
+3bf441685fe7eec3e1daf1e9403a6109723785bb:.claude/memory/pii-fixtures/tp-known-secrets.txt:jwt:41
+3bf441685fe7eec3e1daf1e9403a6109723785bb:.claude/memory/pii-fixtures/tp-known-secrets.txt:jwt:42
+3bf441685fe7eec3e1daf1e9403a6109723785bb:.claude/memory/pii-fixtures/tp-known-secrets.txt:private-key:34

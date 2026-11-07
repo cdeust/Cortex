@@ -106,7 +106,10 @@ class TestDiscoverAllMemories:
         indexed it with strings ("tuple indices must be integers"), so every
         legacy projects/*/memory/*.md read failed and setup imported zero
         memory files (each failure swallowed to stderr by the caller)."""
-        monkeypatch.setattr("mcp_server.infrastructure.scanner.CLAUDE_DIR", tmp_path)
+        monkeypatch.setattr(
+            "mcp_server.infrastructure.scanner.CLAUDE_PROJECTS_DIR",
+            tmp_path / "projects",
+        )
         mem_dir = tmp_path / "projects" / "proj-a" / "memory"
         mem_dir.mkdir(parents=True)
         (mem_dir / "auth-decision.md").write_text(
@@ -132,7 +135,10 @@ class TestDiscoverAllMemories:
     def test_parses_memory_file_without_frontmatter(self, tmp_path, monkeypatch):
         """No-frontmatter files fall back to filename-derived name and the
         full content as body — same NamedTuple contract, empty meta."""
-        monkeypatch.setattr("mcp_server.infrastructure.scanner.CLAUDE_DIR", tmp_path)
+        monkeypatch.setattr(
+            "mcp_server.infrastructure.scanner.CLAUDE_PROJECTS_DIR",
+            tmp_path / "projects",
+        )
         mem_dir = tmp_path / "projects" / "proj-b" / "memory"
         mem_dir.mkdir(parents=True)
         (mem_dir / "plain-note.md").write_text("just a plain note\n", encoding="utf-8")
@@ -153,7 +159,10 @@ class TestDiscoverConversations:
 
 class TestDiscoverConversationsForProjects:
     def test_scopes_to_requested_projects_only(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("mcp_server.infrastructure.scanner.CLAUDE_DIR", tmp_path)
+        monkeypatch.setattr(
+            "mcp_server.infrastructure.scanner.CLAUDE_PROJECTS_DIR",
+            tmp_path / "projects",
+        )
         projects_dir = tmp_path / "projects"
         _write_session(projects_dir / "proj-a", "s1.jsonl")
         _write_session(projects_dir / "proj-b", "s1.jsonl")
@@ -165,7 +174,10 @@ class TestDiscoverConversationsForProjects:
         assert result[0]["toolsUsed"] == ["Read", "Read"]
 
     def test_never_touches_unrequested_project_dirs(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("mcp_server.infrastructure.scanner.CLAUDE_DIR", tmp_path)
+        monkeypatch.setattr(
+            "mcp_server.infrastructure.scanner.CLAUDE_PROJECTS_DIR",
+            tmp_path / "projects",
+        )
         projects_dir = tmp_path / "projects"
         _write_session(projects_dir / "proj-a", "s1.jsonl")
         # proj-b intentionally has a corrupt/unreadable-shape file; if the
@@ -180,7 +192,10 @@ class TestDiscoverConversationsForProjects:
         assert all(c["project"] == "proj-a" for c in result)
 
     def test_bounded_by_limit(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("mcp_server.infrastructure.scanner.CLAUDE_DIR", tmp_path)
+        monkeypatch.setattr(
+            "mcp_server.infrastructure.scanner.CLAUDE_PROJECTS_DIR",
+            tmp_path / "projects",
+        )
         projects_dir = tmp_path / "projects"
         for i in range(5):
             _write_session(projects_dir / "proj-a", f"s{i}.jsonl")
@@ -190,21 +205,30 @@ class TestDiscoverConversationsForProjects:
         assert len(result) == 3
 
     def test_empty_project_ids_returns_empty_without_io(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("mcp_server.infrastructure.scanner.CLAUDE_DIR", tmp_path)
+        monkeypatch.setattr(
+            "mcp_server.infrastructure.scanner.CLAUDE_PROJECTS_DIR",
+            tmp_path / "projects",
+        )
         # No projects dir created at all -- if this touched the filesystem
         # looking for it beyond the guard clause, it would still return []
         # (list_dir is defensive), so this mainly documents the contract.
         assert discover_conversations_for_projects([], limit=20) == []
 
     def test_zero_limit_returns_empty(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("mcp_server.infrastructure.scanner.CLAUDE_DIR", tmp_path)
+        monkeypatch.setattr(
+            "mcp_server.infrastructure.scanner.CLAUDE_PROJECTS_DIR",
+            tmp_path / "projects",
+        )
         projects_dir = tmp_path / "projects"
         _write_session(projects_dir / "proj-a", "s1.jsonl")
 
         assert discover_conversations_for_projects(["proj-a"], limit=0) == []
 
     def test_unknown_project_id_skipped_gracefully(self, tmp_path, monkeypatch):
-        monkeypatch.setattr("mcp_server.infrastructure.scanner.CLAUDE_DIR", tmp_path)
+        monkeypatch.setattr(
+            "mcp_server.infrastructure.scanner.CLAUDE_PROJECTS_DIR",
+            tmp_path / "projects",
+        )
         (tmp_path / "projects").mkdir()
 
         assert discover_conversations_for_projects(["does-not-exist"], limit=20) == []
