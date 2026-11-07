@@ -12,6 +12,9 @@ import pytest
 from mcp_server.handlers import auto_task_record_writer as writer
 from mcp_server.handlers.record_session_end import _resolve_domain
 
+# The writer's exact refusal, as its error boundary reports it.
+ESCAPE = "ValueError: task record path escapes wiki root"
+
 _TRAVERSAL = "../../../escaped-domain"
 
 
@@ -46,6 +49,7 @@ def test_writer_refuses_path_outside_wiki_root(wiki, tmp_path):
     result = _write(_TRAVERSAL)
 
     assert result["status"] == "error"
+    assert result["reason"] == ESCAPE
     assert not list(tmp_path.rglob("escaped-domain"))
 
 
@@ -63,6 +67,11 @@ def test_resolve_domain_sanitizes_explicit_domain():
     assert _resolve_domain("my-project", None, None, {}) == "my-project"
 
 
+@pytest.mark.parametrize("raw", ["..", "../..", "///"])
+def test_an_explicit_domain_with_nothing_left_after_sanitizing_is_unknown(raw):
+    assert _resolve_domain(raw, None, None, {}) == "unknown"
+
+
 def test_writer_refuses_symlinked_domain_dir_outside_wiki_root(wiki, tmp_path):
     outside = tmp_path / "outside"
     outside.mkdir()
@@ -72,6 +81,7 @@ def test_writer_refuses_symlinked_domain_dir_outside_wiki_root(wiki, tmp_path):
     result = _write("linked")
 
     assert result["status"] == "error"
+    assert result["reason"] == ESCAPE
     assert not list(outside.iterdir())
 
 
