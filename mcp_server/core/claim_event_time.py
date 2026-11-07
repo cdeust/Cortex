@@ -160,7 +160,9 @@ def _interval(sentence: str, dated: list[_Dated]) -> EventTime:
         gap = sentence[m1.end() : m2.start()].strip().lower()
         if (_word_before(sentence, m1.start()), gap) in _CLOSED_FRAMES:
             return EventTime(kind="interval", start=first, end=second)
-    if len(dated) == 1:
+    # One bound is open only when its frame is the sentence's only interval
+    # wording: in "from 10 until 12 March 2026" the start was stated, not unknown.
+    if len(dated) == 1 and len(_RANGE_RE.findall(sentence)) == 1:
         match, bound = dated[0]
         word = _word_before(sentence, match.start())
         if word in _OPEN_END_WORDS:

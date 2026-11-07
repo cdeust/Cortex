@@ -116,6 +116,9 @@ def test_a_time_without_a_zone_stays_naive():
         "From 2026-03-12T10:00Z to 2026-03-12T12:00 we used Redis.",
         "From 2026-01 or 2026-03 we used Redis.",
         "2026-01 until 2026-03 we used Redis.",
+        "We used Redis from 10 until 12 March 2026.",
+        "We used Redis from 10 till 12 March 2026.",
+        "Since 10 until 12 March 2026 we used Redis.",
         "From 2026-01 to then 2026-03 we used Redis.",
         "Since 2026-01 and until 2026-03 we used Redis.",
         "From 2026-01 to 2026-03 to 2026-05 we used Redis.",
@@ -219,6 +222,7 @@ def _bound(event, side: str) -> tuple[datetime, str] | None:
         ("Since 2026-01 we use SQLite.", (_naive(2026, 1, 1), "month"), None),
         ("We used Redis until March 2026.", None, (_naive(2026, 3, 1), "month")),
         ("We used Redis till 12 March 2026.", None, (_naive(2026, 3, 12), "day")),
+        ("We worked from home until March 2026.", None, (_naive(2026, 3, 1), "month")),
     ],
 )
 def test_interval_wording_around_full_dates_keeps_each_bound(sentence, start, end):
