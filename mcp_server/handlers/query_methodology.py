@@ -21,6 +21,8 @@ from mcp_server.handlers._tool_meta import READ_ONLY
 from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import get_shared_store
+from mcp_server.shared.domain_mapping import resolve_cwd
+from mcp_server.shared.domain_mapping import resolve_domain as resolve_hint
 
 logger = logging.getLogger(__name__)
 
@@ -152,6 +154,22 @@ def _get_hot_memories(
         for m in mems
         if not _is_noise_memory(m)
     ]
+
+
+def _memory_scope(cwd: str, profile_domain: str) -> str:
+    """The domain ``remember`` writes a memory under for this session.
+
+    ``detect_domain`` returns a cognitive-profile id, not a memory scope.
+    ``remember`` without an explicit domain writes under ``resolve_cwd(cwd)``
+    and, outside a known repository, under the detected profile resolved as a
+    hint (``remember._resolve_domain``). Reading hot memories under the raw
+    profile id listed a scope no write used whenever the two differ.
+
+    source: issue #721; ADR-0647"""
+    resolved = resolve_cwd(cwd) if cwd else ""
+    if resolved:
+        return resolved
+    return resolve_hint(profile_domain) if profile_domain else ""
 
 
 def _get_fired_triggers(directory: str, first_message: str) -> list[dict[str, Any]]:
@@ -314,7 +332,7 @@ async def handler(args: dict | None = None) -> dict:
 
     domain_id = detection.get("domain")
     profile = profiles.get("domains", {}).get(domain_id) if domain_id else None
-    hot_memories = _get_hot_memories(domain_id or "", cwd)
+    hot_memories = _get_hot_memories(_memory_scope(cwd, domain_id or ""), cwd)
     fired_triggers = _get_fired_triggers(cwd, first_message)
 
     if not profile:
