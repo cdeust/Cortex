@@ -21,6 +21,7 @@ from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
 from mcp_server.handlers._telemetry_wrap import instrument
+from mcp_server.shared.domain_mapping import resolve_explicit_domain
 from mcp_server.shared.subprocess_safe import run_with_hard_timeout
 
 # source: ADR-0451
@@ -469,7 +470,11 @@ def _grade_memories(
 async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Validate memory or memories: staleness (file paths) + provenance
     grade (file/commit/url/artifact/citation refs), I6-D6."""
+    # source: issue #721 -- validate the domain identity ``remember`` writes
+    # (a family member maps to its canonical, any other name is kept,
+    # lowercased); a blank domain counts as no domain.
     args = args or {}
+    args = {**args, "domain": resolve_explicit_domain(args.get("domain") or "")}
     base_dir = args.get("base_dir", "") or os.getcwd()
     threshold = float(args.get("staleness_threshold", 0.5))
     url_check_limit = int(args.get("url_check_limit", _DEFAULT_URL_CHECK_LIMIT))

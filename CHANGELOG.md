@@ -171,6 +171,13 @@ adheres to [Semantic Versioning](https://semver.org/).
   registry entry. The window's `claude.exe` pid is now read from `CLAUDE_PID`
   first, used only when it names a `claude.exe` not younger than the hook,
   and the walk answers otherwise.
+- `validate_memory` validates the domain identity `remember` writes (#721,
+  slice 8). It passed an explicit `domain` unresolved to
+  `get_memories_for_domain`, so `validate_memory(domain="cortex-cowork")`
+  validated a scope no write used (`remember` stores it under `cortex`) and
+  `domain="SciFact"` missed `scifact`, both reporting `validated: 0`. It now
+  resolves the domain with `resolve_explicit_domain`; a blank domain counts as
+  no domain.
 - `assess_coverage` scores the domain identity `remember` writes (#721,
   slice 7). It passed an explicit `domain` unresolved to
   `get_memories_for_domain`, so `assess_coverage(domain="cortex-cowork")`
