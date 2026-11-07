@@ -104,18 +104,26 @@ def test_a_time_without_a_zone_stays_naive():
         "Between 10 and 12 March 2026 we measured throughput.",
         "We measured throughput 10-12 March 2026.",
         "We measured throughput 10\u201312 March 2026.",
-        "Since 2026-01 we use SQLite.",
         "# Release 2026-03\nWe decided to drop Redis.",
         "Outages on 2026-03-12,2026-03-13.",
-        "We used Redis until March 2026.",
         "The file notes-2026-03-12.md uses the cache.",
         "Tested 2026-03-12x builds only.",
         "The range 1999-2001 was measured.",
-        "From 2026-01 to 2026-03 we used Redis.",
-        "Between March 2026 and 4 April 2026 we used Redis.",
         "On 12 March 2026, not May 3, 2026, we used Redis.",
         "Planned for 12 March 2026, shipped on 2026-04-02.",
         "Failed at 2026-03-12T10:00Z and 2026-03-12T12:00+02:00.",
+        "From 2026-03 to 2026-01 we used Redis.",
+        "From 2026-03-12T10:00Z to 2026-03-12T12:00 we used Redis.",
+        "From 2026-01 or 2026-03 we used Redis.",
+        "2026-01 until 2026-03 we used Redis.",
+        "We used Redis from 10 until 12 March 2026.",
+        "We used Redis from 10 till 12 March 2026.",
+        "Since 10 until 12 March 2026 we used Redis.",
+        "We kept Redis through 2026-03.",
+        "From 2026-01 to then 2026-03 we used Redis.",
+        "Since 2026-01 and until 2026-03 we used Redis.",
+        "From 2026-01 to 2026-03 to 2026-05 we used Redis.",
+        "From 2026-02-30 to 2026-03-12 we used Redis.",
     ],
 )
 def test_no_single_stated_date_leaves_the_event_time_unknown(sentence):
@@ -172,3 +180,78 @@ def test_list_items_kept_as_one_unit_do_not_lend_their_dates():
         "- We decided to drop Redis\n- Cache outage on 2026-03-12 broke recall"
     )
     assert claims and all(c.event_time.kind == "unknown" for c in claims)
+
+
+def _bound(event, side: str) -> tuple[datetime, str] | None:
+    bound = getattr(event, side)
+    return None if bound is None else (bound.value, bound.precision)
+
+
+@pytest.mark.parametrize(
+    ("sentence", "start", "end"),
+    [
+        (
+            "From 2026-01 to 2026-03 we used Redis.",
+            (_naive(2026, 1, 1), "month"),
+            (_naive(2026, 3, 1), "month"),
+        ),
+        (
+            "Between March 2026 and 4 April 2026 we used Redis.",
+            (_naive(2026, 3, 1), "month"),
+            (_naive(2026, 4, 4), "day"),
+        ),
+        (
+            "We used Redis from 12 March 2026 until 2026-04-02.",
+            (_naive(2026, 3, 12), "day"),
+            (_naive(2026, 4, 2), "day"),
+        ),
+        (
+            "We used Redis (from March 2026 through May 2026).",
+            (_naive(2026, 3, 1), "month"),
+            (_naive(2026, 5, 1), "month"),
+        ),
+        (
+            "FROM 2026-01 TO 2026-03 we used Redis.",
+            (_naive(2026, 1, 1), "month"),
+            (_naive(2026, 3, 1), "month"),
+        ),
+        (
+            "From 2026-03-12 to 2026-03-12 we used Redis.",
+            (_naive(2026, 3, 12), "day"),
+            (_naive(2026, 3, 12), "day"),
+        ),
+        ("Since 2026-01 we use SQLite.", (_naive(2026, 1, 1), "month"), None),
+        ("We used Redis until March 2026.", None, (_naive(2026, 3, 1), "month")),
+        (
+            "From 2026-01 till 2026-03 we used Redis.",
+            (_naive(2026, 1, 1), "month"),
+            (_naive(2026, 3, 1), "month"),
+        ),
+        ("We used Redis till 12 March 2026.", None, (_naive(2026, 3, 12), "day")),
+        ("We worked from home until March 2026.", None, (_naive(2026, 3, 1), "month")),
+    ],
+)
+def test_interval_wording_around_full_dates_keeps_each_bound(sentence, start, end):
+    event = stated_event_time(sentence)
+    assert event.kind == "interval", event
+    assert (_bound(event, "start"), _bound(event, "end")) == (start, end)
+
+
+def test_interval_bounds_keep_their_stated_zone():
+    event = stated_event_time(
+        "From 2026-03-12T10:00Z to 2026-03-12T12:00+02:00 the queue was down."
+    )
+    assert event.kind == "interval"
+    assert event.start is not None and event.end is not None
+    assert event.start.value.utcoffset() == timedelta(0)
+    assert event.end.value.utcoffset() == timedelta(hours=2)
+    assert (event.start.precision, event.end.precision) == ("minute", "minute")
+
+
+def test_an_extracted_interval_survives_the_persisted_json_round_trip():
+    from mcp_server.shared.wiki_ir import EventTime
+
+    (claim,), _ = extract_claims("We decided to use Redis from 2026-01 to 2026-03.")
+    stored = claim.event_time.model_dump(mode="json", exclude_none=True)
+    assert EventTime.model_validate(stored) == claim.event_time
+    assert claim.extracted_at is None
