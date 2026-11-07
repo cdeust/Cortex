@@ -54,6 +54,14 @@ adheres to [Semantic Versioning](https://semver.org/).
   JSON of `EventTime` in PostgreSQL (`JSONB`) and SQLite (`JSON`), so a naive
   bound stays naive and an aware one keeps its stated offset. Existing rows
   migrate once to `{"kind": "unknown"}`; `wiki_extract` writes the field.
+- `extract_claims` reads each claim's `event_time` from the date its own
+  sentence states, at the precision written (#717, slice 3): "March 2026" is a
+  month, `2026-03-12T10:30+02:00` a minute with its offset. A sentence with no
+  date, a bare year, a relative or impossible date, two different dates, or
+  several sentences kept as one unit (a short paragraph, heading or list item,
+  whose date may belong to the other sentence), or interval wording ("from 10
+  to 12 March 2026", "since 2026-01") stays `unknown`; a date inside a URL or
+  a path is not read, and the event time is never taken from `extracted_at`.
 
 ### Changed
 
@@ -128,6 +136,15 @@ adheres to [Semantic Versioning](https://semver.org/).
   no reference from it; `existing_paths={str(f)}` named a native path where
   the handler passes extracted references, which use `/` on every platform.
   The tests now build `tmp_path / "a.py"` and pass `f.as_posix()`.
+- `python -m mcp_server.doctor` no longer stops on a symlink loop in
+  `CLAUDE_PLUGIN_ROOT` or in the path it imports `mcp_server` from (#729,
+  slice 4). Up to Python 3.12 `Path.resolve()` raises `RuntimeError` on a loop;
+  the `Plugin/runtime pairing` and `Runtime artifact identity` checks caught
+  only `OSError` and `ValueError`, so the loop aborted every other check. From
+  3.13 a non-strict `resolve()` raises nothing, and the artifact check passed
+  with 0 files. Both checks now resolve these paths with `strict=True` and
+  catch `RuntimeError`, so on every supported Python each fails alone and names
+  the loop.
 - The preemptive-context hook tests send an event path that is absolute on the
   running platform (#692 class 5, 9 Windows failures in run 38008915302):
   `/a.py` has no drive on Windows, so `_event_paths` rightly dropped it as a
@@ -140,6 +157,12 @@ adheres to [Semantic Versioning](https://semver.org/).
   registry entry. The window's `claude.exe` pid is now read from `CLAUDE_PID`
   first, used only when it names a `claude.exe` not younger than the hook,
   and the walk answers otherwise.
+- `drill_down` rebuilds its hierarchy over the domain identity `remember`
+  writes (#721, slice 6). `recall_hierarchical`, which hands out the cluster
+  IDs, builds its tree over the resolved domain, but `drill_down` rebuilt it
+  over the raw argument, so `drill_down("L2-0", domain="cortex-cowork")` read a
+  scope no write used and the ID pointed nowhere. It now resolves the domain
+  with `resolve_explicit_domain`; a blank domain counts as no domain.
 - `get_project_story` reads the domain identity `remember` writes (#721,
   slice 5). It passed an explicit `domain` unresolved to
   `get_memories_for_domain`, so `get_project_story(domain="cortex-cowork")`
