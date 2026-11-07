@@ -46,6 +46,10 @@ def _store():
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
+    from mcp_server.infrastructure.backend_resolution import settle_for_command  # noqa: PLC0415 — before settings bind, like mcp_server/__main__.py
+
+    if not settle_for_command("cortex portability"):
+        return 1
     from mcp_server.handlers import memory_portability as portability  # noqa: PLC0415 — keeps --help free of store imports
 
     store = _store()

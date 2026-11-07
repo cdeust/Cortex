@@ -19,8 +19,15 @@ from mcp_server.hooks.agent_briefing_sqlite import (
 
 
 def _connect():
-    """Select the configured backend; None when PostgreSQL is unreachable."""
-    if effective_backend(os.environ) == "sqlite":
+    """Select the configured backend; None when PostgreSQL is unreachable.
+
+    With no named URL, only the shared store decides (SQLite unless the
+    backend is PostgreSQL); raw psycopg never gets an empty conninfo, which
+    would reach whatever local server libpq defaults to (issue #704).
+    """
+    backend = effective_backend(os.environ)
+    url = os.environ.get("DATABASE_URL") or get_memory_settings().DATABASE_URL
+    if backend == "sqlite" or (backend != "postgresql" and not url):
         from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: PLC0415 — hook latency boundary
 
         return SqliteBriefingConnection(get_shared_store())
@@ -30,11 +37,11 @@ def _connect():
         return None
     from mcp_server.infrastructure.db_connect import pg_connect  # noqa: PLC0415 — after the optional-extra probe
 
+    if not url:
+        _log("agent_briefing: postgresql backend has no DATABASE_URL")
+        return None
     try:
-        return pg_connect(
-            os.environ.get("DATABASE_URL") or get_memory_settings().DATABASE_URL,
-            autocommit=True,
-        )
+        return pg_connect(url, autocommit=True)
     except psycopg.Error:
         return None
 

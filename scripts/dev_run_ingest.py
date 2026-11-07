@@ -10,6 +10,7 @@ import asyncio
 import json
 import sys
 from mcp_server.hooks.wiring import wire_composition_root  # source: issue #560
+from mcp_server.infrastructure.backend_resolution import settle_for_command
 from mcp_server.handlers.ingest_codebase import handler
 
 wire_composition_root()
@@ -30,4 +31,7 @@ async def main() -> int:
 
 
 if __name__ == "__main__":
+    # issue #704: read the backend marker before any handler opens the store
+    if not settle_for_command("dev_run_ingest"):
+        raise SystemExit(1)
     raise SystemExit(asyncio.run(main()))
