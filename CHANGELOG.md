@@ -171,6 +171,13 @@ adheres to [Semantic Versioning](https://semver.org/).
   registry entry. The window's `claude.exe` pid is now read from `CLAUDE_PID`
   first, used only when it names a `claude.exe` not younger than the hook,
   and the walk answers otherwise.
+- `assess_coverage` scores the domain identity `remember` writes (#721,
+  slice 7). It passed an explicit `domain` unresolved to
+  `get_memories_for_domain`, so `assess_coverage(domain="cortex-cowork")`
+  scored a scope no write used (`remember` stores it under `cortex`) and
+  `domain="SciFact"` missed `scifact`. It now resolves the domain with
+  `resolve_explicit_domain`; a blank domain counts as no domain, and the
+  returned `domain` is the resolved name.
 - `drill_down` rebuilds its hierarchy over the domain identity `remember`
   writes (#721, slice 6). `recall_hierarchical`, which hands out the cluster
   IDs, builds its tree over the resolved domain, but `drill_down` rebuilt it
