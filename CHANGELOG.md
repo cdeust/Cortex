@@ -14,6 +14,9 @@ adheres to [Semantic Versioning](https://semver.org/).
   the session's (`CLAUDE_PROJECT_DIR`, else the working directory), unless the user
   allows it locally with `CORTEX_CROSS_PROJECT_WRITES=<domain>,…` or `*`. Shared
   domains that name no repository stay writable. No tool argument can reopen it.
+- The Codex `apply_patch` hook translation refuses a patch path that resolves outside
+  the working directory, symlinks included, so the hook never reads a file outside
+  the project as an operation's preimage (GHSA-pw64-v3mg-xxmm).
 
 ### Added
 
@@ -95,6 +98,14 @@ adheres to [Semantic Versioning](https://semver.org/).
   serves a new call; the disconnect test also shows teardown neither waits on
   nor kills the worker thread. Releasing the slot at the cancel turns both
   tests red.
+- `tests_py/server/test_mcp_protocol_cancellation_remember.py` runs the same
+  cancel and disconnect over JSON-RPC with the real `remember` tool, registered
+  by `tool_registry_memory.register`, on the suite's isolated Cortex store
+  (#728, slice 4). The handler blocks right before the store's exact insert;
+  the worker keeps the `remember` slot, `abandoned_work` records it
+  `completed`, and the memory row lands with the sent content after the client
+  stopped listening, with nothing written before. Releasing the slot at the
+  cancel turns both tests red.
 
 ### Changed
 
@@ -163,6 +174,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `test_root_and_job_paths_preserve_intake_context[~/state]` sets `USERPROFILE`
+  next to `HOME` (#692 class 5, 1 Windows failure in run 38008915302).
+  `Path.expanduser` reads `USERPROFILE` on Windows and ignores `HOME`, so
+  `~/state` resolved under the runner's real profile instead of the test root.
 - Four `validate_memory` tests write their file references the way the
   platform writes paths (#692 class 5, 4 Windows failures in run 38008915302).
   `f"{tmp_path}/a.py"` mixes `\` and `/` on Windows, and the extractor reads
