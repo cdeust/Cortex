@@ -138,6 +138,28 @@ def _environment_fields() -> dict:
     }
 
 
+def _artifact_fields() -> dict:
+    """The ``mcp_server`` artifact this run imported, as `cortex doctor` names it.
+
+    ``git_sha`` is the revision ``reproduce.sh`` read from the checkout; it says
+    nothing about uncommitted edits or about an installed wheel shadowing the
+    tree. The doctor's artifact check states which one ran (installed wheel or
+    source tree), its revision, whether ``mcp_server`` differs from it, and one
+    digest over its members, so a score is bound to the code that produced it.
+    ``ok`` is False when that identity is unknown or altered (the detail says
+    why); the manifest is still written.
+
+    source: issue #729 (acceptance: record source revision and installed
+    artifact digests in verification receipts)"""
+    # noqa: PLC0415 — the doctor check is imported only when a manifest is built.
+    from mcp_server.doctor_artifact import artifact_identity  # noqa: PLC0415
+
+    def capture(name: str, ok: bool, detail: str, fix: str = "", **_: object) -> dict:
+        return {"ok": ok, "detail": detail, "fix": fix or None}
+
+    return {"runtime_artifact": artifact_identity(capture)}
+
+
 def _start_snapshot_fields(results_dir: str) -> dict:
     """`_at_start` machine-load/disk-space fields, or None/None if
     `write_start_snapshot` was never called for this `results_dir` — split
@@ -210,6 +232,8 @@ def build_manifest(
         "bench_container_port": int(pg_port),
         "bench_runner_pid": int(pid),
         **_environment_fields(),
+        # source: issue #729
+        **_artifact_fields(),
         "results_files": sorted(
             p.name
             for p in Path(results_dir).glob("*.json")
