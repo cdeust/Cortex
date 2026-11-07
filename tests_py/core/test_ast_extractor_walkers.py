@@ -63,9 +63,17 @@ class Outer {
 }
 """
 
+# Valid Kotlin: members of `A` sit on their own lines, because Kotlin needs a
+# newline or `;` between declarations. The earlier one-line `class A { fun m()
+# {} class B {...} }` was a syntax error the walker only read through the
+# grammar's error recovery, so its output tracked the grammar release, not the
+# walker (tree-sitter-language-pack 1.23.1 recovers differently and lost `A.m`).
 KOTLIN_SOURCE = b"""interface I { fun x() }
 object O { fun o() {} }
-class A { fun m() {} class B { fun deep() {} } }
+class A {
+    fun m() {}
+    class B { fun deep() {} }
+}
 fun top() {}
 """
 
@@ -158,29 +166,41 @@ class TestKotlin:
         assert _defs("kotlin", KOTLIN_SOURCE, extract_kotlin_definitions) == [
             ("I", "interface"),
             ("I.x", "method"),
-            ("o", "function"),
+            ("O", "class"),
+            ("O.o", "method"),
             ("A", "class"),
             ("A.m", "method"),
-            ("A.deep", "method"),
+            ("B", "class"),
+            ("B.deep", "method"),
             ("top", "function"),
         ]
 
-    def test_object_declaration_emits_no_type_entry(self) -> None:
-        """Pins the surprise: a bare `object O` yields nothing for O, and its
-        member is unqualified. Changing this should require editing this
-        assertion.
+    def test_fixture_is_valid_kotlin(self) -> None:
+        """The walker contract is pinned on source the grammar accepts. On a
+        syntax error the definitions come from error recovery, which changes
+        between grammar releases (the reason this fixture was rewritten).
+        """
+        from tree_sitter_language_pack import get_parser
+
+        assert not get_parser("kotlin").parse(KOTLIN_SOURCE).root_node.has_error
+
+    def test_bare_object_declaration_emits_a_type_entry(self) -> None:
+        """`object O { ... }` with no supertype is an `object_declaration`
+        carrying a `type_identifier` in tree-sitter-language-pack 1.23.1, so O
+        is reported and its member is qualified. The 1.22.1 grammar parsed it
+        as an `infix_expression` with an ERROR, which is why an earlier
+        version of this test pinned "no entry for O".
         """
         from mcp_server.core.ast_extractors_jvm import extract_kotlin_definitions
 
         got = _defs("kotlin", KOTLIN_SOURCE, extract_kotlin_definitions)
-        assert ("O", "class") not in got
-        assert ("o", "function") in got
+        assert ("O", "class") in got
+        assert ("O.o", "method") in got
+        assert ("o", "function") not in got
 
     def test_object_with_a_supertype_does_emit_a_type_entry(self) -> None:
-        """The contrast that explains the surprise above: with a supertype the
-        grammar produces a `type_identifier`, so `object_declaration` is a
-        reachable, observable branch and not dead code. Without this case the
-        branch's node-type string is unpinned.
+        """A supertype does not change the shape: still an
+        `object_declaration` with a `type_identifier`, members qualified.
         """
         from mcp_server.core.ast_extractors_jvm import extract_kotlin_definitions
 

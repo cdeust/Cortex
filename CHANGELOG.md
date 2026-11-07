@@ -181,6 +181,15 @@ adheres to [Semantic Versioning](https://semver.org/).
   next to `HOME` (#692 class 5, 1 Windows failure in run 38008915302).
   `Path.expanduser` reads `USERPROFILE` on Windows and ignores `HOME`, so
   `~/state` resolved under the runner's real profile instead of the test root.
+- The Kotlin walker tests pinned tree-sitter's error recovery instead of the
+  walker: their fixture `class A { fun m() {} class B { ... } }` is not valid
+  Kotlin (declarations need a newline or `;`), so the expected definitions
+  changed with the grammar release, and bumping tree-sitter-language-pack to
+  1.23.1 (#932) failed `unit` on `TestKotlin` (run 42350563661). The fixture is
+  now valid Kotlin, a test asserts it parses without error, and the pin moves
+  to `<1.24`, locked at 1.23.1, whose grammar parses a bare `object O { ... }`
+  as an `object_declaration`: `O` and `O.o` are now reported where 1.22.1
+  dropped `O` and left `o` unqualified.
 - Four `validate_memory` tests write their file references the way the
   platform writes paths (#692 class 5, 4 Windows failures in run 38008915302).
   `f"{tmp_path}/a.py"` mixes `\` and `/` on Windows, and the extractor reads
