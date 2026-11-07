@@ -14,6 +14,10 @@ adheres to [Semantic Versioning](https://semver.org/).
   the session's (`CLAUDE_PROJECT_DIR`, else the working directory), unless the user
   allows it locally with `CORTEX_CROSS_PROJECT_WRITES=<domain>,…` or `*`. Shared
   domains that name no repository stay writable. No tool argument can reopen it.
+- `record_session_end` no longer writes an ADR task record outside the wiki root
+  (GHSA-5w3v-7v7h-q9x4, reported and fixed by kasparovabi). An explicit `domain`
+  goes through `domain_id_from_label`, and the writer refuses a path that resolves
+  outside `WIKI_ROOT`.
 - The Codex `apply_patch` hook translation refuses a patch path that resolves outside
   the working directory, symlinks included, so the hook never reads a file outside
   the project as an operation's preimage (GHSA-pw64-v3mg-xxmm).
