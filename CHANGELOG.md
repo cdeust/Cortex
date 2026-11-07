@@ -154,6 +154,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `test_root_and_job_paths_preserve_intake_context[~/state]` sets `USERPROFILE`
+  next to `HOME` (#692 class 5, 1 Windows failure in run 38008915302).
+  `Path.expanduser` reads `USERPROFILE` on Windows and ignores `HOME`, so
+  `~/state` resolved under the runner's real profile instead of the test root.
 - Four `validate_memory` tests write their file references the way the
   platform writes paths (#692 class 5, 4 Windows failures in run 38008915302).
   `f"{tmp_path}/a.py"` mixes `\` and `/` on Windows, and the extractor reads
