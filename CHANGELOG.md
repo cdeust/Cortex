@@ -122,6 +122,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Four `validate_memory` tests write their file references the way the
+  platform writes paths (#692 class 5, 4 Windows failures in run 38008915302).
+  `f"{tmp_path}/a.py"` mixes `\` and `/` on Windows, and the extractor reads
+  no reference from it; `existing_paths={str(f)}` named a native path where
+  the handler passes extracted references, which use `/` on every platform.
+  The tests now build `tmp_path / "a.py"` and pass `f.as_posix()`.
 - The preemptive-context hook tests send an event path that is absolute on the
   running platform (#692 class 5, 9 Windows failures in run 38008915302):
   `/a.py` has no drive on Windows, so `_event_paths` rightly dropped it as a
