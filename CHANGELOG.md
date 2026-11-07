@@ -54,6 +54,14 @@ adheres to [Semantic Versioning](https://semver.org/).
   JSON of `EventTime` in PostgreSQL (`JSONB`) and SQLite (`JSON`), so a naive
   bound stays naive and an aware one keeps its stated offset. Existing rows
   migrate once to `{"kind": "unknown"}`; `wiki_extract` writes the field.
+- `extract_claims` reads each claim's `event_time` from the date its own
+  sentence states, at the precision written (#717, slice 3): "March 2026" is a
+  month, `2026-03-12T10:30+02:00` a minute with its offset. A sentence with no
+  date, a bare year, a relative or impossible date, two different dates, or
+  several sentences kept as one unit (a short paragraph, heading or list item,
+  whose date may belong to the other sentence), or interval wording ("from 10
+  to 12 March 2026", "since 2026-01") stays `unknown`; a date inside a URL or
+  a path is not read, and the event time is never taken from `extracted_at`.
 
 ### Changed
 

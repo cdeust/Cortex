@@ -9,6 +9,7 @@ from typing import Literal
 import re
 from dataclasses import dataclass
 
+from mcp_server.core.claim_event_time import SENTENCE_END, stated_event_time
 from mcp_server.shared.wiki_ir import ClaimEvent, ClaimType, EvidenceRef
 
 
@@ -19,7 +20,6 @@ from mcp_server.shared.wiki_ir import ClaimEvent, ClaimType, EvidenceRef
 # and headings as their own sentences).
 
 _FENCE_RE = re.compile(r"```[\s\S]*?```", re.MULTILINE)
-_SENTENCE_END = re.compile(r"(?<=[.!?])\s+(?=[A-Z\[\(\#\*\d])")
 
 
 def _strip_code_fences(text: str) -> str:
@@ -54,7 +54,7 @@ def _split_sentences(content: str) -> list[str]:
             sentences.append(para.strip("#").strip("- *+").strip())
             continue
         # Long paragraphs — split on sentence terminators
-        for s in _SENTENCE_END.split(para):
+        for s in SENTENCE_END.split(para):
             s = s.strip()
             if s:
                 sentences.append(s)
@@ -281,6 +281,7 @@ def extract_claims(
                 entity_ids=entity_ids or [],
                 evidence_refs=refs,
                 confidence=confidence,
+                event_time=stated_event_time(sent),
             )
         )
 
