@@ -193,8 +193,10 @@ class TestRecallHandler:
         # signal favors alpha)
         assert result["count"] >= 1
 
-    def test_global_memory_visible_across_domains(self):
+    def test_global_memory_visible_across_domains(self, monkeypatch):
         """Global memories should appear in domain-scoped recall."""
+        # GHSA-7848-qh48-mx2w: a global write needs the allowance.
+        monkeypatch.setenv("CORTEX_CROSS_PROJECT_WRITES", "*")
         # Store a global memory in domain "infra"
         store_result = asyncio.run(
             remember_handler(
