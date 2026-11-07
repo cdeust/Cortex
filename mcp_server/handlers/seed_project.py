@@ -29,6 +29,7 @@ from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.handlers._tool_meta import NON_IDEMPOTENT_WRITE
 from mcp_server.handlers.seed_project_constants import is_transient_seed_root
+from mcp_server.handlers._write_scope import require_writable_domain
 
 _store: MemoryStore | None = None
 
@@ -117,6 +118,7 @@ def _parse_args(args: dict[str, Any] | None) -> tuple[Path, str, int, bool]:
     root = Path(directory).expanduser().resolve()
     # source: ADR-0445
     domain = args.get("domain", "") or root.name
+    require_writable_domain(domain, "seed_project")  # GHSA-7848-qh48-mx2w
     max_kb = int(args.get("max_file_size_kb", 64))
     dry_run = args.get("dry_run", False)
     return root, domain, max_kb * 1024, dry_run

@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Security
+
+- A memory write can no longer target another local project's domain from this
+  session (GHSA-7848-qh48-mx2w). `remember`, `seed_project`, `ingest_prd` and
+  `ingest_document` refuse a domain that belongs to a known repository other than
+  the session's (`CLAUDE_PROJECT_DIR`, else the working directory), unless the user
+  allows it locally with `CORTEX_CROSS_PROJECT_WRITES=<domain>,…` or `*`. Shared
+  domains that name no repository stay writable. No tool argument can reopen it.
+
 ### Added
 
 - Every telemetry sample now carries `stage_ms`, the milliseconds its own

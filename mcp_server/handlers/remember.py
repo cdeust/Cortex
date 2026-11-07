@@ -48,6 +48,7 @@ from mcp_server.infrastructure.memory_config import (
 )
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.profile_store import load_profiles
+from mcp_server.handlers._write_scope import require_writable_domain
 from mcp_server.infrastructure.memory_exact import find_exact
 from mcp_server.handlers.remember_response import duplicate_response
 from mcp_server.shared.domain_mapping import (
@@ -174,6 +175,7 @@ def _resolved_origin(args: dict[str, Any], write_class: str) -> str:
 
 def _prepare_request(args: dict, store: MemoryStore, write_class: str) -> GateRequest:
     domain = _resolve_domain(args.get("directory", ""), args.get("domain", ""))
+    require_writable_domain(domain, "remember")  # GHSA-7848-qh48-mx2w
     origin = _resolved_origin(args, write_class)
     return GateRequest(
         args["content"],

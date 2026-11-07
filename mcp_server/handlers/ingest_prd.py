@@ -25,6 +25,7 @@ from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.wiki_store import write_page
+from mcp_server.handlers._write_scope import require_writable_domain
 
 logger = logging.getLogger(__name__)
 
@@ -322,6 +323,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
     title = _extract_title(text, args.get("title"))
     domain = (args.get("domain") or "prd").strip() or "prd"
+    require_writable_domain(domain, "ingest_prd")  # GHSA-7848-qh48-mx2w
     directory = str(Path(args.get("path") or ".").expanduser().resolve().parent)
 
     # 1. Write the spec page.
