@@ -42,6 +42,7 @@ jobs:
     outputs:
       tested_sha: ${{ steps.resolve.outputs.tested_sha }}
       run_tests: ${{ steps.resolve.outputs.run_tests }}
+      pr_number: ${{ steps.resolve.outputs.pr_number }}
     steps:
       - name: Resolve protected merge
         id: resolve
@@ -452,6 +453,120 @@ jobs:
           if __name__ == "__main__":
               sys.exit(main())
           PY
+
+  # GitHub does not close the issues a PR names with a closing keyword when the
+  # merge is made with the workflow's GITHUB_TOKEN (the resolver's PUT): the 8 such
+  # merges before 2026-11-06 all left their issues open (#801 after #908). This
+  # job closes what GitHub itself links to the PR (closingIssuesReferences). It is
+  # outside the test chain: a failure here shows red without blocking the tests.
+  close-issues:
+    needs: resolve
+    if: >-
+      !cancelled() && github.event_name == 'workflow_run'
+      && needs.resolve.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5 # source: operational cap; a few API calls per merged PR.
+    permissions:
+      issues: write
+      pull-requests: read
+    steps:
+      - name: Close the issues the merged PR closes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.resolve.outputs.pr_number }}
+        run: |
+          python3 - <<'CLOSE'
+          """Close the open issues GitHub links to a PR the resolver merged.
+
+          Sources:
+          https://docs.github.com/en/graphql/reference/objects#pullrequest (closingIssuesReferences)
+          https://docs.github.com/en/rest/issues/issues#update-an-issue (state_reason)
+          https://docs.github.com/en/rest/issues/comments#create-an-issue-comment
+          """
+
+          import json
+          import os
+          import sys
+          from urllib.request import Request, urlopen
+
+          API = "https://api.github.com"
+          # source: the GraphQL login of the GITHUB_TOKEN actor that the resolver merges as.
+          RESOLVER = "github-actions"
+          QUERY = """
+          query($owner: String!, $name: String!, $number: Int!) {
+            repository(owner: $owner, name: $name) {
+              pullRequest(number: $number) {
+                merged
+                mergedBy { login }
+                closingIssuesReferences(first: 50) {
+                  pageInfo { hasNextPage }
+                  nodes { number state repository { nameWithOwner } }
+                }
+              }
+            }
+          }
+          """
+
+
+          def call(method, url, payload=None):
+              request = Request(
+                  url,
+                  data=None if payload is None else json.dumps(payload).encode(),
+                  method=method,
+                  headers={
+                      "Authorization": f"Bearer {os.environ['GH_TOKEN']}",
+                      "Accept": "application/vnd.github+json",
+                      "X-GitHub-Api-Version": "2022-11-28",
+                  },
+              )
+              with urlopen(request, timeout=30) as response:
+                  return json.loads(response.read() or b"null")
+
+
+          def main():
+              repository = os.environ["GITHUB_REPOSITORY"]
+              owner, name = repository.split("/")
+              number = int(os.environ["PR_NUMBER"])
+              data = call(
+                  "POST",
+                  f"{API}/graphql",
+                  {"query": QUERY, "variables": {"owner": owner, "name": name, "number": number}},
+              )
+              if data.get("errors"):
+                  raise SystemExit(f"close-issues: GraphQL errors: {data['errors']}")
+              pull = data["data"]["repository"]["pullRequest"]
+              if pull["merged"] is not True:
+                  raise SystemExit(f"close-issues: PR #{number} is not merged")
+              merger = (pull.get("mergedBy") or {}).get("login")
+              if merger != RESOLVER:
+                  # GitHub closes the issues itself when a person merges.
+                  print(f"PR #{number} merged by {merger}: GitHub closes its issues")
+                  return 0
+              links = pull["closingIssuesReferences"]
+              if links["pageInfo"]["hasNextPage"]:
+                  raise SystemExit(f"close-issues: PR #{number} links over 50 issues")
+              for issue in links["nodes"]:
+                  owner_repo = issue["repository"]["nameWithOwner"]
+                  if owner_repo != repository:
+                      print(f"{owner_repo}#{issue['number']}: another repository, left alone")
+                      continue
+                  if issue["state"] != "OPEN":
+                      print(f"#{issue['number']} already {issue['state'].lower()}")
+                      continue
+                  path = f"{API}/repos/{repository}/issues/{issue['number']}"
+                  # Close first: a failed close must not leave a "Closed by" comment.
+                  call("PATCH", path, {"state": "closed", "state_reason": "completed"})
+                  body = f"Closed by #{number}, merged by the resolver (its GITHUB_TOKEN merge does not trigger GitHub's closing keywords)."
+                  call("POST", f"{path}/comments", {"body": body})
+                  print(f"#{issue['number']} closed by #{number}")
+              if not links["nodes"]:
+                  print(f"PR #{number} names no issue to close")
+              return 0
+
+
+          if __name__ == "__main__":
+              sys.exit(main())
+          CLOSE
 
   # ci.json first: a missing key or an empty command fails here, before any
   # test runs (design, "Repository contract: ci.json"). The validator is

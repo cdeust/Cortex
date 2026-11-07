@@ -36,7 +36,9 @@ def _caller(text, bodies, field):
     expected = {
         "uses": "./.github/workflows/pipeline-post-merge.yml",
         "if": CALLER_CONDITION,
-        "permissions": "contents: write pull-requests: write actions: read",
+        "permissions": (
+            "contents: write pull-requests: write actions: read issues: write"
+        ),
         "secrets": "RELEASE_TAG_SSH_KEY: ${{ secrets.RELEASE_TAG_SSH_KEY }}",
         "steps": "",
         "needs": "",
