@@ -177,7 +177,7 @@ adheres to [Semantic Versioning](https://semver.org/).
   scored a scope no write used (`remember` stores it under `cortex`) and
   `domain="SciFact"` missed `scifact`. It now resolves the domain with
   `resolve_explicit_domain`; a blank domain counts as no domain, and the
-  returned `domain` is the scope read.
+  returned `domain` is the resolved name.
 - `drill_down` rebuilds its hierarchy over the domain identity `remember`
   writes (#721, slice 6). `recall_hierarchical`, which hands out the cluster
   IDs, builds its tree over the resolved domain, but `drill_down` rebuilt it
