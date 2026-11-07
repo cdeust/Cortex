@@ -4,6 +4,8 @@ import sys
 from importlib import metadata
 from pathlib import Path
 
+import pytest
+
 from mcp_server import doctor, doctor_artifact
 
 # source: python3 -c "import base64, hashlib; print(base64.urlsafe_b64encode(
@@ -240,3 +242,26 @@ def test_both_backends_run_the_check():
     assert doctor._artifact_identity in doctor.CHECKS
     assert doctor._artifact_identity in doctor.SQLITE_CHECKS
     assert doctor._artifact_identity().name == doctor_artifact.NAME
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="symlink privilege is not assumed on Windows"
+)
+def test_a_package_path_in_a_symlink_loop_fails_the_check_only(monkeypatch, tmp_path):
+    # Path.resolve() raises RuntimeError on a loop up to Python 3.12.
+    (tmp_path / "loop-a").symlink_to(tmp_path / "loop-b")
+    (tmp_path / "loop-b").symlink_to(tmp_path / "loop-a")
+    _without_distribution(monkeypatch, tmp_path / "loop-a")
+    check = doctor_artifact.artifact_identity(doctor.Check)
+    assert (check.name, check.ok, check.optional) == (doctor_artifact.NAME, False, True)
+    assert check.detail.startswith("cannot read the running artifact: ")
+    assert str(tmp_path / "loop-a") in check.detail
+
+
+def test_a_missing_package_directory_fails_the_check_only(monkeypatch, tmp_path):
+    # A package path that does not exist is not an empty source tree.
+    _without_distribution(monkeypatch, tmp_path / "gone" / "mcp_server")
+    check = doctor_artifact.artifact_identity(doctor.Check)
+    assert (check.name, check.ok, check.optional) == (doctor_artifact.NAME, False, True)
+    assert check.detail.startswith("cannot read the running artifact: ")
+    assert "gone" in check.detail

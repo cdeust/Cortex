@@ -181,14 +181,17 @@ def artifact_identity(check: Callable[..., Any]) -> Any:
     it; the other doctor checks still run)."""
     try:
         return _identify(check)
-    except (OSError, ValueError) as exc:
+    except (OSError, RuntimeError, ValueError) as exc:
+        # A symlink loop is this check's failure, not doctor's. Up to Python 3.12
+        # resolve() raises RuntimeError on one; from 3.13 only strict=True raises
+        # (OSError), so the path is resolved strictly.
         return check(
             NAME, False, f"cannot read the running artifact: {exc}", optional=True
         )
 
 
 def _identify(check: Callable[..., Any]) -> Any:
-    root = Path(mcp_server.__file__).resolve().parent
+    root = Path(mcp_server.__file__).parent.resolve(strict=True)
     try:
         dist = metadata.distribution(DISTRIBUTION)
     except metadata.PackageNotFoundError:

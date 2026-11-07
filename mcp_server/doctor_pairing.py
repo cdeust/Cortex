@@ -100,8 +100,11 @@ def plugin_pairing(
         detail = f"{ROOT_ENV} unset: not launched by the Claude plugin, no pairing"
         return check(NAME, True, detail, optional=True)
     try:
-        return _pair(check, Path(plugin).resolve())
-    except (OSError, ValueError) as exc:
+        return _pair(check, Path(plugin).resolve(strict=True))
+    except (OSError, RuntimeError, ValueError) as exc:
+        # A symlink loop is this check's failure, not doctor's. Up to Python 3.12
+        # resolve() raises RuntimeError on one; from 3.13 only strict=True raises
+        # (OSError), so the path is resolved strictly.
         detail = f"cannot read the Claude plugin pairing: {exc}"
         return check(NAME, False, detail, _REINSTALL, optional=True)
 

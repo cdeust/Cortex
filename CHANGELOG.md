@@ -130,6 +130,15 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `python -m mcp_server.doctor` no longer stops on a symlink loop in
+  `CLAUDE_PLUGIN_ROOT` or in the path it imports `mcp_server` from (#729,
+  slice 4). Up to Python 3.12 `Path.resolve()` raises `RuntimeError` on a loop;
+  the `Plugin/runtime pairing` and `Runtime artifact identity` checks caught
+  only `OSError` and `ValueError`, so the loop aborted every other check. From
+  3.13 a non-strict `resolve()` raises nothing, and the artifact check passed
+  with 0 files. Both checks now resolve these paths with `strict=True` and
+  catch `RuntimeError`, so on every supported Python each fails alone and names
+  the loop.
 - The preemptive-context hook tests send an event path that is absolute on the
   running platform (#692 class 5, 9 Windows failures in run 38008915302):
   `/a.py` has no drive on Windows, so `_event_paths` rightly dropped it as a
