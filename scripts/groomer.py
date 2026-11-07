@@ -51,6 +51,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 from mcp_server.hooks.wiring import wire_composition_root  # noqa: E402 — source: issue #560
+from mcp_server.infrastructure.backend_resolution import settle_for_command  # noqa: E402
 
 wire_composition_root()
 
@@ -346,4 +347,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    # issue #704: read the backend marker before any handler opens the store
+    if not settle_for_command("groomer"):
+        sys.exit(1)
     sys.exit(main())

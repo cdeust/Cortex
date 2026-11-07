@@ -43,6 +43,7 @@ from mcp_server.hooks.wiring import wire_composition_root  # noqa: E402 — sour
 wire_composition_root()
 
 from mcp_server.infrastructure.memory_config import get_memory_settings  # noqa: E402
+from mcp_server.infrastructure.backend_resolution import settle_for_command  # noqa: E402
 from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: E402
 from mcp_server.handlers.consolidation.near_dup_calibration_pass import (  # noqa: E402
     run_near_dup_sample,
@@ -58,6 +59,9 @@ from mcp_server.shared.near_dup_calibration import (  # noqa: E402
 
 async def _get_store():
 
+    # issue #704: read the backend marker first, as the server does
+    if not settle_for_command("near_dup_calibrate"):
+        raise SystemExit(1)
     settings = get_memory_settings()
     store = get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
     require_postgres_store(store)

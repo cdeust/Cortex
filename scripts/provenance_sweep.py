@@ -38,6 +38,7 @@ wire_composition_root()
 
 from mcp_server.handlers import validate_memory  # noqa: E402
 from mcp_server.infrastructure.memory_config import get_memory_settings  # noqa: E402
+from mcp_server.infrastructure.backend_resolution import settle_for_command  # noqa: E402
 from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: E402
 
 _GRADES = ("verified", "verifiable", "unverifiable")
@@ -68,6 +69,9 @@ async def _run(
     apply: bool, url_check_limit: int, page_limit: int, max_pages: int
 ) -> dict:
 
+    # issue #704: read the backend marker first, as the server does
+    if not settle_for_command("provenance_sweep"):
+        raise SystemExit(1)
     settings = get_memory_settings()
     store = get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
 

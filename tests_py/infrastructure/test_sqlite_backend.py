@@ -525,9 +525,8 @@ class TestExplicitDatabaseUrlFallbackBoundary:
         monkeypatch.setenv("CORTEX_MEMORY_STORE_BACKEND", "auto")
         monkeypatch.delenv("DATABASE_URL", raising=False)
         monkeypatch.delenv("CORTEX_ALLOW_SQLITE_FALLBACK", raising=False)
-        # settings.DATABASE_URL default (postgresql://127.0.0.1:5432/cortex) is
-        # still the URL that gets tried against PG, but its source is the
-        # hardcoded default, not an operator-supplied env var.
+        # settings.DATABASE_URL has no default (issue #704), so nothing is
+        # tried against PostgreSQL at all.
         self._unreachable_pg(monkeypatch)
         get_memory_settings.cache_clear()
 
@@ -541,7 +540,11 @@ class TestExplicitDatabaseUrlFallbackBoundary:
             get_memory_settings.cache_clear()
 
     def test_reachable_postgresql_is_preferred_over_sqlite(self, monkeypatch, tmp_path):
-        """A reachable default PostgreSQL target wins before SQLite fallback."""
+        """A reachable PostgreSQL at a named URL wins before SQLite fallback.
+
+        The URL must be named: a default that happens to answer is never
+        used (issue #704, tests_py/infrastructure/test_no_default_database_url.py).
+        """
         import mcp_server.infrastructure.memory_store as memory_store_module
         from mcp_server.infrastructure.memory_config import get_memory_settings
 
@@ -549,6 +552,9 @@ class TestExplicitDatabaseUrlFallbackBoundary:
         monkeypatch.setenv("CORTEX_RUNTIME", "cowork")
         monkeypatch.setenv("CORTEX_MEMORY_STORE_BACKEND", "auto")
         monkeypatch.delenv("DATABASE_URL", raising=False)
+        monkeypatch.setenv(
+            "CORTEX_MEMORY_DATABASE_URL", "postgresql://db.invalid/cortex"
+        )
         monkeypatch.delenv("CORTEX_ALLOW_SQLITE_FALLBACK", raising=False)
         monkeypatch.setattr(
             memory_store_module,
