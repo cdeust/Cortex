@@ -69,6 +69,13 @@ adheres to [Semantic Versioning](https://semver.org/).
   start, each bound at its own written precision and zone. Abbreviated ranges
   ("from 10 to 12 March 2026", "10-12 March 2026"), an end before the start,
   and a pair where only one end states a zone stay `unknown`.
+- `tests_py/handlers/test_claim_event_time_supersession.py` runs
+  `wiki_extract` then `wiki_resolve` on SQLite over a correction and two
+  contradictory dates (#717, slice 5, acceptance criterion 3). Resolution
+  writes `supersedes` and memos and leaves every `event_time` as its sentence
+  stated it: the superseded claim keeps its older date, both contradictory
+  dates survive with their precision under a `conflict_candidate` memo, and an
+  undated claim stays `unknown`.
 
 ### Changed
 
