@@ -76,6 +76,14 @@ adheres to [Semantic Versioning](https://semver.org/).
   stated it: the superseded claim keeps its older date, both contradictory
   dates survive with their precision under a `conflict_candidate` memo, and an
   undated claim stays `unknown`.
+- `tests_py/server/test_mcp_protocol_cancellation.py` cancels a `tools/call`
+  over the MCP protocol (SDK client and server on the in-memory transport)
+  while its handler runs, once by `notifications/cancelled` and once by the
+  client disconnecting (#728, slice 3). In both paths the worker keeps its
+  admission slot until it ends, `abandoned_work` counts it then records it
+  `completed`, its SQLite write lands after the client stopped listening, and
+  teardown neither waits on nor kills the worker thread. Releasing the slot at
+  the cancel turns both tests red.
 
 ### Changed
 
