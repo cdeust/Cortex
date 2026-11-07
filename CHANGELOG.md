@@ -171,6 +171,15 @@ adheres to [Semantic Versioning](https://semver.org/).
   registry entry. The window's `claude.exe` pid is now read from `CLAUDE_PID`
   first, used only when it names a `claude.exe` not younger than the hook,
   and the walk answers otherwise.
+- `query_methodology` lists the hot memories of the domain `remember` writes
+  (#721, slice 9). It read them under the cognitive-profile id `detect_domain`
+  returns, while `remember` without an explicit domain writes under the
+  session's repository (`resolve_cwd`) and, outside a known repository, under
+  the detected profile resolved as a hint. A profile id that differs from that
+  scope (a legacy id, or `cortex-cowork` outside its checkout) listed a scope no
+  write used. It now reads the scope `remember` would write for the same `cwd`.
+  `detect_gaps` was checked and needs no change: it reads only domains taken
+  from the store.
 - `validate_memory` validates the domain identity `remember` writes (#721,
   slice 8). It passed an explicit `domain` unresolved to
   `get_memories_for_domain`, so `validate_memory(domain="cortex-cowork")`
