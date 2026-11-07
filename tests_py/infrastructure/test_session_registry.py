@@ -18,6 +18,7 @@ import time
 import pytest
 
 import mcp_server.infrastructure.session_registry as sr
+from mcp_server.shared import platform as host_platform
 
 
 @pytest.fixture(autouse=True)
@@ -37,6 +38,18 @@ def _patch_dir(tmp_path, monkeypatch):
     target = tmp_path / "session-registry"
     monkeypatch.setattr(sr, "registry_dir", lambda: target)
     return target
+
+
+def _as_window(monkeypatch, claude_pid: int) -> None:
+    """Make ``claude_pid`` this server's window, on every platform.
+
+    The reader tests below are about the registry file, not about how the
+    window is found. Faking ``os.getppid`` only reaches the POSIX branch of
+    ``_window_claude_pid``; on Windows the reader walks the real process
+    table instead (ADR-1096), so those tests read no entry (issue #692,
+    class 5). How the window is found has its own tests: the POSIX mapping
+    below, the Windows walk in ``test_session_registry_windows.py``."""
+    monkeypatch.setattr(sr, "_window_claude_pid", lambda: claude_pid)
 
 
 def _spawn_dummy_process() -> subprocess.Popen:
@@ -69,7 +82,7 @@ def test_write_and_read_nominal(tmp_path, monkeypatch):
     _patch_dir(tmp_path, monkeypatch)
     monkeypatch.setattr(sr, "_process_start_signature", lambda pid: "sig-1")
     monkeypatch.setattr(sr, "_pid_alive", lambda pid: True)
-    monkeypatch.setattr(os, "getppid", lambda: 4242)
+    _as_window(monkeypatch, 4242)
 
     ok = sr.write_session("stem-abc", claude_pid=4242)
     assert ok is True
@@ -81,7 +94,7 @@ def test_write_resolves_ancestor_when_pid_not_given(tmp_path, monkeypatch):
     monkeypatch.setattr(sr, "find_claude_ancestor", lambda: 9001)
     monkeypatch.setattr(sr, "_process_start_signature", lambda pid: "sig-9001")
     monkeypatch.setattr(sr, "_pid_alive", lambda pid: True)
-    monkeypatch.setattr(os, "getppid", lambda: 9001)
+    _as_window(monkeypatch, 9001)
 
     assert sr.write_session("stem-x") is True
     assert sr.current_window_session() == "stem-x"
@@ -126,7 +139,7 @@ def test_dead_pid_reads_as_none_and_gets_purged(tmp_path, monkeypatch):
         encoding="utf-8",
     )
 
-    monkeypatch.setattr(os, "getppid", lambda: pid)
+    _as_window(monkeypatch, pid)
     assert sr.current_window_session() is None
 
     removed = sr.purge_dead_entries()
@@ -152,7 +165,7 @@ def test_start_time_divergence_returns_none(tmp_path, monkeypatch):
         ),
         encoding="utf-8",
     )
-    monkeypatch.setattr(os, "getppid", lambda: 555)
+    _as_window(monkeypatch, 555)
     monkeypatch.setattr(sr, "_pid_alive", lambda pid: True)
     # simulates pid 555 recycled by a new process with a different start
     monkeypatch.setattr(sr, "_process_start_signature", lambda pid: "sig-new")
@@ -167,7 +180,7 @@ def test_tombstone_reads_as_none(tmp_path, monkeypatch):
     _patch_dir(tmp_path, monkeypatch)
     monkeypatch.setattr(sr, "_process_start_signature", lambda pid: "sig-t")
     monkeypatch.setattr(sr, "_pid_alive", lambda pid: True)
-    monkeypatch.setattr(os, "getppid", lambda: 777)
+    _as_window(monkeypatch, 777)
 
     assert sr.write_session("stem-live", claude_pid=777) is True
     assert sr.current_window_session() == "stem-live"
@@ -183,7 +196,7 @@ def test_corrupted_json_returns_none(tmp_path, monkeypatch):
     d = _patch_dir(tmp_path, monkeypatch)
     d.mkdir(parents=True, exist_ok=True)
     (d / "888.json").write_text("{not valid json", encoding="utf-8")
-    monkeypatch.setattr(os, "getppid", lambda: 888)
+    _as_window(monkeypatch, 888)
     assert sr.current_window_session() is None  # no exception raised
 
 
@@ -194,13 +207,13 @@ def test_unknown_schema_version_returns_none(tmp_path, monkeypatch):
         json.dumps({"v": 99, "session_id": "x", "claude_pid": 999}),
         encoding="utf-8",
     )
-    monkeypatch.setattr(os, "getppid", lambda: 999)
+    _as_window(monkeypatch, 999)
     assert sr.current_window_session() is None
 
 
 def test_missing_file_returns_none(tmp_path, monkeypatch):
     _patch_dir(tmp_path, monkeypatch)
-    monkeypatch.setattr(os, "getppid", lambda: 111111)
+    _as_window(monkeypatch, 111111)
     assert sr.current_window_session() is None
 
 
@@ -219,8 +232,18 @@ def test_pid_mismatch_returns_none(tmp_path, monkeypatch):
         ),
         encoding="utf-8",
     )
-    monkeypatch.setattr(os, "getppid", lambda: 222)
+    _as_window(monkeypatch, 222)
     assert sr.current_window_session() is None
+
+
+# ── how the window is found on POSIX ────────────────────────────────────
+
+
+def test_posix_window_is_the_parent_process(monkeypatch):
+    # POSIX: the MCP server is a direct child of the window's claude
+    monkeypatch.setattr(host_platform, "IS_WINDOWS", False)
+    monkeypatch.setattr(os, "getppid", lambda: 4242)
+    assert sr._window_claude_pid() == 4242
 
 
 # ── bounded ancestor walk ────────────────────────────────────────────────
@@ -233,6 +256,7 @@ def test_ancestor_walk_finds_claude(monkeypatch):
     def fake_probe(pid):
         return chain.get(pid)
 
+    monkeypatch.setattr(host_platform, "IS_WINDOWS", False)
     monkeypatch.setattr(os, "getppid", lambda: 200)
     monkeypatch.setattr(sr, "_ppid_and_comm", fake_probe)
     assert sr.find_claude_ancestor() == 100
@@ -244,6 +268,7 @@ def test_ancestor_walk_no_match_returns_none(monkeypatch):
     def fake_probe(pid):
         return chain.get(pid)
 
+    monkeypatch.setattr(host_platform, "IS_WINDOWS", False)
     monkeypatch.setattr(os, "getppid", lambda: 200)
     monkeypatch.setattr(sr, "_ppid_and_comm", fake_probe)
     assert sr.find_claude_ancestor() is None
@@ -258,12 +283,14 @@ def test_ancestor_walk_respects_depth_bound(monkeypatch):
     def fake_probe(pid):
         return chain.get(pid)
 
+    monkeypatch.setattr(host_platform, "IS_WINDOWS", False)
     monkeypatch.setattr(os, "getppid", lambda: 200)
     monkeypatch.setattr(sr, "_ppid_and_comm", fake_probe)
     assert sr.find_claude_ancestor(max_depth=5) is None
 
 
 def test_ancestor_walk_probe_failure_returns_none(monkeypatch):
+    monkeypatch.setattr(host_platform, "IS_WINDOWS", False)
     monkeypatch.setattr(os, "getppid", lambda: 300)
     monkeypatch.setattr(sr, "_ppid_and_comm", lambda pid: None)
     assert sr.find_claude_ancestor() is None
@@ -304,7 +331,7 @@ def test_cached_start_signature_hits_after_first_call(tmp_path, monkeypatch):
         ),
         encoding="utf-8",
     )
-    monkeypatch.setattr(os, "getppid", lambda: 5001)
+    _as_window(monkeypatch, 5001)
     monkeypatch.setattr(sr, "_pid_alive", lambda pid: True)
 
     calls = []
@@ -372,7 +399,7 @@ def test_session_id_change_seen_immediately_despite_cached_signature(
     _patch_dir(tmp_path, monkeypatch)
     monkeypatch.setattr(sr, "_pid_alive", lambda pid: True)
     monkeypatch.setattr(sr, "_process_start_signature", lambda pid: "sig-fixed")
-    monkeypatch.setattr(os, "getppid", lambda: 6001)
+    _as_window(monkeypatch, 6001)
 
     assert sr.write_session("stem-first", claude_pid=6001) is True
     assert sr.current_window_session() == "stem-first"  # populates cache

@@ -177,6 +177,14 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The session-registry reader tests make their window pid the window on every
+  platform (#692 class 5, 5 Windows failures in run 38008915302). They faked
+  `os.getppid`, which only the POSIX branch of `_window_claude_pid` reads; on
+  Windows the reader walked the runner's real process table, found no
+  `claude.exe`, and read no entry. The tests that expected `None` passed there
+  without reading the file. The tests now set `_window_claude_pid` itself, the
+  POSIX ancestor-walk tests pin the POSIX branch, and a new test pins the POSIX
+  mapping (the window is the parent process).
 - `test_root_and_job_paths_preserve_intake_context[~/state]` sets `USERPROFILE`
   next to `HOME` (#692 class 5, 1 Windows failure in run 38008915302).
   `Path.expanduser` reads `USERPROFILE` on Windows and ignores `HOME`, so
