@@ -163,13 +163,12 @@ def _memory_scope(cwd: str, profile_domain: str) -> str:
     ``remember`` without an explicit domain writes under ``resolve_cwd(cwd)``
     and, outside a known repository, under the detected profile resolved as a
     hint (``remember._resolve_domain``). Reading hot memories under the raw
-    profile id listed a scope no write used whenever the two differ.
+    profile id listed a scope no write used whenever the two differ. Without
+    a ``cwd`` the profile (detected from ``project`` or ``first_message``) is
+    resolved as a hint too; no profile gives no domain.
 
     source: issue #721; ADR-0647"""
-    resolved = resolve_cwd(cwd) if cwd else ""
-    if resolved:
-        return resolved
-    return resolve_hint(profile_domain) if profile_domain else ""
+    return resolve_cwd(cwd) or resolve_hint(profile_domain)
 
 
 def _get_fired_triggers(directory: str, first_message: str) -> list[dict[str, Any]]:

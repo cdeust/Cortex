@@ -74,7 +74,7 @@ def _read_scope(cwd: str, profile_domain: str) -> str:
     ):
         with patch("mcp_server.core.telemetry.record"):
             asyncio.run(methodology.handler({"cwd": cwd}))
-    return store.domains[-1]
+    return store.domains[-1] if store.domains else ""
 
 
 def _write_scope(monkeypatch, cwd: str, profile_domain: str) -> str:
@@ -91,6 +91,16 @@ def test_known_repository_is_read_under_its_canonical(dirs):
 
 def test_profile_outside_a_repository_is_read_as_remember_resolves_it(dirs):
     assert _read_scope(dirs["outside"], "cortex-cowork") == "cortex"
+
+
+def test_profile_without_cwd_is_read_as_a_hint(dirs):
+    assert _read_scope("", "cortex-cowork") == "cortex"
+
+
+@pytest.mark.parametrize("where", ["repo", "outside"])
+def test_no_profile_reads_the_repository_or_no_domain(dirs, where):
+    expected = "cortex" if where == "repo" else ""
+    assert _read_scope(dirs[where], "") == expected
 
 
 @pytest.mark.parametrize(
