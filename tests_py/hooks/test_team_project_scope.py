@@ -53,7 +53,9 @@ def test_team_decision_hooks_remain_project_scoped(module, tmp_path):
 
 
 @pytest.mark.parametrize("module", ["auto_recall", "session_start"])
-def test_explicit_global_hooks_cross_projects(module, tmp_path):
+def test_explicit_global_hooks_cross_projects(module, tmp_path, monkeypatch):
+    # GHSA-7848-qh48-mx2w: a global write needs the allowance.
+    monkeypatch.setenv("CORTEX_CROSS_PROJECT_WRITES", "*")
     content = "Decision: retain the ledger dossier layout for GLOBAL_SCOPE_MARKER"
     _write(content, agent_topic="engineer", directory="/tmp/project-a", is_global=True)
     assert "GLOBAL_SCOPE_MARKER" in _hook(module, "/tmp/project-a", tmp_path)

@@ -35,6 +35,7 @@ from mcp_server.shared.wiki_frontmatter_validation import normalize_frontmatter
 from mcp_server.infrastructure.wiki_store import read_page
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
+from mcp_server.handlers._write_scope import require_writable_domain
 
 logger = logging.getLogger(__name__)
 
@@ -192,6 +193,7 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         source=str(path), version=content_version(raw), source_kind=kind
     )
     domain = (str(args.get("domain") or "").strip()) or "documents"
+    require_writable_domain(domain, "ingest_document")  # GHSA-7848-qh48-mx2w
     return await _persist(path, parsed, prov, domain)
 
 

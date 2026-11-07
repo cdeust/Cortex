@@ -491,6 +491,11 @@ def resolve_explicit_domain(name: str) -> str:
     return _build_registry().name_to_canonical.get(lower, lower)
 
 
+def project_domains() -> frozenset[str]:
+    """Canonical domains of the known repositories: the domains a project owns."""
+    return frozenset(r.canonical for r in _build_registry().repos if r.canonical)
+
+
 def resolve_cwd(cwd: str) -> str:
     """Resolve a working directory to a canonical domain.
 

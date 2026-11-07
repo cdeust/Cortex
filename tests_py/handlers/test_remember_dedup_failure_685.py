@@ -36,6 +36,8 @@ def test_second_vector_search_failure_stops_remember_before_insert(monkeypatch):
         monkeypatch.setattr(remember, "apply_modulations", lambda *_args: {"heat": 1.0})
         insert = MagicMock()
         monkeypatch.setattr(remember, "insert_and_post_process", insert)
+        # GHSA-7848-qh48-mx2w: a global write needs the allowance.
+        monkeypatch.setenv("CORTEX_CROSS_PROJECT_WRITES", "*")
 
         with pytest.raises(RuntimeError, match="dedup search unavailable") as caught:
             asyncio.run(

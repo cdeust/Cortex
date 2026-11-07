@@ -169,7 +169,7 @@ class _FakeStoreForReplica:
         self.updates: list[tuple] = []
 
     def _execute(self, query: str, params: Any = None) -> _FakeExecuteResult:
-        if "SELECT id FROM memories" in query:
+        if query.startswith("SELECT id") and "FROM memories" in query:
             if self._existing_id is not None:
                 return _FakeExecuteResult([{"id": self._existing_id}])
             return _FakeExecuteResult([])
