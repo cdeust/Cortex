@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Security
+
+- The Codex `apply_patch` hook translation refuses a patch path that resolves outside
+  the working directory, symlinks included, so the hook never reads a file outside
+  the project as an operation's preimage (GHSA-pw64-v3mg-xxmm).
+
 ### Added
 
 - Every telemetry sample now carries `stage_ms`, the milliseconds its own
