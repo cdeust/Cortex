@@ -45,9 +45,18 @@ _MIN_ENVELOPE_LINES = 3
 
 
 def _resolve(value: object, cwd: str) -> str:
+    """The patched file's absolute path; it must stay inside ``cwd``.
+
+    source: GHSA-pw64-v3mg-xxmm: a path such as ``../../../etc/hostname``, or a
+    symlink leading out, made the preimage read a file outside the project.
+    """
     if not isinstance(value, str) or not value.strip():
         raise HostEventError("Missing file path")
-    return str((Path(cwd) / Path(value)).resolve())
+    root = Path(cwd).resolve()
+    path = (root / Path(value)).resolve()
+    if not path.is_relative_to(root):
+        raise HostEventError("Patch path escapes the working directory")
+    return str(path)
 
 
 def _shaped(event: dict, tool_name: str, path: str, **fields: object) -> dict:
