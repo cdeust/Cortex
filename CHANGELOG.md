@@ -130,6 +130,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Four `validate_memory` tests write their file references the way the
+  platform writes paths (#692 class 5, 4 Windows failures in run 38008915302).
+  `f"{tmp_path}/a.py"` mixes `\` and `/` on Windows, and the extractor reads
+  no reference from it; `existing_paths={str(f)}` named a native path where
+  the handler passes extracted references, which use `/` on every platform.
+  The tests now build `tmp_path / "a.py"` and pass `f.as_posix()`.
 - `python -m mcp_server.doctor` no longer stops on a symlink loop in
   `CLAUDE_PLUGIN_ROOT` or in the path it imports `mcp_server` from (#729,
   slice 4). Up to Python 3.12 `Path.resolve()` raises `RuntimeError` on a loop;

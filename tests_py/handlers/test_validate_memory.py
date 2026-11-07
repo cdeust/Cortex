@@ -95,7 +95,9 @@ class TestAssessMemories:
         assert 1 not in stale_ids
 
     def test_all_refs_missing_marks_stale_at_default_threshold(self, tmp_path):
-        content = f"See {tmp_path}/missing_a.py and {tmp_path}/missing_b.py"
+        # Native paths: "{tmp_path}/x.py" mixes separators on Windows, and the
+        # extractor reads no reference from a mixed-separator path (#692).
+        content = f"See {tmp_path / 'missing_a.py'} and {tmp_path / 'missing_b.py'}"
         mems = [self._make_mem(42, content)]
         # existing_paths is empty — all refs are missing
         reports, stale_ids = _assess_memories(mems, existing_paths=set(), threshold=0.5)
@@ -108,8 +110,10 @@ class TestAssessMemories:
         f.write_text("x")
         content = f"Using {f}"
         mems = [self._make_mem(7, content)]
+        # existing_paths holds extracted refs, which use "/" on every platform
+        # (_resolve_existing_paths returns refs, not native paths) (#692).
         reports, stale_ids = _assess_memories(
-            mems, existing_paths={str(f)}, threshold=0.5
+            mems, existing_paths={f.as_posix()}, threshold=0.5
         )
         assert reports[0]["is_stale"] is False
         assert 7 not in stale_ids
@@ -123,7 +127,7 @@ class TestAssessMemories:
         mems = [self._make_mem(3, content)]
         # threshold=1.0 means only mark stale if ALL refs are missing
         reports, stale_ids = _assess_memories(
-            mems, existing_paths={str(f)}, threshold=1.0
+            mems, existing_paths={f.as_posix()}, threshold=1.0
         )
         assert reports[0]["is_stale"] is False, (
             "threshold=1.0 should not flag memory when only 50% of refs are missing"
@@ -678,7 +682,7 @@ class TestGradeFromContentPure:
 
     def test_missing_file_ref_grades_unverifiable(self, tmp_path):
         report = grade_from_content(
-            f"see {tmp_path}/does-not-exist.py", base_dir=str(tmp_path)
+            f"see {tmp_path / 'does-not-exist.py'}", base_dir=str(tmp_path)
         )
         assert report.grade == "unverifiable"
         assert report.dead_refs
