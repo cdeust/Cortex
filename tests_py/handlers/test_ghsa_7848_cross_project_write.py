@@ -102,8 +102,8 @@ def test_a_tool_argument_cannot_reopen_it(projects):
 
 def test_a_session_outside_any_known_project_cannot_target_one(projects):
     env = {_write_scope.SESSION_ENV: str(projects.parent / "elsewhere")}
-    with pytest.raises(ValidationError, match="no known project"):
-        _write_scope.require_writable_domain("alpha", "remember", env)
+    error = _refused(lambda: _write_scope.require_writable_domain("alpha", "t", env))
+    assert str(error) == _refusal("t", session="")
 
 
 def test_star_allows_every_project(projects):
@@ -145,8 +145,12 @@ def test_the_refusal_names_the_tool_the_domain_and_the_session(projects):
 
 
 def test_no_domain_is_always_writable(projects):
-    _write_scope.require_writable_domain(None, "t", {})
-    _write_scope.require_writable_domain("", "t", {})
+    # Even next to a project named like a placeholder default.
+    subprocess.run(["git", "init", "-q", str(projects / "xxxx")], check=True)
+    domain_mapping._build_registry.cache_clear()
+    env = {_write_scope.SESSION_ENV: str(projects / "beta")}
+    _write_scope.require_writable_domain(None, "t", env)
+    _write_scope.require_writable_domain("", "t", env)
 
 
 @pytest.mark.parametrize("allow", ["Alpha", " beta , alpha ,", "alpha,beta"])
