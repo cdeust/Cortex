@@ -4,10 +4,13 @@
 with a synthetic handler and a plain SQLite file. Here the server is built by
 the production registration (``tool_registry_memory.register``), the tool is
 the real ``remember`` handler, and the store is the suite's isolated Cortex
-SQLite store (``tests_py/conftest.py`` redirects ``CORTEX_MEMORY_DB_PATH``
-to a throwaway tree before any import). The only test double is a gate on
-the store instance's ``insert_memory_exact``: the handler has run its write
-gate, embedding and curation, and blocks right before the row is written.
+store: SQLite locally, PostgreSQL in the CI ``unit`` job
+(``scripts/ci_unit.sh``); ``tests_py/conftest.py`` redirects both before any
+import. The only test double is a gate on the store instance's
+``insert_memory_exact``: the handler has embedded the content and built the
+record, and blocks right before the row is written. ``force=True`` bypasses
+the write gate and curation (``remember_helpers.try_curation``), so the call
+always reaches the insert.
 
 What both tests pin:
 - the worker keeps the ``remember`` admission slot until it ends;
@@ -75,14 +78,18 @@ class _GatedInsert:
         self._real = store.insert_memory_exact
         self.reached = threading.Event()
         self.release = threading.Event()
+        self.done = threading.Event()
         self.ids: list[int] = []
 
     def __call__(self, data: dict[str, Any]) -> tuple[int, bool]:
         self.reached.set()
-        assert self.release.wait(_GUARD)
-        mem_id, inserted = self._real(data)
-        self.ids.append(mem_id)
-        return mem_id, inserted
+        try:
+            assert self.release.wait(_GUARD)
+            mem_id, inserted = self._real(data)
+            self.ids.append(mem_id)
+            return mem_id, inserted
+        finally:
+            self.done.set()
 
     def total(self) -> int:
         return self.store.count_memories().get("total", 0)
@@ -96,6 +103,9 @@ def gate(monkeypatch: pytest.MonkeyPatch) -> _GatedInsert:
     monkeypatch.setattr(store, "insert_memory_exact", gated)
     yield gated
     gated.release.set()
+    # A failed test must not leave its insert racing the conftest purge.
+    if gated.reached.is_set():
+        gated.done.wait(_GUARD)
 
 
 def _server() -> MCPServer:
