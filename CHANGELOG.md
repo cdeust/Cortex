@@ -309,6 +309,20 @@ adheres to [Semantic Versioning](https://semver.org/).
   table no longer claims an "identical" retrieval contract on SQLite: the tool
   interface is identical, and SQLite has only a bounded n=50 run without the
   reranker, no run comparable to the n=500 headline (#708).
+- No PostgreSQL URL is assumed in code any more (#704, library residual of
+  #804). `MemorySettings.DATABASE_URL` defaulted to
+  `postgresql://127.0.0.1:5432/cortex`, so a library caller with no URL and
+  no marker (the CLI runtime's `auto`, `python -m mcp_server.migrate`, the
+  agent-briefing hook's raw connection) connected to whatever local `cortex`
+  database answered. The setting now defaults to empty: `auto` with no named
+  URL is SQLite in every runtime and tries no connection; a library caller
+  with an explicit `postgresql` backend and no URL raises instead of guessing
+  a server (the server, the hooks, the standalone `portability`, `migrate`
+  and `wiki_migrate` commands and the `scripts/` maintenance commands that
+  open the shared store first apply ADR-1104's backend
+  resolution, which names `postgresql://localhost:5432/cortex` for a selected
+  PostgreSQL backend); `_get_database_url` refuses an empty conninfo and
+  `cortex-migrate` reports it on its exit-1 contract.
 - The groomer coordinator no longer starts a consolidate cycle outside its
   lock in three failure cases (#683, ADR-1118). An existing `groomer.pid` that
   cannot be read (permission denied, I/O error) now raises
@@ -482,6 +496,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+- The embedding model loads only `*.safetensors` (`use_safetensors=True`), including
+  in its background download. macOS Intel stops at torch 2.2.2, so the `torch.load`
+  advisories (GHSA-53q9-r3pm-6pq6, GHSA-63cw-57p8-fm3p) cannot be patched there by
+  version: a pickled checkpoint is now refused before it reaches `torch.load`. A test
+  keeps every other unpatchable advisory's function out of `mcp_server/`.
 - Pillow now requires version 13.0.0 or newer to address the advisories affecting
   12.3.0, including GHSA-5x8w-8jj5-q52h. Pillow 13 requires Python 3.11+, so
   Python 3.10 users must upgrade. The plugin bootstrap selects its managed
