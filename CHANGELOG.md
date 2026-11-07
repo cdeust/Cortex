@@ -18,6 +18,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- A benchmark run's `MANIFEST.json` now carries `runtime_artifact`: the `mcp_server`
+  artifact the run imported, as `cortex doctor` names it (installed wheel or source
+  tree, its revision, uncommitted changes, one digest over its members), with
+  `ok: false` when that identity is unknown or altered (#729, slice 5).
 - Every telemetry sample now carries `stage_ms`, the milliseconds its own
   operation spent in each stage timed with `timed_stage(name)` (#722, slice 1).
   A stage entered twice accumulates, a stage that raises is still counted, and
