@@ -112,3 +112,113 @@ def test_star_allows_every_project(projects):
         _write_scope.ALLOW_ENV: "*",
     }
     _write_scope.require_writable_domain("alpha", "remember", env)
+
+
+# ── The exact refusal, its normalisation and the local allowance ────────────
+
+
+def _refusal(tool, domain="alpha", session="beta"):
+    where = f"this session's project ({session!r})" if session else "no known project"
+    return (
+        f"{tool}: domain {domain!r} belongs to another project than {where}; "
+        f"set CORTEX_CROSS_PROJECT_WRITES={domain} (or '*') in the environment "
+        "to allow it"
+    )
+
+
+def _refused(call):
+    with pytest.raises(ValidationError) as caught:
+        call()
+    return caught.value
+
+
+def test_the_refusal_names_the_tool_the_domain_and_the_session(projects):
+    env = {_write_scope.SESSION_ENV: str(projects / "beta")}
+    error = _refused(lambda: _write_scope.require_writable_domain(" ALPHA ", "t", env))
+    assert str(error) == _refusal("t")
+    assert error.details == {
+        "tool": "t",
+        "field": "domain",
+        "domain": "alpha",
+        "session": "beta",
+    }
+
+
+def test_no_domain_is_always_writable(projects):
+    _write_scope.require_writable_domain(None, "t", {})
+    _write_scope.require_writable_domain("", "t", {})
+
+
+@pytest.mark.parametrize("allow", ["Alpha", " beta , alpha ,", "alpha,beta"])
+def test_the_allowance_is_a_trimmed_case_blind_list(projects, allow):
+    env = {
+        _write_scope.SESSION_ENV: str(projects / "beta"),
+        _write_scope.ALLOW_ENV: allow,
+    }
+    _write_scope.require_writable_domain("alpha", "t", env)
+
+
+def test_without_the_variable_no_project_is_allowed(projects):
+    # A project named like any placeholder default stays refused too.
+    subprocess.run(["git", "init", "-q", str(projects / "xxxx")], check=True)
+    domain_mapping._build_registry.cache_clear()
+    env = {_write_scope.SESSION_ENV: str(projects / "beta")}
+    for name in ("alpha", "xxxx"):
+        error = _refused(
+            lambda n=name: _write_scope.require_writable_domain(n, "t", env)
+        )
+        assert str(error) == _refusal("t", name)
+
+
+def test_the_session_is_the_working_directory_without_the_variable(
+    projects, monkeypatch
+):
+    monkeypatch.chdir(projects / "beta")
+    assert _write_scope.session_domain({}) == "beta"
+    assert (
+        _write_scope.session_domain({_write_scope.SESSION_ENV: str(projects / "alpha")})
+        == "alpha"
+    )
+
+
+# ── Every writing tool applies it, under its own name ───────────────────────
+
+
+@pytest.mark.asyncio
+async def test_remember_refuses_under_its_name(projects):
+    with pytest.raises(ValidationError) as caught:
+        await remember_handler({"content": MARKER, "domain": "alpha", "force": True})
+    assert str(caught.value) == _refusal("remember")
+
+
+def test_seed_project_refuses_another_projects_directory(projects):
+    from mcp_server.handlers import seed_project
+
+    for args in ({"directory": str(projects / "alpha")}, {"domain": "alpha"}):
+        error = _refused(lambda a=args: seed_project._parse_args(a))
+        assert str(error) == _refusal("seed_project")
+
+
+@pytest.mark.asyncio
+async def test_ingest_prd_refuses_before_writing(projects, monkeypatch):
+    from mcp_server.handlers import ingest_prd
+
+    written = []
+    monkeypatch.setattr(ingest_prd, "write_page", lambda *a, **k: written.append(a))
+    with pytest.raises(ValidationError) as caught:
+        await ingest_prd.handler(
+            {"content": "# Plan\n\nA requirement.", "domain": "alpha"}
+        )
+    assert str(caught.value) == _refusal("ingest_prd")
+    assert written == []
+
+
+@pytest.mark.asyncio
+async def test_ingest_document_refuses_before_writing(projects, tmp_path):
+    from mcp_server.handlers import ingest_document
+
+    page = tmp_path / "export.html"
+    page.write_text("<h1>Onboarding</h1><p>welcome</p>", encoding="utf-8")
+    with pytest.raises(ValidationError) as caught:
+        await ingest_document.handler({"path": str(page), "domain": "alpha"})
+    assert str(caught.value) == _refusal("ingest_document")
