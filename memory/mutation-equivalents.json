@@ -592,6 +592,14 @@
       "kind": "equivalent-by-construction",
       "rationale": "`handler` replaces any `period` outside (\"day\", \"week\", \"month\", \"all\") with \"week\" on the next statement. A missing `period` defaulting to None, \"XXweekXX\" or \"WEEK\" therefore leaves the guard as \"week\", exactly as the \"week\" default does, so every later read of `period` sees the same value. No input distinguishes the variants.",
       "issue": "#721"
+    },
+    {
+      "mutant": "mcp_server.core.claim_event_time.x__word_before__mutmut_8",
+      "removed": "return words[-1].strip(_OPENERS).lower() if words else \"\"",
+      "added": "return words[-1].strip(_OPENERS).lower() if words else \"XXXX\"",
+      "kind": "equivalent-by-construction",
+      "rationale": "The empty default is returned only when no word precedes the date, and _interval only tests the result for membership in _CLOSED_FRAMES (whose opening words are 'from' and 'between'), _OPEN_END_WORDS ('since') and _OPEN_START_WORDS ('until', 'till'). Neither \"\" nor \"XXXX\" is one of those words, so both defaults leave the event time unknown; the no-preceding-word case is pinned by '2026-01 until 2026-03 we used Redis.' in tests_py/core/test_claim_event_time.py.",
+      "issue": "#717"
     }
   ]
 }

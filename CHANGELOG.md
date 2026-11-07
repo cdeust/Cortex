@@ -62,6 +62,12 @@ adheres to [Semantic Versioning](https://semver.org/).
   whose date may belong to the other sentence), or interval wording ("from 10
   to 12 March 2026", "since 2026-01") stays `unknown`; a date inside a URL or
   a path is not read, and the event time is never taken from `extracted_at`.
+- `extract_claims` reads stated intervals into `event_time` (#717, slice 4):
+  "from D1 to|until|till|through D2" and "between D1 and D2" give both bounds,
+  "since D" a start with an unknown end, "until|till D" an end with an unknown
+  start, each bound at its own written precision and zone. Abbreviated ranges
+  ("from 10 to 12 March 2026", "10-12 March 2026"), an end before the start,
+  and a pair where only one end states a zone stay `unknown`.
 
 ### Changed
 
