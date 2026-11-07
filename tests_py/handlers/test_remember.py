@@ -103,7 +103,9 @@ class TestRememberHandler:
         # domain may be empty if no profile exists, but shouldn't error
         assert "domain" in result
 
-    def test_store_global_memory(self):
+    def test_store_global_memory(self, monkeypatch):
+        # GHSA-7848-qh48-mx2w: a global write needs the allowance.
+        monkeypatch.setenv("CORTEX_CROSS_PROJECT_WRITES", "*")
         result = asyncio.run(
             handler(
                 {

@@ -22,7 +22,11 @@ import os
 from collections.abc import Mapping
 
 from mcp_server.errors import ValidationError
-from mcp_server.shared.domain_mapping import project_domains, resolve_cwd
+from mcp_server.shared.domain_mapping import (
+    project_domains,
+    resolve_cwd,
+    resolve_explicit_domain,
+)
 
 # source: the owner decision of 2026-11-07 on GHSA-7848: a local variable may reopen
 # cross-project writes, a tool parameter may not.
@@ -45,7 +49,7 @@ def require_writable_domain(
     domain: str, tool: str, environ: Mapping[str, str] = os.environ
 ) -> None:
     """Raise ValidationError when `domain` is another project's than the session's."""
-    target = (domain or "").strip().lower()
+    target = resolve_explicit_domain(domain or "")
     if not target or target not in project_domains():
         return
     session = session_domain(environ)
@@ -58,3 +62,55 @@ def require_writable_domain(
         f"set {ALLOW_ENV}={target} (or '*') in the environment to allow it",
         {"tool": tool, "field": "domain", "domain": target, "session": session},
     )
+
+
+# A global memory reaches every project's hot memories (`domain = ? OR is_global`),
+# so writing one, or changing an existing one, needs the allowance for every project.
+EVERY_PROJECT = "*"
+# source: GHSA-7848-qh48-mx2w; the reason a detected global scope stayed local.
+KEPT_LOCAL = f"global scope detected but {ALLOW_ENV}=* is not set; kept local"
+
+
+def _every_project(environ: Mapping[str, str]) -> bool:
+    return EVERY_PROJECT in _allowed(environ)
+
+
+def global_scope(
+    scope: tuple[bool, str],
+    explicit: bool,
+    tool: str,
+    environ: Mapping[str, str] = os.environ,
+) -> tuple[bool, str]:
+    """The (is_global, reason) a write may keep; an explicit request is refused."""
+    is_global, reason = scope
+    if not is_global or _every_project(environ):
+        return is_global, reason
+    if explicit:
+        raise ValidationError(
+            f"{tool}: is_global=true writes into every project's memory; "
+            f"set {ALLOW_ENV}={EVERY_PROJECT} in the environment to allow it",
+            {"tool": tool, "field": "is_global"},
+        )
+    return False, KEPT_LOCAL
+
+
+def require_writable_memory(
+    row: Mapping, tool: str, environ: Mapping[str, str] = os.environ
+) -> None:
+    """Raise ValidationError when this session may not change the memory ``row``."""
+    if row.get("is_global") and not _every_project(environ):
+        raise ValidationError(
+            f"{tool}: memory {row.get('id')} is global, so changing it reaches every "
+            f"project; set {ALLOW_ENV}={EVERY_PROJECT} in the environment to allow it",
+            {"tool": tool, "field": "memory_id", "memory_id": row.get("id")},
+        )
+    require_writable_domain(row.get("domain") or "", tool, environ)
+
+
+def memory_writable(row: Mapping, environ: Mapping[str, str] = os.environ) -> bool:
+    """Whether a write may pick ``row`` as its target (merge, replica refresh)."""
+    try:
+        require_writable_memory(row, "", environ)
+    except ValidationError:
+        return False
+    return True

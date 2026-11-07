@@ -48,7 +48,12 @@ from mcp_server.infrastructure.memory_config import (
 )
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.profile_store import load_profiles
-from mcp_server.handlers._write_scope import require_writable_domain
+from mcp_server.handlers._write_scope import (
+    KEPT_LOCAL,
+    global_scope,
+    require_writable_domain,
+    require_writable_memory,
+)
 from mcp_server.infrastructure.memory_exact import find_exact
 from mcp_server.handlers.remember_response import duplicate_response
 from mcp_server.shared.domain_mapping import (
@@ -187,8 +192,11 @@ def _prepare_request(args: dict, store: MemoryStore, write_class: str) -> GateRe
 
 def _exact_record(args: dict[str, Any], request: GateRequest) -> dict[str, Any]:
     options = request.options
-    is_global, _ = resolve_global_scope(
-        request.content, request.tags, explicit=bool(args.get("is_global", False))
+    explicit = bool(args.get("is_global", False))
+    is_global, _ = global_scope(
+        resolve_global_scope(request.content, request.tags, explicit=explicit),
+        explicit,
+        "remember",
     )
     return {
         "content": request.content,
@@ -220,6 +228,8 @@ def prepare_write(args: dict[str, Any] | None) -> PreparedWrite | dict:
     supersedes_id, rejection = validate_supersede_target(
         args.get("supersedes_id"), store
     )
+    if supersedes_id is not None:  # GHSA-7848-qh48-mx2w: the target is changed
+        require_writable_memory(store.get_memory(supersedes_id) or {}, "remember")
     if rejection is not None:
         return rejection
     request = _prepare_request(args, store, write_class)
@@ -328,10 +338,10 @@ async def _handler_impl(
     )
     _enrich_mod_with_gate(mod, gate)
 
-    is_global, global_reason = resolve_global_scope(
-        content,
-        tags,
-        explicit=bool(is_global),
+    is_global, global_reason = global_scope(  # GHSA-7848-qh48-mx2w
+        resolve_global_scope(content, tags, explicit=bool(is_global)),
+        bool(is_global),
+        "remember",
     )
 
     mid: int | None
@@ -388,8 +398,8 @@ async def _handler_impl(
         write_class=resolved_write_class,
         origin=resolved_origin,
     )
-    if is_global and result.get("stored"):
-        result["is_global"] = True
+    if result.get("stored") and (is_global or global_reason == KEPT_LOCAL):
+        result["is_global"] = is_global
         result["global_reason"] = global_reason
 
     # MOOD_CONGRUENT_RERANK signal-feed (Bower 1981 mood-congruent recall):

@@ -51,6 +51,7 @@ from mcp_server.core import capture_origin
 from mcp_server.core import knowledge_graph, source_monitoring, habituation
 from mcp_server.core.hierarchical_predictive_coding import compute_hierarchical_novelty
 from mcp_server.core.predictive_coding_signals import extract_sensory_features
+from mcp_server.handlers._write_scope import memory_writable
 import json as _json
 import numpy as _np
 
@@ -384,7 +385,7 @@ def try_block_replica_upsert(
     try:
         vpath_json = _json.dumps([vpath_tag])
         rows = store._execute(
-            "SELECT id FROM memories "
+            "SELECT id, domain, is_global FROM memories "
             "WHERE tags @> %s::jsonb "
             "AND tags @> '[\"memory-replica\"]'::jsonb "
             "LIMIT 1",
@@ -396,6 +397,12 @@ def try_block_replica_upsert(
         return False, None
 
     if not rows:
+        return False, None
+    # GHSA-7848-qh48-mx2w: a replica of another project's or a global memory this
+    # session may not change is not refreshed; the write proceeds as a new row.
+    if not memory_writable(
+        {"domain": rows[0].get("domain"), "is_global": rows[0].get("is_global")}
+    ):
         return False, None
 
     existing_id = rows[0]["id"]
@@ -456,6 +463,10 @@ def try_curation(
             continue
         # source: ADR-0438
         if cand.get("superseded_by_id") is not None:
+            continue
+        # GHSA-7848-qh48-mx2w: never fold content into another project's or a
+        # global memory this session may not change; a new row is created instead.
+        if not memory_writable(cand):
             continue
         sim = emb_engine.similarity(embedding, cand["embedding"])
         overlap = (

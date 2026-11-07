@@ -77,15 +77,17 @@ class RememberBatchCalls(unittest.TestCase):
                         scalar_reference,
                     )
                 )
-            result = asyncio.run(
-                remember._handler_impl(
-                    {
-                        "content": scenario[0],
-                        "write_class": "deliberate",
-                        "is_global": True,
-                    }
+            # GHSA-7848-qh48-mx2w: a global write needs the allowance.
+            with patch.dict("os.environ", {"CORTEX_CROSS_PROJECT_WRITES": "*"}):
+                result = asyncio.run(
+                    remember._handler_impl(
+                        {
+                            "content": scenario[0],
+                            "write_class": "deliberate",
+                            "is_global": True,
+                        }
+                    )
                 )
-            )
         return SimpleNamespace(result=result, engine=engine, store=store, insert=insert)
 
     def test_ordinary_remember_preserves_seven_scalar_calls_and_exact_scores(self):
