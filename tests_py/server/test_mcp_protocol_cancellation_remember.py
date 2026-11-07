@@ -5,12 +5,12 @@ with a synthetic handler and a plain SQLite file. Here the server is built by
 the production registration (``tool_registry_memory.register``), the tool is
 the real ``remember`` handler, and the store is the suite's isolated Cortex
 store: SQLite locally, PostgreSQL in the CI ``unit`` job
-(``scripts/ci_unit.sh``); ``tests_py/conftest.py`` redirects both before any
-import. The only test double is a gate on the store instance's
-``insert_memory_exact``: the handler has embedded the content and built the
-record, and blocks right before the row is written. ``force=True`` bypasses
-the write gate and curation (``remember_helpers.try_curation``), so the call
-always reaches the insert.
+(``scripts/ci_unit.sh``); ``tests_py/conftest.py`` points both at throwaway
+stores before any store is opened. The only test double is a gate on the store
+instance's ``insert_memory_exact``: the handler has embedded the content and
+built the record, and blocks right before the row is written. ``force=True``
+bypasses the write gate and curation (``remember_helpers.try_curation``), so
+the call always reaches the insert.
 
 What both tests pin:
 - the worker keeps the ``remember`` admission slot until it ends;
