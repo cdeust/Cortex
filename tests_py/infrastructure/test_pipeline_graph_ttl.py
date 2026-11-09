@@ -61,3 +61,26 @@ class TestStaleness:
         # Even a just-written file is older than "0 hours ago" by a tiny
         # amount — TTL 0 means always stale.
         assert pipeline_graph_ttl.graph_is_stale(str(f)) is True
+
+    def _frozen_at(self, monkeypatch, f, age_hours):
+        """The clock reads the file's mtime plus ``age_hours`` (0: a coarse clock)."""
+        now = f.stat().st_mtime + age_hours * 3600.0
+        monkeypatch.setattr(pipeline_graph_ttl.time, "time", lambda: now)
+
+    def test_ttl_zero_is_stale_at_age_zero(self, tmp_path, monkeypatch):
+        # #692, run 38008915302: on Windows the clock read the mtime back, so
+        # `age > 0` was False and a zero TTL left a just-written graph fresh.
+        monkeypatch.setenv("CORTEX_PIPELINE_GRAPH_TTL_HOURS", "0")
+        f = tmp_path / "graph.ladybug"
+        f.write_text("content")
+        self._frozen_at(monkeypatch, f, 0.0)
+        assert pipeline_graph_ttl.graph_is_stale(str(f)) is True
+
+    def test_a_graph_exactly_ttl_old_is_not_stale(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("CORTEX_PIPELINE_GRAPH_TTL_HOURS", "1")
+        f = tmp_path / "graph.ladybug"
+        f.write_text("content")
+        self._frozen_at(monkeypatch, f, 1.0)
+        assert pipeline_graph_ttl.graph_is_stale(str(f)) is False
+        self._frozen_at(monkeypatch, f, 1.0 + 1 / 3600)  # one second older
+        assert pipeline_graph_ttl.graph_is_stale(str(f)) is True
