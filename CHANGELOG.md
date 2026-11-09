@@ -18,6 +18,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- A benchmark run's `MANIFEST.json` now carries `runtime_artifact`: the `mcp_server`
+  artifact the run imported, as `cortex doctor` names it (installed wheel or source
+  tree, its revision, uncommitted changes, one digest over its members), with
+  `ok: false` when that identity is unknown or altered (#729, slice 5).
 - `scripts/native_receipt.py` validates a native host receipt against the
   `cortex-native-receipt/1` schema (#730, slice 2). Every check carries the
   `members_digest` of the artifact it ran (the digest `cortex doctor` reports) and
