@@ -190,7 +190,7 @@ adheres to [Semantic Versioning](https://semver.org/).
   `\fake\home\.cache\flashrank` to a POSIX literal, and
   `test_cell_model_cache_and_state_restore_without_changing_defaults` compared the
   `/`-joined path that `core/reranker_model.py` builds (it may not import pathlib,
-  ADR-0244) to a native `str(Path)`. Both values name the same file.
+  issue #560) to a native `str(Path)`. Both values name the same file.
 - `MCPClient` names the exception when spawning an upstream server fails: the
   message is `Failed to spawn: NotImplementedError()` instead of `Failed to spawn: `,
   which is what a bare exception with an empty message used to print. The two
