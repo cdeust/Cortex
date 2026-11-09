@@ -123,6 +123,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- A Dependabot minor or patch update that touches only `uv.lock` or `pyproject.toml`
+  merges on green required checks without a Claude verdict (ADR-1126, amends
+  ADR-1121). Major updates, workflow or Dockerfile updates and every other pull
+  request keep the reviewed path.
 - The post-merge engine closes the issues a resolver-merged PR names with a closing
   keyword (`close-issues` job, `issues: write` only). GitHub ignores those keywords when
   the merge is made with the workflow's `GITHUB_TOKEN`: all 8 resolver merges with

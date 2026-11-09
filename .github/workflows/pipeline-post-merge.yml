@@ -356,6 +356,66 @@ jobs:
               require(max(verdicts)[1] == "approve", "merge held: Claude review verdict is block")
 
 
+          # Files a low-risk dependency update may touch (ADR-1126). Anything else, a
+          # workflow file first of all, keeps the PR on the reviewed path.
+          # source: .github/dependabot.yml, uv ecosystem: "declared in pyproject.toml
+          # and locked in uv.lock, the only dependency file".
+          LOW_RISK_FILES = frozenset({"uv.lock", "pyproject.toml"})
+          # source: the `update-type` values Dependabot writes in its commit message,
+          # https://github.com/dependabot/fetch-metadata#outputs
+          LOW_RISK_UPDATES = frozenset(
+              {"version-update:semver-minor", "version-update:semver-patch"}
+          )
+
+
+          def _declared_updates(commit):
+              """Update types of one Dependabot commit, or None when it is not one.
+
+              A git author is only a declared e-mail, and `verified` vouches for the
+              committer's key. Dependabot's commits are committed and signed by GitHub
+              itself (`web-flow`), where the author is the acting account and cannot be
+              chosen. Every dependency the commit names must declare its update type.
+              source: https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification
+              """
+              detail = commit.get("commit") or {}
+              signed = (detail.get("verification") or {}).get("verified") is True
+              author = (commit.get("author") or {}).get("login")
+              committer = (commit.get("committer") or {}).get("login")
+              if author != "dependabot[bot]" or committer != "web-flow" or not signed:
+                  return None
+              message = detail.get("message") or ""
+              updates = re.findall(r"^\s*update-type: (\S+)\s*$", message, re.M)
+              names = re.findall(r"^\s*- dependency-name: ", message, re.M)
+              return updates if updates and len(updates) == len(names) else None
+
+
+          def _is_low_risk(pr, repository, api):
+              """True for a Dependabot minor or patch update of the dependency files.
+
+              The tier comes from the change, not from a label or a title (ADR-1126): the
+              PR is Dependabot's single commit (committed and signed by GitHub), every
+              update it declares is minor or patch, and it touches nothing outside
+              LOW_RISK_FILES. Such a PR merges on green required checks without a review.
+              """
+              user = pr.get("user") or {}
+              if user.get("login") != "dependabot[bot]" or user.get("type") != "Bot":
+                  return False
+              path = f"/repos/{repository}/pulls/{pr['number']}"
+              commits = list(api.records(path + "/commits"))
+              # Dependabot opens and rebases a PR as one commit; a second one is
+              # someone else's work on its branch.
+              if len(commits) != 1:
+                  return False
+              updates = _declared_updates(commits[0])
+              if updates is None or not set(updates) <= LOW_RISK_UPDATES:
+                  return False
+              files = set()
+              for row in api.records(path + "/files"):
+                  # A rename counts under both of its names.
+                  files |= {row.get("filename"), row.get("previous_filename")} - {None}
+              return bool(files) and files <= LOW_RISK_FILES
+
+
           def _merge_open_pr(pr, merge_path, head, api, repository):
               require(
                   pr.get("state") == "open" and pr.get("draft") is False,
@@ -369,7 +429,10 @@ jobs:
                   ),
                   "PR label holds merge",
               )
-              _review_approves(pr["number"], head, repository, api)
+              if _is_low_risk(pr, repository, api):
+                  print("post-merge: low-risk dependency update, no review required")
+              else:
+                  _review_approves(pr["number"], head, repository, api)
               result = api.request(
                   "PUT",
                   merge_path,
