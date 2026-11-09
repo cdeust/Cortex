@@ -192,7 +192,7 @@ def _prepare_request(args: dict, store: MemoryStore, write_class: str) -> GateRe
 
 def _exact_record(args: dict[str, Any], request: GateRequest) -> dict[str, Any]:
     options = request.options
-    explicit = bool(args.get("is_global", False))
+    explicit = bool(args.get("is_global"))
     is_global, _ = global_scope(
         resolve_global_scope(request.content, request.tags, explicit=explicit),
         explicit,

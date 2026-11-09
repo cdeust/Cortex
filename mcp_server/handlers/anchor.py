@@ -17,7 +17,10 @@ from typing import Any
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
-from mcp_server.handlers._write_scope import global_scope, require_writable_memory
+from mcp_server.handlers._write_scope import (
+    require_global_allowed,
+    require_writable_memory,
+)
 import json as _json
 
 # ── Schema ────────────────────────────────────────────────────────────────────
@@ -122,8 +125,8 @@ def _build_anchor_content(content: str, reason: str) -> str:
 def _require_anchor_allowed(mem: dict[str, Any], args: dict[str, Any]) -> None:
     """Anchoring rewrites the memory's content and scope (GHSA-7848-qh48-mx2w)."""
     require_writable_memory(mem, "anchor")
-    if args.get("is_global", False):
-        global_scope((True, "explicit"), True, "anchor")
+    if args.get("is_global"):
+        require_global_allowed("anchor")
 
 
 async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:

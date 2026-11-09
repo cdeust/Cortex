@@ -55,7 +55,7 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     ("infrastructure/pg_store_heat.py", 66),
     ("infrastructure/sqlite_store.py", 555),
     # Anchor pin.
-    ("handlers/anchor.py", 154),
+    ("handlers/anchor.py", 157),
     # Atomic cue boost: the project-scoped file cues moved from the hook in
     # ADR-1086, and the pipeline impact bump moved from its hook (ADR-0493,
     # issue #750) so SQLite runs it too. One UPDATE serves both.

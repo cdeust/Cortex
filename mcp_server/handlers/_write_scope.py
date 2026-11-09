@@ -45,17 +45,26 @@ def _allowed(environ: Mapping[str, str]) -> frozenset[str]:
     return frozenset(d.strip().lower() for d in raw.split(",") if d.strip())
 
 
+def _refused_domain(domain: str, environ: Mapping[str, str]) -> tuple[str, str] | None:
+    """(target, session) when `domain` is another project's than the session's."""
+    target = resolve_explicit_domain(domain or "")
+    if not target or target not in project_domains():
+        return None
+    session = session_domain(environ)
+    allowed = _allowed(environ)
+    if target == session or "*" in allowed or target in allowed:
+        return None
+    return target, session
+
+
 def require_writable_domain(
     domain: str, tool: str, environ: Mapping[str, str] = os.environ
 ) -> None:
     """Raise ValidationError when `domain` is another project's than the session's."""
-    target = resolve_explicit_domain(domain or "")
-    if not target or target not in project_domains():
+    refused = _refused_domain(domain, environ)
+    if refused is None:
         return
-    session = session_domain(environ)
-    allowed = _allowed(environ)
-    if target == session or "*" in allowed or target in allowed:
-        return
+    target, session = refused
     where = f"this session's project ({session!r})" if session else "no known project"
     raise ValidationError(
         f"{tool}: domain {target!r} belongs to another project than {where}; "
@@ -75,6 +84,16 @@ def _every_project(environ: Mapping[str, str]) -> bool:
     return EVERY_PROJECT in _allowed(environ)
 
 
+def require_global_allowed(tool: str, environ: Mapping[str, str] = os.environ) -> None:
+    """Raise ValidationError unless the user allows writes into every project."""
+    if not _every_project(environ):
+        raise ValidationError(
+            f"{tool}: is_global=true writes into every project's memory; "
+            f"set {ALLOW_ENV}={EVERY_PROJECT} in the environment to allow it",
+            {"tool": tool, "field": "is_global"},
+        )
+
+
 def global_scope(
     scope: tuple[bool, str],
     explicit: bool,
@@ -86,11 +105,7 @@ def global_scope(
     if not is_global or _every_project(environ):
         return is_global, reason
     if explicit:
-        raise ValidationError(
-            f"{tool}: is_global=true writes into every project's memory; "
-            f"set {ALLOW_ENV}={EVERY_PROJECT} in the environment to allow it",
-            {"tool": tool, "field": "is_global"},
-        )
+        require_global_allowed(tool, environ)
     return False, KEPT_LOCAL
 
 
@@ -109,8 +124,6 @@ def require_writable_memory(
 
 def memory_writable(row: Mapping, environ: Mapping[str, str] = os.environ) -> bool:
     """Whether a write may pick ``row`` as its target (merge, replica refresh)."""
-    try:
-        require_writable_memory(row, "", environ)
-    except ValidationError:
+    if row.get("is_global") and not _every_project(environ):
         return False
-    return True
+    return _refused_domain(row.get("domain") or "", environ) is None
