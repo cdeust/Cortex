@@ -177,6 +177,13 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- A zero `CORTEX_PIPELINE_GRAPH_TTL_HOURS` makes every codebase graph stale on
+  every platform (#692 class 9, 1 Windows failure in run 38008915302).
+  `graph_is_stale` returned `age > ttl`, and on Windows the clock read a
+  just-written graph's mtime back, so its age was 0, not older than 0 hours, and
+  the graph stayed fresh. A zero TTL is now stale by itself, as it already was for
+  `claim_reanalysis_slot`; the tests freeze the clock at the mtime.
+
 - The session-registry reader tests make their window pid the window on every
   platform (#692 class 5, 5 Windows failures in run 38008915302). They faked
   `os.getppid`, which only the POSIX branch of `_window_claude_pid` reads; on
