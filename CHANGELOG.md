@@ -188,6 +188,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The installer tests' uv stand-in is a `uv.cmd` on Windows, so PATH lookup reaches
+  it instead of the runner's real uv (#692 class 9, 6 Windows setup errors in
+  `test_installer_rerun_keeps_entries` in run 38008915302). `shutil.which` matches
+  only `PATHEXT` names on Windows and `CreateProcess` cannot run an extensionless
+  script (WinError 193), so the launcher installed the real uv.lock into the test's
+  deps directory and the probe packages never appeared.
 - The two end-to-end issue-147 tests make only the grading step's `os.getcwd()`
   fallback raise, not every `os.getcwd()` in the interpreter, so they pass on Windows
   (#692 class 9, 2 Windows failures in run 38008915302). On Windows
