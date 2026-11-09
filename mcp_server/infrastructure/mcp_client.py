@@ -148,7 +148,7 @@ class MCPClient:
             ) from exc
         except Exception as e:
             raise McpConnectionError(
-                f"Failed to spawn: {e}",
+                f"Failed to spawn: {e!r}",
                 {"command": command, "args": args},
             ) from e
 
