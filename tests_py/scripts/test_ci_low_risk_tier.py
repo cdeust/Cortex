@@ -23,10 +23,13 @@ def resolver():
     return namespace
 
 
-def commit(updates=(PATCH,), author="dependabot[bot]", verified=True):
+def commit(
+    updates=(PATCH,), author="dependabot[bot]", verified=True, committer="web-flow"
+):
     lines = "".join(f"- dependency-name: x\n  update-type: {u}\n" for u in updates)
     return {
         "author": {"login": author},
+        "committer": {"login": committer},
         "commit": {
             "message": f"deps: bump x\n\n---\nupdated-dependencies:\n{lines}...\n",
             "verification": {"verified": verified},
@@ -92,6 +95,11 @@ class LowRiskTierTests(unittest.TestCase):
         self.assertFalse(self.low(pr=pull(kind="User")))
         self.assertFalse(self.low([commit(), commit(author="cdeust")]))
         self.assertFalse(self.low([commit(verified=False)]))
+
+    def test_a_bot_attributed_commit_signed_by_a_person_is_not(self):
+        # Dependabot's e-mail as author, a contributor's own verified key.
+        self.assertFalse(self.low([commit(), commit(committer="cdeust")]))
+        self.assertFalse(self.low([commit(committer=None)]))
 
     def test_a_low_risk_pr_merges_without_a_review(self):
         api = FakeApi([commit()], ("uv.lock",))

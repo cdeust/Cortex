@@ -372,7 +372,7 @@ jobs:
               """True for a Dependabot minor or patch update of the dependency files.
 
               The tier comes from the change, not from a label or a title (ADR-1126): the
-              PR and each of its commits are Dependabot's (GitHub verified signature),
+              PR and each of its commits are Dependabot's (committed and signed by GitHub),
               every update it declares is minor or patch, and it touches nothing outside
               LOW_RISK_FILES. Such a PR merges on green required checks without a review.
               """
@@ -386,7 +386,13 @@ jobs:
                   detail = commit.get("commit") or {}
                   signed = (detail.get("verification") or {}).get("verified") is True
                   author = (commit.get("author") or {}).get("login")
-                  if author != "dependabot[bot]" or not signed:
+                  # A git author is only a declared e-mail, and `verified` vouches for
+                  # the committer's key. Dependabot's commits are committed and signed
+                  # by GitHub itself (`web-flow`), where the author is the acting
+                  # account and cannot be chosen.
+                  # source: https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification
+                  committer = (commit.get("committer") or {}).get("login")
+                  if author != "dependabot[bot]" or committer != "web-flow" or not signed:
                       return False
                   updates += re.findall(
                       r"^\s*update-type: (\S+)\s*$", detail.get("message") or "", re.M
