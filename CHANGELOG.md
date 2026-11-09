@@ -184,6 +184,14 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `MCPClient` names the exception when spawning an upstream server fails: the
+  message is `Failed to spawn: NotImplementedError()` instead of `Failed to spawn: `,
+  which is what a bare exception with an empty message used to print. The two
+  real-child stdio tests of `test_mcp_client.py` now run on a loop that can spawn
+  a process (the Proactor loop on Windows, where `tests_py/conftest.py` installs
+  the selector policy, whose loop has no subprocess support) and spawn
+  `sys.executable` instead of a bare `python3` (#692 class 9, 2 Windows failures
+  in run 38008915302).
 - A zero `CORTEX_PIPELINE_GRAPH_TTL_HOURS` makes every codebase graph stale on
   every platform (#692 class 9, 1 Windows failure in run 38008915302).
   `graph_is_stale` returned `age > ttl`, and on Windows the clock read a
