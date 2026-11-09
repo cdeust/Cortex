@@ -3671,6 +3671,10 @@
     "ADR-1125": {
       "mirror": "ADR-1125-a-cancelled-tool-call-s-worker-runs-to-completion-inside-its-admission-slot.md",
       "path": "adr/cortex/1125-a-cancelled-tool-call-s-worker-runs-to-completion-inside-its-admission-slot.md"
+    },
+    "ADR-1126": {
+      "mirror": "ADR-1126-a-dependabot-minor-or-patch-update-of-the-dependency-files-merges-without-a-review.md",
+      "path": "adr/cortex/1126-a-dependabot-minor-or-patch-update-of-the-dependency-files-merges-without-a-review.md"
     }
   },
   "project": "cortex",
