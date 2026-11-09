@@ -204,6 +204,33 @@ def test_seed_project_refuses_another_projects_directory(projects):
 
 
 @pytest.mark.asyncio
+async def test_seed_project_purges_the_domain_it_checked_not_the_argument(
+    projects, monkeypatch
+):
+    """A session in beta seeding its directory with domain=alpha never purges alpha."""
+    from mcp_server.handlers import seed_project
+
+    purged = []
+
+    class Store:
+        def delete_memories_by_tag(self, tag, domain=None):
+            purged.append((tag, domain))
+            return 0
+
+    async def stored(*args):
+        return 0, 0, []
+
+    # pytest's tmp_path is a transient root, which seed_project refuses.
+    monkeypatch.setattr(seed_project, "is_transient_seed_root", lambda _path: False)
+    monkeypatch.setattr(seed_project, "_get_store", lambda: Store())
+    monkeypatch.setattr(seed_project, "collect_all_discoveries", lambda *a: [])
+    monkeypatch.setattr(seed_project, "_store_discoveries", stored)
+    monkeypatch.chdir(projects / "beta")
+    await seed_project.handler({"domain": "alpha"})
+    assert purged == [("seeded", "beta")]
+
+
+@pytest.mark.asyncio
 async def test_ingest_prd_refuses_before_writing(projects, monkeypatch):
     from mcp_server.handlers import ingest_prd
 

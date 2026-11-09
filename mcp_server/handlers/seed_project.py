@@ -194,9 +194,13 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         }
 
     purged = 0
+    # GHSA-7848-qh48-mx2w: purge the domain seeding writes under (the directory wins
+    # over the argument), the one `_parse_args` checked, never the raw argument.
     if not dry_run:
         # source: ADR-0445
-        purged = _get_store().delete_memories_by_tag("seeded", domain=domain)
+        purged = _get_store().delete_memories_by_tag(
+            "seeded", domain=_remember_domain(str(root), domain)
+        )
 
     all_discoveries = collect_all_discoveries(root, max_bytes)
 

@@ -19,7 +19,8 @@ adheres to [Semantic Versioning](https://semver.org/).
   detector infers without it is kept local and reported (`global_reason`). `anchor`,
   `supersedes_id`, curation merges and memory-replica refreshes never change another
   project's or a global memory without that allowance, and `seed_project` checks the
-  domain `remember` will use before it purges anything.
+  domain `remember` will use before it purges anything, and purges that domain,
+  never the raw `domain` argument.
 - `record_session_end` no longer writes an ADR task record outside the wiki root
   (GHSA-5w3v-7v7h-q9x4, reported and fixed by kasparovabi). An explicit `domain`
   goes through `domain_id_from_label`, and the writer refuses a path that resolves
