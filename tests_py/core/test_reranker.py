@@ -146,7 +146,10 @@ class TestRerankerCacheDir:
     def test_falls_back_to_home_cache(self, monkeypatch):
         monkeypatch.delenv("XDG_CACHE_HOME", raising=False)
         monkeypatch.setenv("HOME", "/fake/home")
-        assert str(reranker_cache_dir()) == "/fake/home/.cache/flashrank"
+        # Compare as paths: on Windows the native separator is a backslash
+        # (#692, run 38008915302); the location is what is under test.
+        expected = Path("/fake/home") / ".cache" / "flashrank"
+        assert Path(reranker_cache_dir()) == expected
 
 
 class TestReRankerNonSilentFailure:

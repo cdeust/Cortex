@@ -140,7 +140,9 @@ def test_cell_model_cache_and_state_restore_without_changing_defaults(tmp_path):
     ):
         with selected_cell(cell("l2-2x")):
             assert model._MODEL_NAME == ranker._MODEL_NAME == cell("l2-2x").model.name
-            assert model._model_path() == str(
+            # core joins with "/" (it may not import pathlib, issue #560);
+            # compare as paths so the native separator does not matter (#692).
+            assert Path(model._model_path()) == (
                 tmp_path / model._MODEL_NAME / model._MODEL_FILE
             )
             ranker._flashrank_instance = object()

@@ -22,6 +22,13 @@ adheres to [Semantic Versioning](https://semver.org/).
   artifact the run imported, as `cortex doctor` names it (installed wheel or source
   tree, its revision, uncommitted changes, one digest over its members), with
   `ok: false` when that identity is unknown or altered (#729, slice 5).
+- `scripts/native_receipt.py` validates a native host receipt against the
+  `cortex-native-receipt/1` schema (#730, slice 2). Every check carries the
+  `members_digest` of the artifact it ran (the digest `cortex doctor` reports) and
+  the host that ran it, so a receipt cannot merge checks run on two artifacts or
+  hosts. The report says whether the receipt is distributed evidence (an unmodified
+  wheel) or source evidence, and which of #730's required journeys it passed,
+  failed or lacks.
 - Every telemetry sample now carries `stage_ms`, the milliseconds its own
   operation spent in each stage timed with `timed_stage(name)` (#722, slice 1).
   A stage entered twice accumulates, a stage that raises is still counted, and
@@ -181,10 +188,48 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The two reranker cache-path tests compare paths, not strings, so they pass on
+  Windows, where the native separator is a backslash (#692 class 9, 2 Windows
+  failures in run 38008915302). `test_falls_back_to_home_cache` compared
+  `\fake\home\.cache\flashrank` to a POSIX literal, and
+  `test_cell_model_cache_and_state_restore_without_changing_defaults` compared the
+  `/`-joined path that `core/reranker_model.py` builds (it may not import pathlib,
+  issue #560) to a native `str(Path)`. Both values name the same file.
+- `MCPClient` names the exception when spawning an upstream server fails: the
+  message is `Failed to spawn: NotImplementedError()` instead of `Failed to spawn: `,
+  which is what a bare exception with an empty message used to print. The two
+  real-child stdio tests of `test_mcp_client.py` now run on a loop that can spawn
+  a process (the Proactor loop on Windows, where `tests_py/conftest.py` installs
+  the selector policy, whose loop has no subprocess support) and spawn
+  `sys.executable` instead of a bare `python3` (#692 class 9, 2 Windows failures
+  in run 38008915302).
+- A zero `CORTEX_PIPELINE_GRAPH_TTL_HOURS` makes every codebase graph stale on
+  every platform (#692 class 9, 1 Windows failure in run 38008915302).
+  `graph_is_stale` returned `age > ttl`, and on Windows the clock read a
+  just-written graph's mtime back, so its age was 0, not older than 0 hours, and
+  the graph stayed fresh. A zero TTL is now stale by itself, as it already was for
+  `claim_reanalysis_slot`; the tests freeze the clock at the mtime.
+- The session-registry reader tests make their window pid the window on every
+  platform (#692 class 5, 5 Windows failures in run 38008915302). They faked
+  `os.getppid`, which only the POSIX branch of `_window_claude_pid` reads; on
+  Windows the reader walked the runner's real process table, found no
+  `claude.exe`, and read no entry. The tests that expected `None` passed there
+  without reading the file. The tests now set `_window_claude_pid` itself, the
+  POSIX ancestor-walk tests pin the POSIX branch, and a new test pins the POSIX
+  mapping (the window is the parent process).
 - `test_root_and_job_paths_preserve_intake_context[~/state]` sets `USERPROFILE`
   next to `HOME` (#692 class 5, 1 Windows failure in run 38008915302).
   `Path.expanduser` reads `USERPROFILE` on Windows and ignores `HOME`, so
   `~/state` resolved under the runner's real profile instead of the test root.
+- The Kotlin walker tests pinned tree-sitter's error recovery instead of the
+  walker: their fixture `class A { fun m() {} class B { ... } }` is not valid
+  Kotlin (declarations need a newline or `;`), so the expected definitions
+  changed with the grammar release, and bumping tree-sitter-language-pack to
+  1.23.1 (#932) failed `unit` on `TestKotlin` (run 42350563661). The fixture is
+  now valid Kotlin, a test asserts it parses without error, and the pin moves
+  to `<1.24`, locked at 1.23.1, whose grammar parses a bare `object O { ... }`
+  as an `object_declaration`: `O` and `O.o` are now reported where 1.22.1
+  dropped `O` and left `o` unqualified.
 - Four `validate_memory` tests write their file references the way the
   platform writes paths (#692 class 5, 4 Windows failures in run 38008915302).
   `f"{tmp_path}/a.py"` mixes `\` and `/` on Windows, and the extractor reads
