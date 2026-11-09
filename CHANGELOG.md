@@ -184,6 +184,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The two end-to-end issue-147 tests make only the grading step's `os.getcwd()`
+  fallback raise, not every `os.getcwd()` in the interpreter, so they pass on Windows
+  (#692 class 9, 2 Windows failures in run 38008915302). On Windows
+  `ntpath.realpath` reads the cwd even for an absolute path, so the store's
+  `Path(db).resolve()` raised before the write reached grading; Windows also refuses
+  to remove a process's cwd, so that failure cannot happen outside the mock.
 - The two reranker cache-path tests compare paths, not strings, so they pass on
   Windows, where the native separator is a backslash (#692 class 9, 2 Windows
   failures in run 38008915302). `test_falls_back_to_home_cache` compared
