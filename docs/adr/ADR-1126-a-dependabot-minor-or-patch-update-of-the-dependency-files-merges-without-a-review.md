@@ -23,9 +23,9 @@ Anthropic describes the same problem and its answer in "Solving code review at A
 ## Decision
 
 1. The resolver computes a tier from the change itself. A pull request is low risk when all of these hold:
-   - its author is `dependabot[bot]`, and every commit is authored by `dependabot[bot]`, committed by GitHub (`web-flow`) and carries a verified signature. The author alone is a declared e-mail and `verified` vouches for the committer's key, so a commit a person signs under Dependabot's name is refused;
-   - every `update-type` its commit messages declare is `version-update:semver-minor` or `version-update:semver-patch`, and there is at least one;
-   - every file it changes is `uv.lock` or `pyproject.toml`.
+   - its author is `dependabot[bot]`, it has exactly one commit, and every commit is authored by `dependabot[bot]`, committed by GitHub (`web-flow`) and carries a verified signature. The author alone is a declared e-mail and `verified` vouches for the committer's key, so a commit a person signs under Dependabot's name is refused;
+   - every `update-type` its commit messages declare is `version-update:semver-minor` or `version-update:semver-patch`, and every dependency the commit names declares one;
+   - every file it changes is `uv.lock` or `pyproject.toml`, a renamed file counting under both of its names.
 2. A low-risk pull request merges without a Claude verdict. Everything else of the merge path is unchanged: the `Pipeline` run of the head succeeded, the branch protection still requires `merge` and `CodeQL`, and a `hold` or `do-not-merge` label or a "do not merge" title still holds it.
 3. Any other pull request keeps ADR-1121. That includes a Dependabot major update, a Dependabot update of a workflow or a Dockerfile, and a Dependabot branch someone else pushed to.
 4. The rule lives in the resolver, which runs from `main` through `workflow_run`: a pull request cannot change its own tier.

@@ -56,7 +56,10 @@ class FakeApi:
         if path.endswith("/commits"):
             return self.commits
         if path.endswith("/files"):
-            return [{"filename": name} for name in self.files]
+            return [
+                name if isinstance(name, dict) else {"filename": name}
+                for name in self.files
+            ]
         return []  # no review run, no comment: the reviewed path holds
 
     def request(self, method, path, body=None):
@@ -93,13 +96,28 @@ class LowRiskTierTests(unittest.TestCase):
     def test_another_author_or_an_unsigned_commit_is_not(self):
         self.assertFalse(self.low(pr=pull(login="cdeust", kind="User")))
         self.assertFalse(self.low(pr=pull(kind="User")))
-        self.assertFalse(self.low([commit(), commit(author="cdeust")]))
+        self.assertFalse(self.low([commit(author="cdeust")]))
         self.assertFalse(self.low([commit(verified=False)]))
 
     def test_a_bot_attributed_commit_signed_by_a_person_is_not(self):
         # Dependabot's e-mail as author, a contributor's own verified key.
-        self.assertFalse(self.low([commit(), commit(committer="cdeust")]))
+        self.assertFalse(self.low([commit(committer="cdeust")]))
         self.assertFalse(self.low([commit(committer=None)]))
+
+    def test_a_second_commit_on_the_branch_is_not(self):
+        self.assertFalse(self.low([commit(), commit()]))
+
+    def test_a_dependency_without_its_update_type_is_not(self):
+        untyped = commit()
+        untyped["commit"]["message"] += "- dependency-name: y\n"
+        self.assertFalse(self.low([untyped]))
+
+    def test_a_file_renamed_to_a_dependency_file_is_not(self):
+        renamed = {
+            "filename": "uv.lock",
+            "previous_filename": ".github/workflows/pipeline.yml",
+        }
+        self.assertFalse(self.low(files=(renamed,)))
 
     def test_a_low_risk_pr_merges_without_a_review(self):
         api = FakeApi([commit()], ("uv.lock",))
