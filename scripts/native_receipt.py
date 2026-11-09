@@ -16,11 +16,18 @@ Schema ``cortex-native-receipt/1`` (one JSON object):
   ``members_digest`` (64 hex characters, the doctor's digest).
 - ``platform``: ``os``, ``os_version``, ``arch``.
 - ``backend``: the storage the host used (free text, e.g. ``managed PostgreSQL``).
-- ``hosts``: ``[{"name", "version"}]``, the installed hosts that ran.
+- ``hosts``: ``[{"name", "version"}]``, the installed hosts that ran; each name
+  appears once, so a check's ``host`` names exactly one installed version.
 - ``checks``: ``[{"id", "host", "outcome", "artifact_digest", "evidence"}]``;
   ``outcome`` is ``passed`` or ``failed``; ``artifact_digest`` must equal
   ``artifact.members_digest`` and ``host`` must name an entry of ``hosts``, so a
   receipt cannot merge checks run on two different artifacts or hosts.
+
+Every identifying field (``artifact.version``, the ``platform`` fields,
+``backend``, each host's ``name`` and ``version``, each check's ``id``, ``host``
+and ``evidence``) is a non-empty string: a key whose value is ``null``, empty or
+not text identifies nothing, so it is refused rather than counted as evidence.
+``artifact.revision`` is the one nullable field (a wheel, or a tree outside git).
 
 ``validate`` returns the schema errors (empty when the receipt is valid). A
 valid receipt is *distributed* evidence only for an unmodified wheel; a source
@@ -72,6 +79,19 @@ def _missing(where: str, value: Any, keys: tuple[str, ...]) -> list[str]:
     return [f"{where}.{key}: missing" for key in keys if key not in value]
 
 
+def _is_text(value: Any) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _not_text(where: str, value: dict, keys: tuple[str, ...]) -> list[str]:
+    """``where.key`` errors for each key whose value is not a non-empty string."""
+    return [
+        f"{where}.{key}: expected a non-empty string"
+        for key in keys
+        if not _is_text(value[key])
+    ]
+
+
 def _artifact_errors(artifact: dict) -> list[str]:
     errors = []
     if artifact["kind"] not in KINDS:
@@ -84,7 +104,9 @@ def _artifact_errors(artifact: dict) -> list[str]:
         errors.append("artifact.modified: expected true or false")
     if artifact["kind"] == "wheel" and artifact["revision"] is not None:
         errors.append("artifact.revision: a wheel has no git revision, use null")
-    return errors
+    elif artifact["revision"] is not None and not _is_text(artifact["revision"]):
+        errors.append("artifact.revision: expected a non-empty string or null")
+    return errors + _not_text("artifact", artifact, ("version",))
 
 
 def _check_errors(index: int, check: Any, digest: str, hosts: set) -> list[str]:
@@ -97,20 +119,25 @@ def _check_errors(index: int, check: Any, digest: str, hosts: set) -> list[str]:
         errors.append(f"{where}.outcome: {check['outcome']!r} not in {OUTCOMES}")
     if check["artifact_digest"] != digest:
         errors.append(f"{where}.artifact_digest: differs from artifact.members_digest")
-    if check["host"] not in hosts:
+    if not isinstance(check["host"], str) or check["host"] not in hosts:
         errors.append(f"{where}.host: {check['host']!r} is not listed in hosts")
-    if not str(check["evidence"]).strip():
-        errors.append(f"{where}.evidence: empty")
-    return errors
+    return errors + _not_text(where, check, ("id", "evidence"))
 
 
 def _host_names(hosts: Any) -> tuple[set, list[str]]:
     if not isinstance(hosts, list) or not hosts:
         return set(), ["hosts: expected a non-empty list"]
     errors: list[str] = []
+    names: set = set()
     for index, host in enumerate(hosts):
-        errors += _missing(f"hosts[{index}]", host, ("name", "version"))
-    names = {h["name"] for h in hosts if isinstance(h, dict) and "name" in h}
+        where = f"hosts[{index}]"
+        missing = _missing(where, host, ("name", "version"))
+        errors += missing or _not_text(where, host, ("name", "version"))
+        if missing or not _is_text(host["name"]):
+            continue
+        if host["name"] in names:
+            errors.append(f"{where}.name: {host['name']!r} is listed twice")
+        names.add(host["name"])
     return names, errors
 
 
@@ -125,6 +152,8 @@ def validate(receipt: Any) -> list[str]:
         errors += _missing(section, receipt.get(section), keys)
     if "backend" not in receipt:
         errors.append("backend: missing")
+    elif not _is_text(receipt["backend"]):
+        errors.append("backend: expected a non-empty string")
     hosts, host_errors = _host_names(receipt.get("hosts"))
     errors += host_errors
     checks = receipt.get("checks")
@@ -133,6 +162,7 @@ def validate(receipt: Any) -> list[str]:
     if errors:
         return errors
     errors += _artifact_errors(receipt["artifact"])
+    errors += _not_text("platform", receipt["platform"], _FIELDS["platform"])
     digest = receipt["artifact"]["members_digest"]
     for index, check in enumerate(checks):
         errors += _check_errors(index, check, digest, hosts)

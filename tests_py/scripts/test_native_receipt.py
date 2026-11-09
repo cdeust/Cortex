@@ -81,8 +81,63 @@ def test_unknown_outcome_and_empty_evidence_are_refused():
     receipt["checks"][0].update(outcome="skipped", evidence="  ")
     assert nr.validate(receipt) == [
         "checks[0].outcome: 'skipped' not in ('passed', 'failed')",
-        "checks[0].evidence: empty",
+        "checks[0].evidence: expected a non-empty string",
     ]
+
+
+@pytest.mark.parametrize("evidence", [None, [], {}, 0])
+def test_evidence_that_is_not_text_is_refused(evidence):
+    # str(None) is "None": stringifying would count a null as evidence (#948).
+    receipt = _receipt()
+    receipt["checks"][0]["evidence"] = evidence
+    assert nr.validate(receipt) == ["checks[0].evidence: expected a non-empty string"]
+
+
+def test_null_identity_fields_are_all_refused():
+    receipt = _receipt()
+    receipt["artifact"]["version"] = None
+    receipt["platform"].update(os=None, os_version="", arch=None)
+    receipt["backend"] = None
+    assert nr.validate(receipt) == ["backend: expected a non-empty string"]
+    receipt["backend"] = "managed PostgreSQL"
+    assert nr.validate(receipt) == [
+        "artifact.version: expected a non-empty string",
+        "platform.os: expected a non-empty string",
+        "platform.os_version: expected a non-empty string",
+        "platform.arch: expected a non-empty string",
+    ]
+
+
+@pytest.mark.parametrize("key", ["name", "version"])
+def test_null_host_identity_is_refused(key):
+    receipt = _receipt()
+    receipt["hosts"][0][key] = None
+    assert nr.validate(receipt) == [f"hosts[0].{key}: expected a non-empty string"]
+
+
+def test_unhashable_check_host_is_an_error_not_a_crash():
+    receipt = _receipt()
+    receipt["checks"][0]["host"] = ["Claude Code"]
+    assert nr.validate(receipt) == [
+        "checks[0].host: ['Claude Code'] is not listed in hosts"
+    ]
+
+
+def test_a_host_name_listed_twice_is_refused():
+    # Two versions under one name: a check could not say which one ran.
+    receipt = _receipt()
+    receipt["hosts"].append({"name": "Claude Code", "version": "2.3.1"})
+    assert nr.validate(receipt) == ["hosts[1].name: 'Claude Code' is listed twice"]
+
+
+def test_source_tree_revision_must_be_text_or_null():
+    receipt = _receipt()
+    receipt["artifact"].update(kind="source-tree", revision="", modified=False)
+    assert nr.validate(receipt) == [
+        "artifact.revision: expected a non-empty string or null"
+    ]
+    receipt["artifact"]["revision"] = None
+    assert nr.validate(receipt) == []
 
 
 def test_missing_sections_are_all_named():
