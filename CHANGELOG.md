@@ -29,7 +29,9 @@ adheres to [Semantic Versioning](https://semver.org/).
   sourceless `.pyc`) as a difference from it; in a wheel or a source tree, a bytecode
   cache that this interpreter would import (its `__pycache__`, or the `pycache_prefix`
   tree when one is set) (importlib's header checks) counts as well unless its code
-  object is the compile of its hashed source; a stale cache it would reject does not.
+  object is the compile of its hashed source; a stale cache it would reject (its
+  `--check-hash-based-pycs` policy included) does not. A sourceless `.pyc` in a source
+  tree counts too.
 - A benchmark run's `MANIFEST.json` now carries `runtime_artifact`: the `mcp_server`
   artifact the run imported, as `cortex doctor` names it (installed wheel or source
   tree, its revision, uncommitted changes, one digest over its members), with

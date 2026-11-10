@@ -45,7 +45,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable
 
 import mcp_server
-from mcp_server.doctor_bytecode import clear_caches_fix, foreign_bytecode
+from mcp_server.doctor_bytecode import clear_caches_fix, foreign_bytecode, sourceless
 from mcp_server.shared.subprocess_safe import run_with_hard_timeout
 
 NAME = "Runtime artifact identity"  # source: issue #729 (title: artifact identity)
@@ -182,8 +182,10 @@ def _wheel(dist: Any, rows: list, root: Path) -> Identity:
 
 def _source_tree(root: Path, version: str | None) -> Identity:
     found = _tree_identity(root, version)
-    # A cache imported in place of a file runs code the digest does not name.
-    cached = tuple(foreign_bytecode(root, {path for path, _ in found.members}))
+    # Bytecode imported in place of a file, or as a module of its own, runs code
+    # the digest does not name.
+    hashed = {path for path, _ in found.members}
+    cached = tuple(foreign_bytecode(root, hashed) + sourceless(root))
     if not cached:
         return found
     return replace(found, altered=cached, fix=found.fix or clear_caches_fix(root))
@@ -273,9 +275,8 @@ def _detail(found: Identity) -> str:
         f"{found.digest}; source evidence, not a distributed artifact"
     )
     if found.altered:
-        detail += (
-            f"; {len(found.altered)} caches run other code, first {found.altered[0]}"
-        )
+        count, first = len(found.altered), found.altered[0]
+        detail += f"; {count} bytecode files run other code, first {first}"
     return detail + (f"; {found.unknown}" if found.unknown else "")
 
 

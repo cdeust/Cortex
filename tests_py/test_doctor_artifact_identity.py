@@ -158,7 +158,8 @@ def test_a_source_tree_running_foreign_bytecode_is_altered(monkeypatch, tmp_path
     assert found.fix == doctor_bytecode.clear_caches_fix(package.resolve())
     check = doctor_artifact.artifact_identity(doctor.Check)
     assert not check.ok
-    assert check.detail.endswith(f"; 1 caches run other code, first {name}")
+    assert check.detail.startswith(f"source tree {package.parent} outside git")
+    assert check.detail.endswith(f"; 1 bytecode files run other code, first {name}")
 
 
 def test_a_checkout_keeps_its_git_failure_fix_with_foreign_bytecode(
@@ -180,3 +181,15 @@ def test_a_source_tree_with_its_own_caches_is_unaltered(monkeypatch, tmp_path):
     py_compile.compile(str(package / "a.py"), doraise=True)
     found = doctor_artifact.identify()
     assert (found.altered, found.fix) == ((), None)
+
+
+def test_a_source_tree_with_a_sourceless_module_is_altered(monkeypatch, tmp_path):
+    # Codex review on #957: `mcp_server/loose.pyc` imports as a module while
+    # the digest skips bytecode, whether git lists it or not.
+    package = _source_package(tmp_path)
+    _without_distribution(monkeypatch, package)
+    _git_replies(monkeypatch, "abc123", "")
+    (package / "loose.pyc").write_bytes(b"\0")
+    found = doctor_artifact.identify()
+    assert found.altered == ("mcp_server/loose.pyc",)
+    assert found.fix == doctor_bytecode.clear_caches_fix(package.resolve())

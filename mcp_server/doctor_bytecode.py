@@ -10,8 +10,8 @@ the cache (``_would_import``, the header checks of importlib's
 interpreter compiles from the hashed source next to it. A cache it would reject
 (another magic number, a stale timestamp or source hash) is never run, so it is
 no alteration: it is left after an upgrade (Codex review on #957). Hash-based
-caches follow the default ``--check-hash-based-pycs``: an unchecked one is used
-as is, so it is compared without a source check.
+caches follow this interpreter's ``--check-hash-based-pycs`` policy: one whose
+hash Python would not check is used as is, so it is compared without a check.
 
 Only the caches this interpreter would read are checked: the paths
 ``importlib.util.cache_from_source`` gives for each hashed source, so its cache
@@ -25,6 +25,7 @@ names); PEP 552 (the 16-byte header before the marshalled code object).
 
 from __future__ import annotations
 
+import _imp  # the active --check-hash-based-pycs policy, as importlib reads it
 import importlib.util
 import marshal
 from pathlib import Path
@@ -53,7 +54,11 @@ def _would_import(data: bytes, source: Path) -> bool:
     if not flags & _HASH_BASED:
         stat = source.stat()
         return data[8:16] == _uint32(int(stat.st_mtime)) + _uint32(stat.st_size)
-    if not flags & _CHECK_SOURCE:
+    # importlib's SourceLoader.get_code: the policy decides whether the source
+    # hash is checked at all (Codex review on #957).
+    policy = _imp.check_hash_based_pycs
+    checked = policy != "never" and (bool(flags & _CHECK_SOURCE) or policy == "always")
+    if not checked:
         return True
     return data[8:16] == importlib.util.source_hash(source.read_bytes())
 
@@ -82,10 +87,21 @@ def _runs_other_code(pyc: Path, source: Path, level: int) -> bool:
 def clear_caches_fix(root: Path) -> str:
     """The repair for a source tree whose caches hold other code."""
     return (
-        f"Delete the bytecode caches of {root} (its `__pycache__` directories, or "
-        "the `pycache_prefix` tree when one is set): Python rebuilds them from "
-        "the sources at the next import"
+        f"Delete the listed bytecode files of {root} (in its `__pycache__` "
+        "directories, the `pycache_prefix` tree when one is set, or beside the "
+        "sources): Python rebuilds the caches from the sources at the next import"
     )
+
+
+def sourceless(root: Path) -> list[str]:
+    """The ``.pyc`` files under the package ``root`` outside ``__pycache__``:
+    each imports as a module of its own, with no source to digest (PEP 3147
+    keeps sourceless imports for such files; Codex review on #957)."""
+    return [
+        _label(root, pyc)
+        for pyc in sorted(root.rglob("*.pyc"))
+        if "__pycache__" not in pyc.relative_to(root).parts
+    ]
 
 
 def _label(root: Path, pyc: Path) -> str:

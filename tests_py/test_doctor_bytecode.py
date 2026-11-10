@@ -153,9 +153,9 @@ def test_another_interpreters_cache_and_other_names_are_skipped(tmp_path):
 
 def test_the_fix_names_the_caches_to_delete(tmp_path):
     assert doctor_bytecode.clear_caches_fix(tmp_path) == (
-        f"Delete the bytecode caches of {tmp_path} (its `__pycache__` directories, "
-        "or the `pycache_prefix` tree when one is set): Python rebuilds them from "
-        "the sources at the next import"
+        f"Delete the listed bytecode files of {tmp_path} (in its `__pycache__` "
+        "directories, the `pycache_prefix` tree when one is set, or beside the "
+        "sources): Python rebuilds the caches from the sources at the next import"
     )
 
 
@@ -173,5 +173,32 @@ def test_a_pycache_prefix_is_where_the_caches_are_read(monkeypatch, tmp_path):
 def test_members_that_are_not_python_sources_have_no_cache(tmp_path):
     package = _package(tmp_path)
     _forge(package / "a.py")
-    (package / "data.txt").write_bytes(b"")
-    assert doctor_bytecode.foreign_bytecode(package, {"mcp_server/data.txt"}) == []
+    (package / "0.txt").write_bytes(b"")
+    assert doctor_bytecode.foreign_bytecode(package, {"mcp_server/0.txt"}) == []
+    # A non-source member that sorts first must not end the scan.
+    members = {"mcp_server/0.txt", "mcp_server/a.py"}
+    assert doctor_bytecode.foreign_bytecode(package, members) == [A_CACHE]
+
+
+def test_the_hash_check_policy_of_the_interpreter_applies(monkeypatch, tmp_path):
+    # Codex review on #957: under `--check-hash-based-pycs never` a checked
+    # cache with a stale hash is still imported; under `always` an unchecked one
+    # is validated against its source.
+    package = _package(tmp_path)
+    _forge(package / "a.py", flags=0b11, check=b"older source")
+    _forge(package / "sub" / "b.py", flags=0b01, check=b"older source")
+    monkeypatch.setattr(doctor_bytecode._imp, "check_hash_based_pycs", "never")
+    assert _foreign(package) == [A_CACHE, f"mcp_server/sub/__pycache__/b.{TAG}.pyc"]
+    monkeypatch.setattr(doctor_bytecode._imp, "check_hash_based_pycs", "always")
+    assert _foreign(package) == []
+
+
+def test_sourceless_modules_are_listed_but_caches_are_not(tmp_path):
+    package = _package(tmp_path)
+    _cache(package / "a.py")
+    (package / "loose.pyc").write_bytes(b"\0")
+    (package / "sub" / "deep.pyc").write_bytes(b"\0")
+    assert doctor_bytecode.sourceless(package) == [
+        "mcp_server/loose.pyc",
+        "mcp_server/sub/deep.pyc",
+    ]
