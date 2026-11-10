@@ -36,6 +36,7 @@ from mcp_server.shared.domain_mapping import (
     resolve_cwd,
     resolve_explicit_domain,
 )
+from mcp_server.shared.project_scope import memory_matches_project, project_ancestors
 
 # source: the owner decision of 2026-11-07 on GHSA-7848: a local variable may reopen
 # cross-project writes, a tool parameter may not.
@@ -127,34 +128,28 @@ def session_directory(environ: Mapping[str, str] = os.environ) -> str:
     return environ.get(SESSION_ENV) or os.getcwd()
 
 
-def _same_branch(path: str, root: str) -> bool:
-    """Whether `path` is `root`, lies inside it, or is a folder above it."""
-    return (path + "/").startswith(root + "/") or root.startswith(
-        path.rstrip("/") + "/"
-    )
-
-
 def _reached_projects(directory: str) -> frozenset[str]:
     """Domains of the known projects whose sessions are served `directory`'s memories.
 
-    A project is reached when `directory` lies inside it (its root included: a
-    session opened there or below), or is a folder above its root (the hooks' rule).
-    The hooks compare path text, and a parent of the projects can be a symlink:
-    `directory` and each root are compared as written and as resolved.
+    The rule is the hooks' own (`shared.project_scope`): a memory is served to a
+    session whose project root is its directory or lies below it. So a project is
+    reached when `directory` is one of its roots or a folder above one, or lies
+    inside one (a session opened below the root). The hooks compare path text, and
+    a parent of the projects can be a symlink: `directory` is compared as the hooks
+    read it and as resolved, with each root in both forms too.
     """
-    directory = (directory or "").strip()
-    # The hooks compare the stored text with absolute roots: a relative directory,
-    # or a label such as `run:<id>`, is served to no session.
-    if not Path(directory).is_absolute():
+    # The text the hooks compare: separators normalised, no trailing one. A
+    # relative directory, a label such as `run:<id>` or `/` is served to no session.
+    read = project_ancestors((directory or "").strip())[:1]
+    if not read or not Path(read[0]).is_absolute():
         return frozenset()
-    forms = {Path(directory).as_posix(), Path(directory).resolve().as_posix()}
-    reached = {
+    forms = {read[0], Path(read[0]).resolve().as_posix()}
+    return frozenset(
         domain
         for root, domain in project_roots().items()
-        if any(_same_branch(form, root) for form in forms)
-    }
-    # A linked worktree lies outside its repository's root and belongs to it.
-    return frozenset((reached | {resolve_cwd(directory)}) - {""})
+        for form in forms
+        if memory_matches_project(form, False, root) or root in project_ancestors(form)
+    )
 
 
 def _refused_directory(directory: str, environ: Mapping[str, str]) -> str | None:

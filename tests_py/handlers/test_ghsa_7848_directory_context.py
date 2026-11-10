@@ -11,6 +11,8 @@ project's directory could be anchored, superseded or merged into.
 
 from __future__ import annotations
 
+import subprocess
+
 import pytest
 
 from mcp_server.errors import ValidationError
@@ -61,7 +63,11 @@ def test_which_projects_a_directory_reaches(projects):
     reached = _write_scope._reached_projects
     assert reached(str(projects)) == {"alpha", "beta"}
     assert reached(str(projects) + "/") == {"alpha", "beta"}
-    assert reached("/") == {"alpha", "beta"}
+    assert reached(str(projects.parent)) == {"alpha", "beta"}
+    assert reached("/") == frozenset()  # the hooks never serve the filesystem root
+    # Codex on PR #970: the hooks read a backslash as a separator.
+    assert reached(f"{projects}\\alpha") == {"alpha"}
+    assert reached(f"{projects.parent}\\dev\\") == {"alpha", "beta"}
     assert reached(str(projects / "alpha" / "src")) == {"alpha"}
     assert reached(str(projects / "beta")) == {"beta"}
     # A name that only starts like a root is another folder.
@@ -82,12 +88,33 @@ def test_a_symlinked_parent_of_the_projects_is_compared_on_both_sides(
     monkeypatch.setattr(domain_mapping, "_candidate_dev_roots", lambda: [link])
     domain_mapping._build_registry.cache_clear()
     reached = _write_scope._reached_projects
-    assert domain_mapping.resolve_cwd(str(link / "alpha")) == ""  # no help from it
     for parent in (link, projects):
         assert reached(str(parent)) == {"alpha", "beta"}
         assert reached(str(parent / "alpha")) == {"alpha"}
         assert reached(str(parent / "alpha" / "src")) == {"alpha"}
         assert reached(str(parent / "alphabet")) == frozenset()
+    assert reached(str(projects.parent / "downloads")) == frozenset()
+    # The session, opened through the link or not, is still its own project.
+    for own in (link / "beta", projects / "beta"):
+        monkeypatch.setenv(_write_scope.SESSION_ENV, str(own))
+        assert _write_scope.session_domain() == "beta"
+        _write_scope.require_writable_directory(str(link / "beta" / "src"), "t")
+        with pytest.raises(ValidationError, match="served to project 'alpha'"):
+            _write_scope.require_writable_directory(str(link), "t")
+
+
+def test_a_folder_above_a_linked_worktree_reaches_its_repository(projects):
+    # Codex on PR #970: a session opened in alpha's worktree is alpha's.
+    git = ["git", "-C", str(projects / "alpha"), "-c", "user.name=t"]
+    git += ["-c", "user.email=t@example.invalid"]
+    subprocess.run([*git, "commit", "-q", "--allow-empty", "-m", "init"], check=True)
+    outside = projects.parent / "external"
+    tree = outside / "alpha-feature"
+    subprocess.run([*git, "worktree", "add", "-q", str(tree)], check=True)
+    domain_mapping._build_registry.cache_clear()
+    reached = _write_scope._reached_projects
+    assert reached(str(outside)) == {"alpha"}
+    assert reached(str(tree)) == reached(str(tree / "src")) == {"alpha"}
     assert reached(str(projects.parent / "downloads")) == frozenset()
 
 
