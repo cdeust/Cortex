@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import enum
 
+import pytest
+
 from benchmarks import _repro
 from benchmarks.lib import write_manifest
 from benchmarks.lib.embedding_identity import (
@@ -80,14 +82,30 @@ def test_the_process_engine_reports_a_consistent_identity() -> None:
     assert (fields["embedding_model_revision"] is not None) is loaded
 
 
-def test_both_manifests_carry_the_served_identity(monkeypatch) -> None:
+def test_the_written_manifest_carries_the_served_identity(monkeypatch) -> None:
     marker = dict.fromkeys(FIELDS, "m")
     monkeypatch.setattr(write_manifest, "embedding_manifest_fields", lambda: marker)
-    monkeypatch.setattr(_repro, "embedding_manifest_fields", lambda: marker)
     monkeypatch.setattr(write_manifest, "reranker_fields", lambda: {})
-    monkeypatch.setattr(_repro, "_reranker_manifest_fields", lambda: {})
-    for manifest in (
-        write_manifest._environment_fields(),
-        _repro.build_repro_manifest(),
-    ):
-        assert {k: manifest[k] for k in FIELDS} == marker
+    manifest = write_manifest._environment_fields()
+    assert {k: manifest[k] for k in FIELDS} == marker
+
+
+def test_the_repro_manifest_reads_the_benchmark_engine() -> None:
+    # The factory singleton is not the engine BenchmarkDB serves with: the
+    # identity is recorded from the engine passed in, run after run.
+    repro: dict = {}
+    _repro.record_embedding_identity(repro, _Engine(ModelState.LOADED, "neural"))
+    _repro.record_embedding_identity(repro, _Engine(ModelState.LOADED, "neural"))
+    assert repro["embedding_model_revision"] == PIN
+    with pytest.raises(RuntimeError, match="changed between runs"):
+        _repro.record_embedding_identity(
+            repro, _Engine(ModelState.MODEL_FILES_ABSENT, "fallback")
+        )
+
+
+def test_the_benchmark_db_engine_is_read_after_open() -> None:
+    pytest.importorskip("psycopg")  # bench_db imports the PostgreSQL store
+    from benchmarks.lib.bench_db import BenchmarkDB
+
+    with pytest.raises(RuntimeError, match="before open"):
+        _ = BenchmarkDB("postgresql://unused").embedding_engine

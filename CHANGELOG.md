@@ -217,9 +217,13 @@ adheres to [Semantic Versioning](https://semver.org/).
   repro manifest of LongMemEval, LoCoMo and BEAM (`benchmarks/_repro.py`) now carry
   `embedding_mode`, `embedding_model_state` and `embedding_model_name`, and
   `embedding_model_revision` is the pinned revision only when the state is
-  `LOADED`, `null` otherwise. Before, a run in `PACKAGE_ABSENT` serving fallback
-  vectors recorded the same revision as a neural run, and the repro manifest had
-  no embedding identity at all.
+  `LOADED`, `null` otherwise. The repro manifest reads them from the engine
+  `BenchmarkDB` serves with (`BenchmarkDB.embedding_engine`), not from the factory
+  singleton, and refuses a multi-run invocation whose runs settled differently.
+  The reranker matrix compares mode and state across cells and accepts a `null`
+  revision only for a cell that is not `LOADED`. Before, a run in
+  `PACKAGE_ABSENT` serving fallback vectors recorded the same revision as a
+  neural run, and the repro manifest had no embedding identity at all.
 
 - The project scope in SQL normalizes the stored `directory_context` the way
   `memory_matches_project` already did: backslashes become `/` and a trailing

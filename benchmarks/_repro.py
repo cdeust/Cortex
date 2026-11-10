@@ -14,7 +14,7 @@ from typing import Any
 from importlib.metadata import version
 from mcp_server.core.reranker import ensure_reranker_loaded, model_sha256
 import benchmarks.lib._composition_root_wiring  # noqa: F401 — source: issue #560
-from benchmarks.lib.embedding_identity import embedding_manifest_fields
+from benchmarks.lib.embedding_identity import embedding_identity_fields
 
 
 def _git_sha() -> str:
@@ -104,8 +104,6 @@ def build_repro_manifest() -> dict[str, Any]:
     Postcondition: returns a dict with keys:
         git_commit, git_dirty, python_version, platform_system,
         platform_machine, platform_node, timestamp_utc, lib_versions,
-        embedding_mode, embedding_model_state, embedding_model_name,
-        embedding_model_revision (None unless the state is LOADED),
         reranker_active, reranker_state, reranker_model_path,
         reranker_model_sha256.
     The dict is JSON-serialisable (all values are str | bool | None | dict).
@@ -131,9 +129,29 @@ def build_repro_manifest() -> dict[str, Any]:
         "platform_node": platform.node(),
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "lib_versions": lib_versions,
-        **embedding_manifest_fields(),
         **_reranker_manifest_fields(),
     }
+
+
+def record_embedding_identity(repro: dict[str, Any], engine: Any) -> None:
+    """Add the identity of the engine that serves the run to ``repro`` (#734).
+
+    precondition: ``engine`` is the benchmark's own engine
+        (``BenchmarkDB.embedding_engine``), not the factory singleton: the two
+        are separate instances and can settle in different states.
+    postcondition: ``repro`` carries ``embedding_mode``,
+        ``embedding_model_state``, ``embedding_model_name`` and
+        ``embedding_model_revision`` (None unless the state is LOADED).
+    raises: RuntimeError when an earlier run of the same invocation recorded a
+        different identity; one result must not average neural and fallback runs.
+    """
+    fields = embedding_identity_fields(engine)
+    recorded = {key: repro[key] for key in fields if key in repro}
+    if recorded and recorded != fields:
+        raise RuntimeError(
+            f"embedding identity changed between runs: {recorded} then {fields}"
+        )
+    repro.update(fields)
 
 
 def multi_run_stats(values: list[float]) -> dict[str, float | int | None]:
