@@ -56,12 +56,18 @@ async def test_each_skipped_image_is_named_with_its_section(wired, tmp_path):  #
             "reference": "rId7",
             "section_index": 0,
             "state": "unsupported",
+            "part": "",
+            "digest": "",
+            "size": None,
         },
         {
             "ordinal": 2,
             "reference": "",
             "section_index": 1,
             "state": "unsupported",
+            "part": "",
+            "digest": "",
+            "size": None,
         },
     ]
 
@@ -82,3 +88,59 @@ async def test_a_long_heading_is_not_copied_once_per_image(wired, tmp_path):  # 
     assert out["images_skipped"] == 50
     assert {a["section_index"] for a in out["attachments"]} == {0}
     assert heading not in json.dumps(out["attachments"])
+
+
+_PKG = "http://schemas.openxmlformats.org/package/2006/relationships"
+
+
+def _with_media(path, rels: str, media: dict[str, bytes]):
+    import zipfile
+
+    with zipfile.ZipFile(path, "a") as z:
+        z.writestr("word/_rels/document.xml.rels", rels)
+        for name, data in media.items():
+            z.writestr(name, data)
+    return path
+
+
+@pytest.mark.asyncio
+async def test_each_embedded_image_names_its_part_digest_and_size(wired, tmp_path):  # noqa: F811
+    import hashlib
+
+    png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 100
+    rels = (
+        f'<Relationships xmlns="{_PKG}">'
+        '<Relationship Id="rId7" Type="t" Target="media/image1.png"/>'
+        '<Relationship Id="rId8" Type="t" Target="https://x/a.png"'
+        ' TargetMode="External"/>'
+        '<Relationship Id="rId9" Type="t" Target="media/absent.png"/>'
+        "</Relationships>"
+    )
+    body = _para("H", "Heading1") + "".join(
+        _drawing(r) for r in ("rId7", "rId8", "rId9")
+    )
+    p = _with_media(
+        _make_docx(tmp_path / "m.docx", body), rels, {"word/media/image1.png": png}
+    )
+    out = await ingest_document.handler({"path": str(p)})
+    named = [
+        (a["reference"], a["part"], a["digest"], a["size"]) for a in out["attachments"]
+    ]
+    assert named == [
+        (
+            "rId7",
+            "word/media/image1.png",
+            f"sha256:{hashlib.sha256(png).hexdigest()}",
+            len(png),
+        ),
+        ("rId8", "", "", None),
+        ("rId9", "", "", None),
+    ]
+    assert {a["state"] for a in out["attachments"]} == {"unsupported"}
+
+
+@pytest.mark.asyncio
+async def test_malformed_relationships_fail_before_any_write(wired, tmp_path):  # noqa: F811
+    p = _with_media(_make_docx(tmp_path / "b.docx", _drawing("rId1")), "<Rel", {})
+    out = await ingest_document.handler({"path": str(p)})
+    assert (out["ingested"], out["reason"]) == (False, "document_parse_failed")

@@ -3,9 +3,11 @@
 
 Runs from the trusted default-branch checkout of claude-review.yml, before the
 review action. It reads workflow-run metadata only: no PR content, no comment
-text. A review counts when its run is a success of the same PR and the action
-step ("PR Review") itself succeeded, so runs that skipped the action because
-the cap was reached do not count as reviews.
+text. A review counts when its run is a success of the same PR, ran under the
+review contract (it has the "Claude review budget" job) and the action step
+("PR Review") itself succeeded, so runs that skipped the action because the cap
+was reached do not count as reviews, nor do reviews of the workflow that
+preceded the contract (ADR-1129).
 
 Writes `round`, `cap`, `skip` and `reviewed_sha` to $GITHUB_OUTPUT. At the cap
 no fourth review runs: the accepted part merges, the rest leaves the PR for a
@@ -42,6 +44,11 @@ EXHAUSTED = (
 )
 # The step of claude-review.yml that runs the action; the test pins this name.
 ACTION_STEP = "PR Review"
+# The job of claude-review.yml that runs this script; the test pins this name.
+# A run without it predates the review contract (the cap, then the verdict line
+# the merge waits for) and does not count: a pull request reviewed only under
+# the old workflow could otherwise never receive a verdict (ADR-1129).
+BUDGET_JOB = "Claude review budget"
 SHA = re.compile(r"[0-9a-f]{40}")
 # source: GitHub REST per_page maximum.
 PER_PAGE = 100
@@ -102,7 +109,10 @@ def candidate_runs(gh: Gh, repo: str, pr: int, run_id: int, head_ref: str):
 
 
 def ran_the_action(gh: Gh, repo: str, run: Record) -> bool:
-    jq = f'[.jobs[].steps[]? | select(.name == "{ACTION_STEP}") | .conclusion]'
+    jq = (
+        f'[select(any(.jobs[]; .name == "{BUDGET_JOB}")) | .jobs[].steps[]? '
+        f'| select(.name == "{ACTION_STEP}") | .conclusion]'
+    )
     text = gh([f"repos/{repo}/actions/runs/{run['id']}/jobs", "--jq", jq])
     conclusions = json.loads(text)
     if not isinstance(conclusions, list):

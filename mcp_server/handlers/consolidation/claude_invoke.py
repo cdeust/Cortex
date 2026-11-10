@@ -66,6 +66,17 @@ async def _communicate_with_timeout(
             await proc.wait()
 
 
+def _reported_cost(raw: Any) -> float | None:
+    """The CLI's ``total_cost_usd`` as a float, or None when it reported none.
+
+    A reported ``0.0`` stays ``0.0``; an absent or null field is unknown,
+    never free (#733: an unknown cost must not read as a free call).
+    Raises ValueError on a value that is not a number."""
+    if raw is None:
+        return None
+    return float(raw)
+
+
 def _parse_invoke_response(
     returncode: int, stdout_bytes: bytes, stderr_bytes: bytes, _root: Any
 ) -> Any:
@@ -79,16 +90,17 @@ def _parse_invoke_response(
         logger.warning(
             "headless-authoring: claude -p exit %d stderr=%r", returncode, stderr[:300]
         )
-        return _root.InvokeResult(text=None, cost_usd=0.0)
+        return _root.InvokeResult(text=None, cost_usd=None)
 
     stdout = stdout.strip()
     if not stdout:
-        return _root.InvokeResult(text=None, cost_usd=0.0)
+        return _root.InvokeResult(text=None, cost_usd=None)
 
+    cost_usd: float | None
     try:
         data = json.loads(stdout)
         text: str | None = data.get("result") or None
-        cost_usd = float(data.get("total_cost_usd") or 0.0)
+        cost_usd = _reported_cost(data.get("total_cost_usd"))
     except (json.JSONDecodeError, ValueError):
         # source: ADR-0350
         logger.debug(
@@ -96,7 +108,7 @@ def _parse_invoke_response(
             "treating raw stdout as text (cost unknown)"
         )
         text = stdout or None
-        cost_usd = 0.0
+        cost_usd = None
 
     return _root.InvokeResult(text=text, cost_usd=cost_usd)
 
@@ -127,11 +139,13 @@ async def _claude_invoke(
 
     proc = await _spawn_claude_process(argv, cwd, child_env)
     if proc is None:
+        # No child process started, so nothing was spent: a known 0.0.
         return _root.InvokeResult(text=None, cost_usd=0.0)
 
     comm = await _communicate_with_timeout(proc, prompt, call_timeout)
     if comm is None:
-        return _root.InvokeResult(text=None, cost_usd=0.0)
+        # The child ran and may have spent before it was killed: unknown.
+        return _root.InvokeResult(text=None, cost_usd=None)
     stdout_bytes, stderr_bytes = comm
 
     return _parse_invoke_response(proc.returncode, stdout_bytes, stderr_bytes, _root)

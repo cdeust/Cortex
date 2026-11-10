@@ -50,7 +50,9 @@ def trigger_background_model_download(
         "import sys\n"
         "from sentence_transformers import SentenceTransformer\n"
         "name, rev, cf = sys.argv[1], sys.argv[2] or None, sys.argv[3] or None\n"
-        "SentenceTransformer(name, revision=rev, cache_folder=cf)\n"
+        # source: embedding_model_lifecycle.SAFETENSORS_ONLY; never fetch a pickle.
+        "SentenceTransformer(name, revision=rev, cache_folder=cf,"
+        " model_kwargs={'use_safetensors': True})\n"
     )
     # ``-s`` keeps user site-packages off the child's sys.path: it imports the
     # torch stack, and a user-site torchvision built for another torch breaks

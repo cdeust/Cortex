@@ -121,7 +121,9 @@ class InvokeResult:
     source: ADR-0361"""
 
     text: str | None  # None on failure
-    cost_usd: float  # client-side spend estimate; 0.0 when unavailable
+    # Client-side spend estimate the CLI reported; None when it reported
+    # none (failure, timeout, non-JSON output, absent field) (#733).
+    cost_usd: float | None
 
 
 @dataclass

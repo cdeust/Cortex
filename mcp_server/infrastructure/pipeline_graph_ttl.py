@@ -47,8 +47,14 @@ def graph_is_stale(graph_path: str | None) -> bool:
     path = Path(graph_path).expanduser()
     if not path.exists():
         return True
+    ttl_hours = graph_ttl_hours()
+    # A zero TTL makes every graph stale by itself, as in claim_reanalysis_slot:
+    # on a coarse clock (Windows) a graph written just now has an age of 0, which
+    # is not older than 0 hours (#692, run 38008915302).
+    if ttl_hours <= 0.0:
+        return True
     age_hours = (time.time() - path.stat().st_mtime) / 3600.0
-    return age_hours > graph_ttl_hours()
+    return age_hours > ttl_hours
 
 
 def claim_reanalysis_slot(project_root: str) -> bool:

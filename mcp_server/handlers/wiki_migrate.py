@@ -454,7 +454,10 @@ if __name__ == "__main__":
         help="Actually purge ghost rel_paths from wiki.pages.",
     )
     cli_args = parser.parse_args()
+    from mcp_server.infrastructure.backend_resolution import settle_for_command
 
+    if not settle_for_command("wiki_migrate"):
+        raise SystemExit(1)
     print(
         _json.dumps(
             asyncio.run(handler({"dry_run": cli_args.dry_run})),

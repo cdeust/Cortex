@@ -228,6 +228,43 @@ jobs:
               return list(indexed.values())
 
 
+          # source: .github/workflows/claude-review.yml, `name: PR Review`.
+          REVIEW_WORKFLOW_NAME = "PR Review"
+
+
+          def _pipeline_of_review(review, repository, api):
+              """The successful Pipeline run of the head a completed review ran on.
+
+              The review and the Pipeline finish in either order (ADR-1127). When the
+              review ends last, its completion wakes the resolver, which then needs the
+              Pipeline run of the same head: the newest one that succeeded. Without one
+              the merge is held, and the Pipeline's own completion will wake the resolver.
+              """
+              require(
+                  review.get("path") == ".github/workflows/claude-review.yml"
+                  and review.get("event") == "pull_request"
+                  and review.get("status") == "completed"
+                  and review.get("conclusion") == "success",
+                  "source review did not complete successfully",
+              )
+              require(
+                  review.get("head_repository", {}).get("full_name") == repository,
+                  "source head repository differs",
+              )
+              head = full_sha(review.get("head_sha"))
+              path = f"/repos/{repository}/actions/workflows/pipeline.yml/runs"
+              runs = [
+                  run
+                  for run in api.records(
+                      f"{path}?head_sha={head}&event=pull_request&status=success",
+                      "workflow_runs",
+                  )
+                  if run.get("head_sha") == head and type(run.get("id")) is int
+              ]
+              require(runs, "merge held: Pipeline has not succeeded on this head")
+              return max(runs, key=lambda run: run["id"])
+
+
           def _source_run(event, repository, api):
               require(
                   re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository),
@@ -238,8 +275,12 @@ jobs:
                   "event repository differs",
               )
               source = event.get("workflow_run")
-              _validate_run(source, repository)
+              require(isinstance(source, dict), "missing workflow_run")
               prefix = f"/repos/{repository}"
+              woken_by_review = source.get("name") == REVIEW_WORKFLOW_NAME
+              if woken_by_review:
+                  source = _pipeline_of_review(source, repository, api)
+              _validate_run(source, repository)
               run = api.request("GET", f"{prefix}/actions/runs/{source['id']}")
               _validate_run(run, repository)
               require(
@@ -250,6 +291,7 @@ jobs:
                   run.get("run_attempt") == source.get("run_attempt"),
                   "source run has a newer attempt",
               )
+              run["woken_by_review"] = woken_by_review
               jobs = _effective_jobs(
                   api.records(f"{prefix}/actions/runs/{run['id']}/jobs?filter=all", "jobs"), run
               )
@@ -356,6 +398,66 @@ jobs:
               require(max(verdicts)[1] == "approve", "merge held: Claude review verdict is block")
 
 
+          # Files a low-risk dependency update may touch (ADR-1126). Anything else, a
+          # workflow file first of all, keeps the PR on the reviewed path.
+          # source: .github/dependabot.yml, uv ecosystem: "declared in pyproject.toml
+          # and locked in uv.lock, the only dependency file".
+          LOW_RISK_FILES = frozenset({"uv.lock", "pyproject.toml"})
+          # source: the `update-type` values Dependabot writes in its commit message,
+          # https://github.com/dependabot/fetch-metadata#outputs
+          LOW_RISK_UPDATES = frozenset(
+              {"version-update:semver-minor", "version-update:semver-patch"}
+          )
+
+
+          def _declared_updates(commit):
+              """Update types of one Dependabot commit, or None when it is not one.
+
+              A git author is only a declared e-mail, and `verified` vouches for the
+              committer's key. Dependabot's commits are committed and signed by GitHub
+              itself (`web-flow`), where the author is the acting account and cannot be
+              chosen. Every dependency the commit names must declare its update type.
+              source: https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification
+              """
+              detail = commit.get("commit") or {}
+              signed = (detail.get("verification") or {}).get("verified") is True
+              author = (commit.get("author") or {}).get("login")
+              committer = (commit.get("committer") or {}).get("login")
+              if author != "dependabot[bot]" or committer != "web-flow" or not signed:
+                  return None
+              message = detail.get("message") or ""
+              updates = re.findall(r"^\s*update-type: (\S+)\s*$", message, re.M)
+              names = re.findall(r"^\s*- dependency-name: ", message, re.M)
+              return updates if updates and len(updates) == len(names) else None
+
+
+          def _is_low_risk(pr, repository, api):
+              """True for a Dependabot minor or patch update of the dependency files.
+
+              The tier comes from the change, not from a label or a title (ADR-1126): the
+              PR is Dependabot's single commit (committed and signed by GitHub), every
+              update it declares is minor or patch, and it touches nothing outside
+              LOW_RISK_FILES. Such a PR merges on green required checks without a review.
+              """
+              user = pr.get("user") or {}
+              if user.get("login") != "dependabot[bot]" or user.get("type") != "Bot":
+                  return False
+              path = f"/repos/{repository}/pulls/{pr['number']}"
+              commits = list(api.records(path + "/commits"))
+              # Dependabot opens and rebases a PR as one commit; a second one is
+              # someone else's work on its branch.
+              if len(commits) != 1:
+                  return False
+              updates = _declared_updates(commits[0])
+              if updates is None or not set(updates) <= LOW_RISK_UPDATES:
+                  return False
+              files = set()
+              for row in api.records(path + "/files"):
+                  # A rename counts under both of its names.
+                  files |= {row.get("filename"), row.get("previous_filename")} - {None}
+              return bool(files) and files <= LOW_RISK_FILES
+
+
           def _merge_open_pr(pr, merge_path, head, api, repository):
               require(
                   pr.get("state") == "open" and pr.get("draft") is False,
@@ -369,7 +471,10 @@ jobs:
                   ),
                   "PR label holds merge",
               )
-              _review_approves(pr["number"], head, repository, api)
+              if _is_low_risk(pr, repository, api):
+                  print("post-merge: low-risk dependency update, no review required")
+              else:
+                  _review_approves(pr["number"], head, repository, api)
               result = api.request(
                   "PUT",
                   merge_path,
@@ -409,12 +514,27 @@ jobs:
                       "pr_number": str(number),
                       "reason": "An exact-SHA main push Pipeline already exists",
                   }
+              if already_merged and run.get("woken_by_review"):
+                  # The Pipeline's completion merged this PR and tests the merge commit.
+                  return {
+                      "tested_sha": sha,
+                      "run_tests": "false",
+                      "pr_number": str(number),
+                      "reason": "Already merged when the review completed",
+                  }
               return {
                   "tested_sha": sha,
                   "run_tests": "true",
                   "pr_number": str(number),
                   "reason": "Test the confirmed protected merge commit",
               }
+
+
+          # A merge that waits is not a failure of main: the review or the Pipeline of
+          # this head is not there yet, or a newer head has its own run. The run that
+          # brings the missing part wakes the resolver again (ADR-1127), so these end
+          # green with a notice instead of a red run on the default branch (ADR-1128).
+          WAITING = ("merge held:", "PR head advanced after testing")
 
 
           def main():
@@ -438,8 +558,14 @@ jobs:
                       f"PR #{result['pr_number']}: {result['reason']}; SHA {result['tested_sha']}"
                   )
                   return 0
+              except PostMergeError as exc:
+                  if str(exc).startswith(WAITING):
+                      # No output is written: no downstream job runs, the run is green.
+                      print(f"::notice title=Merge not made::{exc}")
+                      return 0
+                  print(f"post-merge: {exc}", file=sys.stderr)
+                  return 1
               except (
-                  PostMergeError,
                   OSError,
                   ValueError,
                   KeyError,
@@ -464,6 +590,7 @@ jobs:
     if: >-
       !cancelled() && github.event_name == 'workflow_run'
       && needs.resolve.result == 'success'
+      && needs.resolve.outputs.pr_number != ''
     runs-on: ubuntu-latest
     timeout-minutes: 5 # source: operational cap; a few API calls per merged PR.
     permissions:

@@ -12,6 +12,7 @@ from mcp_server.hooks.session_start_common import (
     _MIN_HEAT,
     _log,
 )
+from mcp_server.infrastructure.pg_scope_clause import pg_scope_predicate
 from mcp_server.shared.project_scope import memory_matches_project, project_ancestors
 
 
@@ -29,7 +30,7 @@ _ANCHORS_SQL = (
     "AND NOT (m.tags @> '[\"auto-captured\"]'::jsonb) "
     # source: ADR-0498
     "AND m.superseded_by_id IS NULL "
-    "AND (m.is_global = TRUE OR m.directory_context = ANY(%s::TEXT[])) "
+    "AND " + pg_scope_predicate("m.") + " "
     # source: ADR-1106 -- exact ties go to the newer memory.
     "ORDER BY effective_heat(m, NOW()) DESC, m.created_at DESC, m.id DESC LIMIT %s"
 )
@@ -44,7 +45,7 @@ _TEAM_DECISIONS_SQL = (
     "effective_heat(m, NOW()) AS heat "
     "FROM memories m JOIN current_memories cm ON cm.id = m.id "
     "WHERE m.is_team_decision = TRUE AND NOT m.is_benchmark "
-    "AND (m.is_global = TRUE OR m.directory_context = ANY(%s::TEXT[])) "
+    "AND " + pg_scope_predicate("m.") + " "
     "AND m.agent_context != '' "
     # source: ADR-0498
     "AND m.superseded_by_id IS NULL "
@@ -68,7 +69,7 @@ _HOT_SQL = (
     "         OR tags @> '[\"memory-replica\"]'::jsonb) "
     # source: ADR-0498
     "AND superseded_by_id IS NULL "
-    "AND (is_global = TRUE OR directory_context = ANY(%s::TEXT[])) "
+    "AND " + pg_scope_predicate() + " "
     # source: ADR-1106 -- exact ties go to the newer memory.
     "ORDER BY heat_base DESC, id DESC LIMIT %s"
 )

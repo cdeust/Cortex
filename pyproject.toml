@@ -132,7 +132,7 @@ codebase = [
     #
     #
     #
-    "tree-sitter-language-pack>=1.12.5,<1.23",
+    "tree-sitter-language-pack>=1.12.5,<1.24",
     "networkx>=3.0",
     # source: ADR-0874
     #

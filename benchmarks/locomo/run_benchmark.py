@@ -21,7 +21,11 @@ os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from benchmarks._repro import build_repro_manifest, multi_run_stats
+from benchmarks._repro import (
+    build_repro_manifest,
+    multi_run_stats,
+    record_embedding_identity,
+)
 from benchmarks.lib.bench_db import BenchmarkDB
 from benchmarks.lib.dataset_pins import file_identity
 from benchmarks.lib.query_log import QueryLog
@@ -241,6 +245,7 @@ def run_benchmark(
         consolidation_call_count = 0
 
         with BenchmarkDB(require_reranker=True) as db:
+            record_embedding_identity(repro, db.embedding_engine)
             for conv_idx, conv in enumerate(data):
                 sessions = extract_sessions(conv["conversation"])
 

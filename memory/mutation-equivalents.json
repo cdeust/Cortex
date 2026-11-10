@@ -482,6 +482,22 @@
       "issue": "#345"
     },
     {
+      "mutant": "mcp_server.infrastructure.memory_store.x__construct_store__mutmut_55",
+      "removed": "allow_fallback = os.environ.get(\"CORTEX_ALLOW_SQLITE_FALLBACK\", \"\").lower() in (",
+      "added": "allow_fallback = os.environ.get(\"CORTEX_ALLOW_SQLITE_FALLBACK\", \"XXXX\").lower() in (",
+      "kind": "equivalent-by-construction",
+      "rationale": "`.lower() in (\"1\", \"true\", \"yes\")` is False for an unset variable whether the default is \"\" or \"XXXX\" (\"xxxx\" is not an opt-in value), so the default string cannot change allow_fallback. Every opt-in spelling and the unset case are pinned by tests_py/infrastructure/test_construct_store_selection.py.",
+      "issue": "#704"
+    },
+    {
+      "mutant": "mcp_server.infrastructure.memory_store.x__construct_store__mutmut_110",
+      "removed": "\"CORTEX_ALLOW_SQLITE_FALLBACK\", \"\"",
+      "added": "\"CORTEX_ALLOW_SQLITE_FALLBACK\", \"XXXX\"",
+      "kind": "equivalent-by-construction",
+      "rationale": "`.lower() in (\"1\", \"true\", \"yes\")` is False for an unset variable whether the default is \"\" or \"XXXX\" (\"xxxx\" is not an opt-in value), so the default string cannot change allow_fallback. Every opt-in spelling and the unset case are pinned by tests_py/infrastructure/test_construct_store_selection.py.",
+      "issue": "#704"
+    },
+    {
       "mutant": "mcp_server.infrastructure.artifact_store.x_write_artifact__mutmut_12",
       "removed": "address = hashlib.sha256(content.encode(\"utf-8\")).hexdigest()[:_ADDRESS_LEN]",
       "added": "address = hashlib.sha256(content.encode(\"UTF-8\")).hexdigest()[:_ADDRESS_LEN]",
@@ -600,6 +616,22 @@
       "kind": "equivalent-by-construction",
       "rationale": "The empty default is returned only when no word precedes the date, and _interval only tests the result for membership in _CLOSED_FRAMES (whose opening words are 'from' and 'between'), _OPEN_END_WORDS ('since') and _OPEN_START_WORDS ('until', 'till'). Neither \"\" nor \"XXXX\" is one of those words, so both defaults leave the event time unknown; the no-preceding-word case is pinned by '2026-01 until 2026-03 we used Redis.' in tests_py/core/test_claim_event_time.py.",
       "issue": "#717"
+    },
+    {
+      "mutant": "mcp_server.infrastructure.docx_media_reader.x__stream_member__mutmut_4",
+      "removed": "with archive.open(name, mode=\"r\") as member:",
+      "added": "with archive.open(name, ) as member:",
+      "kind": "equivalent-by-construction",
+      "rationale": "ZipFile.open(name, mode='r', pwd=None, *, force_zip64=False) defaults mode to 'r', so dropping the keyword opens the same read-only ZipExtFile and streams the same bytes. The explicit mode=\"r\" exists only so the ADR-1110 storage-primitive scanner (tests_py/architecture/_storage_primitives.py) reads the call as a read, which test_every_storage_primitive_is_an_audited_site pins.",
+      "issue": "#732"
+    },
+    {
+      "mutant": "mcp_server.infrastructure.docx_media_reader.x_read_docx_relationships_xml__mutmut_18",
+      "removed": "return raw.decode(\"utf-8\")",
+      "added": "return raw.decode(\"UTF-8\")",
+      "kind": "equivalent-by-construction",
+      "rationale": "Python's codec registry normalises encoding names before lookup (codecs.lookup lower-cases them), so 'utf-8' and 'UTF-8' select the same codec: every byte string decodes to the same text or raises the same UnicodeDecodeError, which the undecodable-bytes test pins.",
+      "issue": "#732"
     }
   ]
 }

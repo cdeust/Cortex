@@ -67,8 +67,8 @@ def project_ancestors(project_root: str | None) -> list[str]:
     # range stops at 2, not 0: parts[:1] on a leading-slash path is [""],
     # a non-empty list whose join is "" -- an empty ancestor would let an
     # empty directory_context match every project downstream (a caller
-    # builds "directory_context = ANY(ancestors)"/"IN (ancestors)" SQL
-    # straight from this list, with no separate empty-string guard).
+    # builds its "= ANY(ancestors)"/"IN (ancestors)" scope SQL straight from
+    # this list, with no separate empty-string guard; see pg_scope_clause).
     return ["/".join(parts[:i]) for i in range(len(parts), 1, -1)]
 
 

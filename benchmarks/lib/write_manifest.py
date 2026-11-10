@@ -25,6 +25,7 @@ _REPO_ROOT = str(Path(__file__).resolve().parents[2])
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 from benchmarks.lib.disk_space_snapshot import disk_space_snapshot  # noqa: E402
+from benchmarks.lib.embedding_identity import embedding_manifest_fields  # noqa: E402
 from benchmarks.lib.machine_load_snapshot import machine_load_snapshot  # noqa: E402
 
 _START_SNAPSHOT_NAME = "START_SNAPSHOT.json"
@@ -74,22 +75,6 @@ def ver(pkg: str) -> str:
         return "absent"
 
 
-def embedding_revision() -> str:
-    """Exact model revision this run's EmbeddingEngine loaded.
-
-    source: ADR-0091"""
-    try:
-        # noqa: PLC0415 — ImportError-probe boundary: the except arm IS the
-        # degraded mode ("unresolved" in the manifest).
-        from mcp_server.infrastructure.embedding_engine import (  # noqa: PLC0415
-            get_embedding_engine,
-        )
-
-        return get_embedding_engine().revision
-    except Exception:  # noqa: BLE001 — signal is the recorded "unresolved" value
-        return "unresolved"
-
-
 def reranker_fields() -> dict:
     """Load state + weights sha256 of the reranker, as this run observed it.
 
@@ -100,20 +85,23 @@ def reranker_fields() -> dict:
         import benchmarks.lib._composition_root_wiring  # noqa: PLC0415,F401 — source: issue #560
         from mcp_server.core.reranker import (  # noqa: PLC0415
             ensure_reranker_loaded,
-            model_sha256,
+            model_identity,
         )
 
         status = ensure_reranker_loaded()
+        identity = model_identity()
         return {
             "reranker_active": status.state == "loaded",
             "reranker_state": status.state,
-            "reranker_model_sha256": model_sha256(),
+            "reranker_model_sha256": identity.sha256,
+            "reranker_model_identity": identity.state,
         }
     except Exception:  # noqa: BLE001 — signal is the recorded reranker_state
         return {
             "reranker_active": False,
             "reranker_state": "unresolved",
             "reranker_model_sha256": None,
+            "reranker_model_identity": "unresolved",
         }
 
 
@@ -133,9 +121,31 @@ def _environment_fields() -> dict:
                 "psycopg-pool",
             )
         },
-        "embedding_model_revision": embedding_revision(),
+        **embedding_manifest_fields(),
         **reranker_fields(),
     }
+
+
+def _artifact_fields() -> dict:
+    """The ``mcp_server`` artifact this run imported, as `cortex doctor` names it.
+
+    ``git_sha`` is the revision ``reproduce.sh`` read from the checkout; it says
+    nothing about uncommitted edits or about an installed wheel shadowing the
+    tree. The doctor's artifact check states which one ran (installed wheel or
+    source tree), its revision, whether ``mcp_server`` differs from it, and one
+    digest over its members, so a score is bound to the code that produced it.
+    ``ok`` is False when that identity is unknown or altered (the detail says
+    why); the manifest is still written.
+
+    source: issue #729 (acceptance: record source revision and installed
+    artifact digests in verification receipts)"""
+    # noqa: PLC0415 — the doctor check is imported only when a manifest is built.
+    from mcp_server.doctor_artifact import artifact_identity  # noqa: PLC0415
+
+    def capture(name: str, ok: bool, detail: str, fix: str = "", **_: object) -> dict:
+        return {"ok": ok, "detail": detail, "fix": fix or None}
+
+    return {"runtime_artifact": artifact_identity(capture)}
 
 
 def _start_snapshot_fields(results_dir: str) -> dict:
@@ -210,6 +220,8 @@ def build_manifest(
         "bench_container_port": int(pg_port),
         "bench_runner_pid": int(pid),
         **_environment_fields(),
+        # source: issue #729
+        **_artifact_fields(),
         "results_files": sorted(
             p.name
             for p in Path(results_dir).glob("*.json")

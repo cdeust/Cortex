@@ -8,6 +8,7 @@ import os
 
 from mcp_server.hooks.agent_briefing_log import _log
 from mcp_server.shared.project_scope import project_ancestors
+from mcp_server.infrastructure.pg_scope_clause import pg_scope_predicate
 from mcp_server.infrastructure.backend_marker import effective_backend
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.hooks.agent_briefing_sqlite import (
@@ -17,10 +18,21 @@ from mcp_server.hooks.agent_briefing_sqlite import (
     fetch_sqlite_context,
 )
 
+# source: ADR-1080 -- the project predicate, one text-array param, its
+# directory_context normalized as project_ancestors is (issue #692).
+_SCOPE = pg_scope_predicate("m.")
+
 
 def _connect():
-    """Select the configured backend; None when PostgreSQL is unreachable."""
-    if effective_backend(os.environ) == "sqlite":
+    """Select the configured backend; None when PostgreSQL is unreachable.
+
+    With no named URL, only the shared store decides (SQLite unless the
+    backend is PostgreSQL); raw psycopg never gets an empty conninfo, which
+    would reach whatever local server libpq defaults to (issue #704).
+    """
+    backend = effective_backend(os.environ)
+    url = os.environ.get("DATABASE_URL") or get_memory_settings().DATABASE_URL
+    if backend == "sqlite" or (backend != "postgresql" and not url):
         from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: PLC0415 — hook latency boundary
 
         return SqliteBriefingConnection(get_shared_store())
@@ -30,11 +42,11 @@ def _connect():
         return None
     from mcp_server.infrastructure.db_connect import pg_connect  # noqa: PLC0415 — after the optional-extra probe
 
+    if not url:
+        _log("agent_briefing: postgresql backend has no DATABASE_URL")
+        return None
     try:
-        return pg_connect(
-            os.environ.get("DATABASE_URL") or get_memory_settings().DATABASE_URL,
-            autocommit=True,
-        )
+        return pg_connect(url, autocommit=True)
     except psycopg.Error:
         return None
 
@@ -63,7 +75,7 @@ def _fetch_agent_context(
             rows = conn.execute(
                 (
                     # source: ADR-0484
-                    """
+                    f"""
                 SELECT m.id, m.content,
                        effective_heat(m, NOW()) AS heat,
                        m.agent_context
@@ -71,14 +83,14 @@ def _fetch_agent_context(
                      JOIN current_memories cm ON cm.id = m.id
                 WHERE m.agent_context = %s
                   AND effective_heat(m, NOW()) >= %s
-                  AND (m.is_global = TRUE OR m.directory_context = ANY(%s::TEXT[]))
+                  AND {_SCOPE}
                   AND NOT m.is_benchmark
                   AND m.superseded_by_id IS NULL
                   AND m.content_tsv @@ plainto_tsquery('english', %s)
                 -- source: ADR-1106 -- exact ties go to the newer memory.
                 ORDER BY effective_heat(m, NOW()) DESC, m.created_at DESC, m.id DESC
                 LIMIT %s
-                """
+                """  # noqa: S608 — _SCOPE is the fixed fragment from pg_scope_predicate; values are bound parameters (docs/ASSURANCE-CASE.md §5)
                 ),
                 (
                     agent_name,
@@ -107,7 +119,7 @@ def _fetch_agent_context(
             rows = conn.execute(
                 (
                     # source: ADR-0484
-                    """
+                    f"""
                 SELECT m.id, m.content,
                        effective_heat(m, NOW()) AS heat,
                        m.agent_context
@@ -115,13 +127,13 @@ def _fetch_agent_context(
                      JOIN current_memories cm ON cm.id = m.id
                 WHERE m.is_team_decision = TRUE
                   AND (m.agent_context IS NULL OR m.agent_context != %s OR %s = 0)
-                  AND (m.is_global = TRUE OR m.directory_context = ANY(%s::TEXT[]))
+                  AND {_SCOPE}
                   AND NOT m.is_benchmark
                   AND m.superseded_by_id IS NULL
                 -- source: ADR-1106 -- exact ties go to the newer memory.
                 ORDER BY effective_heat(m, NOW()) DESC, m.created_at DESC, m.id DESC
                 LIMIT %s
-                """
+                """  # noqa: S608 — _SCOPE is the fixed fragment from pg_scope_predicate; values are bound parameters (docs/ASSURANCE-CASE.md §5)
                 ),
                 (agent_name, len(keywords), ancestors, remaining),
             ).fetchall()

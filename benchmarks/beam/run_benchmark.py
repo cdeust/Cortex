@@ -19,7 +19,11 @@ os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from benchmarks._repro import build_repro_manifest, multi_run_stats
+from benchmarks._repro import (
+    build_repro_manifest,
+    multi_run_stats,
+    record_embedding_identity,
+)
 from benchmarks.beam.data import (
     beam_dataset_identity,
     extract_10m_chat,
@@ -337,6 +341,7 @@ def run_benchmark(
         total_start = time.time()
 
         with BenchmarkDB(require_reranker=True) as db:
+            record_embedding_identity(repro, db.embedding_engine)
             for conv_idx, conversation in enumerate(ds):
                 conv_start = time.time()
 

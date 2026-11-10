@@ -89,7 +89,10 @@ Remote or team PostgreSQL (a configured `database_url`): no native receipt.
 ## Remaining slices of #730
 
 1. A receipt schema that binds each native check to the artifact digest it ran
-   (shared with #729, which names the running artifact and its digest).
+   (shared with #729, which names the running artifact and its digest). Delivered:
+   `cortex-native-receipt/1`, validated by `scripts/native_receipt.py`.
+   Its `artifact` object is produced by `scripts/native_receipt_artifact.py` from
+   the doctor's identity, not copied by hand.
 2. A gate that refuses a support claim (README, release notes) for a cell without a
    current receipt of that schema.
 3. Native receipts for the cells marked `—` that the owner's scope requires: Windows

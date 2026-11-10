@@ -2,6 +2,8 @@
 
 import asyncio
 import json
+import sys
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -231,6 +233,15 @@ class TestMCPClientConnect:
         ):
             with pytest.raises(McpConnectionError, match="Failed to spawn"):
                 _run(client.connect())
+
+    def test_spawn_failure_with_an_empty_message_still_names_the_cause(self):
+        # A Windows selector loop raises a bare NotImplementedError, whose str()
+        # is "": the error read "Failed to spawn: " and hid the cause (#692).
+        _, client = _make_client()
+        with patch("asyncio.create_subprocess_exec", side_effect=NotImplementedError):
+            with pytest.raises(McpConnectionError) as exc:
+                _run(client.connect())
+        assert "NotImplementedError" in str(exc.value)
 
     def test_connect_handshake_success(self):
         async def _test():
@@ -1280,11 +1291,36 @@ for line in sys.stdin:
 
 
 def _real_child_client(script: str) -> MCPClient:
-    """Build a client that spawns a real python child running ``script``."""
-    config = {"command": "python3", "args": ["-c", script]}
+    """Build a client that spawns a real python child running ``script``.
+
+    The child is ``sys.executable``, the interpreter running the suite: a bare
+    ``python3`` is not on PATH on every system (the python.org Windows
+    installer ships ``python.exe`` only). The allowlist compares the command's
+    last ``/`` component, which is the whole path when the separator is ``\\``.
+    """
+    config = {"command": sys.executable, "args": ["-c", script]}
     client = MCPClient(config)
-    client._extra_allowed_commands = {"python3"}
+    client._extra_allowed_commands = {sys.executable, Path(sys.executable).name}
     return client
+
+
+def _run_with_subprocesses(coro):
+    """Run ``coro`` on a loop that can spawn a real child process.
+
+    ``tests_py/conftest.py`` installs ``WindowsSelectorEventLoopPolicy`` on
+    Windows, and a Windows ``SelectorEventLoop`` does not support subprocesses:
+    ``create_subprocess_exec`` raises a bare ``NotImplementedError`` (#692,
+    class 9, run 38008915302). The Proactor loop, Windows' default, does.
+    source: Python docs, asyncio "Platform Support", Windows
+    """
+    if sys.platform == "win32":
+        loop = asyncio.ProactorEventLoop()
+    else:
+        loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
 
 
 async def _close_and_reap(client: MCPClient) -> None:
@@ -1335,7 +1371,7 @@ class TestStdioDeadlockRegression:
             finally:
                 await _close_and_reap(client)
 
-        _run(_test())
+        _run_with_subprocesses(_test())
 
     def test_silent_child_raises_loud_timeout(self):
         """A never-answering child must raise McpConnectionError, not hang."""
@@ -1352,7 +1388,7 @@ class TestStdioDeadlockRegression:
             finally:
                 await _close_and_reap(client)
 
-        _run(_test())
+        _run_with_subprocesses(_test())
 
     def test_connected_false_when_bound_loop_closed(self):
         """The root-cause guard: a client bound to a closed loop is NOT reusable.

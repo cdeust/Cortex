@@ -36,6 +36,7 @@ wire_composition_root()
 from mcp_server.handlers.wiki_migrate import page_row_from_md  # noqa: E402
 from mcp_server.infrastructure.config import WIKI_ROOT  # noqa: E402
 from mcp_server.infrastructure.memory_config import get_memory_settings  # noqa: E402
+from mcp_server.infrastructure.backend_resolution import settle_for_command  # noqa: E402
 from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: E402
 
 _CORRUPTION_SIGNATURE_SQL = "title LIKE 'title:%' OR title LIKE '\"%%\"'"
@@ -92,6 +93,15 @@ def repair_row(
     return "fixed"
 
 
+def _open_store():
+    """The configured shared store, after the backend marker is read."""
+    # issue #704: read the backend marker first, as the server does
+    if not settle_for_command("backfill_wiki_titles_2026_07_14"):
+        raise SystemExit(1)
+    settings = get_memory_settings()
+    return get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -99,9 +109,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    settings = get_memory_settings()
-    store = get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
-    conn = store._conn
+    conn = _open_store()._conn
 
     rows = find_affected_rows(conn)
     print(f"Found {len(rows)} rows matching the corruption signature.")
