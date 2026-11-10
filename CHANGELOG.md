@@ -158,8 +158,8 @@ adheres to [Semantic Versioning](https://semver.org/).
   and limits in that text with the hook's own constants.
 - `PRIVACY.md` now also says that the 50-character threshold counts the response
   as the hook formats it, so an edit is almost always captured and a Bash call is
-  dropped, command line included, when it prints nothing or fewer than 30
-  characters on a single stream; that an Edit keeps its before and after strings
+  kept, command line included, once its stdout, stderr and interrupted marker add
+  up to 50 formatted characters (one stream alone: 30 characters); that an Edit keeps its before and after strings
   while a Write, MultiEdit or NotebookEdit keeps its whole JSON response (written
   content and, when the host sends it, the previous file);
   and that a tool in none of the three lists (Task, TodoWrite, MCP tools) is never

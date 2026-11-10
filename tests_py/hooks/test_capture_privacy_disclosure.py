@@ -123,18 +123,29 @@ def test_a_long_read_response_is_copied_whole_into_an_artifact(captured):
     assert str(files[0]) in captured[-1]
 
 
-def test_a_bash_call_under_the_formatted_threshold_is_dropped_whole(captured):
-    assert "fewer than 30 characters on a single stream" in _paragraph()
-    kept = _number_before("characters on a single stream")
-    command = "grep 'Alice Martin' a.csv"
+_BASH = {"command": "grep 'Alice Martin' a.csv"}
+
+
+def _capture_bash(captured, response: dict) -> bool:
+    before = len(captured)
+    hook.process_event(_event("Bash", _BASH, response))
+    return len(captured) > before and "Alice Martin" in captured[-1]
+
+
+def test_a_bash_call_on_one_stream_is_kept_from_the_stated_length(captured):
+    assert "A call that prints nothing is always dropped" in _paragraph()
+    kept = _number_before("characters of output; two streams")
     for stream in ("stdout", "stderr"):
-        hook.process_event(
-            _event("Bash", {"command": command}, {stream: "x" * (kept - 1)})
-        )
-        hook.process_event(_event("Bash", {"command": command}, {stream: ""}))
-    assert captured == []
-    hook.process_event(_event("Bash", {"command": command}, {"stdout": "x" * kept}))
-    assert len(captured) == 1 and "Alice Martin" in captured[-1]
+        assert not _capture_bash(captured, {stream: "x" * (kept - 1)})
+        assert _capture_bash(captured, {stream: "x" * kept})
+    assert not _capture_bash(captured, {"stdout": "  ", "stderr": ""})
+    assert not _capture_bash(captured, {"stdout": "", "interrupted": True})
+
+
+def test_two_streams_or_an_interruption_are_kept_with_less_output(captured):
+    assert "two streams or an interrupted marker can reach 50" in _paragraph()
+    assert _capture_bash(captured, {"stdout": "ok", "stderr": "warn: x"})
+    assert _capture_bash(captured, {"stdout": "12345678", "interrupted": True})
 
 
 def test_a_one_character_edit_is_captured_with_its_path(captured):
