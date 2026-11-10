@@ -21,12 +21,16 @@ To build and retrieve memory, Cortex reads and processes:
   captured call copies depends on the tool:
   - Edit, Write, MultiEdit, NotebookEdit and Bash: the tool's response, when it
     is at least 50 characters long, plus the edited file's path or, for Bash, the
-    first 200 characters of the command line. A call whose response is shorter
-    is not captured at all, its path or command line included. An Edit response
-    is stored as its before and after strings; a Write or MultiEdit response is
-    stored as its whole JSON, so the content written and, when the host sends
-    it, the file's previous content are copied. A pattern or name typed in a
-    captured command is copied even when the command prints nothing useful.
+    first 200 characters of the command line. The 50 characters count the
+    response as the hook formats it (an Edit's path with its before and after
+    blocks, Bash's output with its label), so an edit is almost always
+    captured. A Bash call is dropped, command line included, when it
+    prints nothing, or fewer than 30 characters on a single stream (stdout or
+    stderr). An Edit response is stored as its before and after strings; a
+    Write, MultiEdit or NotebookEdit response is stored as its whole JSON, so
+    the content written and, when the host sends it, the file's previous
+    content are copied. A pattern or name typed in a captured command is
+    copied even when the command prints nothing useful.
   - Read, NotebookRead, Glob and Grep: the path, glob or search pattern in the
     memory row, not the file contents or the matches. A Grep pattern made of
     names copies those names. A response longer than 3000 characters is the

@@ -123,10 +123,25 @@ def test_a_long_read_response_is_copied_whole_into_an_artifact(captured):
     assert str(files[0]) in captured[-1]
 
 
-def test_a_short_response_is_not_captured_nor_its_command(captured):
-    assert "is not captured at all, its path or command line included" in _paragraph()
-    hook.process_event(_event("Bash", {"command": "grep 'Alice Martin' a.csv"}, "ok"))
+def test_a_bash_call_under_the_formatted_threshold_is_dropped_whole(captured):
+    assert "fewer than 30 characters on a single stream" in _paragraph()
+    kept = _number_before("characters on a single stream")
+    command = "grep 'Alice Martin' a.csv"
+    for stream in ("stdout", "stderr"):
+        hook.process_event(
+            _event("Bash", {"command": command}, {stream: "x" * (kept - 1)})
+        )
+        hook.process_event(_event("Bash", {"command": command}, {stream: ""}))
     assert captured == []
+    hook.process_event(_event("Bash", {"command": command}, {"stdout": "x" * kept}))
+    assert len(captured) == 1 and "Alice Martin" in captured[-1]
+
+
+def test_a_one_character_edit_is_captured_with_its_path(captured):
+    assert "so an edit is almost always" in _paragraph()
+    response = {"filePath": "/p/clients.csv", "oldString": "x", "newString": "y"}
+    hook.process_event(_event("Edit", {"file_path": "/p/clients.csv"}, response))
+    assert "/p/clients.csv" in captured[-1]
 
 
 def test_an_edit_keeps_before_and_after_and_not_the_previous_file(captured):
@@ -142,14 +157,20 @@ def test_an_edit_keeps_before_and_after_and_not_the_previous_file(captured):
     assert "Bob Durand" not in captured[-1]
 
 
-@pytest.mark.parametrize("tool", ["Write", "MultiEdit"])
-def test_a_write_or_multiedit_response_is_stored_whole(captured, tool):
-    assert "a Write or MultiEdit response is stored as its whole JSON" in _paragraph()
+_WHOLE_JSON_RESPONSES = {
+    "Write": {"type": "update", "content": "Alice Martin, 12 rue des Lilas"},
+    "MultiEdit": {"edits": [{"old_string": "Alice", "new_string": "Alice Martin"}]},
+    "NotebookEdit": {"new_source": "Alice Martin, 12 rue des Lilas", "cell_id": "c1"},
+}
+
+
+@pytest.mark.parametrize("tool", sorted(_WHOLE_JSON_RESPONSES))
+def test_a_write_multiedit_or_notebookedit_response_is_stored_whole(captured, tool):
+    assert "NotebookEdit response is stored as its whole JSON" in _paragraph()
     response = {
-        "type": "update",
         "filePath": "/p/clients.csv",
-        "content": "Alice Martin, 12 rue des Lilas, diabetic",
         "originalFile": "Bob Durand, 3 rue Haute, asthmatic",
+        **_WHOLE_JSON_RESPONSES[tool],
     }
     hook.process_event(_event(tool, {"file_path": "/p/clients.csv"}, response))
     assert "Alice Martin" in captured[-1] and "Bob Durand" in captured[-1]

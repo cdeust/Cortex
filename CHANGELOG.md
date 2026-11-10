@@ -156,10 +156,12 @@ adheres to [Semantic Versioning](https://semver.org/).
   project, that personal data is not redacted, and that an artifact can outlive a
   capture refused after hand-over (#737, slice 4). A test compares the tool lists
   and limits in that text with the hook's own constants.
-- `PRIVACY.md` now also says that a write-class or Bash call whose response is
-  under 50 characters is not captured at all, command line included; that an Edit
-  keeps its before and after strings while a Write or MultiEdit keeps its whole
-  JSON response (written content and, when the host sends it, the previous file);
+- `PRIVACY.md` now also says that the 50-character threshold counts the response
+  as the hook formats it, so an edit is almost always captured and a Bash call is
+  dropped, command line included, when it prints nothing or fewer than 30
+  characters on a single stream; that an Edit keeps its before and after strings
+  while a Write, MultiEdit or NotebookEdit keeps its whole JSON response (written
+  content and, when the host sends it, the previous file);
   and that a tool in none of the three lists (Task, TodoWrite, MCP tools) is never
   captured (#737, slice 5). Each sentence is checked against `process_event`.
 
