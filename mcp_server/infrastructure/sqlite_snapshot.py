@@ -15,7 +15,8 @@ source is refused instead of being created empty. Both connections come from
 before SQLite opens it (ADR-1112), as the store is.
 
 source: issue #731; docs/audits/owned-resources-backup-2026-11-05.md §3, §5;
-SQLite online backup API, https://www.sqlite.org/backup.html: a single
+SQLite online backup API, https://www.sqlite.org/backup.html (Python's
+``Connection.backup`` defaults to ``pages=-1``): a single
 ``sqlite3_backup_step()`` call with a negative page count "copies the entire
 source database in one call", holding one read lock on the source throughout.
 """
@@ -40,14 +41,14 @@ def _open_source(source: Path) -> sqlite3.Connection:
     return sqlite_connect(f"{source.resolve().as_uri()}?mode=ro", uri=True)
 
 
-def _seal(target: sqlite3.Connection, path: Path) -> None:
+def _seal(target: sqlite3.Connection) -> None:
     """Make the copy one file and refuse it if SQLite does not call it intact."""
     mode = target.execute("PRAGMA journal_mode=DELETE").fetchone()[0]
     if mode != "delete":
-        raise SnapshotError(f"{path} kept journal_mode={mode}")
+        raise SnapshotError(f"the copy kept journal_mode={mode}")
     verdict = [row[0] for row in target.execute("PRAGMA integrity_check")]
     if verdict != ["ok"]:
-        raise SnapshotError(f"{path} failed integrity_check: {verdict[:3]}")
+        raise SnapshotError(f"the copy failed integrity_check: {'; '.join(verdict)}")
 
 
 def snapshot_sqlite(source: Path, target: Path) -> None:
@@ -62,5 +63,5 @@ def snapshot_sqlite(source: Path, target: Path) -> None:
     with closing(_open_source(source)) as src:
         create_private_file(target)
         with closing(sqlite_connect(str(target))) as dst:
-            src.backup(dst, pages=-1)
-            _seal(dst, target)
+            src.backup(dst)  # pages=-1 by default: one step
+            _seal(dst)

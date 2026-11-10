@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import hashlib
+from datetime import datetime, timezone
 import os
+import re
 import sqlite3
 import stat
 import sys
@@ -80,7 +82,11 @@ def test_a_postgresql_root_stages_its_files_only(tmp_path):
 
 
 def test_a_managed_root_is_refused_until_its_cluster_can_be_copied(tmp_path):
-    with pytest.raises(ManifestError, match="managed PostgreSQL"):
+    expected = (
+        "a managed PostgreSQL backup needs a stopped copy or a logical dump, "
+        "not implemented yet (issue #731)"
+    )
+    with pytest.raises(ManifestError, match=f"^{re.escape(expected)}$"):
         snapshot_backup(tmp_path / "root", tmp_path / "staging", "managed")
     assert not (tmp_path / "staging").exists()
 
@@ -196,3 +202,33 @@ def test_any_other_file_vanishing_after_its_listing_fails_the_backup(
     monkeypatch.setattr(backup_snapshot_module, "scan_resource", scan_then_delete)
     with pytest.raises(FileNotFoundError):
         snapshot_backup(root, staging, "sqlite")
+
+
+def test_the_manifest_carries_the_given_instant(tmp_path):
+    root, staging = tmp_path / "root", tmp_path / "staging"
+    _live_store(root).close()
+    now = datetime(2026, 11, 10, 11, 0, 0, tzinfo=timezone.utc)
+    manifest = snapshot_backup(root, staging, "sqlite", now=now)
+    assert manifest["created_at"] == "2026-11-10T11:00:00+00:00"
+
+
+def test_a_store_path_that_is_a_directory_is_refused(tmp_path):
+    root = tmp_path / "root"
+    (root / "methodology" / "memory.db").mkdir(parents=True)
+    with pytest.raises(BackupScanError, match="expected to be a file"):
+        snapshot_backup(root, tmp_path / "staging", "sqlite")
+
+
+def test_a_staging_path_that_is_a_file_is_refused(tmp_path):
+    root, staging = tmp_path / "root", tmp_path / "staging"
+    _live_store(root).close()
+    staging.write_bytes(b"x")
+    with pytest.raises(StagingError, match=r"staging is not a directory$"):
+        snapshot_backup(root, staging, "sqlite")
+
+
+def test_a_staging_root_with_missing_parents_is_created(tmp_path):
+    root, staging = tmp_path / "root", tmp_path / "a" / "b" / "staging"
+    _live_store(root).close()
+    snapshot_backup(root, staging, "sqlite")
+    assert (staging / "methodology" / "memory.db").is_file()

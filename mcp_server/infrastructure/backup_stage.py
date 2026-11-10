@@ -68,7 +68,7 @@ def private_dirs(staging: Path, relative: str) -> Path:
 
 
 def copy_files(
-    root: Path, staging: Path, paths: Iterable[str], consumed_ok: bool = False
+    root: Path, staging: Path, paths: Iterable[str], *, consumed_ok: bool
 ) -> None:
     """Copy each ``root/path`` to a new ``0o600`` file ``staging/path``.
 

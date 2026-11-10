@@ -65,7 +65,9 @@ def _stage_files(root: Path, staging: Path, spec: ResourceSpec) -> None:
     if spec.kind == "dir":  # an empty directory is still present
         private_dirs(staging, spec.path)
     consumed_ok = spec.name == _CAPTURE_SPOOL  # see the module docstring
-    copy_files(root, staging, [record[0] for record in records], consumed_ok)
+    copy_files(
+        root, staging, [record[0] for record in records], consumed_ok=consumed_ok
+    )
 
 
 def snapshot_backup(

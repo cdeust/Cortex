@@ -11,6 +11,7 @@ from contextlib import closing
 
 import pytest
 
+from mcp_server.infrastructure import sqlite_snapshot
 from mcp_server.infrastructure.sqlite_snapshot import SnapshotError, snapshot_sqlite
 
 
@@ -118,3 +119,63 @@ def test_the_copy_is_owner_only_whatever_the_umask(tmp_path):
     finally:
         os.umask(previous)
     assert stat.S_IMODE(target.stat().st_mode) == 0o600
+
+
+def test_a_target_whose_directory_is_missing_is_refused(tmp_path):
+    source, target = tmp_path / "memory.db", tmp_path / "absent" / "copy.db"
+    _wal_store(source).close()
+    with pytest.raises(SnapshotError, match=r"absent is not a directory$"):
+        snapshot_sqlite(source, target)
+
+
+class _Rows:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def fetchone(self):
+        return self._rows[0]
+
+    def __iter__(self):
+        return iter(self._rows)
+
+
+class _Copy:
+    """A connection whose PRAGMA answers are given: what a damaged copy reports."""
+
+    def __init__(self, journal, integrity):
+        self.answers = {
+            "PRAGMA journal_mode=DELETE": journal,
+            "PRAGMA integrity_check": integrity,
+        }
+
+    def execute(self, sql):
+        return _Rows(self.answers[sql])
+
+
+def test_a_copy_that_keeps_its_wal_is_refused():
+    with pytest.raises(SnapshotError, match=r"^the copy kept journal_mode=wal$"):
+        sqlite_snapshot._seal(_Copy([("wal",)], [("ok",)]))
+
+
+def test_a_copy_that_fails_integrity_check_is_refused_with_every_finding():
+    findings = [(f"row {n} missing from index",) for n in range(5)]
+    message = "; ".join(f[0] for f in findings)
+    with pytest.raises(SnapshotError) as refused:
+        sqlite_snapshot._seal(_Copy([("delete",)], findings))
+    assert str(refused.value) == f"the copy failed integrity_check: {message}"
+
+
+def test_the_source_is_opened_read_only_by_an_explicit_uri(tmp_path, monkeypatch):
+    """``mode=ro`` is a URI parameter: without ``uri=True`` a Python whose SQLite
+    is built without SQLITE_USE_URI would open (or create) a file of that name."""
+    source = tmp_path / "memory.db"
+    _wal_store(source).close()
+    opened = []
+
+    def spy(target, **kwargs):
+        opened.append((target, kwargs))
+        return sqlite3.connect(":memory:")
+
+    monkeypatch.setattr(sqlite_snapshot, "sqlite_connect", spy)
+    sqlite_snapshot._open_source(source).close()
+    assert opened == [(f"{source.resolve().as_uri()}?mode=ro", {"uri": True})]
