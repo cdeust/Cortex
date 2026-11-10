@@ -144,6 +144,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- The review prompt puts the run's link just before the verdict line in every comment
+  that carries it (ADR-1130). The resolver reads a verdict only from a comment that
+  links the review run of the head; a review posted with `gh pr comment` carried the
+  verdict without the link, and an approved, green pull request stayed unmerged (#973).
 - `PRIVACY.md` now says what the PostToolUse auto-capture copies, tool by tool:
   the response of Edit, Write, MultiEdit, NotebookEdit, Bash, WebFetch and
   WebSearch, the first 200 characters of a Bash command, the path or pattern of
