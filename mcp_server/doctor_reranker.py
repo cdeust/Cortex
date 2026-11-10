@@ -25,14 +25,18 @@ from mcp_server.infrastructure.reranker_cache import (
 )
 
 NAME = "Reranker weights identity"  # source: issue #734 (acceptance criterion 3)
+# FlashRank 0.2.10 downloads only when the model *directory* is absent
+# (``Ranker._prepare_model_dir``: ``if not self.model_dir.exists()``;
+# ADR-0244), so a repair removes the directory, never the file alone.
 _ABSENT_FIX = (
-    "Run one recall with network access (FlashRank downloads the model into "
-    "this cache), or provision the file there before setting "
-    "CORTEX_RERANKER_OFFLINE"
+    "Remove {model_dir} if it exists, then run one recall with network access "
+    "(FlashRank downloads the model into this cache), or provision the whole "
+    "directory there before setting CORTEX_RERANKER_OFFLINE"
 )
 _MISMATCH_FIX = (
-    "Delete {path} and let FlashRank download it again; results measured with "
-    "this file are not comparable with the published numbers"
+    "Remove the directory {model_dir} and let FlashRank download it again; "
+    "results measured with this file are not comparable with the published "
+    "numbers"
 )
 
 
@@ -44,6 +48,7 @@ def reranker_identity(check: Callable[..., Any]) -> Any:
         both digests when they differ. An unreadable file is reported as a
         warning with the error, never raised."""
     path = model_path_under(reranker_cache_dir())
+    model_dir = path.rsplit("/", 1)[0]
     try:
         identity = classify_model_digest(reranker_model_sha256(path))
     except OSError as exc:
@@ -54,9 +59,11 @@ def reranker_identity(check: Callable[..., Any]) -> Any:
         return check(NAME, True, detail, "", optional=True)
     if identity.state == ABSENT:
         detail = f"absent at {path}; recall runs without reranking"
-        return check(NAME, False, detail, _ABSENT_FIX, optional=True)
+        fix = _ABSENT_FIX.format(model_dir=model_dir)
+        return check(NAME, False, detail, fix, optional=True)
     detail = (
         f"sha256 {identity.sha256} at {path} differs from the expected "
         f"{identity.expected}"
     )
-    return check(NAME, False, detail, _MISMATCH_FIX.format(path=path), optional=True)
+    fix = _MISMATCH_FIX.format(model_dir=model_dir)
+    return check(NAME, False, detail, fix, optional=True)

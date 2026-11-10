@@ -20,6 +20,14 @@ def weights(tmp_path, monkeypatch):
     return path
 
 
+def _joined(path) -> str:
+    """``path`` as ``model_path_under`` spells it: joined with ``/`` on every OS."""
+    root = path
+    while root.name != "ms-marco-MiniLM-L-12-v2":
+        root = root.parent
+    return "/".join([str(root.parent), *path.relative_to(root.parent).parts])
+
+
 def _pin(monkeypatch, data: bytes) -> None:
     pinned = functools.partial(
         classify_model_digest, expected=hashlib.sha256(data).hexdigest()
@@ -30,8 +38,9 @@ def _pin(monkeypatch, data: bytes) -> None:
 def test_absent_weights_warn_with_the_path(weights):
     check = doctor_reranker.reranker_identity(doctor.Check)
     assert (check.ok, check.optional) == (False, True)
-    assert str(weights) in check.detail
+    assert _joined(weights) in check.detail
     assert "CORTEX_RERANKER_OFFLINE" in check.fix
+    assert f"Remove {_joined(weights.parent)} " in check.fix
 
 
 def test_pinned_weights_pass(weights, monkeypatch):
@@ -49,7 +58,8 @@ def test_different_weights_warn_with_both_digests(weights, monkeypatch):
     assert (check.ok, check.optional) == (False, True)
     assert hashlib.sha256(b"other weights").hexdigest() in check.detail
     assert hashlib.sha256(b"pinned weights").hexdigest() in check.detail
-    assert str(weights) in check.fix
+    # FlashRank re-downloads only when the model directory is absent.
+    assert f"Remove the directory {_joined(weights.parent)} " in check.fix
 
 
 def test_unreadable_weights_warn_instead_of_raising(weights, monkeypatch):
