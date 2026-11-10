@@ -156,6 +156,13 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- `claude-review.yml` and `scripts/ci_review_budget.py` no longer carry anything specific to
+  this repository, so every repository of the fleet can hold the same two files. The review
+  workflow authorizes the pinned action's fetch of the PR head only on a private repository
+  (the step ci-autonome needed and Cortex lacked), and asks for "every review /review-pr
+  lists" instead of "all five reviews" (architect-os runs three). The budget script refuses a
+  `GITHUB_OUTPUT` outside `RUNNER_TEMP` (the check claude-mods already had, CodeQL
+  py/path-injection).
 - `docs/agent-guidance.md` gains "CI contract for agents and routines", and `CLAUDE.md`
   points to it: no push while a review runs, no forced push, no comparison with the main
   branch, one pull request in flight, no comment after an approve. It binds every agent

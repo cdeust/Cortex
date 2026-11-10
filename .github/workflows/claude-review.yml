@@ -79,6 +79,23 @@ jobs:
           ref: main
           fetch-depth: 1
           persist-credentials: false
+      # A private repository cannot be fetched anonymously, and the pinned action
+      # fetches the PR head before its own git auth (run 42785671958 of
+      # ci-autonome: "could not read Username for 'https://github.com'"). The
+      # step runs only there, so this file is the same in every repository.
+      # source: pinned action src/modes/tag/index.ts#L79 fetches the PR head
+      # (src/github/operations/branch.ts#L241), and
+      # src/github/operations/git-config.ts#L78-L81 unsets this local header
+      # before Claude runs.
+      - name: Authorize pinned action fetch
+        if: github.event.repository.private
+        env:
+          FETCH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          basic="$(printf 'x-access-token:%s' "$FETCH_TOKEN" | base64 | tr -d '\n')"
+          echo "::add-mask::$basic"
+          git config --local "http.$GITHUB_SERVER_URL/.extraheader" "AUTHORIZATION: basic $basic"
       - name: Install subprocess isolation
         run: |
           sudo apt-get update
@@ -99,7 +116,7 @@ jobs:
           allowed_bots: "claude[bot],chatgpt-codex-connector[bot],dependabot[bot]"
           prompt: |
             /review-pr REPO: ${{ github.repository }} PR_NUMBER: ${{ github.event.pull_request.number }}
-            Complete all five reviews using foreground agents and wait for their actual reports.
+            Complete every review /review-pr lists using foreground agents and wait for their actual reports.
             Use `gh pr comment` for top-level feedback and a completion summary, including when there are no findings.
             Only post GitHub comments - don't submit review text as messages.
             Review contract (ADR-1119): this is review ${{ needs.budget.outputs.round }} of at most ${{ needs.budget.outputs.cap }}.
