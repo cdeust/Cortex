@@ -31,6 +31,14 @@ adheres to [Semantic Versioning](https://semver.org/).
   project's or a global memory without that allowance, and `seed_project` checks the
   domain `remember` will use before it purges anything, and purges that domain,
   never the raw `domain` argument.
+  The directory a memory is stored under passes the same rule, because the
+  SessionStart and auto-recall hooks select by it: `remember`, `ingest_prd` and
+  `ingest_document` refuse a directory inside another known project or above one,
+  which would serve the memory to that project's sessions. `ingest_prd` given text
+  (`content`, `pipeline_id`) stores it under the session's project, no longer under
+  the folder above the server's working directory. `anchor`, `supersedes_id`,
+  curation merges and replica refreshes also refuse a row whose directory belongs to
+  another project, whatever its domain (a `code:<name>` row of `ingest_codebase`).
 - `record_session_end` no longer writes an ADR task record outside the wiki root
   (GHSA-5w3v-7v7h-q9x4, reported and fixed by kasparovabi). An explicit `domain`
   goes through `domain_id_from_label`, and the writer refuses a path that resolves

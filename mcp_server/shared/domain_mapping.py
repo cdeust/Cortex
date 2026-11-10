@@ -496,6 +496,11 @@ def project_domains() -> frozenset[str]:
     return frozenset(r.canonical for r in _build_registry().repos if r.canonical)
 
 
+def project_roots() -> dict[str, str]:
+    """Root path of every known repository, mapped to the domain that owns it."""
+    return {r.fs_path: r.canonical for r in _build_registry().repos if r.canonical}
+
+
 def resolve_cwd(cwd: str) -> str:
     """Resolve a working directory to a canonical domain.
 

@@ -199,7 +199,8 @@ schema = {
                 "type": "string",
                 "description": (
                     "Cognitive-domain override. Auto-detected from directory if "
-                    "omitted; only set this when crossing project boundaries."
+                    "omitted. Another project's domain or directory is refused "
+                    "unless CORTEX_CROSS_PROJECT_WRITES allows it locally."
                 ),
                 "examples": ["cortex", "ai-architect"],
             },

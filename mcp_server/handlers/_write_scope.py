@@ -14,17 +14,25 @@ memory: a cross-project prompt-injection primitive. A write may target:
   open it: the caller is the party the rule guards against.
 
 Anything else fails with the variable to set, never a silent redirect.
+
+The domain is one of two channels. The SessionStart and auto-recall hooks select
+by `directory_context`: a memory is served to a session whose project root is
+that directory or lies below it (`shared.project_scope`). So the directory a
+write stores, and the one an existing row carries, pass the same rule
+(`require_writable_directory`): it must reach no project but the session's.
 """
 
 from __future__ import annotations
 
 import os
 from collections.abc import Mapping
+from pathlib import Path
 from typing import NoReturn
 
 from mcp_server.errors import ValidationError
 from mcp_server.shared.domain_mapping import (
     project_domains,
+    project_roots,
     resolve_cwd,
     resolve_explicit_domain,
 )
@@ -34,6 +42,10 @@ from mcp_server.shared.domain_mapping import (
 ALLOW_ENV = "CORTEX_CROSS_PROJECT_WRITES"
 # source: Claude Code sets it to the open project for MCP servers (GHSA-gvpp-v77h-5w8g).
 SESSION_ENV = "CLAUDE_PROJECT_DIR"
+# source: the same owner decision; the allowance value that names every project. A
+# global memory reaches every project's hot memories (`domain = ? OR is_global`), so
+# writing one, or changing an existing one, needs it.
+EVERY_PROJECT = "*"
 
 
 def session_domain(environ: Mapping[str, str] = os.environ) -> str:
@@ -60,7 +72,7 @@ def _refused_domain(target: str, environ: Mapping[str, str]) -> tuple[str, str] 
         return None
     session = session_domain(environ)
     allowed = _allowed(environ)
-    if target == session or "*" in allowed or target in allowed:
+    if target == session or EVERY_PROJECT in allowed or target in allowed:
         return None
     return target, session
 
@@ -110,9 +122,56 @@ def _refuse(target: str, tool: str, environ: Mapping[str, str]) -> NoReturn:
     )
 
 
-# A global memory reaches every project's hot memories (`domain = ? OR is_global`),
-# so writing one, or changing an existing one, needs the allowance for every project.
-EVERY_PROJECT = "*"
+def session_directory(environ: Mapping[str, str] = os.environ) -> str:
+    """The directory of the project this server session runs in."""
+    return environ.get(SESSION_ENV) or os.getcwd()
+
+
+def _reached_projects(directory: str) -> frozenset[str]:
+    """Domains of the known projects whose sessions are served `directory`'s memories.
+
+    A project is reached when `directory` lies inside it (its root included: a
+    session opened there or below), or is a folder above its root (the hooks' rule).
+    """
+    directory = (directory or "").strip()
+    # The hooks compare the stored text with absolute roots: a relative directory,
+    # or a label such as `run:<id>`, is served to no session.
+    if not Path(directory).is_absolute():
+        return frozenset()
+    above = Path(directory).resolve().as_posix().rstrip("/") + "/"
+    below = {
+        domain for root, domain in project_roots().items() if root.startswith(above)
+    }
+    return frozenset((below | {resolve_cwd(directory)}) - {""})
+
+
+def _refused_directory(directory: str, environ: Mapping[str, str]) -> str | None:
+    """A project `directory` reaches that this session may not write into, or None."""
+    allowed = _allowed(environ)
+    reached = _reached_projects(directory) - allowed
+    if not reached or EVERY_PROJECT in allowed:
+        return None
+    others = reached - {session_domain(environ)}
+    return min(others) if others else None
+
+
+def require_writable_directory(
+    directory: str, tool: str, environ: Mapping[str, str] = os.environ
+) -> None:
+    """Raise ValidationError when `directory`'s memories reach another project."""
+    other = _refused_directory(directory, environ)
+    if other is None:
+        return
+    session = session_domain(environ)
+    where = f"this session's project ({session!r})" if session else "no known project"
+    raise ValidationError(
+        f"{tool}: a memory stored under directory {directory!r} is served to project "
+        f"{other!r}, another project than {where}; set {ALLOW_ENV}={other} (or '*') "
+        "in the environment to allow it",
+        {"tool": tool, "field": "directory", "domain": other, "session": session},
+    )
+
+
 # source: GHSA-7848-qh48-mx2w; the reason a detected global scope stayed local.
 KEPT_LOCAL = f"global scope detected but {ALLOW_ENV}=* is not set; kept local"
 
@@ -157,6 +216,7 @@ def require_writable_memory(
             {"tool": tool, "field": "memory_id", "memory_id": row.get("id")},
         )
     require_writable_canonical(row.get("domain") or "", tool, environ)
+    require_writable_directory(row.get("directory_context") or "", tool, environ)
 
 
 def memory_writable(row: Mapping, environ: Mapping[str, str] = os.environ) -> bool:
@@ -164,4 +224,6 @@ def memory_writable(row: Mapping, environ: Mapping[str, str] = os.environ) -> bo
     if row.get("is_global") and not _every_project(environ):
         return False
     target = (row.get("domain") or "").strip().lower()
-    return _refused_domain(target, environ) is None
+    if _refused_domain(target, environ) is not None:
+        return False
+    return _refused_directory(row.get("directory_context") or "", environ) is None

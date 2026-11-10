@@ -52,6 +52,7 @@ from mcp_server.handlers._write_scope import (
     KEPT_LOCAL,
     global_scope,
     require_writable_canonical,
+    require_writable_directory,
     require_writable_memory,
 )
 from mcp_server.infrastructure.memory_exact import find_exact
@@ -182,6 +183,8 @@ def _prepare_request(args: dict, store: MemoryStore, write_class: str) -> GateRe
     domain = _resolve_domain(args.get("directory", ""), args.get("domain", ""))
     # GHSA-7848-qh48-mx2w: `domain` is resolved already, it is checked as it is.
     require_writable_canonical(domain, "remember")
+    # The hooks select by directory: it must reach no other project either.
+    require_writable_directory(args.get("directory", ""), "remember")
     origin = _resolved_origin(args, write_class)
     return GateRequest(
         args["content"],

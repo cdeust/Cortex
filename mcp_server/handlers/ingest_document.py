@@ -35,7 +35,10 @@ from mcp_server.shared.wiki_frontmatter_validation import normalize_frontmatter
 from mcp_server.infrastructure.wiki_store import read_page
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
-from mcp_server.handlers._write_scope import require_writable_domain
+from mcp_server.handlers._write_scope import (
+    require_writable_directory,
+    require_writable_domain,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -195,6 +198,8 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     domain = (str(args.get("domain") or "").strip()) or "documents"
     # GHSA-7848-qh48-mx2w: the rows keep the domain the check resolved.
     domain = require_writable_domain(domain, "ingest_document")
+    # The rows are stored under the file's folder, which the hooks select by.
+    require_writable_directory(str(path.resolve().parent), "ingest_document")
     return await _persist(path, parsed, prov, domain)
 
 

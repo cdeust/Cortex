@@ -74,7 +74,9 @@ async def test_ingest_document_stores_the_resolved_domain_never_the_alias(
         return {"ingested": True}
 
     monkeypatch.setattr(ingest_document, "_persist", persist)
-    page = tmp_path / "export.html"
+    # Beside the projects' folder, never above it: that folder reaches them all.
+    page = tmp_path / "downloads" / "export.html"
+    page.parent.mkdir()
     page.write_text("<h1>Onboarding</h1><p>welcome</p>", encoding="utf-8")
     await ingest_document.handler({"path": str(page), "domain": "family"})
     assert seen == ["beta"]
