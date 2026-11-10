@@ -315,11 +315,12 @@ def _memory_directory(path: str | None) -> str:
     or lies below it. A PRD read from a file keeps the file's folder, which must
     reach no other project. Text handed over directly (`content`, `pipeline_id`)
     belongs to the session's project, never to the folder above the server's
-    working directory, which every sibling project lies below.
+    working directory, which every sibling project lies below. Either one is
+    checked: a server started above the projects has no project of its own.
     """
-    if not path:
-        return session_directory()
-    directory = str(Path(path).expanduser().resolve().parent)
+    directory = (
+        str(Path(path).expanduser().resolve().parent) if path else session_directory()
+    )
     require_writable_directory(directory, "ingest_prd")
     return directory
 

@@ -29,6 +29,7 @@ from mcp_server.handlers import (
     ingest_codebase_writers as writers,
     ingest_docs_content,
 )
+from mcp_server.handlers._write_scope import require_writable_directory
 from mcp_server.handlers.ingest_codebase_schema import schema  # re-exported
 from mcp_server.handlers.ingest_helpers import (
     call_upstream,
@@ -458,6 +459,10 @@ async def handler(
             ),
             "project_path": _resolved,
         }
+
+    # GHSA-7848-qh48-mx2w: every row is stored under this directory, which the
+    # SessionStart and auto-recall hooks select by.
+    require_writable_directory(_resolved, "ingest_codebase")
 
     output_dir = args.get("output_dir") or _default_output_dir(project_path)
     language = args.get("language", "auto") or "auto"

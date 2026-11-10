@@ -213,3 +213,47 @@ async def test_anchor_refuses_a_shared_domain_row_of_another_project(
     monkeypatch.setattr(anchor, "_get_store", lambda: Store())
     with pytest.raises(ValidationError, match=r"^anchor: a memory stored under"):
         await anchor.handler({"memory_id": 7, "reason": MARKER})
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("place", [".", "alpha"])
+async def test_ingest_codebase_refuses_a_path_in_or_above_another_project(
+    projects, monkeypatch, place
+):
+    from mcp_server.handlers import ingest_codebase
+
+    def no_store():
+        raise AssertionError("refused before anything is read or written")
+
+    monkeypatch.setattr(ingest_codebase, "_get_store", no_store)
+    target = str((projects / place).resolve())
+    with pytest.raises(ValidationError, match=r"^ingest_codebase: a memory stored"):
+        await ingest_codebase.handler({"project_path": target})
+
+
+@pytest.mark.asyncio
+async def test_ingest_codebase_of_the_sessions_project_passes_the_check(
+    projects, monkeypatch
+):
+    from mcp_server.handlers import ingest_codebase
+
+    class ReachedError(Exception):
+        pass
+
+    def store():
+        raise ReachedError
+
+    monkeypatch.setattr(ingest_codebase, "_get_store", store)
+    with pytest.raises(ReachedError):
+        await ingest_codebase.handler({"project_path": str(projects / "beta")})
+
+
+@pytest.mark.asyncio
+async def test_prd_text_is_refused_when_the_server_runs_above_the_projects(
+    projects, prd, monkeypatch
+):
+    ingest_prd, store = prd
+    monkeypatch.setenv(_write_scope.SESSION_ENV, str(projects))
+    with pytest.raises(ValidationError, match=r"^ingest_prd: a memory stored under"):
+        await ingest_prd.handler({"content": PRD})
+    assert store.rows == []
