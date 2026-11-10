@@ -80,8 +80,13 @@ def _executable(code: CodeType) -> CodeType:
 
 def _runs_other_code(pyc: Path, source: Path, level: int) -> bool:
     """True when the interpreter would run ``pyc`` and its code is not the
-    compile of ``source`` (or cannot be read: the import would then fail)."""
-    data = pyc.read_bytes()
+    compile of ``source`` (or holds no loadable code: the import would then
+    fail). A cache that cannot be read is not used: ``SourceLoader.get_code``
+    catches the ``OSError`` and compiles the source (Codex review on #957)."""
+    try:
+        data = pyc.read_bytes()
+    except OSError:
+        return False
     if not _would_import(data, source):
         return False
     try:
@@ -96,6 +101,8 @@ def _runs_other_code(pyc: Path, source: Path, level: int) -> bool:
         )
     except (EOFError, ValueError, TypeError, SyntaxError):
         return True
+    if not isinstance(cached, CodeType):
+        return True  # importlib refuses a non-code payload: the import fails
     return _executable(cached) != _executable(built)
 
 
@@ -109,13 +116,16 @@ def clear_caches_fix(root: Path) -> str:
 
 
 def sourceless(root: Path) -> list[str]:
-    """The ``.pyc`` files under the package ``root`` outside ``__pycache__``:
-    each imports as a module of its own, with no source to digest (PEP 3147
-    keeps sourceless imports for such files; Codex review on #957)."""
+    """The ``.pyc`` files under the package ``root`` outside ``__pycache__``
+    with no ``.py`` beside them: each imports as a module of its own, with no
+    source to digest (PEP 3147 keeps sourceless imports). Beside its source a
+    legacy ``.pyc`` never runs: the path finder tries sources before bytecode
+    (Codex reviews on #957)."""
     return [
         _label(root, pyc)
         for pyc in sorted(root.rglob("*.pyc"))
         if "__pycache__" not in pyc.relative_to(root).parts
+        and not pyc.with_suffix(".py").is_file()
     ]
 
 

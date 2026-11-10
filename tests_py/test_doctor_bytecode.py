@@ -230,3 +230,36 @@ def test_a_cache_without_debug_ranges_runs_the_same_code(tmp_path):
     assert _foreign(package) == []
     _forge(source, code=b"def f(a):\n    return [x - a for x in range(3)]\n")
     assert _foreign(package) == [A_CACHE]
+
+
+def test_a_legacy_cache_beside_its_source_is_not_sourceless(tmp_path):
+    # Codex review on #957: the path finder imports `a.py` before `a.pyc`.
+    package = _package(tmp_path)
+    (package / "a.pyc").write_bytes(b"\0")
+    (package / "loose.pyc").write_bytes(b"\0")
+    assert doctor_bytecode.sourceless(package) == ["mcp_server/loose.pyc"]
+
+
+def test_an_unreadable_cache_is_not_used(monkeypatch, tmp_path):
+    # Codex review on #957: SourceLoader compiles the source when the cache
+    # cannot be read, so the cache runs nothing.
+    package = _package(tmp_path)
+    cfile = _forge(package / "a.py")
+    real = Path.read_bytes
+
+    def read_bytes(path):
+        if path == cfile:
+            raise PermissionError(13, "Permission denied", str(path))
+        return real(path)
+
+    monkeypatch.setattr(Path, "read_bytes", read_bytes)
+    assert _foreign(package) == []
+
+
+def test_a_cache_holding_no_code_object_is_foreign(tmp_path):
+    # Codex review on #957: a valid header over `marshal.dumps(123)` fails the
+    # import instead of running the source; it must not crash the check.
+    package = _package(tmp_path)
+    cfile = _forge(package / "a.py")
+    cfile.write_bytes(cfile.read_bytes()[:16] + marshal.dumps(123))
+    assert _foreign(package) == [A_CACHE]
