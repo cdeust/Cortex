@@ -169,8 +169,12 @@ the repository's own standards apply. They never widen what a prompt allows.
 
 1. **The review verdict decides the merge.** The resolver merges a pull request whose
    last `claude[bot]` verdict covers its head, reads approve, and whose required checks
-   are green. No agent merges by hand, enables auto-merge, or writes a line that begins
-   with `Verdict:`: that line is the review's.
+   are green. Two cases differ: a Dependabot update the resolver classes as low risk
+   merges on green required checks without a review (ADR-1126), and a title that
+   contains "do not merge" is never merged. No agent merges by hand, enables auto-merge,
+   or writes a line that begins with `Verdict:`: that line is the review's. A pull
+   request cut down after its third review has a head no review covers: it waits for
+   the owner's `claude-rereview` label, it is not merged by hand.
 2. **No push while a review runs.** A push during a `PR Review` run moves the review to a
    commit that is no longer the head and still spends it.
 3. **No forced push,** `--force-with-lease` included. It does not reset the review budget
