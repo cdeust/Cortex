@@ -9,6 +9,8 @@ already-truncated result set).
 
 from __future__ import annotations
 
+from mcp_server.infrastructure.pg_scope_clause import normalized_directory_column
+
 
 def directory_scope_clause(
     directory_ancestors: list[str] | None,
@@ -26,8 +28,8 @@ def directory_scope_clause(
     Postcondition: None yields ("", ()) -- unchanged query, backward
     compatible with every existing caller. An empty list yields a clause
     matching only is_global rows. A non-empty list yields a clause
-    matching is_global rows or any row whose directory_context is in the
-    list.
+    matching is_global rows or any row whose normalized directory_context
+    (pg_scope_clause.normalized_directory_column, issue #692) is in the list.
     """
     if directory_ancestors is None:
         return "", ()
@@ -36,6 +38,6 @@ def directory_scope_clause(
     placeholders = ",".join("?" for _ in directory_ancestors)
     clause = (
         f"AND ({column_prefix}is_global = 1 OR "
-        f"{column_prefix}directory_context IN ({placeholders})) "
+        f"{normalized_directory_column(column_prefix)} IN ({placeholders})) "
     )
     return clause, tuple(directory_ancestors)

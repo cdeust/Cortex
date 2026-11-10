@@ -1,6 +1,7 @@
 """Shared first-launch policy, issues #703/#704; preserve ADR-1104 and ADR-1114."""
 
 import json
+import os
 
 import pytest
 
@@ -80,3 +81,37 @@ def test_explicit_auto_remains_an_operator_choice(tmp_path):
     assert backend_resolution.settle_backend(env, marker) == "auto"
     assert not marker.exists()
     assert "DATABASE_URL" not in env
+
+
+# ── settle_for_command itself (mutation gate, ADR-1122) ────────────────────
+
+
+def test_settle_for_command_settles_the_process_environment(monkeypatch):
+    seen = []
+    monkeypatch.setattr(backend_resolution, "settle_backend", seen.append)
+    assert backend_resolution.settle_for_command("prog") is True
+    assert seen == [os.environ]
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        backend_marker.BackendMarkerError("bad marker"),
+        pytest.param("managed", id="ManagedPgError"),
+        OSError("disk gone"),
+    ],
+)
+def test_settle_for_command_reports_a_backend_it_cannot_settle(
+    monkeypatch, capsys, error
+):
+    if error == "managed":
+        error = managed_pg.ManagedPgError("server down")
+
+    def fail(environ):
+        raise error
+
+    monkeypatch.setattr(backend_resolution, "settle_backend", fail)
+    assert backend_resolution.settle_for_command("prog") is False
+    captured = capsys.readouterr()
+    assert captured.err == f"prog: Cortex not ready: {error}\n"
+    assert captured.out == ""

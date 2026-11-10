@@ -16,6 +16,44 @@ To build and retrieve memory, Cortex reads and processes:
   and ingestion tools (decisions, lessons, notes, code/PRD references).
 - **Derived metadata** — keyword/entity extraction, embeddings, heat/decay
   scores, and cognitive-profile statistics computed from the above.
+- **Tool calls, through the Claude Code plugin's PostToolUse auto-capture**, in
+  every project you open, with no per-project exclusion (issue #737). What one
+  captured call copies depends on the tool:
+  - Edit, Write, MultiEdit, NotebookEdit and Bash: the tool's response, when it
+    is at least 50 characters long, plus the edited file's path or, for Bash, the
+    first 200 characters of the command line. The 50 characters count the
+    response as the hook formats it (an Edit's path with its before and after
+    blocks, Bash's output with its label), so an edit is almost always
+    captured. A Bash call is kept, command line included, as soon as its
+    stdout, its stderr and its interrupted marker, formatted and added up,
+    reach 50 characters. A call that prints nothing is always dropped; one
+    that is not interrupted and prints on one stream only is dropped below 30
+    characters of output; two streams or an interrupted marker can reach 50
+    with less. An Edit response is stored as its before and after strings; a
+    Write, MultiEdit or NotebookEdit response is stored as its whole JSON, so
+    the content written and, when the host sends it, the file's previous
+    content are copied. A pattern or name typed in a captured command is
+    copied even when the command prints nothing useful.
+  - Read, NotebookRead, Glob and Grep: the path, glob or search pattern in the
+    memory row, not the file contents or the matches. A Grep pattern made of
+    names copies those names. A response longer than 3000 characters is the
+    exception: its full text is written to an artifact file (below), and the row
+    points to it, so a long file you read is copied whole.
+  - WebFetch and WebSearch: the response, when it is at least 50 characters long.
+
+  A tool in none of these three lists (Task, TodoWrite or an MCP tool, for
+  example) is never captured. For the tools other than Read, NotebookRead, Glob
+  and Grep, a response longer than 3000 characters is stored as a short gist
+  in the memory row. For every tool, its full text goes to a file under
+  `~/.claude/methodology/artifacts/` (one file per distinct content and month,
+  shared by every memory that captured that content in that month). A
+  capture that never leaves the hook removes the file it created. A capture
+  handed to the capture worker or spool and then refused there can still leave
+  that file on disk with no memory pointing to it; no sweep removes such files
+  yet. The only switch is `CORTEX_CAPTURE_MODE` (see *Your controls*), and it
+  applies to every project at once. The redaction gate below removes
+  credentials, not personal data, so names, e-mail addresses or health
+  information in a captured response are stored as they are.
 
 Cortex does **not** ask for, collect, or process passwords, payment data, or
 credentials. Credentials that reach Cortex anyway (a token in a tool output, a
@@ -56,8 +94,15 @@ personal data are not redacted.
   this same server and store.
 - **PostgreSQL + pgvector (opt-in — `install-plugin.sh --postgres`, large
   stores, shared team databases):** your data is stored in **your own**
-  database, configured via the `DATABASE_URL` environment variable (default
-  `postgresql://127.0.0.1:5432/cortex`); the opt-in setup script installs
+  database, configured via the `DATABASE_URL` environment variable. There
+  is no default URL in code. On a fresh install, with neither `DATABASE_URL`
+  nor a backend marker, Cortex uses SQLite and opens no PostgreSQL
+  connection. On a HOME that already holds Cortex state but no marker, the
+  first launch probes `localhost:5432` once: if a PostgreSQL answers, or the
+  answer is unclear, it selects PostgreSQL there and writes the marker;
+  otherwise SQLite (ADR-1104, `backend_resolution.decide`). A PostgreSQL
+  backend selected by the marker or by `CORTEX_MEMORY_STORE_BACKEND=postgresql`,
+  with no URL, uses `postgresql://localhost:5432/cortex` (issue #704). The opt-in setup script installs
   PostgreSQL locally on your machine, and an existing PostgreSQL install is
   detected and kept across plugin updates. Apart from its own server above,
   Cortex never provisions or connects to any database you did not configure.

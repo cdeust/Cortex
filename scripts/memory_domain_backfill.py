@@ -39,12 +39,16 @@ from mcp_server.handlers.consolidation.memory_domain_backfill_pass import (  # n
     run_memory_domain_backfill_pass,
 )
 from mcp_server.infrastructure.memory_config import get_memory_settings  # noqa: E402
+from mcp_server.infrastructure.backend_resolution import settle_for_command  # noqa: E402
 from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: E402
 from mcp_server.shared.campaign_store_guard import require_postgres_store  # noqa: E402
 
 
 async def _run(apply: bool, limit: int, include_orphans: bool) -> dict:
 
+    # issue #704: read the backend marker first, as the server does
+    if not settle_for_command("memory_domain_backfill"):
+        raise SystemExit(1)
     settings = get_memory_settings()
     store = get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
     require_postgres_store(store)

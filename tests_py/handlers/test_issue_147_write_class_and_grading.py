@@ -39,11 +39,13 @@ error/exception-keyword regex (``core.thermodynamics.is_error_content``)
 from __future__ import annotations
 
 import asyncio
+import os
 from unittest.mock import Mock, patch
 
 import pytest
 
 from mcp_server.core import write_gate
+from mcp_server.handlers import remember_helpers
 from mcp_server.handlers.remember import handler
 from mcp_server.handlers.remember_helpers import (
     _grade_content_best_effort,
@@ -152,6 +154,19 @@ class TestDeliberateNeverNoveltyRejected:
         assert result["reason"] != "below_threshold"
 
 
+def _cwd_gone_at_grading():
+    """Make only the grading fallback's ``os.getcwd()`` (remember_helpers) raise.
+
+    A global patch also hits ``ntpath.realpath``, which reads the cwd even for
+    an absolute path, so the store's ``Path(db).resolve()`` raised first on
+    Windows (run 38008915302, ``<frozen ntpath>:719``); Windows cannot remove
+    a process's cwd, so that failure exists only under the mock."""
+
+    gone = FileNotFoundError(2, "No such file or directory")
+    os_without_cwd = Mock(wraps=os, getcwd=Mock(side_effect=gone))
+    return patch.object(remember_helpers, "os", os_without_cwd)
+
+
 class TestGradingNeverBlocksTheWrite:
     """Regression (2): a missing/removed process cwd must never surface as
     a bare FileNotFoundError that blocks the write."""
@@ -180,9 +195,7 @@ class TestGradingNeverBlocksTheWrite:
     def test_force_write_survives_missing_cwd(self):
         """End-to-end (issue repro): a force=True write must still insert
         even when the process cwd has been removed mid-session."""
-        with patch(
-            "os.getcwd", side_effect=FileNotFoundError(2, "No such file or directory")
-        ):
+        with _cwd_gone_at_grading():
             result = asyncio.run(
                 handler(
                     {
@@ -206,9 +219,7 @@ class TestGradingNeverBlocksTheWrite:
         from mcp_server.infrastructure.memory_config import get_memory_settings
         from mcp_server.infrastructure.memory_store import get_shared_store
 
-        with patch(
-            "os.getcwd", side_effect=FileNotFoundError(2, "No such file or directory")
-        ):
+        with _cwd_gone_at_grading():
             result = asyncio.run(
                 handler(
                     {

@@ -34,7 +34,15 @@ def test_pip_receives_a_requirements_file_not_a_pylock_name(tmp_path: Path) -> N
     pylock.write_text(requirements.read_text(), encoding="utf-8")
 
     done = subprocess.run(
-        [str(directory / "uv"), "pip", "install", "--target", "t", "-r", str(pylock)],
+        [
+            str(_fake_uv.executable(directory)),
+            "pip",
+            "install",
+            "--target",
+            "t",
+            "-r",
+            str(pylock),
+        ],
         capture_output=True,
         text=True,
     )

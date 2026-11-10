@@ -204,7 +204,10 @@ def test_busy_job_does_not_block_another_session(queue):
 def test_root_and_job_paths_preserve_intake_context(
     queue, tmp_path, monkeypatch, configured
 ):
+    # Path.expanduser reads HOME on POSIX and USERPROFILE on Windows (ntpath,
+    # Python >= 3.8): with HOME alone, "~/state" left the test root (#692).
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("CORTEX_CLAUDE_DIR", configured)
     monkeypatch.setenv("CORTEX_MEMORY_SQLITE_FALLBACK_PATH", "relative.db")

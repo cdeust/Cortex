@@ -35,6 +35,7 @@ from mcp_server.handlers.consolidation.memory_staleness_pass import (  # noqa: E
 )
 from mcp_server.handlers.validate_memory import _resolve_existing_paths  # noqa: E402
 from mcp_server.infrastructure.memory_config import get_memory_settings  # noqa: E402
+from mcp_server.infrastructure.backend_resolution import settle_for_command  # noqa: E402
 from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: E402
 
 
@@ -69,6 +70,9 @@ def _parse_args(argv):
 
 def main(argv=None) -> int:
     args = _parse_args(argv)
+    # issue #704: read the backend marker first, as the server does
+    if not settle_for_command("memory_staleness_revalidate"):
+        raise SystemExit(1)
     settings = get_memory_settings()
     store = get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
     target = store if args.apply else _DryRunStore(store)

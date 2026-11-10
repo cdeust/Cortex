@@ -77,7 +77,6 @@ def _source_package(tmp_path, *, git: bool = True):
         (package.parent / ".git").mkdir()
     (package / "__pycache__" / "a.cpython-311.pyc").write_bytes(b"\0")
     (package / "__pycache__" / "notes.txt").write_bytes(b"\0")
-    (package / "stray.pyc").write_bytes(b"\0")
     (package / "a.py").write_bytes(SOURCE)
     return package
 
@@ -95,6 +94,7 @@ def test_digest_is_one_sha256_over_sorted_lines():
 
 def test_tree_members_skip_bytecode_only(tmp_path):
     package = _source_package(tmp_path)
+    (package / "stray.pyc").write_bytes(b"\0")
     assert doctor_artifact.tree_members(package) == [("mcp_server/a.py", X1)]
 
 
