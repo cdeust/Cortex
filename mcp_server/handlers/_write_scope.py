@@ -152,7 +152,7 @@ def _reached_projects(directory: str) -> frozenset[str]:
     )
 
 
-def _refused_directory(directory: str, environ: Mapping[str, str]) -> str | None:
+def _refused_directory(directory: str | None, environ: Mapping[str, str]) -> str | None:
     """A project `directory` reaches that this session may not write into, or None."""
     allowed = _allowed(environ)
     reached = _reached_projects(directory) - allowed
@@ -163,7 +163,7 @@ def _refused_directory(directory: str, environ: Mapping[str, str]) -> str | None
 
 
 def require_writable_directory(
-    directory: str, tool: str, environ: Mapping[str, str] = os.environ
+    directory: str | None, tool: str, environ: Mapping[str, str] = os.environ
 ) -> None:
     """Raise ValidationError when `directory`'s memories reach another project."""
     other = _refused_directory(directory, environ)
@@ -223,7 +223,7 @@ def require_writable_memory(
             {"tool": tool, "field": "memory_id", "memory_id": row.get("id")},
         )
     require_writable_canonical(row.get("domain") or "", tool, environ)
-    require_writable_directory(row.get("directory_context") or "", tool, environ)
+    require_writable_directory(row.get("directory_context"), tool, environ)
 
 
 def memory_writable(row: Mapping, environ: Mapping[str, str] = os.environ) -> bool:
@@ -233,4 +233,4 @@ def memory_writable(row: Mapping, environ: Mapping[str, str] = os.environ) -> bo
     target = (row.get("domain") or "").strip().lower()
     if _refused_domain(target, environ) is not None:
         return False
-    return _refused_directory(row.get("directory_context") or "", environ) is None
+    return _refused_directory(row.get("directory_context"), environ) is None

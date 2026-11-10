@@ -33,7 +33,7 @@ async def test_a_folder_above_another_project_is_refused(projects, domain):
     above = str(projects)
     # The hooks' rule: alpha's session would be served a memory stored there.
     assert memory_matches_project(above, False, str(projects / "alpha"))
-    with pytest.raises(ValidationError, match=r"served to project 'alpha'"):
+    with pytest.raises(ValidationError, match=r"^remember: .* to project 'alpha'"):
         await remember_handler(
             {"content": MARKER, "directory": above, "domain": domain, "force": True}
         )
@@ -222,6 +222,20 @@ def test_a_row_in_another_projects_directory_is_not_writable(projects):
     assert _write_scope.memory_writable(own) is True
     _write_scope.require_writable_memory(own, "anchor")
     assert _write_scope.memory_writable(_row(projects, "")) is True
+    for unset in (_row(projects, "") | {"directory_context": None}, {"id": 7}):
+        assert _write_scope.memory_writable(unset) is True
+        _write_scope.require_writable_memory(unset, "anchor")
+
+
+def test_a_row_is_judged_in_the_environment_it_is_given(projects):
+    # The caller's environment decides, not the process's: an allowance passed in
+    # opens the row, and the process environment (no allowance) is not consulted.
+    foreign = _row(projects, projects / "alpha", domain="team-notes")
+    allowing = {_write_scope.SESSION_ENV: str(projects / "beta"), ALLOW: "alpha"}
+    _write_scope.require_writable_memory(foreign, "anchor", allowing)
+    assert _write_scope.memory_writable(foreign, allowing) is True
+    with pytest.raises(ValidationError, match=r"^anchor: a memory stored under"):
+        _write_scope.require_writable_memory(foreign, "anchor")
 
 
 @pytest.mark.asyncio
