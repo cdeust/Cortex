@@ -47,6 +47,9 @@ SESSION_ENV = "CLAUDE_PROJECT_DIR"
 # global memory reaches every project's hot memories (`domain = ? OR is_global`), so
 # writing one, or changing an existing one, needs it.
 EVERY_PROJECT = "*"
+# source: shared.project_scope.memory_matches_project, its `is_global` argument. The
+# directory rule asks about a project-scoped memory; a global one is refused before.
+_LOCAL = False
 
 
 def session_domain(environ: Mapping[str, str] = os.environ) -> str:
@@ -141,15 +144,15 @@ def _reached_projects(directory: str | None) -> frozenset[str]:
     # The text the hooks compare: separators normalised, no trailing one, and no
     # character trimmed (a folder name may end with a space). A relative directory,
     # a label such as `run:<id>` or `/` is served to no session.
-    read = project_ancestors(directory or "")[:1]
-    if not read or not Path(read[0]).is_absolute():
+    ancestors = project_ancestors(directory)
+    if not ancestors or not Path(ancestors[0]).is_absolute():
         return frozenset()
-    forms = {read[0], Path(read[0]).resolve().as_posix()}
+    forms = {ancestors[0], Path(ancestors[0]).resolve().as_posix()}
     return frozenset(
         domain
         for root, domain in project_roots().items()
         for form in forms
-        if memory_matches_project(form, False, root) or root in project_ancestors(form)
+        if memory_matches_project(form, _LOCAL, root) or root in project_ancestors(form)
     )
 
 
