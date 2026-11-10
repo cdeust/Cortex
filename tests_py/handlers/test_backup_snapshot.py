@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import sqlite3
 import stat
 import sys
@@ -13,6 +14,7 @@ import pytest
 from mcp_server.core.backup_manifest import ManifestError, parse_manifest, to_json
 from mcp_server.handlers import backup_snapshot as backup_snapshot_module
 from mcp_server.handlers.backup_snapshot import snapshot_backup
+from mcp_server.infrastructure.backup_scan import BackupScanError
 from mcp_server.infrastructure.backup_stage import StagingError
 
 
@@ -98,13 +100,40 @@ def test_a_staging_root_inside_the_cortex_root_is_refused(tmp_path):
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="POSIX permission bits")
-def test_the_staging_root_is_owner_only(tmp_path):
+def test_every_staged_entry_is_owner_only_whatever_the_umask(tmp_path):
     root, staging = tmp_path / "root", tmp_path / "staging"
     _live_store(root).close()
+    _write(root, "methodology/wiki/adr/1.md", b"page")
+    _write(root, ".capture-worker/spool/1.json", b"{}")
     staging.mkdir(mode=0o755)
     staging.chmod(0o755)
-    snapshot_backup(root, staging, "sqlite")
-    assert stat.S_IMODE(staging.stat().st_mode) == 0o700
+    previous = os.umask(0o022)
+    try:
+        snapshot_backup(root, staging, "sqlite")
+    finally:
+        os.umask(previous)
+    modes = {
+        path.relative_to(staging).as_posix(): stat.S_IMODE(path.lstat().st_mode)
+        for path in [staging, *staging.rglob("*")]
+    }
+    assert modes.pop(".") == 0o700
+    assert modes and all(
+        mode == (0o700 if (staging / name).is_dir() else 0o600)
+        for name, mode in modes.items()
+    ), modes
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32", reason="creating a symlink needs a privilege on Windows"
+)
+def test_a_linked_methodology_directory_is_refused_for_the_store(tmp_path):
+    root, staging, outside = tmp_path / "root", tmp_path / "staging", tmp_path / "out"
+    _live_store(outside).close()
+    root.mkdir()
+    (root / "methodology").symlink_to(outside / "methodology")
+    with pytest.raises(BackupScanError, match="symbolic link"):
+        snapshot_backup(root, staging, "sqlite")
+    assert not (staging / "methodology" / "memory.db").exists()
 
 
 def test_the_spool_is_staged_before_the_store(tmp_path, monkeypatch):

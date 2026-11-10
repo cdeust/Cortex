@@ -23,7 +23,7 @@ source: issue #731; docs/audits/owned-resources-backup-2026-11-05.md §3, §5
 from __future__ import annotations
 
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from mcp_server.core.backup_manifest import (
@@ -34,17 +34,22 @@ from mcp_server.core.backup_manifest import (
 )
 from mcp_server.handlers.backup_manifest import backup_manifest
 from mcp_server.infrastructure.backup_scan import scan_resource
-from mcp_server.infrastructure.backup_stage import copy_files, prepare_staging
+from mcp_server.infrastructure.backup_stage import (
+    copy_files,
+    prepare_staging,
+    private_dirs,
+)
 from mcp_server.infrastructure.sqlite_snapshot import snapshot_sqlite
 
 _SQLITE_STORE = "sqlite_store"
 
 
 def _stage_sqlite(root: Path, staging: Path, relative: str) -> None:
-    source = root / relative
-    if not source.exists() and not source.is_symlink():
+    """Snapshot the store; ``scan_resource`` first refuses a link on its path."""
+    if scan_resource(root, relative, "file") is None:
         raise ManifestError(f"{relative} is required for a sqlite backup and is absent")
-    snapshot_sqlite(source, staging / relative)
+    parent = private_dirs(staging, PurePosixPath(relative).parent.as_posix())
+    snapshot_sqlite(root / relative, parent / PurePosixPath(relative).name)
 
 
 def _stage_files(root: Path, staging: Path, spec: ResourceSpec) -> None:
@@ -52,7 +57,7 @@ def _stage_files(root: Path, staging: Path, spec: ResourceSpec) -> None:
     if records is None:
         return
     if spec.kind == "dir":  # an empty directory is still present
-        (staging / spec.path).mkdir(parents=True, exist_ok=True)
+        private_dirs(staging, spec.path)
     copy_files(root, staging, [record[0] for record in records])
 
 

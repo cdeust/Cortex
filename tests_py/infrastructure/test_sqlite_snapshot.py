@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import os
 import sqlite3
+import stat
 import sys
 import threading
 from contextlib import closing
@@ -28,6 +30,7 @@ def _count(path) -> int:
 
 def test_rows_committed_only_in_the_wal_are_in_the_copy(tmp_path):
     source, target = tmp_path / "memory.db", tmp_path / "copy" / "memory.db"
+    target.parent.mkdir()
     writer = _wal_store(source)
     writer.executemany("INSERT INTO pairs VALUES (?, 0)", [(i,) for i in range(500)])
     writer.commit()
@@ -103,3 +106,15 @@ def test_a_corrupt_source_is_refused(tmp_path):
     source.write_bytes(b"not a database" * 100)
     with pytest.raises(sqlite3.DatabaseError):
         snapshot_sqlite(source, tmp_path / "copy.db")
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permission bits")
+def test_the_copy_is_owner_only_whatever_the_umask(tmp_path):
+    source, target = tmp_path / "memory.db", tmp_path / "copy.db"
+    _wal_store(source).close()
+    previous = os.umask(0o022)
+    try:
+        snapshot_sqlite(source, target)
+    finally:
+        os.umask(previous)
+    assert stat.S_IMODE(target.stat().st_mode) == 0o600
