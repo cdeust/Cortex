@@ -88,3 +88,36 @@ def test_a_failed_git_leaves_the_identity_unknown(monkeypatch, tmp_path):
     assert found.fix == (
         f"Run `git -C {package.parent} status` to see why git cannot answer"
     )
+
+
+def test_a_package_file_absent_from_record_is_an_alteration(monkeypatch, tmp_path):
+    # Codex security review on #957: an unlisted module, extension or sourceless
+    # .pyc runs while every RECORD row still matches.
+    package, dist = _wheel_install(tmp_path)
+    (package / "evil.py").write_bytes(b"x = 3\n")
+    (package / "sub").mkdir()
+    (package / "sub" / "loose.pyc").write_bytes(b"\0")
+    _imported_from(monkeypatch, package, dist)
+    found = doctor_artifact.identify()
+    assert found.altered == ("mcp_server/evil.py", "mcp_server/sub/loose.pyc")
+    assert (found.modified, found.fix) == (True, REINSTALL)
+
+
+def test_import_bytecode_and_listed_files_are_not_alterations(monkeypatch, tmp_path):
+    package, dist = _wheel_install(tmp_path)
+    (package / "__pycache__").mkdir()
+    (package / "__pycache__" / "a.cpython-311.pyc").write_bytes(b"\0")
+    (package / "b.py").write_bytes(b"y = 1\n")  # listed in RECORD without a hash
+    _imported_from(monkeypatch, package, dist)
+    found = doctor_artifact.identify()
+    assert (found.altered, found.modified, found.fix) == ((), False, None)
+
+
+def test_unrecorded_names_files_relative_to_the_package(tmp_path):
+    package = tmp_path / "mcp_server"
+    (package / "__pycache__").mkdir(parents=True)
+    (package / "__pycache__" / "a.pyc").write_bytes(b"\0")
+    (package / "a.py").write_bytes(b"")
+    (package / "b.so").write_bytes(b"")
+    listed = {"mcp_server/a.py"}
+    assert doctor_artifact.unrecorded(package, listed) == ["mcp_server/b.so"]

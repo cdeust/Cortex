@@ -8,7 +8,11 @@ not be attributed to the running runtime. This check names the artifact:
 
 - an installed wheel: its version and a digest over the ``mcp_server`` members
   its ``RECORD`` lists, each member re-hashed on disk against that ``RECORD``
-  (PEP 376/627: ``RECORD`` holds ``sha256=`` plus the urlsafe base64 digest);
+  (PEP 376/627: ``RECORD`` holds ``sha256=`` plus the urlsafe base64 digest),
+  and any package file the ``RECORD`` does not list counted as a difference
+  too: an unlisted ``.py``, extension or sourceless ``.pyc`` would run while
+  the digest still matched (Codex security review on #957). Bytecode under
+  ``__pycache__`` is not counted, since Python writes it at import;
 - a source tree (a checkout or an editable install): its git revision, whether
   ``mcp_server`` differs from it, and the same digest computed over its files,
   labelled as source evidence, never as a distributed artifact. In a git
@@ -143,12 +147,27 @@ def _git(root: Path, *argv: str) -> str | None:
     return run_with_hard_timeout(["git", *argv], cwd=root, timeout=_GIT_TIMEOUT_S)
 
 
-def _wheel(dist: Any, rows: list, root: Path) -> Identity:
+def unrecorded(root: Path, listed: set[str]) -> list[str]:
+    """The files under the package ``root`` absent from ``listed`` (RECORD
+    paths), bytecode under ``__pycache__`` aside: Python writes it at import."""
+    found = []
+    for path in sorted(root.rglob("*")):
+        relative = path.relative_to(root)
+        if path.is_file() and "__pycache__" not in relative.parts:
+            name = f"{PACKAGE}/{relative.as_posix()}"
+            if name not in listed:
+                found.append(name)
+    return found
+
+
+def _wheel(dist: Any, rows: list, root: Path, record: str) -> Identity:
     altered = []
     for path, expected in rows:
         file = Path(str(dist.locate_file(path)))
         if not file.is_file() or record_hash(file.read_bytes()) != expected:
             altered.append(path)
+    listed = {row[0] for row in csv.reader(record.splitlines()) if row}
+    altered += unrecorded(root, listed)
     fix = _reinstall(dist.version) if altered else None
     return Identity(
         "wheel", dist.version, None, bool(altered), tuple(rows), root,
@@ -201,7 +220,8 @@ def identify() -> Identity:
         return _source_tree(root, None)
     if Path(str(dist.locate_file(PACKAGE))).resolve() != root:
         return _source_tree(root, dist.version)
-    if dist.read_text("RECORD") is None:
+    record = dist.read_text("RECORD")
+    if record is None:
         # An installed wheel whose RECORD is gone cannot be checked against
         # anything; describing it as a source tree would hide that.
         unknown = f"installed {DISTRIBUTION} {dist.version} has no RECORD"
@@ -211,7 +231,7 @@ def identify() -> Identity:
         )  # fmt: skip
     rows = wheel_members(dist)
     if rows:
-        return _wheel(dist, rows, root)
+        return _wheel(dist, rows, root, record)
     return _source_tree(root, dist.version)
 
 
