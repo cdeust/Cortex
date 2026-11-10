@@ -15,7 +15,7 @@ from __future__ import annotations
 import hashlib
 import os
 import stat
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 
 class BackupScanError(OSError):
@@ -50,6 +50,21 @@ def _walk(root: Path, directory: Path) -> list[tuple[str, str, int]]:
     return records
 
 
+def _check_ancestors(root: Path, relative: str) -> None:
+    """Refuse a directory between ``root`` and the resource that is not a real one.
+
+    A linked ``methodology`` would otherwise digest a store outside the root
+    under a name inside it. The walk stops at the first one that is absent.
+    """
+    current = root
+    for part in PurePosixPath(relative).parts[:-1]:
+        current = current / part
+        if not current.exists() and not current.is_symlink():
+            return
+        if not stat.S_ISDIR(_checked_mode(current)):
+            raise BackupScanError(f"{current} is expected to be a dir")
+
+
 def scan_resource(
     root: Path, relative: str, kind: str
 ) -> list[tuple[str, str, int]] | None:
@@ -57,6 +72,7 @@ def scan_resource(
 
     ``kind`` is ``"file"`` or ``"dir"``; a resource of the other kind is refused.
     """
+    _check_ancestors(root, relative)
     target = root / relative
     if not target.exists() and not target.is_symlink():
         return None

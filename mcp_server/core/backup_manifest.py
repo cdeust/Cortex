@@ -203,4 +203,25 @@ def parse_manifest(text: str) -> dict[str, Any]:
         raise ManifestError(
             f"entries {names} do not match the {manifest['backend']} table"
         )
+    for index, spec in enumerate(specs):  # same length: the names matched above
+        _check_entry(spec, entries[index], manifest["backend"])
     return manifest
+
+
+def _is_record(record: tuple[Any, Any, Any]) -> bool:
+    path, sha256, size = record
+    return isinstance(path, str) and isinstance(sha256, str) and type(size) is int
+
+
+def _check_entry(spec: ResourceSpec, entry: dict[str, Any], backend: str) -> None:
+    """Refuse an entry that is not exactly what its spec and its own files build."""
+    files, present = entry.get("files"), entry.get("present")
+    if not isinstance(present, bool) or not isinstance(files, list):
+        raise ManifestError(f"entry {spec.name}: present or files malformed")
+    if not all(isinstance(f, dict) for f in files):
+        raise ManifestError(f"entry {spec.name}: present or files malformed")
+    records = [(f.get("path"), f.get("sha256"), f.get("size")) for f in files]
+    if not all(_is_record(record) for record in records):
+        raise ManifestError(f"entry {spec.name}: present or files malformed")
+    if _entry(spec, records if present else None, backend) != entry:
+        raise ManifestError(f"entry {spec.name} differs from the table or its files")

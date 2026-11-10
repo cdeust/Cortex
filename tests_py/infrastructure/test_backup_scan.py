@@ -105,3 +105,48 @@ def test_a_special_file_inside_a_directory_is_refused(tmp_path):
             scan_resource(tmp_path, "spool", "dir")
     finally:
         server.close()
+
+
+# --- ancestors of a resource (review of #960) ---
+
+
+@needs_symlink
+def test_a_symlinked_ancestor_is_refused(tmp_path, tmp_path_factory):
+    outside = tmp_path_factory.mktemp("outside")
+    (outside / "memory.db").write_bytes(b"not this install's store")
+    os.symlink(outside, tmp_path / "methodology")
+    with pytest.raises(BackupScanError, match=r"methodology is a symbolic link"):
+        scan_resource(tmp_path, "methodology/memory.db", "file")
+
+
+@needs_symlink
+def test_a_dangling_symlinked_ancestor_is_refused_not_absent(tmp_path):
+    os.symlink(tmp_path / "missing", tmp_path / "methodology")
+    with pytest.raises(BackupScanError, match=r"methodology is a symbolic link"):
+        scan_resource(tmp_path, "methodology/wiki", "dir")
+
+
+def test_a_deep_ancestor_that_is_a_file_is_refused(tmp_path):
+    (tmp_path / "methodology").mkdir()
+    (tmp_path / "methodology" / "managed-pg").write_bytes(b"x")
+    with pytest.raises(BackupScanError, match=r"managed-pg is expected to be a dir$"):
+        scan_resource(tmp_path, "methodology/managed-pg/password", "file")
+
+
+def test_an_absent_ancestor_makes_the_resource_absent(tmp_path):
+    (tmp_path / "methodology").mkdir()
+    assert scan_resource(tmp_path, "methodology/managed-pg/password", "file") is None
+    assert scan_resource(tmp_path, ".capture-worker/spool", "dir") is None
+
+
+def test_two_absent_ancestors_make_the_resource_absent(tmp_path):
+    assert scan_resource(tmp_path, "methodology/managed-pg/password", "file") is None
+    assert scan_resource(tmp_path, "methodology/managed-pg/cluster", "dir") is None
+
+
+def test_a_resource_below_real_ancestors_is_read(tmp_path):
+    (tmp_path / "methodology" / "managed-pg").mkdir(parents=True)
+    (tmp_path / "methodology" / "managed-pg" / "password").write_bytes(b"pw")
+    assert scan_resource(tmp_path, "methodology/managed-pg/password", "file") == [
+        ("methodology/managed-pg/password", _sha(b"pw"), 2)
+    ]

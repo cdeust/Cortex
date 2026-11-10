@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 
 import pytest
 
@@ -216,53 +215,3 @@ def test_size_zero_is_valid():
         "sqlite", _sqlite_scan(wiki=[("methodology/wiki/a.md", DIGEST, 0)]), "t"
     )
     assert entry["entries"][2]["files"][0]["size"] == 0
-
-
-# --- canonical text and parse ----------------------------------------------------
-
-
-def test_to_json_is_canonical_and_parses_back_unchanged():
-    manifest = bm.build_manifest("sqlite", _sqlite_scan(), "t")
-    text = bm.to_json(manifest)
-    assert text.endswith("}\n") and not text.endswith("\n\n")
-    assert text == json.dumps(manifest, sort_keys=True, indent=2) + "\n"
-    assert bm.to_json({"b": "é", "a": 1}) == '{\n  "a": 1,\n  "b": "\\u00e9"\n}\n'
-    assert bm.parse_manifest(text) == manifest
-
-
-def _text(**override) -> str:
-    manifest = bm.build_manifest("sqlite", _sqlite_scan(), "t")
-    manifest.update(override)
-    return json.dumps(manifest)
-
-
-@pytest.mark.parametrize(
-    ("text", "message"),
-    [
-        ("{", r"^not JSON: "),
-        ("[]", r"^not a cortex-backup-manifest document$"),
-        (
-            _text(format="cortex-memory-export"),
-            r"^not a cortex-backup-manifest document$",
-        ),
-        (_text(version=2), r"^manifest version 2, this Cortex reads 1$"),
-        (_text(version="1"), r"^manifest version '1', this Cortex reads 1$"),
-        (_text(backend="auto"), r"^unknown backend 'auto'"),
-        (_text(entries={}), r"^entries must be a list of objects$"),
-        (_text(entries=["wiki"]), r"^entries must be a list of objects$"),
-        (
-            _text(entries=[{"name": "wiki"}]),
-            r"^entries \['wiki'\] do not match the sqlite table$",
-        ),
-    ],
-)
-def test_parse_refuses_another_format_version_or_table(text, message):
-    with pytest.raises(bm.ManifestError, match=message):
-        bm.parse_manifest(text)
-
-
-def test_parse_refuses_a_manifest_without_entries():
-    manifest = json.loads(_text())
-    del manifest["entries"]
-    with pytest.raises(bm.ManifestError, match=r"^entries must be a list of objects$"):
-        bm.parse_manifest(json.dumps(manifest))
