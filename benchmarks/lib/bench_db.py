@@ -121,6 +121,17 @@ class BenchmarkDB:
             self._embeddings = EmbeddingEngine()
         return self
 
+    @property
+    def embedding_engine(self) -> EmbeddingEngine:
+        """The engine this connection embeds and recalls with (set by ``open``).
+
+        The repro manifest reads its identity here (#734): the factory
+        singleton is a different instance and can settle in another state.
+        """
+        if self._embeddings is None:
+            raise RuntimeError("BenchmarkDB.embedding_engine read before open()")
+        return self._embeddings
+
     def _purge_stale_benchmark_data(self) -> None:
         """Remove orphaned benchmark memories from crashed/killed runs."""
         assert self._store is not None
