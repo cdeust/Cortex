@@ -142,6 +142,20 @@ def budget(gh: Gh, repo: str, pr: int, run_id: int, head_ref: str, labels):
     return decide(reviews, labels)
 
 
+def output_file(env) -> str:
+    """$GITHUB_OUTPUT, accepted only inside the runner's temporary directory.
+
+    The runner creates the file under $RUNNER_TEMP/_runner_file_commands; a path
+    anywhere else is not the runner's and is refused (CodeQL py/path-injection).
+    source: https://docs.github.com/en/actions/reference/workflows-and-actions/variables
+    """
+    base = os.path.realpath(env["RUNNER_TEMP"])
+    path = os.path.realpath(env["GITHUB_OUTPUT"])
+    if not path.startswith(base + os.sep):
+        raise SystemExit("GITHUB_OUTPUT is outside RUNNER_TEMP")
+    return path
+
+
 def main() -> int:
     env = os.environ
     result = budget(
@@ -152,7 +166,7 @@ def main() -> int:
         env["HEAD_REF"],
         json.loads(env.get("LABELS", "[]")),
     )
-    with open(env["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+    with open(output_file(env), "a", encoding="utf-8") as out:
         for key, value in result.items():
             out.write(f"{key}={value}\n")
     if result["skip"] == "true":
