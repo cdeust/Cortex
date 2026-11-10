@@ -119,9 +119,11 @@ def _parse_args(args: dict[str, Any] | None) -> tuple[Path, str, int, bool]:
     root = Path(directory).expanduser().resolve()
     # source: ADR-0445
     domain = args.get("domain", "") or root.name
-    # GHSA-7848-qh48-mx2w: check the domain remember will write each file under
-    # (the directory wins over the argument) before anything is purged.
-    require_writable_domain(_remember_domain(str(root), domain), "seed_project")
+    # GHSA-7848-qh48-mx2w: the domain remember will write each file under (the
+    # directory wins over the argument) is resolved once here, checked, and is the
+    # one the handler purges, writes and reports: never the raw argument.
+    domain = _remember_domain(str(root), domain) or domain
+    require_writable_domain(domain, "seed_project")
     max_kb = int(args.get("max_file_size_kb", 64))
     dry_run = args.get("dry_run", False)
     return root, domain, max_kb * 1024, dry_run
@@ -194,13 +196,9 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         }
 
     purged = 0
-    # GHSA-7848-qh48-mx2w: purge the domain seeding writes under (the directory wins
-    # over the argument), the one `_parse_args` checked, never the raw argument.
     if not dry_run:
         # source: ADR-0445
-        purged = _get_store().delete_memories_by_tag(
-            "seeded", domain=_remember_domain(str(root), domain)
-        )
+        purged = _get_store().delete_memories_by_tag("seeded", domain=domain)
 
     all_discoveries = collect_all_discoveries(root, max_bytes)
 
