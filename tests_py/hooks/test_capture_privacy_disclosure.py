@@ -121,3 +121,42 @@ def test_a_long_read_response_is_copied_whole_into_an_artifact(captured):
     assert files[0].read_text(encoding="utf-8") == contents
     assert "Alice Martin" not in captured[-1]
     assert str(files[0]) in captured[-1]
+
+
+def test_a_short_response_is_not_captured_nor_its_command(captured):
+    assert "is not captured at all, its path or command line included" in _paragraph()
+    hook.process_event(_event("Bash", {"command": "grep 'Alice Martin' a.csv"}, "ok"))
+    assert captured == []
+
+
+def test_an_edit_keeps_before_and_after_and_not_the_previous_file(captured):
+    assert "An Edit response is stored as its before and after strings" in _paragraph()
+    response = {
+        "filePath": "/p/clients.csv",
+        "oldString": "Alice Martin",
+        "newString": "Alice Dupont",
+        "originalFile": "Bob Durand, 3 rue Haute, asthmatic\n" * 3,
+    }
+    hook.process_event(_event("Edit", {"file_path": "/p/clients.csv"}, response))
+    assert "Alice Martin" in captured[-1] and "Alice Dupont" in captured[-1]
+    assert "Bob Durand" not in captured[-1]
+
+
+@pytest.mark.parametrize("tool", ["Write", "MultiEdit"])
+def test_a_write_or_multiedit_response_is_stored_whole(captured, tool):
+    assert "a Write or MultiEdit response is stored as its whole JSON" in _paragraph()
+    response = {
+        "type": "update",
+        "filePath": "/p/clients.csv",
+        "content": "Alice Martin, 12 rue des Lilas, diabetic",
+        "originalFile": "Bob Durand, 3 rue Haute, asthmatic",
+    }
+    hook.process_event(_event(tool, {"file_path": "/p/clients.csv"}, response))
+    assert "Alice Martin" in captured[-1] and "Bob Durand" in captured[-1]
+
+
+@pytest.mark.parametrize("tool", ["Task", "TodoWrite", "mcp__cortex__recall"])
+def test_a_tool_in_no_list_is_never_captured(captured, tool):
+    assert "A tool in none of these three lists" in _paragraph()
+    hook.process_event(_event(tool, {}, "Alice Martin, diabetic. " * 200))
+    assert captured == []

@@ -156,6 +156,12 @@ adheres to [Semantic Versioning](https://semver.org/).
   project, that personal data is not redacted, and that an artifact can outlive a
   capture refused after hand-over (#737, slice 4). A test compares the tool lists
   and limits in that text with the hook's own constants.
+- `PRIVACY.md` now also says that a write-class or Bash call whose response is
+  under 50 characters is not captured at all, command line included; that an Edit
+  keeps its before and after strings while a Write or MultiEdit keeps its whole
+  JSON response (written content and, when the host sends it, the previous file);
+  and that a tool in none of the three lists (Task, TodoWrite, MCP tools) is never
+  captured (#737, slice 5). Each sentence is checked against `process_event`.
 
 - A resolver run that only waits (no verdict yet, no Pipeline yet, or a newer head)
   ends green with a notice instead of red, so a failed `Pipeline after merge` on
