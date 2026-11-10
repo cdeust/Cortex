@@ -8,6 +8,7 @@ import os
 
 from mcp_server.hooks.agent_briefing_log import _log
 from mcp_server.shared.project_scope import project_ancestors
+from mcp_server.infrastructure.pg_scope_clause import pg_scope_predicate
 from mcp_server.infrastructure.backend_marker import effective_backend
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.hooks.agent_briefing_sqlite import (
@@ -16,6 +17,10 @@ from mcp_server.hooks.agent_briefing_sqlite import (
     _MIN_HEAT,
     fetch_sqlite_context,
 )
+
+# source: ADR-1080 -- the project predicate, one text-array param, its
+# directory_context normalized as project_ancestors is (issue #692).
+_SCOPE = pg_scope_predicate("m.")
 
 
 def _connect():
@@ -70,7 +75,7 @@ def _fetch_agent_context(
             rows = conn.execute(
                 (
                     # source: ADR-0484
-                    """
+                    f"""
                 SELECT m.id, m.content,
                        effective_heat(m, NOW()) AS heat,
                        m.agent_context
@@ -78,14 +83,14 @@ def _fetch_agent_context(
                      JOIN current_memories cm ON cm.id = m.id
                 WHERE m.agent_context = %s
                   AND effective_heat(m, NOW()) >= %s
-                  AND (m.is_global = TRUE OR m.directory_context = ANY(%s::TEXT[]))
+                  AND {_SCOPE}
                   AND NOT m.is_benchmark
                   AND m.superseded_by_id IS NULL
                   AND m.content_tsv @@ plainto_tsquery('english', %s)
                 -- source: ADR-1106 -- exact ties go to the newer memory.
                 ORDER BY effective_heat(m, NOW()) DESC, m.created_at DESC, m.id DESC
                 LIMIT %s
-                """
+                """  # noqa: S608 — _SCOPE is the fixed fragment from pg_scope_predicate; values are bound parameters (docs/ASSURANCE-CASE.md §5)
                 ),
                 (
                     agent_name,
@@ -114,7 +119,7 @@ def _fetch_agent_context(
             rows = conn.execute(
                 (
                     # source: ADR-0484
-                    """
+                    f"""
                 SELECT m.id, m.content,
                        effective_heat(m, NOW()) AS heat,
                        m.agent_context
@@ -122,13 +127,13 @@ def _fetch_agent_context(
                      JOIN current_memories cm ON cm.id = m.id
                 WHERE m.is_team_decision = TRUE
                   AND (m.agent_context IS NULL OR m.agent_context != %s OR %s = 0)
-                  AND (m.is_global = TRUE OR m.directory_context = ANY(%s::TEXT[]))
+                  AND {_SCOPE}
                   AND NOT m.is_benchmark
                   AND m.superseded_by_id IS NULL
                 -- source: ADR-1106 -- exact ties go to the newer memory.
                 ORDER BY effective_heat(m, NOW()) DESC, m.created_at DESC, m.id DESC
                 LIMIT %s
-                """
+                """  # noqa: S608 — _SCOPE is the fixed fragment from pg_scope_predicate; values are bound parameters (docs/ASSURANCE-CASE.md §5)
                 ),
                 (agent_name, len(keywords), ancestors, remaining),
             ).fetchall()

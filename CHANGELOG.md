@@ -209,6 +209,14 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The project scope in SQL normalizes the stored `directory_context` the way
+  `memory_matches_project` already did: backslashes become `/` and a trailing
+  separator is dropped (#692 class 9, the 6 file-priming alias tests that stayed at
+  heat 0.5 in run 38008915302). `project_ancestors` yields `C:/work/repo` while a
+  memory recorded on Windows stores `C:\work\repo`, so file priming, the store's
+  hot and FTS queries and the session-start, auto-recall and agent-briefing hooks
+  matched no project-scoped Windows memory. One expression in `pg_scope_clause`
+  now serves both backends' clauses and the hooks' raw PostgreSQL queries.
 - The installer tests' uv stand-in is a `uv.cmd` on Windows, so PATH lookup reaches
   it instead of the runner's real uv (#692 class 9, 6 Windows setup errors in
   `test_installer_rerun_keeps_entries` in run 38008915302). `shutil.which` matches
