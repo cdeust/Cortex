@@ -18,6 +18,13 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- A versioned backup manifest (`cortex-backup-manifest`, version 1) names the class A
+  resources of an install by backend (SQLite store, or managed cluster and its
+  password marked secret; wiki, artifacts, profiles, session log, MCP connections,
+  capture spool) with a SHA-256 digest and a size for every file. A required store
+  that is absent, a symbolic link or a special file is refused, never skipped
+  (#731, slice 2).
+
 - `scripts/native_receipt_artifact.py` prints the `artifact` object of a
   `cortex-native-receipt/1` receipt for the `mcp_server` the running interpreter
   imports (#730). It reads the identity `cortex doctor` computes, now as data

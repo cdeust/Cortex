@@ -108,7 +108,9 @@ not need it). Class **X** = not Cortex's to back up.
 
 ## 5. Remaining slices of #731
 
-1. A versioned manifest listing the class A entries above with a digest each.
+1. A versioned manifest listing the class A entries above with a digest each
+   (delivered: `mcp_server/core/backup_manifest.py`, `infrastructure/backup_scan.py`,
+   `handlers/backup_manifest.py`).
 2. A consistent snapshot of each store under concurrent writes (SQLite online
    backup; managed PostgreSQL stopped copy or logical dump).
 3. Restore into a fresh `CORTEX_CLAUDE_DIR`, then verify integrity and a known

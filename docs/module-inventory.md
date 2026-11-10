@@ -194,6 +194,9 @@ not exist." The registered tools are listed in `docs/mcp-tools.md`.
 - `confluence_parser.py` — Pure Confluence storage-format XHTML parser (entities + ac:/ri: namespaces pre-resolved) → `ParsedDocument`
 - `document_normalizer.py` — `ParsedDocument` + provenance → wiki page markdown + memory payloads (skipped-image/empty notices, provenance stamping)
 
+*Backup (issue #731):*
+- `backup_manifest.py` — Versioned backup manifest: the class A resource table per backend (audit 2026-11-05), build from a scan, canonical JSON, parse refusing another format, version or table
+
 *Undocumented (measured, not yet catalogued individually):* `core/streaming/`
 (5 files) and `core/context_assembly/` (14 files — 15 as of the issue #228
 split, minus `active_retrieval.py`, deleted by issue #201 as unwired dead
@@ -204,6 +207,7 @@ control/writing, backpressure, and other mechanisms not yet described above.
 Run the measurement command in the header to get a current file listing.
 
 ## infrastructure/ — All I/O
+- `backup_scan.py` — Reads one backup resource under the Cortex root and digests every file (SHA-256, size); refuses symlinks and special files (issue #731)
 
 - `config.py` — Centralized path constants via pathlib. The root (`CLAUDE_DIR`,
   default `~/.claude`) is overridable via `CORTEX_CLAUDE_DIR`; every other
