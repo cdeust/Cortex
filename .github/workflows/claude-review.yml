@@ -108,6 +108,7 @@ jobs:
             The commit reviewed by the previous review is "${{ needs.budget.outputs.reviewed_sha }}" (empty on the first review). If it is not empty: first check that each earlier Blocker is fixed, then review only the commits pushed after it (gh pr view --json commits) and do not re-audit unchanged code.
             On the last review, say which part of the PR is accepted and which files or commits carry the open Blockers, so the author can merge the accepted part and send the rest to a refinement PR.
             End with exactly one line: "Verdict: approve" or "Verdict: block".
+            The resolver reads a verdict only from a comment that links this run (ADR-1130): in every comment that carries the verdict line, the `gh pr comment` review included, put the line "[View job run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" just before it.
           # Scoped gh permissions are from upstream docs/solutions.md.
           claude_args: |
             --strict-mcp-config
