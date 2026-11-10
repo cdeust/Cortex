@@ -59,11 +59,19 @@ def _refused_domain(domain: str, environ: Mapping[str, str]) -> tuple[str, str] 
 
 def require_writable_domain(
     domain: str, tool: str, environ: Mapping[str, str] = os.environ
-) -> None:
-    """Raise ValidationError when `domain` is another project's than the session's."""
+) -> str:
+    """The domain the write must store; ValidationError when it is another project's.
+
+    The check reads the resolved domain, so the caller stores that one, never the
+    raw argument: a name that resolves to the session's own project (a directory
+    name, a family member) can also be another family's canonical, and rows stored
+    under the raw name would reach that family's hot memories. A name that resolves
+    to no known project is a shared domain and is returned as given.
+    """
     refused = _refused_domain(domain, environ)
     if refused is None:
-        return
+        target = resolve_explicit_domain(domain or "")
+        return target if target in project_domains() else (domain or "")
     target, session = refused
     where = f"this session's project ({session!r})" if session else "no known project"
     raise ValidationError(

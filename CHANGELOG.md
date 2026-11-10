@@ -14,6 +14,9 @@ adheres to [Semantic Versioning](https://semver.org/).
   the session's (`CLAUDE_PROJECT_DIR`, else the working directory), unless the user
   allows it locally with `CORTEX_CROSS_PROJECT_WRITES=<domain>,…` or `*`. Shared
   domains that name no repository stay writable. No tool argument can reopen it.
+  A write stores the domain the check resolved, never the raw argument: `ingest_prd`
+  and `ingest_document` kept a name that resolves to the session's project but can
+  also be another repository family's domain.
   A global memory reaches every project, so an explicit `is_global=true` (in
   `remember` or `anchor`) needs `CORTEX_CROSS_PROJECT_WRITES=*`; a global scope the
   detector infers without it is kept local and reported (`global_reason`). `anchor`,

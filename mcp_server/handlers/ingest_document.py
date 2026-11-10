@@ -193,7 +193,8 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         source=str(path), version=content_version(raw), source_kind=kind
     )
     domain = (str(args.get("domain") or "").strip()) or "documents"
-    require_writable_domain(domain, "ingest_document")  # GHSA-7848-qh48-mx2w
+    # GHSA-7848-qh48-mx2w: the rows keep the domain the check resolved.
+    domain = require_writable_domain(domain, "ingest_document")
     return await _persist(path, parsed, prov, domain)
 
 
