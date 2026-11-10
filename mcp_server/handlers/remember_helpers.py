@@ -385,7 +385,7 @@ def try_block_replica_upsert(
     try:
         vpath_json = _json.dumps([vpath_tag])
         rows = store._execute(
-            "SELECT id, domain, is_global FROM memories "
+            "SELECT id, domain, is_global, directory_context FROM memories "
             "WHERE tags @> %s::jsonb "
             "AND tags @> '[\"memory-replica\"]'::jsonb "
             "ORDER BY id",
@@ -400,13 +400,7 @@ def try_block_replica_upsert(
     # session may not change is not refreshed. Every replica of the block is read,
     # not the first one: another project's row must not hide this session's own,
     # or each sync would insert one more row (replicas bypass exact deduplication).
-    writable = [
-        row
-        for row in rows
-        if memory_writable(
-            {"domain": row.get("domain"), "is_global": row.get("is_global")}
-        )
-    ]
+    writable = [row for row in rows if memory_writable(row)]
     if not writable:
         return False, None
 

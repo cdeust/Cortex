@@ -127,22 +127,34 @@ def session_directory(environ: Mapping[str, str] = os.environ) -> str:
     return environ.get(SESSION_ENV) or os.getcwd()
 
 
+def _same_branch(path: str, root: str) -> bool:
+    """Whether `path` is `root`, lies inside it, or is a folder above it."""
+    return (path + "/").startswith(root + "/") or root.startswith(
+        path.rstrip("/") + "/"
+    )
+
+
 def _reached_projects(directory: str) -> frozenset[str]:
     """Domains of the known projects whose sessions are served `directory`'s memories.
 
     A project is reached when `directory` lies inside it (its root included: a
     session opened there or below), or is a folder above its root (the hooks' rule).
+    The hooks compare path text, and a parent of the projects can be a symlink:
+    `directory` and each root are compared as written and as resolved.
     """
     directory = (directory or "").strip()
     # The hooks compare the stored text with absolute roots: a relative directory,
     # or a label such as `run:<id>`, is served to no session.
     if not Path(directory).is_absolute():
         return frozenset()
-    above = Path(directory).resolve().as_posix().rstrip("/") + "/"
-    below = {
-        domain for root, domain in project_roots().items() if root.startswith(above)
+    forms = {Path(directory).as_posix(), Path(directory).resolve().as_posix()}
+    reached = {
+        domain
+        for root, domain in project_roots().items()
+        if any(_same_branch(form, root) for form in forms)
     }
-    return frozenset((below | {resolve_cwd(directory)}) - {""})
+    # A linked worktree lies outside its repository's root and belongs to it.
+    return frozenset((reached | {resolve_cwd(directory)}) - {""})
 
 
 def _refused_directory(directory: str, environ: Mapping[str, str]) -> str | None:

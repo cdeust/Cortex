@@ -16,6 +16,7 @@ import pytest
 from mcp_server.errors import ValidationError
 from mcp_server.handlers import _write_scope, anchor
 from mcp_server.handlers.remember import handler as remember_handler
+from mcp_server.shared import domain_mapping
 from mcp_server.shared.project_scope import memory_matches_project
 from tests_py.handlers import test_ghsa_7848_cross_project_write as _base
 
@@ -69,6 +70,25 @@ def test_which_projects_a_directory_reaches(projects):
     link = projects.parent / "link"
     link.symlink_to(projects, target_is_directory=True)
     assert reached(str(link)) == {"alpha", "beta"}
+
+
+def test_a_symlinked_parent_of_the_projects_is_compared_on_both_sides(
+    projects, monkeypatch
+):
+    # Codex on PR #970: the discovery keeps the text of a symlinked parent
+    # (`~/code -> /mnt/repos`), and the hooks compare path text.
+    link = projects.parent / "code"
+    link.symlink_to(projects, target_is_directory=True)
+    monkeypatch.setattr(domain_mapping, "_candidate_dev_roots", lambda: [link])
+    domain_mapping._build_registry.cache_clear()
+    reached = _write_scope._reached_projects
+    assert domain_mapping.resolve_cwd(str(link / "alpha")) == ""  # no help from it
+    for parent in (link, projects):
+        assert reached(str(parent)) == {"alpha", "beta"}
+        assert reached(str(parent / "alpha")) == {"alpha"}
+        assert reached(str(parent / "alpha" / "src")) == {"alpha"}
+        assert reached(str(parent / "alphabet")) == frozenset()
+    assert reached(str(projects.parent / "downloads")) == frozenset()
 
 
 def test_a_relative_directory_or_a_label_reaches_no_session(projects, monkeypatch):

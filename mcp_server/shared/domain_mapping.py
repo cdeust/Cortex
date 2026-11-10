@@ -341,6 +341,7 @@ class DomainRegistry:
     slug_index: dict[str, RepoInfo]
     fragment_index: dict[str, str]
     path_to_repo: dict[str, RepoInfo] = field(default_factory=dict)
+    root_forms: dict[str, str] | None = None
 
     def __post_init__(self) -> None:
         self.path_to_repo = {r.fs_path: r for r in self.repos}
@@ -497,8 +498,21 @@ def project_domains() -> frozenset[str]:
 
 
 def project_roots() -> dict[str, str]:
-    """Root path of every known repository, mapped to the domain that owns it."""
-    return {r.fs_path: r.canonical for r in _build_registry().repos if r.canonical}
+    """Root path of every known repository, mapped to the domain that owns it.
+
+    Each root appears as discovered and as resolved: the discovery keeps the text of
+    a symlinked parent (`~/code -> /mnt/repos`), while a path given by a caller may
+    name either side of the link.
+    """
+    registry = _build_registry()
+    if registry.root_forms is None:
+        registry.root_forms = {
+            form: r.canonical
+            for r in registry.repos
+            if r.canonical
+            for form in (r.fs_path, _to_posix(Path(r.fs_path).resolve()))
+        }
+    return registry.root_forms
 
 
 def resolve_cwd(cwd: str) -> str:

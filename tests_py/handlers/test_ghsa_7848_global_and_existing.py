@@ -134,10 +134,13 @@ class _ReplicaStore:
     [
         {"id": 7, "domain": "alpha", "is_global": False},
         {"id": 7, "domain": "", "is_global": True},
+        {"id": 7, "domain": "", "is_global": False, "directory_context": "ALPHA"},
     ],
-    ids=["other-project", "global"],
+    ids=["other-project", "global", "other-projects-directory"],
 )
 def test_a_replica_of_a_row_this_session_may_not_change_is_not_refreshed(projects, row):
+    if row.get("directory_context") == "ALPHA":  # Codex on PR #970
+        row = row | {"directory_context": str(projects / "alpha")}
     store = _ReplicaStore(row)
     tags = ["memory-replica", "vpath:/x.md"]
     assert try_block_replica_upsert(MARKER, None, tags, "user", store) == (False, None)
@@ -156,6 +159,9 @@ def test_another_projects_replica_does_not_hide_this_sessions_own(projects):
     assert len(store.updates) == 1 and 9 in store.updates[0]
     # Every replica of the block is read, in a stable order: no LIMIT hides one.
     assert store.selects[0].endswith("'[\"memory-replica\"]'::jsonb ORDER BY id")
+    assert store.selects[0].startswith(
+        "SELECT id, domain, is_global, directory_context FROM memories "
+    )
 
 
 def test_seed_project_checks_the_domain_remember_will_use(projects):
