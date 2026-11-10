@@ -32,6 +32,10 @@ def test_equal_digests_verify_whatever_the_case():
     )
 
 
+def test_an_upper_case_digest_of_the_bytes_verifies():
+    assert classify_weights(_DIGEST, _DIGEST.upper()).state == "verified"
+
+
 def test_different_digests_mismatch():
     found = "c" * 64
     assert classify_weights(_DIGEST, found) == WeightsIdentity(

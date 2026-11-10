@@ -56,8 +56,8 @@ def classify_weights(blob_name: str | None, sha256: str | None) -> WeightsIdenti
     """
     if sha256 is None:
         return WeightsIdentity(ABSENT, None, None)
-    expected = (blob_name or "").lower()
-    if not _SHA256.match(expected):
+    if blob_name is None or not _SHA256.match(blob_name.lower()):
         return WeightsIdentity(UNVERIFIABLE, sha256, None)
+    expected = blob_name.lower()
     state = VERIFIED if sha256.lower() == expected else MISMATCH
     return WeightsIdentity(state, sha256, expected)

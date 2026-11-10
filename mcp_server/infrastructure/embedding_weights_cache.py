@@ -78,8 +78,7 @@ def file_sha256(path: str) -> str | None:
     """Sha256 of the file ``path`` resolves to, or None when there is none."""
     if not os.path.isfile(path):
         return None
-    digest = hashlib.sha256()
+    # hashlib.file_digest (Python 3.11+, the floor in pyproject.toml) reads in
+    # chunks itself, so no read size or sentinel is spelled out here.
     with open(path, "rb") as fh:
-        for chunk in iter(lambda: fh.read(1 << 20), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+        return hashlib.file_digest(fh, hashlib.sha256).hexdigest()

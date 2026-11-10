@@ -164,3 +164,15 @@ def test_a_home_relative_cache_is_expanded_as_the_loader_does(monkeypatch):
     monkeypatch.setenv("SENTENCE_TRANSFORMERS_HOME", os.path.join("~", "models"))
     expected = os.path.realpath(os.path.join(os.path.expanduser("~"), "models"))
     assert embedding_weights_cache.embedding_hub_cache() == expected
+
+
+def test_a_bare_model_name_gets_the_sentence_transformers_organization():
+    assert embedding_weights_cache.repo_cache_dir("/c", "all-MiniLM-L6-v2") == (
+        os.path.join("/c", "models--sentence-transformers--all-MiniLM-L6-v2")
+    )
+
+
+def test_an_organization_qualified_model_name_is_kept():
+    assert embedding_weights_cache.repo_cache_dir("/c", "org/model") == (
+        os.path.join("/c", "models--org--model")
+    )
