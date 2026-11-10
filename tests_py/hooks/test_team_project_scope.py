@@ -14,6 +14,7 @@ from mcp_server.handlers.forget import _get_store
 from mcp_server.handlers.remember import handler
 from mcp_server.hooks.agent_briefing_query import _fetch_agent_context
 from mcp_server.hooks.agent_briefing_role import _pg_role_rows
+from mcp_server.hooks.auto_recall import _recall_memories
 from mcp_server.hooks.session_start_fetch import _fetch_team_decisions
 from tests_py._hermetic_hook_env import hermetic_hook_env
 
@@ -87,8 +88,9 @@ def test_pg_team_readers_scope_both_agent_passes():
 
 
 def test_pg_briefing_passes_scope_a_windows_directory():
-    """Issue #692: both briefing passes and the role priors match a row stored
-    with Windows separators, as memory_matches_project does (ADR-1080)."""
+    """Issue #692: both briefing passes, the role priors and auto-recall match
+    a row stored with Windows separators, as memory_matches_project does
+    (ADR-1080). Called in process, so mutation testing reaches the queries."""
     store = _get_store()
     if type(store).__name__ != "PgMemoryStore":
         pytest.skip("PostgreSQL backend required for raw PG hook queries")
@@ -117,4 +119,8 @@ def test_pg_briefing_passes_scope_a_windows_directory():
     assert sources.get(decision) == "team:dba"
     assert foreign not in sources
     role_ids = {r["id"] for r in _pg_role_rows(conn, "engineer", root, 5)}
-    assert prior in role_ids and foreign not in role_ids
+    assert prior in role_ids
+    assert decision not in role_ids and foreign not in role_ids
+    recalled = {r["id"] for r in _recall_memories(conn, "ledger orchid", root)}
+    assert prior in recalled and decision in recalled
+    assert foreign not in recalled
