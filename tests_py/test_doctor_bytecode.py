@@ -4,6 +4,7 @@ import importlib.util
 import marshal
 import os
 import py_compile
+import subprocess
 import sys
 from pathlib import Path
 
@@ -202,3 +203,30 @@ def test_sourceless_modules_are_listed_but_caches_are_not(tmp_path):
         "mcp_server/loose.pyc",
         "mcp_server/sub/deep.pyc",
     ]
+
+
+def test_a_cache_without_debug_ranges_runs_the_same_code(tmp_path):
+    # Codex review on #957: `-X no_debug_ranges` drops column data only.
+    package = _package(tmp_path)
+    source = package / "a.py"
+    source.write_bytes(b"def f(a):\n    return [x + a for x in range(3)]\n")
+    cfile = _cache_path(source)
+    script = (
+        "import py_compile, sys; "
+        "py_compile.compile(sys.argv[1], cfile=sys.argv[2], doraise=True)"
+    )
+    subprocess.run(
+        [
+            sys.executable,
+            "-X",
+            "no_debug_ranges",
+            "-c",
+            script,
+            str(source),
+            str(cfile),
+        ],
+        check=True,
+    )
+    assert _foreign(package) == []
+    _forge(source, code=b"def f(a):\n    return [x - a for x in range(3)]\n")
+    assert _foreign(package) == [A_CACHE]

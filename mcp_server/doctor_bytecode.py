@@ -29,6 +29,7 @@ import _imp  # the active --check-hash-based-pycs policy, as importlib reads it
 import importlib.util
 import marshal
 from pathlib import Path
+from types import CodeType
 
 PACKAGE = "mcp_server"  # source: pyproject.toml [tool.hatch.build.targets.wheel]
 _HEADER = 16  # source: PEP 552, magic + flags + two 4-byte fields
@@ -63,6 +64,20 @@ def _would_import(data: bytes, source: Path) -> bool:
     return data[8:16] == importlib.util.source_hash(source.read_bytes())
 
 
+def _executable(code: CodeType) -> CodeType:
+    """``code`` without its location table, nested code objects included.
+
+    The table maps instructions to lines and columns for tracebacks only, and
+    ``-X no_debug_ranges`` leaves the columns out, so a cache written under it
+    differs from a plain compile without running other code (Codex review on
+    #957). Instructions, constants and names still compare."""
+    consts = tuple(
+        _executable(const) if isinstance(const, CodeType) else const
+        for const in code.co_consts
+    )
+    return code.replace(co_linetable=bytes(), co_consts=consts)
+
+
 def _runs_other_code(pyc: Path, source: Path, level: int) -> bool:
     """True when the interpreter would run ``pyc`` and its code is not the
     compile of ``source`` (or cannot be read: the import would then fail)."""
@@ -81,7 +96,7 @@ def _runs_other_code(pyc: Path, source: Path, level: int) -> bool:
         )
     except (EOFError, ValueError, TypeError, SyntaxError):
         return True
-    return cached != built
+    return _executable(cached) != _executable(built)
 
 
 def clear_caches_fix(root: Path) -> str:
