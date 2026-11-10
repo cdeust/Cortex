@@ -103,14 +103,23 @@ def test_a_package_file_absent_from_record_is_an_alteration(monkeypatch, tmp_pat
     assert (found.modified, found.fix) == (True, REINSTALL)
 
 
-def test_import_bytecode_and_listed_files_are_not_alterations(monkeypatch, tmp_path):
+def test_import_bytecode_is_not_an_alteration(monkeypatch, tmp_path):
     package, dist = _wheel_install(tmp_path)
     (package / "__pycache__").mkdir()
     (package / "__pycache__" / "a.cpython-311.pyc").write_bytes(b"\0")
-    (package / "b.py").write_bytes(b"y = 1\n")  # listed in RECORD without a hash
     _imported_from(monkeypatch, package, dist)
     found = doctor_artifact.identify()
     assert (found.altered, found.modified, found.fix) == ((), False, None)
+
+
+def test_a_file_listed_without_a_hash_is_an_alteration(monkeypatch, tmp_path):
+    # Codex review on #957: `mcp_server/b.py,,` is never hashed nor digested, so
+    # its content could change while the receipt stayed `modified: false`.
+    package, dist = _wheel_install(tmp_path)
+    (package / "b.py").write_bytes(b"y = 1\n")
+    _imported_from(monkeypatch, package, dist)
+    found = doctor_artifact.identify()
+    assert (found.altered, found.modified) == (("mcp_server/b.py",), True)
 
 
 def test_unrecorded_names_files_relative_to_the_package(tmp_path):

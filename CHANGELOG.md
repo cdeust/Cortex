@@ -24,9 +24,10 @@ adheres to [Semantic Versioning](https://semver.org/).
   (`mcp_server.doctor_artifact.identify`), instead of a receipt author copying the
   doctor's text by hand, and refuses when the identity cannot be stated (git failure,
   missing RECORD, a wheel whose files differ from its RECORD, no installed version,
-  checkout without a commit). `cortex doctor` now also counts a package file absent from an
-  installed wheel's RECORD (a module, an extension, a sourceless `.pyc`) as a difference
-  from it; bytecode under `__pycache__` is not counted, since Python writes it at import.
+  checkout without a commit). `cortex doctor` now also counts a package file that an
+  installed wheel's RECORD does not list with a hash (a module, an extension, a
+  sourceless `.pyc`) as a difference from it; bytecode under `__pycache__` is not
+  counted, since Python writes it at import.
 - A benchmark run's `MANIFEST.json` now carries `runtime_artifact`: the `mcp_server`
   artifact the run imported, as `cortex doctor` names it (installed wheel or source
   tree, its revision, uncommitted changes, one digest over its members), with
