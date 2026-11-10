@@ -18,6 +18,7 @@ from mcp_server.core.confluence_parser import parse_confluence_storage
 from mcp_server.core.docx_parser import parse_docx_xml
 from mcp_server.core.document_normalizer import NormalizedDocument, normalize_document
 from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
+from mcp_server.handlers.ingest_document_media import identify_docx_images
 from mcp_server.handlers.ingest_document_writers import (
     DocumentMemoryContext,
     content_version,
@@ -67,8 +68,10 @@ schema = {
         "summary_memory_id, section_count (sections written), "
         "section_memory_ids, expected_components, completed_components, "
         "failures, retired_receipt_ids, images_skipped, attachments "
-        "([{ordinal, reference, section_index, state}] per embedded image, "
-        "state 'unsupported' until extraction exists), section_headings "
+        "([{ordinal, reference, section_index, state, part, digest, size}] per "
+        "embedded image: docx part, sha256 and byte size of its bytes when "
+        "the reference resolves, else empty; state 'unsupported' until "
+        "extraction exists), section_headings "
         "(heading of each parsed section, indexed by section_index), notices, title, "
         "source, source_kind, version}."
     ),
@@ -153,7 +156,9 @@ def _read_and_parse(path: Path, kind: str, title: str) -> tuple[ParsedDocument, 
     any write."""
     if kind == "docx":
         raw = read_docx_xml(path)
-        return parse_docx_xml(raw, title=title), raw
+        parsed = parse_docx_xml(raw, title=title)
+        parsed.attachments = identify_docx_images(path, parsed.attachments)
+        return parsed, raw
     raw = read_confluence_export(path)
     return parse_confluence_storage(raw, title=title), raw
 

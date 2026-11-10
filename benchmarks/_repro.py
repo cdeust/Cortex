@@ -12,7 +12,7 @@ import sys
 from datetime import datetime, timezone
 from typing import Any
 from importlib.metadata import version
-from mcp_server.core.reranker import ensure_reranker_loaded, model_sha256
+from mcp_server.core.reranker import ensure_reranker_loaded, model_identity
 import benchmarks.lib._composition_root_wiring  # noqa: F401 — source: issue #560
 from benchmarks.lib.embedding_identity import embedding_identity_fields
 
@@ -81,11 +81,13 @@ def _reranker_manifest_fields() -> dict[str, Any]:
     """
     try:
         status = ensure_reranker_loaded()
+        identity = model_identity()
         return {
             "reranker_active": status.state == "loaded",
             "reranker_state": status.state,
             "reranker_model_path": status.model_path,
-            "reranker_model_sha256": model_sha256(),
+            "reranker_model_sha256": identity.sha256,
+            "reranker_model_identity": identity.state,
         }
     except Exception:  # noqa: BLE001 — source: ADR-0814
         return {
@@ -93,6 +95,7 @@ def _reranker_manifest_fields() -> dict[str, Any]:
             "reranker_state": "unresolved",
             "reranker_model_path": None,
             "reranker_model_sha256": None,
+            "reranker_model_identity": "unresolved",
         }
 
 
@@ -105,7 +108,7 @@ def build_repro_manifest() -> dict[str, Any]:
         git_commit, git_dirty, python_version, platform_system,
         platform_machine, platform_node, timestamp_utc, lib_versions,
         reranker_active, reranker_state, reranker_model_path,
-        reranker_model_sha256.
+        reranker_model_sha256, reranker_model_identity.
     The dict is JSON-serialisable (all values are str | bool | None | dict).
     """
     sha = _git_sha()

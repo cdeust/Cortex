@@ -85,20 +85,23 @@ def reranker_fields() -> dict:
         import benchmarks.lib._composition_root_wiring  # noqa: PLC0415,F401 — source: issue #560
         from mcp_server.core.reranker import (  # noqa: PLC0415
             ensure_reranker_loaded,
-            model_sha256,
+            model_identity,
         )
 
         status = ensure_reranker_loaded()
+        identity = model_identity()
         return {
             "reranker_active": status.state == "loaded",
             "reranker_state": status.state,
-            "reranker_model_sha256": model_sha256(),
+            "reranker_model_sha256": identity.sha256,
+            "reranker_model_identity": identity.state,
         }
     except Exception:  # noqa: BLE001 — signal is the recorded reranker_state
         return {
             "reranker_active": False,
             "reranker_state": "unresolved",
             "reranker_model_sha256": None,
+            "reranker_model_identity": "unresolved",
         }
 
 

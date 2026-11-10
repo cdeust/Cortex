@@ -3683,6 +3683,14 @@
     "ADR-1128": {
       "mirror": "ADR-1128-a-merge-that-waits-ends-the-resolver-green-not-red.md",
       "path": "adr/cortex/1128-a-merge-that-waits-ends-the-resolver-green-not-red.md"
+    },
+    "ADR-1129": {
+      "mirror": "ADR-1129-only-reviews-run-under-the-review-contract-count-against-the-budget.md",
+      "path": "adr/cortex/1129-only-reviews-run-under-the-review-contract-count-against-the-budget.md"
+    },
+    "ADR-1130": {
+      "mirror": "ADR-1130-the-comment-that-carries-the-verdict-links-the-review-run.md",
+      "path": "adr/cortex/1130-the-comment-that-carries-the-verdict-links-the-review-run.md"
     }
   },
   "project": "cortex",
