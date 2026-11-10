@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import hashlib
 import sqlite3
+import stat
+import sys
 from contextlib import closing
 
 import pytest
 
 from mcp_server.core.backup_manifest import ManifestError, parse_manifest, to_json
+from mcp_server.handlers import backup_snapshot as backup_snapshot_module
 from mcp_server.handlers.backup_snapshot import snapshot_backup
 from mcp_server.infrastructure.backup_stage import StagingError
 
@@ -92,3 +95,35 @@ def test_a_staging_root_inside_the_cortex_root_is_refused(tmp_path):
     _live_store(tmp_path).close()
     with pytest.raises(StagingError, match="inside the Cortex root"):
         snapshot_backup(tmp_path, tmp_path / "methodology" / "backup", "sqlite")
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permission bits")
+def test_the_staging_root_is_owner_only(tmp_path):
+    root, staging = tmp_path / "root", tmp_path / "staging"
+    _live_store(root).close()
+    staging.mkdir(mode=0o755)
+    staging.chmod(0o755)
+    snapshot_backup(root, staging, "sqlite")
+    assert stat.S_IMODE(staging.stat().st_mode) == 0o700
+
+
+def test_the_spool_is_staged_before_the_store(tmp_path, monkeypatch):
+    """A payload drained between the two copies must still be in the spool copy."""
+    root, staging = tmp_path / "root", tmp_path / "staging"
+    _live_store(root).close()
+    _write(root, ".capture-worker/spool/1.json", b"{}")
+    seen = []
+    real = backup_snapshot_module.snapshot_sqlite
+
+    def snapshot_after_spool(source, target):
+        seen.append((staging / ".capture-worker/spool/1.json").exists())
+        (root / ".capture-worker/spool/1.json").unlink()  # the drainer ran
+        real(source, target)
+
+    monkeypatch.setattr(backup_snapshot_module, "snapshot_sqlite", snapshot_after_spool)
+    manifest = snapshot_backup(root, staging, "sqlite")
+    assert seen == [True]
+    entries = {e["name"]: e for e in manifest["entries"]}
+    assert [f["path"] for f in entries["capture_spool"]["files"]] == [
+        ".capture-worker/spool/1.json"
+    ]

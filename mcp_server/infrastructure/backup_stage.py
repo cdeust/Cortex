@@ -6,10 +6,14 @@ computed on that copy, so its digests describe what the backup carries, not a
 store that kept moving after it was read.
 
 ``prepare_staging`` refuses a staging root that already holds anything, or
-that lies inside the Cortex root (the copy would scan itself).
+that lies inside the Cortex root (the copy would scan itself), and leaves it
+owner-only (``0o700``): the copy carries data the root keeps private, such as
+the ``0o700``/``0o600`` capture spool, and a ``0o755`` staging root under the
+default umask would expose it to other local users.
 ``copy_files`` copies plain files by their POSIX paths relative to the root.
 
-source: issue #731; docs/audits/owned-resources-backup-2026-11-05.md §5
+source: issue #731; docs/audits/owned-resources-backup-2026-11-05.md §5;
+the private modes of ``infrastructure/capture_spool.py`` (ADR-0488)
 """
 
 from __future__ import annotations
@@ -17,6 +21,9 @@ from __future__ import annotations
 import shutil
 from pathlib import Path, PurePosixPath
 from typing import Iterable
+
+# source: infrastructure/capture_spool.py PRIVATE_DIR (ADR-0488)
+PRIVATE_DIR = 0o700
 
 
 class StagingError(OSError):
@@ -32,7 +39,8 @@ def prepare_staging(root: Path, staging: Path) -> None:
         raise StagingError(f"{staging} is not a directory")
     if staging.exists() and any(staging.iterdir()):
         raise StagingError(f"{staging} is not empty")
-    staging.mkdir(parents=True, exist_ok=True)
+    staging.mkdir(mode=PRIVATE_DIR, parents=True, exist_ok=True)
+    staging.chmod(PRIVATE_DIR)  # mkdir's mode is masked; an empty one is reused
 
 
 def copy_files(root: Path, staging: Path, paths: Iterable[str]) -> None:
