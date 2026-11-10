@@ -156,3 +156,43 @@ def test_the_spool_is_staged_before_the_store(tmp_path, monkeypatch):
     assert [f["path"] for f in entries["capture_spool"]["files"]] == [
         ".capture-worker/spool/1.json"
     ]
+
+
+def test_a_spool_file_drained_after_its_listing_is_left_out(tmp_path, monkeypatch):
+    root, staging = tmp_path / "root", tmp_path / "staging"
+    _live_store(root).close()
+    _write(root, ".capture-worker/spool/1.json", b"{}")
+    _write(root, ".capture-worker/spool/2.json", b"{}")
+    real = backup_snapshot_module.scan_resource
+
+    def scan_then_drain(base, relative, kind):
+        records = real(base, relative, kind)
+        if relative == ".capture-worker/spool":
+            (base / relative / "1.json").unlink()  # stored, then deleted
+        return records
+
+    monkeypatch.setattr(backup_snapshot_module, "scan_resource", scan_then_drain)
+    manifest = snapshot_backup(root, staging, "sqlite")
+    entries = {e["name"]: e for e in manifest["entries"]}
+    assert [f["path"] for f in entries["capture_spool"]["files"]] == [
+        ".capture-worker/spool/2.json"
+    ]
+
+
+def test_any_other_file_vanishing_after_its_listing_fails_the_backup(
+    tmp_path, monkeypatch
+):
+    root, staging = tmp_path / "root", tmp_path / "staging"
+    _live_store(root).close()
+    _write(root, "methodology/wiki/adr/1.md", b"page")
+    real = backup_snapshot_module.scan_resource
+
+    def scan_then_delete(base, relative, kind):
+        records = real(base, relative, kind)
+        if relative == "methodology/wiki":
+            (base / relative / "adr" / "1.md").unlink()
+        return records
+
+    monkeypatch.setattr(backup_snapshot_module, "scan_resource", scan_then_delete)
+    with pytest.raises(FileNotFoundError):
+        snapshot_backup(root, staging, "sqlite")

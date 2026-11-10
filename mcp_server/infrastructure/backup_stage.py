@@ -67,11 +67,25 @@ def private_dirs(staging: Path, relative: str) -> Path:
     return current
 
 
-def copy_files(root: Path, staging: Path, paths: Iterable[str]) -> None:
-    """Copy each ``root/path`` to a new ``0o600`` file ``staging/path``."""
+def copy_files(
+    root: Path, staging: Path, paths: Iterable[str], consumed_ok: bool = False
+) -> None:
+    """Copy each ``root/path`` to a new ``0o600`` file ``staging/path``.
+
+    ``consumed_ok`` lets a file that vanished after it was listed be left out;
+    any other missing file is an error.
+    """
     for path in paths:
         relative = PurePosixPath(path)
+        try:
+            source = root.joinpath(*relative.parts).open("rb")
+        except FileNotFoundError:
+            if consumed_ok:
+                continue
+            raise
         target = private_dirs(staging, relative.parent.as_posix()) / relative.name
-        with root.joinpath(*relative.parts).open("rb") as source:
-            with os.fdopen(os.open(target, _CREATE, PRIVATE_FILE_MODE), "wb") as out:
-                shutil.copyfileobj(source, out)
+        with (
+            source,
+            os.fdopen(os.open(target, _CREATE, PRIVATE_FILE_MODE), "wb") as out,
+        ):
+            shutil.copyfileobj(source, out)

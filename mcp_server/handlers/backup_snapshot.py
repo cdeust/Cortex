@@ -7,10 +7,15 @@ writes by a running server during the copy cannot tear it. The manifest is then
 computed on the staging tree and returned.
 
 The SQLite store is copied last. The capture drainer stores a spooled payload
-and then deletes its spool file (``hooks/capture_drain.py``): copied after the
-store, a payload pending when the backup started could be drained in between
-and be in neither copy. Copied before, it is in the staged spool, and also in
-the store if it was drained meanwhile, a replay the write gate absorbs.
+and only then deletes its spool file (``hooks/capture_drain.py``): copied after
+the store, a payload pending when the backup started could be drained in between
+and be in neither copy. Copied before, it is in the staged spool or, when it was
+drained meanwhile, in the store. A spool file that vanishes between its listing
+and its copy was therefore either stored (and is in the later store snapshot)
+or renamed ``*.rejected`` (refused, kept for inspection only); it is left out of
+the staged spool, and only the spool is allowed to lose a file that way. A
+payload in both copies is a replay, delivered at least once like any drainer
+replay; the write gate's exact-duplicate check absorbs only an exact repeat.
 
 The managed PostgreSQL cluster is refused here: a running cluster directory is
 not consistent as copied files, and its stopped copy or logical dump is a later
@@ -42,6 +47,7 @@ from mcp_server.infrastructure.backup_stage import (
 from mcp_server.infrastructure.sqlite_snapshot import snapshot_sqlite
 
 _SQLITE_STORE = "sqlite_store"
+_CAPTURE_SPOOL = "capture_spool"
 
 
 def _stage_sqlite(root: Path, staging: Path, relative: str) -> None:
@@ -58,7 +64,8 @@ def _stage_files(root: Path, staging: Path, spec: ResourceSpec) -> None:
         return
     if spec.kind == "dir":  # an empty directory is still present
         private_dirs(staging, spec.path)
-    copy_files(root, staging, [record[0] for record in records])
+    consumed_ok = spec.name == _CAPTURE_SPOOL  # see the module docstring
+    copy_files(root, staging, [record[0] for record in records], consumed_ok)
 
 
 def snapshot_backup(
