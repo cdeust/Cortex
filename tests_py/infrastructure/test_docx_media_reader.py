@@ -83,3 +83,15 @@ def test_a_member_whose_crc_fails_is_refused(tmp_path):
     p.write_bytes(bytes(raw))
     with pytest.raises(DocumentReadError, match="cannot read word/media/i.png"):
         digest_docx_parts(p, ["word/media/i.png"])
+
+
+def test_a_relationships_part_whose_crc_fails_is_refused(tmp_path):
+    p = tmp_path / "a.docx"
+    with zipfile.ZipFile(p, "w", zipfile.ZIP_STORED) as z:
+        z.writestr(_RELS, b"<Relationships/>")
+    raw = bytearray(p.read_bytes())
+    at = raw.index(_RELS.encode()) + len(_RELS)
+    raw[at] ^= 0xFF  # first stored data byte, after the local header's name
+    p.write_bytes(bytes(raw))
+    with pytest.raises(DocumentReadError, match="cannot read word/_rels"):
+        read_docx_relationships_xml(p)

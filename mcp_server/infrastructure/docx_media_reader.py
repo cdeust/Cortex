@@ -49,7 +49,9 @@ def read_docx_relationships_xml(
                    main part references no other part).
     Raises:        :class:`DocumentReadError` on a missing or corrupt
                    container, a part larger than ``max_bytes`` (the cap the
-                   main part has, ADR-0516), or undecodable bytes.
+                   main part has, ADR-0516), a part whose bytes fail to
+                   decompress or whose CRC does not match, or undecodable
+                   bytes.
 
     source: issue #732; ADR-0516 (cap and UTF-8 rule)
     """
@@ -63,7 +65,12 @@ def read_docx_relationships_xml(
                 f"{path} relationships part is {info.file_size} bytes, "
                 f"exceeds {max_bytes}-byte cap"
             )
-        raw = archive.read(info)
+        try:
+            raw = archive.read(info)
+        except (zipfile.BadZipFile, OSError, EOFError) as exc:
+            raise DocumentReadError(
+                f"cannot read {info.filename} in {path}: {exc}"
+            ) from exc
     try:
         return raw.decode("utf-8")
     except UnicodeDecodeError as exc:
