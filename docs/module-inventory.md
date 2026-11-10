@@ -193,6 +193,7 @@ not exist." The registered tools are listed in `docs/mcp-tools.md`.
 - `document_model.py` — Typed model for ingested documents (`ParsedDocument`/`DocumentSection`/`DocumentTable`/`DocumentProvenance`) — the shared normalization seam every adapter and the live-Confluence REST connector (enterprise-backlog#28) target
 - `document_images.py` — Pure image inventory shared by the document parsers (one entry per image-naming element, linear in the input; issue #732)
 - `docx_parser.py` — Pure OOXML WordprocessingML parser (`word/document.xml` string → `ParsedDocument`); stdlib `xml.etree` only
+- `docx_relationships.py` — Pure parser of `word/_rels/document.xml.rels`: internal relationship id → package part name (OPC Annex A.3 resolution), so an image's `r:embed` names the member holding its bytes (issue #732)
 - `confluence_parser.py` — Pure Confluence storage-format XHTML parser (entities + ac:/ri: namespaces pre-resolved) → `ParsedDocument`
 - `document_normalizer.py` — `ParsedDocument` + provenance → wiki page markdown + memory payloads (skipped-image/empty notices, provenance stamping)
 
@@ -283,6 +284,7 @@ Run the measurement command in the header to get a current file listing.
 - `wiki_pages_listing.py` — `append_section`/`list_pages`/`next_adr_number`
 - `wiki_reindex_io.py` — Best-effort `.generated/INDEX.md`/`README.md` rebuild + superseded-page cleanup after a wiki write
 - `document_reader.py` — Reads a .docx (unzips `word/document.xml`) or a Confluence XHTML export off disk into the string its pure parser consumes; raises `DocumentReadError` on a bad container/decoding (issue #192)
+- `docx_media_reader.py` — Reads a .docx's `word/_rels/document.xml.rels` text and streams the named media parts through SHA-256 (`sha256:<hex>`, size) without holding them in memory (issue #732)
 - `workflow_graph_source_ast.py` — `WorkflowGraphASTSource`, the AST-layer workflow-graph loader (ADR-0046); composition point over the three modules below (issue #275 split — was one 1029-line file)
 - `ap_sync_loop.py` — `_SyncLoop`, the cross-loop sync/drain primitive pinning one event loop across an `APBridge` caller's lifetime (issue #258: drains cancelled tasks before stopping the loop, closing the "Task was destroyed but it is pending!" GC-warning race)
 - `workflow_graph_ast_symbols.py` — AST *symbol* loading: the AP label set, the symbol-type mapping, and the per-label batched query + WHERE-clause construction

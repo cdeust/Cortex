@@ -18,6 +18,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `ingest_document` names the bytes behind each embedded docx image (#732, slice 2).
+  An attachment whose relationship id resolves, through `word/_rels/document.xml.rels`,
+  to a part of the package now carries that `part`, its `digest` (`sha256:<hex>`) and
+  its `size`. A linked (external) image, a reference to an absent part and a
+  Confluence image keep them empty. The bytes are identified, not stored: `state`
+  stays `unsupported`.
 - A versioned backup manifest (`cortex-backup-manifest`, version 1) names the class A
   resources of an install by backend (SQLite store, or managed cluster and its
   password marked secret; wiki, artifacts, profiles, session log, MCP connections,
