@@ -121,3 +121,74 @@ def test_a_long_read_response_is_copied_whole_into_an_artifact(captured):
     assert files[0].read_text(encoding="utf-8") == contents
     assert "Alice Martin" not in captured[-1]
     assert str(files[0]) in captured[-1]
+
+
+_BASH = {"command": "grep 'Alice Martin' a.csv"}
+
+
+def _capture_bash(captured, response: dict) -> bool:
+    before = len(captured)
+    hook.process_event(_event("Bash", _BASH, response))
+    return len(captured) > before and "Alice Martin" in captured[-1]
+
+
+def test_a_bash_call_on_one_stream_is_kept_from_the_stated_length(captured):
+    assert "A call that prints nothing is always dropped" in _paragraph()
+    kept = _number_before("characters of output; two streams")
+    for stream in ("stdout", "stderr"):
+        assert not _capture_bash(captured, {stream: "x" * (kept - 1)})
+        assert _capture_bash(captured, {stream: "x" * kept})
+    assert not _capture_bash(captured, {"stdout": "  ", "stderr": ""})
+    assert not _capture_bash(captured, {"stdout": "", "interrupted": True})
+
+
+def test_two_streams_or_an_interruption_are_kept_with_less_output(captured):
+    assert "two streams or an interrupted marker can reach 50" in _paragraph()
+    assert _capture_bash(captured, {"stdout": "ok", "stderr": "warn: x"})
+    assert _capture_bash(captured, {"stdout": "12345678", "interrupted": True})
+
+
+def test_a_one_character_edit_is_captured_with_its_path(captured):
+    assert "so an edit is almost always" in _paragraph()
+    response = {"filePath": "/p/clients.csv", "oldString": "x", "newString": "y"}
+    hook.process_event(_event("Edit", {"file_path": "/p/clients.csv"}, response))
+    assert "/p/clients.csv" in captured[-1]
+
+
+def test_an_edit_keeps_before_and_after_and_not_the_previous_file(captured):
+    assert "An Edit response is stored as its before and after strings" in _paragraph()
+    response = {
+        "filePath": "/p/clients.csv",
+        "oldString": "Alice Martin",
+        "newString": "Alice Dupont",
+        "originalFile": "Bob Durand, 3 rue Haute, asthmatic\n" * 3,
+    }
+    hook.process_event(_event("Edit", {"file_path": "/p/clients.csv"}, response))
+    assert "Alice Martin" in captured[-1] and "Alice Dupont" in captured[-1]
+    assert "Bob Durand" not in captured[-1]
+
+
+_WHOLE_JSON_RESPONSES = {
+    "Write": {"type": "update", "content": "Alice Martin, 12 rue des Lilas"},
+    "MultiEdit": {"edits": [{"old_string": "Alice", "new_string": "Alice Martin"}]},
+    "NotebookEdit": {"new_source": "Alice Martin, 12 rue des Lilas", "cell_id": "c1"},
+}
+
+
+@pytest.mark.parametrize("tool", sorted(_WHOLE_JSON_RESPONSES))
+def test_a_write_multiedit_or_notebookedit_response_is_stored_whole(captured, tool):
+    assert "NotebookEdit response is stored as its whole JSON" in _paragraph()
+    response = {
+        "filePath": "/p/clients.csv",
+        "originalFile": "Bob Durand, 3 rue Haute, asthmatic",
+        **_WHOLE_JSON_RESPONSES[tool],
+    }
+    hook.process_event(_event(tool, {"file_path": "/p/clients.csv"}, response))
+    assert "Alice Martin" in captured[-1] and "Bob Durand" in captured[-1]
+
+
+@pytest.mark.parametrize("tool", ["Task", "TodoWrite", "mcp__cortex__recall"])
+def test_a_tool_in_no_list_is_never_captured(captured, tool):
+    assert "A tool in none of these three lists" in _paragraph()
+    hook.process_event(_event(tool, {}, "Alice Martin, diabetic. " * 200))
+    assert captured == []
