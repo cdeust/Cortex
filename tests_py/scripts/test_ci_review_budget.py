@@ -268,6 +268,18 @@ class WorkflowWiringTests(unittest.TestCase):
         ):
             self.assertIn(needle, prompt)
 
+    def test_prompt_puts_the_run_link_in_every_comment_that_carries_the_verdict(self):
+        # ADR-1130: the resolver binds a verdict to a head through the run its comment
+        # links. A review posted with `gh pr comment` carried the verdict and no link.
+        prompt = self.action()["with"]["prompt"]
+        link = (
+            '"[View job run](${{ github.server_url }}/${{ github.repository }}'
+            '/actions/runs/${{ github.run_id }})"'
+        )
+        self.assertIn(link, prompt)
+        self.assertIn("in every comment that carries the verdict line", prompt)
+        self.assertLess(prompt.index("End with exactly one line"), prompt.index(link))
+
     def test_cap_is_three(self):
         self.assertEqual(budget.CAP, 3)
 

@@ -204,6 +204,7 @@ def _summarize_cycle(
         usd_spent=budget.usd_spent,
         wall_clock_ms=wall_ms,
         skipped_budget=skipped_budget,
+        unpriced_calls=budget.unpriced_calls,
     )
 
 

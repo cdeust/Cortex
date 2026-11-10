@@ -530,6 +530,13 @@ jobs:
               }
 
 
+          # A merge that waits is not a failure of main: the review or the Pipeline of
+          # this head is not there yet, or a newer head has its own run. The run that
+          # brings the missing part wakes the resolver again (ADR-1127), so these end
+          # green with a notice instead of a red run on the default branch (ADR-1128).
+          WAITING = ("merge held:", "PR head advanced after testing")
+
+
           def main():
               try:
                   require(
@@ -551,8 +558,14 @@ jobs:
                       f"PR #{result['pr_number']}: {result['reason']}; SHA {result['tested_sha']}"
                   )
                   return 0
+              except PostMergeError as exc:
+                  if str(exc).startswith(WAITING):
+                      # No output is written: no downstream job runs, the run is green.
+                      print(f"::notice title=Merge not made::{exc}")
+                      return 0
+                  print(f"post-merge: {exc}", file=sys.stderr)
+                  return 1
               except (
-                  PostMergeError,
                   OSError,
                   ValueError,
                   KeyError,
@@ -577,6 +590,7 @@ jobs:
     if: >-
       !cancelled() && github.event_name == 'workflow_run'
       && needs.resolve.result == 'success'
+      && needs.resolve.outputs.pr_number != ''
     runs-on: ubuntu-latest
     timeout-minutes: 5 # source: operational cap; a few API calls per merged PR.
     permissions:

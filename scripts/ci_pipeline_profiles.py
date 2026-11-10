@@ -56,7 +56,8 @@ def conditions(post_merge: bool) -> dict[str, str]:
             tag="!cancelled() && github.event_name == 'workflow_run'",
             **{
                 "close-issues": "!cancelled() && github.event_name == 'workflow_run' "
-                "&& needs.resolve.result == 'success'"
+                "&& needs.resolve.result == 'success' "
+                "&& needs.resolve.outputs.pr_number != ''"
             },
         )
     else:

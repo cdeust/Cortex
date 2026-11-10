@@ -194,6 +194,7 @@ async def run_wiki_maintenance(
                 "usd_spent": cycle.usd_spent,
                 "wall_clock_ms": cycle.wall_clock_ms,
                 "skipped_budget": cycle.skipped_budget,
+                "unpriced_calls": cycle.unpriced_calls,
             }
         except Exception as exc:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
             logger.debug(

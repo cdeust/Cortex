@@ -15,6 +15,7 @@ from mcp_server.core.reranker_model import (
     _model_exists,
     _model_path,
     _offline_requested,
+    model_identity,
     model_sha256,
     reranker_cache_dir,
 )
@@ -41,6 +42,7 @@ __all__ = [
     "_offline_requested",
     "ensure_reranker_loaded",
     "get_raw_ce_score",
+    "model_identity",
     "model_sha256",
     "rerank_results",
     "reranker_cache_dir",
