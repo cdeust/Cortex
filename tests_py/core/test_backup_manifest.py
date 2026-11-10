@@ -215,3 +215,29 @@ def test_size_zero_is_valid():
         "sqlite", _sqlite_scan(wiki=[("methodology/wiki/a.md", DIGEST, 0)]), "t"
     )
     assert entry["entries"][2]["files"][0]["size"] == 0
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "methodology/wiki/../../outside.txt",
+        "methodology/wiki/./a.md",
+        "methodology/wiki//a.md",
+        "methodology/wiki/a.md/",
+        "/methodology/wiki/a.md",
+        "methodology/wiki/sub\\..\\..\\x",
+        "methodology/wiki/..",
+    ],
+)
+def test_a_path_that_is_not_canonical_is_refused(path):
+    with pytest.raises(bm.ManifestError, match=r"is not a canonical relative path$"):
+        bm.build_manifest("sqlite", _sqlite_scan(wiki=[(path, DIGEST, 1)]), "t")
+
+
+def test_dots_inside_a_name_are_canonical():
+    records = [
+        ("methodology/wiki/..a.md", DIGEST, 1),
+        ("methodology/wiki/a..b/.c", DIGEST, 1),
+    ]
+    entry = bm.build_manifest("sqlite", _sqlite_scan(wiki=records), "t")["entries"][2]
+    assert [f["path"] for f in entry["files"]] == [r[0] for r in records]

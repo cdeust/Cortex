@@ -117,6 +117,16 @@ def resources_for(backend: str) -> tuple[ResourceSpec, ...]:
     return tuple(spec for spec in RESOURCES if backend in spec.backends)
 
 
+def _is_canonical(path: str) -> bool:
+    """A relative POSIX path with no empty, ``.`` or ``..`` component and no ``\\``.
+
+    The prefix check below is only containment for such a path: a restore that
+    joins ``methodology/wiki/../../x`` to the root would write outside it.
+    """
+    parts = path.split("/")
+    return "\\" not in path and not any(p in ("", ".", "..") for p in parts)
+
+
 def _checked_files(
     spec: ResourceSpec, records: Sequence[FileRecord]
 ) -> list[dict[str, Any]]:
@@ -125,6 +135,8 @@ def _checked_files(
         raise ManifestError(f"{spec.path} is a file resource: one record, its own path")
     files = []
     for path, sha256, size in sorted(records):
+        if not _is_canonical(path):
+            raise ManifestError(f"{path!r} is not a canonical relative path")
         if spec.kind == "dir" and not path.startswith(spec.path + "/"):
             raise ManifestError(f"{path} is not inside {spec.path}")
         if not _SHA256_HEX.fullmatch(sha256) or size < 0:

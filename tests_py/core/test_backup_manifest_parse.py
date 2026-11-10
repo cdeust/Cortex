@@ -154,3 +154,14 @@ def test_parse_refuses_a_required_entry_marked_absent():
 def test_parse_accepts_absent_and_present_entries_built_by_the_table():
     text = _entry_text("wiki")
     assert bm.parse_manifest(text) == json.loads(text)
+
+
+def test_parse_refuses_a_parent_traversal_in_a_file_path():
+    text = _entry_text(
+        "wiki",
+        files=[
+            {"path": "methodology/wiki/../../outside.txt", "sha256": DIGEST, "size": 1}
+        ],
+    )
+    with pytest.raises(bm.ManifestError, match=r"is not a canonical relative path$"):
+        bm.parse_manifest(text)
