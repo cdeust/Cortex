@@ -165,6 +165,7 @@ not exist." The registered tools are listed in `docs/mcp-tools.md`.
 - `reranker.py` — FlashRank ONNX cross-encoder reranking: lifecycle singleton + rerank entrypoints (client-side post-PG)
 - `reranker_model.py` — FlashRank model identity, durable cache_dir, offline-fetch gate, `RerankerStatus`, weights sha256
 - `reranker_identity.py` — Pure classification of the on-disk weights sha256 against the pinned digest of the published results (`absent`/`verified`/`mismatch`, #734)
+- `embedding_weights_identity.py` — Pure classification of the cached embedding weights sha256 against the digest their Hugging Face blob is named by (`absent`/`unverifiable`/`verified`/`mismatch`, #734)
 - `reranker_scoring.py` — Pure score-blending math: confidence gate, adaptive alpha, WRRF/CE blend
 - `scoring.py` — BM25, n-gram, keyword scoring (reference; PG does this server-side)
 - `spreading_activation.py` — Collins & Loftus 1975 semantic priming over entity graph
@@ -274,6 +275,7 @@ Run the measurement command in the header to get a current file listing.
 - `managed_pg_protocol.py` — Stdlib SCRAM-SHA-256 handshake proving the server holds the cluster's password and accepts connections (ADR-1114)
 - `memory_store.py` — Memory store abstraction
 - `embedding_engine.py` — Vector embeddings (384-dim, sentence-transformers)
+- `embedding_weights_cache.py` — Locates the pinned snapshot's `model.safetensors` in the hub cache the engine loads from, reads its blob link and sha256 (#734)
 - `artifact_store.py` — Content-addressed raw-output artifacts (`~/.claude/methodology/artifacts/<yyyy-mm>/<sha256[:16]>.md`) backing gist+pointer memories
 - `agent_config.py` — Agent configuration and topic scoping
 - `wiki_schema_reader.py` — Filesystem adapter for `shared/wiki_schema_loader.py`'s data model/parsers; walks `wiki/_kinds|_rules|_views|_triggers/` and builds a `WikiRegistry` (issue #126 port-and-adapter split)
