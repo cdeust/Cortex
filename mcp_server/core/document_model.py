@@ -60,12 +60,22 @@ class DocumentAttachment:
     an index, not the heading text, so a long heading is not copied once per
     image into the result. ``state`` says what ingestion did with it.
 
+    ``part`` is the package member that holds the image's bytes (a docx
+    ``word/media/...`` part), ``digest`` their ``sha256:<hex>`` and ``size``
+    their length: the identity of the bytes, not a copy of them. All three
+    stay empty (``""``, ``""``, ``None``) when the reference resolves to no
+    member: no reference, a linked (external) image, a Confluence attachment
+    (stored outside the export), or a relationship naming an absent part.
+
     source: issue #732"""
 
     ordinal: int
     reference: str
     section_index: int
     state: str = ATTACHMENT_UNSUPPORTED
+    part: str = ""
+    digest: str = ""
+    size: int | None = None
 
 
 @dataclass

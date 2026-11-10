@@ -18,6 +18,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `ingest_document` names the bytes behind each embedded docx image (#732, slice 2).
+  An attachment whose relationship id resolves, through `word/_rels/document.xml.rels`,
+  to a part of the package now carries that `part`, its `digest` (`sha256:<hex>`) and
+  its `size`. A linked (external) image, a reference to an absent part and a
+  Confluence image keep them empty. The bytes are identified, not stored: `state`
+  stays `unsupported`.
 - `scripts/native_receipt_artifact.py` prints the `artifact` object of a
   `cortex-native-receipt/1` receipt for the `mcp_server` the running interpreter
   imports (#730). It reads the identity `cortex doctor` computes, now as data
