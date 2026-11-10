@@ -3675,6 +3675,10 @@
     "ADR-1126": {
       "mirror": "ADR-1126-a-dependabot-minor-or-patch-update-of-the-dependency-files-merges-without-a-review.md",
       "path": "adr/cortex/1126-a-dependabot-minor-or-patch-update-of-the-dependency-files-merges-without-a-review.md"
+    },
+    "ADR-1127": {
+      "mirror": "ADR-1127-the-review-s-completion-wakes-the-resolver-as-the-pipeline-s-does.md",
+      "path": "adr/cortex/1127-the-review-s-completion-wakes-the-resolver-as-the-pipeline-s-does.md"
     }
   },
   "project": "cortex",
