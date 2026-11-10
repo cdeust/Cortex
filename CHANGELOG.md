@@ -123,6 +123,9 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Claude reviews of one pull request are admitted one at a time, so pushes whose
+  review runs overlap can no longer each count as the same round of the three
+  (ADR-1119).
 - The resolver is also woken by the end of the Claude review, not only by the end
   of the Pipeline, so a pull request merges whichever finishes first (ADR-1127,
   amends ADR-1121).
