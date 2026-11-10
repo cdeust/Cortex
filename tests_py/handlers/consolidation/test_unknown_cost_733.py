@@ -18,6 +18,11 @@ import pytest
 import mcp_server.handlers.consolidation.distill_drain as dd
 import mcp_server.handlers.consolidation.headless_authoring as ha
 from mcp_server.handlers.consolidation.claude_invoke import _parse_invoke_response
+from mcp_server.handlers.consolidation.cycle_types import (
+    CycleBudget,
+    cycle_budget_charge,
+    cycle_budget_exhausted,
+)
 
 
 @pytest.mark.parametrize(
@@ -47,13 +52,15 @@ def test_reported_cost_is_read() -> None:
 
 
 def test_unpriced_charge_is_counted_not_summed() -> None:
-    budget = ha.CycleBudget(deadline=time.monotonic() + 60.0, usd_cap=1.0)
-    ha.cycle_budget_charge(budget, None)
-    ha.cycle_budget_charge(budget, 0.25)
-    ha.cycle_budget_charge(budget, None)
+    # Imported from cycle_types itself: the mutation gate selects a module's
+    # tests by its dotted import, not through headless_authoring's re-export.
+    budget = CycleBudget(deadline=time.monotonic() + 60.0, usd_cap=1.0)
+    cycle_budget_charge(budget, None)
+    cycle_budget_charge(budget, 0.25)
+    cycle_budget_charge(budget, None)
     assert budget.usd_spent == pytest.approx(0.25)
     assert budget.unpriced_calls == 2
-    assert not ha.cycle_budget_exhausted(budget)
+    assert not cycle_budget_exhausted(budget)
 
 
 def test_distill_summary_reports_unpriced_calls(
