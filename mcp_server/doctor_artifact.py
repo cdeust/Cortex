@@ -39,13 +39,13 @@ import base64
 import csv
 import hashlib
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from importlib import metadata
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
 import mcp_server
-from mcp_server.doctor_bytecode import foreign_bytecode
+from mcp_server.doctor_bytecode import clear_caches_fix, foreign_bytecode
 from mcp_server.shared.subprocess_safe import run_with_hard_timeout
 
 NAME = "Runtime artifact identity"  # source: issue #729 (title: artifact identity)
@@ -181,6 +181,15 @@ def _wheel(dist: Any, rows: list, root: Path) -> Identity:
 
 
 def _source_tree(root: Path, version: str | None) -> Identity:
+    found = _tree_identity(root, version)
+    # A cache imported in place of a file runs code the digest does not name.
+    cached = tuple(foreign_bytecode(root, {path for path, _ in found.members}))
+    if not cached:
+        return found
+    return replace(found, altered=cached, fix=found.fix or clear_caches_fix(root))
+
+
+def _tree_identity(root: Path, version: str | None) -> Identity:
     if not (root.parent / ".git").exists():
         # No repository to ask: the digest is the tree's only identity.
         members = tuple(tree_members(root))
@@ -263,6 +272,10 @@ def _detail(found: Identity) -> str:
         f"{found.version or 'unknown'}), {count} {PACKAGE} files, digest "
         f"{found.digest}; source evidence, not a distributed artifact"
     )
+    if found.altered:
+        detail += (
+            f"; {len(found.altered)} caches run other code, first {found.altered[0]}"
+        )
     return detail + (f"; {found.unknown}" if found.unknown else "")
 
 

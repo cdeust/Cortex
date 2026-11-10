@@ -51,9 +51,12 @@ def receipt_artifact(found: Identity) -> dict:
     if found.unknown:
         raise UnstatedIdentityError(found.unknown)
     if found.altered:
+        what = "the installed wheel differs from its RECORD"
+        if found.kind != "wheel":
+            what = "cached bytecode runs other code than the source tree"
         raise UnstatedIdentityError(
-            f"the installed wheel differs from its RECORD ({found.altered[0]} "
-            "first): its digest does not name the running files; reinstall it"
+            f"{what} ({found.altered[0]} first): its digest does not name the "
+            f"running files; {found.fix}"
         )
     if found.version is None:
         raise UnstatedIdentityError("no installed hypermnesia-mcp names the version")

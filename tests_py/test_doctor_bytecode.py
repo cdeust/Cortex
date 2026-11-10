@@ -149,3 +149,10 @@ def test_another_interpreters_cache_and_other_names_are_skipped(tmp_path):
     # A forged cache under another tag is not this interpreter's to import.
     _forge(package / "a.py").rename(cache / "a.other-99.pyc")
     assert _foreign(package) == []
+
+
+def test_the_fix_names_the_caches_to_delete(tmp_path):
+    assert doctor_bytecode.clear_caches_fix(tmp_path) == (
+        f"Delete the `__pycache__` directories under {tmp_path}: Python rebuilds "
+        "them from the sources at the next import"
+    )

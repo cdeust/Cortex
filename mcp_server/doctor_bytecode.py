@@ -95,6 +95,14 @@ def _runs_other_code(pyc: Path, source: Path, level: int) -> bool:
     return cached != built
 
 
+def clear_caches_fix(root: Path) -> str:
+    """The repair for a source tree whose caches hold other code."""
+    return (
+        f"Delete the `__pycache__` directories under {root}: Python rebuilds them "
+        "from the sources at the next import"
+    )
+
+
 def foreign_bytecode(root: Path, members: set[str]) -> list[str]:
     """The caches under the package ``root`` that this interpreter would import
     in place of a hashed member of ``members`` and that hold other code. A cache

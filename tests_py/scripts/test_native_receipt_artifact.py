@@ -144,7 +144,10 @@ def test_a_tampered_wheel_is_refused(monkeypatch, tmp_path):
     _imported_from(monkeypatch, package, dist)
     found = doctor_artifact.identify()
     assert (found.modified, found.altered) == (True, ("mcp_server/a.py",))
-    with pytest.raises(producer.UnstatedIdentityError, match="reinstall it"):
+    with pytest.raises(
+        producer.UnstatedIdentityError,
+        match="differs from its RECORD .* Reinstall the runtime",
+    ):
         producer.receipt_artifact(found)
 
 
@@ -159,4 +162,14 @@ def test_a_checkout_without_an_installed_version_is_refused(monkeypatch, tmp_pat
         False,
     )
     with pytest.raises(producer.UnstatedIdentityError, match="names the version"):
+        producer.receipt_artifact(found)
+
+
+def test_a_source_tree_running_foreign_bytecode_is_refused():
+    found = _wheel(kind="source-tree", altered=("mcp_server/__pycache__/a.pyc",),
+                   fix="Delete the caches")  # fmt: skip
+    with pytest.raises(
+        producer.UnstatedIdentityError,
+        match="cached bytecode runs other code .* Delete the caches",
+    ):
         producer.receipt_artifact(found)

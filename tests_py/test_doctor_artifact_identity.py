@@ -8,7 +8,7 @@
 import py_compile
 import sys
 
-from mcp_server import doctor_artifact
+from mcp_server import doctor, doctor_artifact, doctor_bytecode
 from mcp_server.doctor_artifact import Identity
 from tests_py.test_doctor_bytecode import _forge
 from tests_py.test_doctor_artifact import (
@@ -145,3 +145,38 @@ def test_unrecorded_names_files_relative_to_the_package(tmp_path):
     (package / "b.so").write_bytes(b"")
     listed = {"mcp_server/a.py"}
     assert doctor_artifact.unrecorded(package, listed) == ["mcp_server/b.so"]
+
+
+def test_a_source_tree_running_foreign_bytecode_is_altered(monkeypatch, tmp_path):
+    # Codex review on #957: an editable install imports its caches too.
+    package = _source_package(tmp_path, git=False)
+    _without_distribution(monkeypatch, package)
+    cfile = _forge(package / "a.py")
+    found = doctor_artifact.identify()
+    name = f"mcp_server/__pycache__/{cfile.name}"
+    assert (found.kind, found.altered) == ("source-tree", (name,))
+    assert found.fix == doctor_bytecode.clear_caches_fix(package.resolve())
+    check = doctor_artifact.artifact_identity(doctor.Check)
+    assert not check.ok
+    assert check.detail.endswith(f"; 1 caches run other code, first {name}")
+
+
+def test_a_checkout_keeps_its_git_failure_fix_with_foreign_bytecode(
+    monkeypatch, tmp_path
+):
+    package = _source_package(tmp_path)
+    _without_distribution(monkeypatch, package)
+    _git_replies(monkeypatch, "abc123", None)
+    _forge(package / "a.py")
+    found = doctor_artifact.identify()
+    assert len(found.altered) == 1
+    assert found.fix.startswith(f"Run `git -C {package.parent} status`")
+    assert found.unknown == "revision state unknown: `git status` failed"
+
+
+def test_a_source_tree_with_its_own_caches_is_unaltered(monkeypatch, tmp_path):
+    package = _source_package(tmp_path, git=False)
+    _without_distribution(monkeypatch, package)
+    py_compile.compile(str(package / "a.py"), doraise=True)
+    found = doctor_artifact.identify()
+    assert (found.altered, found.fix) == ((), None)
