@@ -63,7 +63,7 @@ def _stream_member(
 
     source: issue #732 (Codex review of PR #961: CRC, then deflate errors)"""
     try:
-        with archive.open(name) as member:
+        with archive.open(name, mode="r") as member:
             while chunk := member.read(_CHUNK_BYTES):
                 sink(chunk)
     except _MEMBER_READ_ERRORS as exc:
