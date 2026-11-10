@@ -211,6 +211,8 @@ Run the measurement command in the header to get a current file listing.
 
 ## infrastructure/ — All I/O
 - `backup_scan.py` — Reads one backup resource under the Cortex root and digests every file (SHA-256, size); refuses symlinks and special files (issue #731)
+- `sqlite_snapshot.py` — One consistent copy of a live SQLite store by the online backup API in one step (WAL included), sealed to `journal_mode=DELETE` and `integrity_check`ed; refuses a missing or linked source and an existing target (issue #731)
+- `backup_stage.py` — The staging tree a backup is copied into: refused when non-empty or inside the Cortex root; plain file copy by relative POSIX path (issue #731)
 
 - `config.py` — Centralized path constants via pathlib. The root (`CLAUDE_DIR`,
   default `~/.claude`) is overridable via `CORTEX_CLAUDE_DIR`; every other

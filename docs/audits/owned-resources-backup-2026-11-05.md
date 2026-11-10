@@ -112,7 +112,9 @@ not need it). Class **X** = not Cortex's to back up.
    (delivered: `mcp_server/core/backup_manifest.py`, `infrastructure/backup_scan.py`,
    `handlers/backup_manifest.py`).
 2. A consistent snapshot of each store under concurrent writes (SQLite online
-   backup; managed PostgreSQL stopped copy or logical dump).
+   backup; managed PostgreSQL stopped copy or logical dump). SQLite part
+   delivered: `infrastructure/sqlite_snapshot.py`, `infrastructure/backup_stage.py`,
+   `handlers/backup_snapshot.py`; the managed cluster is still refused.
 3. Restore into a fresh `CORTEX_CLAUDE_DIR`, then verify integrity and a known
    memory and source query.
 4. Refusal of an incomplete or incompatible archive, leaving the target intact.

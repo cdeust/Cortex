@@ -95,6 +95,19 @@ _AUDITED = {
         1,
         "moves the sha256-verified binary into place, no user content",
     ),
+    ("infrastructure/backup_stage.py", "os.open-write"): (
+        1,
+        "issue #731: creates each staged backup file 0600 with O_EXCL|O_NOFOLLOW; "
+        "its bytes are a copy of class A files already written through the gate",
+    ),
+    ("infrastructure/backup_stage.py", "open-write"): (
+        1,
+        "issue #731: os.fdopen of that same 0600 descriptor, no other file",
+    ),
+    ("infrastructure/backup_stage.py", "shutil-copy"): (
+        1,
+        "issue #731: copyfileobj into that 0600 file, the same already-gated bytes",
+    ),
     ("infrastructure/profile_store.py", "shutil-copy"): (
         1,
         "renames the existing private profiles file to its legacy backup",
