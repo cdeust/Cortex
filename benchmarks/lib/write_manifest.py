@@ -25,6 +25,7 @@ _REPO_ROOT = str(Path(__file__).resolve().parents[2])
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 from benchmarks.lib.disk_space_snapshot import disk_space_snapshot  # noqa: E402
+from benchmarks.lib.embedding_identity import embedding_manifest_fields  # noqa: E402
 from benchmarks.lib.machine_load_snapshot import machine_load_snapshot  # noqa: E402
 
 _START_SNAPSHOT_NAME = "START_SNAPSHOT.json"
@@ -74,22 +75,6 @@ def ver(pkg: str) -> str:
         return "absent"
 
 
-def embedding_revision() -> str:
-    """Exact model revision this run's EmbeddingEngine loaded.
-
-    source: ADR-0091"""
-    try:
-        # noqa: PLC0415 — ImportError-probe boundary: the except arm IS the
-        # degraded mode ("unresolved" in the manifest).
-        from mcp_server.infrastructure.embedding_engine import (  # noqa: PLC0415
-            get_embedding_engine,
-        )
-
-        return get_embedding_engine().revision
-    except Exception:  # noqa: BLE001 — signal is the recorded "unresolved" value
-        return "unresolved"
-
-
 def reranker_fields() -> dict:
     """Load state + weights sha256 of the reranker, as this run observed it.
 
@@ -100,20 +85,23 @@ def reranker_fields() -> dict:
         import benchmarks.lib._composition_root_wiring  # noqa: PLC0415,F401 — source: issue #560
         from mcp_server.core.reranker import (  # noqa: PLC0415
             ensure_reranker_loaded,
-            model_sha256,
+            model_identity,
         )
 
         status = ensure_reranker_loaded()
+        identity = model_identity()
         return {
             "reranker_active": status.state == "loaded",
             "reranker_state": status.state,
-            "reranker_model_sha256": model_sha256(),
+            "reranker_model_sha256": identity.sha256,
+            "reranker_model_identity": identity.state,
         }
     except Exception:  # noqa: BLE001 — signal is the recorded reranker_state
         return {
             "reranker_active": False,
             "reranker_state": "unresolved",
             "reranker_model_sha256": None,
+            "reranker_model_identity": "unresolved",
         }
 
 
@@ -133,7 +121,7 @@ def _environment_fields() -> dict:
                 "psycopg-pool",
             )
         },
-        "embedding_model_revision": embedding_revision(),
+        **embedding_manifest_fields(),
         **reranker_fields(),
     }
 

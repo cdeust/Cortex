@@ -3679,6 +3679,10 @@
     "ADR-1127": {
       "mirror": "ADR-1127-the-review-s-completion-wakes-the-resolver-as-the-pipeline-s-does.md",
       "path": "adr/cortex/1127-the-review-s-completion-wakes-the-resolver-as-the-pipeline-s-does.md"
+    },
+    "ADR-1128": {
+      "mirror": "ADR-1128-a-merge-that-waits-ends-the-resolver-green-not-red.md",
+      "path": "adr/cortex/1128-a-merge-that-waits-ends-the-resolver-green-not-red.md"
     }
   },
   "project": "cortex",

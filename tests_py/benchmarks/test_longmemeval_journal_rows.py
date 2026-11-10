@@ -21,12 +21,20 @@ pytest.importorskip("psycopg")
 from benchmarks.lib.query_log import QueryLog  # noqa: E402
 
 
+class _FallbackEngine:
+    """The engine identity ``record_embedding_identity`` reads (#734)."""
+
+    mode, model_name, revision = "fallback", "fixture", None
+    model_state = type("State", (), {"name": "PACKAGE_ABSENT"})()
+
+
 class FakeDB:
     """Ranks the haystack sessions in a fixed order of session id."""
 
     def __init__(self, require_reranker: bool = True) -> None:
         self.order: list[str] = []
         self.ids: dict[str, int] = {}
+        self.embedding_engine = _FallbackEngine()
 
     def __enter__(self) -> FakeDB:
         return self

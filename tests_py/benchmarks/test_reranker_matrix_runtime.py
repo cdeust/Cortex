@@ -176,20 +176,20 @@ def test_observed_reranker_failure_cannot_become_a_score():
     assert calls == [("reranker.rerank_call", error)]
 
 
-def test_matrix_rejects_mixed_sql_or_gate_inputs():
-    from copy import deepcopy
-    from benchmarks.reranker_matrix.matrix import consistent_inputs
-
+def _matrix_item(**manifest):
     item = {
         "complete_artifacts": True,
         "results": {
             "MANIFEST.json": {
                 "git_sha": "sha",
                 "longmemeval_dataset_sha256": "data",
+                "embedding_mode": "neural",
+                "embedding_model_state": "LOADED",
                 "embedding_model_revision": "emb",
                 "pg_image": "pg",
                 "packages": {},
                 "python": "3.12",
+                **manifest,
             },
             "reranker-cell.json": {"code_sha256": {"gate": "same"}, "packages": {}},
         },
@@ -200,12 +200,37 @@ def test_matrix_rejects_mixed_sql_or_gate_inputs():
             "beam-100K.reranker-cell.json": {"datasets": {"beam": {"sha256": "same"}}},
         }
     )
+    return item
+
+
+def test_matrix_rejects_mixed_sql_or_gate_inputs():
+    from copy import deepcopy
+    from benchmarks.reranker_matrix.matrix import consistent_inputs
+
+    item = _matrix_item()
     results = {"baseline": item, "candidate": deepcopy(item)}
     assert consistent_inputs(results)
     results["candidate"]["results"]["reranker-cell.json"]["code_sha256"]["gate"] = (
         "changed"
     )
     assert not consistent_inputs(results)
+
+
+def test_matrix_embedding_identity_of_fallback_and_mixed_cells():
+    from benchmarks.reranker_matrix.matrix import consistent_inputs
+
+    # #734: a fallback cell records no revision; that is a fact, not a gap.
+    fallback = {
+        "embedding_mode": "fallback",
+        "embedding_model_state": "PACKAGE_ABSENT",
+        "embedding_model_revision": None,
+    }
+    both = {"a": _matrix_item(**fallback), "b": _matrix_item(**fallback)}
+    assert consistent_inputs(both)
+    assert not consistent_inputs({"a": _matrix_item(), "b": _matrix_item(**fallback)})
+    loaded_without_pin = _matrix_item(embedding_model_revision=None)
+    assert not consistent_inputs({"a": loaded_without_pin})
+    assert not consistent_inputs({"a": _matrix_item(embedding_mode="unresolved")})
 
 
 def test_loaded_corpus_fingerprint_preserves_rows_and_detects_data_change():
