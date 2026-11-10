@@ -13,6 +13,20 @@ from mcp_server.infrastructure.pg_scope_clause import pg_scope_predicate
 from mcp_server.infrastructure.sqlite_scope_clause import directory_scope_clause
 from mcp_server.shared.project_scope import project_ancestors
 
+# source: ADR-1085 -- role priors outside team decisions; the project predicate
+# is pg_scope_predicate's, normalized as project_ancestors is (issue #692).
+_PG_ROLE_SQL = (
+    "SELECT m.id, m.content, effective_heat(m, NOW()) AS heat FROM memories m "  # noqa: S608 — the scope is the fixed fragment from pg_scope_predicate; values are bound parameters (docs/ASSURANCE-CASE.md §5)
+    "JOIN current_memories cm ON cm.id = m.id "
+    "WHERE m.agent_context = %s AND effective_heat(m, NOW()) >= %s "
+    "AND NOT COALESCE(m.is_team_decision, FALSE) AND NOT m.is_benchmark "
+    "AND m.superseded_by_id IS NULL "
+    "AND " + pg_scope_predicate("m.") + " "
+    # source: ADR-1106 -- exact ties go to the newer memory.
+    "ORDER BY effective_heat(m, NOW()) DESC, m.created_at DESC, m.id DESC "
+    "LIMIT %s"
+)
+
 
 def fetch_role_context(conn, agent, project_root):
     """Team decisions first; existing role-prior heat order fills unused slots."""
@@ -52,14 +66,6 @@ def _sqlite_role_rows(conn, agent, project_root, remaining):
 
 def _pg_role_rows(conn, agent, project_root, remaining):
     return conn.execute(
-        "SELECT m.id, m.content, effective_heat(m, NOW()) AS heat FROM memories m "  # noqa: S608 — the scope is the fixed fragment from pg_scope_predicate; values are bound parameters (docs/ASSURANCE-CASE.md §5)
-        "JOIN current_memories cm ON cm.id = m.id "
-        "WHERE m.agent_context = %s AND effective_heat(m, NOW()) >= %s "
-        "AND NOT COALESCE(m.is_team_decision, FALSE) AND NOT m.is_benchmark "
-        "AND m.superseded_by_id IS NULL "
-        "AND " + pg_scope_predicate("m.") + " "
-        # source: ADR-1106 -- exact ties go to the newer memory.
-        "ORDER BY effective_heat(m, NOW()) DESC, m.created_at DESC, m.id DESC "
-        "LIMIT %s",
+        _PG_ROLE_SQL,
         (agent, _MIN_HEAT, project_ancestors(project_root), remaining),
     ).fetchall()

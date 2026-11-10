@@ -21,8 +21,9 @@ def normalized_directory_column(column_prefix: str = "") -> str:
     matches in Python and never in SQL (issue #692). ``REPLACE`` and the
     two-argument ``RTRIM`` exist with these semantics in PostgreSQL and SQLite,
     and ``'\\'`` is one backslash in both (PostgreSQL standard-conforming
-    strings). No index covers ``directory_context``, so wrapping the column
-    costs no index use.
+    strings). No index has ``directory_context`` as a search key; SQLite's
+    covering indexes that end with it (sqlite_schema.py) still yield the
+    column the expression reads, so wrapping it costs no index use.
 
     source: ADR-1080
     source: PostgreSQL docs, functions-string (replace, rtrim)

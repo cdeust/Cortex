@@ -13,6 +13,7 @@ import pytest
 from mcp_server.handlers.forget import _get_store
 from mcp_server.handlers.remember import handler
 from mcp_server.hooks.agent_briefing_query import _fetch_agent_context
+from mcp_server.hooks.agent_briefing_role import _pg_role_rows
 from mcp_server.hooks.session_start_fetch import _fetch_team_decisions
 from tests_py._hermetic_hook_env import hermetic_hook_env
 
@@ -83,3 +84,37 @@ def test_pg_team_readers_scope_both_agent_passes():
     }
     assert own in briefing_ids and foreign not in briefing_ids
     assert not _fetch_team_decisions(conn, set(), None)
+
+
+def test_pg_briefing_passes_scope_a_windows_directory():
+    """Issue #692: both briefing passes and the role priors match a row stored
+    with Windows separators, as memory_matches_project does (ADR-1080)."""
+    store = _get_store()
+    if type(store).__name__ != "PgMemoryStore":
+        pytest.skip("PostgreSQL backend required for raw PG hook queries")
+    root = "C:\\work\\orchid"
+    prior = _write(
+        "Engineer prior: keep the ledger orchid index warm",
+        agent_topic="engineer",
+        directory=root,
+    )
+    decision = _write(
+        "Decision: retain the ledger orchid layout",
+        agent_topic="dba",
+        directory=root + "\\",
+    )
+    foreign = _write(
+        "Engineer prior: keep the ledger orchid cache cold",
+        agent_topic="engineer",
+        directory="C:\\work\\other",
+    )
+    conn = store._conn
+    sources = {
+        r["id"]: r["source"]
+        for r in _fetch_agent_context(conn, "engineer", ["ledger"], root)
+    }
+    assert sources.get(prior) == "agent-prior"
+    assert sources.get(decision) == "team:dba"
+    assert foreign not in sources
+    role_ids = {r["id"] for r in _pg_role_rows(conn, "engineer", root, 5)}
+    assert prior in role_ids and foreign not in role_ids

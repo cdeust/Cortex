@@ -55,8 +55,12 @@ def test_hot_memories_scope_accepts_what_the_python_rule_accepts(stored):
 
 
 def test_no_query_compares_the_raw_directory_column():
-    """The hooks' PostgreSQL queries cannot run here without pgvector; this
-    pins that every scope predicate goes through the normalized expression."""
+    """Every scope predicate goes through the normalized expression.
+
+    A guard against new inline copies: it matches the two forms the scope
+    takes (``= ANY(`` and ``IN (``) on the raw column, not every comparison.
+    tests_py/hooks/test_team_project_scope.py runs the hooks' PostgreSQL
+    queries on a Windows-style directory."""
     import re
     from pathlib import Path
 
