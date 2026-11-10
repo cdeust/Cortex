@@ -18,6 +18,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- A backup of a SQLite or PostgreSQL install is first staged into a fresh directory
+  outside the Cortex root: the SQLite store is copied by the online backup API in one
+  step, so rows committed only in the WAL are carried and concurrent writes cannot
+  tear the copy, which is sealed to one file and `integrity_check`ed. The manifest is
+  computed on the staged copy. A managed PostgreSQL install is refused until its
+  cluster can be copied stopped or dumped (#731, slice 3).
 - A versioned backup manifest (`cortex-backup-manifest`, version 1) names the class A
   resources of an install by backend (SQLite store, or managed cluster and its
   password marked secret; wiki, artifacts, profiles, session log, MCP connections,
