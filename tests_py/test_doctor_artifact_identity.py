@@ -5,12 +5,12 @@
 ``Identity``: kind, version, revision, modified, members, location, and the
 ``unknown``/``fix`` pair that makes the check fail and the producer refuse."""
 
-import importlib.util
 import py_compile
 import sys
 
 from mcp_server import doctor_artifact
 from mcp_server.doctor_artifact import Identity
+from tests_py.test_doctor_bytecode import _forge
 from tests_py.test_doctor_artifact import (
     REINSTALL,
     X1,
@@ -119,9 +119,7 @@ def test_forged_import_bytecode_is_an_alteration(monkeypatch, tmp_path):
     # Codex security review on #957: a timestamp-valid cache runs in place of
     # the RECORD-matching source.
     package, dist = _wheel_install(tmp_path)
-    (tmp_path / "evil.py").write_bytes(b"x = 2\n")
-    cache = importlib.util.cache_from_source(str(package / "a.py"))
-    py_compile.compile(str(tmp_path / "evil.py"), cfile=cache, doraise=True)
+    _forge(package / "a.py")
     _imported_from(monkeypatch, package, dist)
     found = doctor_artifact.identify()
     tag = sys.implementation.cache_tag

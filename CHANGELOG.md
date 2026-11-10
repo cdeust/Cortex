@@ -27,8 +27,8 @@ adheres to [Semantic Versioning](https://semver.org/).
   checkout without a commit). `cortex doctor` now also counts a package file that an
   installed wheel's RECORD does not list with a hash (a module, an extension, a
   sourceless `.pyc`) as a difference from it; a cache under `__pycache__` that this
-  interpreter would import counts as well unless its code object is the compile of its
-  hashed source.
+  interpreter would import (importlib's header checks) counts as well unless its code
+  object is the compile of its hashed source; a stale cache it would reject does not.
 - A benchmark run's `MANIFEST.json` now carries `runtime_artifact`: the `mcp_server`
   artifact the run imported, as `cortex doctor` names it (installed wheel or source
   tree, its revision, uncommitted changes, one digest over its members), with
