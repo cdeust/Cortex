@@ -144,6 +144,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- `docs/agent-guidance.md` gains "CI contract for agents and routines", and `CLAUDE.md`
+  points to it: no push while a review runs, no forced push, no comparison with the main
+  branch, one pull request in flight, no comment after an approve. It binds every agent
+  and routine and wins over a less restrictive routine prompt: the scheduled routines
+  were written before the contract.
 - The review prompt puts the run's link just before the verdict line in every comment
   that carries it (ADR-1130). The resolver reads a verdict only from a comment that
   links the review run of the head; a review posted with `gh pr comment` carried the
