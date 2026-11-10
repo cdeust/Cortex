@@ -218,7 +218,7 @@ def identify() -> Identity:
 def _detail(found: Identity) -> str:
     count = len(found.members)
     if found.kind == "wheel":
-        if found.unknown and not found.members:
+        if found.unknown:  # only a wheel without RECORD: it has no members
             return found.unknown
         detail = (
             f"installed {DISTRIBUTION} {found.version}, {count} {PACKAGE} "
