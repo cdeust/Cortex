@@ -144,6 +144,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- `docs/agent-guidance.md` gains "CI contract for agents and routines", and `CLAUDE.md`
+  points to it: no push while a review runs, no forced push, no comparison with the main
+  branch, one pull request in flight, no comment after an approve. It binds every agent
+  and routine and wins over a less restrictive routine prompt: the scheduled routines
+  were written before the contract.
 - `PRIVACY.md` now says what the PostToolUse auto-capture copies, tool by tool:
   the response of Edit, Write, MultiEdit, NotebookEdit, Bash, WebFetch and
   WebSearch, the first 200 characters of a Bash command, the path or pattern of
