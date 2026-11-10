@@ -62,7 +62,7 @@ def _foreign(package):
 def test_caches_compiled_from_their_sources_are_accepted(tmp_path):
     package = _package(tmp_path)
     _cache(package / "a.py")
-    _cache(package / "sub" / "b.py", level=2)
+    _cache(package / "sub" / "b.py")
     assert _foreign(package) == []
 
 
@@ -74,10 +74,28 @@ def test_a_forged_timestamp_cache_is_foreign(tmp_path):
     assert _foreign(package) == [A_CACHE]
 
 
-def test_a_forged_optimised_cache_is_foreign(tmp_path):
+def test_only_the_active_optimisation_level_is_read(tmp_path):
+    # Codex review on #957: an interpreter without -O never reads `opt-1`.
     package = _package(tmp_path)
     _forge(package / "a.py", level=1)
-    assert _foreign(package) == [f"mcp_server/__pycache__/a.{TAG}.opt-1.pyc"]
+    _forge(package / "sub" / "b.py", level=2)
+    assert _foreign(package) == []
+
+
+def test_an_optimised_interpreter_reads_its_own_level(tmp_path):
+    package = _package(tmp_path)
+    _forge(package / "a.py", level=1)
+    _cache(package / "sub" / "b.py")  # plain: not read under -O
+    script = (
+        "import sys; from pathlib import Path; from mcp_server import doctor_bytecode; "
+        "print(doctor_bytecode.foreign_bytecode(Path(sys.argv[1]), "
+        "{'mcp_server/a.py', 'mcp_server/sub/b.py'}))"
+    )
+    run = subprocess.run(
+        [sys.executable, "-O", "-c", script, str(package)],
+        capture_output=True, text=True, check=True, cwd=Path(__file__).parents[1],
+    )  # fmt: skip
+    assert run.stdout.strip() == str([f"mcp_server/__pycache__/a.{TAG}.opt-1.pyc"])
 
 
 def test_forged_hash_based_caches_are_foreign(tmp_path):

@@ -33,9 +33,6 @@ from types import CodeType
 
 PACKAGE = "mcp_server"  # source: pyproject.toml [tool.hatch.build.targets.wheel]
 _HEADER = 16  # source: PEP 552, magic + flags + two 4-byte fields
-# source: PEP 488, the optimisation levels a cache file can be written for
-# (`python`, `-O`, `-OO`); the host's level is not known here, so all are read.
-_LEVELS = (0, 1, 2)
 # source: PEP 552, flags field: bit 0 hash-based, bit 1 check_source
 _HASH_BASED, _CHECK_SOURCE = 0b01, 0b10
 _UINT32 = 0xFFFFFFFF  # source: importlib _validate_timestamp_pyc masks to 32 bits
@@ -78,7 +75,7 @@ def _executable(code: CodeType) -> CodeType:
     return code.replace(co_linetable=bytes(), co_consts=consts)
 
 
-def _runs_other_code(pyc: Path, source: Path, level: int) -> bool:
+def _runs_other_code(pyc: Path, source: Path) -> bool:
     """True when the interpreter would run ``pyc`` and its code is not the
     compile of ``source`` (or holds no loadable code: the import would then
     fail). A cache that cannot be read is not used: ``SourceLoader.get_code``
@@ -96,9 +93,9 @@ def _runs_other_code(pyc: Path, source: Path, level: int) -> bool:
         cached = marshal.loads(data[_HEADER:])
         # The code object does not compare its filename, so the source path
         # names the compile for tracebacks only.
-        built = compile(
-            source.read_bytes(), source, "exec", dont_inherit=True, optimize=level
-        )
+        # compile() at this interpreter's own optimisation level, the one whose
+        # cache ``foreign_bytecode`` reads.
+        built = compile(source.read_bytes(), source, "exec", dont_inherit=True)
     except (EOFError, ValueError, TypeError, SyntaxError):
         return True
     if not isinstance(cached, CodeType):
@@ -140,18 +137,17 @@ def foreign_bytecode(root: Path, members: set[str]) -> list[str]:
     ``members`` (paths under ``root.parent``) and that hold other code.
 
     Each cache path comes from ``importlib.util.cache_from_source``, so it is
-    the one the import system reads, ``sys.pycache_prefix`` included (Codex
-    review on #957), never a scan of directories."""
+    the one the import system reads: this interpreter's cache tag, its
+    ``sys.pycache_prefix`` and its optimisation level (``-O``, ``-OO`` or
+    ``PYTHONOPTIMIZE``, PEP 488), never a scan of directories. A cache written
+    for another level is never read by this interpreter (Codex reviews on
+    #957)."""
     found = []
     for name in sorted(members):
         if not name.endswith(".py"):
             continue
         source = root.parent / name
-        for level in _LEVELS:
-            cache = importlib.util.cache_from_source(
-                str(source), optimization=level or ""
-            )
-            pyc = Path(cache)
-            if pyc.is_file() and _runs_other_code(pyc, source, level):
-                found.append(_label(root, pyc))
+        pyc = Path(importlib.util.cache_from_source(str(source)))
+        if pyc.is_file() and _runs_other_code(pyc, source):
+            found.append(_label(root, pyc))
     return found
