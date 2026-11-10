@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import pytest
 
+from mcp_server.errors import ValidationError
 from mcp_server.handlers import _write_scope
 from mcp_server.shared import domain_mapping
 from tests_py.handlers.test_ghsa_7848_cross_project_write import (
@@ -74,3 +75,42 @@ async def test_ingest_document_stores_the_resolved_domain_never_the_alias(
     page.write_text("<h1>Onboarding</h1><p>welcome</p>", encoding="utf-8")
     await ingest_document.handler({"path": str(page), "domain": "family"})
     assert seen == ["beta"]
+
+
+# Codex on PR #969: a directory name can be an alias of one project (`family` is the
+# directory of the repository whose domain is `beta`) and the canonical domain of
+# another repository family (`family-one`, `family-two`). A domain that is an
+# identity already (from a path, from a stored row) is never resolved a second time.
+@pytest.fixture
+def collision(aliased, monkeypatch):
+    """`family` is both an alias of `beta` and another family's canonical domain."""
+    monkeypatch.setattr(
+        _write_scope, "project_domains", lambda: frozenset({"alpha", "beta", "family"})
+    )
+    return aliased
+
+
+def test_a_family_writes_in_its_own_domain_despite_the_alias(collision, monkeypatch):
+    monkeypatch.setattr(_write_scope, "session_domain", lambda environ=None: "family")
+    _write_scope.require_writable_canonical("family", "remember")
+    assert _write_scope.memory_writable({"domain": "family"}) is True
+
+
+def test_the_aliased_project_cannot_change_the_familys_rows(collision):
+    row = {"id": 3, "domain": "family", "is_global": False}
+    assert _write_scope.memory_writable(row) is False
+    with pytest.raises(ValidationError, match=r"^anchor: domain 'family' belongs"):
+        _write_scope.require_writable_memory(row, "anchor")
+    with pytest.raises(ValidationError, match=r"^remember: domain 'family' belongs"):
+        _write_scope.require_writable_canonical(" Family ", "remember")
+
+
+def test_the_alias_given_as_a_name_still_resolves_to_the_sessions_project(collision):
+    assert _write_scope.require_writable_domain("family", "ingest_prd") == "beta"
+
+
+def test_a_resolved_domain_of_no_known_project_stays_writable(collision):
+    _write_scope.require_writable_canonical("team-notes", "remember")
+    _write_scope.require_writable_canonical("", "remember")
+    _write_scope.require_writable_canonical(None, "remember")
+    _write_scope.require_writable_canonical("beta", "remember")

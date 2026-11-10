@@ -51,7 +51,7 @@ from mcp_server.infrastructure.profile_store import load_profiles
 from mcp_server.handlers._write_scope import (
     KEPT_LOCAL,
     global_scope,
-    require_writable_domain,
+    require_writable_canonical,
     require_writable_memory,
 )
 from mcp_server.infrastructure.memory_exact import find_exact
@@ -180,7 +180,8 @@ def _resolved_origin(args: dict[str, Any], write_class: str) -> str:
 
 def _prepare_request(args: dict, store: MemoryStore, write_class: str) -> GateRequest:
     domain = _resolve_domain(args.get("directory", ""), args.get("domain", ""))
-    require_writable_domain(domain, "remember")  # GHSA-7848-qh48-mx2w
+    # GHSA-7848-qh48-mx2w: `domain` is resolved already, it is checked as it is.
+    require_writable_canonical(domain, "remember")
     origin = _resolved_origin(args, write_class)
     return GateRequest(
         args["content"],

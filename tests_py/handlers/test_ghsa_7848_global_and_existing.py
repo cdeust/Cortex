@@ -117,11 +117,13 @@ async def test_curation_never_merges_into_another_projects_memory(
 
 
 class _ReplicaStore:
-    def __init__(self, row):
-        self.row, self.updates = row, []
+    def __init__(self, *rows):
+        self.rows, self.updates, self.selects = list(rows), [], []
 
     def _execute(self, sql, params=()):
-        rows = [self.row] if sql.lstrip().startswith("SELECT") else []
+        rows = self.rows if sql.lstrip().startswith("SELECT") else []
+        if sql.lstrip().startswith("SELECT"):
+            self.selects.append(sql)
         if not sql.lstrip().startswith("SELECT"):
             self.updates.append(params)
         return type("Cursor", (), {"fetchall": lambda _self: rows})()
@@ -140,6 +142,20 @@ def test_a_replica_of_a_row_this_session_may_not_change_is_not_refreshed(project
     tags = ["memory-replica", "vpath:/x.md"]
     assert try_block_replica_upsert(MARKER, None, tags, "user", store) == (False, None)
     assert store.updates == []
+
+
+def test_another_projects_replica_does_not_hide_this_sessions_own(projects):
+    # Codex on PR #969: with LIMIT 1 the other project's row was the only one read,
+    # so every sync from beta inserted one more row instead of refreshing its own.
+    store = _ReplicaStore(
+        {"id": 7, "domain": "alpha", "is_global": False},
+        {"id": 9, "domain": "beta", "is_global": False},
+    )
+    tags = ["memory-replica", "vpath:/x.md"]
+    assert try_block_replica_upsert(MARKER, None, tags, "user", store) == (True, 9)
+    assert len(store.updates) == 1 and 9 in store.updates[0]
+    # Every replica of the block is read, in a stable order: no LIMIT hides one.
+    assert store.selects[0].endswith("'[\"memory-replica\"]'::jsonb ORDER BY id")
 
 
 def test_seed_project_checks_the_domain_remember_will_use(projects):

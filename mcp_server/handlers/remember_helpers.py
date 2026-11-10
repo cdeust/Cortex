@@ -388,7 +388,7 @@ def try_block_replica_upsert(
             "SELECT id, domain, is_global FROM memories "
             "WHERE tags @> %s::jsonb "
             "AND tags @> '[\"memory-replica\"]'::jsonb "
-            "LIMIT 1",
+            "ORDER BY id",
             (vpath_json,),
         ).fetchall()
     except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("remember_helpers.block_supersede_select")
@@ -396,16 +396,21 @@ def try_block_replica_upsert(
         silent_failure.note("remember_helpers.block_supersede_select", exc)
         return False, None
 
-    if not rows:
-        return False, None
     # GHSA-7848-qh48-mx2w: a replica of another project's or a global memory this
-    # session may not change is not refreshed; the write proceeds as a new row.
-    if not memory_writable(
-        {"domain": rows[0].get("domain"), "is_global": rows[0].get("is_global")}
-    ):
+    # session may not change is not refreshed. Every replica of the block is read,
+    # not the first one: another project's row must not hide this session's own,
+    # or each sync would insert one more row (replicas bypass exact deduplication).
+    writable = [
+        row
+        for row in rows
+        if memory_writable(
+            {"domain": row.get("domain"), "is_global": row.get("is_global")}
+        )
+    ]
+    if not writable:
         return False, None
 
-    existing_id = rows[0]["id"]
+    existing_id = writable[0]["id"]
 
     # Refresh content, embedding, tags, source; preserve heat and is_protected.
 

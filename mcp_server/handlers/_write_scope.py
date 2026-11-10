@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
+from typing import NoReturn
 
 from mcp_server.errors import ValidationError
 from mcp_server.shared.domain_mapping import (
@@ -45,9 +46,16 @@ def _allowed(environ: Mapping[str, str]) -> frozenset[str]:
     return frozenset(d.strip().lower() for d in raw.split(",") if d.strip())
 
 
-def _refused_domain(domain: str, environ: Mapping[str, str]) -> tuple[str, str] | None:
-    """(target, session) when `domain` is another project's than the session's."""
-    target = resolve_explicit_domain(domain or "")
+def _refused_domain(target: str, environ: Mapping[str, str]) -> tuple[str, str] | None:
+    """(target, session) when the canonical `target` is another project's domain.
+
+    `target` is a domain identity already: resolved from a path, read from a stored
+    row, or resolved once from a name the caller gave. It is never resolved again
+    here. A directory name can be an alias of one project and the canonical of
+    another repository family; resolving a canonical a second time would turn that
+    family's domain into the aliased project, refuse the family its own writes and
+    let the aliased project change the family's rows.
+    """
     if not target or target not in project_domains():
         return None
     session = session_domain(environ)
@@ -68,11 +76,29 @@ def require_writable_domain(
     under the raw name would reach that family's hot memories. A name that resolves
     to no known project is a shared domain and is returned as given.
     """
-    refused = _refused_domain(domain, environ)
-    if refused is None:
-        target = resolve_explicit_domain(domain or "")
-        return target if target in project_domains() else (domain or "")
-    target, session = refused
+    target = resolve_explicit_domain(domain or "")
+    if _refused_domain(target, environ) is not None:
+        _refuse(target, tool, environ)
+    return target if target in project_domains() else (domain or "")
+
+
+def require_writable_canonical(
+    domain: str, tool: str, environ: Mapping[str, str] = os.environ
+) -> None:
+    """Raise ValidationError when the already resolved `domain` is another project's.
+
+    For a domain that is an identity already (resolved from a path by `remember` or
+    `seed_project`, or stored on a row): it is compared as it is, never resolved
+    through the name aliases a second time (see `_refused_domain`).
+    """
+    target = (domain or "").strip().lower()
+    if _refused_domain(target, environ) is not None:
+        _refuse(target, tool, environ)
+
+
+def _refuse(target: str, tool: str, environ: Mapping[str, str]) -> NoReturn:
+    """Raise the refusal of a write into `target`, another project's domain."""
+    session = session_domain(environ)
     where = f"this session's project ({session!r})" if session else "no known project"
     raise ValidationError(
         f"{tool}: domain {target!r} belongs to another project than {where}; "
@@ -127,11 +153,12 @@ def require_writable_memory(
             f"project; set {ALLOW_ENV}={EVERY_PROJECT} in the environment to allow it",
             {"tool": tool, "field": "memory_id", "memory_id": row.get("id")},
         )
-    require_writable_domain(row.get("domain") or "", tool, environ)
+    require_writable_canonical(row.get("domain") or "", tool, environ)
 
 
 def memory_writable(row: Mapping, environ: Mapping[str, str] = os.environ) -> bool:
     """Whether a write may pick ``row`` as its target (merge, replica refresh)."""
     if row.get("is_global") and not _every_project(environ):
         return False
-    return _refused_domain(row.get("domain") or "", environ) is None
+    target = (row.get("domain") or "").strip().lower()
+    return _refused_domain(target, environ) is None

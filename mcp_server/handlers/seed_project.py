@@ -30,7 +30,7 @@ from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.handlers._tool_meta import NON_IDEMPOTENT_WRITE
 from mcp_server.handlers.seed_project_constants import is_transient_seed_root
-from mcp_server.handlers._write_scope import require_writable_domain
+from mcp_server.handlers._write_scope import require_writable_canonical
 
 _store: MemoryStore | None = None
 
@@ -123,7 +123,7 @@ def _parse_args(args: dict[str, Any] | None) -> tuple[Path, str, int, bool]:
     # directory wins over the argument) is resolved once here, checked, and is the
     # one the handler purges, writes and reports: never the raw argument.
     domain = _remember_domain(str(root), domain) or domain
-    require_writable_domain(domain, "seed_project")
+    require_writable_canonical(domain, "seed_project")
     max_kb = int(args.get("max_file_size_kb", 64))
     dry_run = args.get("dry_run", False)
     return root, domain, max_kb * 1024, dry_run

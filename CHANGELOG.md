@@ -17,6 +17,11 @@ adheres to [Semantic Versioning](https://semver.org/).
   A write stores the domain the check resolved, never the raw argument: `ingest_prd`
   and `ingest_document` kept a name that resolves to the session's project but can
   also be another repository family's domain.
+  A domain that is an identity already (resolved from a path, stored on a row) is
+  never resolved through the name aliases a second time: where a directory name is
+  also another family's domain, that family keeps its own writes and the aliased
+  project cannot change its rows. A memory-replica refresh reads every replica of
+  the block, so another project's row no longer hides this session's own.
   A global memory reaches every project, so an explicit `is_global=true` (in
   `remember` or `anchor`) needs `CORTEX_CROSS_PROJECT_WRITES=*`; a global scope the
   detector infers without it is kept local and reported (`global_reason`). `anchor`,
