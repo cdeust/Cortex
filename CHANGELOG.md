@@ -137,6 +137,9 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- A resolver run that only waits (no verdict yet, no Pipeline yet, or a newer head)
+  ends green with a notice instead of red, so a failed `Pipeline after merge` on
+  `main` means a real fault (ADR-1128, amends ADR-1127).
 - The resolver is also woken by the end of the Claude review, not only by the end
   of the Pipeline, so a pull request merges whichever finishes first (ADR-1127,
   amends ADR-1121).
