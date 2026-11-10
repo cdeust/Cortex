@@ -95,3 +95,27 @@ def test_a_relationships_part_whose_crc_fails_is_refused(tmp_path):
     p.write_bytes(bytes(raw))
     with pytest.raises(DocumentReadError, match="cannot read word/_rels"):
         read_docx_relationships_xml(p)
+
+
+def _corrupt_deflate(path, name: str, data: bytes):
+    """Write ``name`` deflated, then break its first compressed block."""
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr(name, data)
+    raw = bytearray(path.read_bytes())
+    at = raw.index(name.encode()) + len(name)
+    raw[at] = 0xFF  # BTYPE 11 (reserved): an invalid deflate block header
+    path.write_bytes(bytes(raw))
+    return path
+
+
+@pytest.mark.parametrize(
+    ("name", "read"),
+    [
+        ("word/media/i.png", lambda p: digest_docx_parts(p, ["word/media/i.png"])),
+        (_RELS, read_docx_relationships_xml),
+    ],
+)
+def test_a_member_with_a_corrupt_deflate_stream_is_refused(tmp_path, name, read):
+    p = _corrupt_deflate(tmp_path / "a.docx", name, b"<Relationships/>" * 64)
+    with pytest.raises(DocumentReadError, match=f"cannot read {name}"):
+        read(p)
