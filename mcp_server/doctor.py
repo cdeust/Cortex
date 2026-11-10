@@ -23,6 +23,8 @@ from mcp_server.infrastructure.backend_marker import effective_backend
 from mcp_server.doctor_artifact import artifact_identity
 from mcp_server.doctor_pairing import plugin_pairing
 from mcp_server.doctor_capture import capture_verdict
+from mcp_server.doctor_embedding import embedding_identity
+from mcp_server.doctor_reranker import reranker_identity
 from mcp_server.doctor_managed import managed_server, selected as managed_selected
 from mcp_server.doctor_mcp import run_mcp
 from mcp_server.doctor_pgvector import pgvector_iterative_scan
@@ -560,6 +562,16 @@ def _artifact_identity() -> Check:
     return artifact_identity(Check)
 
 
+def _reranker_identity() -> Check:
+    """source: issue #734 — are the reranker weights the published ones."""
+    return reranker_identity(Check)
+
+
+def _embedding_identity() -> Check:
+    """source: issue #734 — are the cached embedding weights intact."""
+    return embedding_identity(Check)
+
+
 def _plugin_pairing() -> Check:
     """source: issue #729 — is the running code the Claude plugin's own."""
     return plugin_pairing(Check)
@@ -577,6 +589,8 @@ CHECKS: list[Callable[[], Check]] = [
     _methodology_dir,
     _auto_capture,
     _i10_config,
+    _reranker_identity,  # optional — reranker weights vs pinned digest (#734)
+    _embedding_identity,  # optional — embedding weights vs declared digest (#734)
     _codebase_pipeline,  # optional — doesn't fail doctor
     _worktree_locations,  # optional — doesn't fail doctor
     _recorded_failures,  # historical warning, not a readiness verdict
@@ -591,6 +605,8 @@ SQLITE_CHECKS: list[Callable[[], Check]] = [
     _methodology_dir,
     _auto_capture,
     _i10_config,
+    _reranker_identity,  # optional — reranker weights vs pinned digest (#734)
+    _embedding_identity,  # optional — embedding weights vs declared digest (#734)
     _codebase_pipeline,  # optional — doesn't fail doctor
     _worktree_locations,  # optional — doesn't fail doctor
     _recorded_failures,  # historical warning, not a readiness verdict

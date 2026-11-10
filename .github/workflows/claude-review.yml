@@ -8,6 +8,15 @@ on:
 
 permissions: {}
 
+# One review admission at a time per pull request: the budget counts completed
+# reviews, so two pushes whose runs overlap would each be admitted as the same
+# round (ADR-1119). A run in progress is never cancelled; of the runs waiting
+# behind it, GitHub keeps the newest, which is the head that matters.
+# source: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/control-the-concurrency-of-workflows-and-jobs
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
 jobs:
   budget:
     name: Claude review budget
@@ -99,6 +108,7 @@ jobs:
             The commit reviewed by the previous review is "${{ needs.budget.outputs.reviewed_sha }}" (empty on the first review). If it is not empty: first check that each earlier Blocker is fixed, then review only the commits pushed after it (gh pr view --json commits) and do not re-audit unchanged code.
             On the last review, say which part of the PR is accepted and which files or commits carry the open Blockers, so the author can merge the accepted part and send the rest to a refinement PR.
             End with exactly one line: "Verdict: approve" or "Verdict: block".
+            The resolver reads a verdict only from a comment that links this run (ADR-1130): in every comment that carries the verdict line, the `gh pr comment` review included, put the line "[View job run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" just before it.
           # Scoped gh permissions are from upstream docs/solutions.md.
           claude_args: |
             --strict-mcp-config

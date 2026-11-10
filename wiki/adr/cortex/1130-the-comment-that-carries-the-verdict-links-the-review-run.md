@@ -1,0 +1,32 @@
+---
+created: 2026-11-10T12:45:00Z
+kind: adr
+number: 1130
+status: accepted
+tags: [ci, review, resolver, amends-adr-1121]
+title: The comment that carries the verdict links the review run
+---
+# ADR-1130: The comment that carries the verdict links the review run
+
+## Status
+
+accepted. Amends ADR-1121 (the Claude review of the exact head decides the merge).
+
+## Context
+
+The resolver counts a verdict only when its comment links the run id of a `claude-review.yml` run of the head (ADR-1121). The review prompt asked for one final verdict line and did not say where. The action posts two comments: its tracking comment, which links the run, and the review the prompt tells it to post with `gh pr comment`, which does not. When the verdict line went only into the second, the resolver read "Claude has not posted a verdict on this head" and held the merge for good: pull request 973 was approved at 12:17 UTC on 2026-11-10, green at 12:36, and not merged (resolver run 42816975550). Pull requests whose `gh pr comment` call was refused merged, because the review then went into the tracking comment.
+
+## Decision
+
+The prompt gives the reviewer the run's link and says to put it just before the verdict line in every comment that carries that line, the `gh pr comment` review included. The resolver is unchanged: a verdict still counts only with the link of a successful review run of the head.
+
+## Consequences
+
+Positive: an approve is read wherever the reviewer writes it, and the binding to the head stays.
+
+Negative: the rule lives in a prompt. A review that ignores it is held as before, visibly, with the same notice.
+
+## Alternatives considered
+
+- Reading a verdict from any `claude[bot]` comment posted during the run: rejected, it drops the binding between a verdict and a head that ADR-1121 exists for.
+- Asking for the verdict in the tracking comment only: rejected, the prompt cannot name which of the two comments the reviewer ends with.

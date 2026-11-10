@@ -88,6 +88,20 @@ def measured_work(evidence: dict) -> dict:
     }
 
 
+def _identity_resolved(identity: dict) -> bool:
+    """Every field is known; the revision may be None only when not LOADED.
+
+    A fallback run has no loaded revision (#734), so its None revision is a
+    fact, not a missing value; a LOADED run without one is unresolved.
+    """
+    loaded = identity["embedding_model_state"] == "LOADED"
+    return not any(
+        (value is None and (name != "embedding_model_revision" or loaded))
+        or value == "unresolved"
+        for name, value in identity.items()
+    )
+
+
 def consistent_inputs(results: dict) -> bool:
     identities = []
     for result in results.values():
@@ -98,6 +112,8 @@ def consistent_inputs(results: dict) -> bool:
         fields = (
             "git_sha",
             "longmemeval_dataset_sha256",
+            "embedding_mode",
+            "embedding_model_state",
             "embedding_model_revision",
             "pg_image",
             "packages",
@@ -116,7 +132,7 @@ def consistent_inputs(results: dict) -> bool:
         }
         if not all(identity["corpora"].values()):
             return False
-        if any(value is None or value == "unresolved" for value in identity.values()):
+        if not _identity_resolved(identity):
             return False
         identities.append(identity)
     return bool(identities) and all(item == identities[0] for item in identities)

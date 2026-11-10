@@ -24,7 +24,11 @@ os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from benchmarks._repro import build_repro_manifest, multi_run_stats
+from benchmarks._repro import (
+    build_repro_manifest,
+    multi_run_stats,
+    record_embedding_identity,
+)
 from benchmarks.lib.bench_db import BenchmarkDB
 from benchmarks.lib.dataset_pins import (
     LME_S_CLEANED,
@@ -234,6 +238,7 @@ def run_benchmark(
         t0 = time.monotonic()
 
         with BenchmarkDB(require_reranker=True) as db:
+            record_embedding_identity(repro, db.embedding_engine)
             for qi, item in enumerate(dataset):
                 qtype = item["question_type"]
                 question = item["question"]

@@ -160,6 +160,41 @@ answered with a push, which started the next review.
 - A PR that edits `claude-review.yml` is not reviewed by the action (it refuses
   a workflow that differs from main). Keep such a PR minimal.
 
+## CI contract for agents and routines
+
+This section and "Review rounds" above bind every agent that works on this repository:
+an interactive session, a scheduled routine, the local manager. Where the prompt of a
+routine is less restrictive, they win: the prompt was written before the contract, and
+the repository's own standards apply. They never widen what a prompt allows.
+
+1. **The review verdict decides the merge.** The resolver merges a pull request whose
+   last `claude[bot]` verdict covers its head, reads approve, and whose required checks
+   are green. Two cases differ: a Dependabot update the resolver classes as low risk
+   merges on green required checks without a review (ADR-1126), and a title that
+   contains "do not merge" is never merged. No agent merges by hand, enables auto-merge,
+   or writes a line that begins with `Verdict:`: that line is the review's. A pull
+   request cut down after its third review has a head no review covers: it waits for
+   the owner's `claude-rereview` label, it is not merged by hand.
+2. **No push while a review runs.** A push during a `PR Review` run moves the review to a
+   commit that is no longer the head and still spends it.
+3. **No forced push,** `--force-with-lease` included. It does not reset the review budget
+   and it rewrites a branch another agent may hold. A refinement pull request (see
+   "Review rounds") goes on a new branch.
+4. **No comparison with the main branch.** Do not measure how far a branch is behind, do
+   not rebase a pull request branch onto the main branch, do not use the branch-update
+   button or its API, and do not write that a pull request is late: a late pull request
+   merges. The only exception is a real conflict (`mergeable_state` is `dirty`): merge the
+   main branch into the branch with a merge commit, resolve it, rerun the touched tests,
+   check that the merge did not change the meaning of either side, and push normally.
+5. **One pull request in flight.** A pull request is in flight while a check runs on it, a
+   review runs on it, or an approve waits for the merge. While one is in flight, open no
+   other pull request (issue, relaunch or next slice) and push to no other branch. A pull
+   request under rule 7 is not in flight.
+6. **No comment after an approve.** No reply to the notes, no summary, no acknowledgement.
+   Notes marked "no action before merge" go to a follow-up pull request after the merge.
+7. **Owner decisions are left alone:** a pull request on the branch
+   `ci/budget-counts-contract-reviews`, anything labelled `hold` or `do-not-merge`, a draft.
+
 ## What NOT to do
 
 - Do NOT gate a release benchmark against the live production database —

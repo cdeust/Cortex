@@ -18,6 +18,33 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `ingest_document` names the bytes behind each embedded docx image (#732, slice 2).
+  An attachment whose relationship id resolves, through `word/_rels/document.xml.rels`,
+  to a part of the package now carries that `part`, its `digest` (`sha256:<hex>`) and
+  its `size`. A linked (external) image, a reference to an absent part and a
+  Confluence image keep them empty. The bytes are identified, not stored: `state`
+  stays `unsupported`.
+- A versioned backup manifest (`cortex-backup-manifest`, version 1) names the class A
+  resources of an install by backend (SQLite store, or managed cluster and its
+  password marked secret; wiki, artifacts, profiles, session log, MCP connections,
+  capture spool) with a SHA-256 digest and a size for every file. A required store
+  that is absent, a symbolic link or a special file is refused, never skipped
+  (#731, slice 2).
+
+- `scripts/native_receipt_artifact.py` prints the `artifact` object of a
+  `cortex-native-receipt/1` receipt for the `mcp_server` the running interpreter
+  imports (#730). It reads the identity `cortex doctor` computes, now as data
+  (`mcp_server.doctor_artifact.identify`), instead of a receipt author copying the
+  doctor's text by hand, and refuses when the identity cannot be stated (git failure,
+  missing RECORD, a wheel whose files differ from its RECORD, no installed version,
+  checkout without a commit). `cortex doctor` now also counts a package file that an
+  installed wheel's RECORD does not list with a hash (a module, an extension, a
+  sourceless `.pyc`) as a difference from it; in a wheel or a source tree, a bytecode
+  cache that this interpreter would import (its `__pycache__`, or the `pycache_prefix`
+  tree when one is set) (importlib's header checks) counts as well unless its code
+  object is the compile of its hashed source; a stale cache it would reject (its
+  `--check-hash-based-pycs` policy included) does not. A sourceless `.pyc` in a source
+  tree counts too.
 - A benchmark run's `MANIFEST.json` now carries `runtime_artifact`: the `mcp_server`
   artifact the run imported, as `cortex doctor` names it (installed wheel or source
   tree, its revision, uncommitted changes, one digest over its members), with
@@ -123,6 +150,48 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- `docs/agent-guidance.md` gains "CI contract for agents and routines", and `CLAUDE.md`
+  points to it: no push while a review runs, no forced push, no comparison with the main
+  branch, one pull request in flight, no comment after an approve. It binds every agent
+  and routine and wins over a less restrictive routine prompt: the scheduled routines
+  were written before the contract.
+- The review prompt puts the run's link just before the verdict line in every comment
+  that carries it (ADR-1130). The resolver reads a verdict only from a comment that
+  links the review run of the head; a review posted with `gh pr comment` carried the
+  verdict without the link, and an approved, green pull request stayed unmerged (#973).
+- `PRIVACY.md` now says what the PostToolUse auto-capture copies, tool by tool:
+  the response of Edit, Write, MultiEdit, NotebookEdit, Bash, WebFetch and
+  WebSearch, the first 200 characters of a Bash command, the path or pattern of
+  Read, NotebookRead, Glob and Grep, and the full response of any tool once it
+  exceeds 3000 characters (written to an artifact file). It also says that this applies to every
+  project, that personal data is not redacted, and that an artifact can outlive a
+  capture refused after hand-over (#737, slice 4). A test compares the tool lists
+  and limits in that text with the hook's own constants.
+- `PRIVACY.md` now also says that the 50-character threshold counts the response
+  as the hook formats it, so an edit is almost always captured and a Bash call is
+  kept, command line included, once its stdout, stderr and interrupted marker add
+  up to 50 formatted characters (one stream alone: 30 characters); that an Edit keeps its before and after strings
+  while a Write, MultiEdit or NotebookEdit keeps its whole JSON response (written
+  content and, when the host sends it, the previous file);
+  and that a tool in none of the three lists (Task, TodoWrite, MCP tools) is never
+  captured (#737, slice 5). Each sentence is checked against `process_event`.
+
+- A resolver run that only waits (no verdict yet, no Pipeline yet, or a newer head)
+  ends green with a notice instead of red, so a failed `Pipeline after merge` on
+  `main` means a real fault (ADR-1128, amends ADR-1127).
+- Claude reviews of one pull request are admitted one at a time, so pushes whose
+  review runs overlap can no longer each count as the same round of the three
+  (ADR-1119).
+- The review budget counts only reviews run under the review contract (a run with
+  the `Claude review budget` job), so a pull request reviewed by the earlier
+  workflow can still receive a verdict (ADR-1129, amends ADR-1119).
+- The resolver is also woken by the end of the Claude review, not only by the end
+  of the Pipeline, so a pull request merges whichever finishes first (ADR-1127,
+  amends ADR-1121).
+- A Dependabot minor or patch update that touches only `uv.lock` or `pyproject.toml`
+  merges on green required checks without a Claude verdict (ADR-1126, amends
+  ADR-1121). Major updates, workflow or Dockerfile updates and every other pull
+  request keep the reviewed path.
 - The post-merge engine closes the issues a resolver-merged PR names with a closing
   keyword (`close-issues` job, `issues: write` only). GitHub ignores those keywords when
   the merge is made with the workflow's `GITHUB_TOKEN`: all 8 resolver merges with
@@ -188,6 +257,39 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The benchmark manifests record the embedding a run served, not the configured
+  pin (#734, slice 2). `MANIFEST.json` (`benchmarks/lib/write_manifest.py`) and the
+  repro manifest of LongMemEval, LoCoMo and BEAM (`benchmarks/_repro.py`) now carry
+  `embedding_mode`, `embedding_model_state` and `embedding_model_name`, and
+  `embedding_model_revision` is the pinned revision only when the state is
+  `LOADED`, `null` otherwise. The repro manifest reads them from the engine
+  `BenchmarkDB` serves with (`BenchmarkDB.embedding_engine`), not from the factory
+  singleton, and refuses a multi-run invocation whose runs settled differently.
+  The reranker matrix compares mode and state across cells and accepts a `null`
+  revision only for a cell that is not `LOADED`. Before, a run in
+  `PACKAGE_ABSENT` serving fallback vectors recorded the same revision as a
+  neural run, and the repro manifest had no embedding identity at all.
+
+- The project scope in SQL normalizes the stored `directory_context` the way
+  `memory_matches_project` already did: backslashes become `/` and a trailing
+  separator is dropped (#692 class 9, the 6 file-priming alias tests that stayed at
+  heat 0.5 in run 38008915302). `project_ancestors` yields `C:/work/repo` while a
+  memory recorded on Windows stores `C:\work\repo`, so file priming, the store's
+  hot and FTS queries and the session-start, auto-recall and agent-briefing hooks
+  matched no project-scoped Windows memory. One expression in `pg_scope_clause`
+  now serves both backends' clauses and the hooks' raw PostgreSQL queries.
+- The installer tests' uv stand-in is a `uv.cmd` on Windows, so PATH lookup reaches
+  it instead of the runner's real uv (#692 class 9, 6 Windows setup errors in
+  `test_installer_rerun_keeps_entries` in run 38008915302). `shutil.which` matches
+  only `PATHEXT` names on Windows and `CreateProcess` cannot run an extensionless
+  script (WinError 193), so the launcher installed the real uv.lock into the test's
+  deps directory and the probe packages never appeared.
+- The two end-to-end issue-147 tests make only the grading step's `os.getcwd()`
+  fallback raise, not every `os.getcwd()` in the interpreter, so they pass on Windows
+  (#692 class 9, 2 Windows failures in run 38008915302). On Windows
+  `ntpath.realpath` reads the cwd even for an absolute path, so the store's
+  `Path(db).resolve()` raised before the write reached grading; Windows also refuses
+  to remove a process's cwd, so that failure cannot happen outside the mock.
 - The two reranker cache-path tests compare paths, not strings, so they pass on
   Windows, where the native separator is a backslash (#692 class 9, 2 Windows
   failures in run 38008915302). `test_falls_back_to_home_cache` compared

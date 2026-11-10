@@ -45,11 +45,22 @@ def _launcher(name: str):
     return __import__(name)
 
 
-def install(directory: Path, requirements: Path, pip: list[str] | None = None) -> Path:
-    """Write ``directory/uv`` at the pinned version, installing ``requirements``."""
+def executable(directory: Path, *, windows: bool = os.name == "nt") -> Path:
+    """The stand-in's command in ``directory``: what PATH lookup resolves to."""
+    return directory / ("uv.cmd" if windows else "uv")
+
+
+def install(
+    directory: Path,
+    requirements: Path,
+    pip: list[str] | None = None,
+    *,
+    windows: bool = os.name == "nt",
+) -> Path:
+    """Write the pinned stand-in into ``directory``, installing ``requirements``."""
     directory.mkdir(parents=True, exist_ok=True)
-    uv = directory / "uv"
-    uv.write_text(
+    script = directory / ("uv-stand-in.py" if windows else "uv")
+    script.write_text(
         _SCRIPT.format(
             python=sys.executable,
             version=_launcher("launcher_uv").UV_VERSION,
@@ -58,7 +69,10 @@ def install(directory: Path, requirements: Path, pip: list[str] | None = None) -
         ),
         encoding="utf-8",
     )
-    uv.chmod(0o755)
+    script.chmod(0o755)
+    if windows:
+        command = f'@"{sys.executable}" "%~dp0{script.name}" %*\r\n'
+        executable(directory, windows=True).write_bytes(command.encode())
     return directory
 
 

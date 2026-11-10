@@ -17,6 +17,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from mcp_server.core.environment import read_environment_variable
+from mcp_server.core.reranker_identity import ModelIdentity, classify_model_digest
 
 # source: ADR-0244
 
@@ -65,8 +66,15 @@ def reranker_cache_dir() -> str:
     return _cache_dir_provider()
 
 
+def model_path_under(cache_dir: str) -> str:
+    """Path of the ONNX weights file inside the cache directory ``cache_dir``.
+
+    source: ADR-0244"""
+    return f"{cache_dir}/{_MODEL_NAME}/{_MODEL_FILE}"
+
+
 def _model_path() -> str:
-    return f"{reranker_cache_dir()}/{_MODEL_NAME}/{_MODEL_FILE}"
+    return model_path_under(reranker_cache_dir())
 
 
 def _model_exists() -> bool:
@@ -85,6 +93,13 @@ def model_sha256() -> str | None:
     if _model_sha256_provider is None:
         raise _unconfigured("model_sha256")
     return _model_sha256_provider(_model_path())
+
+
+def model_identity() -> ModelIdentity:
+    """The on-disk weights against the pinned digest (issue #734, slice 3).
+
+    source: mcp_server/core/reranker_identity.py"""
+    return classify_model_digest(model_sha256())
 
 
 def _offline_requested() -> bool:
