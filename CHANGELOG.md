@@ -18,6 +18,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `scripts/native_receipt_artifact.py` prints the `artifact` object of a
+  `cortex-native-receipt/1` receipt for the `mcp_server` the running interpreter
+  imports (#730). It reads the identity `cortex doctor` computes, now as data
+  (`mcp_server.doctor_artifact.identify`), instead of a receipt author copying the
+  doctor's text by hand, and refuses when the identity cannot be stated (git failure,
+  missing RECORD, no installed version, checkout without a commit).
 - A benchmark run's `MANIFEST.json` now carries `runtime_artifact`: the `mcp_server`
   artifact the run imported, as `cortex doctor` names it (installed wheel or source
   tree, its revision, uncommitted changes, one digest over its members), with
