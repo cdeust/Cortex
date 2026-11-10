@@ -18,6 +18,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- A versioned backup manifest (`cortex-backup-manifest`, version 1) names the class A
+  resources of an install by backend (SQLite store, or managed cluster and its
+  password marked secret; wiki, artifacts, profiles, session log, MCP connections,
+  capture spool) with a SHA-256 digest and a size for every file. A required store
+  that is absent, a symbolic link or a special file is refused, never skipped
+  (#731, slice 2).
 - A benchmark run's `MANIFEST.json` now carries `runtime_artifact`: the `mcp_server`
   artifact the run imported, as `cortex doctor` names it (installed wheel or source
   tree, its revision, uncommitted changes, one digest over its members), with
