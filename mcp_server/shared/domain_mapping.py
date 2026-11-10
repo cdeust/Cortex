@@ -341,7 +341,6 @@ class DomainRegistry:
     slug_index: dict[str, RepoInfo]
     fragment_index: dict[str, str]
     path_to_repo: dict[str, RepoInfo] = field(default_factory=dict)
-    root_forms: dict[str, str] | None = None
 
     def __post_init__(self) -> None:
         self.path_to_repo = {r.fs_path: r for r in self.repos}
@@ -505,7 +504,9 @@ def _worktree_roots(root: str) -> list[str]:
     found: list[str] = []
     for entry in sorted(Path(root, ".git", "worktrees").glob("*/gitdir")):
         try:
-            text = entry.read_text(encoding="utf-8", errors="replace").strip()
+            text = _os.fsdecode(
+                entry.read_bytes()
+            ).strip()  # a path, as the OS reads it
         except OSError:
             continue
         if text:
@@ -520,17 +521,17 @@ def project_roots() -> dict[str, str]:
     appears as discovered and as resolved: the discovery keeps the text of a
     symlinked parent (`~/code -> /mnt/repos`), while a path given by a caller may
     name either side of the link.
+
+    Read on every call: git can add a linked worktree while the server runs, and a
+    root kept from an earlier call would leave that worktree's sessions unknown.
     """
-    registry = _build_registry()
-    if registry.root_forms is None:
-        registry.root_forms = {
-            form: r.canonical
-            for r in registry.repos
-            if r.canonical
-            for base in (r.fs_path, *_worktree_roots(r.fs_path))
-            for form in (base, _to_posix(Path(base).resolve()))
-        }
-    return registry.root_forms
+    return {
+        form: r.canonical
+        for r in _build_registry().repos
+        if r.canonical
+        for base in (r.fs_path, *_worktree_roots(r.fs_path))
+        for form in (base, _to_posix(Path(base).resolve()))
+    }
 
 
 def resolve_cwd(cwd: str) -> str:

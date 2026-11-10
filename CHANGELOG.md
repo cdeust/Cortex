@@ -37,7 +37,11 @@ adheres to [Semantic Versioning](https://semver.org/).
   project or above one, which would serve the memory to that project's sessions.
   The check reads the directory as the hooks do (a backslash is a separator) and
   as resolved, against every root of a repository, its linked worktrees included,
-  as discovered and as resolved (a symlinked parent of the projects). `ingest_prd` given text
+  as discovered and as resolved (a symlinked parent of the projects). The roots are
+  read at every check, so a worktree added while the server runs is known; the
+  directory is compared as written (a folder name may end with a space); and
+  `seed_project` checks its directory before it purges, and refuses a domain that
+  `remember` would resolve once more to another one. `ingest_prd` given text
   (`content`, `pipeline_id`) stores it under the session's project, no longer under
   the folder above the server's working directory, and is refused when the server
   itself runs above the projects. `anchor`, `supersedes_id`,

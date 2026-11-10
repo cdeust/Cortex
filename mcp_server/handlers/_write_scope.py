@@ -128,7 +128,7 @@ def session_directory(environ: Mapping[str, str] = os.environ) -> str:
     return environ.get(SESSION_ENV) or os.getcwd()
 
 
-def _reached_projects(directory: str) -> frozenset[str]:
+def _reached_projects(directory: str | None) -> frozenset[str]:
     """Domains of the known projects whose sessions are served `directory`'s memories.
 
     The rule is the hooks' own (`shared.project_scope`): a memory is served to a
@@ -138,9 +138,10 @@ def _reached_projects(directory: str) -> frozenset[str]:
     a parent of the projects can be a symlink: `directory` is compared as the hooks
     read it and as resolved, with each root in both forms too.
     """
-    # The text the hooks compare: separators normalised, no trailing one. A
-    # relative directory, a label such as `run:<id>` or `/` is served to no session.
-    read = project_ancestors((directory or "").strip())[:1]
+    # The text the hooks compare: separators normalised, no trailing one, and no
+    # character trimmed (a folder name may end with a space). A relative directory,
+    # a label such as `run:<id>` or `/` is served to no session.
+    read = project_ancestors(directory or "")[:1]
     if not read or not Path(read[0]).is_absolute():
         return frozenset()
     forms = {read[0], Path(read[0]).resolve().as_posix()}
@@ -176,6 +177,17 @@ def require_writable_directory(
         f"{other!r}, another project than {where}; set {ALLOW_ENV}={other} (or '*') "
         "in the environment to allow it",
         {"tool": tool, "field": "directory", "domain": other, "session": session},
+    )
+
+
+def require_stable_domain(domain: str, written: str, tool: str) -> None:
+    """Raise ValidationError when a resolved `domain` resolves again to `written`."""
+    if written == domain:
+        return
+    raise ValidationError(
+        f"{tool}: domain {domain!r} is also an alias of {written!r}, the domain the "
+        "files would be written under; run it from a directory inside the project",
+        {"tool": tool, "field": "domain", "domain": written},
     )
 
 

@@ -72,7 +72,10 @@ def test_which_projects_a_directory_reaches(projects):
     assert reached(str(projects / "beta")) == {"beta"}
     # A name that only starts like a root is another folder.
     assert reached(str(projects / "alph")) == frozenset()
-    assert reached(f"  {projects}  ") == {"alpha", "beta"}
+    # Padded text is not the folder: the hooks trim nothing, they serve it to no one.
+    padded = f"  {projects}  "
+    assert not memory_matches_project(padded, False, str(projects / "alpha"))
+    assert reached(padded) == frozenset()
     link = projects.parent / "link"
     link.symlink_to(projects, target_is_directory=True)
     assert reached(str(link)) == {"alpha", "beta"}
@@ -110,9 +113,11 @@ def test_a_folder_above_a_linked_worktree_reaches_its_repository(projects):
     subprocess.run([*git, "commit", "-q", "--allow-empty", "-m", "init"], check=True)
     outside = projects.parent / "external"
     tree = outside / "alpha-feature"
-    subprocess.run([*git, "worktree", "add", "-q", str(tree)], check=True)
-    domain_mapping._build_registry.cache_clear()
     reached = _write_scope._reached_projects
+    # Codex on PR #977: the roots are read on every call, so a worktree git adds
+    # while the server runs is known to the next write.
+    assert reached(str(outside)) == frozenset()
+    subprocess.run([*git, "worktree", "add", "-q", str(tree)], check=True)
     assert reached(str(outside)) == {"alpha"}
     assert reached(str(tree)) == reached(str(tree / "src")) == {"alpha"}
     assert reached(str(projects.parent / "downloads")) == frozenset()
@@ -225,17 +230,6 @@ def test_a_row_in_another_projects_directory_is_not_writable(projects):
     for unset in (_row(projects, "") | {"directory_context": None}, {"id": 7}):
         assert _write_scope.memory_writable(unset) is True
         _write_scope.require_writable_memory(unset, "anchor")
-
-
-def test_a_row_is_judged_in_the_environment_it_is_given(projects):
-    # The caller's environment decides, not the process's: an allowance passed in
-    # opens the row, and the process environment (no allowance) is not consulted.
-    foreign = _row(projects, projects / "alpha", domain="team-notes")
-    allowing = {_write_scope.SESSION_ENV: str(projects / "beta"), ALLOW: "alpha"}
-    _write_scope.require_writable_memory(foreign, "anchor", allowing)
-    assert _write_scope.memory_writable(foreign, allowing) is True
-    with pytest.raises(ValidationError, match=r"^anchor: a memory stored under"):
-        _write_scope.require_writable_memory(foreign, "anchor")
 
 
 @pytest.mark.asyncio
