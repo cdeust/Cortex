@@ -23,15 +23,17 @@ To build and retrieve memory, Cortex reads and processes:
     is at least 50 characters long, plus the edited file's path or, for Bash, the
     first 200 characters of the command line. A pattern or name typed in a command
     is copied even when the command prints nothing useful.
-  - Read, NotebookRead, Glob and Grep: the path, glob or search pattern only, not
-    the file contents or the matches. A Grep pattern made of names copies those
-    names.
+  - Read, NotebookRead, Glob and Grep: the path, glob or search pattern in the
+    memory row, not the file contents or the matches. A Grep pattern made of
+    names copies those names. A response longer than 3000 characters is the
+    exception: its full text is written to an artifact file (below), and the row
+    points to it, so a long file you read is copied whole.
   - WebFetch and WebSearch: the response, when it is at least 50 characters long.
 
-  A response longer than 3000 characters is stored as a short gist in the memory
-  row, and its full text goes to a file under `~/.claude/methodology/artifacts/`
-  (one file per distinct content and month, shared by every memory that captured
-  that content in that month). A
+  For the other tools, a response longer than 3000 characters is stored as a
+  short gist in the memory row. For every tool, its full text goes to a file
+  under `~/.claude/methodology/artifacts/` (one file per distinct content and
+  month, shared by every memory that captured that content in that month). A
   capture that never leaves the hook removes the file it created. A capture
   handed to the capture worker or spool and then refused there can still leave
   that file on disk with no memory pointing to it; no sweep removes such files

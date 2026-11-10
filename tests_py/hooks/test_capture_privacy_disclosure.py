@@ -109,3 +109,15 @@ def test_a_long_response_goes_to_an_artifact_and_the_row_keeps_a_gist(captured):
     assert files[0].read_text(encoding="utf-8") == response
     assert response not in captured[-1]
     assert str(files[0]) in captured[-1]
+
+
+def test_a_long_read_response_is_copied_whole_into_an_artifact(captured):
+    assert "a long file you read is copied whole" in _paragraph()
+    contents = "Alice Martin, 12 rue des Lilas, diabetic\n" * 120
+    assert len(contents) > GIST_BUDGET
+    hook.process_event(_event("Read", {"file_path": "/p/clients.csv"}, contents))
+    files = list(artifact_store.ARTIFACTS_DIR.rglob("*.md"))
+    assert len(files) == 1
+    assert files[0].read_text(encoding="utf-8") == contents
+    assert "Alice Martin" not in captured[-1]
+    assert str(files[0]) in captured[-1]

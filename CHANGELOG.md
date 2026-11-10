@@ -139,8 +139,9 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 - `PRIVACY.md` now says what the PostToolUse auto-capture copies, tool by tool:
   the response of Edit, Write, MultiEdit, NotebookEdit, Bash, WebFetch and
-  WebSearch, the first 200 characters of a Bash command, only the path or pattern
-  of Read, NotebookRead, Glob and Grep. It also says that this applies to every
+  WebSearch, the first 200 characters of a Bash command, the path or pattern of
+  Read, NotebookRead, Glob and Grep, and the full response of any tool once it
+  exceeds 3000 characters (written to an artifact file). It also says that this applies to every
   project, that personal data is not redacted, and that an artifact can outlive a
   capture refused after hand-over (#737, slice 4). A test compares the tool lists
   and limits in that text with the hook's own constants.
