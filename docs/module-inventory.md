@@ -164,6 +164,7 @@ not exist." The registered tools are listed in `docs/mcp-tools.md`.
 - `pg_recall.py` — PostgreSQL recall orchestration
 - `reranker.py` — FlashRank ONNX cross-encoder reranking: lifecycle singleton + rerank entrypoints (client-side post-PG)
 - `reranker_model.py` — FlashRank model identity, durable cache_dir, offline-fetch gate, `RerankerStatus`, weights sha256
+- `reranker_identity.py` — Pure classification of the on-disk weights sha256 against the pinned digest of the published results (`absent`/`verified`/`mismatch`, #734)
 - `reranker_scoring.py` — Pure score-blending math: confidence gate, adaptive alpha, WRRF/CE blend
 - `scoring.py` — BM25, n-gram, keyword scoring (reference; PG does this server-side)
 - `spreading_activation.py` — Collins & Loftus 1975 semantic priming over entity graph
