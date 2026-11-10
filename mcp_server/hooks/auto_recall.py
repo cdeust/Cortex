@@ -55,8 +55,12 @@ from mcp_server.shared.injection_markers import (
 from mcp_server.hooks._telemetry import observe_hook
 from mcp_server.shared.freshness import provenance_suffix
 from mcp_server.shared.project_scope import project_ancestors, resolve_project_root
+from mcp_server.infrastructure.pg_scope_clause import pg_scope_predicate
 
 _LOG_PREFIX = "[cortex-auto-recall]"
+# source: ADR-1080 -- the project predicate, one text-array param, its
+# directory_context normalized as project_ancestors is (issue #692).
+_SCOPE = pg_scope_predicate("m.")
 # source: issues #703/#704 -- only shared resolution supplies a PostgreSQL URL.
 _DATABASE_URL = os.environ.get("DATABASE_URL", "")
 _MAX_MEMORIES = 3
@@ -148,7 +152,7 @@ def _recall_memories(conn, query: str, project_root: str | None = None) -> list[
         rows = conn.execute(
             (
                 # source: ADR-0485
-                """
+                f"""
             SELECT m.id, m.content,
                    effective_heat(m, NOW()) AS heat,
                    m.domain, m.agent_context, m.is_protected,
@@ -161,12 +165,12 @@ def _recall_memories(conn, query: str, project_root: str | None = None) -> list[
               AND effective_heat(m, NOW()) >= %s
               AND NOT m.is_benchmark
               AND m.superseded_by_id IS NULL
-              AND (m.is_global = TRUE OR m.directory_context = ANY(%s::TEXT[]))
+              AND {_SCOPE}
             -- source: ADR-1106 -- exact ties go to the newer memory.
             ORDER BY m.is_protected DESC, rank DESC, effective_heat(m, NOW()) DESC,
                      m.created_at DESC, m.id DESC
             LIMIT %s
-            """
+            """  # noqa: S608 — _SCOPE is the fixed fragment from pg_scope_predicate; values are bound parameters (docs/ASSURANCE-CASE.md §5)
             ),
             (query[:200], _MIN_HEAT, ancestors, _MAX_MEMORIES + 2),
         ).fetchall()
