@@ -4,9 +4,11 @@ name: Pipeline after merge
 # GitHub rejects a workflow listening to itself (run40017492191).
 # The local reusable retains this caller's workflow_run event context.
 # https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations#github-context
+# The review and the Pipeline finish in either order: each completion wakes the
+# resolver, which merges once both are there (ADR-1127).
 on:
   workflow_run:
-    workflows: [Pipeline]
+    workflows: [Pipeline, PR Review]
     types: [completed]
     branches-ignore: [main]
 

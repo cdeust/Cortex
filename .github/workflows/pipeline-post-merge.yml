@@ -228,6 +228,43 @@ jobs:
               return list(indexed.values())
 
 
+          # source: .github/workflows/claude-review.yml, `name: PR Review`.
+          REVIEW_WORKFLOW_NAME = "PR Review"
+
+
+          def _pipeline_of_review(review, repository, api):
+              """The successful Pipeline run of the head a completed review ran on.
+
+              The review and the Pipeline finish in either order (ADR-1127). When the
+              review ends last, its completion wakes the resolver, which then needs the
+              Pipeline run of the same head: the newest one that succeeded. Without one
+              the merge is held, and the Pipeline's own completion will wake the resolver.
+              """
+              require(
+                  review.get("path") == ".github/workflows/claude-review.yml"
+                  and review.get("event") == "pull_request"
+                  and review.get("status") == "completed"
+                  and review.get("conclusion") == "success",
+                  "source review did not complete successfully",
+              )
+              require(
+                  review.get("head_repository", {}).get("full_name") == repository,
+                  "source head repository differs",
+              )
+              head = full_sha(review.get("head_sha"))
+              path = f"/repos/{repository}/actions/workflows/pipeline.yml/runs"
+              runs = [
+                  run
+                  for run in api.records(
+                      f"{path}?head_sha={head}&event=pull_request&status=success",
+                      "workflow_runs",
+                  )
+                  if run.get("head_sha") == head and type(run.get("id")) is int
+              ]
+              require(runs, "merge held: Pipeline has not succeeded on this head")
+              return max(runs, key=lambda run: run["id"])
+
+
           def _source_run(event, repository, api):
               require(
                   re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository),
@@ -238,8 +275,12 @@ jobs:
                   "event repository differs",
               )
               source = event.get("workflow_run")
-              _validate_run(source, repository)
+              require(isinstance(source, dict), "missing workflow_run")
               prefix = f"/repos/{repository}"
+              woken_by_review = source.get("name") == REVIEW_WORKFLOW_NAME
+              if woken_by_review:
+                  source = _pipeline_of_review(source, repository, api)
+              _validate_run(source, repository)
               run = api.request("GET", f"{prefix}/actions/runs/{source['id']}")
               _validate_run(run, repository)
               require(
@@ -250,6 +291,7 @@ jobs:
                   run.get("run_attempt") == source.get("run_attempt"),
                   "source run has a newer attempt",
               )
+              run["woken_by_review"] = woken_by_review
               jobs = _effective_jobs(
                   api.records(f"{prefix}/actions/runs/{run['id']}/jobs?filter=all", "jobs"), run
               )
@@ -471,6 +513,14 @@ jobs:
                       "run_tests": "false",
                       "pr_number": str(number),
                       "reason": "An exact-SHA main push Pipeline already exists",
+                  }
+              if already_merged and run.get("woken_by_review"):
+                  # The Pipeline's completion merged this PR and tests the merge commit.
+                  return {
+                      "tested_sha": sha,
+                      "run_tests": "false",
+                      "pr_number": str(number),
+                      "reason": "Already merged when the review completed",
                   }
               return {
                   "tested_sha": sha,

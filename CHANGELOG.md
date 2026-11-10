@@ -123,6 +123,9 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- The resolver is also woken by the end of the Claude review, not only by the end
+  of the Pipeline, so a pull request merges whichever finishes first (ADR-1127,
+  amends ADR-1121).
 - A Dependabot minor or patch update that touches only `uv.lock` or `pyproject.toml`
   merges on green required checks without a Claude verdict (ADR-1126, amends
   ADR-1121). Major updates, workflow or Dockerfile updates and every other pull
