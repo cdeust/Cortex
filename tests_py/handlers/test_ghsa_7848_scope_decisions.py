@@ -17,6 +17,7 @@ from mcp_server.errors import ValidationError
 from mcp_server.handlers import _write_scope, anchor, remember
 from mcp_server.handlers.remember import handler as remember_handler
 from mcp_server.handlers.remember_helpers import try_curation
+from mcp_server.handlers.remember_response import duplicate_response
 from mcp_server.shared import domain_mapping
 from tests_py.handlers import test_ghsa_7848_cross_project_write as _base
 
@@ -142,9 +143,15 @@ async def test_a_detected_global_memory_is_its_own_exact_duplicate(
     first = await remember_handler({"content": content, "tags": tags, "force": True})
     assert first["stored"] is True
     assert first["is_global"] is True
-    replay = await remember_handler({"content": content, "tags": tags, "force": True})
-    assert replay["reason"] == "exact_duplicate"
-    assert replay["memory_id"] == first["memory_id"]
+    replay = {"content": content, "tags": tags, "force": True}
+    # The pre-encode lookup itself must find it: the locked insert repeats the
+    # lookup, so a handler-level replay alone cannot see a wrong preflight scope.
+    assert remember.prepare_write(dict(replay)) == duplicate_response(
+        first["memory_id"]
+    )
+    replayed = await remember_handler(replay)
+    assert replayed["reason"] == "exact_duplicate"
+    assert replayed["memory_id"] == first["memory_id"]
 
 
 @pytest.mark.asyncio

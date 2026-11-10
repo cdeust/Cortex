@@ -148,3 +148,12 @@ def test_seed_project_checks_the_domain_remember_will_use(projects):
         seed_project._parse_args(
             {"directory": str(projects / "alpha"), "domain": "beta"}
         )
+
+
+def test_seed_project_reports_the_domain_remember_resolves(projects, tmp_path):
+    # Outside any known repository the explicit domain is resolved exactly as
+    # remember resolves it (stripped, lowercased), never kept as the raw argument.
+    _root, domain, _max, _dry = seed_project._parse_args(
+        {"directory": str(tmp_path / "unregistered"), "domain": "  Shared-Notes "}
+    )
+    assert domain == "shared-notes"
