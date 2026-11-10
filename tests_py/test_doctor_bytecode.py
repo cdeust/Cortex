@@ -48,7 +48,7 @@ def _forge(source, *, level=0, flags=0, check=None, code=EVIL, magic=None):
         tail = _uint32(int(stat.st_mtime)) + _uint32(stat.st_size)
     header = (magic or importlib.util.MAGIC_NUMBER) + _uint32(flags) + tail
     cfile = _cache_path(source, level)
-    cfile.parent.mkdir(exist_ok=True)
+    cfile.parent.mkdir(parents=True, exist_ok=True)
     body = marshal.dumps(compile(code, str(source), "exec", optimize=level))
     cfile.write_bytes(header + body)
     return cfile
@@ -153,6 +153,25 @@ def test_another_interpreters_cache_and_other_names_are_skipped(tmp_path):
 
 def test_the_fix_names_the_caches_to_delete(tmp_path):
     assert doctor_bytecode.clear_caches_fix(tmp_path) == (
-        f"Delete the `__pycache__` directories under {tmp_path}: Python rebuilds "
-        "them from the sources at the next import"
+        f"Delete the bytecode caches of {tmp_path} (its `__pycache__` directories, "
+        "or the `pycache_prefix` tree when one is set): Python rebuilds them from "
+        "the sources at the next import"
     )
+
+
+def test_a_pycache_prefix_is_where_the_caches_are_read(monkeypatch, tmp_path):
+    # Codex review on #957: with `-X pycache_prefix`, Python reads the external
+    # tree and ignores the package's `__pycache__`.
+    package = _package(tmp_path)
+    _forge(package / "sub" / "b.py")  # in-tree: not read under a prefix
+    monkeypatch.setattr(sys, "pycache_prefix", str(tmp_path / "prefix"))
+    cfile = _forge(package / "a.py")
+    assert not cfile.is_relative_to(package)
+    assert _foreign(package) == [str(cfile)]
+
+
+def test_members_that_are_not_python_sources_have_no_cache(tmp_path):
+    package = _package(tmp_path)
+    _forge(package / "a.py")
+    (package / "data.txt").write_bytes(b"")
+    assert doctor_bytecode.foreign_bytecode(package, {"mcp_server/data.txt"}) == []
