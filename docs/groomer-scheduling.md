@@ -77,6 +77,10 @@ counts and the first real `--apply` run's `usd_spent` before trusting this
 ceiling in production**; the design doc explicitly flags this as unmeasured
 until exercised (§3(a), "Ce chiffre doit être mesuré empiriquement au
 premier dry-run").
+`usd_spent` sums only the costs the CLI reported; a call that reported none
+(non-zero exit, timeout, non-JSON output, absent `total_cost_usd`) is counted
+in `unpriced_calls` instead, so `usd_spent` is a lower bound whenever
+`unpriced_calls` > 0 (#733).
 
 ## Active-session guard
 
