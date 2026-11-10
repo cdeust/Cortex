@@ -49,7 +49,7 @@ from pathlib import Path
 from typing import Any
 
 SCHEMA = "cortex-native-receipt/1"  # source: this module's docstring (v1)
-KINDS = ("wheel", "source-tree")  # source: doctor_artifact.py _identify branches
+KINDS = ("wheel", "source-tree")  # source: doctor_artifact.py identify() branches
 OUTCOMES = ("passed", "failed")  # source: issue #730 (a receipt records failures)
 # source: doctor_artifact.members_digest, a sha256 hexdigest (64 hex characters)
 _DIGEST = re.compile(r"[0-9a-f]{64}")
@@ -107,6 +107,12 @@ def _artifact_errors(artifact: dict) -> list[str]:
     elif artifact["revision"] is not None and not _is_text(artifact["revision"]):
         errors.append("artifact.revision: expected a non-empty string or null")
     return errors + _not_text("artifact", artifact, ("version",))
+
+
+def artifact_errors(artifact: Any) -> list[str]:
+    """The schema errors of a receipt's ``artifact`` object on its own."""
+    missing = _missing("artifact", artifact, _FIELDS["artifact"])
+    return missing or _artifact_errors(artifact)
 
 
 def _check_errors(index: int, check: Any, digest: str, hosts: set) -> list[str]:
