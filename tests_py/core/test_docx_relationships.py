@@ -59,6 +59,11 @@ def test_a_relationship_without_an_id_is_absent():
     assert parse_docx_relationships(xml) == {}
 
 
+def test_a_relationship_without_a_target_is_absent():
+    xml = _rels('<Relationship Id="r" Type="t"/>', _rel("s", "media/b.png"))
+    assert parse_docx_relationships(xml) == {"s": "word/media/b.png"}
+
+
 def test_an_element_outside_the_package_namespace_is_ignored():
     foreign = '<Relationship xmlns="urn:x" Id="r" Target="a"/>'
     xml = f'<Relationships xmlns="{_NS}">{foreign}</Relationships>'

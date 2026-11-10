@@ -44,8 +44,8 @@ def identify_docx_images(
     digests = digest_docx_parts(path, wanted)
     identified: list[DocumentAttachment] = []
     for attachment in attachments:
-        part = parts.get(attachment.reference, "")
-        if part in digests:
+        part = parts.get(attachment.reference)
+        if part is not None and part in digests:
             digest, size = digests[part]
             attachment = replace(attachment, part=part, digest=digest, size=size)
         identified.append(attachment)

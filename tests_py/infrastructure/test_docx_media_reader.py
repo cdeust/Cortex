@@ -81,8 +81,9 @@ def test_a_member_whose_crc_fails_is_refused(tmp_path):
     at = raw.index(b"word/media/i.png") + len("word/media/i.png")
     raw[at] ^= 0xFF  # first stored data byte, after the local header's name
     p.write_bytes(bytes(raw))
-    with pytest.raises(DocumentReadError, match="cannot read word/media/i.png"):
+    with pytest.raises(DocumentReadError, match="cannot read word/media/i.png") as e:
         digest_docx_parts(p, ["word/media/i.png"])
+    assert str(p) in str(e.value)  # the error names the docx it came from
 
 
 def test_a_relationships_part_whose_crc_fails_is_refused(tmp_path):
@@ -93,8 +94,9 @@ def test_a_relationships_part_whose_crc_fails_is_refused(tmp_path):
     at = raw.index(_RELS.encode()) + len(_RELS)
     raw[at] ^= 0xFF  # first stored data byte, after the local header's name
     p.write_bytes(bytes(raw))
-    with pytest.raises(DocumentReadError, match="cannot read word/_rels"):
+    with pytest.raises(DocumentReadError, match="cannot read word/_rels") as e:
         read_docx_relationships_xml(p)
+    assert str(p) in str(e.value)
 
 
 def _corrupt_deflate(path, name: str, data: bytes):
@@ -119,3 +121,20 @@ def test_a_member_with_a_corrupt_deflate_stream_is_refused(tmp_path, name, read)
     p = _corrupt_deflate(tmp_path / "a.docx", name, b"<Relationships/>" * 64)
     with pytest.raises(DocumentReadError, match=f"cannot read {name}"):
         read(p)
+
+
+def test_a_part_is_read_in_bounded_chunks(tmp_path, monkeypatch):
+    """Memory stays bounded: no read asks for the whole member at once."""
+    image = b"x" * (3 * 65_536 + 1)
+    p = _zip(tmp_path / "a.docx", {"word/media/i.png": image})
+    sizes: list[int | None] = []
+    real_read = zipfile.ZipExtFile.read
+
+    def _read(self, n=-1):
+        sizes.append(n)
+        return real_read(self, n)
+
+    monkeypatch.setattr(zipfile.ZipExtFile, "read", _read)
+    out = digest_docx_parts(p, ["word/media/i.png"])
+    assert out["word/media/i.png"][1] == len(image)
+    assert sizes and all(n == 65_536 for n in sizes)

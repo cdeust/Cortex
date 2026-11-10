@@ -40,7 +40,7 @@ def _resolve_part(target: str) -> str:
     source: ECMA-376 Part 2 Annex A.3; RFC 3986 §5.2.4 (dot segments)
     """
     named = [s for s in target.split("/") if s not in ("", ".")]
-    if all(s == ".." for s in named):
+    if not named:
         return ""
     segments: list[str] = [] if target.startswith("/") else list(_SOURCE_DIR)
     for segment in named:
@@ -58,7 +58,8 @@ def parse_docx_relationships(rels_xml: str) -> dict[str, str]:
                    (``""`` when the package has none: no id resolves).
     Postcondition: ``{id: part}`` for every ``Relationship`` whose
                    ``TargetMode`` is not ``External`` and whose target names
-                   a part; external and empty targets are absent.
+                   a part; external, empty and missing ids or targets are
+                   absent.
     Raises:        :class:`DocumentParseError` on malformed XML, so a broken
                    package is reported, not read as one without images.
 
@@ -72,10 +73,10 @@ def parse_docx_relationships(rels_xml: str) -> dict[str, str]:
         raise DocumentParseError(f"malformed docx relationships XML: {exc}") from exc
     parts: dict[str, str] = {}
     for rel in root.iter(f"{{{_PKG_REL_NS}}}Relationship"):
-        rid = rel.get("Id", "")
-        if not rid or rel.get("TargetMode") == _EXTERNAL:
+        rid, target = rel.get("Id"), rel.get("Target")
+        if not rid or not target or rel.get("TargetMode") == _EXTERNAL:
             continue
-        part = _resolve_part(rel.get("Target", ""))
+        part = _resolve_part(target)
         if part:
             parts[rid] = part
     return parts
