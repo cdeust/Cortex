@@ -24,6 +24,21 @@ adheres to [Semantic Versioning](https://semver.org/).
   its `size`. A linked (external) image, a reference to an absent part and a
   Confluence image keep them empty. The bytes are identified, not stored: `state`
   stays `unsupported`.
+
+- `scripts/native_receipt_artifact.py` prints the `artifact` object of a
+  `cortex-native-receipt/1` receipt for the `mcp_server` the running interpreter
+  imports (#730). It reads the identity `cortex doctor` computes, now as data
+  (`mcp_server.doctor_artifact.identify`), instead of a receipt author copying the
+  doctor's text by hand, and refuses when the identity cannot be stated (git failure,
+  missing RECORD, a wheel whose files differ from its RECORD, no installed version,
+  checkout without a commit). `cortex doctor` now also counts a package file that an
+  installed wheel's RECORD does not list with a hash (a module, an extension, a
+  sourceless `.pyc`) as a difference from it; in a wheel or a source tree, a bytecode
+  cache that this interpreter would import (its `__pycache__`, or the `pycache_prefix`
+  tree when one is set) (importlib's header checks) counts as well unless its code
+  object is the compile of its hashed source; a stale cache it would reject (its
+  `--check-hash-based-pycs` policy included) does not. A sourceless `.pyc` in a source
+  tree counts too.
 - A benchmark run's `MANIFEST.json` now carries `runtime_artifact`: the `mcp_server`
   artifact the run imported, as `cortex doctor` names it (installed wheel or source
   tree, its revision, uncommitted changes, one digest over its members), with
@@ -129,6 +144,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Claude reviews of one pull request are admitted one at a time, so pushes whose
+  review runs overlap can no longer each count as the same round of the three
+  (ADR-1119).
+- The resolver is also woken by the end of the Claude review, not only by the end
+  of the Pipeline, so a pull request merges whichever finishes first (ADR-1127,
+  amends ADR-1121).
 - A Dependabot minor or patch update that touches only `uv.lock` or `pyproject.toml`
   merges on green required checks without a Claude verdict (ADR-1126, amends
   ADR-1121). Major updates, workflow or Dockerfile updates and every other pull
@@ -198,6 +219,14 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The project scope in SQL normalizes the stored `directory_context` the way
+  `memory_matches_project` already did: backslashes become `/` and a trailing
+  separator is dropped (#692 class 9, the 6 file-priming alias tests that stayed at
+  heat 0.5 in run 38008915302). `project_ancestors` yields `C:/work/repo` while a
+  memory recorded on Windows stores `C:\work\repo`, so file priming, the store's
+  hot and FTS queries and the session-start, auto-recall and agent-briefing hooks
+  matched no project-scoped Windows memory. One expression in `pg_scope_clause`
+  now serves both backends' clauses and the hooks' raw PostgreSQL queries.
 - The installer tests' uv stand-in is a `uv.cmd` on Windows, so PATH lookup reaches
   it instead of the runner's real uv (#692 class 9, 6 Windows setup errors in
   `test_installer_rerun_keeps_entries` in run 38008915302). `shutil.which` matches

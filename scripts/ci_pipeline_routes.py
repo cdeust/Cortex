@@ -14,8 +14,10 @@ DIRECT_EVENTS = (
     "push: branches: [main]"
 )
 ENGINE_EVENTS = "workflow_call: secrets: RELEASE_TAG_SSH_KEY: required: false"
+# The review's completion wakes the resolver as the Pipeline's does (ADR-1127).
 CALLER_EVENTS = (
-    "workflow_run: workflows: [Pipeline] types: [completed] branches-ignore: [main]"
+    "workflow_run: workflows: [Pipeline, PR Review] types: [completed] "
+    "branches-ignore: [main]"
 )
 CALLER_CONDITION = (
     "github.event.workflow_run.event == 'pull_request' "

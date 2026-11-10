@@ -8,6 +8,15 @@ on:
 
 permissions: {}
 
+# One review admission at a time per pull request: the budget counts completed
+# reviews, so two pushes whose runs overlap would each be admitted as the same
+# round (ADR-1119). A run in progress is never cancelled; of the runs waiting
+# behind it, GitHub keeps the newest, which is the head that matters.
+# source: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/control-the-concurrency-of-workflows-and-jobs
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
 jobs:
   budget:
     name: Claude review budget

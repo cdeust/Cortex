@@ -16,7 +16,7 @@ import unittest
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
-from unittest import mock
+import unittest.mock
 
 import yaml
 
@@ -160,8 +160,8 @@ class CliTests(unittest.TestCase):
             gh = fake_gh(runs, jobs)
             stdout = StringIO()
             with (
-                mock.patch.dict(os.environ, env),
-                mock.patch.object(budget, "gh_api", gh),
+                unittest.mock.patch.dict(os.environ, env),
+                unittest.mock.patch.object(budget, "gh_api", gh),
                 redirect_stdout(stdout),
             ):
                 self.assertEqual(budget.main(), 0)
@@ -192,6 +192,15 @@ class WorkflowWiringTests(unittest.TestCase):
             step
             for step in self.jobs["review"]["steps"]
             if step.get("uses", "").startswith("anthropics/claude-code-action@")
+        )
+
+    def test_reviews_of_one_pr_are_admitted_one_at_a_time(self):
+        self.assertEqual(
+            self.workflow["concurrency"],
+            {
+                "group": "claude-review-${{ github.event.pull_request.number }}",
+                "cancel-in-progress": False,
+            },
         )
 
     def test_the_counted_step_name_is_the_action_step(self):
