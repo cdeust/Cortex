@@ -212,6 +212,15 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- The benchmark manifests record the embedding a run served, not the configured
+  pin (#734, slice 2). `MANIFEST.json` (`benchmarks/lib/write_manifest.py`) and the
+  repro manifest of LongMemEval, LoCoMo and BEAM (`benchmarks/_repro.py`) now carry
+  `embedding_mode`, `embedding_model_state` and `embedding_model_name`, and
+  `embedding_model_revision` is the pinned revision only when the state is
+  `LOADED`, `null` otherwise. Before, a run in `PACKAGE_ABSENT` serving fallback
+  vectors recorded the same revision as a neural run, and the repro manifest had
+  no embedding identity at all.
+
 - The project scope in SQL normalizes the stored `directory_context` the way
   `memory_matches_project` already did: backslashes become `/` and a trailing
   separator is dropped (#692 class 9, the 6 file-priming alias tests that stayed at

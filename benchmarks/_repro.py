@@ -14,6 +14,7 @@ from typing import Any
 from importlib.metadata import version
 from mcp_server.core.reranker import ensure_reranker_loaded, model_sha256
 import benchmarks.lib._composition_root_wiring  # noqa: F401 — source: issue #560
+from benchmarks.lib.embedding_identity import embedding_manifest_fields
 
 
 def _git_sha() -> str:
@@ -103,6 +104,8 @@ def build_repro_manifest() -> dict[str, Any]:
     Postcondition: returns a dict with keys:
         git_commit, git_dirty, python_version, platform_system,
         platform_machine, platform_node, timestamp_utc, lib_versions,
+        embedding_mode, embedding_model_state, embedding_model_name,
+        embedding_model_revision (None unless the state is LOADED),
         reranker_active, reranker_state, reranker_model_path,
         reranker_model_sha256.
     The dict is JSON-serialisable (all values are str | bool | None | dict).
@@ -128,6 +131,7 @@ def build_repro_manifest() -> dict[str, Any]:
         "platform_node": platform.node(),
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "lib_versions": lib_versions,
+        **embedding_manifest_fields(),
         **_reranker_manifest_fields(),
     }
 
