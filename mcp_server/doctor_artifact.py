@@ -12,8 +12,9 @@ not be attributed to the running runtime. This check names the artifact:
   and any package file the ``RECORD`` does not list with a hash counted as a
   difference too: an unlisted or unhashed ``.py``, extension or sourceless
   ``.pyc`` would run while the digest still matched (Codex reviews on #957).
-  Bytecode under ``__pycache__`` is not counted, since Python writes it at
-  import;
+  Bytecode under ``__pycache__`` is not in RECORD (Python writes it at
+  import): a cache this interpreter would import counts as a difference unless
+  its code is the compile of its hashed source (``doctor_bytecode.py``);
 - a source tree (a checkout or an editable install): its git revision, whether
   ``mcp_server`` differs from it, and the same digest computed over its files,
   labelled as source evidence, never as a distributed artifact. In a git
@@ -44,6 +45,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable
 
 import mcp_server
+from mcp_server.doctor_bytecode import foreign_bytecode
 from mcp_server.shared.subprocess_safe import run_with_hard_timeout
 
 NAME = "Runtime artifact identity"  # source: issue #729 (title: artifact identity)
@@ -150,8 +152,7 @@ def _git(root: Path, *argv: str) -> str | None:
 
 def unrecorded(root: Path, listed: set[str]) -> list[str]:
     """The files under the package ``root`` absent from ``listed`` (hashed
-    RECORD paths), bytecode under ``__pycache__`` aside: Python writes it at
-    import."""
+    RECORD paths), ``__pycache__`` aside: ``doctor_bytecode`` checks it."""
     found = []
     for path in sorted(root.rglob("*")):
         relative = path.relative_to(root)
@@ -170,7 +171,8 @@ def _wheel(dist: Any, rows: list, root: Path) -> Identity:
             altered.append(path)
     # Only a hashed row vouches for a file: an unhashed one (``path,,``) is never
     # verified nor digested, so it counts as unrecorded (Codex review on #957).
-    altered += unrecorded(root, {path for path, _ in rows})
+    hashed = {path for path, _ in rows}
+    altered += unrecorded(root, hashed) + foreign_bytecode(root, hashed)
     fix = _reinstall(dist.version) if altered else None
     return Identity(
         "wheel", dist.version, None, bool(altered), tuple(rows), root,

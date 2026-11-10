@@ -5,6 +5,10 @@
 ``Identity``: kind, version, revision, modified, members, location, and the
 ``unknown``/``fix`` pair that makes the check fail and the producer refuse."""
 
+import importlib.util
+import py_compile
+import sys
+
 from mcp_server import doctor_artifact
 from mcp_server.doctor_artifact import Identity
 from tests_py.test_doctor_artifact import (
@@ -105,11 +109,24 @@ def test_a_package_file_absent_from_record_is_an_alteration(monkeypatch, tmp_pat
 
 def test_import_bytecode_is_not_an_alteration(monkeypatch, tmp_path):
     package, dist = _wheel_install(tmp_path)
-    (package / "__pycache__").mkdir()
-    (package / "__pycache__" / "a.cpython-311.pyc").write_bytes(b"\0")
+    py_compile.compile(str(package / "a.py"), doraise=True)
     _imported_from(monkeypatch, package, dist)
     found = doctor_artifact.identify()
     assert (found.altered, found.modified, found.fix) == ((), False, None)
+
+
+def test_forged_import_bytecode_is_an_alteration(monkeypatch, tmp_path):
+    # Codex security review on #957: a timestamp-valid cache runs in place of
+    # the RECORD-matching source.
+    package, dist = _wheel_install(tmp_path)
+    (tmp_path / "evil.py").write_bytes(b"x = 2\n")
+    cache = importlib.util.cache_from_source(str(package / "a.py"))
+    py_compile.compile(str(tmp_path / "evil.py"), cfile=cache, doraise=True)
+    _imported_from(monkeypatch, package, dist)
+    found = doctor_artifact.identify()
+    tag = sys.implementation.cache_tag
+    assert found.altered == (f"mcp_server/__pycache__/a.{tag}.pyc",)
+    assert (found.modified, found.fix) == (True, REINSTALL)
 
 
 def test_a_file_listed_without_a_hash_is_an_alteration(monkeypatch, tmp_path):
