@@ -52,7 +52,7 @@ class DistillDrainResult:
     dossier_kind: str
     status: str  # "attempted" | "skipped-solo-mode" | "skipped-budget" | "failed"
     duration_ms: int
-    cost_usd: float
+    cost_usd: float | None  # None: the call ran and reported no cost (#733)
     detail: str = ""
 
 
@@ -69,6 +69,7 @@ class DistillCycleSummary:
     usd_spent: float
     wall_clock_ms: int
     results: list[DistillDrainResult] = field(default_factory=list)
+    unpriced_calls: int = 0  # calls absent from usd_spent (#733)
 
 
 async def run_distill_drain_cycle(
@@ -175,4 +176,5 @@ async def run_distill_drain_cycle(
         usd_spent=budget.usd_spent,
         wall_clock_ms=wall_ms,
         results=results,
+        unpriced_calls=budget.unpriced_calls,
     )

@@ -8,6 +8,15 @@ on:
 
 permissions: {}
 
+# One review admission at a time per pull request: the budget counts completed
+# reviews, so two pushes whose runs overlap would each be admitted as the same
+# round (ADR-1119). A run in progress is never cancelled; of the runs waiting
+# behind it, GitHub keeps the newest, which is the head that matters.
+# source: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/control-the-concurrency-of-workflows-and-jobs
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
 jobs:
   budget:
     name: Claude review budget
@@ -70,6 +79,23 @@ jobs:
           ref: main
           fetch-depth: 1
           persist-credentials: false
+      # A private repository cannot be fetched anonymously, and the pinned action
+      # fetches the PR head before its own git auth (run 42785671958 of
+      # ci-autonome: "could not read Username for 'https://github.com'"). The
+      # step runs only there, so this file is the same in every repository.
+      # source: pinned action src/modes/tag/index.ts#L79 fetches the PR head
+      # (src/github/operations/branch.ts#L241), and
+      # src/github/operations/git-config.ts#L78-L81 unsets this local header
+      # before Claude runs.
+      - name: Authorize pinned action fetch
+        if: github.event.repository.private
+        env:
+          FETCH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          basic="$(printf 'x-access-token:%s' "$FETCH_TOKEN" | base64 | tr -d '\n')"
+          echo "::add-mask::$basic"
+          git config --local "http.$GITHUB_SERVER_URL/.extraheader" "AUTHORIZATION: basic $basic"
       - name: Install subprocess isolation
         run: |
           sudo apt-get update
@@ -90,7 +116,7 @@ jobs:
           allowed_bots: "claude[bot],chatgpt-codex-connector[bot],dependabot[bot]"
           prompt: |
             /review-pr REPO: ${{ github.repository }} PR_NUMBER: ${{ github.event.pull_request.number }}
-            Complete all five reviews using foreground agents and wait for their actual reports.
+            Complete every review /review-pr lists using foreground agents and wait for their actual reports.
             Use `gh pr comment` for top-level feedback and a completion summary, including when there are no findings.
             Only post GitHub comments - don't submit review text as messages.
             Review contract (ADR-1119): this is review ${{ needs.budget.outputs.round }} of at most ${{ needs.budget.outputs.cap }}.
@@ -99,6 +125,7 @@ jobs:
             The commit reviewed by the previous review is "${{ needs.budget.outputs.reviewed_sha }}" (empty on the first review). If it is not empty: first check that each earlier Blocker is fixed, then review only the commits pushed after it (gh pr view --json commits) and do not re-audit unchanged code.
             On the last review, say which part of the PR is accepted and which files or commits carry the open Blockers, so the author can merge the accepted part and send the rest to a refinement PR.
             End with exactly one line: "Verdict: approve" or "Verdict: block".
+            The resolver reads a verdict only from a comment that links this run (ADR-1130): in every comment that carries the verdict line, the `gh pr comment` review included, put the line "[View job run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" just before it.
           # Scoped gh permissions are from upstream docs/solutions.md.
           claude_args: |
             --strict-mcp-config

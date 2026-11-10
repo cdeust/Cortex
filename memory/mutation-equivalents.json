@@ -624,6 +624,22 @@
       "kind": "equivalent-by-construction",
       "rationale": "`_LOCAL` is False and memory_matches_project reads is_global only as `if is_global:` (mcp_server/shared/project_scope.py), so None and False take the same branch for every directory and root: the directory rule is never global. The local branch itself is pinned by the test_ghsa_7848_directory_* cases that refuse a folder above another project.",
       "issue": "#977"
+    },
+    {
+      "mutant": "mcp_server.infrastructure.docx_media_reader.x__stream_member__mutmut_4",
+      "removed": "with archive.open(name, mode=\"r\") as member:",
+      "added": "with archive.open(name, ) as member:",
+      "kind": "equivalent-by-construction",
+      "rationale": "ZipFile.open(name, mode='r', pwd=None, *, force_zip64=False) defaults mode to 'r', so dropping the keyword opens the same read-only ZipExtFile and streams the same bytes. The explicit mode=\"r\" exists only so the ADR-1110 storage-primitive scanner (tests_py/architecture/_storage_primitives.py) reads the call as a read, which test_every_storage_primitive_is_an_audited_site pins.",
+      "issue": "#732"
+    },
+    {
+      "mutant": "mcp_server.infrastructure.docx_media_reader.x_read_docx_relationships_xml__mutmut_18",
+      "removed": "return raw.decode(\"utf-8\")",
+      "added": "return raw.decode(\"UTF-8\")",
+      "kind": "equivalent-by-construction",
+      "rationale": "Python's codec registry normalises encoding names before lookup (codecs.lookup lower-cases them), so 'utf-8' and 'UTF-8' select the same codec: every byte string decodes to the same text or raises the same UnicodeDecodeError, which the undecodable-bytes test pins.",
+      "issue": "#732"
     }
   ]
 }

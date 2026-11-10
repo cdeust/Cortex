@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "Pinned vendor CLIs used only to validate Cortex host configuration in CI",
   "dependencies": {
-    "@anthropic-ai/claude-code": "2.1.220",
+    "@anthropic-ai/claude-code": "2.1.251",
     "@google/gemini-cli": "0.53.1",
     "@openai/codex": "0.146.0"
   }

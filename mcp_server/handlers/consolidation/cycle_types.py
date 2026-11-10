@@ -30,6 +30,9 @@ class CycleBudget:
     deadline: float  # time.monotonic() timestamp
     usd_cap: float  # <=0 means no USD cap
     usd_spent: float = field(default=0.0)
+    # Calls whose cost the CLI did not report: usd_spent excludes them, so
+    # usd_spent is a lower bound whenever this is > 0 (#733).
+    unpriced_calls: int = field(default=0)
 
 
 def cycle_budget_time_left(budget: "CycleBudget") -> float:
@@ -44,12 +47,16 @@ def cycle_budget_exhausted(budget: "CycleBudget") -> bool:
     return budget.usd_cap > 0 and budget.usd_spent >= budget.usd_cap
 
 
-def cycle_budget_charge(budget: "CycleBudget", usd: float) -> None:
-    """Add ``usd`` to the running spend.
+def cycle_budget_charge(budget: "CycleBudget", usd: float | None) -> None:
+    """Add ``usd`` to the running spend, or count the call as unpriced.
 
-    Pre-condition:  ``usd`` >= 0.
-    Post-condition: ``budget.usd_spent`` incremented by ``usd``.
+    Pre-condition:  ``usd`` is None (cost not reported) or >= 0.
+    Post-condition: ``budget.usd_spent`` incremented by ``usd``, or
+                    ``budget.unpriced_calls`` incremented by 1 when None.
     """
+    if usd is None:
+        budget.unpriced_calls += 1
+        return
     budget.usd_spent += usd
 
 
@@ -80,3 +87,5 @@ class CycleSummary:
     # source: ADR-0354
     wall_clock_ms: int = 0
     skipped_budget: int = 0
+    # source: #733 — calls absent from usd_spent because no cost was reported
+    unpriced_calls: int = 0

@@ -69,7 +69,7 @@ class PipelineRoutesTests(unittest.TestCase):
             ("github.event.workflow_run.conclusion == 'success'", "true"),
             ("github.event.workflow_run.event == 'pull_request'", "true"),
             ("branches-ignore: [main]", "branches-ignore: [other]"),
-            ("workflows: [Pipeline]", "workflows: [Other]"),
+            ("workflows: [Pipeline, PR Review]", "workflows: [Other]"),
         ):
             with self.subTest(before=before):
                 changed = self.caller.replace(before, after)
