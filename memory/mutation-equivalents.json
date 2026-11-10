@@ -616,6 +616,14 @@
       "kind": "equivalent-by-construction",
       "rationale": "The empty default is returned only when no word precedes the date, and _interval only tests the result for membership in _CLOSED_FRAMES (whose opening words are 'from' and 'between'), _OPEN_END_WORDS ('since') and _OPEN_START_WORDS ('until', 'till'). Neither \"\" nor \"XXXX\" is one of those words, so both defaults leave the event time unknown; the no-preceding-word case is pinned by '2026-01 until 2026-03 we used Redis.' in tests_py/core/test_claim_event_time.py.",
       "issue": "#717"
+    },
+    {
+      "mutant": "mcp_server.handlers._write_scope.x__reached_projects__mutmut_15",
+      "removed": "if memory_matches_project(form, _LOCAL, root) or root in project_ancestors(form)",
+      "added": "if memory_matches_project(form, None, root) or root in project_ancestors(form)",
+      "kind": "equivalent-by-construction",
+      "rationale": "`_LOCAL` is False and memory_matches_project reads is_global only as `if is_global:` (mcp_server/shared/project_scope.py), so None and False take the same branch for every directory and root: the directory rule is never global. The local branch itself is pinned by the test_ghsa_7848_directory_* cases that refuse a folder above another project.",
+      "issue": "#977"
     }
   ]
 }

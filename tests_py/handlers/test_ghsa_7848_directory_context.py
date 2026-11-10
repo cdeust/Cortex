@@ -129,6 +129,9 @@ def test_a_relative_directory_or_a_label_reaches_no_session(projects, monkeypatc
     reached = _write_scope._reached_projects
     assert reached("src") == reached("run:42") == reached("") == frozenset()
     assert reached(None) == frozenset()
+    # A relative path of two parts has one ancestor only: the absolute test reads
+    # that one (unit job of PR #977, mutant `ancestors[1]`).
+    assert reached("src/notes") == frozenset()
 
 
 def test_the_refusal_names_the_project_and_the_session(projects, monkeypatch):
