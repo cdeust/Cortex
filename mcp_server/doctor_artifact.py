@@ -33,6 +33,7 @@ import base64
 import csv
 import hashlib
 import sys
+from dataclasses import dataclass
 from importlib import metadata
 from pathlib import Path
 from typing import Any, Callable, Iterable
@@ -106,20 +107,31 @@ def wheel_members(dist: Any) -> list[tuple[str, str]]:
     return rows
 
 
-def _installed(check: Callable[..., Any], dist: Any, rows: list) -> Any:
-    altered = []
-    for path, expected in rows:
-        file = Path(str(dist.locate_file(path)))
-        if not file.is_file() or record_hash(file.read_bytes()) != expected:
-            altered.append(path)
-    detail = (
-        f"installed {DISTRIBUTION} {dist.version}, {len(rows)} {PACKAGE} "
-        f"members, digest {members_digest(rows)}"
-    )
-    if altered:
-        detail += f"; {len(altered)} differ from its RECORD, first {altered[0]}"
-        return check(NAME, False, detail, _reinstall(dist.version), optional=True)
-    return check(NAME, True, detail, optional=True)
+@dataclass(frozen=True)
+class Identity:
+    """The running ``mcp_server`` as data: the check and a receipt both read it.
+
+    ``kind`` is ``wheel`` or ``source-tree``; ``version`` is ``None`` when no
+    installed distribution names one; ``revision`` is the git sha of a checkout
+    (``None`` for a wheel, a tree outside git or a checkout without a commit);
+    ``modified`` says ``mcp_server`` differs from what names it (a wheel's
+    RECORD, a checkout's revision); ``unknown`` says why the identity cannot be
+    stated, with ``fix`` the repair the check prints."""
+
+    kind: str
+    version: str | None
+    revision: str | None
+    modified: bool
+    members: tuple[tuple[str, str], ...]
+    location: Path
+    in_git: bool = False
+    altered: tuple[str, ...] = ()
+    unknown: str | None = None
+    fix: str | None = None
+
+    @property
+    def digest(self) -> str:
+        return members_digest(self.members)
 
 
 def _reinstall(version: str) -> str:
@@ -131,20 +143,25 @@ def _git(root: Path, *argv: str) -> str | None:
     return run_with_hard_timeout(["git", *argv], cwd=root, timeout=_GIT_TIMEOUT_S)
 
 
-def _tree_detail(root: Path, where: str, version: str, members: list) -> str:
-    return (
-        f"source tree {root.parent} {where} (version {version}), "
-        f"{len(members)} {PACKAGE} files, digest {members_digest(members)}; "
-        "source evidence, not a distributed artifact"
-    )
+def _wheel(dist: Any, rows: list, root: Path) -> Identity:
+    altered = []
+    for path, expected in rows:
+        file = Path(str(dist.locate_file(path)))
+        if not file.is_file() or record_hash(file.read_bytes()) != expected:
+            altered.append(path)
+    fix = _reinstall(dist.version) if altered else None
+    return Identity(
+        "wheel", dist.version, None, bool(altered), tuple(rows), root,
+        altered=tuple(altered), fix=fix,
+    )  # fmt: skip
 
 
-def _source_tree(check: Callable[..., Any], root: Path, version: str) -> Any:
+def _source_tree(root: Path, version: str | None) -> Identity:
     if not (root.parent / ".git").exists():
         # No repository to ask: the digest is the tree's only identity.
-        detail = _tree_detail(root, "outside git", version, tree_members(root))
-        return check(NAME, True, detail, optional=True)
-    revision = _git(root.parent, "rev-parse", "HEAD") or "no git revision"
+        members = tuple(tree_members(root))
+        return Identity("source-tree", version, None, False, members, root)
+    revision = _git(root.parent, "rev-parse", "HEAD")
     changes = _git(root.parent, "status", "--porcelain", "--", PACKAGE)
     listed = _git(
         root.parent,
@@ -157,17 +174,72 @@ def _source_tree(check: Callable[..., Any], root: Path, version: str) -> Any:
         PACKAGE,
     )
     names = None if listed is None else [n for n in listed.split("\0") if n]
-    state = " with uncommitted changes" if changes else ""
-    members = tree_members(root, names)
-    detail = _tree_detail(root, f"at {revision}{state}", version, members)
+    members = tuple(tree_members(root, names))
+    unknown = fix = None
     if changes is None or names is None:
         # git failed or timed out: the tree is not known to match the revision,
         # and its file list falls back to every file under the package.
         failed = "status" if changes is None else "ls-files"
-        detail += f"; revision state unknown: `git {failed}` failed"
+        unknown = f"revision state unknown: `git {failed}` failed"
         fix = f"Run `git -C {root.parent} {failed}` to see why git cannot answer"
-        return check(NAME, False, detail, fix, optional=True)
-    return check(NAME, True, detail, optional=True)
+    return Identity(
+        "source-tree", version, revision or None, bool(changes), members, root,
+        in_git=True, unknown=unknown, fix=fix,
+    )  # fmt: skip
+
+
+def identify() -> Identity:
+    """Identify the artifact this process imports ``mcp_server`` from.
+
+    Raises ``OSError``, ``RuntimeError`` or ``ValueError`` when a file, a RECORD
+    or the package path cannot be read (a symlink loop: ``RuntimeError`` up to
+    Python 3.12; from 3.13 only ``strict=True`` raises, so it is resolved so)."""
+    root = Path(mcp_server.__file__).parent.resolve(strict=True)
+    try:
+        dist = metadata.distribution(DISTRIBUTION)
+    except metadata.PackageNotFoundError:
+        return _source_tree(root, None)
+    if Path(str(dist.locate_file(PACKAGE))).resolve() != root:
+        return _source_tree(root, dist.version)
+    if dist.read_text("RECORD") is None:
+        # An installed wheel whose RECORD is gone cannot be checked against
+        # anything; describing it as a source tree would hide that.
+        unknown = f"installed {DISTRIBUTION} {dist.version} has no RECORD"
+        return Identity(
+            "wheel", dist.version, None, False, (), root,
+            unknown=unknown, fix=_reinstall(dist.version),
+        )  # fmt: skip
+    rows = wheel_members(dist)
+    if rows:
+        return _wheel(dist, rows, root)
+    return _source_tree(root, dist.version)
+
+
+def _detail(found: Identity) -> str:
+    count = len(found.members)
+    if found.kind == "wheel":
+        if found.unknown and not found.members:
+            return found.unknown
+        detail = (
+            f"installed {DISTRIBUTION} {found.version}, {count} {PACKAGE} "
+            f"members, digest {found.digest}"
+        )
+        if found.altered:
+            detail += (
+                f"; {len(found.altered)} differ from its RECORD, "
+                f"first {found.altered[0]}"
+            )
+        return detail
+    where = "outside git"
+    if found.in_git:
+        state = " with uncommitted changes" if found.modified else ""
+        where = f"at {found.revision or 'no git revision'}{state}"
+    detail = (
+        f"source tree {found.location.parent} {where} (version "
+        f"{found.version or 'unknown'}), {count} {PACKAGE} files, digest "
+        f"{found.digest}; source evidence, not a distributed artifact"
+    )
+    return detail + (f"; {found.unknown}" if found.unknown else "")
 
 
 def artifact_identity(check: Callable[..., Any]) -> Any:
@@ -177,34 +249,14 @@ def artifact_identity(check: Callable[..., Any]) -> Any:
     Post-condition: an optional check; it fails when an installed wheel's
     files differ from its own RECORD or its RECORD is gone, when git cannot
     state a checkout's revision state or file list, or when a file or RECORD
-    cannot be read (the failure names
-    it; the other doctor checks still run)."""
+    cannot be read (the failure names it; the other doctor checks still run)."""
     try:
-        return _identify(check)
+        found = identify()
     except (OSError, RuntimeError, ValueError) as exc:
-        # A symlink loop is this check's failure, not doctor's. Up to Python 3.12
-        # resolve() raises RuntimeError on one; from 3.13 only strict=True raises
-        # (OSError), so the path is resolved strictly.
+        # A symlink loop is this check's failure, not doctor's.
         return check(
             NAME, False, f"cannot read the running artifact: {exc}", optional=True
         )
-
-
-def _identify(check: Callable[..., Any]) -> Any:
-    root = Path(mcp_server.__file__).parent.resolve(strict=True)
-    try:
-        dist = metadata.distribution(DISTRIBUTION)
-    except metadata.PackageNotFoundError:
-        return _source_tree(check, root, "unknown")
-    if Path(str(dist.locate_file(PACKAGE))).resolve() != root:
-        return _source_tree(check, root, dist.version)
-    if dist.read_text("RECORD") is None:
-        # An installed wheel whose RECORD is gone cannot be checked against
-        # anything; describing it as a source tree would hide that.
-        detail = f"installed {DISTRIBUTION} {dist.version} has no RECORD"
-        fix = _reinstall(dist.version)
-        return check(NAME, False, detail, fix, optional=True)
-    rows = wheel_members(dist)
-    if rows:
-        return _installed(check, dist, rows)
-    return _source_tree(check, root, dist.version)
+    if found.fix:
+        return check(NAME, False, _detail(found), found.fix, optional=True)
+    return check(NAME, True, _detail(found), optional=True)
