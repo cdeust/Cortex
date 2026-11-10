@@ -71,11 +71,12 @@ def test_a_clean_wheel_is_distributed_evidence():
     assert nr.is_distributed(receipt)
 
 
-def test_a_wheel_differing_from_its_record_is_not_distributed():
+def test_a_wheel_differing_from_its_record_is_refused():
+    # Codex review on #957: the digest of an altered wheel is its RECORD's, so
+    # two differently altered installs would share it; no receipt binds to it.
     found = _wheel(modified=True, altered=("mcp_server/a.py",), fix="reinstall")
-    receipt = _receipt(producer.receipt_artifact(found))
-    assert nr.validate(receipt) == []
-    assert not nr.is_distributed(receipt)
+    with pytest.raises(producer.UnstatedIdentityError, match="differs from its RECORD"):
+        producer.receipt_artifact(found)
 
 
 def test_a_checkout_carries_its_revision_and_changes():
@@ -138,12 +139,13 @@ def test_an_installed_wheel_produces_a_valid_receipt_artifact(monkeypatch, tmp_p
     }
 
 
-def test_a_tampered_wheel_is_produced_as_modified(monkeypatch, tmp_path):
+def test_a_tampered_wheel_is_refused(monkeypatch, tmp_path):
     package, dist = _wheel_install(tmp_path, tamper=True)
     _imported_from(monkeypatch, package, dist)
     found = doctor_artifact.identify()
     assert (found.modified, found.altered) == (True, ("mcp_server/a.py",))
-    assert producer.receipt_artifact(found)["modified"] is True
+    with pytest.raises(producer.UnstatedIdentityError, match="reinstall it"):
+        producer.receipt_artifact(found)
 
 
 def test_a_checkout_without_an_installed_version_is_refused(monkeypatch, tmp_path):

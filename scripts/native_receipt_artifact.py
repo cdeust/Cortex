@@ -9,11 +9,13 @@ the doctor's identity as data (``mcp_server.doctor_artifact.identify``) and
 prints the receipt fields, checked against the receipt schema before output.
 
 It refuses, and prints why, when the identity cannot be stated: git could not
-answer, an installed wheel has no RECORD, no installed distribution names the
-version, or a checkout has no commit to bind to. A refusal is never a guessed
-field. A wheel whose files differ from its RECORD is printed with
-``modified: true``: that is a true identity, and ``native_receipt.py`` then
-reports the receipt as source evidence, not distributed evidence.
+answer, an installed wheel has no RECORD or its files differ from that RECORD,
+no installed distribution names the version, or a checkout has no commit to
+bind to. A refusal is never a guessed field. An altered wheel is refused because
+its ``members_digest`` is computed over its RECORD hashes, not over the files
+that run: two differently altered installs would carry the same digest, so
+checks run on either could be merged into one receipt (Codex review on #957).
+The doctor fails the same install with a reinstall fix.
 
 Run it with the interpreter the host runs, so it imports the same ``mcp_server``.
 
@@ -48,6 +50,11 @@ def receipt_artifact(found: Identity) -> dict:
     Raises ``UnstatedIdentityError`` when ``found`` cannot be stated."""
     if found.unknown:
         raise UnstatedIdentityError(found.unknown)
+    if found.altered:
+        raise UnstatedIdentityError(
+            f"the installed wheel differs from its RECORD ({found.altered[0]} "
+            "first): its digest does not name the running files; reinstall it"
+        )
     if found.version is None:
         raise UnstatedIdentityError("no installed hypermnesia-mcp names the version")
     if found.in_git and found.revision is None:
