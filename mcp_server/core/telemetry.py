@@ -8,6 +8,7 @@ import json
 import logging
 import threading
 import time
+import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -29,8 +30,9 @@ class TelemetryExporter(Protocol):
       - ``export`` receives the same dict shape written to the JSONL log
         (``ts``, ``op``, ``latency_ms``, ``bytes_in``, ``bytes_out``,
         ``result_count``, ``ok``, ``skipped``, ``tier``,
-        ``reranked_count``, ``stage_ms``). ``skipped`` is true only on a declined
-        operation (``ok`` is then false): it is not an error.
+        ``reranked_count``, ``stage_ms``, ``operation_id``). ``skipped`` is true
+        only on a declined operation (``ok`` is then false): it is not an error.
+        ``operation_id`` is unbounded in cardinality: never a metric attribute.
       - ``export`` MUST NOT raise for control flow that reaches the
         caller -- ``record()`` catches any exception defensively, but a
         well-behaved implementation handles its own I/O errors.
@@ -86,6 +88,8 @@ class TelemetrySample(TypedDict):
     tier: str | None
     reranked_count: int
     stage_ms: dict[str, float]
+    # One MCP tool call; None outside one (hooks, capture worker). Issue #733.
+    operation_id: str | None
 
 
 @dataclass
@@ -95,13 +99,20 @@ class _Capture:
 
 
 _capture: ContextVar[_Capture | None] = ContextVar("telemetry_capture", default=None)
+_operation: ContextVar[str | None] = ContextVar("telemetry_operation", default=None)
 
 
 @contextmanager
 def capture_records() -> Iterator[list[TelemetrySample]]:
-    """Defer publication; copied worker contexts publish directly after closure."""
+    """Defer publication; copied worker contexts publish directly after closure.
+
+    postcondition: every sample recorded in this context, or in a context
+    copied from it (a worker thread, a task spawned during the call, even one
+    that records after closure), carries the same fresh ``operation_id``.
+    """
     captured = _Capture()
     token = _capture.set(captured)
+    operation = _operation.set(uuid.uuid4().hex)
     try:
         yield captured.samples
     finally:
@@ -109,6 +120,7 @@ def capture_records() -> Iterator[list[TelemetrySample]]:
 
         with _lock:
             captured.closed = True
+        _operation.reset(operation)
         _capture.reset(token)
 
 
@@ -151,7 +163,13 @@ def record(
         "tier": retrieval.tier,
         "reranked_count": retrieval.reranked_count,
         "stage_ms": dict(retrieval.stage_ms),
+        "operation_id": _operation.get(),
     }
+    _deliver(sample)
+
+
+def _deliver(sample: TelemetrySample) -> None:
+    """Defer to the open capture of this context, else publish now."""
     captured = _capture.get()
     with _lock:
         if captured is not None and not captured.closed:
