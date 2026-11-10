@@ -152,7 +152,15 @@ def test_engine_cache_folder_wins_then_sentence_transformers_home(monkeypatch):
     monkeypatch.setattr(
         embedding_weights_cache, "embedding_cache_dir", lambda: "/cortex"
     )
-    assert embedding_weights_cache.embedding_hub_cache() == "/cortex"
+    assert embedding_weights_cache.embedding_hub_cache() == os.path.realpath("/cortex")
     monkeypatch.setattr(embedding_weights_cache, "embedding_cache_dir", lambda: None)
     monkeypatch.setenv("SENTENCE_TRANSFORMERS_HOME", "/st")
-    assert embedding_weights_cache.embedding_hub_cache() == "/st"
+    assert embedding_weights_cache.embedding_hub_cache() == os.path.realpath("/st")
+
+
+def test_a_home_relative_cache_is_expanded_as_the_loader_does(monkeypatch):
+    # hf_hub_download (1.33.0) loads from Path(cache_dir).expanduser().resolve().
+    monkeypatch.setattr(embedding_weights_cache, "embedding_cache_dir", lambda: None)
+    monkeypatch.setenv("SENTENCE_TRANSFORMERS_HOME", os.path.join("~", "models"))
+    expected = os.path.realpath(os.path.join(os.path.expanduser("~"), "models"))
+    assert embedding_weights_cache.embedding_hub_cache() == expected

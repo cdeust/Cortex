@@ -40,12 +40,18 @@ def _hf_hub_cache() -> str:
 def embedding_hub_cache() -> str:
     """The hub cache the engine loads from: Cortex's own ``cache_folder``,
     else ``SENTENCE_TRANSFORMERS_HOME`` (read by sentence-transformers when
-    ``cache_folder`` is None, base/model.py), else huggingface_hub's default."""
-    return (
+    ``cache_folder`` is None, base/model.py), else huggingface_hub's default.
+
+    Normalized as hf_hub_download normalizes it before any lookup
+    (huggingface_hub 1.33.0 file_download.py:
+    ``str(Path(cache_dir).expanduser().resolve())``), so ``~/models`` names
+    the directory the engine reads, not a literal ``~`` under the cwd."""
+    cache = (
         embedding_cache_dir()
         or os.environ.get("SENTENCE_TRANSFORMERS_HOME")
         or _hf_hub_cache()
     )
+    return os.path.realpath(os.path.expanduser(cache))
 
 
 def repo_cache_dir(cache: str, model_name: str) -> str:
