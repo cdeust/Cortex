@@ -20,7 +20,9 @@ adheres to [Semantic Versioning](https://semver.org/).
   A domain that is an identity already (resolved from a path, stored on a row) is
   never resolved through the name aliases a second time: where a directory name is
   also another family's domain, that family keeps its own writes and the aliased
-  project cannot change its rows. A memory-replica refresh reads every replica of
+  project cannot change its rows. A name given to `ingest_prd` or `ingest_document`
+  that is itself another project's domain is refused, never redirected to the
+  session's project. A memory-replica refresh reads every replica of
   the block, so another project's row no longer hides this session's own.
   A global memory reaches every project, so an explicit `is_global=true` (in
   `remember` or `anchor`) needs `CORTEX_CROSS_PROJECT_WRITES=*`; a global scope the

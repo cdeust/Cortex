@@ -73,10 +73,13 @@ def require_writable_domain(
     The check reads the resolved domain, so the caller stores that one, never the
     raw argument: a name that resolves to the session's own project (a directory
     name, a family member) can also be another family's canonical, and rows stored
-    under the raw name would reach that family's hot memories. A name that resolves
+    under the raw name would reach that family's hot memories. A name that is itself
+    a project's domain is that domain, whatever alias it also carries: it is refused
+    from another project, never redirected to the session's. A name that resolves
     to no known project is a shared domain and is returned as given.
     """
-    target = resolve_explicit_domain(domain or "")
+    name = (domain or "").strip().lower()
+    target = name if name in project_domains() else resolve_explicit_domain(name)
     if _refused_domain(target, environ) is not None:
         _refuse(target, tool, environ)
     return target if target in project_domains() else (domain or "")
