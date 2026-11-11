@@ -135,10 +135,22 @@ def build_repro_manifest() -> dict[str, Any]:
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "lib_versions": lib_versions,
         **reranker,
-        # source: issue #734 — embedding "served" is filled by
-        # record_embedding_identity once the benchmark's engine has served.
-        "runtime_manifest": effective_manifest(reranker_served=reranker),
+        "runtime_manifest": _runtime_manifest(reranker),
     }
+
+
+def _runtime_manifest(reranker: dict[str, Any]) -> dict[str, Any]:
+    """The effective manifest of the run, without the reranker cache path (a
+    path names the home directory). Embedding ``served`` and
+    ``device_requested`` stay None until ``record_embedding_identity`` reads
+    the benchmark's own engine: ``BenchmarkDB`` builds it with its default
+    device, not the factory setting.
+
+    source: issue #734"""
+    served = {k: v for k, v in reranker.items() if k != "reranker_model_path"}
+    manifest = effective_manifest(reranker_served=served)
+    manifest["embedding"]["device_requested"] = None
+    return manifest
 
 
 def record_embedding_identity(repro: dict[str, Any], engine: Any) -> None:
@@ -150,7 +162,8 @@ def record_embedding_identity(repro: dict[str, Any], engine: Any) -> None:
     postcondition: ``repro`` carries ``embedding_mode``,
         ``embedding_model_state``, ``embedding_model_name`` and
         ``embedding_model_revision`` (None unless the state is LOADED), and
-        ``runtime_manifest.embedding.served`` holds the same fields.
+        ``runtime_manifest.embedding`` holds the same fields under ``served``
+        and the engine's ``device_requested``.
     raises: RuntimeError when an earlier run of the same invocation recorded a
         different identity; one result must not average neural and fallback runs.
     """
@@ -162,7 +175,9 @@ def record_embedding_identity(repro: dict[str, Any], engine: Any) -> None:
         )
     repro.update(fields)
     if "runtime_manifest" in repro:
-        repro["runtime_manifest"]["embedding"]["served"] = fields
+        embedding = repro["runtime_manifest"]["embedding"]
+        embedding["served"] = fields
+        embedding["device_requested"] = engine.device_requested
 
 
 def multi_run_stats(values: list[float]) -> dict[str, float | int | None]:

@@ -19,7 +19,9 @@ What it holds, and what it leaves out:
   digest, the identity of the weights on disk (``classify_weights``,
   ``classify_model_digest``), never their path. ``served`` is what the caller's
   engine served (mode, ``ModelState``, revision when loaded): a benchmark
-  passes it; ``cortex-doctor`` loads no model, so it writes None.
+  passes it; ``cortex-doctor`` loads no model, so it writes None. A caller
+  removes any path from what it passes (``_repro`` drops
+  ``reranker_model_path``).
 
 It reads files only: it never downloads, loads or deletes a model.
 
@@ -50,10 +52,7 @@ from mcp_server.infrastructure.embedding_weights_cache import (
     weights_path,
 )
 from mcp_server.infrastructure.memory_config import get_memory_settings
-from mcp_server.infrastructure.reranker_cache import (
-    reranker_cache_dir,
-    reranker_model_sha256,
-)
+from mcp_server.infrastructure.reranker_cache import reranker_model_sha256
 
 # source: issue #734; bumped when a key changes meaning, so a reader of
 # committed manifests can tell two layouts apart.
@@ -119,7 +118,9 @@ def embedding_section(served: dict[str, Any] | None) -> dict[str, Any]:
 
 def reranker_section(served: dict[str, Any] | None) -> dict[str, Any]:
     """The reranker model: expected digest, weights on disk, what was served."""
-    path = reranker_model.model_path_under(reranker_cache_dir())
+    # The engine's own cache seam: benchmarks/reranker_matrix points it at the
+    # cell's cache, so the digest is that of the weights the run loads.
+    path = reranker_model.model_path_under(reranker_model.reranker_cache_dir())
     try:
         found = classify_model_digest(reranker_model_sha256(path))
         weights = {"state": found.state, "sha256": found.sha256}
@@ -142,7 +143,9 @@ def effective_manifest(
     """The one manifest of this run, JSON-serialisable.
 
     precondition: ``embedding_served`` and ``reranker_served`` are the fields
-        the caller's own engines reported, or None when it served no model.
+        the caller's own engines reported, without any path, or None when it
+        served no model; the core reranker seam is wired
+        (``wire_composition_root``).
     postcondition: keys ``schema``, ``artifact``, ``backend``, ``embedding``,
         ``reranker``; no path, URL, memory content or connection setting."""
     return {

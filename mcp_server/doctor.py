@@ -651,6 +651,7 @@ def run() -> int:
         return run_mcp(json_output=json_output, copy_header=copy_header)
     if argv and argv[0] == "manifest":
         # source: issue #734 — the run's code and models as one JSON document
+        wire_composition_root()  # the manifest reads the core reranker seam
         print(json.dumps(effective_manifest(), indent=2))
         return 0
     return _run_full_check()

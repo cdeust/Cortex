@@ -14,6 +14,7 @@ import pytest
 from benchmarks import _repro
 from benchmarks.lib import write_manifest
 from mcp_server import doctor, doctor_manifest
+from mcp_server.core import reranker_model
 from mcp_server.core.reranker_identity import EXPECTED_MODEL_SHA256
 from mcp_server.infrastructure.backend_marker import BackendMarkerError
 from mcp_server.infrastructure.embedding_model_lifecycle import DEFAULT_MODEL_REVISION
@@ -26,7 +27,7 @@ def caches(tmp_path, monkeypatch):
     """Empty embedding and reranker caches under ``tmp_path``."""
     hub, flashrank = tmp_path / "hub", tmp_path / "flashrank"
     monkeypatch.setattr(doctor_manifest, "embedding_hub_cache", lambda: str(hub))
-    monkeypatch.setattr(doctor_manifest, "reranker_cache_dir", lambda: str(flashrank))
+    monkeypatch.setattr(reranker_model, "reranker_cache_dir", lambda: str(flashrank))
     return tmp_path
 
 
@@ -138,13 +139,40 @@ def test_the_written_manifest_embeds_what_the_run_served(caches, monkeypatch):
     assert runtime["reranker"]["served"] == reranker
 
 
+class _Engine:
+    device_requested = "cuda"
+
+
 def test_the_repro_manifest_fills_the_served_embedding(caches, monkeypatch):
-    reranker = {"reranker_state": "r"}
+    # The benchmark engine, not the factory setting, says which device ran.
+    monkeypatch.setenv("CORTEX_MEMORY_EMBEDDING_DEVICE", "mps")
+    reranker = {"reranker_state": "r", "reranker_model_path": str(caches / "m")}
     monkeypatch.setattr(_repro, "_reranker_manifest_fields", lambda: reranker)
     fields = {"embedding_mode": "neural"}
     monkeypatch.setattr(_repro, "embedding_identity_fields", lambda _engine: fields)
     repro = _repro.build_repro_manifest()
-    assert repro["runtime_manifest"]["reranker"]["served"] == reranker
-    assert repro["runtime_manifest"]["embedding"]["served"] is None
-    _repro.record_embedding_identity(repro, object())
-    assert repro["runtime_manifest"]["embedding"]["served"] == fields
+    runtime = repro["runtime_manifest"]
+    assert runtime["reranker"]["served"] == {"reranker_state": "r"}
+    assert str(caches) not in json.dumps(runtime)
+    assert runtime["embedding"]["served"] is None
+    assert runtime["embedding"]["device_requested"] is None
+    _repro.record_embedding_identity(repro, _Engine())
+    assert runtime["embedding"]["served"] == fields
+    assert runtime["embedding"]["device_requested"] == "cuda"
+
+
+def test_the_matrix_cache_seam_is_the_one_hashed(caches, monkeypatch):
+    # benchmarks/reranker_matrix patches the core seam to a cell's cache.
+    cell = caches / "cell"
+    monkeypatch.setattr(reranker_model, "reranker_cache_dir", lambda: str(cell))
+    seen = []
+    monkeypatch.setattr(doctor_manifest, "reranker_model_sha256", seen.append)
+    doctor_manifest.reranker_section(None)
+    assert seen == [reranker_model.model_path_under(str(cell))]
+
+
+def test_the_engine_reports_its_requested_device():
+    from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
+
+    assert EmbeddingEngine(device="mps").device_requested == "mps"
+    assert EmbeddingEngine().device_requested == "cpu"
