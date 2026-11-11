@@ -38,8 +38,24 @@ MEMORIES = (
 QUERY = "offline receipt memory stored with networking disabled"
 
 
+# source: mcp_server/core/reranker.py ``rerank_results`` (the component its
+# swallowed inference failure is noted under).
+_RERANK_CALL = "reranker.rerank_call"
+
+
+def _rerank_failures() -> int:
+    """Inference failures the loaded reranker swallowed so far (ADR-0640)."""
+    # noqa: PLC0415 — imported after the guard is installed (module docstring).
+    from mcp_server.observability import silent_failure  # noqa: PLC0415
+
+    return int(silent_failure.status().get(_RERANK_CALL, {}).get("count", 0))
+
+
 def _labels() -> dict[str, Any]:
-    """The embedding mode and reranker state now, without loading a model."""
+    """The embedding mode and reranker state now, without loading a model.
+
+    ``reranker_state`` is the load state only: a loaded model whose inference
+    raised served the first-stage order, which ``rerank_failures`` counts."""
     # noqa: PLC0415 — imported after the guard is installed (module docstring).
     from mcp_server.core.reranker import reranker_status  # noqa: PLC0415
     from mcp_server.infrastructure.embedding_factory import (  # noqa: PLC0415
@@ -59,7 +75,7 @@ async def _timed(guard: NetworkGuard, name: str, call: Any) -> dict[str, Any]:
 
     postcondition: ``ok`` is False and ``error`` names the class when the
     operation raised; the message is not kept (it can carry content)."""
-    before = len(guard.attempts)
+    before, failures = len(guard.attempts), _rerank_failures()
     start = time.perf_counter()
     entry: dict[str, Any] = {"operation": name, "ok": True, "error": None}
     try:
@@ -68,6 +84,7 @@ async def _timed(guard: NetworkGuard, name: str, call: Any) -> dict[str, Any]:
         entry.update(ok=False, error=type(exc).__name__, result=None)
     entry["elapsed_ms"] = round((time.perf_counter() - start) * 1000, 1)
     entry["network_attempts"] = len(guard.attempts) - before
+    entry["rerank_failures"] = _rerank_failures() - failures
     entry.update(_labels())
     return entry
 
@@ -144,6 +161,11 @@ def main(argv: list[str]) -> int:
 
     wire_composition_root()
     operations = asyncio.run(run_operations(guard))
+    # The manifest is built once the operations are done and the guard is
+    # removed: it is not a memory operation, and its artifact identity runs
+    # a local ``git`` (doctor_artifact), which a refused spawn would turn into
+    # ``revision state unknown``. It reads files only (doctor_manifest).
+    guard.uninstall()
     manifest = served_manifest()
     document = {
         "operations": operations,
