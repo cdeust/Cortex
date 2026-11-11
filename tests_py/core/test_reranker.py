@@ -205,6 +205,34 @@ class TestRerankerStatus:
             assert status.state == "loaded"
             assert reranker_status().state == "loaded"
 
+    def test_status_reports_the_providers_of_the_loaded_session(self):
+        # The session's providers, not onnxruntime's available ones, say where
+        # inference ran (#734, slice 8); priority order is kept.
+        class _Session:
+            def get_providers(self):
+                return ["CUDAExecutionProvider", "CPUExecutionProvider"]
+
+        class _Ranker:
+            session = _Session()
+
+        with _ResetSingleton():
+            assert reranker_status().providers is None
+            with patch("flashrank.Ranker", return_value=_Ranker()):
+                status = ensure_reranker_loaded()
+            assert status.providers == (
+                "CUDAExecutionProvider",
+                "CPUExecutionProvider",
+            )
+
+    def test_no_providers_without_an_onnx_session(self):
+        # A failed load and a listwise (llama-cpp) ranker serve no ONNX session.
+        with _ResetSingleton():
+            with patch("flashrank.Ranker", return_value=object()):
+                assert ensure_reranker_loaded().providers is None
+        with _ResetSingleton():
+            with patch("flashrank.Ranker", side_effect=OSError("NoSuchFile")):
+                assert ensure_reranker_loaded().providers is None
+
     def test_status_does_not_trigger_a_load(self):
         """reranker_status() must be side-effect-free (preflight-safe)."""
         with _ResetSingleton():

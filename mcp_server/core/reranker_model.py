@@ -122,3 +122,6 @@ class RerankerStatus:
     state: str
     model_path: str
     error: str | None = None
+    # The execution providers of the loaded ONNX session, in priority order,
+    # or None when no session is loaded (issue #734, slice 8).
+    providers: tuple[str, ...] | None = None

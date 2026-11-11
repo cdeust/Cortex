@@ -17,6 +17,11 @@ adheres to [Semantic Versioning](https://semver.org/).
   are run before a pull request is opened or pushed to, and their counts go in its
   body; a journal or documentation entry is pushed with the change it records. The
   pull request template asks for the risk of the change and the way to undo it.
+- Benchmark manifests and the offline receipt record `reranker_providers`: the
+  execution providers of the reranker's loaded ONNX session, in priority order
+  (`InferenceSession.get_providers()`), not those onnxruntime makes available
+  (on 1.28.0 these list `AzureExecutionProvider` while the session runs on CPU).
+  `RerankerStatus.providers` carries them; None when no session is loaded (#734).
 - Benchmark manifests and the offline receipt record `embedding_device`: the
   device the loaded embedding model runs on (`EmbeddingEngine.device_served`),
   not the `auto` or GPU setting it was asked for, and `cpu` once a GPU failure
