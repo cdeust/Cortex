@@ -65,6 +65,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `consolidate` records one telemetry sample per call (#733, slice 3): its wall
+  time, request and response bytes and outcome (ok, or error when it raises) reach
+  `get_telemetry` and `telemetry.jsonl`, and inside an MCP call the sample carries
+  that call's `operation_id`. Before, the tool recorded nothing. A run started by
+  the session hooks records its sample too, with `operation_id` null.
 - A staged backup can be restored into a fresh Cortex root (#731, slice 4).
   `snapshot_backup` now writes the manifest at the top of the staging tree
   (`cortex-backup-manifest.json`), and `restore_backup` refuses the backup before it
