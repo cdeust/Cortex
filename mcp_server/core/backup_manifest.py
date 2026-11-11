@@ -36,6 +36,9 @@ FORMAT = "cortex-backup-manifest"
 # source: issue #731 slice 2, the first format; bump on any change to the
 # resource table or to the entry and file fields below.
 VERSION = 1
+# source: issue #731 slice 4 — the manifest's file at the root of a staged backup;
+# no resource of the table below lives at the root, so it is never an entry.
+MANIFEST_NAME = "cortex-backup-manifest.json"
 
 SQLITE = "sqlite"
 MANAGED = "managed"

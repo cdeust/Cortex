@@ -63,6 +63,21 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- A staged backup can be restored into a fresh Cortex root (#731, slice 4).
+  `snapshot_backup` now writes the manifest at the top of the staging tree
+  (`cortex-backup-manifest.json`), and `restore_backup` refuses the backup before it
+  writes anything when the manifest is absent or of another format, version or
+  resource table, when a file is absent, extra or of another digest or size (each is
+  named), or when the SQLite store fails `integrity_check`. The target must not
+  exist. The files are copied owner-only into `<target>.partial`, compared with the
+  manifest again, and only then renamed to the target. A managed PostgreSQL backup is
+  refused.
+- Each captured payload stored in the background is one operation in the telemetry
+  (#733, slice 4). The resident capture worker and the spool drainer start a fresh
+  `operation_id` per payload, so the `remember` sample of a capture, its
+  `capture_processed` sample and, when the store fails or the payload is refused, its
+  `capture_skipped` sample carry the same id instead of `null`. The id is born in
+  the worker: it does not yet name the hook invocation that produced the payload.
 - A backup of a SQLite or PostgreSQL install is first staged into a fresh directory
   outside the Cortex root: the SQLite store is copied by the online backup API in one
   step, so rows committed only in the WAL are carried and concurrent writes cannot
