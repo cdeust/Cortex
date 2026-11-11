@@ -189,6 +189,12 @@ adheres to [Semantic Versioning](https://semver.org/).
   and that a tool in none of the three lists (Task, TodoWrite, MCP tools) is never
   captured (#737, slice 5). Each sentence is checked against `process_event`.
 
+- The resolver reads the file names of the low-risk Dependabot tier from the new
+  required `ci.json` key `low_risk_files` (Cortex: `uv.lock`, `pyproject.toml`) on the
+  default branch, and fails when the key is missing, so `pipeline-post-merge.yml` and
+  `pipeline.yml` hold no repository's file names and can be copied to the other
+  repositories as they are. A file is matched by its name in any directory, and a
+  path under `.github/` is never low risk (ADR-1131, amends ADR-1126).
 - A resolver run that only waits (no verdict yet, no Pipeline yet, or a newer head)
   ends green with a notice instead of red, so a failed `Pipeline after merge` on
   `main` means a real fault (ADR-1128, amends ADR-1127).

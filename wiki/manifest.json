@@ -3691,6 +3691,10 @@
     "ADR-1130": {
       "mirror": "ADR-1130-the-comment-that-carries-the-verdict-links-the-review-run.md",
       "path": "adr/cortex/1130-the-comment-that-carries-the-verdict-links-the-review-run.md"
+    },
+    "ADR-1131": {
+      "mirror": "ADR-1131-the-resolver-reads-the-low-risk-file-names-from-ci-json.md",
+      "path": "adr/cortex/1131-the-resolver-reads-the-low-risk-file-names-from-ci-json.md"
     }
   },
   "project": "cortex",

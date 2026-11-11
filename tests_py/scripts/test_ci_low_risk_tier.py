@@ -1,6 +1,8 @@
 """A Dependabot minor or patch update of the dependency files merges without a
 review; every other change keeps the reviewed path (ADR-1126)."""
 
+import base64
+import json
 from pathlib import Path
 import textwrap
 import unittest
@@ -11,6 +13,8 @@ HEAD = "a" * 40
 MINOR = "version-update:semver-minor"
 PATCH = "version-update:semver-patch"
 MAJOR = "version-update:semver-major"
+# source: ci.json at the repository root, `low_risk_files` (ADR-1131).
+LISTED = json.loads((ROOT / "ci.json").read_text())["low_risk_files"]
 
 
 def resolver():
@@ -63,6 +67,9 @@ class FakeApi:
         return []  # no review run, no comment: the reviewed path holds
 
     def request(self, method, path, body=None):
+        if (method, path) == ("GET", f"/repos/{REPO}/contents/ci.json"):
+            content = json.dumps({"low_risk_files": LISTED}).encode()
+            return {"encoding": "base64", "content": base64.b64encode(content).decode()}
         self.puts.append((method, path, body))
         return {"merged": True, "sha": "c" * 40}
 

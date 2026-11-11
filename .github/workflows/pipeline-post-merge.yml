@@ -2,7 +2,7 @@
 name: Pipeline post-merge tests
 
 # The single CI of docs/superpowers/specs/2026-10-22-single-ci-design.md:
-# contract, unit, regression, e2e, environment, install, review, merge on a
+# contract, unit, regression, e2e, environment, install, merge on a
 # pull request; five tests then tag on main or a resolved merge SHA. Rendered by
 # zetetic-team-subagents `scripts/setup.sh render-ci`: edit the template.
 
@@ -62,6 +62,7 @@ jobs:
 
           from __future__ import annotations
 
+          import base64
           import json
           import os
           from pathlib import Path
@@ -398,16 +399,48 @@ jobs:
               require(max(verdicts)[1] == "approve", "merge held: Claude review verdict is block")
 
 
-          # Files a low-risk dependency update may touch (ADR-1126). Anything else, a
-          # workflow file first of all, keeps the PR on the reviewed path.
-          # source: .github/dependabot.yml, uv ecosystem: "declared in pyproject.toml
-          # and locked in uv.lock, the only dependency file".
-          LOW_RISK_FILES = frozenset({"uv.lock", "pyproject.toml"})
+          # The ci.json key that names the files a low-risk dependency update may touch
+          # (ADR-1126): the manifests and locks of the ecosystems the repository
+          # declares in .github/dependabot.yml. The names differ per repository, so
+          # they live in ci.json and not in this file (ADR-1131).
+          # source: the contract step's validator below, LOW_RISK_KEY.
+          LOW_RISK_KEY = "low_risk_files"
           # source: the `update-type` values Dependabot writes in its commit message,
           # https://github.com/dependabot/fetch-metadata#outputs
           LOW_RISK_UPDATES = frozenset(
               {"version-update:semver-minor", "version-update:semver-patch"}
           )
+
+
+          def _low_risk_files(repository, api):
+              """The file names ci.json lists under `low_risk_files`, or a failure.
+
+              Read from the default branch, which no pull request can change before it
+              is merged. A missing file, a missing key or a malformed list fails the
+              resolver: no built-in list stands in for it.
+              source: https://docs.github.com/en/rest/repos/contents#get-repository-content
+              (no `ref`: the default branch; a file's content is base64).
+              """
+              document = api.request("GET", f"/repos/{repository}/contents/ci.json")
+              require(
+                  isinstance(document, dict) and document.get("encoding") == "base64",
+                  "ci.json: not a file on the default branch",
+              )
+              try:
+                  data = json.loads(base64.b64decode(document.get("content") or ""))
+              except ValueError as exc:
+                  raise PostMergeError("ci.json: not valid JSON") from exc
+              require(
+                  isinstance(data, dict) and LOW_RISK_KEY in data,
+                  f"ci.json: {LOW_RISK_KEY}: missing",
+              )
+              names = data[LOW_RISK_KEY]
+              require(
+                  isinstance(names, list)
+                  and all(isinstance(name, str) and name and "/" not in name for name in names),
+                  f"ci.json: {LOW_RISK_KEY}: must be a list of file names",
+              )
+              return frozenset(names)
 
 
           def _declared_updates(commit):
@@ -436,12 +469,14 @@ jobs:
 
               The tier comes from the change, not from a label or a title (ADR-1126): the
               PR is Dependabot's single commit (committed and signed by GitHub), every
-              update it declares is minor or patch, and it touches nothing outside
-              LOW_RISK_FILES. Such a PR merges on green required checks without a review.
+              update it declares is minor or patch, and every file it touches is named
+              in ci.json's `low_risk_files` and lies outside `.github/`. Such a PR merges
+              on green required checks without a review.
               """
               user = pr.get("user") or {}
               if user.get("login") != "dependabot[bot]" or user.get("type") != "Bot":
                   return False
+              allowed = _low_risk_files(repository, api)
               path = f"/repos/{repository}/pulls/{pr['number']}"
               commits = list(api.records(path + "/commits"))
               # Dependabot opens and rebases a PR as one commit; a second one is
@@ -455,7 +490,12 @@ jobs:
               for row in api.records(path + "/files"):
                   # A rename counts under both of its names.
                   files |= {row.get("filename"), row.get("previous_filename")} - {None}
-              return bool(files) and files <= LOW_RISK_FILES
+              # A workflow or action directory never holds a dependency manifest.
+              if any(name.startswith(".github/") for name in files):
+                  return False
+              # By file name: a workspace carries one manifest per package.
+              names = {name.rsplit("/", 1)[-1] for name in files}
+              return bool(files) and names <= allowed
 
 
           def _merge_open_pr(pr, merge_path, head, api, repository):
@@ -696,8 +736,9 @@ jobs:
           CLOSE
 
   # ci.json first: a missing key or an empty command fails here, before any
-  # test runs (design, "Repository contract: ci.json"). The validator is
-  # tools/ci_contract.py of zetetic-team-subagents, embedded byte for byte.
+  # test runs (design, "Repository contract: ci.json"). The validator began as
+  # tools/ci_contract.py of zetetic-team-subagents; `low_risk_files` was added
+  # here (ADR-1131).
   contract:
     needs: resolve
     if: >-
@@ -740,7 +781,9 @@ jobs:
           contract: ci.json"): exactly the keys ``unit``, ``regression``, ``e2e``,
           ``environment`` and ``install``, each a non-empty shell command, plus an
           optional ``version_file`` (default ``.claude-plugin/plugin.json``), or exclusive
-          ``release_packages`` entries with version_file and tag_prefix. Every manifest
+          ``release_packages`` entries with version_file and tag_prefix, plus the
+          required ``low_risk_files``: the file names (no directory) a low-risk
+          dependency update may touch, read by the merge resolver. Every manifest
           version and tag ref is validated before exporting commands or release tags.
           A missing file, a missing key or an empty command fails the pipeline here, so a step that
           has nothing to run never passes (the design's first anti-goal).
@@ -769,7 +812,8 @@ jobs:
           VERSION_KEY = "version_file"
           DEFAULT_VERSION_FILE = ".claude-plugin/plugin.json"
           RELEASE_KEY = "release_packages"
-          ALLOWED_KEYS = KEYS + (VERSION_KEY, RELEASE_KEY)
+          LOW_RISK_KEY = "low_risk_files"
+          ALLOWED_KEYS = KEYS + (VERSION_KEY, RELEASE_KEY, LOW_RISK_KEY)
           ALLOWED = ", ".join(ALLOWED_KEYS)
 
 
@@ -896,6 +940,18 @@ jobs:
               return []
 
 
+          def _low_risk_faults(data: dict) -> List[str]:
+              """An empty list is valid: no dependency update skips the review."""
+              if LOW_RISK_KEY not in data:
+                  return [f"{LOW_RISK_KEY}: missing"]
+              names = data[LOW_RISK_KEY]
+              if not isinstance(names, list) or not all(
+                  isinstance(name, str) and name and "/" not in name for name in names
+              ):
+                  return [f"{LOW_RISK_KEY}: must be a list of file names"]
+              return []
+
+
           def faults(root: Path) -> List[str]:
               """Every fault of ``root/ci.json``, in key order then unknown keys; empty
               when the file honours the contract."""
@@ -915,6 +971,7 @@ jobs:
                   for key in data
                   if key not in ALLOWED_KEYS
               )
+              found.extend(_low_risk_faults(data))
               found.extend(_version_faults(data, root))
               return found
 
