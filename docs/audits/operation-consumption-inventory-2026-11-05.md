@@ -92,10 +92,11 @@ Probe (this container, `main` `149b943`, Python 3.11, no `claude` call made):
 ```python
 from mcp_server.handlers.consolidation import headless_authoring as root
 from mcp_server.handlers.consolidation.claude_invoke import _parse_invoke_response as p
-p(1, b"", b"", root)                       # InvokeResult(text=None, cost_usd=0.0)
-p(0, b"", b"", root)                       # InvokeResult(text=None, cost_usd=0.0)
-p(0, b"not json", b"", root)               # InvokeResult(text='not json', cost_usd=0.0)
-p(0, b'{"result":"x"}', b"", root)         # InvokeResult(text='x', cost_usd=0.0)
+
+p(1, b"", b"", root)  # InvokeResult(text=None, cost_usd=0.0)
+p(0, b"", b"", root)  # InvokeResult(text=None, cost_usd=0.0)
+p(0, b"not json", b"", root)  # InvokeResult(text='not json', cost_usd=0.0)
+p(0, b'{"result":"x"}', b"", root)  # InvokeResult(text='x', cost_usd=0.0)
 p(0, b'{"result":"x","total_cost_usd":0.0123}', b"", root)  # cost_usd=0.0123
 ```
 

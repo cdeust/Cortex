@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [4.24.0] - 2026-11-11
+
 ### Security
 
 - A memory write can no longer target another local project's domain from this

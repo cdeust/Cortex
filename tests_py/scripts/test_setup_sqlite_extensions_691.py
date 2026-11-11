@@ -31,9 +31,7 @@ def test_sqlite_setup_stops_before_install(monkeypatch, capsys):
 def test_extension_capable_python_passes_preflight(monkeypatch):
     mod = _load_setup_module(monkeypatch, "sqlite")
     connection = SimpleNamespace(enable_load_extension=lambda enabled: None)
-    monkeypatch.setitem(
-        sys.modules, "sqlite3", SimpleNamespace(Connection=connection)
-    )
+    monkeypatch.setitem(sys.modules, "sqlite3", SimpleNamespace(Connection=connection))
     mod.setup_sqlite.check_sqlite_extension_loading(mod.fail)
 
 

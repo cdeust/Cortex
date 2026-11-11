@@ -74,9 +74,10 @@ class EnvironmentSetup(unittest.TestCase):
         self.assertTrue(run.call_args.kwargs["check"])
 
     def test_other_hosts_do_not_run_the_powershell_probe(self):
-        with patch.object(setup.os, "name", "posix"), patch.object(
-            setup.subprocess, "run"
-        ) as run:
+        with (
+            patch.object(setup.os, "name", "posix"),
+            patch.object(setup.subprocess, "run") as run,
+        ):
             setup.check_windows_bash_contract()
         run.assert_not_called()
 

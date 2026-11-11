@@ -152,7 +152,10 @@ def _check_record(body, field, source_ref: str) -> list[str]:
 
 
 def _check_merge_confirmation(body, field) -> list[str]:
-    """Pin the post-PUT identity checks in the resolver (the PR is re-read; main is never compared)."""
+    """Pin the post-PUT identity checks in the resolver.
+
+    The PR is re-read; main is never compared.
+    """
     run = field(_required_step(body, field, "resolve"), "run")
     clauses = (
         'pr = api.request("GET", pr_path)',
@@ -167,7 +170,10 @@ def _check_merge_confirmation(body, field) -> list[str]:
 
 
 def _check_release(body, field) -> list[str]:
-    """Publish the tags on the explicitly tested SHA (the commit the push event built)."""
+    """Publish the tags on the explicitly tested SHA.
+
+    That SHA is the commit the push event built.
+    """
     step = _required_step(body, field, "publish")
     failures = []
     if field(step, "if") != "steps.guard.outputs.has_deploy_key == 'true'" or field(
@@ -188,9 +194,7 @@ def _check_release(body, field) -> list[str]:
         '"tag", "-a", "-m", "Release " + tag, "--", tag, sha,',
     )
     if any(clause not in run for clause in clauses):
-        failures.append(
-            "tag must publish the explicit tested SHA"
-        )
+        failures.append("tag must publish the explicit tested SHA")
     return failures
 
 
