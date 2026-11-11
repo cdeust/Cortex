@@ -13,8 +13,9 @@ What it holds, and what it leaves out:
 - ``artifact``: kind, version, git revision, whether it differs from what
   names it, and the members digest (``doctor_artifact.identify``). Not its
   location: a path names the user's home directory.
-- ``backend``: the backend the precedence chain selects (``effective_backend``),
-  never ``DATABASE_URL`` or any other connection setting.
+- ``backend``: the store the caller opened, or else the backend the
+  precedence chain selects (``effective_backend``), never ``DATABASE_URL`` or
+  any other connection setting.
 - ``embedding`` and ``reranker``: model name, pinned revision or expected
   digest, the identity of the weights on disk (``classify_weights``,
   ``classify_model_digest``), never their path. ``served`` is what the caller's
@@ -139,19 +140,22 @@ def reranker_section(served: dict[str, Any] | None) -> dict[str, Any]:
 def effective_manifest(
     embedding_served: dict[str, Any] | None = None,
     reranker_served: dict[str, Any] | None = None,
+    backend: str | None = None,
 ) -> dict[str, Any]:
     """The one manifest of this run, JSON-serialisable.
 
     precondition: ``embedding_served`` and ``reranker_served`` are the fields
         the caller's own engines reported, without any path, or None when it
         served no model; the core reranker seam is wired
-        (``wire_composition_root``).
+        (``wire_composition_root``); ``backend`` is the store the caller
+        actually opened, or None to report the one the precedence chain
+        selects (a benchmark opens PostgreSQL whatever that chain says).
     postcondition: keys ``schema``, ``artifact``, ``backend``, ``embedding``,
         ``reranker``; no path, URL, memory content or connection setting."""
     return {
         "schema": SCHEMA,
         "artifact": artifact_section(),
-        "backend": backend_section(),
+        "backend": backend or backend_section(),
         "embedding": embedding_section(embedding_served),
         "reranker": reranker_section(reranker_served),
     }

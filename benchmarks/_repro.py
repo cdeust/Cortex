@@ -148,7 +148,8 @@ def _runtime_manifest(reranker: dict[str, Any]) -> dict[str, Any]:
 
     source: issue #734"""
     served = {k: v for k, v in reranker.items() if k != "reranker_model_path"}
-    manifest = effective_manifest(reranker_served=served)
+    # source: benchmarks/lib/bench_db.py BenchmarkDB.open (PgMemoryStore always)
+    manifest = effective_manifest(reranker_served=served, backend="postgresql")
     manifest["embedding"]["device_requested"] = None
     return manifest
 

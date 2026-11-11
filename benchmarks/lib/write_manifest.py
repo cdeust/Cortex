@@ -137,7 +137,11 @@ def _runtime_manifest(embedding: dict, reranker: dict) -> dict:
     # noqa: PLC0415 — the doctor module is imported only when a manifest is built.
     from mcp_server.doctor_manifest import effective_manifest  # noqa: PLC0415
 
-    return effective_manifest(embedding_served=embedding, reranker_served=reranker)
+    # source: benchmarks/lib/bench_db.py BenchmarkDB.open (PgMemoryStore always),
+    # the store reproduce.sh's legs run against in their PostgreSQL container.
+    return effective_manifest(
+        embedding_served=embedding, reranker_served=reranker, backend="postgresql"
+    )
 
 
 def _artifact_fields() -> dict:

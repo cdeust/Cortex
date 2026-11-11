@@ -161,6 +161,18 @@ def test_the_repro_manifest_fills_the_served_embedding(caches, monkeypatch):
     assert runtime["embedding"]["device_requested"] == "cuda"
 
 
+def test_benchmark_manifests_name_the_store_they_open(caches, monkeypatch):
+    # The operator's selection is not what BenchmarkDB opens (PgMemoryStore).
+    monkeypatch.setenv("CORTEX_MEMORY_STORE_BACKEND", "sqlite")
+    monkeypatch.setattr(write_manifest, "embedding_manifest_fields", dict)
+    monkeypatch.setattr(write_manifest, "reranker_fields", dict)
+    monkeypatch.setattr(_repro, "_reranker_manifest_fields", dict)
+    written = write_manifest._environment_fields()["runtime_manifest"]
+    assert written["backend"] == "postgresql"
+    assert _repro.build_repro_manifest()["runtime_manifest"]["backend"] == "postgresql"
+    assert doctor_manifest.effective_manifest()["backend"] == "sqlite"
+
+
 def test_the_matrix_cache_seam_is_the_one_hashed(caches, monkeypatch):
     # benchmarks/reranker_matrix patches the core seam to a cell's cache.
     cell = caches / "cell"
