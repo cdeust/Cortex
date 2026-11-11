@@ -107,11 +107,11 @@
       "source": {
         "source": "github",
         "repo": "cdeust/zetetic-team-subagents",
-        "ref": "v2.45.1",
-        "sha": "a71494cb8e4e0c1525356da1dcf4824bdb014c14"
+        "ref": "v2.46.0",
+        "sha": "3caec261cfd0e5ccd2b90f13ef509e4062c716a0"
       },
-      "description": "Zetetic agent team for Cortex — 15 problem-shaped skills backed by 97 genius agents (reasoning patterns from history's greatest minds), 23 team agents (incl. refactorer, simplifier, memory-writer), 86 skills total, 30 commands, 65 tools, 32 hooks, authoritative coding-standards rules, goal-driven and autonomous build loops, and the shared Claude Code and Codex gates, under one epistemic standard none of them can bypass. Composes with Cortex memory: every agent recalls/remembers through the Cortex MCP and routes via /genius, /agent, /zetetic, /quality, /research commands.",
-      "version": "2.45.1",
+      "description": "Complete system: 15 problem-shaped skills backed by 97 genius agents, 86 skills total, 30 commands, 71 tools, 36 hooks, authoritative coding-standards rules, goal-driven and autonomous build loops, and the shared Claude Code and Codex gates",
+      "version": "2.46.0",
       "author": {
         "name": "Clement Deust",
         "email": "admin@ai-architect.tools"
