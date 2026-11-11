@@ -14,11 +14,18 @@ source is refused instead of being created empty. Both connections come from
 ``infrastructure/db_connect.py`` (ADR-1110), and the copy is created ``0o600``
 before SQLite opens it (ADR-1112), as the store is.
 
+``check_snapshot`` reads such a copy back before a restore (slice 4): it runs
+``integrity_check`` on the file opened ``immutable``, so SQLite takes no lock
+and writes nothing beside a backup it only reads.
+
 source: issue #731; docs/audits/owned-resources-backup-2026-11-05.md §3, §5;
 SQLite online backup API, https://www.sqlite.org/backup.html (Python's
 ``Connection.backup`` defaults to ``pages=-1``): a single
 ``sqlite3_backup_step()`` call with a negative page count "copies the entire
 source database in one call", holding one read lock on the source throughout.
+SQLite URI parameters, https://www.sqlite.org/uri.html (``immutable``): the
+file is assumed unmodifiable and opened read-only, with no locking and no
+change detection.
 """
 
 from __future__ import annotations
@@ -65,3 +72,15 @@ def snapshot_sqlite(source: Path, target: Path) -> None:
         with closing(sqlite_connect(str(target))) as dst:
             src.backup(dst)  # pages=-1 by default: one step
             _seal(dst)
+
+
+def check_snapshot(path: Path) -> None:
+    """Refuse the file at ``path`` unless SQLite reads it as an intact database."""
+    uri = f"{path.resolve().as_uri()}?mode=ro&immutable=1"
+    try:
+        with closing(sqlite_connect(uri, uri=True)) as copy:
+            verdict = [row[0] for row in copy.execute("PRAGMA integrity_check")]
+    except sqlite3.DatabaseError as exc:
+        raise SnapshotError(f"{path} is not a readable SQLite database: {exc}") from exc
+    if verdict != ["ok"]:
+        raise SnapshotError(f"{path} failed integrity_check: {'; '.join(verdict)}")

@@ -19,8 +19,10 @@ replay; the write gate's exact-duplicate check absorbs only an exact repeat.
 
 The managed PostgreSQL cluster is refused here: a running cluster directory is
 not consistent as copied files, and its stopped copy or logical dump is a later
-part of this slice. No tool is registered yet; the restore check (slice 4 of
-#731) consumes the staging tree.
+part of this slice. The manifest is written at the top of the staging tree
+(``cortex-backup-manifest.json``), which makes the tree a backup that
+``handlers/backup_restore.py`` (slice 4) can check by itself. No tool is
+registered yet.
 
 source: issue #731; docs/audits/owned-resources-backup-2026-11-05.md §3, §5
 """
@@ -33,9 +35,11 @@ from typing import Any
 
 from mcp_server.core.backup_manifest import (
     MANAGED,
+    MANIFEST_NAME,
     ManifestError,
     ResourceSpec,
     resources_for,
+    to_json,
 )
 from mcp_server.handlers.backup_manifest import backup_manifest
 from mcp_server.infrastructure.backup_scan import scan_resource
@@ -43,6 +47,7 @@ from mcp_server.infrastructure.backup_stage import (
     copy_files,
     prepare_staging,
     private_dirs,
+    write_new_file,
 )
 from mcp_server.infrastructure.sqlite_snapshot import snapshot_sqlite
 
@@ -73,7 +78,7 @@ def _stage_files(root: Path, staging: Path, spec: ResourceSpec) -> None:
 def snapshot_backup(
     root: Path, staging: Path, backend: str, now: datetime | None = None
 ) -> dict[str, Any]:
-    """Copy the class A data of ``root`` into ``staging``; its manifest."""
+    """Copy the class A data of ``root`` into ``staging``, with its manifest."""
     if backend == MANAGED:
         raise ManifestError(
             "a managed PostgreSQL backup needs a stopped copy or a logical dump, "
@@ -87,4 +92,6 @@ def snapshot_backup(
     for spec in specs:
         if spec.name == _SQLITE_STORE:  # last: see the module docstring
             _stage_sqlite(root, staging, spec.path)
-    return backup_manifest(staging, backend, now=now)
+    manifest = backup_manifest(staging, backend, now=now)
+    write_new_file(staging, MANIFEST_NAME, to_json(manifest).encode())  # ASCII text
+    return manifest
