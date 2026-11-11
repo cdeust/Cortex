@@ -199,6 +199,7 @@ not exist." The registered tools are listed in `docs/mcp-tools.md`.
 
 *Backup (issue #731):*
 - `backup_manifest.py` — Versioned backup manifest: the class A resource table per backend (audit 2026-11-05), build from a scan, canonical JSON, parse refusing another format, version or table
+- `backup_verify.py` — Names every resource and file on which a tree's scan disagrees with a backup manifest (absent, not in the manifest, content differs); the restore check of issue #731
 
 *Undocumented (measured, not yet catalogued individually):* `core/streaming/`
 (5 files) and `core/context_assembly/` (14 files — 15 as of the issue #228
@@ -211,8 +212,8 @@ Run the measurement command in the header to get a current file listing.
 
 ## infrastructure/ — All I/O
 - `backup_scan.py` — Reads one backup resource under the Cortex root and digests every file (SHA-256, size); refuses symlinks and special files (issue #731)
-- `sqlite_snapshot.py` — One consistent copy of a live SQLite store by the online backup API in one step (WAL included), sealed to `journal_mode=DELETE` and `integrity_check`ed; refuses a missing or linked source and an existing target (issue #731)
-- `backup_stage.py` — The staging tree a backup is copied into: refused when non-empty or inside the Cortex root; plain file copy by relative POSIX path (issue #731)
+- `sqlite_snapshot.py` — One consistent copy of a live SQLite store by the online backup API in one step (WAL included), sealed to `journal_mode=DELETE` and `integrity_check`ed; refuses a missing or linked source and an existing target; `check_snapshot` re-runs `integrity_check` on a copy opened immutable before a restore (issue #731)
+- `backup_stage.py` — The staging tree a backup is copied into: refused when non-empty or inside the Cortex root; plain file copy by relative POSIX path; writes and reads the manifest file at the top of the tree (issue #731)
 
 - `config.py` — Centralized path constants via pathlib. The root (`CLAUDE_DIR`,
   default `~/.claude`) is overridable via `CORTEX_CLAUDE_DIR`; every other

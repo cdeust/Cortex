@@ -12,7 +12,11 @@ from contextlib import closing
 import pytest
 
 from mcp_server.infrastructure import sqlite_snapshot
-from mcp_server.infrastructure.sqlite_snapshot import SnapshotError, snapshot_sqlite
+from mcp_server.infrastructure.sqlite_snapshot import (
+    SnapshotError,
+    check_snapshot,
+    snapshot_sqlite,
+)
 
 
 def _wal_store(path):
@@ -179,3 +183,59 @@ def test_the_source_is_opened_read_only_by_an_explicit_uri(tmp_path, monkeypatch
     monkeypatch.setattr(sqlite_snapshot, "sqlite_connect", spy)
     sqlite_snapshot._open_source(source).close()
     assert opened == [(f"{source.resolve().as_uri()}?mode=ro", {"uri": True})]
+
+
+def test_an_intact_copy_passes_the_check_and_nothing_is_written_beside_it(tmp_path):
+    source, copy = tmp_path / "memory.db", tmp_path / "copy" / "memory.db"
+    copy.parent.mkdir()
+    _wal_store(source).close()
+    snapshot_sqlite(source, copy)
+    before = copy.read_bytes()
+
+    check_snapshot(copy)
+
+    assert sorted(p.name for p in copy.parent.iterdir()) == ["memory.db"]
+    assert copy.read_bytes() == before
+
+
+def test_a_file_sqlite_cannot_read_fails_the_check(tmp_path):
+    copy = tmp_path / "memory.db"
+    copy.write_bytes(b"not a database" * 100)
+    with pytest.raises(SnapshotError) as refused:
+        check_snapshot(copy)
+    assert str(refused.value) == (
+        f"{copy} is not a readable SQLite database: file is not a database"
+    )
+    assert isinstance(refused.value.__cause__, sqlite3.DatabaseError)
+
+
+def test_a_missing_file_fails_the_check_and_is_not_created(tmp_path):
+    copy = tmp_path / "memory.db"
+    with pytest.raises(SnapshotError, match="is not a readable SQLite database"):
+        check_snapshot(copy)
+    assert not copy.exists()
+
+
+class _ClosableCopy(_Copy):
+    def close(self):
+        pass
+
+
+def test_the_check_reads_the_copy_immutable_and_reports_every_finding(
+    tmp_path, monkeypatch
+):
+    copy = tmp_path / "memory.db"
+    findings = [(f"row {n} missing from index",) for n in range(3)]
+    opened = []
+
+    def spy(target, **kwargs):
+        opened.append((target, kwargs))
+        return _ClosableCopy([("delete",)], findings)
+
+    monkeypatch.setattr(sqlite_snapshot, "sqlite_connect", spy)
+    with pytest.raises(SnapshotError) as refused:
+        check_snapshot(copy)
+    message = "; ".join(f[0] for f in findings)
+    assert str(refused.value) == f"{copy} failed integrity_check: {message}"
+    uri = f"{copy.resolve().as_uri()}?mode=ro&immutable=1"
+    assert opened == [(uri, {"uri": True})]

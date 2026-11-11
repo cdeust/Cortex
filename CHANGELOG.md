@@ -63,6 +63,15 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- A staged backup can be restored into a fresh Cortex root (#731, slice 4).
+  `snapshot_backup` now writes the manifest at the top of the staging tree
+  (`cortex-backup-manifest.json`), and `restore_backup` refuses the backup before it
+  writes anything when the manifest is absent or of another format, version or
+  resource table, when a file is absent, extra or of another digest or size (each is
+  named), or when the SQLite store fails `integrity_check`. The target must not
+  exist. The files are copied owner-only into `<target>.partial`, compared with the
+  manifest again, and only then renamed to the target. A managed PostgreSQL backup is
+  refused.
 - A backup of a SQLite or PostgreSQL install is first staged into a fresh directory
   outside the Cortex root: the SQLite store is copied by the online backup API in one
   step, so rows committed only in the WAL are carried and concurrent writes cannot
