@@ -30,6 +30,7 @@ from mcp_server.infrastructure.scanner import read_head_tail
 from mcp_server.handlers._tool_meta import NON_IDEMPOTENT_WRITE
 from mcp_server.handlers.backfill_helpers import gist_oversized_content
 from mcp_server.handlers.remember import handler as remember_handler
+from mcp_server.handlers._telemetry_wrap import instrument
 
 # ── Schema ────────────────────────────────────────────────────────────────
 
@@ -293,7 +294,7 @@ async def _process_single_file(
     return imported, gated, 0, True
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Import conversation sessions into the memory store."""
     args = args or {}
     project_filter = args.get("project", "")
@@ -344,3 +345,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         preview_items,
         errors,
     )
+
+
+handler = instrument("import_sessions", _handler_impl, result_count_key="imported")

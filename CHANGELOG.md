@@ -65,6 +65,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `unified_search`, `memory_stats`, `checkpoint`, `narrative` and `import_sessions`
+  record one telemetry sample per call (#733): wall time, request and response
+  bytes, outcome (error when the call raises) and, inside an MCP call, that call's
+  `operation_id`. `unified_search` counts its fused results and `import_sessions`
+  the items it imported. Before, these tools recorded nothing.
 - `consolidate` records one telemetry sample per call (#733, slice 3): its wall
   time, request and response bytes and outcome (ok, or error when it raises) reach
   `get_telemetry` and `telemetry.jsonl`, and inside an MCP call the sample carries

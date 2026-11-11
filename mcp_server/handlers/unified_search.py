@@ -30,6 +30,7 @@ from mcp_server.infrastructure.workflow_graph_source_ast import (
     WorkflowGraphASTSource,
 )
 from mcp_server.handlers._tool_meta import READ_ONLY
+from mcp_server.handlers._telemetry_wrap import instrument
 
 
 schema = {
@@ -128,7 +129,7 @@ def _exact_response(exact: dict, query: str) -> dict:
     return response
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     args = args or {}
     query = str(args.get("query") or "").strip()
     top_n = int(args.get("max_results") or 10)
@@ -208,5 +209,7 @@ def _bounded_results(resp: dict) -> dict:
     resp["counts"]["fused"] = len(resp["results"])
     return resp
 
+
+handler = instrument("unified_search", _handler_impl, result_count_key="results")
 
 __all__ = ["handler", "schema"]
