@@ -18,6 +18,10 @@ from typing import Any
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
+from mcp_server.handlers._write_scope import (
+    require_writable_directory,
+    session_directory,
+)
 
 # ── Schema ────────────────────────────────────────────────────────────────────
 
@@ -135,7 +139,12 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     if trigger_type not in ("keyword", "time", "file", "domain"):
         return {"created": False, "reason": f"invalid trigger_type: {trigger_type}"}
 
-    target_directory = (args.get("target_directory") or "").strip() or None
+    # A trigger fires where its directory is served (core.prospective
+    # .trigger_in_scope): none given means this session's project, and one
+    # given passes the rule of every other write (GHSA-7848-qh48-mx2w).
+    target_directory = (args.get("target_directory") or "").strip()
+    target_directory = target_directory or session_directory()
+    require_writable_directory(target_directory, "create_trigger")
     source_memory_id = args.get("source_memory_id")
 
     store = _get_store()

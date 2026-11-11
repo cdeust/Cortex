@@ -12,7 +12,18 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import pytest
+
+from mcp_server.handlers import _write_scope
 from mcp_server.handlers.recall_helpers import inject_triggered_memories
+
+_PROJECT = "/work/project"
+
+
+@pytest.fixture(autouse=True)
+def _session(monkeypatch):
+    """A trigger fires only in its own project: the session runs in _PROJECT."""
+    monkeypatch.setenv(_write_scope.SESSION_ENV, _PROJECT)
 
 
 def _store(triggers, memories):
@@ -25,7 +36,11 @@ def _store(triggers, memories):
 
 
 def _trigger(condition="deploy"):
-    return {"trigger_type": "keyword_match", "trigger_condition": condition}
+    return {
+        "trigger_type": "keyword_match",
+        "trigger_condition": condition,
+        "target_directory": _PROJECT,
+    }
 
 
 def _mem(content="standing instruction", source="", tags=None):

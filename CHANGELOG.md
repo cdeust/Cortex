@@ -14,6 +14,12 @@ adheres to [Semantic Versioning](https://semver.org/).
   the session's (`CLAUDE_PROJECT_DIR`, else the working directory), unless the user
   allows it locally with `CORTEX_CROSS_PROJECT_WRITES=<domain>,…` or `*`. Shared
   domains that name no repository stay writable. No tool argument can reopen it.
+  A prospective trigger, made by `create_trigger` or extracted from a `remember`
+  text such as `TODO:`, now fires only in a session of the project its directory
+  belongs to; it fired in every project whose first message or query shared a
+  keyword. `create_trigger` stores the session's project when no directory is
+  given and refuses a directory that reaches another project. A trigger stored
+  without a directory no longer fires.
   A write stores the domain the check resolved, never the raw argument: `ingest_prd`
   and `ingest_document` kept a name that resolves to the session's project but can
   also be another repository family's domain.

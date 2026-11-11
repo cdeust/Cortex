@@ -15,11 +15,14 @@ memory: a cross-project prompt-injection primitive. A write may target:
 
 Anything else fails with the variable to set, never a silent redirect.
 
-The domain is one of two channels. The SessionStart and auto-recall hooks select
+The domain is one of three channels. The SessionStart and auto-recall hooks select
 by `directory_context`: a memory is served to a session whose project root is
 that directory or lies below it (`shared.project_scope`). So the directory a
 write stores, and the one an existing row carries, pass the same rule
 (`require_writable_directory`): it must reach no project but the session's.
+The third is a prospective trigger, made by `create_trigger` or extracted from a
+`remember` text: it fires under that same directory rule
+(`core.prospective.trigger_in_scope`), so its text reaches no other project.
 """
 
 from __future__ import annotations

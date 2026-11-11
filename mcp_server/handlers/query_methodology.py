@@ -14,10 +14,11 @@ from typing import Any
 
 from mcp_server.core.context_generator import generate_context
 from mcp_server.core.domain_detector import detect_domain
-from mcp_server.core.prospective import check_trigger
+from mcp_server.core.prospective import check_trigger, trigger_in_scope
 from mcp_server.core.response_budget import ListTarget, TextTarget, bound_payload
 from mcp_server.infrastructure.profile_store import load_profiles
 from mcp_server.handlers._tool_meta import READ_ONLY
+from mcp_server.handlers._write_scope import session_directory
 from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import get_shared_store
@@ -182,7 +183,10 @@ def _get_fired_triggers(directory: str, first_message: str) -> list[dict[str, An
         fired = []
         # source: ADR-0427
         seen_contents: set[str] = set()
+        root = directory or session_directory()
         for trigger in active_triggers:
+            if not trigger_in_scope(trigger, root):
+                continue
             if check_trigger(trigger, directory=directory, content=first_message):
                 store.trigger_prospective_memory(trigger["id"])
                 content = trigger["content"]

@@ -11,7 +11,8 @@ from mcp_server.core import thermodynamics
 from mcp_server.core.enrichment import build_expanded_query
 from mcp_server.core.document_reference import annotate_document_sources
 from mcp_server.shared.code_tokenize import expand_fts_query
-from mcp_server.core.prospective import check_trigger
+from mcp_server.core.prospective import check_trigger, trigger_in_scope
+from mcp_server.handlers._write_scope import session_directory
 from mcp_server.core.query_intent import QueryIntent
 from mcp_server.core.retrieval_signals import (
     compute_graph_signals,
@@ -298,10 +299,11 @@ def inject_triggered_memories(
         return results
     existing_ids = {r["memory_id"] for r in results}
     injected: list[dict] = []
+    root = session_directory()
     for t in triggers:
         if max_inject is not None and len(injected) >= max_inject:
             break
-        if not check_trigger(t, content=query):
+        if not trigger_in_scope(t, root) or not check_trigger(t, content=query):
             continue
         matches = store.search_fts(t.get("content", ""), limit=3)
         for mid, _score in matches:
