@@ -16,6 +16,7 @@ from benchmarks.lib import write_manifest
 from mcp_server import doctor, doctor_manifest
 from mcp_server.core import reranker_model
 from mcp_server.core.reranker_identity import EXPECTED_MODEL_SHA256
+from mcp_server.doctor_artifact import Identity
 from mcp_server.infrastructure.backend_marker import BackendMarkerError
 from mcp_server.infrastructure.embedding_model_lifecycle import DEFAULT_MODEL_REVISION
 
@@ -33,6 +34,7 @@ def caches(tmp_path, monkeypatch):
 
 def test_empty_caches_give_absent_weights_and_no_served_model(caches):
     manifest = doctor_manifest.effective_manifest()
+    assert list(manifest) == ["schema", "artifact", "backend", "embedding", "reranker"]
     assert manifest["schema"] == 1
     assert manifest["embedding"] == {
         "name": "all-MiniLM-L6-v2",
@@ -115,6 +117,37 @@ def test_the_artifact_section_is_the_doctor_identity():
     assert section["revision"] == found.revision
 
 
+@pytest.mark.parametrize(
+    ("modified", "altered", "expected"),
+    [(False, (), False), (True, (), True), (False, ("mcp_server/x.pyc",), True)],
+)
+def test_the_artifact_section_states_every_field(
+    tmp_path, monkeypatch, modified, altered, expected
+):
+    # Bytecode that runs other code counts as modified, like a changed member.
+    found = Identity(
+        "wheel", "4.24.0", None, modified, (), tmp_path, altered=altered,
+        unknown="why",
+    )  # fmt: skip
+    monkeypatch.setattr(doctor_manifest, "identify", lambda: found)
+    assert doctor_manifest.artifact_section() == {
+        "kind": "wheel",
+        "version": "4.24.0",
+        "revision": None,
+        "modified": expected,
+        "digest": found.digest,
+        "unknown": "why",
+    }
+
+
+def test_linked_embedding_weights_are_verified(caches, monkeypatch):
+    digest = "a" * 64
+    monkeypatch.setattr(doctor_manifest, "linked_blob_name", lambda _p: digest)
+    monkeypatch.setattr(doctor_manifest, "file_sha256", lambda _p: digest)
+    weights = doctor_manifest.embedding_section(None)["weights"]
+    assert weights == {"state": "verified", "sha256": digest}
+
+
 def test_served_fields_are_carried_as_given(caches):
     embedding, reranker = {"embedding_mode": "neural"}, {"reranker_state": "loaded"}
     manifest = doctor_manifest.effective_manifest(embedding, reranker)
@@ -128,6 +161,14 @@ def test_doctor_manifest_subcommand_prints_it(caches, monkeypatch, capsys):
     printed = json.loads(capsys.readouterr().out)
     assert printed["schema"] == 1
     assert printed["embedding"]["weights"]["state"] == "absent"
+
+
+def test_the_subcommand_prints_indented_json(monkeypatch, capsys):
+    # Two-space indentation: the document is read by people as well as tools.
+    monkeypatch.setattr(doctor, "effective_manifest", lambda: {"a": {"b": 1}})
+    monkeypatch.setattr(doctor.sys, "argv", ["cortex-doctor", "manifest"])
+    assert doctor.run() == 0
+    assert capsys.readouterr().out == '{\n  "a": {\n    "b": 1\n  }\n}\n'
 
 
 def test_the_written_manifest_embeds_what_the_run_served(caches, monkeypatch):
