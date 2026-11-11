@@ -20,6 +20,7 @@ import logging
 import time
 from pathlib import Path
 
+from mcp_server.core import telemetry
 from mcp_server.hooks._store_lifecycle import close_shared_store_on_exit
 from mcp_server.hooks.capture_dispatch import report_failure
 from mcp_server.hooks.capture_store import store
@@ -55,11 +56,14 @@ async def drain_pending(spool: Path, skip: set[Path]) -> int:
     postcondition: every pending file not in ``skip`` is stored and deleted, or
     retired by ``_refuse`` (added to ``skip`` when it could not be); a store that
     exceeds ``capture_spool.STORE_SECONDS`` is cancelled and refused like any
-    failure. Returns the number stored."""
+    failure. Each file is one operation (issue #733): the samples of its store
+    and the ``capture_skipped`` of its refusal carry one operation id. Returns
+    the number stored."""
     stored = 0
     for path in capture_spool.pending(spool):
         if path in skip:
             continue
+        telemetry.begin_operation()
         started = time.monotonic()
         try:
             await asyncio.wait_for(

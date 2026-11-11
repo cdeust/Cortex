@@ -105,6 +105,15 @@ p(0, b'{"result":"x","total_cost_usd":0.0123}', b"", root)  # cost_usd=0.0123
    `InvokeResult`, `CycleBudget` and the `consolidate` response.
 2. Give each MCP call and each hook invocation an operation identity carried by
    every nested sample and handed to the capture worker and background cycles.
+   Delivered: one id per MCP call (`core/telemetry.py::capture_records`), and
+   one id per captured payload stored by the resident worker or the spool
+   drainer (`begin_operation`, called by `hooks/capture_store.py::remember` and
+   `hooks/capture_drain.py::drain_pending`). Not delivered: an id for a hook
+   invocation, and its hand-off to the worker. The capture payload has a fixed
+   key set (`capture_worker_policy.validate_payload`) and no version, and a
+   resident worker started before an upgrade keeps running the old code: it
+   would refuse a payload that carries a new key. Background cycles
+   (`consolidate`) carry no id either.
 3. Record CPU time beside wall time, and emit samples for the tools that record
    none today, starting with `consolidate`.
 4. Read the provider usage the CLI reports, beyond `total_cost_usd`, with its

@@ -88,7 +88,7 @@ class TelemetrySample(TypedDict):
     tier: str | None
     reranked_count: int
     stage_ms: dict[str, float]
-    # One MCP tool call; None outside one (hooks, capture worker). Issue #733.
+    # One MCP tool call or one background capture; None outside (hooks). #733.
     operation_id: str | None
 
 
@@ -122,6 +122,16 @@ def capture_records() -> Iterator[list[TelemetrySample]]:
             captured.closed = True
         _operation.reset(operation)
         _capture.reset(token)
+
+
+def begin_operation() -> None:
+    """Start a new operation in this context: later samples carry its fresh id.
+
+    For a loop that handles one unit of background work after another (a
+    captured payload). The operation lasts until the next call or the end of
+    the context, so the sample that reports the unit's failure belongs to it.
+    """
+    _operation.set(uuid.uuid4().hex)
 
 
 def _disabled() -> bool:
