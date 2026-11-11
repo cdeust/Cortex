@@ -14,6 +14,8 @@ the copy never writes through a link nor over an existing entry.
 that lies inside the Cortex root (the copy would scan itself).
 ``private_dirs`` creates the directories of a relative POSIX path;
 ``copy_files`` copies plain files by their POSIX paths relative to the root.
+``write_new_file`` and ``read_text_file`` write and read one file at the top of
+a tree: the manifest of a staged backup (slice 4).
 
 source: issue #731; docs/audits/owned-resources-backup-2026-11-05.md §5;
 ADR-1112 (``shared/private_paths.py``)
@@ -24,7 +26,7 @@ from __future__ import annotations
 import os
 import shutil
 from pathlib import Path, PurePosixPath
-from typing import Iterable
+from typing import BinaryIO, Iterable
 
 from mcp_server.shared.private_paths import PRIVATE_DIR_MODE, PRIVATE_FILE_MODE
 
@@ -36,6 +38,15 @@ _CREATE = (
     | getattr(os, "O_NOFOLLOW", 0)
     | getattr(os, "O_BINARY", 0)
 )
+
+
+def _new_private_file(path: Path) -> BinaryIO:
+    """Open the new ``0o600`` file ``path`` for writing, never through a link.
+
+    The one write site of this module, audited in
+    ``tests_py/architecture/test_storage_redaction_gate.py`` (ADR-1110).
+    """
+    return os.fdopen(os.open(path, _CREATE, PRIVATE_FILE_MODE), "wb")
 
 
 class StagingError(OSError):
@@ -84,8 +95,23 @@ def copy_files(
                 continue
             raise
         target = private_dirs(staging, relative.parent.as_posix()) / relative.name
-        with (
-            source,
-            os.fdopen(os.open(target, _CREATE, PRIVATE_FILE_MODE), "wb") as out,
-        ):
+        with source, _new_private_file(target) as out:
             shutil.copyfileobj(source, out)
+
+
+def write_new_file(directory: Path, name: str, data: bytes) -> None:
+    """Write ``data`` to the new ``0o600`` file ``directory/name``, never over one."""
+    with _new_private_file(directory / name) as out:
+        out.write(data)
+
+
+def read_text_file(directory: Path, name: str) -> str | None:
+    """The text of the plain file ``directory/name``; ``None`` when it is not one.
+
+    A byte that is not UTF-8 is replaced, so the reader's parser refuses the
+    text instead of this function raising a decoding error.
+    """
+    path = directory / name
+    if path.is_symlink() or not path.is_file():
+        return None
+    return path.read_bytes().decode(errors="replace")  # UTF-8, bytes.decode default

@@ -116,6 +116,12 @@ not need it). Class **X** = not Cortex's to back up.
    delivered: `infrastructure/sqlite_snapshot.py`, `infrastructure/backup_stage.py`,
    `handlers/backup_snapshot.py`; the managed cluster is still refused.
 3. Restore into a fresh `CORTEX_CLAUDE_DIR`, then verify integrity and a known
-   memory and source query.
+   memory and source query. Delivered for the SQLite and PostgreSQL-backend
+   trees: `handlers/backup_restore.py` (the copy is compared with the manifest
+   again before it becomes the target; the test reads a known memory from the
+   restored store). A managed cluster is still refused.
 4. Refusal of an incomplete or incompatible archive, leaving the target intact.
+   Delivered: `core/backup_verify.py` names each absent, extra or changed file,
+   and nothing is written before the backup matches its manifest
+   (`cortex-backup-manifest.json`, at the top of the staging tree).
 5. Tested recovery and upgrade-rollback documentation per supported platform.
