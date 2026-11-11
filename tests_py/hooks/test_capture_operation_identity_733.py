@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import threading
 from pathlib import Path
 from unittest import mock
 
@@ -46,13 +45,28 @@ def _remember(monkeypatch, impl) -> None:
 
 
 def _worker_consumes(*payloads) -> None:
-    """The resident server's own loop, fed ``payloads``, until its idle timeout."""
-    policy = ServerPolicy(Limits(4096, 1, 0.5), report_failure)
-    server = CaptureServer(mock.Mock(), capture_store.remember, policy)
-    feeder = threading.Thread(target=lambda: [server.pending.put(p) for p in payloads])
-    feeder.start()  # the admission queue is bounded: feed it as the receiver does
+    """The resident server's own loop over ``payloads``, one at a time.
+
+    No clock decides the outcome: the first payload is queued before the loop
+    starts, and the callback queues the next one (the bounded queue is empty
+    while a payload is processed) or, after the last, stops the server, so the
+    idle timeout is never waited for. ``put_nowait`` fails, it cannot block.
+    """
+    remaining = list(payloads)
+
+    async def callback(item) -> None:
+        try:
+            await capture_store.remember(item)
+        finally:
+            if remaining:
+                server.pending.put_nowait(remaining.pop(0))
+            else:
+                server.stopping.set()
+
+    policy = ServerPolicy(Limits(4096, 1, 300), report_failure)
+    server = CaptureServer(mock.Mock(), callback, policy)
+    server.pending.put_nowait(remaining.pop(0))
     asyncio.run(server._consume())
-    feeder.join()
 
 
 def _ids(recorded) -> list[tuple[str, str | None]]:
