@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- The `cortex-plugins` marketplace installs zetetic-team-subagents 2.46.0
+  (tag `v2.46.0`, commit `3caec261`), up from 2.45.1. Its description is the one
+  that plugin publishes at that tag: the 23 team-role agents it named were removed
+  in 2.46.0.
+
 ## [4.24.0] - 2026-11-11
 
 ### Security
