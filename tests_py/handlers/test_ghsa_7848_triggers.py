@@ -47,6 +47,24 @@ async def test_a_todo_written_in_beta_does_not_fire_in_alpha(projects):
 
 
 @pytest.mark.asyncio
+async def test_an_alpha_trigger_stored_first_does_not_stop_the_beta_one(projects):
+    store = query_methodology._try_get_memory_store()
+    store.insert_prospective_memory(
+        {
+            "content": "an alpha reminder",
+            "trigger_condition": "deploy",
+            "trigger_type": "keyword_match",
+            "target_directory": str(projects / "alpha"),
+            "is_active": True,
+            "triggered_count": 0,
+            "created_by": "test",
+        }
+    )
+    await _write_todo(projects)
+    assert _fired(projects / "beta") == [MARKER]
+
+
+@pytest.mark.asyncio
 async def test_a_todo_written_in_beta_still_fires_in_beta(projects):
     await _write_todo(projects)
     assert _fired(projects / "beta") == [MARKER]
@@ -65,7 +83,7 @@ async def test_recall_in_alpha_does_not_inject_a_trigger_of_beta(projects, monke
 
 @pytest.mark.asyncio
 async def test_create_trigger_refuses_another_projects_directory(projects):
-    with pytest.raises(ValidationError, match="CORTEX_CROSS_PROJECT_WRITES=alpha"):
+    with pytest.raises(ValidationError, match=r"^create_trigger: .*WRITES=alpha"):
         await create_trigger(
             {
                 "content": MARKER,

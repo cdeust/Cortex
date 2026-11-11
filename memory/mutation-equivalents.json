@@ -640,6 +640,14 @@
       "kind": "equivalent-by-construction",
       "rationale": "Python's codec registry normalises encoding names before lookup (codecs.lookup lower-cases them), so 'utf-8' and 'UTF-8' select the same codec: every byte string decodes to the same text or raises the same UnicodeDecodeError, which the undecodable-bytes test pins.",
       "issue": "#732"
+    },
+    {
+      "mutant": "mcp_server.core.prospective.x_trigger_in_scope__mutmut_9",
+      "removed": "return memory_matches_project(trigger.get(\"target_directory\"), False, project_root)",
+      "added": "return memory_matches_project(trigger.get(\"target_directory\"), None, project_root)",
+      "kind": "equivalent-by-construction",
+      "rationale": "memory_matches_project reads is_global only as `if is_global:` (mcp_server/shared/project_scope.py), so None and False take the same branch for every trigger and root: a trigger is never global. The local branch itself is pinned by test_a_trigger_fires_only_where_its_directory_is_served, which refuses a trigger of beta in alpha.",
+      "issue": "#981"
     }
   ]
 }
