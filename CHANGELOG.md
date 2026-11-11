@@ -8,6 +8,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Benchmark manifests and the offline receipt record `embedding_device`: the
+  device the loaded embedding model runs on (`EmbeddingEngine.device_served`),
+  not the `auto` or GPU setting it was asked for, and `cpu` once a GPU failure
+  reloads it there. It is None when no model is loaded. A repro invocation whose
+  runs served on different devices now stops instead of averaging them (#734).
 - The `cortex-plugins` marketplace installs zetetic-team-subagents 2.46.0
   (tag `v2.46.0`, commit `3caec261`), up from 2.45.1. Its description is the one
   that plugin publishes at that tag: the 23 team-role agents it named were removed

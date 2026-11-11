@@ -102,6 +102,15 @@ class EmbeddingEngine(
         return self._device_requested
 
     @property
+    def device_served(self) -> str | None:
+        """The device the loaded model runs on, or None when no model is loaded.
+
+        ``device_requested`` can say ``auto`` (resolved by ``_detect_device``)
+        and a GPU failure reloads on CPU (``_fallback_to_cpu``): only this names
+        where the vectors were computed (#734 runtime manifest)."""
+        return self._device if self._model is not None else None
+
+    @property
     def revision(self) -> str | None:
         """The pinned HF revision this engine loads (None = unpinned refs/main)."""
         return self._revision

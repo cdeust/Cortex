@@ -21,6 +21,7 @@ FIELDS = {
     "embedding_model_state",
     "embedding_model_name",
     "embedding_model_revision",
+    "embedding_device",
 }
 
 
@@ -31,6 +32,7 @@ class _Engine:
         self._settled, self._mode = settled, mode
         self.model_state: enum.Enum = ModelState.UNINITIALIZED
         self.model_name, self.revision = "all-MiniLM-L6-v2", PIN
+        self.device_served = "mps" if settled is ModelState.LOADED else None
 
     @property
     def mode(self) -> str:
@@ -45,6 +47,7 @@ def test_a_loaded_model_names_its_revision() -> None:
         "embedding_model_state": "LOADED",
         "embedding_model_name": "all-MiniLM-L6-v2",
         "embedding_model_revision": PIN,
+        "embedding_device": "mps",
     }
 
 
@@ -60,6 +63,7 @@ def test_a_fallback_run_records_no_revision() -> None:
         assert fields["embedding_mode"] == "fallback"
         assert fields["embedding_model_state"] == state.name
         assert fields["embedding_model_revision"] is None
+        assert fields["embedding_device"] is None
 
 
 def test_an_engine_that_cannot_be_built_is_unresolved(monkeypatch) -> None:
@@ -72,6 +76,7 @@ def test_an_engine_that_cannot_be_built_is_unresolved(monkeypatch) -> None:
         "embedding_model_state": "unresolved",
         "embedding_model_name": None,
         "embedding_model_revision": None,
+        "embedding_device": None,
     }
 
 
@@ -80,6 +85,7 @@ def test_the_process_engine_reports_a_consistent_identity() -> None:
     loaded = fields["embedding_model_state"] == "LOADED"
     assert fields["embedding_mode"] == ("neural" if loaded else "fallback")
     assert (fields["embedding_model_revision"] is not None) is loaded
+    assert (fields["embedding_device"] is not None) is loaded
 
 
 def test_the_written_manifest_carries_the_served_identity(monkeypatch) -> None:

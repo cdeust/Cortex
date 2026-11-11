@@ -229,3 +229,25 @@ def test_the_engine_reports_its_requested_device():
 
     assert EmbeddingEngine(device="mps").device_requested == "mps"
     assert EmbeddingEngine().device_requested == "cpu"
+
+
+def test_the_engine_reports_the_device_its_model_runs_on(monkeypatch):
+    # "auto" is a request; the manifest needs the device that was resolved,
+    # and the CPU one after a GPU failure reloads the model (#734, slice 7).
+    from mcp_server.infrastructure.embedding_engine import EmbeddingEngine
+
+    engine = EmbeddingEngine(device="auto")
+    assert engine.device_served is None  # no model loaded, no device served
+    monkeypatch.setattr(EmbeddingEngine, "_detect_device", staticmethod(lambda: "mps"))
+    engine._resolve_device()
+    engine._model = object()
+    assert (engine.device_requested, engine.device_served) == ("auto", "mps")
+
+    def reload_on(device_engine=engine):
+        device_engine._model = object()
+
+    monkeypatch.setattr(engine, "_ensure_model", reload_on)
+    engine._fallback_to_cpu()
+    assert engine.device_served == "cpu"
+    engine._model = None
+    assert engine.device_served is None
