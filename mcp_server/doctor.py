@@ -4,6 +4,7 @@ source: ADR-0322"""
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import sqlite3
@@ -24,6 +25,7 @@ from mcp_server.doctor_artifact import artifact_identity
 from mcp_server.doctor_pairing import plugin_pairing
 from mcp_server.doctor_capture import capture_verdict
 from mcp_server.doctor_embedding import embedding_identity
+from mcp_server.doctor_manifest import effective_manifest
 from mcp_server.doctor_reranker import reranker_identity
 from mcp_server.doctor_managed import managed_server, selected as managed_selected
 from mcp_server.doctor_mcp import run_mcp
@@ -647,6 +649,11 @@ def run() -> int:
         json_output = "--json" in flags
         copy_header = "--copy" in flags
         return run_mcp(json_output=json_output, copy_header=copy_header)
+    if argv and argv[0] == "manifest":
+        # source: issue #734 — the run's code and models as one JSON document
+        wire_composition_root()  # the manifest reads the core reranker seam
+        print(json.dumps(effective_manifest(), indent=2))
+        return 0
     return _run_full_check()
 
 

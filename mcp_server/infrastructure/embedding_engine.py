@@ -97,6 +97,11 @@ class EmbeddingEngine(
         return self._model_name
 
     @property
+    def device_requested(self) -> str:
+        """The device this engine was constructed with (#734 runtime manifest)."""
+        return self._device_requested
+
+    @property
     def revision(self) -> str | None:
         """The pinned HF revision this engine loads (None = unpinned refs/main)."""
         return self._revision

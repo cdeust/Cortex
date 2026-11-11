@@ -15,6 +15,7 @@ from importlib.metadata import version
 from mcp_server.core.reranker import ensure_reranker_loaded, model_identity
 import benchmarks.lib._composition_root_wiring  # noqa: F401 — source: issue #560
 from benchmarks.lib.embedding_identity import embedding_identity_fields
+from mcp_server.doctor_manifest import effective_manifest
 
 
 def _git_sha() -> str:
@@ -108,11 +109,12 @@ def build_repro_manifest() -> dict[str, Any]:
         git_commit, git_dirty, python_version, platform_system,
         platform_machine, platform_node, timestamp_utc, lib_versions,
         reranker_active, reranker_state, reranker_model_path,
-        reranker_model_sha256, reranker_model_identity.
+        reranker_model_sha256, reranker_model_identity, runtime_manifest.
     The dict is JSON-serialisable (all values are str | bool | None | dict).
     """
     sha = _git_sha()
     dirty = _git_dirty()
+    reranker = _reranker_manifest_fields()
 
     lib_versions = {
         "sentence-transformers": _lib_version("sentence-transformers"),
@@ -132,8 +134,24 @@ def build_repro_manifest() -> dict[str, Any]:
         "platform_node": platform.node(),
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "lib_versions": lib_versions,
-        **_reranker_manifest_fields(),
+        **reranker,
+        "runtime_manifest": _runtime_manifest(reranker),
     }
+
+
+def _runtime_manifest(reranker: dict[str, Any]) -> dict[str, Any]:
+    """The effective manifest of the run, without the reranker cache path (a
+    path names the home directory). Embedding ``served`` and
+    ``device_requested`` stay None until ``record_embedding_identity`` reads
+    the benchmark's own engine: ``BenchmarkDB`` builds it with its default
+    device, not the factory setting.
+
+    source: issue #734"""
+    served = {k: v for k, v in reranker.items() if k != "reranker_model_path"}
+    # source: benchmarks/lib/bench_db.py BenchmarkDB.open (PgMemoryStore always)
+    manifest = effective_manifest(reranker_served=served, backend="postgresql")
+    manifest["embedding"]["device_requested"] = None
+    return manifest
 
 
 def record_embedding_identity(repro: dict[str, Any], engine: Any) -> None:
@@ -144,7 +162,9 @@ def record_embedding_identity(repro: dict[str, Any], engine: Any) -> None:
         are separate instances and can settle in different states.
     postcondition: ``repro`` carries ``embedding_mode``,
         ``embedding_model_state``, ``embedding_model_name`` and
-        ``embedding_model_revision`` (None unless the state is LOADED).
+        ``embedding_model_revision`` (None unless the state is LOADED), and
+        ``runtime_manifest.embedding`` holds the same fields under ``served``
+        and the engine's ``device_requested``.
     raises: RuntimeError when an earlier run of the same invocation recorded a
         different identity; one result must not average neural and fallback runs.
     """
@@ -155,6 +175,10 @@ def record_embedding_identity(repro: dict[str, Any], engine: Any) -> None:
             f"embedding identity changed between runs: {recorded} then {fields}"
         )
     repro.update(fields)
+    if "runtime_manifest" in repro:
+        embedding = repro["runtime_manifest"]["embedding"]
+        embedding["served"] = fields
+        embedding["device_requested"] = engine.device_requested
 
 
 def multi_run_stats(values: list[float]) -> dict[str, float | int | None]:
