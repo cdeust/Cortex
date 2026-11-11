@@ -37,6 +37,7 @@ from mcp_server.infrastructure.embedding_engine import (
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.memory_exact import collapse_exact
+from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
 from mcp_server.hooks.consolidate_background import _write_stamp
 
@@ -233,7 +234,7 @@ async def _atimed(fn, *args, **kwargs) -> dict[str, Any]:
     return result
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Run maintenance cycles on the memory system."""
     args = args or {}
     settings = get_memory_settings()
@@ -290,6 +291,11 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         logger.debug("consolidate stamp write failed (non-fatal): %s", exc)
 
     return stats
+
+
+# source: issue #733 (slice 3) — consolidate recorded no telemetry sample, so its
+# wall time, bytes and outcome were absent from get_telemetry and the JSONL.
+handler = instrument("consolidate", _handler_impl, result_count_key=None)
 
 
 def _run_cycles(
