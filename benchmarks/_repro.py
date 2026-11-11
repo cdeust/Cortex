@@ -162,7 +162,8 @@ def record_embedding_identity(repro: dict[str, Any], engine: Any) -> None:
         are separate instances and can settle in different states.
     postcondition: ``repro`` carries ``embedding_mode``,
         ``embedding_model_state``, ``embedding_model_name`` and
-        ``embedding_model_revision`` (None unless the state is LOADED), and
+        ``embedding_model_revision`` and ``embedding_device`` (None unless the
+        state is LOADED), and
         ``runtime_manifest.embedding`` holds the same fields under ``served``
         and the engine's ``device_requested``.
     raises: RuntimeError when an earlier run of the same invocation recorded a
