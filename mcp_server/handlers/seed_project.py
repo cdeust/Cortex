@@ -20,6 +20,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from mcp_server.handlers.remember import _resolve_domain as _remember_domain
 from mcp_server.handlers.remember import handler as remember_handler
 from mcp_server.handlers.seed_project_stages import (
     collect_all_discoveries,
@@ -29,6 +30,11 @@ from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.handlers._tool_meta import NON_IDEMPOTENT_WRITE
 from mcp_server.handlers.seed_project_constants import is_transient_seed_root
+from mcp_server.handlers._write_scope import (
+    require_stable_domain,
+    require_writable_canonical,
+    require_writable_directory,
+)
 
 _store: MemoryStore | None = None
 
@@ -117,6 +123,19 @@ def _parse_args(args: dict[str, Any] | None) -> tuple[Path, str, int, bool]:
     root = Path(directory).expanduser().resolve()
     # source: ADR-0445
     domain = args.get("domain", "") or root.name
+    # GHSA-7848-qh48-mx2w: the domain remember will write each file under (the
+    # directory wins over the argument) is resolved once here, checked, and is the
+    # one the handler purges, writes and reports: never the raw argument.
+    domain = _remember_domain(str(root), domain) or domain
+    # remember resolves the name it is handed once more when `root` is no known
+    # repository, and a family's domain can be another project's alias: a name
+    # that does not stay itself is refused here, before anything is purged.
+    require_stable_domain(
+        domain, _remember_domain(str(root), domain) or domain, "seed_project"
+    )
+    require_writable_canonical(domain, "seed_project")
+    # Checked before the purge: remember would refuse the first file afterwards.
+    require_writable_directory(str(root), "seed_project")
     max_kb = int(args.get("max_file_size_kb", 64))
     dry_run = args.get("dry_run", False)
     return root, domain, max_kb * 1024, dry_run

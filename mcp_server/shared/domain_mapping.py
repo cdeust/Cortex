@@ -491,6 +491,49 @@ def resolve_explicit_domain(name: str) -> str:
     return _build_registry().name_to_canonical.get(lower, lower)
 
 
+def project_domains() -> frozenset[str]:
+    """Canonical domains of the known repositories: the domains a project owns."""
+    return frozenset(r.canonical for r in _build_registry().repos if r.canonical)
+
+
+def _worktree_roots(root: str) -> list[str]:
+    """Roots of the linked worktrees git registered for the repository at `root`.
+
+    source: gitrepository-layout(5), `worktrees/<id>/gitdir` holds the path of the
+    worktree's `.git` file."""
+    found: list[str] = []
+    for entry in sorted(Path(root, ".git", "worktrees").glob("*/gitdir")):
+        try:
+            text = _os.fsdecode(
+                entry.read_bytes()
+            ).strip()  # a path, as the OS reads it
+        except OSError:
+            continue
+        if text:
+            found.append(_to_posix(Path(text).parent))
+    return found
+
+
+def project_roots() -> dict[str, str]:
+    """Every root of every known repository, mapped to the domain that owns it.
+
+    A repository's roots are its own and those of its linked worktrees. Each
+    appears as discovered and as resolved: the discovery keeps the text of a
+    symlinked parent (`~/code -> /mnt/repos`), while a path given by a caller may
+    name either side of the link.
+
+    Read on every call: git can add a linked worktree while the server runs, and a
+    root kept from an earlier call would leave that worktree's sessions unknown.
+    """
+    return {
+        form: r.canonical
+        for r in _build_registry().repos
+        if r.canonical
+        for base in (r.fs_path, *_worktree_roots(r.fs_path))
+        for form in (base, _to_posix(Path(base).resolve()))
+    }
+
+
 def resolve_cwd(cwd: str) -> str:
     """Resolve a working directory to a canonical domain.
 
@@ -508,6 +551,9 @@ def resolve_cwd(cwd: str) -> str:
         repo = _resolve_repo_for_root(root, registry)
         if repo:
             return repo.canonical
+        # A repository discovered through a symlinked parent is registered under
+        # the link's text, while `_git_root` resolves: look the root up resolved.
+        return project_roots().get(root, "")
     # source: ADR-0647
 
     return ""

@@ -25,6 +25,11 @@ from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.wiki_store import write_page
+from mcp_server.handlers._write_scope import (
+    require_writable_directory,
+    require_writable_domain,
+    session_directory,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -303,6 +308,23 @@ async def _fetch_quality_history(limit: int = 20) -> dict[str, Any] | None:
         return None
 
 
+def _memory_directory(path: str | None) -> str:
+    """The directory the PRD's memories are stored under (GHSA-7848-qh48-mx2w).
+
+    The hooks serve a memory to the sessions whose project root is that directory
+    or lies below it. A PRD read from a file keeps the file's folder, which must
+    reach no other project. Text handed over directly (`content`, `pipeline_id`)
+    belongs to the session's project, never to the folder above the server's
+    working directory, which every sibling project lies below. Either one is
+    checked: a server started above the projects has no project of its own.
+    """
+    directory = (
+        str(Path(path).expanduser().resolve().parent) if path else session_directory()
+    )
+    require_writable_directory(directory, "ingest_prd")
+    return directory
+
+
 async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Ingest a PRD document into Cortex."""
     args = args or {}
@@ -322,7 +344,9 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
     title = _extract_title(text, args.get("title"))
     domain = (args.get("domain") or "prd").strip() or "prd"
-    directory = str(Path(args.get("path") or ".").expanduser().resolve().parent)
+    # GHSA-7848-qh48-mx2w: the rows keep the domain the check resolved.
+    domain = require_writable_domain(domain, "ingest_prd")
+    directory = _memory_directory(args.get("path"))
 
     # 1. Write the spec page.
     rel_path, markdown = _render_prd_spec_page(title, text, source)

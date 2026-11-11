@@ -217,8 +217,10 @@ class TestAnchorHandlerSuccess:
             )
 
     @pytest.mark.asyncio
-    async def test_is_global_stored(self):
+    async def test_is_global_stored(self, monkeypatch):
         """POST-5: is_global=True propagated to DB."""
+        # GHSA-7848-qh48-mx2w: a global write needs the allowance.
+        monkeypatch.setenv("CORTEX_CROSS_PROJECT_WRITES", "*")
         mid = _seed_memory("Global anchor test memory")
         result = await anchor_handler({"memory_id": mid, "is_global": True})
         assert result["anchored"] is True

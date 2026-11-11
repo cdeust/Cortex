@@ -8,6 +8,51 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Security
 
+- A memory write can no longer target another local project's domain from this
+  session (GHSA-7848-qh48-mx2w). `remember`, `seed_project`, `ingest_prd` and
+  `ingest_document` refuse a domain that belongs to a known repository other than
+  the session's (`CLAUDE_PROJECT_DIR`, else the working directory), unless the user
+  allows it locally with `CORTEX_CROSS_PROJECT_WRITES=<domain>,…` or `*`. Shared
+  domains that name no repository stay writable. No tool argument can reopen it.
+  A prospective trigger, made by `create_trigger` or extracted from a `remember`
+  text such as `TODO:`, now fires only in a session of the project its directory
+  belongs to; it fired in every project whose first message or query shared a
+  keyword. `create_trigger` stores the session's project when no directory is
+  given and refuses a directory that reaches another project. A trigger stored
+  without a directory no longer fires.
+  A write stores the domain the check resolved, never the raw argument: `ingest_prd`
+  and `ingest_document` kept a name that resolves to the session's project but can
+  also be another repository family's domain.
+  A domain that is an identity already (resolved from a path, stored on a row) is
+  never resolved through the name aliases a second time: where a directory name is
+  also another family's domain, that family keeps its own writes and the aliased
+  project cannot change its rows. A name given to `ingest_prd` or `ingest_document`
+  that is itself another project's domain is refused, never redirected to the
+  session's project. A memory-replica refresh reads every replica of
+  the block, so another project's row no longer hides this session's own.
+  A global memory reaches every project, so an explicit `is_global=true` (in
+  `remember` or `anchor`) needs `CORTEX_CROSS_PROJECT_WRITES=*`; a global scope the
+  detector infers without it is kept local and reported (`global_reason`). `anchor`,
+  `supersedes_id`, curation merges and memory-replica refreshes never change another
+  project's or a global memory without that allowance, and `seed_project` checks the
+  domain `remember` will use before it purges anything, and purges that domain,
+  never the raw `domain` argument.
+  The directory a memory is stored under passes the same rule, because the
+  SessionStart and auto-recall hooks select by it: `remember`, `ingest_prd`,
+  `ingest_document` and `ingest_codebase` refuse a directory inside another known
+  project or above one, which would serve the memory to that project's sessions.
+  The check reads the directory as the hooks do (a backslash is a separator) and
+  as resolved, against every root of a repository, its linked worktrees included,
+  as discovered and as resolved (a symlinked parent of the projects). The roots are
+  read at every check, so a worktree added while the server runs is known; the
+  directory is compared as written (a folder name may end with a space); and
+  `seed_project` checks its directory before it purges, and refuses a domain that
+  `remember` would resolve once more to another one. `ingest_prd` given text
+  (`content`, `pipeline_id`) stores it under the session's project, no longer under
+  the folder above the server's working directory, and is refused when the server
+  itself runs above the projects. `anchor`, `supersedes_id`,
+  curation merges and replica refreshes also refuse a row whose directory belongs to
+  another project, whatever its domain (a `code:<name>` row of `ingest_codebase`).
 - `record_session_end` no longer writes an ADR task record outside the wiki root
   (GHSA-5w3v-7v7h-q9x4, reported and fixed by kasparovabi). An explicit `domain`
   goes through `domain_id_from_label`, and the writer refuses a path that resolves

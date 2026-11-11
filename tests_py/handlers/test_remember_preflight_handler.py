@@ -102,7 +102,10 @@ class HandlerPreflight(unittest.TestCase):
             with patch.object(remember, "try_curation", return_value=("create", None)):
                 with patch.object(remember, "insert_and_post_process", insert):
                     args = {**self.args, "is_global": True}
-                    asyncio.run(remember._handler_impl(args))
+                    # GHSA-7848-qh48-mx2w: a global write needs the allowance.
+                    allow = {"CORTEX_CROSS_PROJECT_WRITES": "*"}
+                    with patch.dict("os.environ", allow):
+                        asyncio.run(remember._handler_impl(args))
         self.assertEqual(
             insert.call_args.args[1], b"raw:" + self.args["content"].encode()
         )

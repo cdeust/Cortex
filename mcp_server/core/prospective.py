@@ -7,6 +7,8 @@ from __future__ import annotations
 import re
 from datetime import datetime, timezone
 
+from mcp_server.shared.project_scope import memory_matches_project
+
 VALID_TRIGGER_TYPES = frozenset(
     {
         "directory_match",
@@ -122,6 +124,23 @@ def check_trigger(
         return _matches_time(condition, current_time or datetime.now(timezone.utc))
 
     return False
+
+
+def trigger_in_scope(trigger: dict, project_root: str | None) -> bool:
+    """True when this trigger may fire in a session rooted at project_root.
+
+    A trigger carries text a write supplied. It fires only where the hooks
+    would serve a memory written in the same directory: in a session whose
+    project root is the trigger's ``target_directory`` or lies below it
+    (``shared.project_scope.memory_matches_project``). A trigger with no
+    directory reaches no session; it is not a wildcard for every project.
+    ``directory_match`` is the one type whose condition is itself a
+    directory, so ``check_trigger`` decides it.
+
+    source: GHSA-7848-qh48-mx2w, review 1 of pull request 981"""
+    if trigger.get("trigger_type") == "directory_match":
+        return True
+    return memory_matches_project(trigger.get("target_directory"), False, project_root)
 
 
 def _matches_time(condition: str, current_time: datetime) -> bool:

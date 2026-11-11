@@ -51,6 +51,7 @@ from mcp_server.core import capture_origin
 from mcp_server.core import knowledge_graph, source_monitoring, habituation
 from mcp_server.core.hierarchical_predictive_coding import compute_hierarchical_novelty
 from mcp_server.core.predictive_coding_signals import extract_sensory_features
+from mcp_server.handlers._write_scope import memory_writable
 import json as _json
 import numpy as _np
 
@@ -384,10 +385,10 @@ def try_block_replica_upsert(
     try:
         vpath_json = _json.dumps([vpath_tag])
         rows = store._execute(
-            "SELECT id FROM memories "
+            "SELECT id, domain, is_global, directory_context FROM memories "
             "WHERE tags @> %s::jsonb "
             "AND tags @> '[\"memory-replica\"]'::jsonb "
-            "LIMIT 1",
+            "ORDER BY id",
             (vpath_json,),
         ).fetchall()
     except Exception as exc:  # noqa: BLE001 — mechanism boundary — failure is observable via silent_failure ("remember_helpers.block_supersede_select")
@@ -395,10 +396,15 @@ def try_block_replica_upsert(
         silent_failure.note("remember_helpers.block_supersede_select", exc)
         return False, None
 
-    if not rows:
+    # GHSA-7848-qh48-mx2w: a replica of another project's or a global memory this
+    # session may not change is not refreshed. Every replica of the block is read,
+    # not the first one: another project's row must not hide this session's own,
+    # or each sync would insert one more row (replicas bypass exact deduplication).
+    writable = [row for row in rows if memory_writable(row)]
+    if not writable:
         return False, None
 
-    existing_id = rows[0]["id"]
+    existing_id = writable[0]["id"]
 
     # Refresh content, embedding, tags, source; preserve heat and is_protected.
 
@@ -456,6 +462,10 @@ def try_curation(
             continue
         # source: ADR-0438
         if cand.get("superseded_by_id") is not None:
+            continue
+        # GHSA-7848-qh48-mx2w: never fold content into another project's or a
+        # global memory this session may not change; a new row is created instead.
+        if not memory_writable(cand):
             continue
         sim = emb_engine.similarity(embedding, cand["embedding"])
         overlap = (

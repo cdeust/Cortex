@@ -618,6 +618,14 @@
       "issue": "#717"
     },
     {
+      "mutant": "mcp_server.handlers._write_scope.x__reached_projects__mutmut_15",
+      "removed": "if memory_matches_project(form, _LOCAL, root) or root in project_ancestors(form)",
+      "added": "if memory_matches_project(form, None, root) or root in project_ancestors(form)",
+      "kind": "equivalent-by-construction",
+      "rationale": "`_LOCAL` is False and memory_matches_project reads is_global only as `if is_global:` (mcp_server/shared/project_scope.py), so None and False take the same branch for every directory and root: the directory rule is never global. The local branch itself is pinned by the test_ghsa_7848_directory_* cases that refuse a folder above another project.",
+      "issue": "#977"
+    },
+    {
       "mutant": "mcp_server.infrastructure.docx_media_reader.x__stream_member__mutmut_4",
       "removed": "with archive.open(name, mode=\"r\") as member:",
       "added": "with archive.open(name, ) as member:",
@@ -632,6 +640,14 @@
       "kind": "equivalent-by-construction",
       "rationale": "Python's codec registry normalises encoding names before lookup (codecs.lookup lower-cases them), so 'utf-8' and 'UTF-8' select the same codec: every byte string decodes to the same text or raises the same UnicodeDecodeError, which the undecodable-bytes test pins.",
       "issue": "#732"
+    },
+    {
+      "mutant": "mcp_server.core.prospective.x_trigger_in_scope__mutmut_9",
+      "removed": "return memory_matches_project(trigger.get(\"target_directory\"), False, project_root)",
+      "added": "return memory_matches_project(trigger.get(\"target_directory\"), None, project_root)",
+      "kind": "equivalent-by-construction",
+      "rationale": "memory_matches_project reads is_global only as `if is_global:` (mcp_server/shared/project_scope.py), so None and False take the same branch for every trigger and root: a trigger is never global. The local branch itself is pinned by test_a_trigger_fires_only_where_its_directory_is_served, which refuses a trigger of beta in alpha.",
+      "issue": "#981"
     }
   ]
 }
