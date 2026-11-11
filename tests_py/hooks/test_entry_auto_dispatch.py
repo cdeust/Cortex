@@ -53,6 +53,12 @@ def dispatch_hook(monkeypatch):
 def test_engine_selected_auto_backend_reaches_hook(
     entry_point, sqlite, tmp_path, monkeypatch, dispatch_hook
 ):
+    if not sqlite:
+        # auto_recall._connect returns None without the driver, before it
+        # reaches the pg_connect this test replaces.
+        pytest.importorskip(
+            "psycopg", reason="psycopg not installed ([postgresql] extra)"
+        )
     monkeypatch.setenv("CORTEX_RUNTIME", "cowork" if entry_point == "wheel" else "cli")
     monkeypatch.setenv("CORTEX_MEMORY_STORE_BACKEND", "auto")
     for key in ("DATABASE_URL", "CORTEX_MEMORY_DATABASE_URL", "CORTEX_BACKEND"):
