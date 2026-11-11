@@ -15,6 +15,7 @@ from importlib.metadata import version
 from mcp_server.core.reranker import ensure_reranker_loaded, model_identity
 import benchmarks.lib._composition_root_wiring  # noqa: F401 — source: issue #560
 from benchmarks.lib.embedding_identity import embedding_identity_fields
+from mcp_server.doctor_manifest import effective_manifest
 
 
 def _git_sha() -> str:
@@ -108,11 +109,12 @@ def build_repro_manifest() -> dict[str, Any]:
         git_commit, git_dirty, python_version, platform_system,
         platform_machine, platform_node, timestamp_utc, lib_versions,
         reranker_active, reranker_state, reranker_model_path,
-        reranker_model_sha256, reranker_model_identity.
+        reranker_model_sha256, reranker_model_identity, runtime_manifest.
     The dict is JSON-serialisable (all values are str | bool | None | dict).
     """
     sha = _git_sha()
     dirty = _git_dirty()
+    reranker = _reranker_manifest_fields()
 
     lib_versions = {
         "sentence-transformers": _lib_version("sentence-transformers"),
@@ -132,7 +134,10 @@ def build_repro_manifest() -> dict[str, Any]:
         "platform_node": platform.node(),
         "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         "lib_versions": lib_versions,
-        **_reranker_manifest_fields(),
+        **reranker,
+        # source: issue #734 — embedding "served" is filled by
+        # record_embedding_identity once the benchmark's engine has served.
+        "runtime_manifest": effective_manifest(reranker_served=reranker),
     }
 
 
@@ -144,7 +149,8 @@ def record_embedding_identity(repro: dict[str, Any], engine: Any) -> None:
         are separate instances and can settle in different states.
     postcondition: ``repro`` carries ``embedding_mode``,
         ``embedding_model_state``, ``embedding_model_name`` and
-        ``embedding_model_revision`` (None unless the state is LOADED).
+        ``embedding_model_revision`` (None unless the state is LOADED), and
+        ``runtime_manifest.embedding.served`` holds the same fields.
     raises: RuntimeError when an earlier run of the same invocation recorded a
         different identity; one result must not average neural and fallback runs.
     """
@@ -155,6 +161,8 @@ def record_embedding_identity(repro: dict[str, Any], engine: Any) -> None:
             f"embedding identity changed between runs: {recorded} then {fields}"
         )
     repro.update(fields)
+    if "runtime_manifest" in repro:
+        repro["runtime_manifest"]["embedding"]["served"] = fields
 
 
 def multi_run_stats(values: list[float]) -> dict[str, float | int | None]:

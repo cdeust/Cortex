@@ -109,6 +109,8 @@ def _environment_fields() -> dict:
     """Package/model/reranker identity fields — split out of `build_manifest`
     to keep that function under the 40-line method cap
     (docs/agent-guidance.md § Code Style)."""
+    embedding = embedding_manifest_fields()
+    reranker = reranker_fields()
     return {
         "python": platform.python_version(),
         "packages": {
@@ -121,9 +123,21 @@ def _environment_fields() -> dict:
                 "psycopg-pool",
             )
         },
-        **embedding_manifest_fields(),
-        **reranker_fields(),
+        **embedding,
+        **reranker,
+        "runtime_manifest": _runtime_manifest(embedding, reranker),
     }
+
+
+def _runtime_manifest(embedding: dict, reranker: dict) -> dict:
+    """The run's code and models as `cortex-doctor manifest` builds them, with
+    what this run's engines served (issue #734).
+
+    source: mcp_server/doctor_manifest.py"""
+    # noqa: PLC0415 — the doctor module is imported only when a manifest is built.
+    from mcp_server.doctor_manifest import effective_manifest  # noqa: PLC0415
+
+    return effective_manifest(embedding_served=embedding, reranker_served=reranker)
 
 
 def _artifact_fields() -> dict:
