@@ -43,7 +43,7 @@ def test_wrong_version_refuses_stale_tool(tmp_path):
 
 
 def test_matching_runtime_execs_without_install_or_resolve(tmp_path):
-    python = installed(tmp_path, "4.23.5")
+    python = installed(tmp_path, "4.24.0")
     with (
         patch.object(runtime.sys, "argv", [str(SCRIPT), "post_tool_capture"]),
         patch.object(runtime.subprocess, "check_output", return_value=str(tmp_path)),
@@ -73,7 +73,7 @@ def test_setup_uses_host_interpreter_and_binary_wheels():
 
 
 def test_server_uses_the_same_isolated_interpreter(tmp_path):
-    python = installed(tmp_path, "4.23.5")
+    python = installed(tmp_path, "4.24.0")
     with (
         patch.object(runtime.sys, "argv", [str(SCRIPT), "server"]),
         patch.object(runtime.subprocess, "check_output", return_value=str(tmp_path)),
@@ -86,7 +86,7 @@ def test_server_uses_the_same_isolated_interpreter(tmp_path):
 
 
 def test_server_forwards_profile_arguments(tmp_path):
-    installed(tmp_path, "4.23.5")
+    installed(tmp_path, "4.24.0")
     with (
         patch.object(runtime.sys, "argv", [str(SCRIPT), "server", "--profile", "lean"]),
         patch.object(runtime.subprocess, "check_output", return_value=str(tmp_path)),

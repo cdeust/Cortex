@@ -25,7 +25,7 @@ def resolver():
 
 
 def run_main(outcome):
-    """Exit code, stdout, stderr and outputs of main() when resolve() ends in outcome."""
+    """Exit code, stdout, stderr, outputs of main() when resolve() ends in outcome."""
     ns = resolver()
 
     def resolve(*_):

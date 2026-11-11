@@ -89,9 +89,7 @@ class CommonSourceChecks:
                 self.reject("tag", before, after)
 
     def test_tag_requires_a_commit_object(self) -> None:
-        for before, after in (
-            ('"cat-file", "-t", sha', '"cat-file", "-t", "HEAD"'),
-        ):
+        for before, after in (('"cat-file", "-t", sha', '"cat-file", "-t", "HEAD"'),):
             with self.subTest(before=before):
                 self.reject("tag", before, after)
 

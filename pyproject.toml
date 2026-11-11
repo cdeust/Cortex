@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "hypermnesia-mcp"
-version = "4.23.5"
+version = "4.24.0"
 description = "Scientifically-grounded memory system based on computational neuroscience research"
 readme = "README.md"
 license = "MIT"
@@ -322,7 +322,13 @@ torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
 #
 #
 #
-extend-exclude = [".claude"]
+extend-exclude = [
+    ".claude",
+    # source: the file's own docstring ("delivered to consuming repositories by
+    # `render-ci --native-review`"). It is written to ci-autonome's line length
+    # and is corrected there; ruff 0.17.3 reported 4 E501 and a reformat on it.
+    "scripts/tests/test_no_main_comparison.py",
+]
 
 [tool.ruff.lint]
 # source: ADR-0874

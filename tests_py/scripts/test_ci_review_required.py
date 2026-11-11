@@ -1,4 +1,7 @@
-"""The review job is not a required job at the protected merge boundary (owner rule 2026-10-29)."""
+"""The review job is not a required job at the protected merge boundary.
+
+Owner rule 2026-10-29.
+"""
 
 from pathlib import Path
 import textwrap
@@ -18,7 +21,8 @@ def resolver():
 
 
 def completed_jobs(*extra):
-    # Source: the canonical test categories, their aggregate merge and the three-OS matrices.
+    # Source: the canonical test categories, their aggregate merge and the
+    # three-OS matrices.
     names = ["contract", "unit", "regression", "e2e", "merge", *extra]
     names += [
         f"{kind} ({os})"

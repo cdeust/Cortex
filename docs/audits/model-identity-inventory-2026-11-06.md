@@ -62,12 +62,13 @@ model downloaded):
 ```python
 from mcp_server.infrastructure.embedding_factory import get_embedding_engine
 from benchmarks.lib.write_manifest import embedding_revision, reranker_fields
+
 e = get_embedding_engine()
 e.mode, e.model_state, e.revision
 # ('fallback', <ModelState.PACKAGE_ABSENT: 3>, '1110a243fdf4706b3f48f1d95db1a4f5529b4d41')
-embedding_revision()   # '1110a243fdf4706b3f48f1d95db1a4f5529b4d41'
-reranker_fields()      # {'reranker_active': False, 'reranker_state': 'failed',
-                       #  'reranker_model_sha256': None}
+embedding_revision()  # '1110a243fdf4706b3f48f1d95db1a4f5529b4d41'
+reranker_fields()  # {'reranker_active': False, 'reranker_state': 'failed',
+#  'reranker_model_sha256': None}
 ```
 
 ## Remaining slices of #734
