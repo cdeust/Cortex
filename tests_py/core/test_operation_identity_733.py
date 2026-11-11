@@ -92,3 +92,34 @@ def test_sample_outside_a_tool_call_has_no_operation(telemetry_log):
     _tool_call(call_next)
     telemetry.record("hook", latency_ms=1)
     assert _samples(telemetry_log)[-1]["operation_id"] is None
+
+
+def _begin_then_record(*ops):
+    telemetry.begin_operation()
+    for op in ops:
+        telemetry.record(op, latency_ms=1)
+
+
+def test_a_begun_operation_gives_its_later_samples_one_fresh_id(telemetry_log):
+    copy_context().run(_begin_then_record, "store", "report")
+    store, report = _samples(telemetry_log)
+    assert len(store["operation_id"]) == 32
+    assert int(store["operation_id"], 16) >= 0
+    assert report["operation_id"] == store["operation_id"]
+
+
+def test_each_begun_operation_replaces_the_one_before_it(telemetry_log):
+    def two_units():
+        _begin_then_record("first")
+        _begin_then_record("second")
+
+    copy_context().run(two_units)
+    first, second = _samples(telemetry_log)
+    assert None not in (first["operation_id"], second["operation_id"])
+    assert first["operation_id"] != second["operation_id"]
+
+
+def test_a_begun_operation_ends_with_its_context(telemetry_log):
+    copy_context().run(_begin_then_record, "inside")
+    telemetry.record("outside", latency_ms=1)
+    assert _samples(telemetry_log)[-1]["operation_id"] is None

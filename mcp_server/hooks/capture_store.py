@@ -61,5 +61,12 @@ async def store(payload: dict[str, object]) -> dict[str, object]:
 
 
 async def remember(payload: dict[str, object]) -> None:
-    """The resident worker's callback: store and discard the handler result."""
+    """The resident worker's callback: store and discard the handler result.
+
+    Each payload is one operation (issue #733): the ``remember`` and
+    ``capture_processed`` samples of this store, and the ``capture_skipped`` the
+    server reports from the same task when it raises, carry one operation id."""
+    from mcp_server.core import telemetry  # noqa: PLC0415 — the worker's import test forbids mcp_server.core before a payload arrives
+
+    telemetry.begin_operation()
     await store(payload)

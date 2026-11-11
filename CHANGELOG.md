@@ -63,6 +63,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Each captured payload stored in the background is one operation in the telemetry
+  (#733, slice 4). The resident capture worker and the spool drainer start a fresh
+  `operation_id` per payload, so the `remember` sample of a capture, its
+  `capture_processed` sample and, when the store fails or the payload is refused, its
+  `capture_skipped` sample carry the same id instead of `null`. The id is born in
+  the worker: it does not yet name the hook invocation that produced the payload.
 - A backup of a SQLite or PostgreSQL install is first staged into a fresh directory
   outside the Cortex root: the SQLite store is copied by the online backup API in one
   step, so rows committed only in the WAL are carried and concurrent writes cannot
