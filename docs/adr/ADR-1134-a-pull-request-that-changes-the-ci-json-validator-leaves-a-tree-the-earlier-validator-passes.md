@@ -59,7 +59,7 @@ Rule 8 arrived with 996 itself. It asks an author to run what a change needs bey
 - The rule does not forbid a pull request that changes `ci.json` and the validator when the earlier validator passes the result: a command value, or the revert of 996 in one commit.
 - The replay uses the validator the branch started from. The Pipeline after merge uses the validator of the main branch at the merge. The two differ when the main branch changed its validator in between, which an author does not check (rule 4).
 - Rule 9 names the validator because it is the case measured. Every other step of the Pipeline after merge also comes from the earlier commit. Whether one of them has failed for that reason was not looked for.
-- `c84dfb5`, the merge commit of 996, went through no test job in its own run after merge. Run 43158939841, after the merge of pull request 997, ran every job green on `5ea8b83`, which contains it: `unit`, `regression`, `e2e`, `environment` and `install` on the three systems, and `tag` (12 November 2026, ended 05:32 UTC).
+- `c84dfb5`, the merge commit of 996, went through no test job in its own run after merge. The next merge covered it: run 43156874217 merged pull request 994 on top of it as `22523c4` and ended with success at 05:06 UTC on 12 November 2026. The run after it, 43158939841 for pull request 997, was read job by job on `5ea8b83`: `unit`, `regression` and `e2e` on Linux, `environment` and `install` on the three systems, and `tag`, all green.
 - The rule is not enforced by a check.
 
 ## Alternatives considered
