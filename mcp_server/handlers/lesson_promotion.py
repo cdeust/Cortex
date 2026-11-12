@@ -11,6 +11,7 @@ from mcp_server.core.lesson_promotion import (
     build_promotion_jobs,
     promotion_instructions,
 )
+from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.handlers._tool_meta import READ_ONLY
 from mcp_server.infrastructure.memory_store import get_shared_store
 from mcp_server.infrastructure.pg_store_lesson_promotion import (
@@ -70,7 +71,7 @@ schema = {
 }
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Build lesson-promotion jobs from validated lesson/lesson-candidate memories.
 
     source: ADR-0419"""
@@ -100,3 +101,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         "returned": len(jobs),
         "instructions": promotion_instructions(),
     }
+
+
+handler = instrument("lesson_promotion", _handler_impl, result_count_key="jobs")

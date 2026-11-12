@@ -12,6 +12,7 @@ from typing import Any
 
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
+from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.handlers._tool_meta import READ_ONLY
 from mcp_server.observability import silent_failure
 from mcp_server.shared.domain_mapping import resolve_explicit_domain
@@ -297,7 +298,7 @@ def _score_and_recommend(
     return score, recs
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Assess knowledge coverage completeness."""
     args = args or {}
     directory = args.get("directory", "") or os.getcwd()
@@ -331,3 +332,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         "directory": directory,
         "domain": domain,
     }
+
+
+handler = instrument("assess_coverage", _handler_impl)
