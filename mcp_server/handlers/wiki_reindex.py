@@ -10,6 +10,7 @@ from typing import Any
 from mcp_server.shared.wiki_layout import PAGE_KINDS, index_path
 from mcp_server.core.wiki_redirect import is_redirect, parse_frontmatter
 from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
+from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.wiki_decision_index import write_decision_index
 from mcp_server.handlers import project_wiki
@@ -187,7 +188,7 @@ def reindex(root: Path | str) -> dict[str, Any]:
     }
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     args = args or {}
     try:
         if args.get("project_root") is not None:
@@ -195,3 +196,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         return reindex(WIKI_ROOT)
     except (ValueError, OSError) as exc:
         return {"error": f"wiki reindex failed: {exc}"}
+
+
+handler = instrument("wiki_reindex", _handler_impl)

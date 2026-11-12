@@ -16,6 +16,7 @@ from typing import Any
 from mcp_server.shared.wiki_pages import parse_page
 from mcp_server.core.wiki_templates import STATUS_VALUES
 from mcp_server.handlers._tool_meta import DESTRUCTIVE
+from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.infrastructure.pg_store_wiki import (
     body_hash,
     delete_links_from,
@@ -412,7 +413,7 @@ def migrate_wiki(wiki_root: Path | str, conn, *, dry_run: bool = True) -> dict:
     }
 
 
-async def handler(args: dict | None = None) -> dict:
+async def _handler_impl(args: dict | None = None) -> dict:
     """MCP tool entry: run migration + ghost-page reconciliation, return summary."""
 
     args = args or {}
@@ -420,6 +421,9 @@ async def handler(args: dict | None = None) -> dict:
     settings = get_memory_settings()
     store = get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
     return migrate_wiki(WIKI_ROOT, store._conn, dry_run=dry_run)
+
+
+handler = instrument("wiki_migrate", _handler_impl)
 
 
 __all__ = [
