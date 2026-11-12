@@ -33,7 +33,7 @@ embedding or reranker inference time as its own unit, and provider tokens.
 
 | Emitter | Operations (`op`) | Source |
 | --- | --- | --- |
-| MCP handler wrapper `instrument` | `recall`, `recall_hierarchical`, `remember`, `forget`, `validate_memory`, `rate_memory`, `navigate_memory`, `get_causal_chain`, `drill_down`, `query_methodology` (10 tools at the audit); `consolidate` since #733 slice 3; `unified_search`, `memory_stats`, `checkpoint`, `narrative` and `import_sessions` since the slice after it; `add_rule`, `get_rules`, `predict`, `resolve_prediction` and `calibration` since the next one; `check_setup` and `get_grooming_health` since the one after it; `wiki_read`, `wiki_list`, `wiki_link`, `wiki_verify` and `wiki_rename` since the next one; `wiki_reindex`, `wiki_purge` and `wiki_migrate` since the one after it; `wiki_get_draft` and `wiki_refine_draft` since the next one; `change_impact`, `ingest_findings` and `ingest_prd` since the one after it; `detect_domain`, `list_domains` and `rebuild_profiles` since the next one; `anchor`, `why` and `get_project_story` since the one after it | the `instrument(...)` line of each handler |
+| MCP handler wrapper `instrument` | `recall`, `recall_hierarchical`, `remember`, `forget`, `validate_memory`, `rate_memory`, `navigate_memory`, `get_causal_chain`, `drill_down`, `query_methodology` (10 tools at the audit); `consolidate` since #733 slice 3; `unified_search`, `memory_stats`, `checkpoint`, `narrative` and `import_sessions` since the slice after it; `add_rule`, `get_rules`, `predict`, `resolve_prediction` and `calibration` since the next one; `check_setup` and `get_grooming_health` since the one after it; `wiki_read`, `wiki_list`, `wiki_link`, `wiki_verify` and `wiki_rename` since the next one; `wiki_reindex`, `wiki_purge` and `wiki_migrate` since the one after it; `wiki_get_draft` and `wiki_refine_draft` since the next one; `change_impact`, `ingest_findings` and `ingest_prd` since the one after it; `detect_domain`, `list_domains` and `rebuild_profiles` since the next one; `anchor`, `why` and `get_project_story` since the one after it; `assess_coverage`, `detect_gaps` and `lesson_promotion` since the next one | the `instrument(...)` line of each handler |
 | `remember_bulk` | one `remember` sample per item, no sample for the bulk call | `handlers/remember_bulk.py` |
 | Hooks `observe_hook` | `session_start`, `auto_recall` | `hooks/session_start.py`, `hooks/auto_recall.py` |
 | Capture worker | `capture_processed` on success; `capture_skipped`, `capture_spool_stalled`, `capture_worker_lifecycle` on failure | `hooks/capture_store.py`, `hooks/capture_dispatch.py`, `hooks/capture_worker.py` |
@@ -65,6 +65,9 @@ calls another instrumented handler.
 `anchor`, `why` and `get_project_story` each record one since the slice
 after it (`why` counts its `evidence`, `get_project_story` its `chapters`);
 none of them calls another instrumented handler.
+`assess_coverage`, `detect_gaps` and `lesson_promotion` each record one
+since the next slice (`detect_gaps` counts its `gaps`, `lesson_promotion`
+its `jobs`); none of them calls another instrumented handler.
 `get_telemetry` stays unwrapped: a sample of its own call would change the
 counters it reports.
 
@@ -164,7 +167,9 @@ p(0, b'{"result":"x","total_cost_usd":0.0123}', b"", root)  # cost_usd=0.0123
    `domains` for `list_domains`); none of them calls another instrumented
    handler. Then `anchor`, `why` and `get_project_story` (result count:
    `evidence` for `why`, `chapters` for `get_project_story`); none of them
-   calls another instrumented handler. Not delivered: samples for the other registered tools that record none (the
+   calls another instrumented handler. Then `assess_coverage`, `detect_gaps`
+   and `lesson_promotion` (result count: `gaps` for `detect_gaps`, `jobs` for
+   `lesson_promotion`); none of them calls another instrumented handler. Not delivered: samples for the other registered tools that record none (the
    other wiki tools, among them `wiki_write` and
    `wiki_adr`, which call `remember.handler` for a pointer memory, so an
    outer sample would sit beside a `remember` sample, the question

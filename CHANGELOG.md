@@ -106,6 +106,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `assess_coverage`, `detect_gaps` and `lesson_promotion` record one telemetry
+  sample per call (#733): wall time, request and response bytes, outcome (error
+  when the call raises) and, inside an MCP call, that call's `operation_id`.
+  `detect_gaps` counts its `gaps`, `lesson_promotion` its `jobs`. Before, these
+  tools recorded nothing.
 - `anchor`, `why` and `get_project_story` record one telemetry sample per call
   (#733): wall time, request and response bytes, outcome (error when the call
   raises) and, inside an MCP call, that call's `operation_id`. `why` counts its
