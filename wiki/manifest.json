@@ -3705,8 +3705,8 @@
       "path": "adr/cortex/1133-a-documentation-only-pull-request-runs-environment-and-install-on-linux-alone.md"
     },
     "ADR-1134": {
-      "mirror": "ADR-1134-the-ci-json-of-a-pull-request-passes-the-validator-of-the-commit-before-its-merge.md",
-      "path": "adr/cortex/1134-the-ci-json-of-a-pull-request-passes-the-validator-of-the-commit-before-its-merge.md"
+      "mirror": "ADR-1134-a-pull-request-that-changes-the-ci-json-validator-leaves-a-tree-the-earlier-validator-passes.md",
+      "path": "adr/cortex/1134-a-pull-request-that-changes-the-ci-json-validator-leaves-a-tree-the-earlier-validator-passes.md"
     }
   },
   "project": "cortex",
