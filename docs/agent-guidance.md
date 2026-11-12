@@ -196,12 +196,14 @@ the repository's own standards apply. They never widen what a prompt allows.
    `ci/budget-counts-contract-reviews`, anything labelled `hold` or `do-not-merge`, a draft.
 8. **The work is verified before the pull request exists** (ADR-1132). Before opening a
    pull request, and before each push to one, run the `unit` and `regression` commands of
-   `ci.json` on a clean copy of the commit, plus what the change needs beyond them, and
-   put the commands and their counts in the pull request body, with what was not run.
-   The hosted Pipeline is the gate, not the place to find out whether a change works. A
-   journal, changelog or documentation entry travels in the commit of the change it
-   records, never as a push of its own to an open pull request: every push runs the
-   whole Pipeline and spends a review.
+   `ci.json` on a clean copy of the commit (a worktree under `.claude/worktrees/` or a
+   `git archive`), plus what the change needs beyond them, and put each command with
+   its passed, failed and skipped counts in the pull request body. A command the
+   session cannot run (a host its network refuses, `initdb` under the root user) is
+   named there with the reason. The hosted Pipeline stays the gate; it is not the place
+   to find out whether a change works. After a conflict merge under rule 4, the touched
+   tests are enough. A journal, changelog or documentation entry is pushed with the
+   change it records; documentation is pushed alone only to fix a Blocker.
 
 ## What NOT to do
 
