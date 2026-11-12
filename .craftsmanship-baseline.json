@@ -3855,12 +3855,12 @@
     {
       "file": "mcp_server/handlers/wiki_refine.py",
       "kind": "method-size",
-      "detail": "handler_get"
+      "detail": "_handler_get_impl"
     },
     {
       "file": "mcp_server/handlers/wiki_refine.py",
       "kind": "method-size",
-      "detail": "handler_refine"
+      "detail": "_handler_refine_impl"
     },
     {
       "file": "mcp_server/handlers/wiki_reindex.py",

@@ -33,7 +33,7 @@ embedding or reranker inference time as its own unit, and provider tokens.
 
 | Emitter | Operations (`op`) | Source |
 | --- | --- | --- |
-| MCP handler wrapper `instrument` | `recall`, `recall_hierarchical`, `remember`, `forget`, `validate_memory`, `rate_memory`, `navigate_memory`, `get_causal_chain`, `drill_down`, `query_methodology` (10 tools at the audit); `consolidate` since #733 slice 3; `unified_search`, `memory_stats`, `checkpoint`, `narrative` and `import_sessions` since the slice after it; `add_rule`, `get_rules`, `predict`, `resolve_prediction` and `calibration` since the next one; `check_setup` and `get_grooming_health` since the one after it; `wiki_read`, `wiki_list`, `wiki_link`, `wiki_verify` and `wiki_rename` since the next one; `wiki_reindex`, `wiki_purge` and `wiki_migrate` since the one after it | the `instrument(...)` line of each handler |
+| MCP handler wrapper `instrument` | `recall`, `recall_hierarchical`, `remember`, `forget`, `validate_memory`, `rate_memory`, `navigate_memory`, `get_causal_chain`, `drill_down`, `query_methodology` (10 tools at the audit); `consolidate` since #733 slice 3; `unified_search`, `memory_stats`, `checkpoint`, `narrative` and `import_sessions` since the slice after it; `add_rule`, `get_rules`, `predict`, `resolve_prediction` and `calibration` since the next one; `check_setup` and `get_grooming_health` since the one after it; `wiki_read`, `wiki_list`, `wiki_link`, `wiki_verify` and `wiki_rename` since the next one; `wiki_reindex`, `wiki_purge` and `wiki_migrate` since the one after it; `wiki_get_draft` and `wiki_refine_draft` since the next one | the `instrument(...)` line of each handler |
 | `remember_bulk` | one `remember` sample per item, no sample for the bulk call | `handlers/remember_bulk.py` |
 | Hooks `observe_hook` | `session_start`, `auto_recall` | `hooks/session_start.py`, `hooks/auto_recall.py` |
 | Capture worker | `capture_processed` on success; `capture_skipped`, `capture_spool_stalled`, `capture_worker_lifecycle` on failure | `hooks/capture_store.py`, `hooks/capture_dispatch.py`, `hooks/capture_worker.py` |
@@ -54,6 +54,8 @@ each record one since the next slice (`wiki_list` counts its `pages`,
 `wiki_verify` its `results`).
 `wiki_reindex`, `wiki_purge` and `wiki_migrate` each record one since the
 slice after it.
+`wiki_get_draft` and `wiki_refine_draft` each record one since the next
+slice (`wiki_get_draft` counts the `drafts` it lists).
 `get_telemetry` stays unwrapped: a sample of its own call would change the
 counters it reports.
 
