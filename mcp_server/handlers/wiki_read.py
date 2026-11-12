@@ -19,6 +19,7 @@ from mcp_server.core.wiki_redirect import (
     resolve_chain,
 )
 from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
+from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.handlers import project_wiki_read
 from mcp_server.infrastructure.memory_config import get_memory_settings
@@ -199,7 +200,7 @@ def _frontmatter_reader(rel_path: str) -> dict[str, object]:
     return parse_frontmatter(content)
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     args = args or {}
     rel_path = str(args.get("path") or "").strip()
     if not rel_path:
@@ -283,3 +284,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         },
         offset,
     )
+
+
+handler = instrument("wiki_read", _handler_impl, result_count_key=None)

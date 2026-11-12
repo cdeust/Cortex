@@ -3820,7 +3820,7 @@
     {
       "file": "mcp_server/handlers/wiki_list.py",
       "kind": "method-size",
-      "detail": "handler"
+      "detail": "_handler_impl"
     },
     {
       "file": "mcp_server/handlers/wiki_memory_sync.py",
@@ -3845,7 +3845,7 @@
     {
       "file": "mcp_server/handlers/wiki_read.py",
       "kind": "method-size",
-      "detail": "handler"
+      "detail": "_handler_impl"
     },
     {
       "file": "mcp_server/handlers/wiki_refine.py",
@@ -3870,7 +3870,7 @@
     {
       "file": "mcp_server/handlers/wiki_rename.py",
       "kind": "method-size",
-      "detail": "handler"
+      "detail": "_handler_impl"
     },
     {
       "file": "mcp_server/handlers/wiki_resolve.py",

@@ -97,6 +97,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `wiki_read`, `wiki_list`, `wiki_link`, `wiki_verify` and `wiki_rename` record
+  one telemetry sample per call (#733): wall time, request and response bytes,
+  outcome (error when the call raises) and, inside an MCP call, that call's
+  `operation_id`. `wiki_list` counts its `pages`, `wiki_verify` its `results`.
+  Before, these tools recorded nothing.
 - `check_setup` and `get_grooming_health` record one telemetry sample per call
   (#733): wall time, request and response bytes, outcome (error when the call
   raises) and, inside an MCP call, that call's `operation_id`. `check_setup`

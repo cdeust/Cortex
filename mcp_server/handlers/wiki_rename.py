@@ -21,6 +21,7 @@ from mcp_server.core.wiki_redirect import (
     parse_frontmatter,
 )
 from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
+from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.wiki_store import WikiExistsError, read_page, write_page
 
@@ -76,7 +77,7 @@ def _now_iso() -> str:
     return datetime.now(tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     args = args or {}
     from_path = str(args.get("from_path") or "").strip()
     to_path = str(args.get("to_path") or "").strip()
@@ -160,3 +161,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         "page_id": page_id,
         "stub_created": True,
     }
+
+
+handler = instrument("wiki_rename", _handler_impl, result_count_key=None)

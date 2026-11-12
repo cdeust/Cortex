@@ -9,6 +9,7 @@ from typing import Any
 from mcp_server.shared.wiki_layout import PAGE_KINDS
 from mcp_server.core.wiki_redirect import is_redirect, parse_frontmatter
 from mcp_server.handlers._tool_meta import READ_ONLY
+from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.wiki_pages_listing import list_pages
 from mcp_server.infrastructure.wiki_store import read_page
@@ -91,7 +92,7 @@ def _classify_page(rel_path: str) -> tuple[bool, bool]:
     return redirect_flag, auto_gen_flag
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     args = args or {}
     kind = args.get("kind")
     include_redirects = bool(args.get("include_redirects", False))
@@ -135,3 +136,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         "redirect_count": redirect_count,
         "auto_generated_count": auto_generated_count,
     }
+
+
+handler = instrument("wiki_list", _handler_impl, result_count_key="pages")

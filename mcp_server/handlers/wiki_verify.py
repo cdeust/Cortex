@@ -33,6 +33,7 @@ from mcp_server.infrastructure.workflow_graph_source_ast import (
     WorkflowGraphASTSource,
 )
 from mcp_server.handlers._tool_meta import READ_ONLY
+from mcp_server.handlers._telemetry_wrap import instrument
 
 
 schema = {
@@ -119,7 +120,7 @@ def _verify_one(path: str, ast_source: WorkflowGraphASTSource) -> dict[str, Any]
     }
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     args = args or {}
     if not is_enabled():
         return {
@@ -154,6 +155,9 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
             "min_refs": MIN_SYMBOL_REFS,
         },
     }
+
+
+handler = instrument("wiki_verify", _handler_impl, result_count_key="results")
 
 
 __all__ = ["handler", "schema"]

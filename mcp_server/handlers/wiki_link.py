@@ -16,6 +16,7 @@ from mcp_server.infrastructure.wiki_store import (
     write_page,
 )
 from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
+from mcp_server.handlers._telemetry_wrap import instrument
 
 schema = {
     "title": "Wiki — link pages",
@@ -80,7 +81,7 @@ def _update_page(rel_path: str, entry: LinkEntry) -> None:
     write_page(WIKI_ROOT, rel_path, updated, mode="replace")
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     args = args or {}
     from_path = str(args.get("from_path") or "").strip()
     to_path = str(args.get("to_path") or "").strip()
@@ -106,3 +107,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         "relation": relation,
         "inverse": inverse_of(relation),
     }
+
+
+handler = instrument("wiki_link", _handler_impl, result_count_key=None)
