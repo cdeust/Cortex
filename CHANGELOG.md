@@ -8,12 +8,15 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- Pull request review (ADR-1135): `/review-pr` tells two of its reviewers to
+- Pull request review (ADR-1135, proposed): `/review-pr` tells two of its reviewers to
   try to refute the pull request: each statement against its source, each rule against
   a case that follows it and fails, each workflow change against what runs after the
-  merge. `docs/review-eval/` holds the evaluation set of the review, with two cases
-  whose defects are known. On them the current brief names 0 of 7 and 0 of 1 known
-  defects, the refutation brief 4 of 7 and 1 of 1.
+  merge. `docs/review-eval/` holds the evaluation set of the review: two cases whose
+  defects are known and a control. On the model the review runs on, three draws per
+  brief: the current brief names 0, 0 and 0 of the 7 known defects of the first case
+  and the defect of the second in 0 draws of 3; the refutation brief names 2, 2 and 3,
+  and the defect of the second in 2 draws of 3. Neither reports a Blocker on the
+  control.
 - CI contract, rule 9 (ADR-1134): a pull request that changes the `ci.json`
   validator leaves a tree the earlier validator still passes, because the Pipeline
   after merge runs the validator of the commit before the merge. A key enters

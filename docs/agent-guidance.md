@@ -213,8 +213,8 @@ the repository's own standards apply. They never widen what a prompt allows.
    requests that added a key to `ci.json` together with the validator that accepts it
    (982, 996) each merged, then failed that job, and the test jobs of that run were skipped.
    Such a pull request replays the step before it is opened and before each push to it:
-   the validator of the main branch as the branch last took it (at its start, or at the
-   last conflict merge under rule 4), on the tree after its commits. So a key enters
+   the validator of the main branch as the branch last took it (at its start, or at its
+   last merge of the main branch), on the tree after its commits. So a key enters
    `ci.json` in a pull request after the one that taught the validator to accept it;
    what fails without the key, a validator that requires it or a reader that refuses
    its absence, comes with the key or after it; and a key leaves `ci.json` after the
