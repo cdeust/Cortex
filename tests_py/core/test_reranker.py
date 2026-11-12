@@ -223,6 +223,7 @@ class TestRerankerStatus:
                 "CUDAExecutionProvider",
                 "CPUExecutionProvider",
             )
+            assert status.model_path == str(reranker_mod._model_path())
 
     def test_no_providers_without_an_onnx_session(self):
         # A failed load and a listwise (llama-cpp) ranker serve no ONNX session.
