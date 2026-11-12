@@ -97,6 +97,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `wiki_reindex`, `wiki_purge` and `wiki_migrate` record one telemetry sample
+  per call (#733): wall time, request and response bytes, outcome (error when
+  the call raises) and, inside an MCP call, that call's `operation_id`. Before,
+  these tools recorded nothing.
 - `wiki_read`, `wiki_list`, `wiki_link`, `wiki_verify` and `wiki_rename` record
   one telemetry sample per call (#733): wall time, request and response bytes,
   outcome (error when the call raises) and, inside an MCP call, that call's

@@ -21,6 +21,7 @@ from mcp_server.core.wiki_stub_detector import (
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.shared.wiki_layout import PAGE_KINDS
 from mcp_server.handlers._tool_meta import DESTRUCTIVE
+from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.handlers.wiki_purge_scan import (
     PAGE_DIRS,
     RejectAxes,
@@ -264,7 +265,7 @@ def _report(sweep: _Sweep, census, root: Path) -> dict[str, Any]:
     }
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Purge wiki pages that no longer earn their place."""
     args = args or {}
     root = Path(WIKI_ROOT).expanduser()
@@ -287,3 +288,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         _prune_empty_dirs(root)
 
     return _report(sweep, census, root)
+
+
+handler = instrument("wiki_purge", _handler_impl)
