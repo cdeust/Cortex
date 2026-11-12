@@ -97,6 +97,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `add_rule`, `get_rules`, `predict`, `resolve_prediction` and `calibration` record
+  one telemetry sample per call (#733): wall time, request and response bytes,
+  outcome (error when the call raises) and, inside an MCP call, that call's
+  `operation_id`. `get_rules` counts the rules it returns. Before, these tools
+  recorded nothing.
 - `unified_search`, `memory_stats`, `checkpoint`, `narrative` and `import_sessions`
   record one telemetry sample per call (#733): wall time, request and response
   bytes, outcome (error when the call raises) and, inside an MCP call, that call's

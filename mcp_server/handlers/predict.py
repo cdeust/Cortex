@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Any
 
 from mcp_server.handlers._tool_meta import NON_IDEMPOTENT_WRITE
+from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.prediction_store import insert_prediction
@@ -87,7 +88,7 @@ def _get_store() -> MemoryStore:
     return get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     args = args or {}
     missing = [
         field
@@ -114,3 +115,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         },
     )
     return {"prediction_id": prediction_id, "status": "open"}
+
+
+handler = instrument("predict", _handler_impl, result_count_key=None)

@@ -11,6 +11,7 @@ from typing import Any
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.handlers._tool_meta import READ_ONLY
+from mcp_server.handlers._telemetry_wrap import instrument
 
 # ── Schema ────────────────────────────────────────────────────────────────────
 
@@ -80,7 +81,7 @@ def _get_store() -> MemoryStore:
 # ── Handler ───────────────────────────────────────────────────────────────────
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """List active neuro-symbolic rules."""
     args = args or {}
     scope_filter = args.get("scope")
@@ -116,3 +117,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         "rules": rules,
         "by_scope": {k: len(v) for k, v in by_scope.items()},
     }
+
+
+handler = instrument("get_rules", _handler_impl, result_count_key="rules")
