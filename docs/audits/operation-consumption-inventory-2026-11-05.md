@@ -33,7 +33,7 @@ embedding or reranker inference time as its own unit, and provider tokens.
 
 | Emitter | Operations (`op`) | Source |
 | --- | --- | --- |
-| MCP handler wrapper `instrument` | `recall`, `recall_hierarchical`, `remember`, `forget`, `validate_memory`, `rate_memory`, `navigate_memory`, `get_causal_chain`, `drill_down`, `query_methodology` (10 tools at the audit); `consolidate` since #733 slice 3; `unified_search`, `memory_stats`, `checkpoint`, `narrative` and `import_sessions` since the slice after it; `add_rule`, `get_rules`, `predict`, `resolve_prediction` and `calibration` since the next one; `check_setup` and `get_grooming_health` since the one after it | the `instrument(...)` line of each handler |
+| MCP handler wrapper `instrument` | `recall`, `recall_hierarchical`, `remember`, `forget`, `validate_memory`, `rate_memory`, `navigate_memory`, `get_causal_chain`, `drill_down`, `query_methodology` (10 tools at the audit); `consolidate` since #733 slice 3; `unified_search`, `memory_stats`, `checkpoint`, `narrative` and `import_sessions` since the slice after it; `add_rule`, `get_rules`, `predict`, `resolve_prediction` and `calibration` since the next one; `check_setup` and `get_grooming_health` since the one after it; `wiki_read`, `wiki_list`, `wiki_link`, `wiki_verify` and `wiki_rename` since the next one | the `instrument(...)` line of each handler |
 | `remember_bulk` | one `remember` sample per item, no sample for the bulk call | `handlers/remember_bulk.py` |
 | Hooks `observe_hook` | `session_start`, `auto_recall` | `hooks/session_start.py`, `hooks/auto_recall.py` |
 | Capture worker | `capture_processed` on success; `capture_skipped`, `capture_spool_stalled`, `capture_worker_lifecycle` on failure | `hooks/capture_store.py`, `hooks/capture_dispatch.py`, `hooks/capture_worker.py` |
@@ -49,6 +49,9 @@ call since #733 slice 3; `unified_search`, `memory_stats`, `checkpoint`,
 each record one since the next slice (`get_rules` counts its `rules`).
 `check_setup` and `get_grooming_health` each record one since the slice
 after it (`check_setup` counts its `checks`).
+`wiki_read`, `wiki_list`, `wiki_link`, `wiki_verify` and `wiki_rename`
+each record one since the next slice (`wiki_list` counts its `pages`,
+`wiki_verify` its `results`).
 `get_telemetry` stays unwrapped: a sample of its own call would change the
 counters it reports.
 
@@ -135,10 +138,15 @@ p(0, b'{"result":"x","total_cost_usd":0.0123}', b"", root)  # cost_usd=0.0123
    the rule and prediction tools (`add_rule`, `get_rules`, `predict`,
    `resolve_prediction`, `calibration`; result count: `rules` for
    `get_rules`). Then `check_setup` and `get_grooming_health` (result
-   count: `checks` for `check_setup`). Not delivered: samples for the
-   other registered tools that record none (wiki, ingest, codebase tools,
-   `seed_project`, whose stored discoveries already record one `remember`
-   sample each).
+   count: `checks` for `check_setup`). Then `wiki_read`, `wiki_list`,
+   `wiki_link`, `wiki_verify` and `wiki_rename` (result count: `pages` for
+   `wiki_list`, `results` for `wiki_verify`); none of them calls another
+   instrumented handler. Not delivered: samples for the other registered
+   tools that record none (the other wiki tools, among them `wiki_write` and
+   `wiki_adr`, which call `remember.handler` for a pointer memory, so an
+   outer sample would sit beside a `remember` sample, the question
+   `seed_project` raises; ingest and codebase tools; `seed_project`, whose
+   stored discoveries already record one `remember` sample each).
 4. Read the provider usage the CLI reports, beyond `total_cost_usd`, with its
    provenance, after checking the fields against the CLI version in use.
 
