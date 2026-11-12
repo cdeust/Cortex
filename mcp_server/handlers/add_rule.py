@@ -20,6 +20,7 @@ from mcp_server.core.memory_rules import validate_rule
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
+from mcp_server.handlers._telemetry_wrap import instrument
 
 # ── Schema ────────────────────────────────────────────────────────────────────
 
@@ -189,7 +190,7 @@ def _validate_rule_args(args: dict[str, Any]) -> dict[str, Any] | None:
     return None
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Add a neuro-symbolic rule."""
     args = args or {}
 
@@ -229,3 +230,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         "priority": priority,
         "source_memory_id": source_memory_id,
     }
+
+
+handler = instrument("add_rule", _handler_impl, result_count_key=None)

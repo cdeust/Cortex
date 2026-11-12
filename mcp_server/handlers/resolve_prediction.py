@@ -16,6 +16,7 @@ from __future__ import annotations
 from typing import Any
 
 from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
+from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.prediction_store import (
@@ -104,7 +105,7 @@ def _refusal(args: dict[str, Any]) -> str | None:
     return None
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     args = args or {}
     refusal = _refusal(args)
     if refusal is not None:
@@ -134,3 +135,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         "verdict": args["verdict"],
         "resolved": True,
     }
+
+
+handler = instrument("resolve_prediction", _handler_impl, result_count_key=None)
