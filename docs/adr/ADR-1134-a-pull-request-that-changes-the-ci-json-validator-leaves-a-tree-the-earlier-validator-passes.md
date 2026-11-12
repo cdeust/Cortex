@@ -27,7 +27,7 @@ Measured in Cortex: the 2 pull requests that added a key to `ci.json`. GitHub li
 | 982 (ADR-1131) | `low_risk_files` | 42968565597, 11 November 2026, 05:52 UTC | merged | failed: `low_risk_files: unknown key` |
 | 996 (ADR-1133) | `docs_paths` | 43149580342, 12 November 2026, 03:38 UTC | merged | failed: `docs_paths: unknown key` |
 
-In both runs `unit`, `regression`, `e2e`, `environment`, `install` and `tag` were skipped: the run tested nothing, on any system.
+In both runs `unit`, `regression`, `e2e`, `environment`, `install` and `tag` were skipped: the merge commit went through no test job, on any system.
 
 In claude-mods, pull request 72 brought `low_risk_files` with its validator, as ADR-1131 told the other repositories to do, and its run after merge failed at the same step (run 42975150439, 11 November 2026, 06:49 UTC; the log line was not read). The runs after the same change in ai-architect-mcp-codebase (509), ai-architect-mcp-spec (207), zetetic-team-subagents (249), cortex-viz (238) and ci-autonome (32) were not read.
 
@@ -59,7 +59,7 @@ Rule 8 arrived with 996 itself. It asks an author to run what a change needs bey
 - The rule does not forbid a pull request that changes `ci.json` and the validator when the earlier validator passes the result: a command value, or the revert of 996 in one commit.
 - The replay uses the validator the branch started from. The Pipeline after merge uses the validator of the main branch at the merge. The two differ when the main branch changed its validator in between, which an author does not check (rule 4).
 - Rule 9 names the validator because it is the case measured. Every other step of the Pipeline after merge also comes from the earlier commit. Whether one of them has failed for that reason was not looked for.
-- `c84dfb5`, the merge commit of 996, has had no test after its merge. The next merge tests it: the Pipeline after merge runs the three systems on a merge commit that contains it.
+- `c84dfb5`, the merge commit of 996, has been through no test job after its merge. The next merge covers it: the Pipeline after merge runs the three systems on a merge commit that contains it.
 - The rule is not enforced by a check.
 
 ## Alternatives considered
