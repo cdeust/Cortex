@@ -13,6 +13,7 @@ from mcp_server.core.grooming_health import (
     is_stale,
 )
 from mcp_server.handlers._tool_meta import READ_ONLY
+from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.infrastructure.memory_store import get_shared_store
 from mcp_server.infrastructure.pg_store_lesson_promotion import (
     count_lesson_promotion_candidates,
@@ -81,7 +82,7 @@ def _count_promotion_candidates(store: Any) -> int:
     return count_lesson_promotion_candidates(store._conn)
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Aggregate backlog counts + staleness ages for the three grooming kinds.
 
     Precondition: none.
@@ -124,3 +125,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         "threshold_days": GROOMING_STALENESS_THRESHOLD_DAYS,
         "any_stale": any(k["stale"] for k in kinds.values()),
     }
+
+
+handler = instrument("get_grooming_health", _handler_impl, result_count_key=None)
