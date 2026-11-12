@@ -49,7 +49,7 @@ Rule 8 arrived with 996 itself. It asks an author to run what a change needs bey
 ## Decision
 
 1. Rule 9 of the CI contract: a pull request that changes the validator leaves a tree the earlier validator still passes. The validator is the script of the step "Validate ci.json", embedded in `pipeline.yml` and `pipeline-post-merge.yml`.
-2. Such a pull request replays the step before it is opened: the validator as it was before the pull request's commits, on the tree after them. A pull request that leaves the validator alone needs no replay: its own `contract` job runs that validator.
+2. Such a pull request replays the step before it is opened and before each push to it: the validator as it was before the pull request's commits, on the tree after them. A pull request that leaves the validator alone needs no replay: its own `contract` job runs that validator.
 3. For a key, it follows that the key enters `ci.json` in a pull request after the one that taught the validator to accept it. What fails without the key, a validator that requires it or a reader that refuses its absence, comes with the key or after it. A key the validator requires leaves `ci.json` after the validator stopped requiring it.
 4. ADR-1131 said a repository that takes the two workflows "must add `low_risk_files` to its `ci.json` in the same pull request". That is the case measured on claude-mods. Such a repository first teaches its own validator to accept the keys it lacks, in a pull request of its own.
 
@@ -59,7 +59,7 @@ Rule 8 arrived with 996 itself. It asks an author to run what a change needs bey
 - The rule does not forbid a pull request that changes `ci.json` and the validator when the earlier validator passes the result: a command value, or the revert of 996 in one commit.
 - The replay uses the validator the branch started from. The Pipeline after merge uses the validator of the main branch at the merge. The two differ when the main branch changed its validator in between, which an author does not check (rule 4).
 - Rule 9 names the validator because it is the case measured. Every other step of the Pipeline after merge also comes from the earlier commit. Whether one of them has failed for that reason was not looked for.
-- `c84dfb5`, the merge commit of 996, has been through no test job after its merge. The next merge covers it: the Pipeline after merge runs the three systems on a merge commit that contains it.
+- `c84dfb5`, the merge commit of 996, went through no test job in its own run after merge. The next merge covered it: run 43156874217 merged pull request 994 on top of it as `22523c4` and ended with success at 05:06 UTC on 12 November 2026. The run after it, 43158939841 for pull request 997, was read job by job on `5ea8b83`: `unit`, `regression` and `e2e` on Linux, `environment` and `install` on the three systems, and `tag`, all green.
 - The rule is not enforced by a check.
 
 ## Alternatives considered

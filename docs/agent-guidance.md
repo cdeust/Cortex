@@ -196,8 +196,9 @@ the repository's own standards apply. They never widen what a prompt allows.
    `ci/budget-counts-contract-reviews`, anything labelled `hold` or `do-not-merge`, a draft.
 8. **The work is verified before the pull request exists** (ADR-1132). Before opening a
    pull request, and before each push to one, run the `unit` and `regression` commands of
-   `ci.json` on a clean copy of the commit (a worktree under `.claude/worktrees/` or a
-   `git archive`), plus what the change needs beyond them, and put each command with
+   `ci.json` on a clean copy of the commit, a worktree under `.claude/worktrees/` (a
+   `git archive` is not one: tests of the `unit` command ask git about the tree and fail
+   on it), plus what the change needs beyond them, and put each command with
    its passed, failed and skipped counts in the pull request body. A command the
    session cannot run (a host its network refuses, `initdb` under the root user) is
    named there with the reason. The hosted Pipeline stays the gate; it is not the place
@@ -210,11 +211,12 @@ the repository's own standards apply. They never widen what a prompt allows.
    the version file it names, with the validator of that earlier commit. The two pull
    requests that added a key to `ci.json` together with the validator that accepts it
    (982, 996) each merged, then failed that job, and the test jobs of that run were skipped.
-   Such a pull request replays the step before it is opened: the validator as it was
-   before its commits, on the tree after them. So a key enters `ci.json` in a pull
-   request after the one that taught the validator to accept it; what fails without the
-   key comes with the key or after it; a key the validator requires leaves `ci.json`
-   after the validator stopped requiring it.
+   Such a pull request replays the step before it is opened and before each push to it:
+   the validator as it was before its commits, on the tree after them. So a key enters
+   `ci.json` in a pull request after the one that taught the validator to accept it;
+   what fails without the key, a validator that requires it or a reader that refuses
+   its absence, comes with the key or after it; a key the validator requires leaves
+   `ci.json` after the validator stopped requiring it.
 
 ## What NOT to do
 

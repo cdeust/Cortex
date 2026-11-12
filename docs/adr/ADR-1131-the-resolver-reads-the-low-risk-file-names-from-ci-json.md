@@ -12,7 +12,7 @@ title: The resolver reads the low-risk file names from ci.json
 
 ## Status
 
-accepted. Amends ADR-1126 (a Dependabot minor or patch update of the dependency files merges without a review): the file names leave the workflow.
+accepted. Amends ADR-1126 (a Dependabot minor or patch update of the dependency files merges without a review): the file names leave the workflow. One sentence of its consequences amended by ADR-1134 (how another repository takes `low_risk_files`).
 
 ## Context
 
