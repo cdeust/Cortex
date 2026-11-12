@@ -32,3 +32,6 @@ the zetetic implementation standard). Read it before any non-trivial change.
   routines"): it binds every agent and routine and wins over a less restrictive routine
   prompt. One pull request in flight, no comparison with the main branch, no forced push,
   no comment after an approve.
+- Issues: no issue waits for the owner (`docs/agent-guidance.md`, "Issues: no issue waits
+  for the owner"). Decide, write the decision and its reason, deliver; hold only for the
+  irreversible, a missing access, a named open dependency or the attempt cap.

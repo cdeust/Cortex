@@ -26,6 +26,15 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Issues (ADR-1136, issue #1009): `docs/agent-guidance.md` gains the section "Issues: no issue
+  waits for the owner", and `CLAUDE.md` points to it. An agent decides a question an issue
+  asks from the repository's written decisions, the issue's own text and the standards,
+  writes the decision and its reason in the issue, and delivers; it holds an issue only for
+  the irreversible, an access it does not have, a named open dependency or its attempt cap,
+  and never pushes a tag, creates a release, raises the version or dispatches a workflow by
+  hand. Measured on 12 November 2026 across the four repositories with an hourly routine: 56
+  of 62 open issues were held, 45 of them on a question to the owner, who does not answer
+  questions on issues.
 - Pull request review (ADR-1135, proposed): `/review-pr` tells two of its reviewers to
   try to refute the pull request: each statement against its source, each rule against
   a case that follows it and fails, each workflow change against what runs after the

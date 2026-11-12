@@ -220,6 +220,45 @@ the repository's own standards apply. They never widen what a prompt allows.
    its absence, comes with the key or after it; and a key leaves `ci.json` after the
    validator stopped requiring it and after every reader that refuses its absence is gone.
 
+## Issues: no issue waits for the owner
+
+Owner instruction of 12 November 2026: the owner does not answer questions on issues and
+does not manage them. An agent takes the most reasonable reading, writes the decision and
+its reason, and continues. This section is that decision, given in advance: it is the
+"human decision" a routine's prompt asks for before it holds an issue. It binds every
+agent and routine that works on this repository.
+
+1. **Decide.** When an issue asks for a choice (a product choice, an ambiguity, "A or B",
+   "build, or document the limit and close", "rewrite or close"), or an earlier comment
+   left a question unanswered, take the most reasonable reading, in this order: (a) a
+   written and accepted decision of this repository (an accepted ADR, `docs/`,
+   CONTRIBUTING.md), the most recent; the text of another issue is not one, and a
+   decision an agent wrote counts only for its own issue; (b) what the issue's own text
+   proposes or excludes; (c) the repository's standards; a missing value is measured,
+   never invented; (d) failing those, the smallest slice that does what the issue asks.
+   "Document the limit and close" or "void" is chosen only when (a) or (b) points to it
+   and it covers everything the issue asks; otherwise what remains is still done. A
+   decision chooses among what the issue asks; it adds no scope.
+2. **Write the decision, then act.** At most one written decision per pass, and only
+   when no pull request of the repository is in flight. Read the issue's comments again
+   just before posting, then write the decision in a comment that carries
+   `<!-- ci-autopilot decision -->`: what is kept, the reason with its source, what is
+   set aside, how to go back. A decision written that way holds for later passes: it is
+   applied, not replayed, and it changes only on a new, verified fact, in writing. A fact
+   taken from an earlier comment is verified again before it is used.
+3. **Hold** (`autopilot:hold`) only in these cases, naming exactly what is missing: the
+   irreversible (deleting a branch, a repository or data, spending money, sending an
+   external message, publishing); an access the agent does not have (hardware, system,
+   secret, account, token permission, a repository it cannot read); a named dependency
+   that is still open; the attempt cap of a routine's own anti-loop rule. Never for a
+   question. Slices that do not depend on what is missing are delivered first.
+4. **Never**, even when a decision leads there: push a tag, create a release, raise the
+   project's version, dispatch a workflow by hand.
+5. **An issue that is already done.** The agent verifies each point on the main branch
+   and writes the evidence in the issue; what remains is delivered in a pull request that
+   carries `Closes #<number>`. An issue opened by someone other than the owner is never
+   closed by an agent.
+
 ## What NOT to do
 
 - Do NOT gate a release benchmark against the live production database —
