@@ -1,0 +1,112 @@
+[
+  {
+    "id": "commit-paired-delta",
+    "family": "introducing_commit",
+    "question": "Which commit introduced the scorer of the outcome benchmark that pairs recall and no-recall trials by task and repetition and reports the delta with a variance estimate?",
+    "key": {"commit": "524660ce05fe9e911d7aeda8337af62f84e2786e"},
+    "evidence": {"added_path": "benchmarks/outcome/paired_delta.py"}
+  },
+  {
+    "id": "commit-answer-resolver",
+    "family": "introducing_commit",
+    "question": "Which commit introduced the git lookup that resolves a commit answer of the outcome benchmark against the corpus repository using object names only, never refs?",
+    "key": {"commit": "6a143491181d3edc6efcfb95137243c79acdeb8d"},
+    "evidence": {"added_path": "benchmarks/outcome/commit_resolver.py"}
+  },
+  {
+    "id": "commit-craftsmanship-gate",
+    "family": "introducing_commit",
+    "question": "Which commit introduced the deterministic craftsmanship gate that enforces the per-file and per-method line caps?",
+    "key": {"commit": "0c2bf1d65dd41b5a8a0fb56b047d3c3f0060c35e"},
+    "evidence": {"added_path": "scripts/check_craftsmanship.py"}
+  },
+  {
+    "id": "approach-bitwise-gate",
+    "family": "abandoned_approach",
+    "question": "Was a gate requiring bitwise-exact equality between the scalar and the batched float32 encoding paths tried, and what was the recorded reason it stopped?",
+    "key": {
+      "tried": true,
+      "reasons": [
+        "IEEE 754 float32 addition/multiplication isn't associative",
+        "float32 addition and multiplication are not associative",
+        "float32 arithmetic is not associative"
+      ]
+    },
+    "evidence": {"commit": "a00251830a962d947c59027f7b2007ddcceda65b"}
+  },
+  {
+    "id": "approach-hotlinked-badge",
+    "family": "abandoned_approach",
+    "question": "Was a hotlinked HOL trust-score badge in the README tried, and what was the recorded reason it stopped?",
+    "key": {
+      "tried": true,
+      "reasons": [
+        "violates check_no_hotlinked_badges",
+        "it violates check_no_hotlinked_badges",
+        "a remote badge can restate itself with no commit here"
+      ]
+    },
+    "evidence": {"commit": "85c10c92ba8c55ac758333f732a4b41ac47066b6"}
+  },
+  {
+    "id": "approach-main-comparison",
+    "family": "abandoned_approach",
+    "question": "Did the pipeline compare a pull request with the main branch before merging, and what was the recorded reason that comparison stopped?",
+    "key": {
+      "tried": true,
+      "reasons": [
+        "ce gate sert a rien",
+        "ce gate sert à rien",
+        "the gate is useless"
+      ]
+    },
+    "evidence": {"commit": "4314293fab72a12be2f35af1e68dbdec5a2ba7bc"}
+  },
+  {
+    "id": "value-review-cap",
+    "family": "decided_value",
+    "question": "What is the decided maximum number of automatic Claude reviews per pull request, and which file records that decision?",
+    "key": {
+      "values": ["three", "3"],
+      "sources": [
+        "docs/adr/ADR-1119-claude-reviews-are-capped-at-three-per-pull-request.md",
+        "docs/agent-guidance.md"
+      ]
+    },
+    "evidence": {
+      "quotes": {
+        "docs/adr/ADR-1119-claude-reviews-are-capped-at-three-per-pull-request.md": "At most three automatic Claude reviews per PR.",
+        "docs/agent-guidance.md": "three Claude reviews per PR, at most."
+      }
+    }
+  },
+  {
+    "id": "value-file-line-cap",
+    "family": "decided_value",
+    "question": "What is the decided maximum number of lines per source file enforced by the craftsmanship gate, and which file records it?",
+    "key": {
+      "values": ["300", "300 lines"],
+      "sources": ["scripts/craftsmanship_rules.py", "docs/agent-guidance.md"]
+    },
+    "evidence": {
+      "quotes": {
+        "scripts/craftsmanship_rules.py": "FILE_LINE_LIMIT = 300",
+        "docs/agent-guidance.md": "300 lines max per file"
+      }
+    }
+  },
+  {
+    "id": "value-min-abbrev",
+    "family": "decided_value",
+    "question": "What is the minimum number of hexadecimal digits a commit prefix needs before the outcome benchmark's resolver considers it, and which file holds that constant with its cited source?",
+    "key": {
+      "values": ["4", "four"],
+      "sources": ["benchmarks/outcome/commit_resolver.py"]
+    },
+    "evidence": {
+      "quotes": {
+        "benchmarks/outcome/commit_resolver.py": "_MIN_ABBREV = 4"
+      }
+    }
+  }
+]
