@@ -13,6 +13,7 @@ from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.handlers._tool_meta import READ_ONLY
 from mcp_server.shared.domain_mapping import resolve_explicit_domain
+from mcp_server.handlers._telemetry_wrap import instrument
 
 schema = {
     "title": "Narrative",
@@ -72,7 +73,7 @@ def _get_store() -> MemoryStore:
     return _store
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Generate project narrative from memories."""
     args = args or {}
     directory = args.get("directory") or ""
@@ -103,3 +104,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         memories,
         directory=directory or domain,
     )
+
+
+handler = instrument("narrative", _handler_impl, result_count_key=None)

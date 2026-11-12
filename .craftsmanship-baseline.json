@@ -3460,7 +3460,7 @@
     {
       "file": "mcp_server/handlers/import_sessions.py",
       "kind": "method-size",
-      "detail": "handler"
+      "detail": "_handler_impl"
     },
     {
       "file": "mcp_server/handlers/import_sessions.py",
