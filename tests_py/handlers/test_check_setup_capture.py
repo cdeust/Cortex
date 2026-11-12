@@ -29,7 +29,11 @@ def test_check_setup_is_not_ready_while_every_capture_is_skipped(tmp_path) -> No
     now = time.time()
     _write_log(tmp_path, [(now - 100 + i, "capture_skipped") for i in range(40)])
     script = (
-        "import asyncio, json; from mcp_server.handlers.check_setup import handler;"
+        # Wired as mcp_server/__main__.py wires the server before any handler:
+        # the instrumented handler reads CORTEX_TELEMETRY_DISABLED through it.
+        "import asyncio, json;"
+        "from mcp_server.hooks.wiring import wire_composition_root;"
+        "wire_composition_root(); from mcp_server.handlers.check_setup import handler;"
         "print(json.dumps(asyncio.run(handler())))"
     )
     env = dict(

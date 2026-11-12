@@ -8,6 +8,7 @@ from typing import Any
 
 from mcp_server.doctor import Check, active_checks
 from mcp_server.handlers._tool_meta import READ_ONLY_EXTERNAL
+from mcp_server.handlers._telemetry_wrap import instrument
 
 # ── Schema ────────────────────────────────────────────────────────────────
 
@@ -65,7 +66,7 @@ def _run_checks() -> list[Check]:
     return [check_fn() for check_fn in active_checks()]
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """precondition: none -- takes no arguments.
     postcondition: `checks` has exactly `len(active_checks())` entries in
     doctor's dependency order; `ready` is True iff no non-optional
@@ -102,3 +103,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
             for c in checks
         ],
     }
+
+
+handler = instrument("check_setup", _handler_impl, result_count_key="checks")

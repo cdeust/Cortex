@@ -97,6 +97,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `check_setup` and `get_grooming_health` record one telemetry sample per call
+  (#733): wall time, request and response bytes, outcome (error when the call
+  raises) and, inside an MCP call, that call's `operation_id`. `check_setup`
+  counts the checks it returns. Before, these tools recorded nothing.
 - `add_rule`, `get_rules`, `predict`, `resolve_prediction` and `calibration` record
   one telemetry sample per call (#733): wall time, request and response bytes,
   outcome (error when the call raises) and, inside an MCP call, that call's
