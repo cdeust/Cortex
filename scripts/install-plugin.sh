@@ -17,9 +17,10 @@ set -euo pipefail
 #      it dispatches by OS to scripts/setup.sh (macOS/Linux: PostgreSQL +
 #      pgvector + schema + model pre-cache) or scripts/setup.py (Windows
 #      via Git Bash). An EXISTING PostgreSQL install is auto-detected
-#      (env URL, prior marker, or a reachable local cortex database) and
-#      kept — an upgrade never silently downgrades a Postgres install
-#      to SQLite.
+#      (env URL, prior marker, or the launcher's first-launch rule for a
+#      HOME with earlier Cortex state, ADR-1104) and kept — an upgrade
+#      never silently downgrades a Postgres install to SQLite. A fresh
+#      HOME is SQLite even when a local cortex database answers (#704).
 #   2. Remove stale other Cortex installations.
 # source: ADR-0740
 #
@@ -85,6 +86,8 @@ say "Installing Cortex v${CURRENT_VERSION}"
 # Default: sqlite (zero-config). PostgreSQL only when explicitly
 # requested (--postgres flag, CORTEX_BACKEND, CORTEX_MEMORY_STORE_BACKEND)
 # or when an existing PostgreSQL install is detected — never downgrade.
+# "Existing" is the launcher's rule (ADR-1104): a HOME with no earlier
+# Cortex state is never PostgreSQL by detection (issue #704).
 
 MARKER_PATH="${HOME}/.claude/methodology/backend.json"
 
@@ -115,12 +118,26 @@ detect_existing_postgres() {
         say "Existing PostgreSQL install detected (marker: $MARKER_PATH)"
         return 0
     fi
-    # source: ADR-0740
-    if command -v psql >/dev/null 2>&1 \
-        && psql -h 127.0.0.1 -p 5432 -d cortex -tAc "SELECT 1" >/dev/null 2>&1; then
-        say "Existing local cortex database detected (127.0.0.1:5432)"
-        return 0
-    fi
+    # Nothing above decides: the launcher's own first-launch rule decides,
+    # so installer and launcher cannot disagree. A HOME with no earlier
+    # Cortex state is SQLite with no connection attempted, even when a
+    # local `cortex` database answers (issue #704).
+    # source: ADR-1104, decision 1 and Consequences
+    local decided
+    # The directory of the marker this installer writes, resolved with
+    # Path.home() inside Python as the marker write below does (a Git Bash
+    # path means nothing to a native Windows Python).
+    decided=$(PYTHONPATH="$PLUGIN_ROOT" "$PY" -c "
+import pathlib
+from mcp_server.infrastructure.backend_resolution import decide
+path = pathlib.Path.home() / '.claude' / 'methodology' / 'backend.json'
+backend, why = decide(path.parent, path.name)
+print(backend + ' (' + why + ')')
+") || fail "could not decide the backend (launcher rule, ADR-1104)"
+    say "Backend decided by the launcher rule: $decided"
+    case "$decided" in
+        postgresql*) return 0 ;;
+    esac
     return 1
 }
 
