@@ -8,6 +8,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- CI contract, rule 9 (ADR-1134): the `ci.json` a pull request leaves passes the
+  validator of the commit before its merge, the one the Pipeline after merge runs. A
+  key enters `ci.json` in a pull request after the one that taught the validator to
+  accept it. The pull requests that added `low_risk_files` and `docs_paths` with
+  their validator each failed that step after merging, and their merge commits had no
+  test after the merge.
 - Pipeline (ADR-1133): a pull request whose every changed path lies under the new
   optional `docs_paths` of `ci.json` runs `environment` and `install` on Linux
   alone. The resolver accepts that matrix only when it finds the pull request
