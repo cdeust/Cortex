@@ -12,6 +12,7 @@ from typing import Any
 
 from mcp_server.core.calibration import UNINFORMATIVE_BRIER, calibration_report
 from mcp_server.handlers._tool_meta import READ_ONLY
+from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.prediction_store import list_predictions
@@ -53,7 +54,7 @@ def _get_store() -> MemoryStore:
     return get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     args = args or {}
     domain = args.get("domain") or None
     conn = _get_store()._conn
@@ -72,3 +73,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
             f"a constant 0.5 forecast would score {UNINFORMATIVE_BRIER}"
         )
     return report
+
+
+handler = instrument("calibration", _handler_impl, result_count_key=None)

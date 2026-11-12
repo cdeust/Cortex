@@ -138,10 +138,14 @@ def served_manifest() -> dict[str, Any]:
     )
 
     identity = model_identity()
+    status = reranker_status()
     reranker = {
-        "reranker_state": reranker_status().state,
+        "reranker_state": status.state,
         "reranker_model_sha256": identity.sha256,
         "reranker_model_identity": identity.state,
+        "reranker_providers": (
+            list(status.providers) if status.providers is not None else None
+        ),
     }
     embedding = embedding_identity_fields(get_embedding_engine())
     return effective_manifest(

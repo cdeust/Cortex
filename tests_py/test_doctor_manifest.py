@@ -251,3 +251,21 @@ def test_the_engine_reports_the_device_its_model_runs_on(monkeypatch):
     assert engine.device_served == "cpu"
     engine._model = None
     assert engine.device_served is None
+
+
+def test_both_manifests_record_the_providers_the_reranker_ran_on(caches, monkeypatch):
+    # The session's execution providers, as a JSON list; None when no session
+    # is loaded (#734, slice 8).
+    from mcp_server.core import reranker
+    from mcp_server.core.reranker_model import RerankerStatus
+
+    loaded = RerankerStatus("loaded", "m", providers=("CPUExecutionProvider",))
+    for status, expected in (
+        (loaded, ["CPUExecutionProvider"]),
+        (RerankerStatus("failed", "m", error="x"), None),
+    ):
+        monkeypatch.setattr(reranker, "ensure_reranker_loaded", lambda s=status: s)
+        monkeypatch.setattr(_repro, "ensure_reranker_loaded", lambda s=status: s)
+        assert write_manifest.reranker_fields()["reranker_providers"] == expected
+        repro = _repro._reranker_manifest_fields()
+        assert repro["reranker_providers"] == expected
