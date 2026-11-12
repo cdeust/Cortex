@@ -67,6 +67,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Install (issue #704): `scripts/install-plugin.sh` no longer picks PostgreSQL because a
+  local `cortex` database answers `psql` on a HOME nothing configured. A HOME that no
+  request, URL or marker decides is decided by the launcher's own first-launch rule
+  (`backend_resolution.decide`, ADR-1104): SQLite on a fresh HOME, with no connection
+  attempted; PostgreSQL kept on a HOME with earlier Cortex state whose local port does
+  not certainly refuse, as the launcher already did.
 - Outcome benchmark (issue #343): `snapshot_corpus` resolves a relative source or
   destination from the caller's directory; git ran in the destination's parent and
   read them from there, so `snapshot_corpus(Path("src"), Path("out/snap"), pin)`
