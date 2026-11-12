@@ -3,6 +3,7 @@ Linux alone, and the resolver accepts that matrix only when it finds the same
 thing from the default branch's ci.json (ADR-1133)."""
 
 import base64
+import http.client
 import json
 import os
 from pathlib import Path
@@ -17,7 +18,6 @@ REPO = "owner/any-repository"
 # source: the heredoc openers of the embedded scripts in pipeline.yml and
 # pipeline-post-merge.yml.
 RESOLVER = "          python3 - <<'PY'\n"
-VALIDATOR = "          python3 - \"$GITHUB_WORKSPACE\" --github-output <<'PY'\n"
 SELECTOR = "          python3 - \"$GITHUB_WORKSPACE\" --platforms <<'PY'\n"
 # source: the matrix of the environment and install jobs before ADR-1133.
 ALL = ["ubuntu-latest", "macos-latest", "windows-latest"]
@@ -25,6 +25,10 @@ LINUX = ALL[:1]
 DOCS = ["docs/", "wiki/", "CHANGELOG.md"]
 # source: GitHub REST, "List pull requests files": 100 a page, 3000 in all.
 PAGE, LISTED_AT_MOST = 100, 3000
+RENAMES = [
+    {"filename": f"docs/b{index}.md", "previous_filename": f"docs/a{index}.md"}
+    for index in range(LISTED_AT_MOST // 2)
+]
 
 
 def embedded(workflow, opener):
@@ -87,6 +91,10 @@ class SelectionTests(unittest.TestCase):
             ("CHANGELOG.md.bak",),
             ("ci.json",),
             (".github/workflows/pipeline.yml",),
+            ("docs/what?.md",),
+            ("docs/NUL.md",),
+            ("docs/a.md ",),
+            ("docs/a\nb.md",),
         ):
             with self.subTest(names=names):
                 self.assertEqual(self.systems(*names), ALL)
@@ -106,7 +114,8 @@ class SelectionTests(unittest.TestCase):
         self.assertEqual(self.systems(), ALL)
 
     def test_an_unreadable_file_list_keeps_the_three_systems(self):
-        for error in (OSError("refused"), ValueError("not json"), TypeError("none")):
+        cut = http.client.IncompleteRead(b"")
+        for error in (OSError("refused"), ValueError("not json"), cut):
             with self.subTest(error=error):
 
                 def broken(page, error=error):
@@ -115,13 +124,19 @@ class SelectionTests(unittest.TestCase):
                 self.assertEqual(
                     self.ns["select"]("pull_request", DOCS, broken)[0], ALL
                 )
-        nameless = fetcher([{"status": "added"}])
-        self.assertEqual(self.ns["select"]("pull_request", DOCS, nameless)[0], ALL)
+        for row in ({"status": "added"}, {"filename": 7}, {"filename": ""}):
+            with self.subTest(row=row):
+                listed = fetcher([row])
+                self.assertEqual(
+                    self.ns["select"]("pull_request", DOCS, listed)[0], ALL
+                )
 
     def test_a_list_at_github_s_limit_keeps_the_three_systems(self):
         full = [f"docs/{index}.md" for index in range(LISTED_AT_MOST)]
         self.assertEqual(self.systems(*full), ALL)
         self.assertEqual(self.systems(*full[:-1]), LINUX)
+        # Paths are counted, as the resolver counts them: a rename is two.
+        self.assertEqual(self.systems(*RENAMES), ALL)
 
     def test_the_reason_never_quotes_a_path(self):
         # A file name can hold a line break followed by a workflow command.
@@ -137,41 +152,6 @@ class SelectionTests(unittest.TestCase):
             with mock.patch.dict(os.environ, env):
                 self.assertEqual(self.ns["main"]([root]), 0)
             self.assertEqual(output.read_text(), f"platforms={json.dumps(ALL)}\n")
-
-
-class ContractTests(unittest.TestCase):
-    def setUp(self):
-        self.ns = load("pipeline.yml", VALIDATOR)
-
-    def faults(self, *listed):
-        document = {key: "true" for key in self.ns["KEYS"]}
-        document.update(version_file="v.json", low_risk_files=[])
-        if listed:
-            document["docs_paths"] = listed[0]
-        with tempfile.TemporaryDirectory() as root:
-            Path(root, "v.json").write_text('{"version": "1.0.0"}')
-            Path(root, "ci.json").write_text(json.dumps(document))
-            return self.ns["faults"](Path(root))
-
-    def test_the_key_is_optional_and_takes_directories_and_files(self):
-        self.assertEqual(self.faults(), [])
-        self.assertEqual(self.faults([]), [])
-        self.assertEqual(self.faults(["docs/", "a/b/", "CHANGELOG.md"]), [])
-
-    def test_a_path_that_can_hold_code_or_leave_the_repository_fails(self):
-        for value in (
-            "docs/", [""], [" docs/"], ["/docs/"], [".github/"], ["./docs/"],
-            ["a/../b/"], ["ci.json"], [7], None,
-        ):  # fmt: skip
-            with self.subTest(value=value):
-                self.assertEqual(
-                    self.faults(value),
-                    ["docs_paths: must be a list of paths inside the repository"],
-                )
-
-    def test_this_repository_s_ci_json_honours_the_contract(self):
-        self.assertEqual(self.ns["faults"](ROOT), [])
-        self.assertEqual(json.loads((ROOT / "ci.json").read_text())["docs_paths"], DOCS)
 
 
 def jobs(environment, install, conclusion="success"):
@@ -222,12 +202,15 @@ class ResolverTests(unittest.TestCase):
         self.assertFalse(self.only_docs({"docs_paths": DOCS}))
         self.assertFalse(self.only_docs({}, "docs/a.md"))
         moved = {"filename": "docs/a.md", "previous_filename": "scripts/a.py"}
-        self.assertFalse(self.only_docs({"docs_paths": DOCS}, moved))
+        for row in (moved, "docs/what?.md", {"status": "added"}, {"filename": 7}):
+            with self.subTest(row=row):
+                self.assertFalse(self.only_docs({"docs_paths": DOCS}, row))
 
     def test_a_file_list_at_github_s_limit_is_not_documentation_only(self):
         full = [f"docs/{index}.md" for index in range(LISTED_AT_MOST)]
         self.assertFalse(self.only_docs({"docs_paths": DOCS}, *full))
         self.assertTrue(self.only_docs({"docs_paths": DOCS}, *full[:-1]))
+        self.assertFalse(self.only_docs({"docs_paths": DOCS}, *RENAMES))
 
     def test_a_malformed_list_fails_the_resolver(self):
         for listed in (

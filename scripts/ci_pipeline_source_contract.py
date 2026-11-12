@@ -130,7 +130,8 @@ def _check_receipt(body, field) -> list[str]:
         'run["reduced_matrix"] = _validate_jobs(jobs) return run',
         'if run.get("reduced_matrix"): require( '
         "_documentation_only(pr, repository, api),",
-        "return len(paths) < FILES_LISTED_AT_MOST and documentation_only(",
+        "return len(paths) < FILES_LISTED_AT_MOST and documentation_only( "
+        "paths, _docs_paths(repository, api) )",
     )
     if any(clause not in run for clause in clauses):
         return [

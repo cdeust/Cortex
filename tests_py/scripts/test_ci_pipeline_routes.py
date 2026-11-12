@@ -13,6 +13,44 @@ from unittest.mock import Mock, patch
 from tests_py.scripts.test_check_ci_gate_complete import change_job, gate
 
 
+# Each clause the gate checker pins in the resolver, and a change that removes it.
+# source: scripts/ci_pipeline_source_contract.py, _check_receipt.
+RECEIPT_MUTATIONS = (
+    ('run.get("path") == ".github/workflows/pipeline.yml"', "True"),
+    ('run.get("name") == "Pipeline"', "True"),
+    ('"regression", "e2e", "merge"', '"regression", "e2e"'),
+    ('"ubuntu-latest", "macos-latest", "windows-latest"', '"ubuntu-latest"'),
+    (
+        "len(actual) == len(set(actual)) and set(actual) in (full, linux)",
+        "True",
+    ),
+    (
+        'full = {f"{category} ({runner})" for runner in RUNNERS}',
+        "full = set(actual)",
+    ),
+    ('linux = {f"{category} ({RUNNERS[0]})"}', "linux = set(actual)"),
+    ("paths, _docs_paths(repository, api)", "paths, ['x/']"),
+    ("len(shapes) == 1,", "True,"),
+    ("return shapes == {1}", "return False"),
+    ('if run.get("reduced_matrix"):', "if False:"),
+    ("_documentation_only(pr, repository, api),", "True,"),
+    (
+        "len(paths) < FILES_LISTED_AT_MOST and documentation_only(",
+        "documentation_only(",
+    ),
+    ("len(matching) == 1,", "True,"),
+    ('allowed = job.get("conclusion") == "success"', "allowed = True"),
+    ('job.get("status") == "completed" and allowed,', "True,"),
+    ("_validate_run(source, repository)", "pass"),
+    ("_validate_run(run, repository)", "pass"),
+    (
+        '              run["reduced_matrix"] = _validate_jobs(jobs)\n'
+        "              return run",
+        "              return run",
+    ),
+)
+
+
 class PipelineRoutesTests(unittest.TestCase):
     def setUp(self):
         self.direct = gate.CI_WORKFLOW.read_text()
@@ -115,35 +153,7 @@ class PipelineRoutesTests(unittest.TestCase):
         self.assertTrue(gate.check(self.engine))
 
     def test_resolver_requires_exact_direct_receipt_and_job_results(self):
-        for before, after in (
-            ('run.get("path") == ".github/workflows/pipeline.yml"', "True"),
-            ('run.get("name") == "Pipeline"', "True"),
-            ('"regression", "e2e", "merge"', '"regression", "e2e"'),
-            ('"ubuntu-latest", "macos-latest", "windows-latest"', '"ubuntu-latest"'),
-            (
-                "len(actual) == len(set(actual)) and set(actual) in (full, linux)",
-                "True",
-            ),
-            ('linux = {f"{category} ({RUNNERS[0]})"}', "linux = set(actual)"),
-            ("len(shapes) == 1,", "True,"),
-            ("return shapes == {1}", "return False"),
-            ('if run.get("reduced_matrix"):', "if False:"),
-            ("_documentation_only(pr, repository, api),", "True,"),
-            (
-                "len(paths) < FILES_LISTED_AT_MOST and documentation_only(",
-                "documentation_only(",
-            ),
-            ("len(matching) == 1,", "True,"),
-            ('allowed = job.get("conclusion") == "success"', "allowed = True"),
-            ('job.get("status") == "completed" and allowed,', "True,"),
-            ("_validate_run(source, repository)", "pass"),
-            ("_validate_run(run, repository)", "pass"),
-            (
-                '              run["reduced_matrix"] = _validate_jobs(jobs)\n'
-                "              return run",
-                "              return run",
-            ),
-        ):
+        for before, after in RECEIPT_MUTATIONS:
             with self.subTest(before=before):
                 changed = change_job(
                     self.engine,

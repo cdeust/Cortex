@@ -359,6 +359,7 @@ jobs:
 
           from __future__ import annotations
 
+          import http.client
           import json
           import os
           import sys
@@ -372,24 +373,41 @@ jobs:
           FILES_LISTED_AT_MOST = 3000
 
           def documentation_only(paths, docs):
-              """True when ``paths`` is not empty and each lies under an entry of ``docs``:
-              an entry ending in "/" is a directory, any other names one file."""
+              """True when ``paths`` is not empty and each lies under an entry of ``docs``
+              (an entry ending in "/" is a directory, any other names one file) and has a
+              name Windows can hold: one it cannot would fail only there, after the merge.
+              source: https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file"""
+              devices = {"CON", "PRN", "AUX", "NUL"}
+              devices |= {f"{port}{digit}" for port in ("COM", "LPT") for digit in "123456789"}
+
+              def portable(part):
+                  return (
+                      part == part.rstrip(" .")
+                      and not any(char in '<>:"|?*\\' or ord(char) < 32 for char in part)
+                      and part.split(".")[0].upper() not in devices
+                  )
+
               return bool(paths) and all(
-                  any(path.startswith(entry) if entry.endswith("/") else path == entry for entry in docs)
+                  all(portable(part) for part in path.split("/"))
+                  and any(path.startswith(entry) if entry.endswith("/") else path == entry for entry in docs)
                   for path in paths
               )
 
 
           def changed_paths(fetch):
               """Every path the pull request touches, a rename under both of its names;
-              None when GitHub may have cut the list short."""
+              None when GitHub may have cut the list short. Paths are counted, as the
+              resolver counts them."""
               paths = []
               for page in range(1, FILES_LISTED_AT_MOST // PAGE + 1):
                   rows = fetch(page)
                   for row in rows:
-                      paths += [name for name in (row["filename"], row.get("previous_filename")) if name]
+                      names = [row["filename"], row.get("previous_filename")]
+                      if not names[0] or not all(isinstance(name, (str, type(None))) for name in names):
+                          raise TypeError("a file without a usable name")
+                      paths += [name for name in names if name]
                   if len(rows) < PAGE:
-                      return paths
+                      return paths if len(paths) < FILES_LISTED_AT_MOST else None
               return None
 
 
@@ -401,7 +419,7 @@ jobs:
                   return RUNNERS, "ci.json names no docs_paths"
               try:
                   paths = changed_paths(fetch)
-              except (OSError, ValueError, KeyError, TypeError) as exc:
+              except (OSError, ValueError, KeyError, TypeError, http.client.HTTPException) as exc:
                   return RUNNERS, f"the file list could not be read ({type(exc).__name__})"
               if paths is None:
                   return RUNNERS, "the file list reaches GitHub's limit"

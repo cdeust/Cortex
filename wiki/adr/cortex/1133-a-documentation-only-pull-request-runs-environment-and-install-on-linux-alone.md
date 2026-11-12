@@ -25,10 +25,10 @@ The resolver required the three legs of both jobs by name (`_validate_jobs`), an
 ## Decision
 
 1. `ci.json` takes an optional key `docs_paths`: directories (ending in `/`) and files whose change cannot alter what a test job runs. An entry stays inside the repository, cannot start with a dot or a slash, and cannot be `ci.json`. The validator embedded in both workflows checks it.
-2. The `contract` job of the Pipeline gains the step "Select the platforms". On a pull request whose every changed path lies under `docs_paths`, a rename counting under both of its names, `environment` and `install` run on Linux alone. Any other event or change, an unreadable file list, or a list at GitHub's limit of 3000 files keeps the three systems.
+2. The `contract` job of the Pipeline gains the step "Select the platforms". On a pull request whose every changed path lies under `docs_paths`, a rename counting under both of its names, `environment` and `install` run on Linux alone. Any other event or change, an unreadable file list, or a list of 3000 paths or more (GitHub lists 3000 files at most) keeps the three systems. A path whose name Windows cannot hold (a reserved character or device name, a trailing dot or space) is never documentation: it would fail only there, after the merge.
 3. The resolver accepts the three systems, or Linux alone on both jobs. For Linux alone it reads `docs_paths` from the default branch's `ci.json` and the files of the pull request, and merges only when it finds the pull request documentation-only itself. Otherwise the merge is refused, and the run ends red.
 4. The Pipeline after merge is unchanged: the three systems run on the merge commit.
-5. Cortex lists `docs/`, `wiki/` and `CHANGELOG.md`. Neither `scripts/ci_environment.py` nor `scripts/ci_install.py` reads them, and the checks that do (`check_project_wiki.py`, `check_doc_claims.py`) run in the Linux jobs.
+5. Cortex lists `docs/`, `wiki/` and `CHANGELOG.md`. Neither `scripts/ci_environment.py` nor `scripts/ci_install.py` reads them. What checks them does not depend on the system: the tests of `check_doc_claims.py` run in the `unit` job, and `check_project_wiki.py` runs in workflows of its own (`supersession-delete-parity.yml`, `memory-exact-review.yml`), not in the Pipeline.
 
 ## Consequences
 
@@ -37,6 +37,9 @@ The resolver required the three legs of both jobs by name (`_validate_jobs`), an
 - A path wrongly listed under `docs_paths` shows after the merge, when the three systems run. The remedy is to remove the entry.
 - A pull request tested on Linux alone while the default branch no longer lists its paths is refused by the resolver; a new push runs the three systems.
 - The validator is embedded word for word in both workflows (pinned by a test) and in `tools/ci_contract.py` of `zetetic-team-subagents`. That copy, and the workflows of the other repositories, follow in their own pull requests.
+- The selector and the resolver count the same thing, paths, so that a pull request the selector sends to Linux alone is not refused for its size by the resolver.
+- `scripts/ci_pipeline_source_contract.py` pins the text of the resolver, not its behaviour. In review, ten hand changes to the resolver went past it; the tests caught nine, and the tenth now has a pinned clause and a mutation case.
+- Two scripts still name the six legs (`scripts/ci_codex_review_resume.py`, `scripts/ci_autopilot_queue.py`). No job of the Pipeline calls them (read, not run).
 - Not proven before the merge: no hosted run has yet shown the job names GitHub gives a one-element `fromJSON` matrix. The resolver expects `environment (ubuntu-latest)` and `install (ubuntu-latest)`; the first documentation-only pull request will show it, and a different name would be refused, not merged.
 
 ## Alternatives considered
