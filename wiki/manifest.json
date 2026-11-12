@@ -3707,6 +3707,10 @@
     "ADR-1134": {
       "mirror": "ADR-1134-a-pull-request-that-changes-the-ci-json-validator-leaves-a-tree-the-earlier-validator-passes.md",
       "path": "adr/cortex/1134-a-pull-request-that-changes-the-ci-json-validator-leaves-a-tree-the-earlier-validator-passes.md"
+    },
+    "ADR-1135": {
+      "mirror": "ADR-1135-two-reviewers-of-review-pr-are-told-to-refute-the-pull-request.md",
+      "path": "adr/cortex/1135-two-reviewers-of-review-pr-are-told-to-refute-the-pull-request.md"
     }
   },
   "project": "cortex",

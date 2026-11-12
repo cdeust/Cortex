@@ -29,7 +29,7 @@ In both runs `unit`, `regression`, `e2e`, `environment`, `install` and `tag` wer
 
 In claude-mods, pull request 72 brought `low_risk_files` with its validator, as ADR-1131 told the other repositories to do, and its run after merge failed at the same step (run 42975150439, 11 November 2026, 06:49 UTC; the log line was not read). The runs after the same change in ai-architect-mcp-codebase (509), ai-architect-mcp-spec (207), zetetic-team-subagents (249), cortex-viz (238) and ci-autonome (32) were not read.
 
-The step was replayed here as the workflow runs it, on a `git archive` of each tree, with the validator taken from `pipeline-post-merge.yml` at the commit named:
+The step was replayed here as the workflow runs it, on a `git archive` of each tree (enough for this step: the validator calls git only to check the form of a tag name, `git check-ref-format`, which needs no repository), with the validator taken from `pipeline-post-merge.yml` at the commit named:
 
 | Validator of | Tree of | Result |
 |---|---|---|
@@ -47,17 +47,17 @@ Rule 8 arrived with 996 itself. It asks an author to run what a change needs bey
 ## Decision
 
 1. Rule 9 of the CI contract: a pull request that changes the validator leaves a tree the earlier validator still passes. The validator is the script of the step "Validate ci.json", embedded in `pipeline.yml` and `pipeline-post-merge.yml`.
-2. Such a pull request replays the step before it is opened and before each push to it: the validator as it was before the pull request's commits, on the tree after them. A pull request that leaves the validator alone needs no replay: its own `contract` job runs that validator.
-3. For a key, it follows that the key enters `ci.json` in a pull request after the one that taught the validator to accept it. What fails without the key, a validator that requires it or a reader that refuses its absence, comes with the key or after it. A key the validator requires leaves `ci.json` after the validator stopped requiring it.
+2. Such a pull request replays the step before it is opened and before each push to it: the validator of the main branch as the branch last took it (at its start, or at its last merge of the main branch), on the tree after the pull request's commits. A pull request that leaves the validator alone needs no replay: its own `contract` job runs that validator.
+3. For a key, it follows that the key enters `ci.json` in a pull request after the one that taught the validator to accept it. What fails without the key, a validator that requires it or a reader that refuses its absence, comes with the key or after it. A key leaves `ci.json` after the validator stopped requiring it and after every reader that refuses its absence is gone: the resolver fails a Dependabot pull request when `low_risk_files` is missing.
 4. ADR-1131 said a repository that takes the two workflows "must add `low_risk_files` to its `ci.json` in the same pull request". That is the case measured on claude-mods. Such a repository first teaches its own validator to accept the keys it lacks, in a pull request of its own.
 
 ## Consequences
 
 - A key added to `ci.json` takes two pull requests. Measure: runs of the Pipeline after merge whose `contract` job fails at "Validate ci.json". In Cortex before this rule: after 2 of the 2 pull requests that added a key.
 - The rule does not forbid a pull request that changes `ci.json` and the validator when the earlier validator passes the result: a command value, or the revert of 996 in one commit.
-- The replay uses the validator the branch started from. The Pipeline after merge uses the validator of the main branch at the merge. The two differ when the main branch changed its validator in between, which an author does not check (rule 4).
+- The replay uses the validator the branch last took from the main branch. The Pipeline after merge uses the validator of the main branch at the merge. The two differ when the main branch changed its validator in between, which an author does not check (rule 4).
 - Rule 9 names the validator because it is the case measured. Every other step of the Pipeline after merge also comes from the earlier commit. Whether one of them has failed for that reason was not looked for.
-- `c84dfb5`, the merge commit of 996, went through no test job in its own run after merge. The next merge covered it: run 43156874217 merged pull request 994 on top of it as `22523c4` and ended with success at 05:06 UTC on 12 November 2026. The run after it, 43158939841 for pull request 997, was read job by job on `5ea8b83`: `unit`, `regression` and `e2e` on Linux, `environment` and `install` on the three systems, and `tag`, all green.
+- `c84dfb5`, the merge commit of 996, went through no test job in its own run after merge. The next merge covered it: run 43156874217 merged pull request 994 on top of it as `22523c4` and ended with success at 05:06 UTC on 12 November 2026. A later run, 43158939841 for pull request 997, was read job by job on `5ea8b83`: `unit`, `regression` and `e2e` on Linux, `environment` and `install` on the three systems, and `tag`, all green.
 - The rule is not enforced by a check.
 
 ## Alternatives considered

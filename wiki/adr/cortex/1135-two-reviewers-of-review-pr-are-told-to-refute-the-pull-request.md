@@ -1,0 +1,81 @@
+---
+created: 2026-11-12T07:25:00Z
+kind: adr
+number: 1135
+status: proposed
+tags: [ci, review, review-pr, evaluation, fleet]
+title: Two reviewers of /review-pr are told to refute the pull request
+---
+# ADR-1135: Two reviewers of /review-pr are told to refute the pull request
+
+## Status
+
+proposed. Owner instruction 2026-11-12, after the first measurement below was sent to him: correct it at once, without asking him anything. The branch this record is written on has had its three reviews (ADR-1119), so the pull request that carries it is reviewed only with the `claude-rereview` label. That label is the owner's (ADR-1119, "Review rounds"): the session did not set it on its own, and the pull request waited as a draft. Second owner instruction, the same day, in answer to the status line that said the pull request waited for his label: the session is to handle that pull request itself ("tu vas la gérer la 1000"). On that instruction the session set the label, in the owner's name. The merge of that pull request is the acceptance.
+
+## Context
+
+Owner remark 2026-11-12: what was merged that day (ADR-1132, ADR-1133, ADR-1134) does not improve the review Claude does in CI.
+
+Measured on the three pull requests of that day:
+
+| Pull request | Errors found before it was opened, by reads launched outside CI | Blockers reported by the hosted review | Defect found after the merge |
+|---|---|---|---|
+| 996 | several, not counted | 0 | 1: run 43149580342 failed at "Validate ci.json" |
+| 997 | 11 | 0 | 0: run 43158939841 green |
+| 998 | 1 | 0 | 0: run 43169983700 green |
+
+The hosted review approved each of them. What caught the errors ran outside CI, from an interactive session.
+
+What the hosted review is given, read in the repository:
+
+- `/review-pr` was twenty lines: five reviewers, each told "to only provide noteworthy feedback". It asked no reviewer to check a statement against its source. The definition of `documentation-accuracy-reviewer` asks it to check documentation against the implementation (comments, README, API documentation); nothing asked it to check what a record says of a run, a commit or a pull request, and nothing asked any reviewer what runs after the merge.
+- `claude-review.yml` allows inline comments, `gh pr diff`, `gh pr view` and `gh pr comment`, on a checkout of the main branch at depth 1. The reviewers read and search; they run no command. The reviews say so themselves. On 997: "this checkout is shallow", "could not be run in this session". On pull request 521 of ai-architect-mcp-codebase: "I could not run the Python suites myself: running Python needs approval this session does not have."
+
+Source: Anthropic, "How the Claude Code team does code review" (claude.dev, 15 October 2026). "Any incidents are now an eval. […] The reviewer runs against that set daily." "Turn incidents and reverts into an eval set, and rescore the reviewer whenever its prompts, tools or model change." "When a review misses something, we ask what the model didn't have in front of it and put the fix into a CLAUDE.md, a skill or a new check."
+
+## Measurement
+
+Three cases, two briefs, the agent types and tools a reviewer of `/review-pr` has. The grid of known defects and the criterion were written before any report was read; their form for three draws was written after the first draw of each cell, before the others were launched. Protocol, briefs, cases, every draw and the limits: `docs/review-eval/README.md`.
+
+A first series was drawn from the interactive session, one draw per brief and per case. The reviewers' definitions say `model: inherit`, so it ran on the session's model, not on the one `claude-review.yml` pins. On it the refutation brief named 4 of the 7 known defects of case A against 0, and the defect of case B, which the current brief did not name. The change was first proposed on that series.
+
+The series that counts was drawn on the model `claude-review.yml` pins (asked for by its family's alias; the transcript of each draw records the identifier the workflow pins), three draws per brief and per case:
+
+| Case | Known defects | Current brief | Refutation brief |
+|---|---|---|---|
+| A: the first version of what became 997, `documentation-accuracy-reviewer` | 7 | 0, 0 and 0 named | 2, 2 and 3 named |
+| B: 996 as merged, `code-quality-reviewer` | 1 | named in 0 draws of 3 | named in 2 draws of 3, tagged Blocker |
+| C, a control: 998 as merged, `documentation-accuracy-reviewer` | 0 | no Blocker in 3 draws | no Blocker in 3 draws |
+
+- The criterion on case A, at least three more known defects on the medians, is not met: two more.
+- The criterion on case B, named in at least two draws of three against at most one, is met.
+- On the control neither brief reported a Blocker.
+- The refutation brief used more tokens: 18 % more on A, 27 % more on B, 11 % more on C (means of three draws).
+- The control was first built with the squash commit message in place of the pull request's body. On that file a draw of the refutation brief reported one Blocker that the real body contradicts. The file was rebuilt before the three draws above.
+
+The first draw on the control, on the session's model, reported six Notes. Four named defects of rules 8 and 9 and of ADR-1134, merged that morning after the reviews of 998: the rules' clean copy left out a fresh clone and the Codex worktree; rule 9 let a required key leave `ci.json` while the resolver still refused its absence; after a conflict merge its replay used a validator older than the main branch's; and ADR-1134 called "the run after it" a run that was not the next one.
+
+## Decision
+
+1. `/review-pr` tells `code-quality-reviewer` and `documentation-accuracy-reviewer`, in addition, to try to refute the pull request: every factual statement against its primary source; for every rule, a case that follows it and fails or a harmless case it forbids; for every change to a workflow, a CI script or a file CI reads, which commit's workflow runs each job before and after the merge, and whether the tree the pull request leaves passes.
+2. `docs/review-eval/` holds the evaluation set of the review. Its first three cases are those of the measurement. A change to `/review-pr`, to a reviewer, to their tools or to the model is measured against it before it is proposed, and a defect the review missed becomes a case.
+3. `/review-pr` was the same file, byte for byte, in Cortex and in nine other repositories of the owner (read on 12 November 2026). They take the new one from Cortex. A repository with its own command and reviewers (architect-os) is not concerned.
+4. What a Blocker is does not change. `claude-review.yml` rates a documentation or wording gap above Note only when it states something false about security or behaviour (ADR-1119, written after pull request 856 took twenty reviews). Under that rule the defects named on case A are Notes unless the top-level reviewer finds one false about behaviour; the defect of case B, a run that fails after the merge, is a Blocker.
+5. The four defects named on the control are corrected here, in rules 8 and 9 of `docs/agent-guidance.md` and in ADR-1134.
+6. The reviewers still run no command. Whether they may run the repository's scripts is not decided here. It was not measured, and it changes what the review job executes: `claude-review.yml` allows four tools, sets `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB` and installs bubblewrap, and what a pull request's code could reach under that was not examined.
+
+## Consequences
+
+- Measure: known defects named by each brief on the evaluation set, on the model of CI, and defects found after a merge that the hosted review did not report. On 12 November 2026: 1 of 3 pull requests.
+- The measured gain is on what runs after the merge (case B). On false statements in a record (case A) it is two defects of seven, under the three this record had set as its criterion. This record is proposed with that result stated, not as a met criterion.
+- Finding is not blocking. The draws were given a wider definition of a Blocker than `claude-review.yml` has, so their tags do not predict the hosted verdict. The gain on the verdict is for defects of CI, security or behaviour, as on case B.
+- Each of the two reviewers costs more: 11 to 27 % more tokens per draw.
+- Not measured: the verdict the top-level reviewer writes from the reports; the three other reviewers; a pull request that changes product code.
+- The third instruction was written from the incident of case B, which is therefore not a held-out case for it.
+
+## Alternatives considered
+
+- Let the reviewers run the repository's scripts, so that a step can be replayed. Not done (decision 6).
+- Rate a false statement of a record as a Blocker. Not done (decision 4): it would undo the limit ADR-1119 set on review rounds.
+- A sixth reviewer. Not proposed: what was measured is the two existing reviewers with another brief.
+- The refutation brief for the five reviewers. Not proposed: three of them were not measured.
