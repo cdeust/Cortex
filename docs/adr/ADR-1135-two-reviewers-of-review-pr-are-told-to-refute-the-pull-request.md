@@ -12,7 +12,7 @@ title: Two reviewers of /review-pr are told to refute the pull request
 
 ## Status
 
-proposed. Owner instruction 2026-11-12, after the first measurement below was sent to him: correct it at once, without asking him anything. The branch this record is written on has had its three reviews (ADR-1119), so the pull request that carries it is reviewed only once the owner sets the `claude-rereview` label. That label is his (ADR-1119, "Review rounds"): the session does not set it. The merge of that pull request is the acceptance.
+proposed. Owner instruction 2026-11-12, after the first measurement below was sent to him: correct it at once, without asking him anything. The branch this record is written on has had its three reviews (ADR-1119), so the pull request that carries it is reviewed only with the `claude-rereview` label. That label is the owner's (ADR-1119, "Review rounds"): the session did not set it on its own, and the pull request waited as a draft. Second owner instruction, the same day, in answer to the status line that said the pull request waited for his label: the session is to handle that pull request itself ("tu vas la gérer la 1000"). On that instruction the session set the label, in the owner's name. The merge of that pull request is the acceptance.
 
 ## Context
 
