@@ -14,6 +14,7 @@ from mcp_server.infrastructure.scanner import (
     discover_conversations,
     group_by_project,
 )
+from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.handlers._tool_meta import DESTRUCTIVE
 
 schema = {
@@ -121,7 +122,7 @@ def _check_skip(force: bool) -> dict | None:
     return None
 
 
-async def handler(args: dict | None = None) -> dict:
+async def _handler_impl(args: dict | None = None) -> dict:
     args = args or {}
     domain = args.get("domain")
 
@@ -155,3 +156,6 @@ async def handler(args: dict | None = None) -> dict:
         "domainOutcomes": [o.to_dict() for o in build.outcomes],
         "duration": duration,
     }
+
+
+handler = instrument("rebuild_profiles", _handler_impl)

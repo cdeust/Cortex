@@ -106,6 +106,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `detect_domain`, `list_domains` and `rebuild_profiles` record one telemetry
+  sample per call (#733): wall time, request and response bytes, outcome (error
+  when the call raises) and, inside an MCP call, that call's `operation_id`.
+  `list_domains` counts its `domains`. Before, these tools recorded nothing.
 - `change_impact`, `ingest_findings` and `ingest_prd` record one telemetry
   sample per call (#733): wall time, request and response bytes, outcome (error
   when the call raises) and, inside an MCP call, that call's `operation_id`.
