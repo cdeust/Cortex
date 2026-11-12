@@ -89,6 +89,9 @@ def _reranker_manifest_fields() -> dict[str, Any]:
             "reranker_model_path": status.model_path,
             "reranker_model_sha256": identity.sha256,
             "reranker_model_identity": identity.state,
+            "reranker_providers": (
+                list(status.providers) if status.providers is not None else None
+            ),
         }
     except Exception:  # noqa: BLE001 — source: ADR-0814
         return {
@@ -97,6 +100,7 @@ def _reranker_manifest_fields() -> dict[str, Any]:
             "reranker_model_path": None,
             "reranker_model_sha256": None,
             "reranker_model_identity": "unresolved",
+            "reranker_providers": None,
         }
 
 
@@ -109,7 +113,8 @@ def build_repro_manifest() -> dict[str, Any]:
         git_commit, git_dirty, python_version, platform_system,
         platform_machine, platform_node, timestamp_utc, lib_versions,
         reranker_active, reranker_state, reranker_model_path,
-        reranker_model_sha256, reranker_model_identity, runtime_manifest.
+        reranker_model_sha256, reranker_model_identity, reranker_providers,
+        runtime_manifest.
     The dict is JSON-serialisable (all values are str | bool | None | dict).
     """
     sha = _git_sha()

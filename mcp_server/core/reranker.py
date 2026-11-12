@@ -112,16 +112,37 @@ def reranker_status() -> RerankerStatus:
         instance is cached in-process; "failed" iff a prior load raised
         (``error`` carries the exception text); "not_attempted" iff no
         call to ``_ensure_reranker`` / ``ensure_reranker_loaded`` has
-        happened yet in this process. Never triggers a load itself.
+        happened yet in this process. ``providers`` is set only when
+        loaded and an ONNX session serves the model. Never triggers a load.
     """
     model_path = str(_model_path())
     if _flashrank_instance is not None:
-        return RerankerStatus(state="loaded", model_path=model_path)
+        return RerankerStatus(
+            state="loaded",
+            model_path=model_path,
+            providers=_session_providers(_flashrank_instance),
+        )
     if _flashrank_failed:
         return RerankerStatus(
             state="failed", model_path=model_path, error=_flashrank_load_error
         )
     return RerankerStatus(state="not_attempted", model_path=model_path)
+
+
+def _session_providers(ranker: Any) -> tuple[str, ...] | None:
+    """Execution providers the ranker's ONNX session runs on, or None.
+
+    FlashRank 0.2.10 builds ``ort.InferenceSession(path)`` with no
+    ``providers`` argument (``flashrank/Ranker.py``), so onnxruntime picks
+    them. ``get_providers()`` of that session is what serves inference;
+    ``ort.get_available_providers()`` is not: on onnxruntime 1.28.0 it lists
+    ``AzureExecutionProvider`` while the session runs on CPU only.
+    A listwise model is served by llama-cpp and has no ``session`` attribute.
+    source: onnxruntime InferenceSession.get_providers (issue #734, slice 8)"""
+    session = getattr(ranker, "session", None)
+    if session is None:
+        return None
+    return tuple(session.get_providers())
 
 
 def rerank_results(

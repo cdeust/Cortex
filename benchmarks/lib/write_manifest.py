@@ -95,6 +95,9 @@ def reranker_fields() -> dict:
             "reranker_state": status.state,
             "reranker_model_sha256": identity.sha256,
             "reranker_model_identity": identity.state,
+            "reranker_providers": (
+                list(status.providers) if status.providers is not None else None
+            ),
         }
     except Exception:  # noqa: BLE001 — signal is the recorded reranker_state
         return {
@@ -102,6 +105,7 @@ def reranker_fields() -> dict:
             "reranker_state": "unresolved",
             "reranker_model_sha256": None,
             "reranker_model_identity": "unresolved",
+            "reranker_providers": None,
         }
 
 
