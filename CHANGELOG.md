@@ -8,6 +8,14 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Outcome benchmark, two-arm runner (issue #343, slice 4):
+  `benchmarks/outcome/two_arm_runner.py` takes a read-only bare clone of the corpus
+  before the first trial, checks the pin and every commit key against it, then runs
+  each repeat as the `recall` arm over the task set followed by the `no_recall` arm
+  over the same tasks in the same order, with the same model and effort level. The
+  agent is injected and reports the model and effort that served each trial; a
+  mismatch stops the run. Answers are scored by `answer_key.verify` into the trials
+  `paired_delta.summarize` pairs. The real agent driver is the next slice.
 - Outcome benchmark, corpus (issue #343, slice 3): the corpus is this repository's
   history pinned at `5205f631`. `benchmarks/outcome/cortex_tasks.json` holds nine
   tasks, three per family (introducing commit, abandoned approach, decided value),

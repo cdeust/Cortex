@@ -13,6 +13,9 @@ git lookup that resolves commit answers against the corpus repository.
 Slice 3: ``cortex_corpus`` — the corpus (this repository's history, pinned
 at ``CORPUS_PIN``) and ``cortex_tasks.json``, whose every key is checked
 against that history by ``check_evidence``.
-The two-arm runner is a later slice.
+Slice 4: ``two_arm_runner`` — the read-only corpus snapshot and the runner
+that sweeps both arms over the same tasks, in the same order, with the same
+model and effort, into the trials ``paired_delta`` scores.
+The real agent driver is a later slice.
 
 source: issue #343"""
