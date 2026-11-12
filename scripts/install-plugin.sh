@@ -118,6 +118,13 @@ detect_existing_postgres() {
         say "Existing PostgreSQL install detected (marker: $MARKER_PATH)"
         return 0
     fi
+    # A saved SQLite choice is a decision too: decide() assumes no marker,
+    # so it must not rewrite one (settle_backend reads the marker first).
+    # source: ADR-1104, decision 1 (the marker wins over the first launch)
+    if [ -f "$MARKER_PATH" ] && grep -q '"backend"[[:space:]]*:[[:space:]]*"sqlite"' "$MARKER_PATH" 2>/dev/null; then
+        say "Existing SQLite install kept (marker: $MARKER_PATH)"
+        return 1
+    fi
     # Nothing above decides: the launcher's own first-launch rule decides,
     # so installer and launcher cannot disagree. A HOME with no earlier
     # Cortex state is SQLite with no connection attempted, even when a

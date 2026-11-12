@@ -73,6 +73,9 @@ adheres to [Semantic Versioning](https://semver.org/).
   (`backend_resolution.decide`, ADR-1104): SQLite on a fresh HOME, with no connection
   attempted; PostgreSQL kept on a HOME with earlier Cortex state whose local port does
   not certainly refuse, as the launcher already did.
+- Install (issue #704): a reinstall keeps a saved `sqlite` marker. The launcher rule
+  assumes no marker, so a HOME with that marker, earlier Cortex state and a `PG*`
+  variable had its marker rewritten to `postgresql`.
 - Outcome benchmark (issue #343): `snapshot_corpus` resolves a relative source or
   destination from the caller's directory; git ran in the destination's parent and
   read them from there, so `snapshot_corpus(Path("src"), Path("out/snap"), pin)`

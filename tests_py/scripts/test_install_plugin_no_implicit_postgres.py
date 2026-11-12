@@ -49,12 +49,16 @@ def _write_answering_psql(bin_dir: Path, calls: Path) -> None:
     stub.chmod(stub.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
 
-def _run(tmp_path: Path, *, earlier_state: bool, extra_env: dict) -> tuple:
+def _run(
+    tmp_path: Path, *, earlier_state: bool, extra_env: dict, marker: str = ""
+) -> tuple:
     home = tmp_path / "home"
     methodology = home / ".claude" / "methodology"
     methodology.mkdir(parents=True)
     if earlier_state:
         (methodology / "profiles.json").write_text("{}", encoding="utf-8")
+    if marker:
+        (methodology / "backend.json").write_text(marker, encoding="utf-8")
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     calls = tmp_path / "psql_calls"
@@ -101,4 +105,19 @@ def test_home_with_earlier_state_keeps_postgresql_by_the_launcher_rule(tmp_path)
     assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
     assert _marker_backend(tmp_path) == "postgresql"
     assert "earlier Cortex state" in result.stdout + result.stderr
+    assert not calls.exists()
+
+
+def test_reinstall_keeps_an_existing_sqlite_marker(tmp_path):
+    # Same HOME as above (earlier state, PGHOST) but a saved `sqlite` choice:
+    # the marker wins over the first-launch rule, as in settle_backend.
+    result, calls = _run(
+        tmp_path,
+        earlier_state=True,
+        extra_env={"PGHOST": "127.0.0.1"},
+        marker='{"backend": "sqlite"}',
+    )
+
+    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+    assert _marker_backend(tmp_path) == "sqlite"
     assert not calls.exists()
