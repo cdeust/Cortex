@@ -42,7 +42,7 @@ The resolver required the three legs of both jobs by name (`_validate_jobs`), an
 - The selector and the resolver count the same thing, paths, so that a pull request the selector sends to Linux alone is not refused for its size by the resolver.
 - `scripts/ci_pipeline_source_contract.py` pins the text of the resolver, not its behaviour. In review, ten hand changes to the resolver went past it; the tests caught nine, and the tenth now has a pinned clause and a mutation case.
 - Two scripts still name the six legs (`scripts/ci_codex_review_resume.py`, `scripts/ci_autopilot_queue.py`). No job of the Pipeline calls them (read, not run).
-- Not proven before the merge: no hosted run has yet shown the job names GitHub gives a one-element `fromJSON` matrix. The resolver expects `environment (ubuntu-latest)` and `install (ubuntu-latest)`; the first documentation-only pull request will show it, and a different name would be refused, not merged.
+- Not proven before the merge: the job names GitHub gives a one-element `fromJSON` matrix. Shown since on pull request 997, the first documentation-only one. Its two Pipeline runs (43154988108 as a draft, 43157084794 once ready) started `environment (ubuntu-latest)` and `install (ubuntu-latest)` and no macOS or Windows job, six machines for the draft and seven once ready, and the resolver merged it on that matrix (run 43158939841).
 
 ## Alternatives considered
 

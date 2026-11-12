@@ -47,7 +47,7 @@ Rule 8 arrived with 996 itself. It asks an author to run what a change needs bey
 ## Decision
 
 1. Rule 9 of the CI contract: a pull request that changes the validator leaves a tree the earlier validator still passes. The validator is the script of the step "Validate ci.json", embedded in `pipeline.yml` and `pipeline-post-merge.yml`.
-2. Such a pull request replays the step before it is opened: the validator as it was before the pull request's commits, on the tree after them. A pull request that leaves the validator alone needs no replay: its own `contract` job runs that validator.
+2. Such a pull request replays the step before it is opened and before each push to it: the validator as it was before the pull request's commits, on the tree after them. A pull request that leaves the validator alone needs no replay: its own `contract` job runs that validator.
 3. For a key, it follows that the key enters `ci.json` in a pull request after the one that taught the validator to accept it. What fails without the key, a validator that requires it or a reader that refuses its absence, comes with the key or after it. A key the validator requires leaves `ci.json` after the validator stopped requiring it.
 4. ADR-1131 said a repository that takes the two workflows "must add `low_risk_files` to its `ci.json` in the same pull request". That is the case measured on claude-mods. Such a repository first teaches its own validator to accept the keys it lacks, in a pull request of its own.
 
