@@ -196,8 +196,9 @@ the repository's own standards apply. They never widen what a prompt allows.
    `ci/budget-counts-contract-reviews`, anything labelled `hold` or `do-not-merge`, a draft.
 8. **The work is verified before the pull request exists** (ADR-1132). Before opening a
    pull request, and before each push to one, run the `unit` and `regression` commands of
-   `ci.json` on a clean copy of the commit (a worktree under `.claude/worktrees/` or a
-   `git archive`), plus what the change needs beyond them, and put each command with
+   `ci.json` on a clean copy of the commit, a worktree under `.claude/worktrees/` (a
+   `git archive` is not one: three tests of the `unit` command ask git about the tree and
+   fail on it), plus what the change needs beyond them, and put each command with
    its passed, failed and skipped counts in the pull request body. A command the
    session cannot run (a host its network refuses, `initdb` under the root user) is
    named there with the reason. The hosted Pipeline stays the gate; it is not the place
