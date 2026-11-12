@@ -37,13 +37,13 @@ Source: Anthropic, "How the Claude Code team does code review" (claude.dev, 15 O
 
 Three cases, two briefs, the agent types and tools a reviewer of `/review-pr` has. The grid of known defects and the criterion were written before any report was read; their form for three draws was written after the first draw of each cell, before the others were launched. Protocol, briefs, cases, every draw and the limits: `docs/review-eval/README.md`.
 
-A first series was drawn from the interactive session, one draw per brief and per case. The reviewers' definitions say `model: inherit`, so it ran on the session's model, not on the one `claude-review.yml` pins. On it the refutation brief named 4 of the 7 known defects of case A against 0, and the defect of case B, which the current brief did not name. The brief was written from that series.
+A first series was drawn from the interactive session, one draw per brief and per case. The reviewers' definitions say `model: inherit`, so it ran on the session's model, not on the one `claude-review.yml` pins. On it the refutation brief named 4 of the 7 known defects of case A against 0, and the defect of case B, which the current brief did not name. The change was first proposed on that series.
 
-The series that counts was drawn on the model `claude-review.yml` pins, three draws per brief and per case:
+The series that counts was drawn on the model `claude-review.yml` pins (asked for by its family's alias; the transcript of each draw records the identifier the workflow pins), three draws per brief and per case:
 
 | Case | Known defects | Current brief | Refutation brief |
 |---|---|---|---|
-| A: the first version pushed for 997, `documentation-accuracy-reviewer` | 7 | 0, 0 and 0 named | 2, 2 and 3 named |
+| A: the first version of what became 997, `documentation-accuracy-reviewer` | 7 | 0, 0 and 0 named | 2, 2 and 3 named |
 | B: 996 as merged, `code-quality-reviewer` | 1 | named in 0 draws of 3 | named in 2 draws of 3, tagged Blocker |
 | C, a control: 998 as merged, `documentation-accuracy-reviewer` | 0 | no Blocker in 3 draws | no Blocker in 3 draws |
 

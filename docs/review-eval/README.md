@@ -12,8 +12,9 @@ tools or model change."
 - One agent per brief and per draw, of the type the case names, with the tools that type has
   in `.claude/agents/`: it reads and searches, it runs no command. That is what a reviewer of
   `/review-pr` has in `claude-review.yml`.
-- The model is the one `claude-review.yml` pins, asked for by the alias the session's
-  harness has for it (see the limits). The reviewers' definitions say
+- The model is the one `claude-review.yml` pins. It was asked for by the alias the
+  session's harness has for its family, and the transcript of each draw records the
+  identifier the workflow pins. The reviewers' definitions say
   `model: inherit`, so an agent started from an interactive session runs on that session's
   model unless the model is given: the first series below was drawn that way and is kept
   apart.
@@ -46,8 +47,9 @@ forbids; which commit's workflow runs each job before and after the merge).
 
 ## Case A: a record with false statements
 
-- Pull request: `case-a-pull-request.md`, the first version pushed for pull request 997
-  (commit `d5c8d42`, documentation only: ADR-1134 and rule 9 as first written).
+- Pull request: `case-a-pull-request.md`, the first version committed for what became pull
+  request 997 (commit `d5c8d42`, documentation only: ADR-1134 and rule 9 as first written).
+  Its description is that commit's message: no pull request was open yet.
 - Commit before it: `31a780d`, whose tree is that of `c84dfb5`.
 - Agent: `documentation-accuracy-reviewer`.
 - Known defects, found before the pull request was opened by reads launched outside CI:
@@ -86,10 +88,10 @@ forbids; which commit's workflow runs each job before and after the merge).
 - Commit before it: `7183492`.
 - Agent: `documentation-accuracy-reviewer`.
 - What it measures: whether a brief reports Blockers where there are none.
-- The file was first built with the squash commit message as its description: twelve commit
+- The file was first built with the squash commit message as its description: ten commit
   messages, most of them of commits merged earlier, and none of the body's test plan. Two
   draws were made on that file and are reported apart. Cases A and B have a commit message
-  as their description and say so above.
+  as their description, as their entries say.
 
 ## Results of 12 November 2026
 
@@ -136,9 +138,11 @@ Blockers of another kind, on cases with defects:
 The refutation brief used 18 % more tokens on case A, 27 % more on case B and 11 % more on
 case C.
 
-Each draw listed what it read: no file outside its two paths, and on the web only runs,
-commits and pull requests its case cites. Requests to `api.github.com` were refused (403) in
-every draw that tried one; the draws that verified a run read its page on github.com.
+Each draw listed what it read. By those lists, none read a file outside its two paths,
+and on the web each opened only runs, commits and pull requests its case cites. The lists
+are the draws' own: nothing else checks them. Requests to `api.github.com` were refused
+(403) in every draw that tried one; the draws that verified a run read its page on
+github.com.
 
 On the first file of case C (the squash commit message as description), one draw of the
 refutation brief on this model reported one Blocker: the description gives no counts for its
@@ -148,7 +152,7 @@ draws above.
 
 ### First series, on the model of the interactive session: one draw per brief and per case
 
-Drawn before the model was controlled. Kept because the brief was written from it.
+Drawn before the model was controlled. Kept because the change was first proposed on it.
 
 | Case | Known defects | Current brief | Refutation brief |
 |---|---|---|---|
@@ -163,6 +167,9 @@ Drawn before the model was controlled. Kept because the brief was written from i
 | B, current brief | 285 616 | 1 036 |
 | B, refutation brief | 249 170 | 818 |
 | C, refutation brief | 213 676 | 761 |
+
+By its own list, each of these draws read no file outside its two paths, and on the web
+only runs, commits and pull requests its case cites.
 
 Criterion of that series, written before its reports were read: at least three more known
 defects named on case A, and the defect of case B named when the current brief does not.
@@ -180,8 +187,6 @@ third again.
 
 - Three draws per cell on the model of CI: the spread on case A is one defect, and case B
   was missed once in three. No interval is given on three draws.
-- The model was given by the alias the session's harness has for the family
-  `claude-review.yml` pins. The identifier that served the draws was not read.
 - The third instruction of the refutation brief was written from the incident of case B, so
   B is not a held-out case for it. Case A was not used to write the brief.
 - Finding is not blocking, and a draw's tag is not the hosted verdict (see Protocol).
