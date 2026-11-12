@@ -10,6 +10,9 @@ reports the delta with a variance estimate.
 Slice 2: ``answer_key`` — task definitions for the three task families and
 a verifier that checks an answer without Cortex; ``commit_resolver`` — the
 git lookup that resolves commit answers against the corpus repository.
-The corpus and the two-arm runner are later slices.
+Slice 3: ``cortex_corpus`` — the corpus (this repository's history, pinned
+at ``CORPUS_PIN``) and ``cortex_tasks.json``, whose every key is checked
+against that history by ``check_evidence``.
+The two-arm runner is a later slice.
 
 source: issue #343"""

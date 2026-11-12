@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Outcome benchmark, corpus (issue #343, slice 3): the corpus is this repository's
+  history pinned at `5205f631`. `benchmarks/outcome/cortex_tasks.json` holds nine
+  tasks, three per family (introducing commit, abandoned approach, decided value),
+  and each carries its evidence: the path the key commit adds, the commit message
+  that records the reason, a quotation of the value in every source.
+  `check_evidence` verifies every key against the pinned commit and refuses a
+  snapshot that lacks it. The two-arm runner is the remaining slice.
+
 ### Changed
 
 - Pull request review (ADR-1135, proposed): `/review-pr` tells two of its reviewers to
