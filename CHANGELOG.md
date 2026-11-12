@@ -8,7 +8,7 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- Pull request review (ADR-1135, proposed): `/review-pr` tells two of its reviewers to
+- Pull request review (ADR-1135): `/review-pr` tells two of its reviewers to
   try to refute the pull request: each statement against its source, each rule against
   a case that follows it and fails, each workflow change against what runs after the
   merge. `docs/review-eval/` holds the evaluation set of the review, with two cases

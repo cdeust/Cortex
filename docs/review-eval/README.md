@@ -68,12 +68,22 @@ forbids; which commit's workflow runs each job before and after the merge).
   and its test jobs were skipped. The hosted review approved the pull request (review 1 of
   3) and the Codex review reported nothing.
 
+## Case C: a control, with no known defect
+
+- Pull request: `case-c-pull-request.md`, Cortex 998 as merged (commit `d4df0ab`,
+  documentation only). A read outside CI, whose one blocker was corrected before the pull
+  request was opened, and the hosted review had left it with no known false statement.
+- Commit before it: `7183492`.
+- Agent: `documentation-accuracy-reviewer`, refutation brief only.
+- What it measures: whether the refutation brief reports Blockers where there are none.
+
 ## Results of 12 November 2026
 
 | Case | Known defects | Current brief | Refutation brief |
 |---|---|---|---|
 | A | 7 | 0 named. "No BLOCKER", four Notes. | 4 named (1 to 4), each tagged Note. "No BLOCKER". |
 | B | 1 | Not named. One Blocker of another kind: a false sentence of ADR-1133. | Named, tagged Blocker, with the remedy: the validator first. |
+| C | 0 | not drawn | "No BLOCKER found", six Notes. |
 
 | Draw | Tokens | Seconds |
 |---|---|---|
@@ -81,6 +91,7 @@ forbids; which commit's workflow runs each job before and after the merge).
 | A, refutation brief | 198 473 | 608 |
 | B, current brief | 285 616 | 1 036 |
 | B, refutation brief | 249 170 | 818 |
+| C, refutation brief | 213 676 | 761 |
 
 Each draw listed what it read: no file outside its two paths, and on the web only runs,
 commits and pull requests its case cites.
@@ -89,9 +100,17 @@ Criterion, written before the reports were read: the refutation brief names at l
 more known defects on case A, and names the defect of case B when the current brief does
 not. Met: four more on A; B named by the refutation brief alone.
 
+Four of the six Notes of case C named defects of rules 8 and 9 and of ADR-1134 that the
+reviews of 998 had let through: a clean copy that left out a fresh clone and the Codex worktree; a required key
+whose removal the rule allowed while the resolver still refused its absence; a replay
+that, after a conflict merge, used a validator older than the main branch's; and "the run
+after it" for two runs that are not consecutive. The pull request that adds this set
+corrects them.
+
 ## What this does not show
 
-- One draw per brief and per case: no measure of the variation between draws.
+- One draw per brief and per case: no measure of the variation between draws. Case C was
+  drawn with the refutation brief alone.
 - The third instruction of the refutation brief was written from the incident of case B, so
   B is not a held-out case for it. Case A was not used to write the brief.
 - Finding is not blocking. On case A the four defects named were tagged Note and the verdict
