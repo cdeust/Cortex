@@ -16,6 +16,7 @@ from typing import Any
 
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
+from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
 from mcp_server.handlers._write_scope import (
     require_global_allowed,
@@ -129,7 +130,7 @@ def _require_anchor_allowed(mem: dict[str, Any], args: dict[str, Any]) -> None:
         require_global_allowed("anchor")
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Anchor a memory — make it compaction-resistant."""
 
     args = args or {}
@@ -168,3 +169,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         "tags": tags,
         "content_preview": content[:120],
     }
+
+
+handler = instrument("anchor", _handler_impl)

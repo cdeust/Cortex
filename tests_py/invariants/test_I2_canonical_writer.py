@@ -54,8 +54,8 @@ _ALLOWED_WRITERS: set[tuple[str, int]] = {
     # Homeostatic fold, one per backend dialect (issue #736).
     ("infrastructure/pg_store_heat.py", 66),
     ("infrastructure/sqlite_store.py", 555),
-    # Anchor pin.
-    ("handlers/anchor.py", 157),
+    # Anchor pin, one line lower since the instrument import of #733.
+    ("handlers/anchor.py", 158),
     # Atomic cue boost: the project-scoped file cues moved from the hook in
     # ADR-1086, and the pipeline impact bump moved from its hook (ADR-0493,
     # issue #750) so SQLite runs it too. One UPDATE serves both.
