@@ -3020,7 +3020,7 @@
     {
       "file": "mcp_server/handlers/change_impact.py",
       "kind": "method-size",
-      "detail": "handler"
+      "detail": "_handler_impl"
     },
     {
       "file": "mcp_server/handlers/change_impact.py",
@@ -3550,7 +3550,7 @@
     {
       "file": "mcp_server/handlers/ingest_findings.py",
       "kind": "method-size",
-      "detail": "handler"
+      "detail": "_handler_impl"
     },
     {
       "file": "mcp_server/handlers/ingest_findings_resolve.py",
@@ -3590,7 +3590,7 @@
     {
       "file": "mcp_server/handlers/ingest_prd.py",
       "kind": "method-size",
-      "detail": "handler"
+      "detail": "_handler_impl"
     },
     {
       "file": "mcp_server/handlers/lesson_promotion.py",
