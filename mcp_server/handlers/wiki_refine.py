@@ -18,6 +18,7 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
+from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.handlers._tool_meta import NON_IDEMPOTENT_WRITE, READ_ONLY
 from mcp_server.shared.wiki_sections import (
     body_of,
@@ -120,7 +121,7 @@ def _kind_contract(registry, kind: str) -> dict:
     }
 
 
-async def handler_get(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_get_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     args = args or {}
     store = _get_store()
     conn = store._conn
@@ -318,7 +319,7 @@ def _validate_against_contract(
     return errors
 
 
-async def handler_refine(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_refine_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     args = args or {}
     draft_id = args.get("draft_id")
     if draft_id is None:
@@ -391,3 +392,7 @@ async def handler_refine(args: dict[str, Any] | None = None) -> dict[str, Any]:
         "synth_model": synth_model,
         "synth_prompt_hash": prompt_hash,
     }
+
+
+handler_get = instrument("wiki_get_draft", _handler_get_impl, result_count_key="drafts")
+handler_refine = instrument("wiki_refine_draft", _handler_refine_impl)
