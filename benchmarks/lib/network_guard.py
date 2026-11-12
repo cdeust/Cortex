@@ -21,10 +21,15 @@ What it refuses and what it lets through:
   literal is refused, so a resolver lookup counts as an attempt even when the
   caller would have stopped there.
 
+- ``subprocess.Popen`` is refused (``EPERM``) and recorded as a ``spawn``
+  with the program's base name: a child process is outside this guard, and
+  the embedding engine starts its model download in one
+  (``embedding_downloads.trigger_background_model_download``), which the
+  first receipt let through and still called ``offline``.
+
 Limits, stated in the receipt: the guard covers Python code that goes through
 the ``socket`` module (``urllib``, ``requests``, ``httpx``, ``huggingface_hub``,
-asyncio). A native extension that opens its own sockets, or a child process,
-is not covered.
+asyncio). A native extension that opens its own sockets is not covered.
 
 source: issue #734, acceptance item 4 ("Demonstrate memory operations with
 networking disabled after provisioning and label fallback behavior")
@@ -34,7 +39,9 @@ from __future__ import annotations
 
 import errno
 import ipaddress
+import os
 import socket
+import subprocess
 import urllib.parse
 import urllib.request
 from typing import Any
@@ -78,16 +85,39 @@ def proxy_endpoints() -> frozenset[tuple[str, int]]:
     return frozenset(endpoints)
 
 
+def with_resolved(endpoints: frozenset[tuple[str, int]]) -> frozenset[tuple[str, int]]:
+    """``endpoints`` plus the addresses each local proxy name resolves to.
+
+    ``connect`` receives an address, not a name: a client that resolves a
+    ``localhost`` proxy first connects to ``127.0.0.1``, which a literal
+    ``("localhost", port)`` would let through. Only names that ``is_local``
+    accepts are resolved (``/etc/hosts``, no resolver traffic); a remote
+    proxy is refused as any remote address is. Call before ``install``.
+    """
+    resolved = set(endpoints)
+    for host, port in endpoints:
+        if not is_local(host):
+            continue
+        try:
+            infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+        except OSError:
+            continue
+        resolved.update((str(info[4][0]).lower(), port) for info in infos)
+    return frozenset(resolved)
+
+
 class NetworkGuard:
     """Refuses non-local connections and lookups while installed.
 
     invariant: ``attempts`` lists every refused call in order, as
-        ``{"call", "host", "port"}``; nothing else is recorded.
+        ``{"call", "host", "port"}`` (a ``spawn`` names the program in
+        ``host``); nothing else is recorded.
     """
 
     def __init__(self, proxies: frozenset[tuple[str, int]] | None = None) -> None:
         self.attempts: list[dict[str, Any]] = []
-        self._proxies = proxy_endpoints() if proxies is None else proxies
+        found = proxy_endpoints() if proxies is None else proxies
+        self._proxies = with_resolved(found)
         self._saved: dict[str, Any] = {}
 
     def refuses(self, host: Any, port: Any) -> bool:
@@ -127,15 +157,28 @@ class NetworkGuard:
 
         return guarded
 
+    def _wrap_popen_init(self, original: Any) -> Any:
+        guard = self
+
+        def guarded(popen: Any, args: Any, *rest: Any, **kwargs: Any) -> None:
+            first = args if isinstance(args, (str, bytes, os.PathLike)) else args[0]
+            program = os.path.basename(os.fsdecode(first).split(" ", 1)[0])
+            guard.attempts.append({"call": "spawn", "host": program, "port": None})
+            raise PermissionError(errno.EPERM, _REFUSAL)
+
+        return guarded
+
     def install(self) -> None:
-        """Patch the ``socket`` module. precondition: not installed."""
+        """Patch ``socket`` and ``subprocess.Popen``. precondition: not installed."""
         if self._saved:
             raise RuntimeError("NetworkGuard is already installed")
         self._saved = {
             "connect": socket.socket.connect,
             "connect_ex": socket.socket.connect_ex,
             "getaddrinfo": socket.getaddrinfo,
+            "popen_init": subprocess.Popen.__init__,
         }
+        subprocess.Popen.__init__ = self._wrap_popen_init(self._saved["popen_init"])  # type: ignore[method-assign]
         socket.socket.connect = self._wrap_connect("connect", self._saved["connect"])  # type: ignore[method-assign]
         socket.socket.connect_ex = self._wrap_connect(  # type: ignore[method-assign]
             "connect_ex", self._saved["connect_ex"]
@@ -149,6 +192,7 @@ class NetworkGuard:
         socket.socket.connect = self._saved["connect"]  # type: ignore[method-assign]
         socket.socket.connect_ex = self._saved["connect_ex"]  # type: ignore[method-assign]
         socket.getaddrinfo = self._saved["getaddrinfo"]
+        subprocess.Popen.__init__ = self._saved["popen_init"]  # type: ignore[method-assign]
         self._saved = {}
 
     def __enter__(self) -> NetworkGuard:

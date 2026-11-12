@@ -11,6 +11,8 @@ from __future__ import annotations
 import asyncio
 import errno
 import socket
+import subprocess
+import sys
 
 import pytest
 
@@ -92,12 +94,36 @@ def test_guard_allows_loopback_but_refuses_a_loopback_proxy():
         server.close()
 
 
+def test_guard_refuses_a_localhost_proxy_reached_by_address():
+    server = _listener()
+    port = server.getsockname()[1]
+    try:
+        with NetworkGuard(proxies=frozenset({("localhost", port)})) as guard:
+            with pytest.raises(OSError):
+                socket.create_connection(("localhost", port), timeout=5)
+        assert guard.attempts and {a["port"] for a in guard.attempts} == {port}
+    finally:
+        server.close()
+
+
+def test_guard_refuses_and_records_a_child_process():
+    with NetworkGuard(proxies=frozenset()) as guard:
+        with pytest.raises(PermissionError):
+            subprocess.Popen([sys.executable, "-c", "pass"])
+    assert guard.attempts == [
+        {"call": "spawn", "host": guard.attempts[0]["host"], "port": None}
+    ]
+    assert guard.attempts[0]["host"].startswith("python")
+
+
 def test_uninstall_restores_the_socket_module():
     connect, lookup = socket.socket.connect, socket.getaddrinfo
+    popen_init = subprocess.Popen.__init__
     with NetworkGuard(proxies=frozenset()):
         assert socket.getaddrinfo is not lookup
     assert socket.socket.connect is connect
     assert socket.getaddrinfo is lookup
+    assert subprocess.Popen.__init__ is popen_init
 
 
 def test_proxy_endpoints_read_the_proxy_variables(monkeypatch):
@@ -122,12 +148,15 @@ def test_child_env_moves_the_store_and_drops_proxies_and_pg(monkeypatch, tmp_pat
     assert env["CORTEX_CLAUDE_DIR"] == str(tmp_path)
 
 
-def _op(ok=True, mode="neural", reranker="loaded"):
+def _op(ok=True, mode="neural", reranker="loaded", name="recall", **extra):
+    result = {"found_stored": True} if name == "recall" else {"stored": True}
     return {
-        "operation": "recall",
+        "operation": name,
         "ok": ok,
+        "result": result,
         "embedding_mode": mode,
         "reranker_state": reranker,
+        **extra,
     }
 
 
@@ -147,9 +176,33 @@ def test_verdict(operations, attempts, expected):
 
 
 def test_verdict_lists_fallback_operations():
-    operations = [_op(), _op(mode="fallback"), _op(reranker="failed")]
+    operations = [
+        _op(),
+        _op(mode="fallback"),
+        _op(reranker="failed"),
+        _op(rerank_failures=1),
+    ]
     found = offline_receipt.verdict({"operations": operations, "network_attempts": []})
-    assert [entry["index"] for entry in found["fallback"]] == [1, 2]
+    assert [entry["index"] for entry in found["fallback"]] == [1, 2, 3]
+
+
+def test_a_neural_remember_is_not_fallback_before_any_rerank():
+    op = _op(name="remember", reranker="not_attempted")
+    found = offline_receipt.verdict({"operations": [op], "network_attempts": []})
+    assert found == {"verdict": "offline", "fallback": []}
+
+
+@pytest.mark.parametrize(
+    "op",
+    [
+        _op(name="remember", result={"stored": False}),
+        _op(name="recall", result={"count": 0, "found_stored": False}),
+        _op(name="recall", result=None),
+    ],
+)
+def test_an_operation_that_did_no_work_fails_the_receipt(op):
+    found = offline_receipt.verdict({"operations": [op], "network_attempts": []})
+    assert found["verdict"] == "failed"
 
 
 def test_an_operation_that_tries_the_network_is_counted():
