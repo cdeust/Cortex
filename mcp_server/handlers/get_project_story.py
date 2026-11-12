@@ -15,6 +15,7 @@ from typing import Any
 
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
+from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.handlers._tool_meta import READ_ONLY
 from mcp_server.shared.domain_mapping import resolve_explicit_domain
 
@@ -228,7 +229,7 @@ def _build_story(chapters: list[dict[str, Any]]) -> str:
 # ── Handler ───────────────────────────────────────────────────────────────────
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Generate period-based autobiographical narrative."""
     args = args or {}
     directory = args.get("directory", "")
@@ -266,3 +267,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         "total_memories": len(filtered),
         "story": _build_story(chapters),
     }
+
+
+handler = instrument("get_project_story", _handler_impl, result_count_key="chapters")

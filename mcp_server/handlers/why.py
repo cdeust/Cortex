@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from mcp_server.core.response_budget import ListTarget, bound_payload
+from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.handlers._tool_meta import READ_ONLY
 from mcp_server.handlers.injection_receipts import INJECTION_CHANNELS
 from mcp_server.infrastructure.memory_config import get_memory_settings
@@ -255,7 +256,7 @@ def _evidence_item(row: dict[str, Any]) -> dict[str, Any]:
     return item
 
 
-async def handler(args: dict[str, Any]) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any]) -> dict[str, Any]:
     """Resolve receipt ids into bounded presence-in-context evidence."""
     receipt_ids = _parse_receipt_ids(args.get("receipt_ids"))
     store = get_shared_store()
@@ -276,3 +277,6 @@ async def handler(args: dict[str, Any]) -> dict[str, Any]:
     )
     resp["count"] = len(resp["evidence"])
     return resp
+
+
+handler = instrument("why", _handler_impl, result_count_key="evidence")

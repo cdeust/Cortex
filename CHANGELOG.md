@@ -106,6 +106,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `anchor`, `why` and `get_project_story` record one telemetry sample per call
+  (#733): wall time, request and response bytes, outcome (error when the call
+  raises) and, inside an MCP call, that call's `operation_id`. `why` counts its
+  `evidence`, `get_project_story` its `chapters`. Before, these tools recorded
+  nothing.
 - `detect_domain`, `list_domains` and `rebuild_profiles` record one telemetry
   sample per call (#733): wall time, request and response bytes, outcome (error
   when the call raises) and, inside an MCP call, that call's `operation_id`.
