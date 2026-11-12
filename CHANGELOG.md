@@ -65,6 +65,14 @@ adheres to [Semantic Versioning](https://semver.org/).
   that plugin publishes at that tag: the 23 team-role agents it named were removed
   in 2.46.0.
 
+### Fixed
+
+- Outcome benchmark (issue #343): `snapshot_corpus` resolves a relative source or
+  destination from the caller's directory; git ran in the destination's parent and
+  read them from there, so `snapshot_corpus(Path("src"), Path("out/snap"), pin)`
+  failed with `repository 'src' does not exist`. A clone that lacks the pin is now
+  removed instead of being left writable.
+
 ## [4.24.0] - 2026-11-11
 
 ### Security

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import stat
+from pathlib import Path
 
 import pytest
 
@@ -94,6 +95,7 @@ def test_snapshot_refuses_an_existing_destination_and_a_missing_pin(tmp_path):
         snapshot_corpus(repo, tmp_path / "taken", "0" * 40)
     with pytest.raises(RuntimeError):
         snapshot_corpus(repo, tmp_path / "snap", "1" * 40)
+    assert not (tmp_path / "snap").exists()
 
 
 def test_both_arms_run_the_same_tasks_in_the_same_order_each_sweep(tmp_path):
@@ -157,3 +159,13 @@ def test_an_empty_task_set_is_refused(tmp_path):
 def test_run_spec_rejects_an_unusable_configuration(kwargs):
     with pytest.raises(ValueError):
         RunSpec(**kwargs)
+
+
+def test_snapshot_accepts_relative_paths_from_the_caller_directory(
+    tmp_path, monkeypatch
+):
+    _, _, head = _corpus(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    snap = snapshot_corpus(Path("src"), Path("out/snap"), head)
+    assert snap == tmp_path / "out" / "snap"
+    assert git(snap, "rev-parse", "--is-bare-repository") == "true"
