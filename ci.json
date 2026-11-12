@@ -5,5 +5,6 @@
   "environment": "PY=\"$(command -v python3 || command -v python)\" && \"$PY\" scripts/ci_environment.py --work \"$CI_WORK/environment\"",
   "install": "PY=\"$(command -v python3 || command -v python)\" && \"$PY\" scripts/ci_install.py --work \"$CI_WORK/install-runtime\" --settle-seconds 1500",
   "version_file": "pyproject.toml",
-  "low_risk_files": ["uv.lock", "pyproject.toml"]
+  "low_risk_files": ["uv.lock", "pyproject.toml"],
+  "docs_paths": ["docs/", "wiki/", "CHANGELOG.md"]
 }

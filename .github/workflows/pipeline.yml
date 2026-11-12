@@ -33,6 +33,10 @@ jobs:
     if: >-
       !cancelled()
     runs-on: ubuntu-latest
+    # pull-requests: read lets "Select the platforms" list the pull request's files.
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       tested_sha: ${{ steps.source.outputs.tested_sha }}
       unit: ${{ steps.commands.outputs.unit }}
@@ -42,6 +46,7 @@ jobs:
       install: ${{ steps.commands.outputs.install }}
       release_tags: ${{ steps.commands.outputs.release_tags }}
       release_group: ${{ steps.commands.outputs.release_group }}
+      platforms: ${{ steps.platforms.outputs.platforms }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -71,8 +76,11 @@ jobs:
           optional ``version_file`` (default ``.claude-plugin/plugin.json``), or exclusive
           ``release_packages`` entries with version_file and tag_prefix, plus the
           required ``low_risk_files``: the file names (no directory) a low-risk
-          dependency update may touch, read by the merge resolver. Every manifest
-          version and tag ref is validated before exporting commands or release tags.
+          dependency update may touch, read by the merge resolver, and the optional
+          ``docs_paths``: the directories (ending in ``/``) and the files whose change
+          alone lets a pull request run ``environment`` and ``install`` on Linux only
+          (ADR-1133). Every manifest version and tag ref is validated before exporting
+          commands or release tags.
           A missing file, a missing key or an empty command fails the pipeline here, so a step that
           has nothing to run never passes (the design's first anti-goal).
 
@@ -101,7 +109,8 @@ jobs:
           DEFAULT_VERSION_FILE = ".claude-plugin/plugin.json"
           RELEASE_KEY = "release_packages"
           LOW_RISK_KEY = "low_risk_files"
-          ALLOWED_KEYS = KEYS + (VERSION_KEY, RELEASE_KEY, LOW_RISK_KEY)
+          DOCS_KEY = "docs_paths"
+          ALLOWED_KEYS = KEYS + (VERSION_KEY, RELEASE_KEY, LOW_RISK_KEY, DOCS_KEY)
           ALLOWED = ", ".join(ALLOWED_KEYS)
 
 
@@ -240,6 +249,23 @@ jobs:
               return []
 
 
+          def _docs_paths_faults(data: dict) -> List[str]:
+              """Optional. Each entry is a directory ending in "/" or one file, inside the
+              repository and outside its dot-directories; ci.json is never one."""
+              paths = data.get(DOCS_KEY, [])
+              if not isinstance(paths, list) or not all(
+                  isinstance(path, str)
+                  and path
+                  and path == path.strip()
+                  and path != "ci.json"
+                  and not path.startswith(("/", "."))
+                  and ".." not in path.split("/")
+                  for path in paths
+              ):
+                  return [f"{DOCS_KEY}: must be a list of paths inside the repository"]
+              return []
+
+
           def faults(root: Path) -> List[str]:
               """Every fault of ``root/ci.json``, in key order then unknown keys; empty
               when the file honours the contract."""
@@ -260,6 +286,7 @@ jobs:
                   if key not in ALLOWED_KEYS
               )
               found.extend(_low_risk_faults(data))
+              found.extend(_docs_paths_faults(data))
               found.extend(_version_faults(data, root))
               return found
 
@@ -296,6 +323,136 @@ jobs:
                   print(f"{VERSION_KEY}: {data.get(VERSION_KEY, DEFAULT_VERSION_FILE)}")
               if "--github-output" in argv:
                   _export(data, release_tags(data, root))
+              return 0
+
+
+          if __name__ == "__main__":
+              sys.exit(main(sys.argv[1:]))
+          PY
+
+      # ADR-1133: a pull request whose every changed path lies under ci.json's
+      # docs_paths runs environment and install on Linux alone. The resolver
+      # recomputes it from the default branch before it accepts that matrix, and
+      # the Pipeline after merge always runs the three systems.
+      - name: Select the platforms
+        id: platforms
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          python3 - "$GITHUB_WORKSPACE" --platforms <<'PY'
+          """ci_platforms.py -- the systems the environment and install jobs run on.
+
+          ADR-1133: a pull request whose every changed path lies under an entry of
+          ci.json's ``docs_paths`` runs those two jobs on Linux alone. Any other event,
+          any other change, an unreadable or cut-short file list keeps the three systems.
+          The file list is the pull request's, as the GitHub API gives it. ci.json is the
+          one of the tested commit: a pull request that changes it keeps the three
+          systems, because ci.json is never a documentation path.
+
+          Sources: Meta, "Predictive test selection" (engineering.fb.com, 2018): run
+          what a change can fail, keep the exhaustive run after it lands.
+          https://docs.github.com/en/rest/pulls/pulls#list-pull-requests-files
+          (100 files per page, 3000 in all).
+          """
+
+          from __future__ import annotations
+
+          import http.client
+          import json
+          import os
+          import sys
+          import urllib.request
+          from pathlib import Path
+
+          # source: the matrix of the environment and install jobs before ADR-1133.
+          RUNNERS = ["ubuntu-latest", "macos-latest", "windows-latest"]
+          # source: GitHub REST, "List pull requests files".
+          PAGE = 100
+          FILES_LISTED_AT_MOST = 3000
+
+          def documentation_only(paths, docs):
+              """True when ``paths`` is not empty and each lies under an entry of ``docs``
+              (an entry ending in "/" is a directory, any other names one file) and has a
+              name Windows can hold: one it cannot would fail only there, after the merge.
+              source: https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file"""
+              devices = {"CON", "PRN", "AUX", "NUL"}
+              devices |= {f"{port}{digit}" for port in ("COM", "LPT") for digit in "123456789"}
+
+              def portable(part):
+                  return (
+                      part == part.rstrip(" .")
+                      and not any(char in '<>:"|?*\\' or ord(char) < 32 for char in part)
+                      and part.split(".")[0].upper() not in devices
+                  )
+
+              return bool(paths) and all(
+                  all(portable(part) for part in path.split("/"))
+                  and any(path.startswith(entry) if entry.endswith("/") else path == entry for entry in docs)
+                  for path in paths
+              )
+
+
+          def changed_paths(fetch):
+              """Every path the pull request touches, a rename under both of its names;
+              None when GitHub may have cut the list short. Paths are counted, as the
+              resolver counts them."""
+              paths = []
+              for page in range(1, FILES_LISTED_AT_MOST // PAGE + 1):
+                  rows = fetch(page)
+                  for row in rows:
+                      names = [row["filename"], row.get("previous_filename")]
+                      if not names[0] or not all(isinstance(name, (str, type(None))) for name in names):
+                          raise TypeError("a file without a usable name")
+                      paths += [name for name in names if name]
+                  if len(rows) < PAGE:
+                      return paths if len(paths) < FILES_LISTED_AT_MOST else None
+              return None
+
+
+          def select(event, docs, fetch):
+              """The systems to run, and why."""
+              if event != "pull_request":
+                  return RUNNERS, "not a pull request"
+              if not docs:
+                  return RUNNERS, "ci.json names no docs_paths"
+              try:
+                  paths = changed_paths(fetch)
+              except (OSError, ValueError, KeyError, TypeError, http.client.HTTPException) as exc:
+                  return RUNNERS, f"the file list could not be read ({type(exc).__name__})"
+              if paths is None:
+                  return RUNNERS, "the file list reaches GitHub's limit"
+              if not documentation_only(paths, docs):
+                  return RUNNERS, "a changed path lies outside docs_paths"
+              return RUNNERS[:1], f"all {len(paths)} changed paths lie under docs_paths"
+
+
+          def github_page(page):
+              url = (
+                  f"{os.environ['GITHUB_API_URL']}/repos/{os.environ['GITHUB_REPOSITORY']}"
+                  f"/pulls/{os.environ['PR_NUMBER']}/files?per_page={PAGE}&page={page}"
+              )
+              request = urllib.request.Request(
+                  url,
+                  headers={
+                      "Authorization": f"Bearer {os.environ['GITHUB_TOKEN']}",
+                      "Accept": "application/vnd.github+json",
+                  },
+              )
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  rows = json.load(response)
+              if not isinstance(rows, list):
+                  raise ValueError("the answer is not a list")
+              return rows
+
+
+          def main(argv):
+              document = json.loads((Path(argv[0]) / "ci.json").read_text(encoding="utf-8"))
+              systems, reason = select(os.environ["EVENT_NAME"], document.get("docs_paths", []), github_page)
+              print(f"platforms: {', '.join(systems)} ({reason})")
+              with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+                  out.write(f"platforms={json.dumps(systems)}\n")
               return 0
 
 
@@ -506,7 +663,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: ${{ fromJSON(needs.contract.outputs.platforms) }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -542,7 +699,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: ${{ fromJSON(needs.contract.outputs.platforms) }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

@@ -34,6 +34,16 @@ Closes #
 - [ ] Mutation survival check: I considered what mutations would NOT be caught.
 - [ ] Manual verification of any UI / CLI / MCP-tool behavior changes.
 
+## Risk and rollback
+
+<!--
+  What can this change break, and how is it undone? (ADR-1132)
+  - Risk: what fails, and for whom, if this change is wrong.
+  - How to revert: the command or step that restores the previous behaviour.
+    `git revert <sha>` when nothing else is needed; name any data migration or
+    released artifact that a revert does not undo.
+-->
+
 ## Audit notes
 
 <!--

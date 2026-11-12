@@ -108,21 +108,30 @@ def _check_resolver(body, field) -> list[str]:
 
 
 def _check_receipt(body, field) -> list[str]:
-    """Require the source run and exact direct-job results, including every OS."""
+    """Require the source run and exact direct-job results: every OS, or Linux
+    alone for a pull request the resolver finds documentation only (ADR-1133)."""
     run = field(_required_step(body, field, "resolve"), "run")
     clauses = (
         'run.get("path") == ".github/workflows/pipeline.yml" '
         'and run.get("name") == "Pipeline"',
         'required = ["contract", "unit", "regression", "e2e", "merge"]',
         'for category in ("environment", "install"):',
-        'for runner in ("ubuntu-latest", "macos-latest", "windows-latest")',
-        "len(actual) == len(expected) and set(actual) == expected",
+        'RUNNERS = ("ubuntu-latest", "macos-latest", "windows-latest")',
+        'full = {f"{category} ({runner})" for runner in RUNNERS}',
+        'linux = {f"{category} ({RUNNERS[0]})"}',
+        "len(actual) == len(set(actual)) and set(actual) in (full, linux),",
+        "len(shapes) == 1,",
+        "return shapes == {1}",
         "len(matching) == 1,",
         'allowed = job.get("conclusion") == "success"',
         'job.get("status") == "completed" and allowed,',
         "_validate_run(source, repository)",
         "_validate_run(run, repository)",
-        "_validate_jobs(jobs) return run",
+        'run["reduced_matrix"] = _validate_jobs(jobs) return run',
+        'if run.get("reduced_matrix"): require( '
+        "_documentation_only(pr, repository, api),",
+        "return len(paths) < FILES_LISTED_AT_MOST and documentation_only( "
+        "paths, _docs_paths(repository, api) )",
     )
     if any(clause not in run for clause in clauses):
         return [

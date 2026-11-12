@@ -194,6 +194,16 @@ the repository's own standards apply. They never widen what a prompt allows.
    Notes marked "no action before merge" go to a follow-up pull request after the merge.
 7. **Owner decisions are left alone:** a pull request on the branch
    `ci/budget-counts-contract-reviews`, anything labelled `hold` or `do-not-merge`, a draft.
+8. **The work is verified before the pull request exists** (ADR-1132). Before opening a
+   pull request, and before each push to one, run the `unit` and `regression` commands of
+   `ci.json` on a clean copy of the commit (a worktree under `.claude/worktrees/` or a
+   `git archive`), plus what the change needs beyond them, and put each command with
+   its passed, failed and skipped counts in the pull request body. A command the
+   session cannot run (a host its network refuses, `initdb` under the root user) is
+   named there with the reason. The hosted Pipeline stays the gate; it is not the place
+   to find out whether a change works. After a conflict merge under rule 4, the touched
+   tests are enough. A journal, changelog or documentation entry is pushed with the
+   change it records; documentation is pushed alone only to fix a Blocker.
 
 ## What NOT to do
 

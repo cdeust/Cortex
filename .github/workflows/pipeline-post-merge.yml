@@ -161,26 +161,37 @@ jobs:
               full_sha(run.get("head_sha"))
 
 
+          # source: the matrix of the environment and install jobs of pipeline.yml.
+          RUNNERS = ("ubuntu-latest", "macos-latest", "windows-latest")
+
+
           def _validate_jobs(jobs):
               # Owner rule 2026-10-29: the required jobs are the tests and their
               # aggregate `merge`; the Claude verdict is read by
               # _review_approves. Overall success alone accepts skipped jobs.
+              # ADR-1133: environment and install ran on the three systems, or both on
+              # Linux alone. True is returned for Linux alone: resolve() then requires a
+              # documentation-only pull request.
               required = ["contract", "unit", "regression", "e2e", "merge"]
+              shapes = set()
               for category in ("environment", "install"):
-                  expected = {
-                      f"{category} ({runner})"
-                      for runner in ("ubuntu-latest", "macos-latest", "windows-latest")
-                  }
+                  full = {f"{category} ({runner})" for runner in RUNNERS}
+                  linux = {f"{category} ({RUNNERS[0]})"}
                   actual = [
                       job.get("name", "")
                       for job in jobs
                       if job.get("name", "").startswith(category + " (")
                   ]
                   require(
-                      len(actual) == len(expected) and set(actual) == expected,
+                      len(actual) == len(set(actual)) and set(actual) in (full, linux),
                       f"source merge gate requires the exact {category} matrix",
                   )
-                  required.extend(sorted(expected))
+                  shapes.add(len(actual))
+                  required.extend(sorted(actual))
+              require(
+                  len(shapes) == 1,
+                  "source merge gate requires the same environment and install matrices",
+              )
               for name in required:
                   matching = [job for job in jobs if job.get("name") == name]
                   require(
@@ -192,6 +203,7 @@ jobs:
                       job.get("status") == "completed" and allowed,
                       f"source merge gate requires completed {name}",
                   )
+              return shapes == {1}
 
 
           def _pr_identity(pr, repository, head):
@@ -296,7 +308,7 @@ jobs:
               jobs = _effective_jobs(
                   api.records(f"{prefix}/actions/runs/{run['id']}/jobs?filter=all", "jobs"), run
               )
-              _validate_jobs(jobs)
+              run["reduced_matrix"] = _validate_jobs(jobs)
               return run
 
 
@@ -498,6 +510,77 @@ jobs:
               return bool(files) and names <= allowed
 
 
+          # The ci.json key that names the documentation paths (ADR-1133).
+          # source: the contract step's validator below, DOCS_KEY.
+          DOCS_KEY = "docs_paths"
+          # source: https://docs.github.com/en/rest/pulls/pulls#list-pull-requests-files
+          FILES_LISTED_AT_MOST = 3000
+
+          def documentation_only(paths, docs):
+              """True when ``paths`` is not empty and each lies under an entry of ``docs``
+              (an entry ending in "/" is a directory, any other names one file) and has a
+              name Windows can hold: one it cannot would fail only there, after the merge.
+              source: https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file"""
+              devices = {"CON", "PRN", "AUX", "NUL"}
+              devices |= {f"{port}{digit}" for port in ("COM", "LPT") for digit in "123456789"}
+
+              def portable(part):
+                  return (
+                      part == part.rstrip(" .")
+                      and not any(char in '<>:"|?*\\' or ord(char) < 32 for char in part)
+                      and part.split(".")[0].upper() not in devices
+                  )
+
+              return bool(paths) and all(
+                  all(portable(part) for part in path.split("/"))
+                  and any(path.startswith(entry) if entry.endswith("/") else path == entry for entry in docs)
+                  for path in paths
+              )
+
+
+          def _docs_paths(repository, api):
+              """The paths ci.json lists under `docs_paths` on the default branch, which no
+              pull request can change before it is merged. A missing key is an empty
+              list: no pull request is documentation only."""
+              document = api.request("GET", f"/repos/{repository}/contents/ci.json")
+              require(
+                  isinstance(document, dict) and document.get("encoding") == "base64",
+                  "ci.json: not a file on the default branch",
+              )
+              try:
+                  data = json.loads(base64.b64decode(document.get("content") or ""))
+              except ValueError as exc:
+                  raise PostMergeError("ci.json: not valid JSON") from exc
+              paths = data.get(DOCS_KEY, []) if isinstance(data, dict) else None
+              require(
+                  isinstance(paths, list)
+                  and all(
+                      isinstance(path, str)
+                      and path
+                      and path != "ci.json"
+                      and not path.startswith(("/", "."))
+                      and ".." not in path.split("/")
+                      for path in paths
+                  ),
+                  f"ci.json: {DOCS_KEY}: must be a list of paths inside the repository",
+              )
+              return paths
+
+
+          def _documentation_only(pr, repository, api):
+              """True when every path the pull request touches lies under ci.json's
+              `docs_paths` (ADR-1133). A rename counts under both of its names."""
+              paths = []
+              for row in api.records(f"/repos/{repository}/pulls/{pr['number']}/files"):
+                  names = [row.get("filename"), row.get("previous_filename")]
+                  if not names[0] or not all(isinstance(name, (str, type(None))) for name in names):
+                      return False
+                  paths += [name for name in names if name]
+              return len(paths) < FILES_LISTED_AT_MOST and documentation_only(
+                  paths, _docs_paths(repository, api)
+              )
+
+
           def _merge_open_pr(pr, merge_path, head, api, repository):
               require(
                   pr.get("state") == "open" and pr.get("draft") is False,
@@ -540,6 +623,12 @@ jobs:
           def resolve(event, repository: str, api: GitHub):
               run = _source_run(event, repository, api)
               number, pr = _pull_request(run, repository, api)
+              if run.get("reduced_matrix"):
+                  require(
+                      _documentation_only(pr, repository, api),
+                      "source merge gate requires the three systems: "
+                      "the pull request is not documentation only",
+                  )
               pr_path = f"/repos/{repository}/pulls/{number}"
               already_merged = pr.get("merged") is True
               if already_merged:
@@ -783,8 +872,11 @@ jobs:
           optional ``version_file`` (default ``.claude-plugin/plugin.json``), or exclusive
           ``release_packages`` entries with version_file and tag_prefix, plus the
           required ``low_risk_files``: the file names (no directory) a low-risk
-          dependency update may touch, read by the merge resolver. Every manifest
-          version and tag ref is validated before exporting commands or release tags.
+          dependency update may touch, read by the merge resolver, and the optional
+          ``docs_paths``: the directories (ending in ``/``) and the files whose change
+          alone lets a pull request run ``environment`` and ``install`` on Linux only
+          (ADR-1133). Every manifest version and tag ref is validated before exporting
+          commands or release tags.
           A missing file, a missing key or an empty command fails the pipeline here, so a step that
           has nothing to run never passes (the design's first anti-goal).
 
@@ -813,7 +905,8 @@ jobs:
           DEFAULT_VERSION_FILE = ".claude-plugin/plugin.json"
           RELEASE_KEY = "release_packages"
           LOW_RISK_KEY = "low_risk_files"
-          ALLOWED_KEYS = KEYS + (VERSION_KEY, RELEASE_KEY, LOW_RISK_KEY)
+          DOCS_KEY = "docs_paths"
+          ALLOWED_KEYS = KEYS + (VERSION_KEY, RELEASE_KEY, LOW_RISK_KEY, DOCS_KEY)
           ALLOWED = ", ".join(ALLOWED_KEYS)
 
 
@@ -952,6 +1045,23 @@ jobs:
               return []
 
 
+          def _docs_paths_faults(data: dict) -> List[str]:
+              """Optional. Each entry is a directory ending in "/" or one file, inside the
+              repository and outside its dot-directories; ci.json is never one."""
+              paths = data.get(DOCS_KEY, [])
+              if not isinstance(paths, list) or not all(
+                  isinstance(path, str)
+                  and path
+                  and path == path.strip()
+                  and path != "ci.json"
+                  and not path.startswith(("/", "."))
+                  and ".." not in path.split("/")
+                  for path in paths
+              ):
+                  return [f"{DOCS_KEY}: must be a list of paths inside the repository"]
+              return []
+
+
           def faults(root: Path) -> List[str]:
               """Every fault of ``root/ci.json``, in key order then unknown keys; empty
               when the file honours the contract."""
@@ -972,6 +1082,7 @@ jobs:
                   if key not in ALLOWED_KEYS
               )
               found.extend(_low_risk_faults(data))
+              found.extend(_docs_paths_faults(data))
               found.extend(_version_faults(data, root))
               return found
 
