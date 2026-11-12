@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from mcp_server.infrastructure.profile_store import load_profiles
+from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.handlers._tool_meta import READ_ONLY
 
 schema = {
@@ -31,7 +32,7 @@ schema = {
 }
 
 
-async def handler(args: dict | None = None) -> dict:
+async def _handler_impl(args: dict | None = None) -> dict:
     profiles = load_profiles()
     domains = []
 
@@ -65,3 +66,6 @@ async def handler(args: dict | None = None) -> dict:
         "totalDomains": len(domains),
         "globalStyle": profiles.get("globalStyle"),
     }
+
+
+handler = instrument("list_domains", _handler_impl, result_count_key="domains")

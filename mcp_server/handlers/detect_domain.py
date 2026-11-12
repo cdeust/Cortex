@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from mcp_server.core.domain_detector import detect_domain
 from mcp_server.infrastructure.profile_store import load_profiles
+from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.handlers._tool_meta import READ_ONLY
 
 schema = {
@@ -58,7 +59,7 @@ schema = {
 }
 
 
-async def handler(args: dict | None = None) -> dict:
+async def _handler_impl(args: dict | None = None) -> dict:
     args = args or {}
     profiles = load_profiles()
     return detect_domain(
@@ -69,3 +70,6 @@ async def handler(args: dict | None = None) -> dict:
         },
         profiles,
     )
+
+
+handler = instrument("detect_domain", _handler_impl)
