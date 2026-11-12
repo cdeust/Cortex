@@ -17,6 +17,7 @@ from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.handlers import abandoned_work
 from mcp_server.handlers._tool_meta import READ_ONLY
+from mcp_server.handlers._telemetry_wrap import instrument
 
 # ── Schema ────────────────────────────────────────────────────────────────
 
@@ -71,7 +72,7 @@ def _get_store() -> MemoryStore:
     return _store
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Return memory system statistics."""
     store = _get_store()
 
@@ -111,3 +112,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         "grooming_staleness_threshold_days": GROOMING_STALENESS_THRESHOLD_DAYS,
         "abandoned_workers": abandoned_work.snapshot(),
     }
+
+
+handler = instrument("memory_stats", _handler_impl, result_count_key=None)

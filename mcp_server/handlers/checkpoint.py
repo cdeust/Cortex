@@ -19,6 +19,7 @@ from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.session_registry import current_window_session
 import json as _json
+from mcp_server.handlers._telemetry_wrap import instrument
 
 logger = logging.getLogger(__name__)
 
@@ -187,7 +188,7 @@ def _get_store() -> MemoryStore:
     return _store
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     if not args or not args.get("action"):
         return {"error": "action is required (save or restore)"}
 
@@ -331,3 +332,6 @@ def _restore_context(args: dict) -> dict:
         "epoch": checkpoint.get("epoch", 0) if checkpoint else 0,
         "formatted": formatted,
     }
+
+
+handler = instrument("checkpoint", _handler_impl, result_count_key=None)

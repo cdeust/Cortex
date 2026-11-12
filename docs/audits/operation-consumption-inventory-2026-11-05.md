@@ -33,7 +33,7 @@ embedding or reranker inference time as its own unit, and provider tokens.
 
 | Emitter | Operations (`op`) | Source |
 | --- | --- | --- |
-| MCP handler wrapper `instrument` | `recall`, `recall_hierarchical`, `remember`, `forget`, `validate_memory`, `rate_memory`, `navigate_memory`, `get_causal_chain`, `drill_down`, `query_methodology` (10 tools at the audit); `consolidate` since #733 slice 3 | the `instrument(...)` line of each handler |
+| MCP handler wrapper `instrument` | `recall`, `recall_hierarchical`, `remember`, `forget`, `validate_memory`, `rate_memory`, `navigate_memory`, `get_causal_chain`, `drill_down`, `query_methodology` (10 tools at the audit); `consolidate` since #733 slice 3; `unified_search`, `memory_stats`, `checkpoint`, `narrative` and `import_sessions` since the slice after it | the `instrument(...)` line of each handler |
 | `remember_bulk` | one `remember` sample per item, no sample for the bulk call | `handlers/remember_bulk.py` |
 | Hooks `observe_hook` | `session_start`, `auto_recall` | `hooks/session_start.py`, `hooks/auto_recall.py` |
 | Capture worker | `capture_processed` on success; `capture_skipped`, `capture_spool_stalled`, `capture_worker_lifecycle` on failure | `hooks/capture_store.py`, `hooks/capture_dispatch.py`, `hooks/capture_worker.py` |
@@ -43,7 +43,10 @@ handlers above already recorded. Every other registered tool, `consolidate`
 included, records nothing, so its wall time, bytes and outcome are absent from
 `get_telemetry` and the JSONL (static reading: no `instrument` or
 `telemetry.record` call in those handlers). `consolidate` records one sample per
-call since #733 slice 3.
+call since #733 slice 3; `unified_search`, `memory_stats`, `checkpoint`,
+`narrative` and `import_sessions` each record one since the slice after it.
+`get_telemetry` stays unwrapped: a sample of its own call would change the
+counters it reports.
 
 ## Attribution to a user operation
 
@@ -122,7 +125,11 @@ p(0, b'{"result":"x","total_cost_usd":0.0123}', b"", root)  # cost_usd=0.0123
    operation id of the MCP call; a run started by a session hook records its
    sample with no id. Not delivered: CPU time (an async call shares the process
    with other calls and hands work to threads, so `process_time` around it is not
-   attributable to it), and samples for the other tools that record none.
+   attributable to it). Then `unified_search`, `memory_stats`, `checkpoint`,
+   `narrative` and `import_sessions` are wrapped the same way (result count:
+   `results` for `unified_search`, `imported` for `import_sessions`). Not
+   delivered: samples for the other registered tools that record none (wiki,
+   rules, predictions, ingest, codebase and setup tools, `get_grooming_health`).
 4. Read the provider usage the CLI reports, beyond `total_cost_usd`, with its
    provenance, after checking the fields against the CLI version in use.
 
