@@ -23,6 +23,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
 from mcp_server.handlers.ingest_findings_artifacts import (
     MalformedArtifactError,
@@ -107,7 +108,7 @@ def _get_store() -> MemoryStore:
     return _store
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Ingest one AP findings run into Cortex."""
     args = args or {}
     run_id = (args.get("run_id") or "").strip()
@@ -165,3 +166,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         "results": results,
         "errors": errors,
     }
+
+
+handler = instrument("ingest_findings", _handler_impl, result_count_key="results")

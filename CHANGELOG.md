@@ -106,6 +106,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `change_impact`, `ingest_findings` and `ingest_prd` record one telemetry
+  sample per call (#733): wall time, request and response bytes, outcome (error
+  when the call raises) and, inside an MCP call, that call's `operation_id`.
+  `change_impact` counts its `matches`, `ingest_findings` its `results`.
+  Before, these tools recorded nothing.
 - `wiki_get_draft` and `wiki_refine_draft` record one telemetry sample per call
   (#733): wall time, request and response bytes, outcome (error when the call
   raises) and, inside an MCP call, that call's `operation_id`. `wiki_get_draft`

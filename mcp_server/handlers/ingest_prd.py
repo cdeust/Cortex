@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from mcp_server.errors import McpConnectionError
+from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
 from mcp_server.handlers.ingest_helpers import call_upstream, normalise_mcp_payload
 from mcp_server.infrastructure.config import WIKI_ROOT
@@ -325,7 +326,7 @@ def _memory_directory(path: str | None) -> str:
     return directory
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Ingest a PRD document into Cortex."""
     args = args or {}
 
@@ -414,3 +415,6 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         "quality_history": quality_history,
         "validation": validation,
     }
+
+
+handler = instrument("ingest_prd", _handler_impl)

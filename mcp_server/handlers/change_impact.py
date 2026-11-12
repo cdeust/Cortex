@@ -31,6 +31,7 @@ from mcp_server.infrastructure.ap_bridge import (
     is_enabled,
     resolve_graph_path,
 )
+from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.handlers._tool_meta import READ_ONLY
 from mcp_server.observability import silent_failure
 
@@ -167,7 +168,7 @@ def _apply_heat_bumps(store: Any, matches: list, boost: float) -> int:
     return bumped
 
 
-async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
+async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     args = args or {}
     if not is_enabled():
         return {
@@ -233,6 +234,9 @@ async def handler(args: dict[str, Any] | None = None) -> dict[str, Any]:
         ],
         "heat_bumped": bumped,
     }
+
+
+handler = instrument("change_impact", _handler_impl, result_count_key="matches")
 
 
 __all__ = ["handler", "schema"]
