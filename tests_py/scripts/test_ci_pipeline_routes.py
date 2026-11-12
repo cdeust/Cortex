@@ -120,14 +120,27 @@ class PipelineRoutesTests(unittest.TestCase):
             ('run.get("name") == "Pipeline"', "True"),
             ('"regression", "e2e", "merge"', '"regression", "e2e"'),
             ('"ubuntu-latest", "macos-latest", "windows-latest"', '"ubuntu-latest"'),
-            ("len(actual) == len(expected) and set(actual) == expected", "True"),
+            (
+                "len(actual) == len(set(actual)) and set(actual) in (full, linux)",
+                "True",
+            ),
+            ('linux = {f"{category} ({RUNNERS[0]})"}', "linux = set(actual)"),
+            ("len(shapes) == 1,", "True,"),
+            ("return shapes == {1}", "return False"),
+            ('if run.get("reduced_matrix"):', "if False:"),
+            ("_documentation_only(pr, repository, api),", "True,"),
+            (
+                "len(paths) < FILES_LISTED_AT_MOST and documentation_only(",
+                "documentation_only(",
+            ),
             ("len(matching) == 1,", "True,"),
             ('allowed = job.get("conclusion") == "success"', "allowed = True"),
             ('job.get("status") == "completed" and allowed,', "True,"),
             ("_validate_run(source, repository)", "pass"),
             ("_validate_run(run, repository)", "pass"),
             (
-                "              _validate_jobs(jobs)\n              return run",
+                '              run["reduced_matrix"] = _validate_jobs(jobs)\n'
+                "              return run",
                 "              return run",
             ),
         ):

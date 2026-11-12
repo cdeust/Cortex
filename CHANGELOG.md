@@ -8,9 +8,14 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Pipeline (ADR-1133): a pull request whose every changed path lies under the new
+  optional `docs_paths` of `ci.json` runs `environment` and `install` on Linux
+  alone. The resolver accepts that matrix only when it finds the pull request
+  documentation-only from the default branch's `ci.json`; the Pipeline after merge
+  still runs the three systems.
 - CI contract, rule 8 (ADR-1132): the `unit` and `regression` commands of `ci.json`
   are run before a pull request is opened or pushed to, and their counts go in its
-  body; a journal or documentation entry travels with the change it records. The
+  body; a journal or documentation entry is pushed with the change it records. The
   pull request template asks for the risk of the change and the way to undo it.
 - Benchmark manifests and the offline receipt record `embedding_device`: the
   device the loaded embedding model runs on (`EmbeddingEngine.device_served`),

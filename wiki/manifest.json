@@ -3699,6 +3699,10 @@
     "ADR-1132": {
       "mirror": "ADR-1132-the-work-is-verified-before-the-pull-request-exists.md",
       "path": "adr/cortex/1132-the-work-is-verified-before-the-pull-request-exists.md"
+    },
+    "ADR-1133": {
+      "mirror": "ADR-1133-a-documentation-only-pull-request-runs-environment-and-install-on-linux-alone.md",
+      "path": "adr/cortex/1133-a-documentation-only-pull-request-runs-environment-and-install-on-linux-alone.md"
     }
   },
   "project": "cortex",
