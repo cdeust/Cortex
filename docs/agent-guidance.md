@@ -194,6 +194,14 @@ the repository's own standards apply. They never widen what a prompt allows.
    Notes marked "no action before merge" go to a follow-up pull request after the merge.
 7. **Owner decisions are left alone:** a pull request on the branch
    `ci/budget-counts-contract-reviews`, anything labelled `hold` or `do-not-merge`, a draft.
+8. **The work is verified before the pull request exists** (ADR-1132). Before opening a
+   pull request, and before each push to one, run the `unit` and `regression` commands of
+   `ci.json` on a clean copy of the commit, plus what the change needs beyond them, and
+   put the commands and their counts in the pull request body, with what was not run.
+   The hosted Pipeline is the gate, not the place to find out whether a change works. A
+   journal, changelog or documentation entry travels in the commit of the change it
+   records, never as a push of its own to an open pull request: every push runs the
+   whole Pipeline and spends a review.
 
 ## What NOT to do
 

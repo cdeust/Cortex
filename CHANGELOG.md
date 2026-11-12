@@ -8,6 +8,10 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- CI contract, rule 8 (ADR-1132): the `unit` and `regression` commands of `ci.json`
+  are run before a pull request is opened or pushed to, and their counts go in its
+  body; a journal or documentation entry travels with the change it records. The
+  pull request template asks for the risk of the change and the way to undo it.
 - Benchmark manifests and the offline receipt record `embedding_device`: the
   device the loaded embedding model runs on (`EmbeddingEngine.device_served`),
   not the `auto` or GPU setting it was asked for, and `cpu` once a GPU failure
