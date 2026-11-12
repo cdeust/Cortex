@@ -11,7 +11,8 @@ The verifier reads a snapshot of the corpus, never the corpus itself:
 --no-local --no-hardlinks``, the copy the ``commit_resolver`` docstring
 requires) before the first trial, checks that it holds the pin, and removes
 its write permission bits. The permission bits are a guard, not a guarantee:
-a process running as root ignores them. The guarantee is that the snapshot
+a process running as root ignores them, and the owner can set them again.
+The guarantee is that the snapshot
 is taken before any agent runs and that its path is never given to the
 agent. ``run_two_arms`` then checks every commit key against that snapshot
 before the first trial, so a key the corpus does not contain fails the run
@@ -37,6 +38,7 @@ source: issue #343"""
 from __future__ import annotations
 
 import os
+import shutil
 import stat
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -111,9 +113,14 @@ def snapshot_corpus(source: Path, destination: Path, pin: str) -> Path:
     """A read-only bare clone of ``source`` at ``destination`` that holds ``pin``.
 
     ``destination`` must not exist yet. A ``source`` git cannot clone, or a
-    clone that lacks ``pin``, raises ``RuntimeError`` with git's message.
+    clone that lacks ``pin``, raises ``RuntimeError`` with git's message; a
+    clone that lacks ``pin`` is removed first. Relative paths are read from
+    the caller's working directory.
     """
-    destination = Path(destination)
+    # Absolute before git runs in ``destination.parent`` (``git -C``), so a
+    # relative ``source`` or ``destination`` keeps naming the caller's path.
+    source = Path(source).absolute()
+    destination = Path(destination).absolute()
     if destination.exists():
         raise ValueError(f"snapshot destination already exists: {destination}")
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -130,7 +137,12 @@ def snapshot_corpus(source: Path, destination: Path, pin: str) -> Path:
             str(destination),
         ],
     )
-    _git(destination, ["cat-file", "-e", f"{pin}^{{commit}}"])
+    try:
+        _git(destination, ["cat-file", "-e", f"{pin}^{{commit}}"])
+    except RuntimeError:
+        # A snapshot without the pin is unusable; leave no writable clone.
+        shutil.rmtree(destination)
+        raise
     _make_read_only(destination)
     return destination
 
