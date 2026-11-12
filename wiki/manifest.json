@@ -3711,6 +3711,10 @@
     "ADR-1135": {
       "mirror": "ADR-1135-two-reviewers-of-review-pr-are-told-to-refute-the-pull-request.md",
       "path": "adr/cortex/1135-two-reviewers-of-review-pr-are-told-to-refute-the-pull-request.md"
+    },
+    "ADR-1136": {
+      "mirror": "ADR-1136-no-issue-waits-for-the-owner.md",
+      "path": "adr/cortex/1136-no-issue-waits-for-the-owner.md"
     }
   },
   "project": "cortex",
