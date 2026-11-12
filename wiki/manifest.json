@@ -3715,6 +3715,10 @@
     "ADR-1136": {
       "mirror": "ADR-1136-no-issue-waits-for-the-owner.md",
       "path": "adr/cortex/1136-no-issue-waits-for-the-owner.md"
+    },
+    "ADR-1137": {
+      "mirror": "ADR-1137-the-issues-rule-trusts-the-owner-account-only.md",
+      "path": "adr/cortex/1137-the-issues-rule-trusts-the-owner-account-only.md"
     }
   },
   "project": "cortex",
