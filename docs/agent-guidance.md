@@ -204,6 +204,17 @@ the repository's own standards apply. They never widen what a prompt allows.
    to find out whether a change works. After a conflict merge under rule 4, the touched
    tests are enough. A journal, changelog or documentation entry is pushed with the
    change it records; documentation is pushed alone only to fix a Blocker.
+9. **A pull request that changes the `ci.json` validator leaves a tree the earlier
+   validator still passes** (ADR-1134). The Pipeline after merge runs the workflow of the
+   commit before the merge: its `contract` job validates the merged tree, `ci.json` and
+   the version file it names, with the validator of that earlier commit. The two pull
+   requests that added a key to `ci.json` together with the validator that accepts it
+   (982, 996) each merged, then failed that job, and the test jobs of that run were skipped.
+   Such a pull request replays the step before it is opened: the validator as it was
+   before its commits, on the tree after them. So a key enters `ci.json` in a pull
+   request after the one that taught the validator to accept it; what fails without the
+   key comes with the key or after it; a key the validator requires leaves `ci.json`
+   after the validator stopped requiring it.
 
 ## What NOT to do
 
