@@ -8,14 +8,17 @@ then writes one receipt:
 
 - ``operations``: each ``remember`` and the ``recall``, with its outcome, the
   embedding mode (``neural`` or ``fallback``) and ``ModelState``, the reranker
-  state, and the network attempts it made;
+  load state, its swallowed inference failures, and the network attempts it
+  made;
 - ``network_attempts``: every refused connection or lookup, host and port;
 - ``runtime_manifest``: ``effective_manifest`` with what the engines served;
 - ``verdict``: ``offline`` when every operation succeeded and nothing tried
   the network, ``network_attempted`` when something did, ``failed`` when an
-  operation failed; ``fallback`` lists the operations served by the
-  algorithmic embedding or without the reranker, so a fallback result is
-  never read as a full-model one.
+  operation raised, stored nothing, or recalled no stored memory;
+- ``fallback``: the operations served by the algorithmic embedding, without
+  the reranker (recall only), or by a loaded reranker whose inference failed
+  (``rerank_failures``), so a fallback result is never read as a full-model
+  one.
 
 The environment is the caller's except for the store, which is redirected so
 the receipt never writes to the user's memories, the variables that would
@@ -58,9 +61,9 @@ _STORE_SELECTORS = ("DATABASE_URL", "CORTEX_DATABASE_URL", "CORTEX_TEST_DATABASE
 _TIMEOUT_S = 600
 LIMITS = (
     "The guard covers Python code that goes through the socket module; a "
-    "native extension opening its own sockets, or a child process, is not "
-    "covered. Loopback and Unix sockets are allowed, except a configured "
-    "proxy's address."
+    "native extension opening its own sockets is not covered. Child processes "
+    "are refused and recorded as spawn attempts. Loopback and Unix sockets are "
+    "allowed, except a configured proxy's address."
 )
 
 
@@ -92,10 +95,33 @@ def child_env(root: Path) -> dict[str, str]:
     return env
 
 
+def succeeded(op: dict[str, Any]) -> bool:
+    """True when ``op`` returned and did its work: a ``remember`` stored, the
+    ``recall`` found a stored memory. A handler that returns without raising
+    but stores or finds nothing has not shown memory works offline."""
+    result = op.get("result") or {}
+    done = result.get("stored") if op["operation"] == "remember" else None
+    if op["operation"] == "recall":
+        done = result.get("found_stored")
+    return bool(op["ok"] and done)
+
+
+def served_fallback(op: dict[str, Any]) -> bool:
+    """True when ``op`` ran without the full models: the algorithmic
+    embedding, or for ``recall`` (the one operation that reranks) a reranker
+    that is not loaded or a loaded one whose inference failed during it
+    (``rerank_results`` then keeps the first-stage order)."""
+    if op["embedding_mode"] != "neural":
+        return True
+    if op["operation"] != "recall":  # only recall reranks
+        return False
+    return op["reranker_state"] != "loaded" or op.get("rerank_failures", 0) > 0
+
+
 def verdict(document: dict[str, Any]) -> dict[str, Any]:
     """``verdict`` and ``fallback`` of a child document (module docstring)."""
     operations = document["operations"]
-    if not all(op["ok"] for op in operations):
+    if not all(succeeded(op) for op in operations):
         state = "failed"
     elif document["network_attempts"]:
         state = "network_attempted"
@@ -104,7 +130,7 @@ def verdict(document: dict[str, Any]) -> dict[str, Any]:
     fallback = [
         {"index": i, "operation": op["operation"]}
         for i, op in enumerate(operations)
-        if op["embedding_mode"] != "neural" or op["reranker_state"] != "loaded"
+        if served_fallback(op)
     ]
     return {"verdict": state, "fallback": fallback}
 
