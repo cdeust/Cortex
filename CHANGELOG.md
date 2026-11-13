@@ -112,6 +112,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Docker (issue #704): `docker/entrypoint.sh` no longer expands `DATABASE_URL` into the
+  `python3 -c` argument of its schema step, where a password in the URL was readable by
+  every local user through argv; it reads the URL from the environment, as
+  `scripts/setup.sh` does since #1030. A test refuses any expansion of `DATABASE_URL` in
+  either script outside `setup.sh`'s export line.
 - Install (issue #704): `scripts/install-plugin.sh` no longer picks PostgreSQL because a
   local `cortex` database answers `psql` on a HOME nothing configured. A HOME that no
   request, URL or marker decides is decided by the launcher's own first-launch rule
