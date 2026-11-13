@@ -263,14 +263,18 @@ precache_embedding_model_step "$PROJECT_DIR" "$DEPS_DIR" || true
 
 step "Verification"
 
+# The URL is read from the environment, never expanded into this argument:
+# argv is readable by every local user, and the URL may carry a password.
+# source: SECURITY.md; Codex security review of #1029
 PYTHONPATH="${PROJECT_DIR}:${DEPS_DIR}" python3 -c "
+import os
 import sys
 checks = []
 
 # Check PostgreSQL connection
 try:
     import psycopg
-    conn = psycopg.connect('${DATABASE_URL}', autocommit=True)
+    conn = psycopg.connect(os.environ['DATABASE_URL'], autocommit=True)
     conn.execute('SELECT 1')
     checks.append(('PostgreSQL connection', True))
 except Exception as e:
@@ -423,5 +427,11 @@ echo "  1. Restart Claude Code to activate"
 echo "  2. Start a conversation — Cortex works automatically"
 echo "  3. Use /cortex-recall to search memories"
 echo ""
-echo "Database: ${DATABASE_URL:-postgresql://127.0.0.1:5432/cortex}"
+# Printed with its password masked (mcp_server.shared.redaction), read
+# from the environment for the same reason as the verification step.
+PYTHONPATH="${PROJECT_DIR}:${DEPS_DIR}" python3 -c "
+import os
+from mcp_server.shared.redaction import redact_url
+print('Database: ' + redact_url(os.environ['DATABASE_URL']))
+"
 echo "Deps:     ${DEPS_DIR}"
