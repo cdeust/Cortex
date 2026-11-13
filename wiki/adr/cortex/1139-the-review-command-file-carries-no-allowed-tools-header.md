@@ -60,4 +60,14 @@ The share of review comments that say the command failed to load: 3 of 11 before
 - Issue 1021 of this repository: the runs, the earlier occurrences, what the logs show and do not show.
 - The probe above; its two directories and outputs are not committed.
 - Pinned action `anthropics/claude-code-action@8041f1d17e0e7d2f2cfe35002962e9f26237c0bb`, `src/modes/detector.ts`: tag mode when `track_progress` is set on a pull request event.
+- The same action, `src/entrypoints/run.ts`: `const claudeCodeVersion = "2.1.311"`, the version of Claude Code the review job installs.
 - `.github/workflows/claude-review.yml`, `claude_args`.
+
+## Corrections of 13 November 2026
+
+Added after the review of pull request 1026.
+
+- The version of Claude Code the review job runs, 2.1.311, had no source on this page. It is the constant of the pinned action, now listed under Sources.
+- One more occurrence before the merge. The review of pull request 1026 itself (run 43357754247, 03:19 UTC) says that its `Skill` call for `/review-pr` was refused. It ran the command file of the main branch, header in place, as "Consequences" says a review of that pull request would. The reviews between 00:46 and 03:19 UTC were not counted, so the 3 of 11 above is not updated.
+- `docs/verification/anthropic-workflow-source-parity-20261027.md` said that the command file matched the upstream blob byte for byte. It has not since ADR-1135; that page now lists both changes.
+- `tests_py/scripts/test_ci_review_command_loads.py` compared the whole frontmatter with `{"description": ...}`, which refused any other key. It now holds what this decision needs: no `allowed-tools`, and the description.

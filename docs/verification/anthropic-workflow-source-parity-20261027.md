@@ -2,7 +2,7 @@
 
 Source commit: [8041f1d17e0e7d2f2cfe35002962e9f26237c0bb](https://github.com/anthropics/claude-code-action/tree/8041f1d17e0e7d2f2cfe35002962e9f26237c0bb).
 
-The six command and reviewer files below match the pinned upstream Git blobs byte for byte. Their MIT notice is preserved in [anthropic-review-license.txt](anthropic-review-license.txt).
+The five reviewer files below match the pinned upstream Git blobs byte for byte (checked again on 13 November 2026 with `git hash-object`). The command file matched its blob when it was installed and has changed twice since; the changes are listed under the table. The MIT notice of the six files is preserved in [anthropic-review-license.txt](anthropic-review-license.txt).
 
 | Copied file | Verified Git blob |
 |---|---|
@@ -12,6 +12,11 @@ The six command and reviewer files below match the pinned upstream Git blobs byt
 | `.claude/agents/performance-reviewer.md` | `6a8e9a7382d09ef2fb39819ccce16d5098f81578` |
 | `.claude/agents/security-code-reviewer.md` | `c9e64e7014d2b0444cabd2a0952399c3495ebeab` |
 | `.claude/agents/test-coverage-reviewer.md` | `30c5f50fbf4a2ddd8dcdce0cfe2042eba4721a4e` |
+
+`.claude/commands/review-pr.md` no longer matches its blob. On 13 November 2026, `git diff a83d8e35c29e90d3390eeceabf62fc69fb24608f HEAD:.claude/commands/review-pr.md` shows six lines added and one removed:
+
+- added by ADR-1135 (pull request 1000): the instruction that has two reviewers try to refute the pull request;
+- removed by ADR-1139 (pull request 1026): the `allowed-tools` line of the frontmatter.
 
 ## Workflow installation
 
