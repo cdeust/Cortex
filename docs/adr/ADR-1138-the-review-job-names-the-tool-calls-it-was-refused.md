@@ -50,7 +50,11 @@ After the review step, the job runs a step named "Refused tool calls":
 
 `tests_py/scripts/test_ci_review_refused_tools.py` runs the step's script under bash with jq on fixture execution files: two tools refused, none refused, no result message, names made of workflow-command characters, a file that is not JSON, a file that is not an array. Three mutations of the step each fail a test: the names printed unfiltered, the tool input printed, the step run only on success.
 
-The pull request that adds the step is reviewed by the workflow it changes, so its own review run prints the lines.
+The pull request that adds the step does not run it. The pinned action skips a run whose workflow file differs from the default branch's: "Workflow validation failed. The workflow file must exist and have identical content to the version on the repository's default branch" (run 43356579113 of that pull request, 17 seconds, no review, no execution file, the new step skipped). The step first runs on the first pull request opened after the merge.
+
+## Delivery
+
+The same skip leaves that pull request without a verdict. ADR-1117 already says that a job that skipped the workflow validation is not a successful review, and the merge gate merges on the verdict of a review of the exact head (ADR-1121). A pull request that changes `.github/workflows/claude-review.yml` therefore cannot be merged by the gate; it is merged by the owner. This holds for every later change of that file, the correction of issue 1021 included.
 
 ## Rollback
 
