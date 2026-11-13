@@ -2,11 +2,13 @@
 
 In tag mode the review prompt does not reach the CLI as a slash command: the
 model loads `/review-pr` with the Skill tool. A command file whose frontmatter
-carries `allowed-tools` needs an approval for that call, and in 3 reviews of 11
-the approval was refused and the review ran without the command.
+carries `allowed-tools` needs an approval for that call.
 Source: probe of 2026-11-13, Claude Code 2.1.323, one run per arm, a command
 file that differs by that one header: with it, `permission_denials` holds
 `Skill`; without it, the command loads.
+Not measured: the review job itself. In 3 reviews of 11 the review ran without
+the command; that the approval was refused there is the reading that fits
+their logs (ADR-1139, Measurement), not an observation.
 """
 
 import shlex
@@ -35,7 +37,9 @@ class ReviewCommandLoads(unittest.TestCase):
         self.assertNotIn("allowed-tools", _frontmatter())
 
     def test_the_command_file_still_describes_itself(self):
-        self.assertEqual(_frontmatter(), {"description": "Review a pull request"})
+        # Only the description is held: another key (`argument-hint`, ...)
+        # does not make the command need an approval.
+        self.assertEqual(_frontmatter().get("description"), "Review a pull request")
 
     def test_the_workflow_allows_what_the_header_allowed(self):
         job = yaml.safe_load(REVIEW.read_text())["jobs"]["review"]

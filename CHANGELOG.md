@@ -94,6 +94,15 @@ adheres to [Semantic Versioning](https://semver.org/).
   the header allowed stay allowed by `--allowedTools` of the review workflow. Typed in an
   interactive session, `/review-pr` now asks before each of them.
 
+- Claude review (ADR-1139, notes of the review of #1026): the source-parity page no longer
+  says that `.claude/commands/review-pr.md` matches the upstream blob byte for byte. It
+  lists the two changes, the ADR-1135 instruction and the removed `allowed-tools` line; the
+  five reviewer files still match their blobs. ADR-1139 names the source of the Claude Code
+  version the review job runs, 2.1.311, a constant of the pinned action, and records that
+  the review of #1026 itself reported its `Skill` call refused. The test of the command
+  file holds the description, not the whole frontmatter, and its docstring says what was
+  measured and what was read from the logs.
+
 - Issues (ADR-1137, corrections of 13 November): rule 1 of "Issues: no issue waits for the
   owner" is triggered by an unanswered question in a comment of the owner's account, not
   of any account, as the local manager already reads comments. ADR-1137 no longer gives
