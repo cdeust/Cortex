@@ -106,6 +106,7 @@ jobs:
           fi
           bwrap --version
       - name: PR Review
+        id: review
         uses: anthropics/claude-code-action@8041f1d17e0e7d2f2cfe35002962e9f26237c0bb # v1.0.263
         env:
           CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
@@ -132,3 +133,30 @@ jobs:
             --permission-mode auto
             --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
             --model "claude-opus-5-5"
+      # Which tool calls the review was refused, by tool name and count
+      # (ADR-1138, issue 1021). The transcript stays hidden, since this
+      # repository is public, so a review that ran without `/review-pr` showed
+      # nothing but a higher permission_denials_count. Only the characters
+      # A-Z, a-z, 0-9, "_" and "-" of a name are printed, so nothing read from
+      # the file can form a workflow command, and no tool input is printed.
+      # Nothing from the checkout runs here: after the action the working tree
+      # is the pull request's. A file jq cannot read is said, not hidden, and
+      # does not fail the job: the verdict does not depend on this step.
+      # source: the result message of the execution file carries
+      # permission_denials, each with tool_name, tool_use_id and tool_input
+      # (pinned action, base-action/src/run-claude-sdk.ts#L150 and #L222-L224).
+      - name: Refused tool calls
+        if: ${{ always() && steps.review.outputs.execution_file != '' }}
+        env:
+          EXECUTION_FILE: ${{ steps.review.outputs.execution_file }}
+        run: |
+          if ! refused="$(jq -r '
+            [ .[] | select(.type == "result") | (.permission_denials // [])[]
+              | (.tool_name // "") | gsub("[^A-Za-z0-9_-]"; "")
+              | if . == "" then "unnamed" else . end ]
+            | group_by(.) | map("refused: \(.[0]) x\(length)")
+            | if length == 0 then ["refused: none"] else . end | .[]
+          ' "$EXECUTION_FILE")"; then
+            refused="refused: the execution file could not be read"
+          fi
+          printf '%s\n' "$refused" | tee -a "$GITHUB_STEP_SUMMARY"
