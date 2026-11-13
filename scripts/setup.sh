@@ -265,7 +265,7 @@ step "Verification"
 
 # The URL is read from the environment, never expanded into this argument:
 # argv is readable by every local user, and the URL may carry a password.
-# source: SECURITY.md; Codex security review of #1029
+# source: scripts/launcher_pg_provision.py:10 (the password never reaches argv)
 PYTHONPATH="${PROJECT_DIR}:${DEPS_DIR}" python3 -c "
 import os
 import sys
@@ -429,6 +429,7 @@ echo "  3. Use /cortex-recall to search memories"
 echo ""
 # Printed with its password masked (mcp_server.shared.redaction), read
 # from the environment for the same reason as the verification step.
+# source: ADR-0663 (redact_url masks the password of a URL)
 PYTHONPATH="${PROJECT_DIR}:${DEPS_DIR}" python3 -c "
 import os
 from mcp_server.shared.redaction import redact_url

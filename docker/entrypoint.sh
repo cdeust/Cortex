@@ -38,11 +38,15 @@ su postgres -c "psql -d cortex -c \
   'CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS pg_trgm;'" \
   2>/dev/null || true
 
-# Initialize schema
+# Initialize schema. The URL is read from the environment, never expanded
+# into this argument: argv is readable by every local user, and the URL may
+# carry a password.
+# source: scripts/launcher_pg_provision.py:10 (the password never reaches argv)
 PYTHONPATH=/opt/cortex python3 -c "
+import os
 from mcp_server.infrastructure.pg_schema import get_all_ddl
 import psycopg
-conn = psycopg.connect('${DATABASE_URL}', autocommit=True)
+conn = psycopg.connect(os.environ['DATABASE_URL'], autocommit=True)
 for ddl in get_all_ddl():
     try: conn.execute(ddl)
     except Exception: pass
