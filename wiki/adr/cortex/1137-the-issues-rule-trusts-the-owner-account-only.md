@@ -1,0 +1,64 @@
+---
+created: 2026-11-12T23:50:00Z
+kind: adr
+number: 1137
+status: accepted
+tags: [issues, routines, contract, hold, fleet, amends-adr-1136]
+title: The issues rule trusts the owner account only
+---
+# ADR-1137: The issues rule trusts the owner account only
+
+## Status
+
+accepted. Amends ADR-1136: rules 1 (b), 2, 4 and 5 of the section "Issues: no issue waits for the owner" of `docs/agent-guidance.md`, and two figures of its Context. It changes no workflow, no gate and no rule of the CI contract.
+
+## Context
+
+The review of pull request 1016, which added the section, approved it with three notes (review 1 of 3, 12 November 2026). The review of the same section in ai-architect-mcp-codebase (its pull request 531) left a fourth.
+
+1. Rules 1 (b) and 2 did not say whose text counts. Rule 1 (b) took "what the issue's own text proposes or excludes" as a source of the decision, and rule 2 made any comment that carries `<!-- ci-autopilot decision -->` a decision later passes apply. This repository is public: anyone can open an issue and anyone can comment. A person outside could therefore write the decision an agent then applies. Two of the five reviewers rated that a Blocker. The review kept it a Note because the pull request an agent opens still passes the review and the merge gate, and because the local manager already checks who wrote an issue and its comments (`scripts/ci_autopilot_issues.py`).
+2. Rule 5 contradicted itself. A pull request that carries `Closes #<number>` closes the issue when it merges, and the next sentence forbids an agent to close an issue opened by someone other than the owner.
+3. Rule 4 forbids raising the project's version, and the list of rule 3 is exhaustive and does not name that case. An issue that asks only for a version bump could neither be delivered nor held before the attempt cap.
+4. The measure "after" of ADR-1136 does not add up as written: 56 held, 42 released, 12 left. It also lists 3 issues "opened by someone other than the owner and left alone" and 1 tracker, which are not cases of rule 3.
+
+Measured on 12 November 2026:
+
+- The routines act under the owner's account. Pull requests 1012, 1013 and 1015 of this repository, opened by the routine on branches `fix/...`, carry the author `cdeust`, as do the comments it writes. A rule that trusts the owner's account therefore still trusts what the routines write.
+- The two issues the measure of ADR-1136 leaves out were session-optimizer 61 and 64. They were already done and were closed that day, before the release: 56 held at 16:14 UTC, 54 after those two, 12 after the 42 were released at 18:26 UTC.
+
+## Decision
+
+1. Rule 1 (b) reads the issue's own text only when the owner opened the issue. The text of an issue someone else opened is a request and decides nothing; the agent then decides from (a), (c) and (d).
+2. Rule 2: the marker makes a comment a decision only when the owner's account wrote the comment. In a comment from any other account it is ignored.
+3. Rule 4: an issue that asks for one of the four forbidden actions and nothing else is held under rule 3, naming the action, as an access the agent does not have. The list of rule 3 keeps its four cases.
+4. Rule 5: an issue opened by someone other than the owner is never closed by an agent, by hand or by a pull request. For such an issue the pull request carries `Refs #<number>`.
+
+The 12 holds of the measure "after" of ADR-1136, read against rule 3:
+
+| Holds | Case of rule 3 |
+|---|---|
+| 7, an access the agent does not have (692, 708, 722, 729, 735, 740; ai-architect-mcp-codebase 197) | an access the agent does not have |
+| 1, issue 359 | a named dependency that is still open |
+| 1, issue 725, a tracker of issues that are still open | a named dependency that is still open |
+| 3, opened by someone other than the owner (662, 737, 835) | none: they were held before the rule, and the comment that released the 42 others was not posted on them, because a comment there is a message to a person outside |
+
+The three holds of the last row are not justified by rule 3. They stay as they are until a pass reads each of them under rule 1 without (b).
+
+## Consequences
+
+- An agent no longer takes a decision from text a person outside wrote. A request from outside is still served: by the repository's written decisions, its standards, or the smallest slice.
+- A decision comment forged under another account has no effect. One written under the owner's account by someone who holds its token would; that is outside what a document can prevent.
+- Who wrote an issue or a comment is read from the `author` the API returns with it. The rule does not say how to detect that someone other than its author edited an issue; on a repository without collaborators only the owner can.
+- Not measured: how many decisions the routines have taken from the text of an issue someone else opened. Three such issues are open and all three are held.
+
+## Rollback
+
+`git revert` of the commit that carries this page. ADR-1136 then stands as written.
+
+## Sources
+
+- Review of pull request 1016 of this repository, comment 6838556774, and its summary, comment 6838478837.
+- Review of pull request 531 of ai-architect-mcp-codebase, comment 6838790959.
+- `scripts/ci_autopilot_issues.py`: the author and editor checks of the local manager.
+- Pull requests 1012, 1013 and 1015 of this repository: author `cdeust`, read on 12 November 2026.
+- ADR-1136, Context, the measures of 16:14, 18:29 and 21:16 UTC.

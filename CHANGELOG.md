@@ -74,6 +74,18 @@ adheres to [Semantic Versioning](https://semver.org/).
   that plugin publishes at that tag: the 23 team-role agents it named were removed
   in 2.46.0.
 
+- Issues (ADR-1137, amends ADR-1136): the section "Issues: no issue waits for the owner"
+  of `docs/agent-guidance.md` trusts the owner's account only. The text of an issue
+  decides a question only when the owner opened the issue; the marker
+  `<!-- ci-autopilot decision -->` makes a comment a decision only when the owner's
+  account wrote it, which is the account the routines act under. An issue that asks only
+  for a tag, a release, a version bump or a workflow dispatch is held as an access the
+  agent does not have. A pull request for an issue someone else opened carries
+  `Refs #<number>`, since `Closes` would close an issue an agent must not close. These
+  are the three notes of the review of pull request 1016 and one of the review of the
+  same section in ai-architect-mcp-codebase. ADR-1137 also says where the two issues
+  the measure of ADR-1136 leaves out went.
+
 ### Fixed
 
 - Install (issue #704): `scripts/install-plugin.sh` no longer picks PostgreSQL because a
