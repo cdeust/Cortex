@@ -144,3 +144,18 @@ def test_reinstall_keeps_a_managed_marker_as_setup_wrote_it(tmp_path):
     assert saved.read_text(encoding="utf-8") == marker
     assert "Existing managed PostgreSQL kept" in result.stdout + result.stderr
     assert not calls.exists()
+
+
+def test_a_configured_url_still_wins_over_a_managed_marker(tmp_path):
+    # ADR-1114 selection order 1: a configured database beats the managed
+    # marker, at launch (environment_decides) and so at install.
+    result, calls = _run(
+        tmp_path,
+        earlier_state=True,
+        extra_env={"DATABASE_URL": "postgresql://db.example:5432/cortex"},
+        marker='{"backend": "managed", "root": "/srv/managed-pg"}',
+    )
+
+    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+    assert _marker_backend(tmp_path) == "postgresql"
+    assert "Existing managed PostgreSQL kept" not in result.stdout + result.stderr
