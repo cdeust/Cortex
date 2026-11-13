@@ -41,11 +41,13 @@ from tests_py._launcher_ready import ready_launcher_argv, ready_plugin_env
 LAUNCHER_PATH = Path(__file__).resolve().parents[2] / "scripts" / "launcher.py"
 LEGACY_PORT = 5432  # source: pre-ADR-1104 scripts/launcher.py default URL
 # source: dated measurement 2026-11-13, Linux container, Python 3.11: the 22
-# runs of this module took 9.4 s in all; 60 s per run only bounds a hang.
+# runs of this module took 23.2 s in all; 60 s per run only bounds a hang.
 HOOK_SECONDS = 60
 _SITECUSTOMIZE = """
 import os, sys
 _log = os.environ["CORTEX_TEST_CONNECT_LOG"]
+with open(_log, "a", encoding="utf-8") as out:
+    out.write("loaded\\n")
 def _audit(event, args):
     if event == "socket.connect" and isinstance(args[1], tuple):
         host, port = args[1][0], args[1][1]
@@ -57,11 +59,14 @@ def _audit(event, args):
         out.write(f"{event} {host} {port}\\n")
 sys.addaudithook(_audit)
 """
-# source: backend_marker / memory_config -- every variable that decides the
-# backend; the child must inherit none of them.
-_DECIDING = (
+# source: backend_marker, memory_config and scripts/launcher_backend.py: the
+# variables that configure a store or select a backend; the child inherits
+# none of them (the launcher maps CLAUDE_PLUGIN_OPTION_DATABASE_URL onto
+# DATABASE_URL, map_database_option).
+_CONFIGURING = (
     "DATABASE_URL",
     "CORTEX_MEMORY_DATABASE_URL",
+    "CLAUDE_PLUGIN_OPTION_DATABASE_URL",
     "CORTEX_MEMORY_STORE_BACKEND",
     "CORTEX_BACKEND",
     "CORTEX_ALLOW_SQLITE_FALLBACK",
@@ -85,9 +90,30 @@ def listener():
             accepted.append(peer)
             conn.close()
 
-    threading.Thread(target=serve, daemon=True).start()
-    yield server.getsockname()[1], accepted
+    thread = threading.Thread(target=serve, daemon=True)
+    thread.start()
+    yield server.getsockname()[1], accepted, server
+    # On Linux close() alone leaves a blocked accept() blocked; shutdown()
+    # wakes it with OSError, so the thread ends and is joined.
+    server.shutdown(socket.SHUT_RDWR)
     server.close()
+    thread.join()
+
+
+def _drain(server: socket.socket, accepted: list) -> None:
+    """Count a connection still waiting in the accept queue (the serving
+    thread may not have taken it yet when the hook exits)."""
+    probe = socket.socket(fileno=os.dup(server.fileno()))
+    probe.setblocking(False)
+    try:
+        while True:
+            conn, peer = probe.accept()
+            accepted.append(peer)
+            conn.close()
+    except BlockingIOError:
+        pass
+    finally:
+        probe.close()
 
 
 def _child_env(tmp_path: Path, port: int) -> tuple[dict, Path]:
@@ -98,7 +124,7 @@ def _child_env(tmp_path: Path, port: int) -> tuple[dict, Path]:
     base = {
         k: v
         for k, v in os.environ.items()
-        if k not in _DECIDING and not k.startswith("PG")
+        if k not in _CONFIGURING and not k.startswith("PG")
     }
     base["CORTEX_CLAUDE_DIR"] = str(tmp_path / "claude-dir")
     base.update(ready_plugin_env(tmp_path))
@@ -112,9 +138,32 @@ def _child_env(tmp_path: Path, port: int) -> tuple[dict, Path]:
         PGHOST="127.0.0.1",
         PGPORT=str(port),
         PGDATABASE="cortex",
+        # source: mcp_server/hooks/_capture_mode.py -- a capture mode inherited
+        # from the developer (writes-only, off) skips post_tool_capture before
+        # the launcher settles the backend; the child runs the default.
+        CORTEX_CAPTURE_MODE="full",
         CORTEX_TEST_CONNECT_LOG=str(tmp_path / "connects.log"),
     )
     return env, project
+
+
+def _event(hook: str, project: Path) -> dict:
+    """One event every hook acts on rather than skips: a capturable ``Read``
+    (post_tool_capture), a specialist with a substantive prompt
+    (agent_briefing, at least 20 characters), a recall query of at least 10
+    characters (auto_recall). session_lifecycle with a session_id starts a
+    detached dream cycle nobody can wait on (tests_py/hooks/test_entry.py)."""
+    seen = project / "seen.txt"
+    seen.write_text("hello\n", encoding="utf-8")
+    return {
+        "session_id": None if hook == "session_lifecycle" else "issue-704",
+        "cwd": str(project),
+        "prompt": "review the storage backend selection of the hooks",
+        "agent_name": "architect",
+        "tool_name": "Read",
+        "tool_input": {"file_path": str(seen)},
+        "tool_response": "",
+    }
 
 
 def _command(front_door: str, hook: str) -> list[str]:
@@ -128,14 +177,11 @@ def _command(front_door: str, hook: str) -> list[str]:
 def test_unconfigured_hook_connects_to_no_postgresql(
     front_door, hook, tmp_path, listener
 ):
-    port, accepted = listener
+    port, accepted, server = listener
     env, project = _child_env(tmp_path, port)
     marker = tmp_path / "claude-dir" / "methodology" / "backend.json"
     assert not has_earlier_state(marker.parent, marker.name)  # a fresh HOME
-    # session_lifecycle with a session_id starts a detached dream cycle
-    # nobody can wait on (tests_py/hooks/test_entry.py, _benign_event).
-    session = None if hook == "session_lifecycle" else "issue-704"
-    event = {"session_id": session, "cwd": str(project), "prompt": "hello"}
+    event = _event(hook, project)
     result = subprocess.run(
         _command(front_door, hook),
         input=json.dumps(event),
@@ -146,8 +192,9 @@ def test_unconfigured_hook_connects_to_no_postgresql(
         timeout=HOOK_SECONDS,
     )
     await_capture_worker_exit(env)
-    log = tmp_path / "connects.log"
-    connects = log.read_text(encoding="utf-8").splitlines() if log.exists() else []
+    _drain(server, accepted)
+    connects = (tmp_path / "connects.log").read_text(encoding="utf-8").splitlines()
+    assert "loaded" in connects, "the audit hook did not load in the child"
     dialed = [c for c in connects if c.split()[-1] in {str(port), str(LEGACY_PORT)}]
     assert result.returncode == 0, result.stderr
     assert accepted == [], f"{hook} via {front_door} reached the listener"
