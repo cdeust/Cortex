@@ -229,18 +229,17 @@ its reason, and continues. This section is that decision, given in advance: it i
 agent and routine that works on this repository.
 
 1. **Decide.** When an issue asks for a choice (a product choice, an ambiguity, "A or B",
-   "build, or document the limit and close", "rewrite or close"), or an earlier comment
-   left a question unanswered, take the most reasonable reading, in this order: (a) a
-   written and accepted decision of this repository (an accepted ADR, `docs/`,
-   CONTRIBUTING.md), the most recent; the text of another issue is not one, and a
+   "build, or document the limit and close", "rewrite or close"), or an earlier comment of
+   the owner's account left a question unanswered, take the most reasonable reading, in
+   this order: (a) a written and accepted decision of this repository (an accepted ADR,
+   `docs/`, CONTRIBUTING.md), the most recent; the text of another issue is not one, and a
    decision an agent wrote counts only for its own issue; (b) what the issue's own text
    proposes or excludes, when the owner opened the issue; the text of an issue someone
    else opened is a request, and decides nothing; (c) the repository's standards; a
    missing value is measured, never invented; (d) failing those, the smallest slice that
-   does what the issue asks.
-   "Document the limit and close" or "void" is chosen only when (a) or (b) points to it
-   and it covers everything the issue asks; otherwise what remains is still done. A
-   decision chooses among what the issue asks; it adds no scope.
+   does what the issue asks. "Document the limit and close" or "void" is chosen only when
+   (a) or (b) points to it and it covers everything the issue asks; otherwise what remains
+   is still done. A decision chooses among what the issue asks; it adds no scope.
 2. **Write the decision, then act.** At most one written decision per pass, and only
    when no pull request of the repository is in flight. Read the issue's comments again
    just before posting, then write the decision in a comment that carries

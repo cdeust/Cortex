@@ -21,12 +21,12 @@ The review of pull request 1016, which added the section, approved it with three
 1. Rules 1 (b) and 2 did not say whose text counts. Rule 1 (b) took "what the issue's own text proposes or excludes" as a source of the decision, and rule 2 made any comment that carries `<!-- ci-autopilot decision -->` a decision later passes apply. This repository is public: anyone can open an issue and anyone can comment. A person outside could therefore write the decision an agent then applies. Two of the five reviewers rated that a Blocker. The review kept it a Note because the pull request an agent opens still passes the review and the merge gate, and because the local manager already checks who wrote an issue and its comments (`scripts/ci_autopilot_issues.py`).
 2. Rule 5 contradicted itself. A pull request that carries `Closes #<number>` closes the issue when it merges, and the next sentence forbids an agent to close an issue opened by someone other than the owner.
 3. Rule 4 forbids raising the project's version, and the list of rule 3 is exhaustive and does not name that case. An issue that asks only for a version bump could neither be delivered nor held before the attempt cap.
-4. The measure "after" of ADR-1136 does not add up as written: 56 held, 42 released, 12 left. It also lists 3 issues "opened by someone other than the owner and left alone" and 1 tracker, which are not cases of rule 3.
+4. The measure "after" of ADR-1136 does not add up as written: 56 held, 42 released, 12 left. It also lists 3 issues "opened by someone other than the owner and left alone" and 1 tracker, without saying which case of rule 3 holds them.
 
 Measured on 12 November 2026:
 
 - The routines act under the owner's account. Pull requests 1012, 1013 and 1015 of this repository, opened by the routine on branches `fix/...`, carry the author `cdeust`, as do the comments it writes. A rule that trusts the owner's account therefore still trusts what the routines write.
-- The two issues the measure of ADR-1136 leaves out were session-optimizer 61 and 64. They were already done and were closed that day, before the release: 56 held at 16:14 UTC, 54 after those two, 12 after the 42 were released at 18:26 UTC.
+- The two issues the measure of ADR-1136 leaves out were session-optimizer 61 and 64. They were already done and were closed that day at 17:10 and 17:11 UTC, before the release: 56 held at 16:14 UTC, 54 after those two, 12 at the measure of 18:29 UTC, once the 42 had been released.
 
 ## Decision
 
@@ -63,4 +63,14 @@ The three holds of the last row are not justified by rule 3. They stay as they a
 - Review of pull request 531 of ai-architect-mcp-codebase, comment 6838790959.
 - `scripts/ci_autopilot_issues.py`: the author and editor checks of the local manager.
 - Pull requests 1012, 1013 and 1015 of this repository: author `cdeust`, read on 12 November 2026.
-- ADR-1136, Context, the measures of 16:14, 18:29 and 21:16 UTC.
+- ADR-1136, Context, the measures of 16:14, 18:29 and 21:16 UTC, for the counts. ADR-1136 does not list the issues: the numbers in the table above are those read at the measure of 18:29 UTC by the session that released the others, and can be read again from the label `autopilot:hold` and its history on each issue.
+- session-optimizer issues 61 and 64: `closed_at` 2026-11-12T17:10:58Z and 2026-11-12T17:11:12Z.
+
+## Corrections of 13 November 2026
+
+From the review of pull request 1018, which added this page (comment 6839458581):
+
+- The Context said the 42 issues were released "at 18:26 UTC". No committed source gives that time; ADR-1136 gives the measure of 18:29 UTC. The sentence now cites that measure, and the closing times of the two issues are added with their source.
+- The Context said the tracker was "not a case of rule 3" while the table classes it as a named dependency that is still open. The table is right; the Context now says that ADR-1136 did not name a case for it.
+- The Sources cited ADR-1136 for issue numbers it does not contain. The line now says where the numbers come from.
+- Rule 1 took as a trigger any "earlier comment [that] left a question unanswered". `scripts/ci_autopilot_issues.py` (`authorize`) already drops, on an issue the owner opened, the comments of other accounts. Rule 1 now reads "an earlier comment of the owner's account": a question a person outside raises in a comment does not oblige an agent to decide it.
