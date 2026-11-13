@@ -86,6 +86,13 @@ adheres to [Semantic Versioning](https://semver.org/).
   same section in ai-architect-mcp-codebase. ADR-1137 also says where the two issues
   the measure of ADR-1136 leaves out went.
 
+- Issues (ADR-1137, corrections of 13 November): rule 1 of "Issues: no issue waits for the
+  owner" is triggered by an unanswered question in a comment of the owner's account, not
+  of any account, as the local manager already reads comments. ADR-1137 no longer gives
+  a release time no committed source supports, no longer contradicts its own table on
+  the tracker issue, and says where its issue numbers come from. These are the three
+  notes of the review of pull request 1018.
+
 ### Fixed
 
 - Install (issue #704): `scripts/install-plugin.sh` no longer picks PostgreSQL because a
