@@ -21,6 +21,9 @@ set -euo pipefail
 #      HOME with earlier Cortex state, ADR-1104) and kept — an upgrade
 #      never silently downgrades a Postgres install to SQLite. A fresh
 #      HOME is SQLite even when a local cortex database answers (#704).
+#      A managed marker (the plugin's own server, written by Setup after
+#      it started, ADR-1114) is kept as written: the installer installs
+#      the dependencies without a system PostgreSQL and rewrites nothing.
 #   2. Remove stale other Cortex installations.
 # source: ADR-0740
 #
@@ -148,8 +151,19 @@ print(backend + ' (' + why + ')')
     return 1
 }
 
+# A managed marker carries the server's root and Setup's identity; only
+# Setup writes it, after the server started (ADR-1114). decide() assumes
+# no marker, so a reinstall must neither re-decide nor rewrite it (#704).
+# source: ADR-1114, selection order 2
+saved_managed_marker() {
+    [ -f "$MARKER_PATH" ] && grep -q '"backend"[[:space:]]*:[[:space:]]*"managed"' "$MARKER_PATH" 2>/dev/null
+}
+
 if [ -n "$REQUESTED" ]; then
     BACKEND="$REQUESTED"
+elif saved_managed_marker; then
+    say "Existing managed PostgreSQL kept (marker: $MARKER_PATH)"
+    BACKEND="managed"
 elif detect_existing_postgres; then
     BACKEND="postgresql"
 else
@@ -170,7 +184,8 @@ fi
 
 # Resolve the marker path with Path.home() inside Python.
 # source: ADR-1088
-MARKER_WRITTEN=$(CORTEX_BACKEND_MARKER_VALUE="$BACKEND" \
+MARKER_WRITTEN=""
+[ "$BACKEND" = "managed" ] || MARKER_WRITTEN=$(CORTEX_BACKEND_MARKER_VALUE="$BACKEND" \
 CORTEX_BACKEND_MARKER_VERSION="$CURRENT_VERSION" "$PY" -c "
 import json, os, pathlib
 path = pathlib.Path.home() / '.claude' / 'methodology' / 'backend.json'
@@ -206,7 +221,14 @@ path.write_text(json.dumps({
 }
 
 # source: ADR-0740
-if [ "$BACKEND" = "sqlite" ]; then
+if [ "$BACKEND" = "managed" ]; then
+    # Dependencies only: the managed server, its extensions and schema
+    # are Setup's (launcher_pg_provision), not a system PostgreSQL.
+    # source: ADR-1114
+    run_setup_py env CORTEX_SETUP_MANAGED_PG=1 \
+        "$PY" "$PLUGIN_ROOT/scripts/setup.py" \
+        || fail "scripts/setup.py failed. ${SETUP_PY_FAILURE} Re-run manually: CORTEX_SETUP_MANAGED_PG=1 \"$PY\" \"$PLUGIN_ROOT/scripts/setup.py\""
+elif [ "$BACKEND" = "sqlite" ]; then
     run_setup_py env CORTEX_MEMORY_STORE_BACKEND=sqlite \
         "$PY" "$PLUGIN_ROOT/scripts/setup.py" \
         || { restore_previous_marker; fail "scripts/setup.py failed. ${SETUP_PY_FAILURE} Re-run manually: CORTEX_MEMORY_STORE_BACKEND=sqlite \"$PY\" \"$PLUGIN_ROOT/scripts/setup.py\""; }

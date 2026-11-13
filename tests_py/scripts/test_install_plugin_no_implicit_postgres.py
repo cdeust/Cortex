@@ -121,3 +121,26 @@ def test_reinstall_keeps_an_existing_sqlite_marker(tmp_path):
     assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
     assert _marker_backend(tmp_path) == "sqlite"
     assert not calls.exists()
+
+
+def test_reinstall_keeps_a_managed_marker_as_setup_wrote_it(tmp_path):
+    # A managed marker (ADR-1114) carries the server root and Setup's
+    # identity. Before the fix it fell through to decide(), which assumes no
+    # marker: with earlier state and PGHOST it was rewritten to postgresql,
+    # detaching the store from the managed server.
+    marker = (
+        '{"backend": "managed", "root": "/srv/managed-pg",'
+        ' "written_by": "Setup (managed PostgreSQL started, ADR-1114)"}'
+    )
+    result, calls = _run(
+        tmp_path,
+        earlier_state=True,
+        extra_env={"PGHOST": "127.0.0.1"},
+        marker=marker,
+    )
+
+    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+    saved = tmp_path / "home" / ".claude" / "methodology" / "backend.json"
+    assert saved.read_text(encoding="utf-8") == marker
+    assert "Existing managed PostgreSQL kept" in result.stdout + result.stderr
+    assert not calls.exists()

@@ -160,8 +160,9 @@ def test_the_run_is_unbuffered_so_tee_does_not_hide_progress():
 
 
 def test_installer_no_longer_asserts_postgresql_is_the_cause():
-    """The unconditional claim is gone from both setup.py call sites; the
-    PostgreSQL install guidance survives as a conditional."""
+    """The unconditional claim is gone from every setup.py call site (SQLite,
+    managed PostgreSQL of ADR-1114, Windows PostgreSQL); the PostgreSQL
+    install guidance survives as a conditional."""
     installer = INSTALLER_PATH.read_text(encoding="utf-8")
 
     assert "PostgreSQL must be installed and running first" not in installer
@@ -170,5 +171,5 @@ def test_installer_no_longer_asserts_postgresql_is_the_cause():
         for line in installer.splitlines()
         if line.strip().startswith("run_setup_py ")
     ]
-    assert len(invocations) == 2, "both the SQLite and the Windows call sites"
-    assert installer.count("${SETUP_PY_FAILURE}") == 2
+    assert len(invocations) == 3, "the SQLite, managed and Windows call sites"
+    assert installer.count("${SETUP_PY_FAILURE}") == 3

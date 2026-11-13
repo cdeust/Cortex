@@ -8,6 +8,8 @@ model.
 Usage:
     python3 scripts/setup.py                                # PostgreSQL path
     CORTEX_MEMORY_STORE_BACKEND=sqlite python3 scripts/setup.py   # SQLite path
+    CORTEX_SETUP_MANAGED_PG=1 python3 scripts/setup.py   # managed PostgreSQL
+                                     # (dependencies only, ADR-1114)
 
 Dependency install (install_deps) installs the installer set of uv.lock
 through the launcher's scratch-and-commit path (``scripts/launcher_deps.py``,
@@ -44,7 +46,12 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://localhost:5432/corte
 
 # SQLite mode: see module docstring. Any other CORTEX_MEMORY_STORE_BACKEND
 # value (unset, "postgresql", "auto") keeps the normal PostgreSQL-required path.
-SKIP_POSTGRES = (
+# Managed mode: the store is the plugin's own server, which Setup starts and
+# provisions (launcher_pg_provision); install-plugin.sh sets this when a
+# saved managed marker is kept. No system PostgreSQL and no schema step here.
+# source: ADR-1114 (managed server, Setup provisions it)
+MANAGED_PG = os.environ.get("CORTEX_SETUP_MANAGED_PG", "") == "1"
+SKIP_POSTGRES = MANAGED_PG or (
     os.environ.get("CORTEX_MEMORY_STORE_BACKEND", "").strip().lower() == "sqlite"
 )
 
@@ -452,7 +459,12 @@ def main() -> None:
     print(f"  Database:    {_redact_db_url(DATABASE_URL)}")
 
     check_python()
-    if SKIP_POSTGRES:
+    if MANAGED_PG:
+        ok(
+            "Managed PostgreSQL (ADR-1114) — dependencies only; Setup starts "
+            "and provisions the plugin's own server at the next launch"
+        )
+    elif SKIP_POSTGRES:
         setup_sqlite.check_sqlite_extension_loading(fail)
         ok(
             "SQLite backend (zero-config default) — no PostgreSQL install, "
@@ -484,7 +496,9 @@ def main() -> None:
     print("  2. Start a conversation — Cortex works automatically")
     print("  3. Use /cortex-recall to search memories")
     print()
-    if SKIP_POSTGRES:
+    if MANAGED_PG:
+        print("Database: managed PostgreSQL — ~/.claude/methodology/backend.json")
+    elif SKIP_POSTGRES:
         print("Database: SQLite — ~/.claude/methodology/memory.db")
     else:
         print(f"Database: {_redact_db_url(DATABASE_URL)}")
