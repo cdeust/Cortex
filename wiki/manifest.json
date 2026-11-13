@@ -3719,6 +3719,10 @@
     "ADR-1137": {
       "mirror": "ADR-1137-the-issues-rule-trusts-the-owner-account-only.md",
       "path": "adr/cortex/1137-the-issues-rule-trusts-the-owner-account-only.md"
+    },
+    "ADR-1139": {
+      "mirror": "ADR-1139-the-review-command-file-carries-no-allowed-tools-header.md",
+      "path": "adr/cortex/1139-the-review-command-file-carries-no-allowed-tools-header.md"
     }
   },
   "project": "cortex",
