@@ -264,3 +264,26 @@ def test_model_cache_child_source_escapes_special_characters_in_paths(monkeypatc
     ]
     assert str(tricky_script_dir) in literals
     assert tricky_deps in literals
+
+
+def test_main_managed_mode_installs_deps_without_a_system_postgresql(monkeypatch):
+    """A kept managed marker (ADR-1114): Setup owns the server and schema,
+    so setup.py installs dependencies only. Issue #704."""
+    monkeypatch.setenv("CORTEX_SETUP_MANAGED_PG", "1")
+    mod = _load_setup_module(monkeypatch, None)
+    names = ("check_python", "check_postgresql", "install_deps", "setup_database")
+    for name in (*names, "verify", "cache_embedding_model"):
+        monkeypatch.setattr(mod, name, mock.Mock())
+    extension_check = mock.Mock()
+    monkeypatch.setattr(
+        mod.setup_sqlite, "check_sqlite_extension_loading", extension_check
+    )
+
+    mod.main()
+
+    assert mod.SKIP_POSTGRES and mod.MANAGED_PG
+    mod.install_deps.assert_called_once()
+    mod.check_postgresql.assert_not_called()
+    mod.setup_database.assert_not_called()
+    mod.cache_embedding_model.assert_not_called()
+    extension_check.assert_not_called()
