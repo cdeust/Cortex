@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import os
+import select
 import socket
 import subprocess
 import sys
@@ -43,6 +44,12 @@ LEGACY_PORT = 5432  # source: pre-ADR-1104 scripts/launcher.py default URL
 # source: dated measurement 2026-11-13, Linux container, Python 3.11: the 22
 # runs of this module took 23.2 s in all; 60 s per run only bounds a hang.
 HOOK_SECONDS = 60
+# source: this module -- the serving thread's wake-up period; it bounds only
+# how long finish() waits after the hook exited, not what is counted.
+POLL_SECONDS = 0.05
+# source: this module -- 100 poll periods; a thread still alive after it is
+# a defect of the fixture, reported by finish().
+JOIN_SECONDS = 5.0
 _SITECUSTOMIZE = """
 import os, sys
 _log = os.environ["CORTEX_TEST_CONNECT_LOG"]
@@ -75,45 +82,43 @@ _CONFIGURING = (
 
 @pytest.fixture
 def listener():
-    """A throwaway server: accepts and counts, never answers."""
+    """A throwaway server: accepts, counts and closes, never answers.
+
+    Yields (port, finish). ``finish()`` stops the serving thread once the
+    accept queue is empty, joins it, and returns every accepted peer, so a
+    connection still queued when the hook exits is counted too. ``select``
+    with a timeout instead of a blocking ``accept()``: no socket mode is
+    changed and no ``shutdown()`` of a listening socket is needed, which
+    raises ENOTCONN on macOS and Windows.
+    """
     server = socket.socket()
     server.bind(("127.0.0.1", 0))
     server.listen()
     accepted: list[tuple] = []
+    stop = threading.Event()
 
     def serve() -> None:
         while True:
-            try:
+            ready, _, _ = select.select([server], [], [], POLL_SECONDS)
+            if ready:
                 conn, peer = server.accept()
-            except OSError:
+                accepted.append(peer)
+                conn.close()
+            elif stop.is_set():
                 return
-            accepted.append(peer)
-            conn.close()
 
     thread = threading.Thread(target=serve, daemon=True)
     thread.start()
-    yield server.getsockname()[1], accepted, server
-    # On Linux close() alone leaves a blocked accept() blocked; shutdown()
-    # wakes it with OSError, so the thread ends and is joined.
-    server.shutdown(socket.SHUT_RDWR)
+
+    def finish() -> list[tuple]:
+        stop.set()
+        thread.join(JOIN_SECONDS)
+        assert not thread.is_alive(), "the listener thread did not stop"
+        return accepted
+
+    yield server.getsockname()[1], finish
+    finish()
     server.close()
-    thread.join()
-
-
-def _drain(server: socket.socket, accepted: list) -> None:
-    """Count a connection still waiting in the accept queue (the serving
-    thread may not have taken it yet when the hook exits)."""
-    probe = socket.socket(fileno=os.dup(server.fileno()))
-    probe.setblocking(False)
-    try:
-        while True:
-            conn, peer = probe.accept()
-            accepted.append(peer)
-            conn.close()
-    except BlockingIOError:
-        pass
-    finally:
-        probe.close()
 
 
 def _child_env(tmp_path: Path, port: int) -> tuple[dict, Path]:
@@ -148,11 +153,17 @@ def _child_env(tmp_path: Path, port: int) -> tuple[dict, Path]:
 
 
 def _event(hook: str, project: Path) -> dict:
-    """One event every hook acts on rather than skips: a capturable ``Read``
-    (post_tool_capture), a specialist with a substantive prompt
-    (agent_briefing, at least 20 characters), a recall query of at least 10
-    characters (auto_recall). session_lifecycle with a session_id starts a
-    detached dream cycle nobody can wait on (tests_py/hooks/test_entry.py)."""
+    """The event: a capturable ``Read`` (post_tool_capture), a specialist with
+    a substantive prompt (agent_briefing, at least 20 characters), a recall
+    query of at least 10 characters (auto_recall).
+
+    Not every hook reaches its store with it. pipeline_impact_bump opens the
+    store only for symbols the code graph returns and post_commit_reindex
+    only after a ``git commit`` run through ``Bash``; the hermetic
+    environment has no pipeline binary, so both return before the store and
+    exercise only the front door's backend resolution. session_lifecycle
+    with a session_id starts a detached dream cycle nobody can wait on
+    (tests_py/hooks/test_entry.py)."""
     seen = project / "seen.txt"
     seen.write_text("hello\n", encoding="utf-8")
     return {
@@ -177,7 +188,7 @@ def _command(front_door: str, hook: str) -> list[str]:
 def test_unconfigured_hook_connects_to_no_postgresql(
     front_door, hook, tmp_path, listener
 ):
-    port, accepted, server = listener
+    port, finish = listener
     env, project = _child_env(tmp_path, port)
     marker = tmp_path / "claude-dir" / "methodology" / "backend.json"
     assert not has_earlier_state(marker.parent, marker.name)  # a fresh HOME
@@ -192,7 +203,7 @@ def test_unconfigured_hook_connects_to_no_postgresql(
         timeout=HOOK_SECONDS,
     )
     await_capture_worker_exit(env)
-    _drain(server, accepted)
+    accepted = finish()
     connects = (tmp_path / "connects.log").read_text(encoding="utf-8").splitlines()
     assert "loaded" in connects, "the audit hook did not load in the child"
     dialed = [c for c in connects if c.split()[-1] in {str(port), str(LEGACY_PORT)}]
