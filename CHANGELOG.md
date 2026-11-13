@@ -86,6 +86,14 @@ adheres to [Semantic Versioning](https://semver.org/).
   same section in ai-architect-mcp-codebase. ADR-1137 also says where the two issues
   the measure of ADR-1136 leaves out went.
 
+- Claude review (ADR-1139, issue #1021): `.claude/commands/review-pr.md` no longer carries
+  an `allowed-tools` header. In 3 reviews of 11 the command did not load and the verdict
+  came from one or two reviewers instead of five. Measured with a probe on Claude Code
+  2.1.323, two command files that differ by that header: with it, the model's `Skill` call
+  for the command is refused; without it, the command loads. The three `gh pr` commands
+  the header allowed stay allowed by `--allowedTools` of the review workflow. Typed in an
+  interactive session, `/review-pr` now asks before each of them.
+
 - Issues (ADR-1137, corrections of 13 November): rule 1 of "Issues: no issue waits for the
   owner" is triggered by an unanswered question in a comment of the owner's account, not
   of any account, as the local manager already reads comments. ADR-1137 no longer gives
