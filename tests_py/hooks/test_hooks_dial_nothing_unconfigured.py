@@ -157,11 +157,12 @@ def _event(hook: str, project: Path) -> dict:
     a substantive prompt (agent_briefing, at least 20 characters), a recall
     query of at least 10 characters (auto_recall).
 
-    Not every hook reaches its store with it. pipeline_impact_bump opens the
-    store only for symbols the code graph returns and post_commit_reindex
-    only after a ``git commit`` run through ``Bash``; the hermetic
-    environment has no pipeline binary, so both return before the store and
-    exercise only the front door's backend resolution. session_lifecycle
+    pipeline_impact_bump acts only on Edit, Write and MultiEdit, so it gets
+    an ``Edit`` of the same file: it then opens the store for the cached
+    graph lookup. post_commit_reindex acts only on a ``git commit`` through
+    ``Bash`` and never opens a store in-process (it spawns a detached
+    re-analysis), so it returns at its first check and exercises only the
+    front door's backend resolution. session_lifecycle
     with a session_id starts a detached dream cycle nobody can wait on
     (tests_py/hooks/test_entry.py)."""
     seen = project / "seen.txt"
@@ -171,7 +172,7 @@ def _event(hook: str, project: Path) -> dict:
         "cwd": str(project),
         "prompt": "review the storage backend selection of the hooks",
         "agent_name": "architect",
-        "tool_name": "Read",
+        "tool_name": "Edit" if hook == "pipeline_impact_bump" else "Read",
         "tool_input": {"file_path": str(seen)},
         "tool_response": "",
     }
