@@ -154,9 +154,12 @@ print(backend + ' (' + why + ')')
 # A managed marker carries the server's root and Setup's identity; only
 # Setup writes it, after the server started (ADR-1114). decide() assumes
 # no marker, so a reinstall must neither re-decide nor rewrite it (#704).
-# source: ADR-1114, selection order 2
+# A configured URL still wins over the marker, as at launch
+# (environment_decides): then detect_existing_postgres keeps PostgreSQL.
+# source: ADR-1114, decisions 5 and 7(a), 7(b)
 saved_managed_marker() {
-    [ -f "$MARKER_PATH" ] && grep -q '"backend"[[:space:]]*:[[:space:]]*"managed"' "$MARKER_PATH" 2>/dev/null
+    [ -z "${DATABASE_URL:-}" ] && [ -z "${CORTEX_MEMORY_DATABASE_URL:-}" ] \
+        && [ -f "$MARKER_PATH" ] && grep -q '"backend"[[:space:]]*:[[:space:]]*"managed"' "$MARKER_PATH" 2>/dev/null
 }
 
 if [ -n "$REQUESTED" ]; then

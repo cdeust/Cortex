@@ -461,8 +461,9 @@ def main() -> None:
     check_python()
     if MANAGED_PG:
         ok(
-            "Managed PostgreSQL (ADR-1114) — dependencies only; Setup starts "
-            "and provisions the plugin's own server at the next launch"
+            "Managed PostgreSQL (ADR-1114) — dependencies only; Setup "
+            "(scripts/init_plugin.py, which install-plugin.sh runs next "
+            "when Claude Code is installed) starts and provisions it"
         )
     elif SKIP_POSTGRES:
         setup_sqlite.check_sqlite_extension_loading(fail)
