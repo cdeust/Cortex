@@ -112,6 +112,13 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Installer (issue #704, review of #1041): a URL named only in
+  `CORTEX_MEMORY_DATABASE_URL` selected PostgreSQL, but Setup provisioned the local
+  `cortex` database instead, because `setup.sh` and `setup.py` read `DATABASE_URL` only
+  and default it. The installer now copies the named URL, trimmed, into an empty
+  `DATABASE_URL`, as the launch does (`settle_backend`). An explicit
+  `CORTEX_MEMORY_STORE_BACKEND` is compared exactly, as the engine compares it:
+  `PostgreSQL` or `SQLITE` is no longer taken for a backend the launch would not select.
 - Installer (issue #704, follow-up of #1040): an explicit `CORTEX_MEMORY_STORE_BACKEND`
   decides only when it names a backend a marker can hold (`sqlite`, `postgresql`). `auto`,
   the engine's own default, and spellings such as `Postgres` are no longer written into a

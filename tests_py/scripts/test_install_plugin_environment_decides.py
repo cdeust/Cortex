@@ -60,11 +60,13 @@ def test_an_explicit_store_backend_decides_and_leaves_the_managed_marker(
     assert _saved_marker(tmp_path) == _MANAGED_MARKER
 
 
-@pytest.mark.parametrize("value", ["auto", "Postgres"])
+@pytest.mark.parametrize("value", ["auto", "Postgres", "PostgreSQL", "SQLITE"])
 def test_a_value_no_marker_holds_is_left_to_the_saved_marker(tmp_path, value):
     # "auto" is the engine's own choice, not a marker value: persisting it
     # would make read_backend_marker refuse every later launch (Codex review
     # of #1040). The saved choice stands, as before the environment check.
+    # The engine compares the value exactly (memory_store.py): "PostgreSQL"
+    # and "SQLITE" are not backends there, so not here (review of #1041).
     result, _ = _run(
         tmp_path,
         earlier_state=True,
@@ -92,8 +94,31 @@ def test_auto_with_a_configured_url_installs_postgresql(tmp_path):
 
     assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
     assert "Backend: postgresql" in result.stdout + result.stderr
-    assert _setup_env(tmp_path)["DATABASE_URL"] == "postgresql://db.example/cortex"
+    setup_env = _setup_env(tmp_path)
+    assert setup_env["DATABASE_URL"] == "postgresql://db.example/cortex"
+    # The SQLite branch would pass the URL too: only the PostgreSQL branch
+    # leaves the user's auto to Setup (review of #1041).
+    assert setup_env["CORTEX_MEMORY_STORE_BACKEND"] == "auto"
     assert _marker_backend(tmp_path) == "postgresql"
+
+
+def test_a_url_named_only_in_cortex_memory_database_url_reaches_setup(tmp_path):
+    # setup.sh and setup.py read DATABASE_URL only and default it to the
+    # local cortex database. The launch copies the named URL into an empty
+    # DATABASE_URL (settle_backend); the installer did not (review of #1041).
+    result, calls = _run(
+        tmp_path,
+        earlier_state=False,
+        extra_env={
+            "CORTEX_MEMORY_DATABASE_URL": " postgresql://db.example/cortex ",
+            "DATABASE_URL": " ",
+        },
+    )
+
+    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+    assert "Backend: postgresql" in result.stdout + result.stderr
+    assert _setup_env(tmp_path)["DATABASE_URL"] == "postgresql://db.example/cortex"
+    assert not calls.exists()
 
 
 def test_a_crlf_python_still_selects_the_environment_backend(tmp_path):
