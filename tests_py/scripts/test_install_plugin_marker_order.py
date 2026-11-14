@@ -121,6 +121,8 @@ def hermetic_environ() -> dict:
     only when PostgreSQL is absent; ci_unit.sh exports
     CORTEX_MEMORY_STORE_BACKEND=postgresql. Either decides at launch, so it
     would contradict the backend a harness asks the installer for (#1044)."""
+    # source: backend_resolution._LIBPQ_PREFIX (a PG* variable is a libpq
+    # setting, which the launcher's detection reads as a configured server)
     return {
         k: v
         for k, v in os.environ.items()

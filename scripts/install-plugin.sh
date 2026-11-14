@@ -134,27 +134,41 @@ fi
 # source: ADR-1114, decision 7(a); backend_marker.environment_decides
 # source: memory_store.py, _construct_store (an unknown backend falls through)
 # source: scripts/lib/setup_py_step.sh (the same tr -d '\r')
-# The line also names the variable that decides, in the launch's order, so
-# a refused request says what to unset. Only CORTEX_MEMORY_STORE_BACKEND or
-# CORTEX_BACKEND can contradict a request: a URL alone selects postgresql,
-# and a sqlite request is CORTEX_BACKEND, which a URL comes after.
+# After the backend, the line names every variable that stands against the
+# request ($REQUESTED, argv[1]), in the launch's order: the one that decides,
+# then the one that decides once it is unset, until the launch opens the
+# request or nothing decides. Naming only the first refused the user a second
+# time when two disagree with it (review of #1045). Only
+# CORTEX_MEMORY_STORE_BACKEND or CORTEX_BACKEND can contradict a request: a
+# URL alone selects postgresql, and a sqlite request is CORTEX_BACKEND, which
+# a URL comes after.
 # source: backend_marker.resolve_backend_env (precedence of the four variables)
 ENV_DECISION=$(PYTHONPATH="$PLUGIN_ROOT" "$PY" -c "
-import os
+import os, sys
 from mcp_server.infrastructure.backend_marker import VALID_BACKENDS, environment_decides, resolve_backend_env
+ORDER = ('CORTEX_MEMORY_STORE_BACKEND', 'CORTEX_BACKEND', 'DATABASE_URL', 'CORTEX_MEMORY_DATABASE_URL')
+def decision(env):
+    chosen = env.get('CORTEX_MEMORY_STORE_BACKEND', '')
+    url = env.get('DATABASE_URL', '').strip() or env.get('CORTEX_MEMORY_DATABASE_URL', '').strip()
+    named = resolve_backend_env(env, None).get('CORTEX_MEMORY_STORE_BACKEND')
+    deciding = [k for k in ORDER if (named if k == 'CORTEX_BACKEND' else env.get(k, '').strip())]
+    if chosen.strip() and chosen not in VALID_BACKENDS:
+        return ('postgresql' if url else 'sqlite'), deciding[0]
+    if environment_decides(env):
+        return (chosen.strip() and chosen or named or 'postgresql'), deciding[0]
+    return None
 env = dict(os.environ)
-chosen = env.get('CORTEX_MEMORY_STORE_BACKEND', '')
-url = env.get('DATABASE_URL', '').strip() or env.get('CORTEX_MEMORY_DATABASE_URL', '').strip()
-named = resolve_backend_env(env, None).get('CORTEX_MEMORY_STORE_BACKEND')
-deciding = [k for k in ('CORTEX_MEMORY_STORE_BACKEND', 'CORTEX_BACKEND', 'DATABASE_URL', 'CORTEX_MEMORY_DATABASE_URL')
-            if (named if k == 'CORTEX_BACKEND' else env.get(k, '').strip())]
-if chosen.strip() and chosen not in VALID_BACKENDS:
-    print('postgresql' if url else 'sqlite', deciding[0])
-elif environment_decides(env):
-    print(chosen.strip() and chosen or named or 'postgresql', deciding[0])
-" | tr -d '\r') || fail "could not read whether the environment decides the backend (ADR-1114 7(a))"
+first = current = decision(env)
+against = []
+while sys.argv[1] and current and current[0] != sys.argv[1]:
+    against.append(current[1])
+    del env[current[1]]
+    current = decision(env)
+if first:
+    print(first[0], ', '.join(against))
+" "$REQUESTED" | tr -d '\r') || fail "could not read whether the environment decides the backend (ADR-1114 7(a))"
 ENV_BACKEND="${ENV_DECISION%% *}"
-ENV_VARIABLE="${ENV_DECISION#* }"
+ENV_AGAINST="${ENV_DECISION#* }"
 
 # source: ADR-0740
 detect_existing_postgres() {
@@ -206,7 +220,7 @@ saved_managed_marker() {
 # read, so the request is refused here, never silently overridden either way.
 # source: ADR-1114, decision 7(a); issue #704 (precedence, review of #1040)
 if [ -n "$REQUESTED" ] && [ -n "$ENV_BACKEND" ] && [ "$REQUESTED" != "$ENV_BACKEND" ]; then
-    fail "This run asks for $REQUESTED (--postgres or CORTEX_BACKEND), but the environment makes every launch open $ENV_BACKEND (CORTEX_MEMORY_STORE_BACKEND, CORTEX_BACKEND, DATABASE_URL, CORTEX_MEMORY_DATABASE_URL or the plugin's database_url option; ADR-1114 7(a)). The variable that decides is $ENV_VARIABLE: unset it, or ask for $ENV_BACKEND."
+    fail "This run asks for $REQUESTED (--postgres or CORTEX_BACKEND), but the environment makes every launch open $ENV_BACKEND (CORTEX_MEMORY_STORE_BACKEND, CORTEX_BACKEND, DATABASE_URL, CORTEX_MEMORY_DATABASE_URL or the plugin's database_url option; ADR-1114 7(a)). Unset $ENV_AGAINST (in the launch's order, each decides once the one before it is unset), or ask for $ENV_BACKEND."
 fi
 if [ -n "$REQUESTED" ]; then
     BACKEND="$REQUESTED"
