@@ -112,6 +112,15 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Installer (issue #704, review of #1040 and of #1043): `--postgres` and
+  `CORTEX_BACKEND` were read before the environment the launch obeys, so
+  `--postgres` with `CORTEX_MEMORY_STORE_BACKEND=sqlite` (or with
+  `CORTEX_BACKEND=sqlite`), or `CORTEX_BACKEND=sqlite` with
+  `CORTEX_MEMORY_STORE_BACKEND=auto` and a URL, provisioned and saved a backend no
+  launch opens. A request the environment contradicts now stops the installer
+  before Setup and before the marker is written, and names the variables to change.
+  A request the environment agrees with, or with nothing deciding in the
+  environment, is installed as before.
 - Installer on Windows (issue #704, Codex review of #1042): with
   `CORTEX_MEMORY_STORE_BACKEND=SQLITE` and a configured URL the installer chose
   PostgreSQL, as the launch does, but started `scripts/setup.py` with `SQLITE`

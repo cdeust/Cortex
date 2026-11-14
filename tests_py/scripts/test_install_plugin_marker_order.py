@@ -101,6 +101,31 @@ def _seed_marker(home: Path, *, backend: str) -> None:
     )
 
 
+# source: backend_marker.environment_decides / resolve_backend_env — every
+# variable that decides the backend before detection; a harness must not
+# inherit one from the suite.
+DECIDING_VARIABLES = (
+    "DATABASE_URL",
+    "CORTEX_MEMORY_DATABASE_URL",
+    "CORTEX_MEMORY_STORE_BACKEND",
+    "CORTEX_BACKEND",
+    "CLAUDE_PLUGIN_OPTION_DATABASE_URL",
+)
+
+
+def hermetic_environ() -> dict:
+    """os.environ without the suite's own backend choice.
+
+    conftest and ci_unit.sh export CORTEX_MEMORY_STORE_BACKEND and
+    DATABASE_URL; they decide at launch, so they would contradict the backend
+    a harness asks the installer for (#1044)."""
+    return {
+        k: v
+        for k, v in os.environ.items()
+        if k not in DECIDING_VARIABLES and not k.startswith("PG")
+    }
+
+
 def _run_installer(
     tmp_path: Path,
     *,
@@ -126,7 +151,7 @@ def _run_installer(
         _write_uname_stub(bin_dir)
 
     env = {
-        **os.environ,
+        **hermetic_environ(),
         "HOME": str(home),
         "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
         "CLAUDE_PLUGIN_ROOT": str(REPO_ROOT),

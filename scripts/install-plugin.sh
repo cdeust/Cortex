@@ -190,6 +190,13 @@ saved_managed_marker() {
     [ -f "$MARKER_PATH" ] && grep -q '"backend"[[:space:]]*:[[:space:]]*"managed"' "$MARKER_PATH" 2>/dev/null
 }
 
+# An explicit request the environment contradicts would install a backend
+# no launch opens: the environment decides at launch before any marker is
+# read, so the request is refused here, never silently overridden either way.
+# source: ADR-1114, decision 7(a); issue #704 (precedence, review of #1040)
+if [ -n "$REQUESTED" ] && [ -n "$ENV_BACKEND" ] && [ "$REQUESTED" != "$ENV_BACKEND" ]; then
+    fail "This run asks for $REQUESTED (--postgres or CORTEX_BACKEND), but the environment makes every launch open $ENV_BACKEND (CORTEX_MEMORY_STORE_BACKEND, CORTEX_BACKEND, DATABASE_URL, CORTEX_MEMORY_DATABASE_URL or the plugin's database_url option; ADR-1114 7(a)). Unset the variable that names $ENV_BACKEND, or ask for $ENV_BACKEND."
+fi
 if [ -n "$REQUESTED" ]; then
     BACKEND="$REQUESTED"
 elif [ -n "$ENV_BACKEND" ]; then
