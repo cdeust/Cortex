@@ -50,14 +50,8 @@ def _write_answering_psql(bin_dir: Path, calls: Path) -> None:
     stub.chmod(stub.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
 
-def _run(
-    tmp_path: Path,
-    *,
-    earlier_state: bool,
-    extra_env: dict,
-    marker: str = "",
-    setup_exit_code: int = 0,
-) -> tuple:
+def _make_home(tmp_path: Path, *, earlier_state: bool, marker: str) -> Path:
+    """A HOME with optional earlier Cortex state and a saved backend marker."""
     home = tmp_path / "home"
     methodology = home / ".claude" / "methodology"
     methodology.mkdir(parents=True)
@@ -65,6 +59,19 @@ def _run(
         (methodology / "profiles.json").write_text("{}", encoding="utf-8")
     if marker:
         (methodology / "backend.json").write_text(marker, encoding="utf-8")
+    return home
+
+
+def _run(
+    tmp_path: Path,
+    *,
+    earlier_state: bool,
+    extra_env: dict,
+    marker: str = "",
+    setup_exit_code: int = 0,
+    args: tuple = (),
+) -> tuple:
+    home = _make_home(tmp_path, earlier_state=earlier_state, marker=marker)
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     calls = tmp_path / "psql_calls"
@@ -84,7 +91,7 @@ def _run(
         **extra_env,
     )
     result = subprocess.run(
-        [BASH, str(INSTALLER_PATH)],
+        [BASH, str(INSTALLER_PATH), *args],
         env=env,
         capture_output=True,
         text=True,
