@@ -22,17 +22,14 @@ from pathlib import Path
 
 from tests_py.scripts.test_install_plugin_marker_order import (
     BASH,
-    DECIDING_VARIABLES,
     INSTALLER_PATH,
     REPO_ROOT,
     _marker_backend,
     _write_inert_pip_stubs,
     _write_setup_py_stub,
     _write_uname_stub,
+    hermetic_environ,
 )
-
-# The variables that decide the backend before detection; not inherited.
-_DECIDING_VARIABLES = DECIDING_VARIABLES
 
 
 def _write_answering_psql(bin_dir: Path, calls: Path) -> None:
@@ -76,8 +73,7 @@ def _run(
     # instead of scripts/setup.sh, which needs a real PostgreSQL.
     _write_uname_stub(bin_dir)
     _write_answering_psql(bin_dir, calls)
-    env = {k: v for k, v in os.environ.items() if k not in _DECIDING_VARIABLES}
-    env = {k: v for k, v in env.items() if not k.startswith("PG")}
+    env = hermetic_environ()
     env.update(
         HOME=str(home),
         PATH=f"{bin_dir}{os.pathsep}{os.environ['PATH']}",

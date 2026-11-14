@@ -101,9 +101,10 @@ def _seed_marker(home: Path, *, backend: str) -> None:
     )
 
 
-# source: backend_marker.environment_decides / resolve_backend_env — every
-# variable that decides the backend before detection; a harness must not
-# inherit one from the suite.
+# source: backend_marker.environment_decides / resolve_backend_env (the first
+# four), install-plugin.sh and launcher_backend.map_database_option (the
+# option, mapped to DATABASE_URL) — every variable that decides the backend
+# before detection; a harness must not inherit one from the suite.
 DECIDING_VARIABLES = (
     "DATABASE_URL",
     "CORTEX_MEMORY_DATABASE_URL",
@@ -116,9 +117,10 @@ DECIDING_VARIABLES = (
 def hermetic_environ() -> dict:
     """os.environ without the suite's own backend choice.
 
-    conftest and ci_unit.sh export CORTEX_MEMORY_STORE_BACKEND and
-    DATABASE_URL; they decide at launch, so they would contradict the backend
-    a harness asks the installer for (#1044)."""
+    conftest always sets DATABASE_URL, and CORTEX_MEMORY_STORE_BACKEND=sqlite
+    only when PostgreSQL is absent; ci_unit.sh exports
+    CORTEX_MEMORY_STORE_BACKEND=postgresql. Either decides at launch, so it
+    would contradict the backend a harness asks the installer for (#1044)."""
     return {
         k: v
         for k, v in os.environ.items()

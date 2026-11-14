@@ -24,9 +24,9 @@ from tests_py.scripts.test_install_plugin_marker_order import (
     _write_inert_pip_stubs,
     _write_setup_py_stub,
     _write_uname_stub,
+    hermetic_environ,
 )
 from tests_py.scripts.test_install_plugin_no_implicit_postgres import (
-    _DECIDING_VARIABLES,
     _MANAGED_MARKER,
     _run,
     _saved_marker,
@@ -200,7 +200,7 @@ def test_a_crlf_python_still_selects_the_environment_backend(tmp_path):
     crlf.chmod(0o755)
     _write_inert_pip_stubs(bin_dir)
     _write_uname_stub(bin_dir)
-    env = {k: v for k, v in os.environ.items() if k not in _DECIDING_VARIABLES}
+    env = hermetic_environ()
     env.update(
         HOME=str(home),
         PATH=f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
