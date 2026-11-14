@@ -22,6 +22,7 @@ from pathlib import Path
 
 from tests_py.scripts.test_install_plugin_marker_order import (
     BASH,
+    DECIDING_VARIABLES,
     INSTALLER_PATH,
     REPO_ROOT,
     _marker_backend,
@@ -30,15 +31,8 @@ from tests_py.scripts.test_install_plugin_marker_order import (
     _write_uname_stub,
 )
 
-# source: backend_marker / memory_config — every variable that decides the
-# backend before detection runs; the test must not inherit one.
-_DECIDING_VARIABLES = (
-    "DATABASE_URL",
-    "CORTEX_MEMORY_DATABASE_URL",
-    "CORTEX_MEMORY_STORE_BACKEND",
-    "CORTEX_BACKEND",
-    "CLAUDE_PLUGIN_OPTION_DATABASE_URL",
-)
+# The variables that decide the backend before detection; not inherited.
+_DECIDING_VARIABLES = DECIDING_VARIABLES
 
 
 def _write_answering_psql(bin_dir: Path, calls: Path) -> None:
