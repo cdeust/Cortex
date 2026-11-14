@@ -265,7 +265,7 @@ step "Verification"
 
 # The URL is read from the environment, never expanded into this argument:
 # argv is readable by every local user, and the URL may carry a password.
-# source: scripts/launcher_pg_provision.py:10 (the password never reaches argv)
+# source: ADR-1114 decision 4 ("the password never reaches argv")
 PYTHONPATH="${PROJECT_DIR}:${DEPS_DIR}" python3 -c "
 import os
 import sys

@@ -40,8 +40,11 @@ su postgres -c "psql -d cortex -c \
 
 # Initialize schema. The URL is read from the environment, never expanded
 # into this argument: argv is readable by every local user, and the URL may
-# carry a password.
-# source: scripts/launcher_pg_provision.py:10 (the password never reaches argv)
+# carry a password. The guard fails the start when the URL is missing, which
+# the "skipped" branch below would otherwise hide (`:` is a builtin: no
+# process, no argv).
+# source: ADR-1114 decision 4 ("the password never reaches argv")
+: "${DATABASE_URL:?DATABASE_URL is not set (docker/Dockerfile sets it)}"
 PYTHONPATH=/opt/cortex python3 -c "
 import os
 from mcp_server.infrastructure.pg_schema import get_all_ddl
@@ -90,16 +93,18 @@ if [[ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" && ! -f "$CLAUDE_HOME/.credentials.json"
     if echo "$CLAUDE_CODE_OAUTH_TOKEN" | python3 -c "import sys,json; json.load(sys.stdin)" 2>/dev/null; then
         echo "$CLAUDE_CODE_OAUTH_TOKEN" > "$CLAUDE_HOME/.credentials.json"
     else
+        # The token is read from the environment, never passed in argv
+        # (readable by every local user). source: ADR-1114 decision 4
         python3 -c "
-import json, sys, time
-token = sys.argv[1]
+import json, os, time
+token = os.environ['CLAUDE_CODE_OAUTH_TOKEN']
 creds = {'claudeAiOauth': {
     'accessToken': token, 'refreshToken': '',
     'expiresAt': int(time.time() * 1000) + 28800000
 }}
 with open('$CLAUDE_HOME/.credentials.json', 'w') as f:
     json.dump(creds, f)
-" "$CLAUDE_CODE_OAUTH_TOKEN"
+"
     fi
     chmod 600 "$CLAUDE_HOME/.credentials.json"
 fi
