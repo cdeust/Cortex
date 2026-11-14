@@ -20,6 +20,8 @@ import stat
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from tests_py.scripts.test_install_plugin_marker_order import (
     BASH,
     INSTALLER_PATH,
@@ -37,6 +39,7 @@ _DECIDING_VARIABLES = (
     "CORTEX_MEMORY_DATABASE_URL",
     "CORTEX_MEMORY_STORE_BACKEND",
     "CORTEX_BACKEND",
+    "CLAUDE_PLUGIN_OPTION_DATABASE_URL",
 )
 
 
@@ -67,7 +70,8 @@ def _run(
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     calls = tmp_path / "psql_calls"
-    _write_setup_py_stub(bin_dir, exit_code=setup_exit_code)
+    env_log = tmp_path / "setup_env"
+    _write_setup_py_stub(bin_dir, exit_code=setup_exit_code, env_log=env_log)
     _write_inert_pip_stubs(bin_dir)
     # Windows dispatch: the PostgreSQL branch then runs the stubbed setup.py
     # instead of scripts/setup.sh, which needs a real PostgreSQL.
@@ -181,17 +185,70 @@ def test_a_configured_url_wins_and_leaves_the_managed_marker_intact(tmp_path):
     assert _saved_marker(tmp_path) == _MANAGED_MARKER
 
 
-def test_an_explicit_backend_setting_leaves_the_managed_marker_intact(tmp_path):
-    # The other override of decision 7(a): an explicit CORTEX_* backend.
+def _setup_env(tmp_path: Path) -> dict:
+    """The environment the stubbed scripts/setup.py was started with."""
+    lines = (tmp_path / "setup_env").read_text(encoding="utf-8").splitlines()
+    return dict(line.split("=", 1) for line in lines if "=" in line)
+
+
+@pytest.mark.parametrize("backend", ["postgresql", "sqlite"])
+def test_an_explicit_store_backend_decides_and_leaves_the_managed_marker(
+    tmp_path, backend
+):
+    # The other override of decision 7(a): an explicit CORTEX_* backend. Before
+    # the fix `postgresql` took the managed path (Setup asked to provision the
+    # managed server the launch ignores) and `sqlite` rewrote the marker,
+    # losing its root (review of #1039).
     result, _ = _run(
         tmp_path,
         earlier_state=True,
-        extra_env={"CORTEX_MEMORY_STORE_BACKEND": "postgresql", "PGHOST": "x"},
+        extra_env={"CORTEX_MEMORY_STORE_BACKEND": backend, "PGHOST": "x"},
         marker=_MANAGED_MARKER,
     )
 
     assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+    assert f"Backend: {backend}" in result.stdout + result.stderr
+    assert "CORTEX_SETUP_MANAGED_PG" not in _setup_env(tmp_path)
     assert _saved_marker(tmp_path) == _MANAGED_MARKER
+
+
+def test_the_host_option_url_decides_and_reaches_setup_trimmed(tmp_path):
+    # Hooks and Setup receive `database_url` as CLAUDE_PLUGIN_OPTION_DATABASE_URL,
+    # mapped onto an empty DATABASE_URL first (launcher_backend). Before the
+    # fix the installer ignored it and kept the managed path.
+    result, _ = _run(
+        tmp_path,
+        earlier_state=True,
+        extra_env={
+            "CLAUDE_PLUGIN_OPTION_DATABASE_URL": " postgresql://db.example/cortex ",
+            "DATABASE_URL": "  ",
+        },
+        marker=_MANAGED_MARKER,
+    )
+
+    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+    assert "Backend: postgresql" in result.stdout + result.stderr
+    assert _setup_env(tmp_path)["DATABASE_URL"] == "postgresql://db.example/cortex"
+    assert _saved_marker(tmp_path) == _MANAGED_MARKER
+
+
+def test_a_blank_url_decides_nothing_and_setup_provisions_the_managed_server(
+    tmp_path,
+):
+    # environment_decides strips the URL: spaces configure nothing, so the
+    # managed marker selects. Before the fix `-n` took them for a URL.
+    result, calls = _run(
+        tmp_path,
+        earlier_state=True,
+        extra_env={"DATABASE_URL": "   "},
+        marker=_MANAGED_MARKER,
+    )
+
+    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+    assert "Existing managed PostgreSQL kept" in result.stdout + result.stderr
+    assert _setup_env(tmp_path)["CORTEX_SETUP_MANAGED_PG"] == "1"
+    assert _saved_marker(tmp_path) == _MANAGED_MARKER
+    assert not calls.exists()
 
 
 def test_a_failed_switch_away_from_managed_restores_the_marker_with_its_root(

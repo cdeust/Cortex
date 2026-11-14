@@ -112,6 +112,15 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Installer (issue #704): `scripts/install-plugin.sh` asks the launch's own
+  `environment_decides` whether the environment decides the backend, after mapping
+  `CLAUDE_PLUGIN_OPTION_DATABASE_URL` onto an empty `DATABASE_URL` as the launcher does
+  (ADR-1114 decision 7(a)). Its own `-n` tests disagreed with the launch three times: the
+  host option was ignored and the managed path kept, a `DATABASE_URL` of spaces was taken
+  for a URL, and `CORTEX_MEMORY_STORE_BACKEND=postgresql` asked Setup to provision the
+  managed server while `=sqlite` rewrote the `managed` marker without its `root`. The
+  earlier entry below promised the last case; it is true from this change. A failed
+  marker restore is now reported instead of printed as "restored" (review of #1039).
 - Installer (issue #704): `scripts/install-plugin.sh` no longer rewrites a `managed`
   marker to `{"backend": "postgresql"}` when a configured URL or an explicit
   `CORTEX_MEMORY_STORE_BACKEND` decides the run. ADR-1114 decision 7(a) only ignores the
