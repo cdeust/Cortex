@@ -110,6 +110,14 @@ adheres to [Semantic Versioning](https://semver.org/).
   the tracker issue, and says where its issue numbers come from. These are the three
   notes of the review of pull request 1018.
 
+- Claude review (ADR-1138, issue #1021): the review job prints which tool calls the review
+  was refused, one line per tool with its count, without publishing the transcript. In 3
+  reviews of 11 the command `/review-pr` did not load and the verdict came from one or
+  two reviewers; the logs showed only a higher count of refused calls. The names are
+  filtered to letters, digits, `_` and `-`, no tool input is printed, nothing from the
+  pull request's checkout is run, and the step cannot fail the job. It names the cause;
+  it does not remove it.
+
 ### Fixed
 
 - Installer on Windows (issue #704, Codex review of #1042): with
