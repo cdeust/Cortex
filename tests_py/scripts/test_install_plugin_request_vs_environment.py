@@ -6,8 +6,9 @@ ADR-1114 decision 7(a): a configured URL or a non-blank
 provisioned and saved a backend no launch opens (note 2 of the review of #1040,
 first note of the review of #1043). ``CORTEX_BACKEND`` is both: a request to
 the installer and, at launch, part of the environment (resolve_backend_env).
-The installer now refuses that run and names the variable that decides (note
-1 of the review of #1044); a request the environment agrees with is kept.
+The installer now refuses that run and names every variable that stands
+against the request, in the launch's order (note 1 of the review of #1044,
+note 1 of the review of #1045); a request the environment agrees with is kept.
 Driven with the harness of ``test_install_plugin_no_implicit_postgres``.
 """
 
@@ -33,6 +34,18 @@ def _auto_with(url_variable: str) -> dict:
         ({}, ("--postgres",), {_STORE: "sqlite"}, "sqlite", _STORE),
         ({"CORTEX_BACKEND": "postgres"}, (), {_STORE: "sqlite"}, "sqlite", _STORE),
         ({}, ("--postgres",), {"CORTEX_BACKEND": "sqlite"}, "sqlite", "CORTEX_BACKEND"),
+        # Two variables stand against the request: naming only the first
+        # refused the user a second time (note 1 of the review of #1045).
+        (
+            {},
+            ("--postgres",),
+            {_STORE: "sqlite", "CORTEX_BACKEND": "sqlite"},
+            "sqlite",
+            f"{_STORE}, CORTEX_BACKEND",
+        ),
+        # A value the engine does not know, with no URL, opens SQLite (note 3
+        # of the review of #1045).
+        ({}, ("--postgres",), {_STORE: "auto"}, "sqlite", _STORE),
         # A URL reaches the guard by each of its three ways in (note 3 of the
         # review of #1044): the option is mapped to DATABASE_URL before it.
         (
@@ -72,7 +85,7 @@ def test_a_request_the_environment_contradicts_fails_before_any_setup(
 
     assert result.returncode != 0, f"{result.stdout}\n{result.stderr}"
     assert f"every launch open {launch_opens}" in result.stderr
-    assert f"The variable that decides is {deciding}: unset it" in result.stderr
+    assert f"Unset {deciding} (in the launch's order" in result.stderr
     assert not (tmp_path / "setup_env").exists()
     assert not (tmp_path / "home" / ".claude" / "methodology" / "backend.json").exists()
 

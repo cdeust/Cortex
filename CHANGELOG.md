@@ -112,10 +112,18 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Installer (issue #704, review of #1045): a refused request named only the first
+  variable that decides, so `--postgres` with `CORTEX_MEMORY_STORE_BACKEND=sqlite`
+  and `CORTEX_BACKEND=sqlite` was refused a second time once the first was unset.
+  The refusal now names every variable that stands against the request, in the
+  launch's order, and the entry below now reads "the first variable", not "the one
+  variable". The installer tests add that case and `--postgres` with
+  `CORTEX_MEMORY_STORE_BACKEND=auto` and no URL (refused, the launch opens SQLite),
+  and the hermetic environment's `PG*` filter cites its source.
 - Installer (issue #704, reviews of #1044): a refused request named every variable
   that can decide and told the user to unset "the variable that names" the backend,
   which has no target when `CORTEX_MEMORY_STORE_BACKEND=auto` and a URL decide. The
-  refusal now names the one variable that decides, in the launch's order. The
+  refusal now names the first variable that decides, in the launch's order. The
   installer tests now send a URL to the guard by each of its three ways in
   (`DATABASE_URL`, `CORTEX_MEMORY_DATABASE_URL`, the plugin's `database_url` option),
   and the three installer harnesses share one hermetic environment.
