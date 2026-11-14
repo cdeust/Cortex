@@ -112,6 +112,13 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Installer (issue #704): `scripts/install-plugin.sh` no longer rewrites a `managed`
+  marker to `{"backend": "postgresql"}` when a configured URL or an explicit
+  `CORTEX_MEMORY_STORE_BACKEND` decides the run. ADR-1114 decision 7(a) only ignores the
+  marker then, and the rewrite lost the server's `root`, so removing the URL later no
+  longer reached the managed server. A failed backend switch now restores the earlier
+  marker byte for byte instead of rebuilding it from its backend name, which wrote a
+  `managed` marker without `root` that `read_backend_marker` rejects (review of #1029).
 - Docker (issue #704): `docker/entrypoint.sh` no longer gives `CLAUDE_CODE_OAUTH_TOKEN`
   to `python3 -c` as `sys.argv[1]`, where every local user could read it; the step reads
   the token from the environment. A missing `DATABASE_URL` now fails the start at an
