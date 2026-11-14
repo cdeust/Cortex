@@ -24,7 +24,7 @@ _STORE = "CORTEX_MEMORY_STORE_BACKEND"
 
 
 def _auto_with(url_variable: str) -> dict:
-    """A value the engine does not know, which opens the URL it is given."""
+    """``auto`` with a URL: the engine opens that URL (memory_store.py)."""
     return {_STORE: "auto", url_variable: _URL}
 
 
@@ -43,9 +43,20 @@ def _auto_with(url_variable: str) -> dict:
             "sqlite",
             f"{_STORE}, CORTEX_BACKEND",
         ),
-        # A value the engine does not know, with no URL, opens SQLite (note 3
-        # of the review of #1045).
+        # ``auto`` with no URL opens SQLite: the engine names it and lets a URL
+        # decide (memory_store.py; note 3 of the review of #1045, note 1 of
+        # the review of #1046).
         ({}, ("--postgres",), {_STORE: "auto"}, "sqlite", _STORE),
+        # The loop stops on agreement once a variable is removed: without
+        # CORTEX_BACKEND the URL opens the requested PostgreSQL, so the URL is
+        # not named (note 2 of the review of #1046).
+        (
+            {},
+            ("--postgres",),
+            {"CORTEX_BACKEND": "sqlite", "DATABASE_URL": _URL},
+            "sqlite",
+            "CORTEX_BACKEND",
+        ),
         # A URL reaches the guard by each of its three ways in (note 3 of the
         # review of #1044): the option is mapped to DATABASE_URL before it.
         (
