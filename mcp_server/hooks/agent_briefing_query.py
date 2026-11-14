@@ -10,7 +10,10 @@ from mcp_server.hooks.agent_briefing_log import _log
 from mcp_server.shared.project_scope import project_ancestors
 from mcp_server.infrastructure.pg_scope_clause import pg_scope_predicate
 from mcp_server.infrastructure.backend_marker import effective_backend
-from mcp_server.infrastructure.memory_config import get_memory_settings
+from mcp_server.infrastructure.memory_config import (
+    get_memory_settings,
+    named_database_url,
+)
 from mcp_server.hooks.agent_briefing_sqlite import (
     SqliteBriefingConnection,
     _MAX_MEMORIES,
@@ -31,7 +34,9 @@ def _connect():
     would reach whatever local server libpq defaults to (issue #704).
     """
     backend = effective_backend(os.environ)
-    url = os.environ.get("DATABASE_URL") or get_memory_settings().DATABASE_URL
+    url = named_database_url(
+        os.environ.get("DATABASE_URL"), get_memory_settings().DATABASE_URL
+    )
     if backend == "sqlite" or (backend != "postgresql" and not url):
         from mcp_server.infrastructure.memory_store import get_shared_store  # noqa: PLC0415 — hook latency boundary
 

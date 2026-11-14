@@ -8,7 +8,10 @@ import logging
 import os
 import threading
 from typing import TYPE_CHECKING
-from mcp_server.infrastructure.memory_config import get_memory_settings
+from mcp_server.infrastructure.memory_config import (
+    get_memory_settings,
+    named_database_url,
+)
 from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 
 if TYPE_CHECKING:
@@ -101,15 +104,10 @@ def reset_shared_store() -> None:
 def _named_url(database_url: str | None, settings_url: str) -> str:
     """The first URL that names something: argument, ``DATABASE_URL``, settings.
 
-    A value made only of whitespace names nothing, as in the installer and
-    ``backend_marker.environment_decides``; libpq would read a blank DSN as
-    its local defaults, the connection issue #704 removes.
-
     source: issue #704"""
-    for candidate in (database_url, os.environ.get("DATABASE_URL"), settings_url):
-        if candidate and candidate.strip():
-            return candidate
-    return ""
+    return named_database_url(
+        database_url, os.environ.get("DATABASE_URL"), settings_url
+    )
 
 
 def _resolve_backend_url(
@@ -225,14 +223,17 @@ def _construct_store(
 
 
 def _database_url_is_explicit(database_url_param: str | None) -> bool:
-    """True when a URL was supplied by a caller or the environment (issue
-        #704: settings carry no default URL of their own).
+    """True when a caller or the environment names a URL (issue #704:
+    settings carry no default URL of their own, and a blank value names
+    nothing).
 
     source: ADR-0535"""
-    return (
-        database_url_param is not None
-        or "DATABASE_URL" in os.environ
-        or bool(os.environ.get("CORTEX_MEMORY_DATABASE_URL", "").strip())
+    return bool(
+        named_database_url(
+            database_url_param,
+            os.environ.get("DATABASE_URL"),
+            os.environ.get("CORTEX_MEMORY_DATABASE_URL"),
+        )
     )
 
 

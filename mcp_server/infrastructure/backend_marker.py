@@ -175,8 +175,7 @@ def apply_backend_resolution(
     plugin manifest interpolates ``${user_config.database_url}`` whose
     default is now empty, and an empty string must mean "not
     configured" everywhere downstream (psycopg would otherwise read
-    libpq defaults from a blank DSN, and
-    ``memory_store._database_url_is_explicit`` tests key presence).
+    libpq defaults from a blank DSN).
 
     A ``managed`` marker (or an inherited URL of that server, for a child of
     an attached process) attaches this process to the plugin's managed
