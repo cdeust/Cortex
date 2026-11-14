@@ -106,17 +106,33 @@ case "${CORTEX_BACKEND:-}" in
     postgres|postgresql) REQUESTED="postgresql" ;;
     sqlite)              REQUESTED="${REQUESTED:-sqlite}" ;;
 esac
-# source: ADR-0740
-if [ "${CORTEX_MEMORY_STORE_BACKEND:-}" = "sqlite" ] && [ -z "$REQUESTED" ]; then
-    REQUESTED="sqlite"
+# The host option and DATABASE_URL are one setting: the option fills an
+# empty URL, trimmed, before anything reads it, so setup.sh provisions the
+# database the user configured.
+# source: scripts/launcher_backend.py, map_database_option (ADR-1104)
+OPTION_URL="${CLAUDE_PLUGIN_OPTION_DATABASE_URL:-}"
+OPTION_URL="${OPTION_URL#"${OPTION_URL%%[![:space:]]*}"}"
+OPTION_URL="${OPTION_URL%"${OPTION_URL##*[![:space:]]}"}"
+if [ -n "$OPTION_URL" ] && ! [[ "${DATABASE_URL:-}" =~ [^[:space:]] ]]; then
+    export DATABASE_URL="$OPTION_URL"
 fi
+
+# Whether the environment decides, by the launch's own test: a blank URL
+# decides nothing, CORTEX_MEMORY_STORE_BACKEND decides either way. Empty
+# when nothing decides, else the backend it selects. The installer's own
+# `-n` tests disagreed with the launch on all three (issue #704).
+# source: ADR-1114, decision 7(a); backend_marker.environment_decides
+ENV_BACKEND=$(PYTHONPATH="$PLUGIN_ROOT" "$PY" -c "
+import os
+from mcp_server.infrastructure.backend_marker import environment_decides, resolve_backend_env
+env = dict(os.environ)
+if environment_decides(env):
+    chosen = env.get('CORTEX_MEMORY_STORE_BACKEND', '').strip().lower()
+    print(chosen or resolve_backend_env(env, None).get('CORTEX_MEMORY_STORE_BACKEND', 'postgresql'))
+") || fail "could not read whether the environment decides the backend (ADR-1114 7(a))"
 
 # source: ADR-0740
 detect_existing_postgres() {
-    if [ -n "${DATABASE_URL:-}" ] || [ -n "${CORTEX_MEMORY_DATABASE_URL:-}" ]; then
-        say "Existing PostgreSQL config detected (DATABASE_URL/CORTEX_MEMORY_DATABASE_URL set)"
-        return 0
-    fi
     if [ -f "$MARKER_PATH" ] && grep -q '"backend"[[:space:]]*:[[:space:]]*"postgresql"' "$MARKER_PATH" 2>/dev/null; then
         say "Existing PostgreSQL install detected (marker: $MARKER_PATH)"
         return 0
@@ -154,16 +170,17 @@ print(backend + ' (' + why + ')')
 # A managed marker carries the server's root and Setup's identity; only
 # Setup writes it, after the server started (ADR-1114). decide() assumes
 # no marker, so a reinstall must neither re-decide nor rewrite it (#704).
-# A configured URL still wins over the marker, as at launch
-# (environment_decides): then detect_existing_postgres keeps PostgreSQL.
+# The environment, when it decides, is read before it (ENV_BACKEND).
 # source: ADR-1114, decisions 5 and 7(a), 7(b)
 saved_managed_marker() {
-    [ -z "${DATABASE_URL:-}" ] && [ -z "${CORTEX_MEMORY_DATABASE_URL:-}" ] \
-        && [ -f "$MARKER_PATH" ] && grep -q '"backend"[[:space:]]*:[[:space:]]*"managed"' "$MARKER_PATH" 2>/dev/null
+    [ -f "$MARKER_PATH" ] && grep -q '"backend"[[:space:]]*:[[:space:]]*"managed"' "$MARKER_PATH" 2>/dev/null
 }
 
 if [ -n "$REQUESTED" ]; then
     BACKEND="$REQUESTED"
+elif [ -n "$ENV_BACKEND" ]; then
+    say "Backend decided by the environment (ADR-1114 7(a)): $ENV_BACKEND"
+    BACKEND="$ENV_BACKEND"
 elif saved_managed_marker; then
     say "Existing managed PostgreSQL kept (marker: $MARKER_PATH)"
     BACKEND="managed"
@@ -226,12 +243,17 @@ print(path)
 # source: issue #638
 restore_previous_marker() {
     if [ -n "$PREVIOUS_BACKEND" ] && [ "$PREVIOUS_BACKEND" != "$BACKEND" ] && [ -z "$KEEP_MARKER" ]; then
-        CORTEX_BACKEND_MARKER_TEXT="$PREVIOUS_MARKER_TEXT" "$PY" -c "
+        # A failed write is said, with Python's own error: a "restored" line
+        # over a marker that was not restored is a silent fallback.
+        if CORTEX_BACKEND_MARKER_TEXT="$PREVIOUS_MARKER_TEXT" "$PY" -c "
 import os, pathlib
 path = pathlib.Path.home() / '.claude' / 'methodology' / 'backend.json'
 path.write_text(os.environ['CORTEX_BACKEND_MARKER_TEXT'], encoding='utf-8', newline='')
-" 2>/dev/null || true
-        warn "Backend switch to $BACKEND failed — restored working marker to $PREVIOUS_BACKEND"
+"; then
+            warn "Backend switch to $BACKEND failed — restored working marker to $PREVIOUS_BACKEND"
+        else
+            warn "Backend switch to $BACKEND failed and the earlier marker ($PREVIOUS_BACKEND) could not be restored to $MARKER_PATH"
+        fi
     fi
 }
 

@@ -34,17 +34,21 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 INSTALLER_PATH = REPO_ROOT / "scripts" / "install-plugin.sh"
 
 
-def _write_setup_py_stub(bin_dir: Path, *, exit_code: int) -> None:
+def _write_setup_py_stub(
+    bin_dir: Path, *, exit_code: int, env_log: Path | None = None
+) -> None:
     """A `python3` on PATH: real Python for everything except
     scripts/setup.py, which exits with `exit_code` immediately -- standing
     in for issue #633's Defect 1 crash (or a clean run) without needing a
-    real torch/torchaudio conflict to reproduce either."""
+    real torch/torchaudio conflict to reproduce either. With `env_log`, the
+    environment setup.py was given is written there first."""
+    record = f'env > "{env_log}"; ' if env_log is not None else ""
     stub = bin_dir / "python3"
     stub.write_text(
         "#!/usr/bin/env bash\n"
         'for arg in "$@"; do\n'
         '    case "$arg" in\n'
-        f"        */scripts/setup.py) exit {exit_code} ;;\n"
+        f"        */scripts/setup.py) {record}exit {exit_code} ;;\n"
         "    esac\n"
         "done\n"
         f'exec "{sys.executable}" "$@"\n',
