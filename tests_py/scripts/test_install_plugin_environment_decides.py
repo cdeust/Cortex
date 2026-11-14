@@ -117,9 +117,30 @@ def test_auto_with_a_configured_url_installs_postgresql(tmp_path):
     assert "Backend: postgresql" in result.stdout + result.stderr
     setup_env = _setup_env(tmp_path)
     assert setup_env["DATABASE_URL"] == "postgresql://db.example/cortex"
-    # The SQLite branch would pass the URL too: only the PostgreSQL branch
-    # leaves the user's auto to Setup (review of #1041).
-    assert setup_env["CORTEX_MEMORY_STORE_BACKEND"] == "auto"
+    # The SQLite branch would pass the URL too, but names sqlite to Setup
+    # (review of #1041).
+    assert setup_env["CORTEX_MEMORY_STORE_BACKEND"] == "postgresql"
+    assert _marker_backend(tmp_path) == "postgresql"
+
+
+def test_a_value_setup_would_lowercase_to_sqlite_still_provisions_postgresql(
+    tmp_path,
+):
+    # The launch compares CORTEX_MEMORY_STORE_BACKEND exactly, so SQLITE plus
+    # a URL opens PostgreSQL; setup.py lowercases it and skipped PostgreSQL
+    # when the Windows branch passed it on unchanged (Codex review of #1042).
+    result, _ = _run(
+        tmp_path,
+        earlier_state=False,
+        extra_env={
+            "CORTEX_MEMORY_STORE_BACKEND": "SQLITE",
+            "DATABASE_URL": "postgresql://db.example/cortex",
+        },
+    )
+
+    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+    assert "Backend: postgresql" in result.stdout + result.stderr
+    assert _setup_env(tmp_path)["CORTEX_MEMORY_STORE_BACKEND"] == "postgresql"
     assert _marker_backend(tmp_path) == "postgresql"
 
 

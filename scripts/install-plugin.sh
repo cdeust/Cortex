@@ -300,8 +300,13 @@ else
     case "$(uname -s)" in
         MINGW*|MSYS*|CYGWIN*)
             say "Detected Windows ($(uname -s)) — delegating to cross-platform scripts/setup.py"
-            run_setup_py "$PY" "$PLUGIN_ROOT/scripts/setup.py" \
-                || { restore_previous_marker; fail "scripts/setup.py failed. ${SETUP_PY_FAILURE} Re-run manually: \"$PY\" \"$PLUGIN_ROOT/scripts/setup.py\". If a PostgreSQL check is among them, install PostgreSQL (https://www.postgresql.org/download/windows/) plus pgvector (https://github.com/pgvector/pgvector#windows) and start the PostgreSQL service first."; }
+            # setup.py lowercases CORTEX_MEMORY_STORE_BACKEND, so a SQLITE the
+            # launch refuses (it compares exactly) would skip PostgreSQL here:
+            # Setup gets the backend decided above, as the sqlite branch does.
+            # source: issue #704, Codex review of #1042
+            run_setup_py env CORTEX_MEMORY_STORE_BACKEND="$BACKEND" \
+                "$PY" "$PLUGIN_ROOT/scripts/setup.py" \
+                || { restore_previous_marker; fail "scripts/setup.py failed. ${SETUP_PY_FAILURE} Re-run manually: CORTEX_MEMORY_STORE_BACKEND=$BACKEND \"$PY\" \"$PLUGIN_ROOT/scripts/setup.py\". If a PostgreSQL check is among them, install PostgreSQL (https://www.postgresql.org/download/windows/) plus pgvector (https://github.com/pgvector/pgvector#windows) and start the PostgreSQL service first."; }
             ;;
         Darwin|Linux)
             bash "$PLUGIN_ROOT/scripts/setup.sh" \
