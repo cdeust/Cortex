@@ -112,6 +112,14 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Installer (issue #704, follow-up of #1040): an explicit `CORTEX_MEMORY_STORE_BACKEND`
+  decides only when it names a backend a marker can hold (`sqlite`, `postgresql`). `auto`,
+  the engine's own default, and spellings such as `Postgres` are no longer written into a
+  marker that `read_backend_marker` rejects at the next launch: the environment decides
+  without them, so a configured URL still installs PostgreSQL (the engine's CLI `auto`
+  with a URL is PostgreSQL), and with nothing else the marker and the detection decide. The query drops the carriage return a
+  native Windows Python ends its line with, which turned `sqlite` into `sqlite\r`
+  (Codex review of #1040).
 - Installer (issue #704): `scripts/install-plugin.sh` asks the launch's own
   `environment_decides` whether the environment decides the backend, after mapping
   `CLAUDE_PLUGIN_OPTION_DATABASE_URL` onto an empty `DATABASE_URL` as the launcher does
