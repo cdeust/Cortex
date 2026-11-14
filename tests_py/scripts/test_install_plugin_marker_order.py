@@ -25,6 +25,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from mcp_server.infrastructure.backend_resolution import _LIBPQ_PREFIX
 from mcp_server.shared.platform import resolve_bash
 
 # A bare "bash" on Windows is the System32 WSL stub. source: ADR-1101
@@ -121,12 +122,12 @@ def hermetic_environ() -> dict:
     only when PostgreSQL is absent; ci_unit.sh exports
     CORTEX_MEMORY_STORE_BACKEND=postgresql. Either decides at launch, so it
     would contradict the backend a harness asks the installer for (#1044)."""
-    # source: backend_resolution._LIBPQ_PREFIX (a PG* variable is a libpq
-    # setting, which the launcher's detection reads as a configured server)
+    # A PG* variable is a libpq setting, which the launcher's detection reads
+    # as a configured server (note 3 of the review of #1046).
     return {
         k: v
         for k, v in os.environ.items()
-        if k not in DECIDING_VARIABLES and not k.startswith("PG")
+        if k not in DECIDING_VARIABLES and not k.startswith(_LIBPQ_PREFIX)
     }
 
 
