@@ -112,6 +112,13 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Installer on Windows (issue #704, Codex review of #1042): with
+  `CORTEX_MEMORY_STORE_BACKEND=SQLITE` and a configured URL the installer chose
+  PostgreSQL, as the launch does, but started `scripts/setup.py` with `SQLITE`
+  unchanged; `setup.py` lowercases it and skipped PostgreSQL provisioning. The
+  Windows branch now gives Setup the backend the installer decided, as the SQLite
+  branch does. `setup.sh` does not read the variable, so Linux and macOS are unchanged.
+
 - Installer (issue #704, review of #1041): a URL named only in
   `CORTEX_MEMORY_DATABASE_URL` selected PostgreSQL, but Setup provisioned the local
   `cortex` database instead, because `setup.sh` and `setup.py` read `DATABASE_URL` only
