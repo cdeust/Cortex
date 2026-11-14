@@ -77,6 +77,25 @@ def test_a_value_no_marker_holds_is_left_to_the_saved_marker(tmp_path, value):
     assert _marker_backend(tmp_path) == "sqlite"
 
 
+def test_auto_with_a_configured_url_installs_postgresql(tmp_path):
+    # The engine turns CLI auto plus a URL into PostgreSQL (memory_store.py),
+    # and the launch reads no marker. Dropping auto must not drop the URL:
+    # the first version of #1041 installed SQLite here (its review).
+    result, _ = _run(
+        tmp_path,
+        earlier_state=False,
+        extra_env={
+            "CORTEX_MEMORY_STORE_BACKEND": "auto",
+            "DATABASE_URL": "postgresql://db.example/cortex",
+        },
+    )
+
+    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+    assert "Backend: postgresql" in result.stdout + result.stderr
+    assert _setup_env(tmp_path)["DATABASE_URL"] == "postgresql://db.example/cortex"
+    assert _marker_backend(tmp_path) == "postgresql"
+
+
 def test_a_crlf_python_still_selects_the_environment_backend(tmp_path):
     # A native Windows Python ends print() with CRLF; $(...) drops only the
     # LF. Emulated by a python3 whose stdout gains a CR on every line.

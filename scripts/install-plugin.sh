@@ -122,20 +122,24 @@ fi
 # Whether the environment decides, by the launch's own test: a blank URL
 # decides nothing, CORTEX_MEMORY_STORE_BACKEND decides either way. Empty
 # when nothing decides, else the backend it selects. The installer's own
-# `-n` tests disagreed with the launch on all three (issue #704). "auto" is
-# the engine's own choice, not a backend a marker can hold: it is left to
-# the marker and the detection below, as before. A native Windows Python
-# ends the line with CRLF: tr drops the \r ($(...) drops only the \n).
+# `-n` tests disagreed with the launch on all three (issue #704). A value
+# that is not a backend ("auto", the engine's own choice, or "Postgres")
+# is not written into a marker: the environment decides without it, so a
+# configured URL still selects PostgreSQL, as the engine's auto does
+# (memory_store.py), and with nothing else the marker and the detection
+# below decide. A native Windows Python ends the line with CRLF: tr drops
+# the \r ($(...) drops only the \n).
 # source: ADR-1114, decision 7(a); backend_marker.environment_decides
 # source: scripts/lib/setup_py_step.sh (the same tr -d '\r')
 ENV_BACKEND=$(PYTHONPATH="$PLUGIN_ROOT" "$PY" -c "
 import os
 from mcp_server.infrastructure.backend_marker import VALID_BACKENDS, environment_decides, resolve_backend_env
 env = dict(os.environ)
+if env.get('CORTEX_MEMORY_STORE_BACKEND', '').strip().lower() not in VALID_BACKENDS:
+    env.pop('CORTEX_MEMORY_STORE_BACKEND', None)
 if environment_decides(env):
     chosen = env.get('CORTEX_MEMORY_STORE_BACKEND', '').strip().lower()
-    chosen = chosen or resolve_backend_env(env, None).get('CORTEX_MEMORY_STORE_BACKEND', 'postgresql')
-    print(chosen if chosen in VALID_BACKENDS else '')
+    print(chosen or resolve_backend_env(env, None).get('CORTEX_MEMORY_STORE_BACKEND', 'postgresql'))
 " | tr -d '\r') || fail "could not read whether the environment decides the backend (ADR-1114 7(a))"
 
 # source: ADR-0740
