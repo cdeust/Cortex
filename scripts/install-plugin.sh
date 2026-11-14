@@ -22,8 +22,9 @@ set -euo pipefail
 #      never silently downgrades a Postgres install to SQLite. A fresh
 #      HOME is SQLite even when a local cortex database answers (#704).
 #      A managed marker (the plugin's own server, written by Setup after
-#      it started, ADR-1114) is kept as written: the installer installs
-#      the dependencies without a system PostgreSQL and rewrites nothing.
+#      it started, ADR-1114) is kept as written. Unless the environment
+#      decides (ADR-1114 7(a)), the installer then installs the
+#      dependencies without a system PostgreSQL.
 #   2. Remove stale other Cortex installations.
 # source: ADR-0740
 #
@@ -107,8 +108,9 @@ case "${CORTEX_BACKEND:-}" in
     sqlite)              REQUESTED="${REQUESTED:-sqlite}" ;;
 esac
 # The host option and DATABASE_URL are one setting: the option fills an
-# empty URL, trimmed, before anything reads it, so setup.sh provisions the
-# database the user configured.
+# empty URL, trimmed, before anything reads it, so setup.sh (which reads
+# DATABASE_URL, not CORTEX_MEMORY_DATABASE_URL) provisions the database
+# the option names.
 # source: scripts/launcher_backend.py, map_database_option (ADR-1104)
 OPTION_URL="${CLAUDE_PLUGIN_OPTION_DATABASE_URL:-}"
 OPTION_URL="${OPTION_URL#"${OPTION_URL%%[![:space:]]*}"}"
@@ -120,16 +122,21 @@ fi
 # Whether the environment decides, by the launch's own test: a blank URL
 # decides nothing, CORTEX_MEMORY_STORE_BACKEND decides either way. Empty
 # when nothing decides, else the backend it selects. The installer's own
-# `-n` tests disagreed with the launch on all three (issue #704).
+# `-n` tests disagreed with the launch on all three (issue #704). "auto" is
+# the engine's own choice, not a backend a marker can hold: it is left to
+# the marker and the detection below, as before. A native Windows Python
+# ends the line with CRLF: tr drops the \r ($(...) drops only the \n).
 # source: ADR-1114, decision 7(a); backend_marker.environment_decides
+# source: scripts/lib/setup_py_step.sh (the same tr -d '\r')
 ENV_BACKEND=$(PYTHONPATH="$PLUGIN_ROOT" "$PY" -c "
 import os
-from mcp_server.infrastructure.backend_marker import environment_decides, resolve_backend_env
+from mcp_server.infrastructure.backend_marker import VALID_BACKENDS, environment_decides, resolve_backend_env
 env = dict(os.environ)
 if environment_decides(env):
     chosen = env.get('CORTEX_MEMORY_STORE_BACKEND', '').strip().lower()
-    print(chosen or resolve_backend_env(env, None).get('CORTEX_MEMORY_STORE_BACKEND', 'postgresql'))
-") || fail "could not read whether the environment decides the backend (ADR-1114 7(a))"
+    chosen = chosen or resolve_backend_env(env, None).get('CORTEX_MEMORY_STORE_BACKEND', 'postgresql')
+    print(chosen if chosen in VALID_BACKENDS else '')
+" | tr -d '\r') || fail "could not read whether the environment decides the backend (ADR-1114 7(a))"
 
 # source: ADR-0740
 detect_existing_postgres() {
