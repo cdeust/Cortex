@@ -125,14 +125,17 @@ fi
 # when nothing decides, else the backend it selects. The installer's own
 # `-n` tests disagreed with the launch on all three (issue #704). Any
 # non-blank CORTEX_MEMORY_STORE_BACKEND decides at launch, so no marker is
-# read; the engine compares it exactly (memory_store.py), and a value that
-# is not a backend there ("auto", "Postgres", "SQLITE") opens PostgreSQL
-# with a configured URL and SQLite without one. That backend is chosen
+# read; the engine compares it exactly (memory_store.py). In the CLI
+# runtime it names "auto" and lets a URL decide; anywhere else "auto", like a
+# value that is not a backend ("Postgres", "SQLITE"), falls through. Every
+# runtime then opens PostgreSQL with a configured URL and SQLite without one
+# (review of #1047). That backend is chosen
 # here, never the raw value, which read_backend_marker would reject; a
 # blank value is absent, as environment_decides strips it (reviews of #1042). A native Windows Python ends the line with CRLF: tr drops the
 # \r ($(...) drops only the \n).
 # source: ADR-1114, decision 7(a); backend_marker.environment_decides
-# source: memory_store.py, _construct_store (an unknown backend falls through)
+# source: memory_store.py, _construct_store (CLI "auto" is named; an
+# unknown backend, and "auto" outside the CLI runtime, falls through)
 # source: scripts/lib/setup_py_step.sh (the same tr -d '\r')
 # After the backend, the line names every variable that stands against the
 # request ($REQUESTED, argv[1]), in the launch's order: the one that decides,
