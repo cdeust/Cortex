@@ -6,10 +6,12 @@ the setup.py step, guarded by `|| fail ...`. Any setup.py failure (a
 Windows torch/torchaudio conflict, a network blip during dependency
 install, anything) discarded a correctly-made backend decision. On the
 next launch, the missing marker left CORTEX_MEMORY_STORE_BACKEND unset,
-and this plugin's "auto" default requires PostgreSQL in CLI-mode runtimes
-(mcp_server/infrastructure/memory_store.py) — turning a chosen SQLite
-install into a hard PostgreSQL requirement with no PostgreSQL ever
-provisioned to satisfy it.
+and this plugin's "auto" default then required PostgreSQL in CLI-mode
+runtimes — turning a chosen SQLite install into a hard PostgreSQL
+requirement with no PostgreSQL ever provisioned to satisfy it. Since issue
+#704, "auto" with no URL opens SQLite (mcp_server/infrastructure/
+memory_store.py, _construct_store); the marker still decides which backend
+a launch opens, so it must survive a setup.py failure.
 
 This test drives the real installer against a `python3` stub that fails
 only the scripts/setup.py invocation, so the regression reproduces without
