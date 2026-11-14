@@ -60,11 +60,13 @@ def test_an_explicit_store_backend_decides_and_leaves_the_managed_marker(
     assert _saved_marker(tmp_path) == _MANAGED_MARKER
 
 
-@pytest.mark.parametrize("value", ["auto", "Postgres"])
+@pytest.mark.parametrize("value", ["auto", "Postgres", "PostgreSQL", "SQLITE"])
 def test_a_value_no_marker_holds_is_left_to_the_saved_marker(tmp_path, value):
     # "auto" is the engine's own choice, not a marker value: persisting it
     # would make read_backend_marker refuse every later launch (Codex review
     # of #1040). The saved choice stands, as before the environment check.
+    # The engine compares the value exactly (memory_store.py): "PostgreSQL"
+    # and "SQLITE" are not backends there, so not here (review of #1041).
     result, _ = _run(
         tmp_path,
         earlier_state=True,
@@ -77,6 +79,27 @@ def test_a_value_no_marker_holds_is_left_to_the_saved_marker(tmp_path, value):
     assert _marker_backend(tmp_path) == "sqlite"
 
 
+@pytest.mark.parametrize("value", ["auto", "PostgreSQL", "SQLITE"])
+@pytest.mark.parametrize("marker", ['{"backend": "postgresql"}', _MANAGED_MARKER])
+def test_a_value_that_is_not_a_backend_with_no_url_installs_sqlite(
+    tmp_path, value, marker
+):
+    # Any non-blank value decides at launch (environment_decides), so the
+    # marker is not read, and the engine opens SQLite with no URL. Dropping
+    # the value let the marker select PostgreSQL here (review of #1042).
+    result, calls = _run(
+        tmp_path,
+        earlier_state=True,
+        extra_env={"CORTEX_MEMORY_STORE_BACKEND": value},
+        marker=marker,
+    )
+
+    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+    assert "Backend: sqlite" in result.stdout + result.stderr
+    assert _setup_env(tmp_path)["CORTEX_MEMORY_STORE_BACKEND"] == "sqlite"
+    assert not calls.exists()
+
+
 def test_auto_with_a_configured_url_installs_postgresql(tmp_path):
     # The engine turns CLI auto plus a URL into PostgreSQL (memory_store.py),
     # and the launch reads no marker. Dropping auto must not drop the URL:
@@ -87,6 +110,48 @@ def test_auto_with_a_configured_url_installs_postgresql(tmp_path):
         extra_env={
             "CORTEX_MEMORY_STORE_BACKEND": "auto",
             "DATABASE_URL": "postgresql://db.example/cortex",
+        },
+    )
+
+    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+    assert "Backend: postgresql" in result.stdout + result.stderr
+    setup_env = _setup_env(tmp_path)
+    assert setup_env["DATABASE_URL"] == "postgresql://db.example/cortex"
+    # The SQLite branch would pass the URL too: only the PostgreSQL branch
+    # leaves the user's auto to Setup (review of #1041).
+    assert setup_env["CORTEX_MEMORY_STORE_BACKEND"] == "auto"
+    assert _marker_backend(tmp_path) == "postgresql"
+
+
+def test_a_url_named_only_in_cortex_memory_database_url_reaches_setup(tmp_path):
+    # setup.sh and setup.py read DATABASE_URL only and default it to the
+    # local cortex database. The launch copies the named URL into an empty
+    # DATABASE_URL (settle_backend); the installer did not (review of #1041).
+    result, calls = _run(
+        tmp_path,
+        earlier_state=False,
+        extra_env={
+            "CORTEX_MEMORY_DATABASE_URL": " postgresql://db.example/cortex ",
+            "DATABASE_URL": " ",
+        },
+    )
+
+    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+    assert "Backend: postgresql" in result.stdout + result.stderr
+    assert _setup_env(tmp_path)["DATABASE_URL"] == "postgresql://db.example/cortex"
+    assert not calls.exists()
+
+
+def test_a_blank_store_backend_is_absent_and_the_named_url_decides(tmp_path):
+    # environment_decides strips the value: spaces decide nothing, and the
+    # URL selects PostgreSQL. The installer printed the spaces as the backend
+    # and persisted them in the marker (Codex review of #1042).
+    result, _ = _run(
+        tmp_path,
+        earlier_state=False,
+        extra_env={
+            "CORTEX_MEMORY_STORE_BACKEND": "   ",
+            "CORTEX_MEMORY_DATABASE_URL": "postgresql://db.example/cortex",
         },
     )
 

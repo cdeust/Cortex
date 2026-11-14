@@ -122,24 +122,27 @@ fi
 # Whether the environment decides, by the launch's own test: a blank URL
 # decides nothing, CORTEX_MEMORY_STORE_BACKEND decides either way. Empty
 # when nothing decides, else the backend it selects. The installer's own
-# `-n` tests disagreed with the launch on all three (issue #704). A value
-# that is not a backend ("auto", the engine's own choice, or "Postgres")
-# is not written into a marker: the environment decides without it, so a
-# configured URL still selects PostgreSQL, as the engine's auto does
-# (memory_store.py), and with nothing else the marker and the detection
-# below decide. A native Windows Python ends the line with CRLF: tr drops
-# the \r ($(...) drops only the \n).
+# `-n` tests disagreed with the launch on all three (issue #704). Any
+# non-blank CORTEX_MEMORY_STORE_BACKEND decides at launch, so no marker is
+# read; the engine compares it exactly (memory_store.py), and a value that
+# is not a backend there ("auto", "Postgres", "SQLITE") opens PostgreSQL
+# with a configured URL and SQLite without one. That backend is chosen
+# here, never the raw value, which read_backend_marker would reject; a
+# blank value is absent, as environment_decides strips it (reviews of #1042). A native Windows Python ends the line with CRLF: tr drops the
+# \r ($(...) drops only the \n).
 # source: ADR-1114, decision 7(a); backend_marker.environment_decides
+# source: memory_store.py, _construct_store (an unknown backend falls through)
 # source: scripts/lib/setup_py_step.sh (the same tr -d '\r')
 ENV_BACKEND=$(PYTHONPATH="$PLUGIN_ROOT" "$PY" -c "
 import os
 from mcp_server.infrastructure.backend_marker import VALID_BACKENDS, environment_decides, resolve_backend_env
 env = dict(os.environ)
-if env.get('CORTEX_MEMORY_STORE_BACKEND', '').strip().lower() not in VALID_BACKENDS:
-    env.pop('CORTEX_MEMORY_STORE_BACKEND', None)
-if environment_decides(env):
-    chosen = env.get('CORTEX_MEMORY_STORE_BACKEND', '').strip().lower()
-    print(chosen or resolve_backend_env(env, None).get('CORTEX_MEMORY_STORE_BACKEND', 'postgresql'))
+chosen = env.get('CORTEX_MEMORY_STORE_BACKEND', '')
+url = env.get('DATABASE_URL', '').strip() or env.get('CORTEX_MEMORY_DATABASE_URL', '').strip()
+if chosen.strip() and chosen not in VALID_BACKENDS:
+    print('postgresql' if url else 'sqlite')
+elif environment_decides(env):
+    print(chosen.strip() and chosen or resolve_backend_env(env, None).get('CORTEX_MEMORY_STORE_BACKEND', 'postgresql'))
 " | tr -d '\r') || fail "could not read whether the environment decides the backend (ADR-1114 7(a))"
 
 # source: ADR-0740
@@ -201,6 +204,19 @@ else
     BACKEND="sqlite"
 fi
 say "Backend: $BACKEND"
+
+# setup.sh and setup.py read DATABASE_URL only, and default it to the local
+# cortex database. A URL named in CORTEX_MEMORY_DATABASE_URL alone selects
+# PostgreSQL, so it is copied into an empty DATABASE_URL first, trimmed, as
+# the launch copies it: Setup provisions the database the user named.
+# source: mcp_server/infrastructure/backend_resolution.py, settle_backend
+NAMED_URL="${CORTEX_MEMORY_DATABASE_URL:-}"
+NAMED_URL="${NAMED_URL#"${NAMED_URL%%[![:space:]]*}"}"
+NAMED_URL="${NAMED_URL%"${NAMED_URL##*[![:space:]]}"}"
+if [ "$BACKEND" = "postgresql" ] && [ -n "$NAMED_URL" ] \
+    && ! [[ "${DATABASE_URL:-}" =~ [^[:space:]] ]]; then
+    export DATABASE_URL="$NAMED_URL"
+fi
 
 # Remember what the marker said before we overwrite it: if BACKEND is a
 # switch away from a previously-persisted, presumably-working backend and
