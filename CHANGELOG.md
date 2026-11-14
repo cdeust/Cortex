@@ -116,7 +116,8 @@ adheres to [Semantic Versioning](https://semver.org/).
   to `python3 -c` as `sys.argv[1]`, where every local user could read it; the step reads
   the token from the environment. A missing `DATABASE_URL` now fails the start at an
   explicit guard instead of being hidden by "Schema init skipped". The test refuses any
-  expansion of the token outside a shell builtin, and the comments cite ADR-1114
+  expansion of the token outside four exact lines where it is an operand of a shell
+  builtin, so any edit to one of them fails it, and the comments cite ADR-1114
   decision 4 as the source of the rule (review of #1031).
 - Docker (issue #704): `docker/entrypoint.sh` no longer expands `DATABASE_URL` into the
   `python3 -c` argument of its schema step, where a password in the URL was readable by

