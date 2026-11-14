@@ -248,3 +248,22 @@ def test_database_url_is_explicit(world, param, env, expected):
     for name, value in env.items():
         world.env.setenv(name, value)
     assert ms._database_url_is_explicit(param) is expected
+
+
+@pytest.mark.parametrize("runtime", ["cli", "cowork"])
+@pytest.mark.parametrize("blank", [" ", "\t\n"])
+def test_a_blank_url_names_nothing(world, runtime, blank):
+    # CORTEX_MEMORY_DATABASE_URL made of whitespace reaches settings as is;
+    # the installer and environment_decides read it as absent (issue #704).
+    _configure(world, runtime, "auto", blank)
+    world.env.setenv("DATABASE_URL", blank)
+    assert ms._construct_store("", 384) == ("sqlite-store", _FALLBACK_PATH, 384)
+    assert world.calls == [("sqlite", _FALLBACK_PATH, 384)]
+    assert ms._resolve_backend_url("", 384, blank) == ("auto", "")
+
+
+def test_a_blank_environment_url_falls_through_to_settings(world):
+    _configure(world, "cli", "auto", "postgresql://settings/db")
+    world.env.setenv("DATABASE_URL", "  ")
+    assert ms._construct_store(database_url=" ") is _PG_STORE
+    assert world.calls == [("pg", "postgresql://settings/db")]

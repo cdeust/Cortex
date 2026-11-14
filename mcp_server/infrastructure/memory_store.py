@@ -98,6 +98,20 @@ def reset_shared_store() -> None:
         _shared_stores.clear()
 
 
+def _named_url(database_url: str | None, settings_url: str) -> str:
+    """The first URL that names something: argument, ``DATABASE_URL``, settings.
+
+    A value made only of whitespace names nothing, as in the installer and
+    ``backend_marker.environment_decides``; libpq would read a blank DSN as
+    its local defaults, the connection issue #704 removes.
+
+    source: issue #704"""
+    for candidate in (database_url, os.environ.get("DATABASE_URL"), settings_url):
+        if candidate and candidate.strip():
+            return candidate
+    return ""
+
+
 def _resolve_backend_url(
     db_path: str, embedding_dim: int, database_url: str | None
 ) -> tuple[str, str]:
@@ -107,7 +121,7 @@ def _resolve_backend_url(
 
     settings = get_memory_settings()
     backend = settings.STORE_BACKEND
-    url = database_url or os.environ.get("DATABASE_URL") or settings.DATABASE_URL
+    url = _named_url(database_url, settings.DATABASE_URL)
     # source: ADR-0535 and issue #704 -- CLI auto is strict only with a named URL.
     if settings.RUNTIME == "cli" and backend == "auto" and url:
         backend = "postgresql"
@@ -134,7 +148,7 @@ def _construct_store(
     settings = get_memory_settings()
     runtime = settings.RUNTIME
     backend = settings.STORE_BACKEND
-    url = database_url or os.environ.get("DATABASE_URL") or settings.DATABASE_URL
+    url = _named_url(database_url, settings.DATABASE_URL)
 
     # source: ADR-0535 and issue #704 -- auto with no named URL is SQLite in every
     # runtime: no connection is attempted to a URL nobody configured.
