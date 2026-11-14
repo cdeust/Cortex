@@ -142,6 +142,25 @@ def test_a_url_named_only_in_cortex_memory_database_url_reaches_setup(tmp_path):
     assert not calls.exists()
 
 
+def test_a_blank_store_backend_is_absent_and_the_named_url_decides(tmp_path):
+    # environment_decides strips the value: spaces decide nothing, and the
+    # URL selects PostgreSQL. The installer printed the spaces as the backend
+    # and persisted them in the marker (Codex review of #1042).
+    result, _ = _run(
+        tmp_path,
+        earlier_state=False,
+        extra_env={
+            "CORTEX_MEMORY_STORE_BACKEND": "   ",
+            "CORTEX_MEMORY_DATABASE_URL": "postgresql://db.example/cortex",
+        },
+    )
+
+    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+    assert "Backend: postgresql" in result.stdout + result.stderr
+    assert _setup_env(tmp_path)["DATABASE_URL"] == "postgresql://db.example/cortex"
+    assert _marker_backend(tmp_path) == "postgresql"
+
+
 def test_a_crlf_python_still_selects_the_environment_backend(tmp_path):
     # A native Windows Python ends print() with CRLF; $(...) drops only the
     # LF. Emulated by a python3 whose stdout gains a CR on every line.

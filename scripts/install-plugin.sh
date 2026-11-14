@@ -127,8 +127,8 @@ fi
 # read; the engine compares it exactly (memory_store.py), and a value that
 # is not a backend there ("auto", "Postgres", "SQLITE") opens PostgreSQL
 # with a configured URL and SQLite without one. That backend is chosen
-# here, never the raw value, which read_backend_marker would reject (review
-# of #1042). A native Windows Python ends the line with CRLF: tr drops the
+# here, never the raw value, which read_backend_marker would reject; a
+# blank value is absent, as environment_decides strips it (reviews of #1042). A native Windows Python ends the line with CRLF: tr drops the
 # \r ($(...) drops only the \n).
 # source: ADR-1114, decision 7(a); backend_marker.environment_decides
 # source: memory_store.py, _construct_store (an unknown backend falls through)
@@ -142,7 +142,7 @@ url = env.get('DATABASE_URL', '').strip() or env.get('CORTEX_MEMORY_DATABASE_URL
 if chosen.strip() and chosen not in VALID_BACKENDS:
     print('postgresql' if url else 'sqlite')
 elif environment_decides(env):
-    print(chosen or resolve_backend_env(env, None).get('CORTEX_MEMORY_STORE_BACKEND', 'postgresql'))
+    print(chosen.strip() and chosen or resolve_backend_env(env, None).get('CORTEX_MEMORY_STORE_BACKEND', 'postgresql'))
 " | tr -d '\r') || fail "could not read whether the environment decides the backend (ADR-1114 7(a))"
 
 # source: ADR-0740
