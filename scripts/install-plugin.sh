@@ -180,15 +180,32 @@ say "Backend: $BACKEND"
 # rather than leave the marker pointing at a backend that was never
 # actually stood up (that reproduces issue #633's own bug in reverse).
 # source: issue #638
+# The whole file is kept, not only its backend: a managed marker is
+# valid only with the root Setup wrote (read_backend_marker, issue #704).
+# The trailing "x" keeps the file's final newlines through $(...).
 PREVIOUS_BACKEND=""
+PREVIOUS_MARKER_TEXT=""
 if [ -f "$MARKER_PATH" ]; then
     PREVIOUS_BACKEND=$(sed -n 's/.*"backend"[[:space:]]*:[[:space:]]*"\([a-z]*\)".*/\1/p' "$MARKER_PATH" 2>/dev/null | head -1)
+    PREVIOUS_MARKER_TEXT=$(cat "$MARKER_PATH" 2>/dev/null; printf x)
+    PREVIOUS_MARKER_TEXT="${PREVIOUS_MARKER_TEXT%x}"
+fi
+
+# A managed marker that the environment overrides (a configured URL or a
+# CORTEX_* backend, not a request of this run) is only ignored at launch,
+# so the installer leaves it as Setup wrote it: rewriting it would lose
+# the server's root once the override is gone (issue #704).
+# source: ADR-1114, decision 7(a)
+KEEP_MARKER=""
+if [ "$BACKEND" = "managed" ] || { [ -z "$REQUESTED" ] && [ "$PREVIOUS_BACKEND" = "managed" ]; }; then
+    KEEP_MARKER=1
+    [ "$BACKEND" = "managed" ] || say "Managed marker kept as Setup wrote it: the environment decides this run"
 fi
 
 # Resolve the marker path with Path.home() inside Python.
 # source: ADR-1088
 MARKER_WRITTEN=""
-[ "$BACKEND" = "managed" ] || MARKER_WRITTEN=$(CORTEX_BACKEND_MARKER_VALUE="$BACKEND" \
+[ -n "$KEEP_MARKER" ] || MARKER_WRITTEN=$(CORTEX_BACKEND_MARKER_VALUE="$BACKEND" \
 CORTEX_BACKEND_MARKER_VERSION="$CURRENT_VERSION" "$PY" -c "
 import json, os, pathlib
 path = pathlib.Path.home() / '.claude' / 'methodology' / 'backend.json'
@@ -208,16 +225,11 @@ print(path)
 # and must stay untouched by this.
 # source: issue #638
 restore_previous_marker() {
-    if [ -n "$PREVIOUS_BACKEND" ] && [ "$PREVIOUS_BACKEND" != "$BACKEND" ]; then
-        CORTEX_BACKEND_MARKER_VALUE="$PREVIOUS_BACKEND" \
-        CORTEX_BACKEND_MARKER_VERSION="$CURRENT_VERSION" "$PY" -c "
-import json, os, pathlib
+    if [ -n "$PREVIOUS_BACKEND" ] && [ "$PREVIOUS_BACKEND" != "$BACKEND" ] && [ -z "$KEEP_MARKER" ]; then
+        CORTEX_BACKEND_MARKER_TEXT="$PREVIOUS_MARKER_TEXT" "$PY" -c "
+import os, pathlib
 path = pathlib.Path.home() / '.claude' / 'methodology' / 'backend.json'
-path.write_text(json.dumps({
-    'backend': os.environ['CORTEX_BACKEND_MARKER_VALUE'],
-    'written_by': 'install-plugin.sh (restored after failed backend switch)',
-    'plugin_version': os.environ['CORTEX_BACKEND_MARKER_VERSION'],
-}, indent=2) + '\n', encoding='utf-8')
+path.write_text(os.environ['CORTEX_BACKEND_MARKER_TEXT'], encoding='utf-8', newline='')
 " 2>/dev/null || true
         warn "Backend switch to $BACKEND failed — restored working marker to $PREVIOUS_BACKEND"
     fi

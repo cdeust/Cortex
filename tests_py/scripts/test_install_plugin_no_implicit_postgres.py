@@ -50,7 +50,12 @@ def _write_answering_psql(bin_dir: Path, calls: Path) -> None:
 
 
 def _run(
-    tmp_path: Path, *, earlier_state: bool, extra_env: dict, marker: str = ""
+    tmp_path: Path,
+    *,
+    earlier_state: bool,
+    extra_env: dict,
+    marker: str = "",
+    setup_exit_code: int = 0,
 ) -> tuple:
     home = tmp_path / "home"
     methodology = home / ".claude" / "methodology"
@@ -62,7 +67,7 @@ def _run(
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     calls = tmp_path / "psql_calls"
-    _write_setup_py_stub(bin_dir, exit_code=0)
+    _write_setup_py_stub(bin_dir, exit_code=setup_exit_code)
     _write_inert_pip_stubs(bin_dir)
     # Windows dispatch: the PostgreSQL branch then runs the stubbed setup.py
     # instead of scripts/setup.sh, which needs a real PostgreSQL.
@@ -146,16 +151,64 @@ def test_reinstall_keeps_a_managed_marker_as_setup_wrote_it(tmp_path):
     assert not calls.exists()
 
 
-def test_a_configured_url_still_wins_over_a_managed_marker(tmp_path):
-    # ADR-1114 selection order 1: a configured database beats the managed
-    # marker, at launch (environment_decides) and so at install.
+_MANAGED_MARKER = (
+    '{"backend": "managed", "root": "/srv/managed-pg",'
+    ' "written_by": "Setup (managed PostgreSQL started, ADR-1114)"}\n'
+)
+
+
+def _saved_marker(tmp_path: Path) -> str:
+    saved = tmp_path / "home" / ".claude" / "methodology" / "backend.json"
+    return saved.read_text(encoding="utf-8")
+
+
+def test_a_configured_url_wins_and_leaves_the_managed_marker_intact(tmp_path):
+    # ADR-1114 decision 7(a): a configured database beats the managed marker,
+    # which is then only ignored. Before the fix the installer rewrote it to
+    # {"backend": "postgresql"}, losing the root, so removing the URL later
+    # no longer reached the managed server (issue #704).
     result, calls = _run(
         tmp_path,
         earlier_state=True,
         extra_env={"DATABASE_URL": "postgresql://db.example:5432/cortex"},
-        marker='{"backend": "managed", "root": "/srv/managed-pg"}',
+        marker=_MANAGED_MARKER,
     )
 
     assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
-    assert _marker_backend(tmp_path) == "postgresql"
-    assert "Existing managed PostgreSQL kept" not in result.stdout + result.stderr
+    out = result.stdout + result.stderr
+    assert "Backend: postgresql" in out
+    assert "Existing managed PostgreSQL kept" not in out
+    assert _saved_marker(tmp_path) == _MANAGED_MARKER
+
+
+def test_an_explicit_backend_setting_leaves_the_managed_marker_intact(tmp_path):
+    # The other override of decision 7(a): an explicit CORTEX_* backend.
+    result, _ = _run(
+        tmp_path,
+        earlier_state=True,
+        extra_env={"CORTEX_MEMORY_STORE_BACKEND": "postgresql", "PGHOST": "x"},
+        marker=_MANAGED_MARKER,
+    )
+
+    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+    assert _saved_marker(tmp_path) == _MANAGED_MARKER
+
+
+def test_a_failed_switch_away_from_managed_restores_the_marker_with_its_root(
+    tmp_path,
+):
+    # An explicit request (CORTEX_BACKEND) does replace the marker; when its
+    # setup fails the earlier marker comes back byte for byte. Before the fix
+    # it came back as {"backend": "managed"} with no root, which
+    # read_backend_marker rejects (issue #704).
+    result, _ = _run(
+        tmp_path,
+        earlier_state=True,
+        extra_env={"CORTEX_BACKEND": "postgres"},
+        marker=_MANAGED_MARKER,
+        setup_exit_code=1,
+    )
+
+    assert result.returncode != 0
+    assert "restored working marker to managed" in result.stdout + result.stderr
+    assert _saved_marker(tmp_path) == _MANAGED_MARKER
