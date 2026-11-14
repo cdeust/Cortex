@@ -79,6 +79,27 @@ def test_a_value_no_marker_holds_is_left_to_the_saved_marker(tmp_path, value):
     assert _marker_backend(tmp_path) == "sqlite"
 
 
+@pytest.mark.parametrize("value", ["auto", "PostgreSQL", "SQLITE"])
+@pytest.mark.parametrize("marker", ['{"backend": "postgresql"}', _MANAGED_MARKER])
+def test_a_value_that_is_not_a_backend_with_no_url_installs_sqlite(
+    tmp_path, value, marker
+):
+    # Any non-blank value decides at launch (environment_decides), so the
+    # marker is not read, and the engine opens SQLite with no URL. Dropping
+    # the value let the marker select PostgreSQL here (review of #1042).
+    result, calls = _run(
+        tmp_path,
+        earlier_state=True,
+        extra_env={"CORTEX_MEMORY_STORE_BACKEND": value},
+        marker=marker,
+    )
+
+    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+    assert "Backend: sqlite" in result.stdout + result.stderr
+    assert _setup_env(tmp_path)["CORTEX_MEMORY_STORE_BACKEND"] == "sqlite"
+    assert not calls.exists()
+
+
 def test_auto_with_a_configured_url_installs_postgresql(tmp_path):
     # The engine turns CLI auto plus a URL into PostgreSQL (memory_store.py),
     # and the launch reads no marker. Dropping auto must not drop the URL:
