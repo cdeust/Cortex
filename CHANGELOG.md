@@ -125,10 +125,16 @@ adheres to [Semantic Versioning](https://semver.org/).
   held outside the store and the hooks; `scripts/install-plugin.sh` and
   `scripts/setup.py` still tested only blankness. The installer took a `DATABASE_URL`
   left as `${user_config.database_url}` for a URL, so a real
-  `CLAUDE_PLUGIN_OPTION_DATABASE_URL` was not mapped and the managed marker was set
-  aside; `setup.py` kept a blank or unexpanded `DATABASE_URL` as its URL. The installer
-  now unsets such a URL, option or backend first, as the launch removes them, and
-  `setup.py` reads `DATABASE_URL` through `named_database_url`. `scripts/setup_db.py`,
+  `CLAUDE_PLUGIN_OPTION_DATABASE_URL` was not mapped; nothing decided, so the installer
+  kept the managed marker and asked Setup for the managed server, while the launch
+  opens the URL the option names. `setup.py` kept a blank or unexpanded `DATABASE_URL`
+  as its URL. The installer now unsets such a URL, option or backend first, as the
+  launch removes such a URL or backend and ignores such an option, and `setup.py`
+  reads `DATABASE_URL` through `named_database_url`. Review of #1053: the installer
+  test of that case now pins `Backend: postgresql` and no managed provisioning, a test
+  fails if `CORTEX_MEMORY_DATABASE_URL` leaves the installer's unset list, and a test
+  puts an `mcp_server` without `shared.database_url` ahead of the checkout that
+  `scripts/setup_db.py` adds to `sys.path`. `scripts/setup_db.py`,
   run as a script, now puts its own checkout first on `sys.path`, so an installed
   `mcp_server` older than #1051 no longer hides `shared.database_url`.
 

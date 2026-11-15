@@ -80,6 +80,35 @@ def test_setup_db_run_directly_without_pythonpath_still_answers_in_json(tmp_path
     assert "status" in json.loads(done.stdout.strip().splitlines()[-1])
 
 
+def test_setup_db_run_directly_puts_its_checkout_before_an_earlier_mcp_server(
+    tmp_path,
+):
+    # An mcp_server older than #1051 has no shared.database_url. Under -I -S
+    # no mcp_server is installed at all, so the test above passes whether the
+    # guard appends the checkout or inserts it first; this one puts such a
+    # package on PYTHONPATH, ahead of an appended checkout (review of #1053,
+    # note 2). -S keeps an installed (editable) mcp_server out of the path.
+    import json
+    import os
+    import subprocess
+
+    stale = tmp_path / "stale" / "mcp_server"
+    stale.mkdir(parents=True)
+    (stale / "__init__.py").write_text("", encoding="utf-8")
+    script = Path(__file__).resolve().parents[2] / "scripts" / "setup_db.py"
+    env = dict(
+        os.environ,
+        DATABASE_URL="postgresql://127.0.0.1:1/cortex_unreachable",
+        PYTHONPATH=str(stale.parent),
+    )
+    done = subprocess.run(
+        [sys.executable, "-S", str(script)],
+        capture_output=True, text=True, env=env, cwd=tmp_path, timeout=60,
+    )  # fmt: skip
+    assert "ModuleNotFoundError" not in done.stderr
+    assert "status" in json.loads(done.stdout.strip().splitlines()[-1])
+
+
 def _load_setup_py(monkeypatch, database_url: str):
     import importlib.util
 
