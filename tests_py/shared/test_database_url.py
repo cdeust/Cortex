@@ -2,7 +2,11 @@
 
 import pytest
 
-from mcp_server.shared.database_url import named_database_url, names_a_database
+from mcp_server.shared.database_url import (
+    named_database_url,
+    names_a_database,
+    names_a_setting,
+)
 
 
 @pytest.mark.parametrize(
@@ -42,3 +46,15 @@ def test_a_dollar_brace_inside_a_dsn_still_names_a_database(dsn):
     # password is libpq's to parse (review 2 of #1051).
     assert names_a_database(dsn)
     assert named_database_url(f" {dsn} ") == dsn
+
+
+@pytest.mark.parametrize("value", [None, "", "  ", "${user_config.store_backend}"])
+def test_a_blank_or_unexpanded_setting_is_no_setting(value):
+    # note 3 of the review of #1051: manifest.json interpolates
+    # ${user_config.store_backend} as it does ${user_config.database_url}.
+    assert not names_a_setting(value)
+
+
+@pytest.mark.parametrize("value", ["sqlite", " postgresql ", "a${b}"])
+def test_any_other_value_is_a_setting(value):
+    assert names_a_setting(value)

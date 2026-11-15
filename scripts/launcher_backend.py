@@ -12,11 +12,15 @@ import sys
 
 def map_database_option(environ) -> None:
     """``CLAUDE_PLUGIN_OPTION_DATABASE_URL`` (how hooks, Setup included, receive
-    the user's ``database_url``) onto an empty ``DATABASE_URL`` (how the MCP
-    server receives it): one setting, one meaning. source: ADR-1104"""
-    option = environ.get("CLAUDE_PLUGIN_OPTION_DATABASE_URL", "").strip()
-    if option and not environ.get("DATABASE_URL", "").strip():
-        environ["DATABASE_URL"] = option
+    the user's ``database_url``) onto a ``DATABASE_URL`` that names no database
+    (how the MCP server receives it): one setting, one meaning. A blank value
+    or a whole unexpanded ``${name}`` token names none (issue #704, note 2 of
+    the review of #1051). source: ADR-1104"""
+    from mcp_server.shared.database_url import names_a_database  # noqa: PLC0415 — every caller runs after the launcher put plugin_root on sys.path; stdlib-only module
+
+    option = environ.get("CLAUDE_PLUGIN_OPTION_DATABASE_URL", "")
+    if names_a_database(option) and not names_a_database(environ.get("DATABASE_URL")):
+        environ["DATABASE_URL"] = option.strip()
 
 
 def apply() -> None:

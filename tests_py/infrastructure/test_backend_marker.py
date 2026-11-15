@@ -238,3 +238,34 @@ class TestAnInvalidMarkerOnlyMattersWhenItWouldApply:
         path = _marker(tmp_path, {"backend": "postgres"})
         with pytest.raises(BackendMarkerError):
             effective_backend({}, marker_path=path)
+
+
+class TestAnUnexpandedBackendIsNoBackend:
+    """Note 3 of the review of #1051: manifest.json interpolates
+    ``${user_config.store_backend}``; left unexpanded, it decides nothing."""
+
+    _UNEXPANDED = {"CORTEX_MEMORY_STORE_BACKEND": "${user_config.store_backend}"}
+
+    def test_it_does_not_decide_the_environment(self):
+        assert not environment_decides(dict(self._UNEXPANDED))
+
+    def test_the_marker_applies_instead(self, tmp_path):
+        path = _marker(tmp_path, {"backend": "postgresql"})
+        assert resolve_backend_env(self._UNEXPANDED, read_backend_marker(path)) == {
+            "CORTEX_MEMORY_STORE_BACKEND": "postgresql"
+        }
+        assert effective_backend(dict(self._UNEXPANDED), marker_path=path) == (
+            "postgresql"
+        )
+
+    def test_apply_replaces_it_with_the_default(self, tmp_path):
+        environ = dict(self._UNEXPANDED)
+        apply_backend_resolution(
+            environ, marker_path=tmp_path / "absent.json", default="sqlite"
+        )
+        assert environ == {"CORTEX_MEMORY_STORE_BACKEND": "sqlite"}
+
+    def test_apply_removes_it_when_nothing_else_decides(self, tmp_path):
+        environ = dict(self._UNEXPANDED)
+        apply_backend_resolution(environ, marker_path=tmp_path / "absent.json")
+        assert environ == {}

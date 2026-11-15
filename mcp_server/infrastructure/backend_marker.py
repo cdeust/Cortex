@@ -13,9 +13,14 @@ it provisioned in a small JSON marker::
 
 1. ``CORTEX_MEMORY_STORE_BACKEND`` already set  -> untouched
 2. ``CORTEX_BACKEND`` = postgres|postgresql|sqlite -> mapped to (1)
-3. ``DATABASE_URL`` / ``CORTEX_MEMORY_DATABASE_URL`` non-empty ->
+3. ``DATABASE_URL`` / ``CORTEX_MEMORY_DATABASE_URL`` names a database ->
    untouched (operator configured PostgreSQL; the engine's strict
    no-silent-fallback path in memory_store applies)
+
+"Set" and "names a database" exclude a blank value and a whole unexpanded
+``${name}`` token (``database_url.names_a_setting``): such a value is
+removed from the environment, so it reaches neither step 1 nor 3 nor the
+engine (issue #704).
 4. marker file backend -> applied
 5. nothing -> ``default`` when the caller names one (the Claude Code plugin
    launcher names ``sqlite``: an empty ``database_url`` means the local
@@ -42,7 +47,7 @@ from typing import Mapping, MutableMapping
 from mcp_server.infrastructure import managed_pg
 from mcp_server.infrastructure.config import METHODOLOGY_DIR
 from mcp_server.shared import gated_files
-from mcp_server.shared.database_url import names_a_database
+from mcp_server.shared.database_url import names_a_database, names_a_setting
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +71,16 @@ _BACKEND_ALIASES = {
 # The variables that name the store's URL, read by environment_decides and
 # resolve_backend_env (source: issue #704, review of #1051).
 _URL_VARIABLES = ("DATABASE_URL", "CORTEX_MEMORY_DATABASE_URL")
+# The explicit backend: the mcpb manifest interpolates
+# ``${user_config.store_backend}`` into it (source: manifest.json, note 3 of
+# the review of #1051).
+_BACKEND_VARIABLE = "CORTEX_MEMORY_STORE_BACKEND"
+
+
+def _explicit_backend(environ: Mapping[str, str]) -> str:
+    """Step 1's value, stripped; ``""`` when blank or unexpanded (issue #704)."""
+    value = environ.get(_BACKEND_VARIABLE, "")
+    return value.strip() if names_a_setting(value) else ""
 
 
 class BackendMarkerError(ValueError):
@@ -132,7 +147,7 @@ def resolve_backend_env(
 
     source: ADR-0505
     source: ADR-1104"""
-    if environ.get("CORTEX_MEMORY_STORE_BACKEND", "").strip():
+    if _explicit_backend(environ):
         return {}
     requested = _BACKEND_ALIASES.get(environ.get("CORTEX_BACKEND", "").strip().lower())
     if requested:
@@ -153,7 +168,7 @@ def environment_decides(environ: Mapping[str, str]) -> bool:
 
     source: ADR-1104 (an invalid marker must not stop a user it never governs)"""
     return bool(
-        environ.get("CORTEX_MEMORY_STORE_BACKEND", "").strip()
+        _explicit_backend(environ)
         or _BACKEND_ALIASES.get(environ.get("CORTEX_BACKEND", "").strip().lower())
         or any(names_a_database(environ.get(name)) for name in _URL_VARIABLES)
     )
@@ -172,12 +187,14 @@ def apply_backend_resolution(
 ) -> dict[str, str]:
     """Apply the resolved backend to ``environ`` in place.
 
-    Also normalizes a ``DATABASE_URL`` or ``CORTEX_MEMORY_DATABASE_URL``
-    that names no database (blank, or an unexpanded ``${...}``) to absent
-    first: the plugin manifest interpolates ``${user_config.database_url}``
-    whose default is now empty, and such a value must mean "not configured"
-    everywhere downstream, in the backend decision as in the store (psycopg
-    would otherwise read libpq defaults from a blank DSN; issue #704).
+    Also normalizes a ``DATABASE_URL``, ``CORTEX_MEMORY_DATABASE_URL`` or
+    ``CORTEX_MEMORY_STORE_BACKEND`` that is blank or a whole unexpanded
+    ``${name}`` token to absent first: the plugin manifest interpolates
+    ``${user_config.database_url}`` whose default is now empty (and the mcpb
+    manifest ``${user_config.store_backend}``), and such a value must mean
+    "not configured" everywhere downstream, in the backend decision as in the
+    store (psycopg would otherwise read libpq defaults from a blank DSN;
+    issue #704).
 
     A ``managed`` marker (or an inherited URL of that server, for a child of
     an attached process) attaches this process to the plugin's managed
@@ -188,8 +205,8 @@ def apply_backend_resolution(
     Post: returns the additions applied (possibly ``{}``). Raises
           ``managed_pg.ManagedPgError`` when the managed server cannot run.
     """
-    for name in _URL_VARIABLES:
-        if name in environ and not names_a_database(environ[name]):
+    for name in (*_URL_VARIABLES, _BACKEND_VARIABLE):
+        if name in environ and not names_a_setting(environ[name]):
             del environ[name]
     inherited = managed_pg.serves(environ)
     if inherited is not None:
@@ -213,7 +230,7 @@ def effective_backend(
           applies) or when the operator configured a database URL
           (case 3 — the engine, not this module, owns that path).
     """
-    explicit = environ.get("CORTEX_MEMORY_STORE_BACKEND", "").strip().lower()
+    explicit = _explicit_backend(environ).lower()
     if explicit in VALID_BACKENDS:
         return explicit
     if explicit:  # "auto" or anything else the engine will interpret

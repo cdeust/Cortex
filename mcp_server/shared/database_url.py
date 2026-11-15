@@ -1,4 +1,4 @@
-"""Which configured value names a PostgreSQL database (issue #704).
+"""Which configured value names a setting or a PostgreSQL database (issue #704).
 
 Pure: no I/O, stdlib only, so the per-event hooks can apply the rule
 without importing the settings stack.
@@ -15,18 +15,27 @@ import re
 _UNEXPANDED_PLACEHOLDER = re.compile(r"\$\{[A-Za-z_][A-Za-z0-9_.]*\}")
 
 
+def names_a_setting(value: str | None) -> bool:
+    """True when ``value`` is a setting: not blank, not a placeholder.
+
+    A value that is a whole ``${name}`` token is a manifest interpolation the
+    host left unexpanded (``${user_config.store_backend}`` as well as
+    ``${user_config.database_url}``): nobody set it.
+
+    source: issue #704 (note 3 of the review of #1051)"""
+    if not value or not value.strip():
+        return False
+    return _UNEXPANDED_PLACEHOLDER.fullmatch(value.strip()) is None
+
+
 def names_a_database(value: str | None) -> bool:
     """True when ``value`` names a database: not blank, not a placeholder.
 
     A value made only of whitespace names nothing: libpq reads a blank DSN
-    as its local defaults, the connection issue #704 removes. A value that is
-    a whole ``${name}`` token is a manifest interpolation the host left
-    unexpanded.
+    as its local defaults, the connection issue #704 removes.
 
     source: issue #704"""
-    if not value or not value.strip():
-        return False
-    return _UNEXPANDED_PLACEHOLDER.fullmatch(value.strip()) is None
+    return names_a_setting(value)
 
 
 def named_database_url(*candidates: str | None) -> str:
