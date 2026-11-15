@@ -38,11 +38,18 @@ def names_a_database(value: str | None) -> bool:
     return names_a_setting(value)
 
 
+def named_setting(*candidates: str | None) -> str:
+    """The first candidate that is a setting, stripped; ``""`` when none.
+
+    source: issue #704"""
+    for candidate in candidates:
+        if names_a_setting(candidate):
+            return candidate.strip()
+    return ""
+
+
 def named_database_url(*candidates: str | None) -> str:
     """The first candidate that names a database, stripped; ``""`` when none.
 
     source: issue #704"""
-    for candidate in candidates:
-        if names_a_database(candidate):
-            return candidate.strip()
-    return ""
+    return named_setting(*candidates)

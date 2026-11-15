@@ -47,7 +47,11 @@ from typing import Mapping, MutableMapping
 from mcp_server.infrastructure import managed_pg
 from mcp_server.infrastructure.config import METHODOLOGY_DIR
 from mcp_server.shared import gated_files
-from mcp_server.shared.database_url import names_a_database, names_a_setting
+from mcp_server.shared.database_url import (
+    named_setting,
+    names_a_database,
+    names_a_setting,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -79,8 +83,7 @@ _BACKEND_VARIABLE = "CORTEX_MEMORY_STORE_BACKEND"
 
 def _explicit_backend(environ: Mapping[str, str]) -> str:
     """Step 1's value, stripped; ``""`` when blank or unexpanded (issue #704)."""
-    value = environ.get(_BACKEND_VARIABLE, "")
-    return value.strip() if names_a_setting(value) else ""
+    return named_setting(environ.get(_BACKEND_VARIABLE))
 
 
 class BackendMarkerError(ValueError):
