@@ -9,10 +9,11 @@ import os
 import sys
 
 from mcp_server.hooks.stdin_event import read_event_text
+from mcp_server.shared.database_url import named_database_url
 
 
 # source: issues #703/#704 -- only shared resolution supplies a PostgreSQL URL.
-_DATABASE_URL = os.environ.get("DATABASE_URL", "")
+_DATABASE_URL = named_database_url(os.environ.get("DATABASE_URL"))
 _HOT_LIMIT = int(os.environ.get("CORTEX_SESSION_START_LIMIT", "8"))
 _MIN_HEAT = float(os.environ.get("CORTEX_SESSION_START_MIN_HEAT", "0.4"))
 _ANCHOR_LIMIT = int(os.environ.get("CORTEX_SESSION_START_ANCHOR_LIMIT", "5"))

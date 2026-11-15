@@ -10,10 +10,8 @@ from mcp_server.hooks.agent_briefing_log import _log
 from mcp_server.shared.project_scope import project_ancestors
 from mcp_server.infrastructure.pg_scope_clause import pg_scope_predicate
 from mcp_server.infrastructure.backend_marker import effective_backend
-from mcp_server.infrastructure.memory_config import (
-    get_memory_settings,
-    named_database_url,
-)
+from mcp_server.infrastructure.memory_config import get_memory_settings
+from mcp_server.shared.database_url import named_database_url
 from mcp_server.hooks.agent_briefing_sqlite import (
     SqliteBriefingConnection,
     _MAX_MEMORIES,

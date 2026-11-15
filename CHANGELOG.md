@@ -119,6 +119,15 @@ adheres to [Semantic Versioning](https://semver.org/).
   argument or `DATABASE_URL` as explicit; and the engine returned the named URL with
   its whitespace. `memory_config.named_database_url` is now the single rule: the first
   non-blank candidate, stripped.
+- Store and hooks (issue #704, review of #1050): the entry above overstated two things.
+  `cortex-migrate`'s resolver (`pg_store_ddl._get_database_url`) also skipped an
+  unexpanded manifest placeholder (`${user_config.database_url}`), which the store and
+  the briefing hook took as a URL, and the recall and SessionStart hooks still read
+  `DATABASE_URL` raw. The rule now lives in `shared/database_url.py`: a value names a
+  database when it is neither blank nor holds `${`; the store, `cortex-migrate` and the
+  three hooks apply it. The blank DSN reached libpq only when the briefing hook's
+  `_connect` was called directly: the launcher and `hooks/entry.py` remove a blank
+  `DATABASE_URL` first (`backend_marker.apply_backend_resolution`).
 - Installer (issue #704, review of #1045): a refused request named only the first
   variable that decides, so `--postgres` with `CORTEX_MEMORY_STORE_BACKEND=sqlite`
   and `CORTEX_BACKEND=sqlite` was refused a second time once the first was unset.

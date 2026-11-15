@@ -114,3 +114,42 @@ def test_direct_briefing_with_only_blank_urls_opens_no_connection(
         postgres_connection_factory.assert_not_called()
     finally:
         get_memory_settings.cache_clear()
+
+
+@pytest.mark.parametrize("blank", [" ", "\t\n"])
+def test_auto_briefing_with_only_blank_urls_reads_the_shared_store(
+    monkeypatch, blank, postgres_connection_factory
+):
+    # The guard at agent_briefing_query._connect: under ``auto`` a blank URL
+    # names nothing, so the shared store decides and libpq is never dialled.
+    from mcp_server.hooks.agent_briefing_sqlite import SqliteBriefingConnection
+    from mcp_server.infrastructure import memory_store
+
+    monkeypatch.setenv("CORTEX_MEMORY_STORE_BACKEND", "auto")
+    monkeypatch.setenv("CORTEX_MEMORY_DATABASE_URL", blank)
+    monkeypatch.setenv("DATABASE_URL", blank)
+    monkeypatch.setattr(memory_store, "get_shared_store", MagicMock())
+    get_memory_settings.cache_clear()
+    try:
+        assert isinstance(_connect(), SqliteBriefingConnection)
+        postgres_connection_factory.assert_not_called()
+    finally:
+        get_memory_settings.cache_clear()
+
+
+def test_direct_briefing_skips_an_unexpanded_manifest_placeholder(
+    monkeypatch, postgres_connection_factory
+):
+    # The manifest interpolates ``${user_config.database_url}``; left
+    # unexpanded it names nothing, as in cortex-migrate's resolver (#704).
+    monkeypatch.setenv("CORTEX_MEMORY_STORE_BACKEND", "postgresql")
+    monkeypatch.setenv("CORTEX_MEMORY_DATABASE_URL", "postgresql:///settings_test")
+    monkeypatch.setenv("DATABASE_URL", "${user_config.database_url}")
+    get_memory_settings.cache_clear()
+    try:
+        _connect()
+        assert postgres_connection_factory.call_args.args[0] == (
+            "postgresql:///settings_test"
+        )
+    finally:
+        get_memory_settings.cache_clear()

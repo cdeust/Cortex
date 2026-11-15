@@ -41,6 +41,7 @@ not exist." The registered tools are listed in `docs/mcp-tools.md`.
 - `categorizer.py` — 10-category work classification
 - `similarity.py` — Jaccard similarity coefficient
 - `hash.py` — DJB2 non-cryptographic hash
+- `database_url.py` — `names_a_database`/`named_database_url`: which configured value names a PostgreSQL database (not blank, no unexpanded `${…}`), the one rule the store, `cortex-migrate` and the hooks apply (issue #704)
 - `project_ids.py` — Path ↔ project ID ↔ label ↔ domain ID conversion
 - `yaml_parser.py` — Lightweight YAML frontmatter parser
 - `types.py` — Pydantic models (ProfilesV2, DomainProfile, CognitiveStyle, etc.)
