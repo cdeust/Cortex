@@ -8,6 +8,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- First SessionStart timed against its hook timeout (issue #705):
+  `tests_py/scripts/test_first_session_start_within_hook_timeout.py` runs the
+  manifest's own SessionStart command on an empty plugin data directory in a
+  throwaway HOME and fails when it takes the manifest's `timeout` (30 s) or longer,
+  when it does not exit 0 with the "installing" notice, or when it writes the
+  dependency set itself. It runs in the existing `unit` job; no workflow changes.
 - Outcome benchmark, two-arm runner (issue #343, slice 4):
   `benchmarks/outcome/two_arm_runner.py` takes a read-only bare clone of the corpus
   before the first trial, checks the pin and every commit key against it, then runs
