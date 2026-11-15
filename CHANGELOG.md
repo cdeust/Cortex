@@ -133,8 +133,8 @@ adheres to [Semantic Versioning](https://semver.org/).
   reads `DATABASE_URL` through `named_database_url`. Review of #1053: the installer
   test of that case now pins `Backend: postgresql` and no managed provisioning, a test
   fails if `CORTEX_MEMORY_DATABASE_URL` leaves the installer's unset list, and a test
-  puts an `mcp_server` without `shared.database_url` ahead of the checkout that
-  `scripts/setup_db.py` adds to `sys.path`. `scripts/setup_db.py`,
+  puts an `mcp_server` without `shared.database_url` on `PYTHONPATH`, which hides the
+  checkout only when `scripts/setup_db.py` appends it to `sys.path`. `scripts/setup_db.py`,
   run as a script, now puts its own checkout first on `sys.path`, so an installed
   `mcp_server` older than #1051 no longer hides `shared.database_url`.
 
