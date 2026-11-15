@@ -53,14 +53,18 @@ class TestInjectionFiltering:
         out = inject_triggered_memories([], "ship the deploy", store)
         assert out == []
 
-    def test_low_signal_tagged_memories_not_injected(self):
-        store = _store([_trigger()], {1: _mem(tags=["auto-captured"])})
+    @pytest.mark.parametrize("source", ["backfill:cortex", "import", "session"])
+    def test_other_capture_writer_memories_not_injected(self, source):
+        store = _store([_trigger()], {1: _mem(source=source)})
         out = inject_triggered_memories([], "ship the deploy", store)
         assert out == []
 
-    def test_user_vocabulary_tag_does_not_block_injection(self):
-        """Issue #706: a user's tag such as ``wip`` never hides the memory."""
-        store = _store([_trigger()], {1: _mem(tags=["wip", "stage-3"])})
+    @pytest.mark.parametrize(
+        "tags", [["wip", "stage-3"], ["auto-captured"], ["imported", "_backfill"]]
+    )
+    def test_user_tag_does_not_block_injection(self, tags):
+        """Issue #706, ADR-1140: a tag never hides a user's memory."""
+        store = _store([_trigger()], {1: _mem(source="user", tags=tags)})
         out = inject_triggered_memories([], "ship the deploy", store)
         assert len(out) == 1
 

@@ -11,6 +11,7 @@ from mcp_server.core import thermodynamics
 from mcp_server.core.enrichment import build_expanded_query
 from mcp_server.core.document_reference import annotate_document_sources
 from mcp_server.shared.code_tokenize import expand_fts_query
+from mcp_server.shared.capture_source import is_capture_source
 from mcp_server.core.prospective import check_trigger, trigger_in_scope
 from mcp_server.handlers._write_scope import session_directory
 from mcp_server.core.query_intent import QueryIntent
@@ -158,59 +159,24 @@ def parse_tags(tags: Any) -> list:
     return tags if tags else []
 
 
-# Capture markers only: tags a Cortex writer puts on the memories it records
-# by itself (post_tool_capture, backfill_memories, session_extractor,
-# wiki_seed_codebase, record_session_end_memory), plus ``tool-output``, which
-# no writer emits but issue #706 lists among the capture tags. Ordinary words
-# (audit, wip, stage-N, ...) no longer hide a memory. A user can still choose
-# a marker itself (``imported`` is also a wiki provenance alias); keying the
-# filter on a system-written field instead of tags is left on #706.
-# source: ADR-0431 (the filter), ADR-1123 (its scope), issue #706
-LOW_SIGNAL_TAGS: frozenset[str] = frozenset(
-    {
-        "auto-captured",
-        "_backfill",
-        "imported",
-        "session-summary",
-        "tool-output",
-        "tool:edit",
-        "tool:bash",
-        "tool:read",
-        "tool:write",
-        "tool:grep",
-        "tool:glob",
-        "tool:search",
-        "tool:webfetch",
-        "tool:websearch",
-        "tool:notebookedit",
-    }
-)
-
-
 def filter_low_signal(results: list[dict]) -> tuple[list[dict], int]:
-    """Drop memories whose tags mark them as low-signal noise.
+    """Drop memories a Cortex capture writer recorded by itself.
 
     Returns ``(kept_results, dropped_count)``. The dropped count is
     surfaced in the response so callers see how much was filtered —
     important for debugging the "why didn't I get the result I expected"
     case.
 
-    Callers that explicitly want low-signal memories (debugging,
-    replay tooling) skip this filter via the ``include_low_signal``
-    input parameter on the recall handler.
+    The filter reads the ``source`` field the writer set, never the tags:
+    a tag is a word the user may choose (issue #706). Callers that
+    explicitly want these memories (debugging, replay tooling) skip this
+    filter via the ``include_low_signal`` input parameter on the recall
+    handler.
+
+    source: ADR-0431 (the filter), ADR-1140 (keyed on source)
     """
-    kept: list[dict] = []
-    dropped = 0
-    for r in results:
-        tags = r.get("tags", [])
-        if isinstance(tags, str):
-            tags = parse_tags(tags)
-        tag_set = {str(t).lower() for t in tags}
-        if tag_set & LOW_SIGNAL_TAGS:
-            dropped += 1
-            continue
-        kept.append(r)
-    return kept, dropped
+    kept = [r for r in results if not is_capture_source(r.get("source"))]
+    return kept, len(results) - len(kept)
 
 
 def filter_by_tags(
@@ -338,11 +304,8 @@ def inject_triggered_memories(
 def _injectable(mem: dict) -> bool:
     """Trigger injection must not bypass the low-signal discipline.
 
-    source: ADR-0431"""
-    if mem.get("source") == "post_tool_capture":
-        return False
-    tags = {str(t).lower() for t in parse_tags(mem.get("tags", []))}
-    return not (tags & LOW_SIGNAL_TAGS)
+    source: ADR-0431 (the filter), ADR-1140 (keyed on source)"""
+    return not is_capture_source(mem.get("source"))
 
 
 def build_enhancements(query: str, intent: str, tier: str, settings: Any) -> dict:

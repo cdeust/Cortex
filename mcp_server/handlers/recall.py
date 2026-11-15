@@ -292,12 +292,13 @@ schema = {
             "include_low_signal": {
                 "type": "boolean",
                 "description": (
-                    # source: ADR-0430 (filter), ADR-1123 (scope)
-                    "When false (default), drops memories tagged as auto-captures "
-                    "(``auto-captured``, ``tool:edit``, ``_backfill``, ``imported``, "
-                    "``session-summary``, …) so curated content (ADRs, lessons, "
-                    "conventions) surfaces in the first few results. Set true for "
-                    "debugging / replay tooling that needs the raw memory feed."
+                    # source: ADR-0430 (filter), ADR-1140 (keyed on source)
+                    "When false (default), drops memories Cortex recorded by itself "
+                    "(tool-output captures, backfill, session import, codebase seed, "
+                    "session summaries; read from the memory's source, never its "
+                    "tags) so curated content (ADRs, lessons, conventions) surfaces "
+                    "in the first few results; low_signal_dropped counts them. Set "
+                    "true for debugging / replay tooling that needs the raw feed."
                 ),
                 "default": False,
             },

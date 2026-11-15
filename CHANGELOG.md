@@ -32,6 +32,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Default recall and trigger injection hide a memory by the `source` its capture
+  writer set, never by its tags (issue #706, ADR-1140). `post_tool_capture`,
+  `import`, `session`, `backfill:<slug>` and `seed:<rel>` stay hidden as before;
+  a user's memory tagged `auto-captured`, `imported`, `session-summary`, `_backfill`
+  or `tool:<name>` is now returned. `LOW_SIGNAL_TAGS` is removed, and the SQLite
+  recall projection returns `source` as PostgreSQL already does.
 - Plugin tree (issue #705, packaging slice): the five BEAM-10M variance runs under
   `benchmarks/beam/variance/` and the oracle log under
   `benchmarks/results/beam10m_paired/` (about 11.7 MB each, 70 MB in all) and the
