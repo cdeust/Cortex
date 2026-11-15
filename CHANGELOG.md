@@ -112,6 +112,17 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Setup, launcher and backend precedence (issue #704, review of #1051): the rule of
+  `shared/database_url.py` now holds outside the store and the hooks too.
+  `scripts/setup_db.py` replaced any `DATABASE_URL` containing `${` by the local default,
+  a literal `${` in a password included; `launcher_backend.map_database_option` kept a
+  real `CLAUDE_PLUGIN_OPTION_DATABASE_URL` from replacing a `DATABASE_URL` left as
+  `${user_config.database_url}`; and a `CORTEX_MEMORY_STORE_BACKEND` left as
+  `${user_config.store_backend}` (the mcpb manifest) counted as an explicit backend, so
+  the marker and the SQLite default never applied. All three now use
+  `names_a_setting` / `names_a_database`: blank or a whole unexpanded `${name}` token
+  means unset, and `apply_backend_resolution` removes such a backend value as it
+  already removed such a URL.
 - Store and hooks (issue #704, reviews of #1048 and #1049): a database URL made only of
   whitespace now names nothing in the store and the briefing hook. The hook read a blank
   `DATABASE_URL` as a URL, hid the one named in the settings and handed libpq a blank

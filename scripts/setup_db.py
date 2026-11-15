@@ -20,6 +20,7 @@ import re
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 
 def _safe_ident(name: str) -> str:
@@ -50,12 +51,20 @@ def _result(status: str, message: str, **extra: object) -> None:
 def _get_database_url() -> str:
     """Resolve DATABASE_URL from environment or default.
 
-    Treats an empty value or an unexpanded ``${...}`` token as unset.
+    Treats a blank value or a whole unexpanded ``${name}`` token as unset,
+    by the rule the store and the hooks apply; a ``${`` inside a DSN (a
+    literal password) is kept (issue #704, note 1 of the review of #1051).
     """
-    url = os.environ.get("DATABASE_URL", "").strip()
-    if not url or "${" in url:
-        return "postgresql://127.0.0.1:5432/cortex"
-    return url
+    # Run directly (docs/deployment-scenarios.md), Python puts scripts/ on the
+    # path, not the checkout: append it, so an installed package still wins.
+    checkout = str(Path(__file__).resolve().parents[1])
+    if checkout not in sys.path:
+        sys.path.append(checkout)
+    from mcp_server.shared.database_url import named_database_url  # noqa: PLC0415 — the checkout is on sys.path only from here; stdlib-only module, so importing setup_db stays stdlib-only
+
+    return named_database_url(os.environ.get("DATABASE_URL")) or (
+        "postgresql://127.0.0.1:5432/cortex"
+    )
 
 
 def _parse_db_url(url: str) -> dict:
