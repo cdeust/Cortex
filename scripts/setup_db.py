@@ -20,6 +20,7 @@ import re
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 
 def _safe_ident(name: str) -> str:
@@ -54,7 +55,12 @@ def _get_database_url() -> str:
     by the rule the store and the hooks apply; a ``${`` inside a DSN (a
     literal password) is kept (issue #704, note 1 of the review of #1051).
     """
-    from mcp_server.shared.database_url import named_database_url  # noqa: PLC0415 — both callers (setup.sh, setup.py) put the project on PYTHONPATH; stdlib-only module, so importing setup_db stays stdlib-only
+    # Run directly (docs/deployment-scenarios.md), Python puts scripts/ on the
+    # path, not the checkout: append it, so an installed package still wins.
+    checkout = str(Path(__file__).resolve().parents[1])
+    if checkout not in sys.path:
+        sys.path.append(checkout)
+    from mcp_server.shared.database_url import named_database_url  # noqa: PLC0415 — the checkout is on sys.path only from here; stdlib-only module, so importing setup_db stays stdlib-only
 
     return named_database_url(os.environ.get("DATABASE_URL")) or (
         "postgresql://127.0.0.1:5432/cortex"

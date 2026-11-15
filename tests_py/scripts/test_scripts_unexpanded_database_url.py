@@ -59,3 +59,21 @@ def test_an_option_that_names_no_database_maps_nothing(option):
     environ = {"CLAUDE_PLUGIN_OPTION_DATABASE_URL": option}
     launcher_backend.map_database_option(environ)
     assert "DATABASE_URL" not in environ
+
+
+def test_setup_db_run_directly_without_pythonpath_still_answers_in_json(tmp_path):
+    # Codex review of #1052: run as `python scripts/setup_db.py` with no
+    # PYTHONPATH, the shared import raised ModuleNotFoundError before any JSON.
+    import json
+    import os
+    import subprocess
+
+    script = Path(__file__).resolve().parents[2] / "scripts" / "setup_db.py"
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+    env["DATABASE_URL"] = "postgresql://127.0.0.1:1/cortex_unreachable"
+    done = subprocess.run(
+        [sys.executable, "-I", str(script)],
+        capture_output=True, text=True, env=env, cwd=tmp_path, timeout=60,
+    )  # fmt: skip
+    assert "ModuleNotFoundError" not in done.stderr
+    assert "status" in json.loads(done.stdout.strip().splitlines()[-1])
