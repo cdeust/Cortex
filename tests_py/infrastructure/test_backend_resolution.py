@@ -115,3 +115,22 @@ def test_settle_for_command_reports_a_backend_it_cannot_settle(
     captured = capsys.readouterr()
     assert captured.err == f"prog: Cortex not ready: {error}\n"
     assert captured.out == ""
+
+
+@pytest.mark.parametrize("key", ["DATABASE_URL", "CORTEX_MEMORY_DATABASE_URL"])
+def test_a_placeholder_url_still_runs_the_first_launch_decision(
+    tmp_path, monkeypatch, key
+):
+    # An unexpanded ${...} names no database (issue #704): an earlier HOME
+    # with a listening legacy server must get PostgreSQL and a marker, as
+    # with no URL at all, not a silent SQLite (review 2 of #1051).
+    (tmp_path / "session-log.json").write_text("{}")
+    monkeypatch.setattr(
+        backend_resolution, "legacy_store_answer", lambda environ: (False, "listens")
+    )
+    marker = tmp_path / "backend.json"
+    env = {key: "${user_config.database_url}"}
+    assert backend_resolution.settle_backend(env, marker) == "postgresql"
+    assert backend_marker.read_backend_marker(marker)["backend"] == "postgresql"
+    assert "CORTEX_MEMORY_DATABASE_URL" not in env
+    assert env["DATABASE_URL"] == "postgresql://localhost:5432/cortex"

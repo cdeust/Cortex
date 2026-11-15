@@ -7,22 +7,26 @@ source: issue #704"""
 
 from __future__ import annotations
 
-# source: issue #704 -- the rule setup_db.py and cortex-migrate already
-# applied: an unexpanded manifest interpolation is not a URL.
-_PLACEHOLDER_MARK = "${"
+import re
+
+# source: issue #704 -- the host interpolates the whole value, e.g.
+# ``${user_config.database_url}``; left unexpanded, the value is exactly that
+# token. A ``${`` inside a DSN (a literal password) is libpq's to parse.
+_UNEXPANDED_PLACEHOLDER = re.compile(r"\$\{[A-Za-z_][A-Za-z0-9_.]*\}")
 
 
 def names_a_database(value: str | None) -> bool:
     """True when ``value`` names a database: not blank, not a placeholder.
 
     A value made only of whitespace names nothing: libpq reads a blank DSN
-    as its local defaults, the connection issue #704 removes. A value that
-    still holds ``${`` is a manifest interpolation the host left unexpanded.
+    as its local defaults, the connection issue #704 removes. A value that is
+    a whole ``${name}`` token is a manifest interpolation the host left
+    unexpanded.
 
     source: issue #704"""
     if not value or not value.strip():
         return False
-    return _PLACEHOLDER_MARK not in value
+    return _UNEXPANDED_PLACEHOLDER.fullmatch(value.strip()) is None
 
 
 def named_database_url(*candidates: str | None) -> str:

@@ -28,3 +28,17 @@ def test_a_naming_value_is_returned_unchanged_but_stripped():
 
 def test_no_candidate_names_nothing():
     assert named_database_url() == ""
+
+
+@pytest.mark.parametrize(
+    "dsn",
+    [
+        "host=localhost dbname=cortex user=cortex password='abc${xyz'",
+        "postgresql://u:p${q}@h/db",
+    ],
+)
+def test_a_dollar_brace_inside_a_dsn_still_names_a_database(dsn):
+    # Only a whole ${name} token is an unexpanded interpolation; a literal
+    # password is libpq's to parse (review 2 of #1051).
+    assert names_a_database(dsn)
+    assert named_database_url(f" {dsn} ") == dsn

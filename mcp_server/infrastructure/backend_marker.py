@@ -137,9 +137,7 @@ def resolve_backend_env(
     requested = _BACKEND_ALIASES.get(environ.get("CORTEX_BACKEND", "").strip().lower())
     if requested:
         return {"CORTEX_MEMORY_STORE_BACKEND": requested}
-    if environ.get("DATABASE_URL", "").strip():
-        return {}
-    if environ.get("CORTEX_MEMORY_DATABASE_URL", "").strip():
+    if any(names_a_database(environ.get(name)) for name in _URL_VARIABLES):
         return {}
     if marker is not None and marker["backend"] == MANAGED:
         return {"CORTEX_MEMORY_STORE_BACKEND": "postgresql"}
@@ -157,8 +155,7 @@ def environment_decides(environ: Mapping[str, str]) -> bool:
     return bool(
         environ.get("CORTEX_MEMORY_STORE_BACKEND", "").strip()
         or _BACKEND_ALIASES.get(environ.get("CORTEX_BACKEND", "").strip().lower())
-        or environ.get("DATABASE_URL", "").strip()
-        or environ.get("CORTEX_MEMORY_DATABASE_URL", "").strip()
+        or any(names_a_database(environ.get(name)) for name in _URL_VARIABLES)
     )
 
 

@@ -124,13 +124,15 @@ adheres to [Semantic Versioning](https://semver.org/).
   unexpanded manifest placeholder (`${user_config.database_url}`), which the store and
   the briefing hook took as a URL, and the recall and SessionStart hooks still read
   `DATABASE_URL` raw. The rule now lives in `shared/database_url.py`: a value names a
-  database when it is neither blank nor holds `${`; the store, `cortex-migrate` and the
+  database when it is neither blank nor a whole unexpanded `${name}` token (a `${` inside
+  a DSN, such as a literal password, is libpq's to parse); the store, `cortex-migrate` and the
   three hooks apply it. The blank DSN reached libpq only when the briefing hook's
   `_connect` was called directly: the launcher and `hooks/entry.py` remove a blank
   `DATABASE_URL` first (`backend_marker.apply_backend_resolution`), which now also
-  removes a `DATABASE_URL` or `CORTEX_MEMORY_DATABASE_URL` holding `${`: the backend
-  decision counted the placeholder as a configured URL, never read a `postgresql` or
-  `managed` marker, and the store then fell back to SQLite without a warning.
+  removes a `DATABASE_URL` or `CORTEX_MEMORY_DATABASE_URL` that names no database, and
+  `environment_decides` and `resolve_backend_env` apply the same rule: they counted the
+  placeholder as a configured URL, so the first-launch decision and a `postgresql` or
+  `managed` marker were skipped and the store fell back to SQLite without a warning.
 - Installer (issue #704, review of #1045): a refused request named only the first
   variable that decides, so `--postgres` with `CORTEX_MEMORY_STORE_BACKEND=sqlite`
   and `CORTEX_BACKEND=sqlite` was refused a second time once the first was unset.
