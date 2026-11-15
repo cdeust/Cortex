@@ -137,6 +137,8 @@ adheres to [Semantic Versioning](https://semver.org/).
   and pins that a blank `CORTEX_BACKEND`, a backend setting the drop does not handle,
   is neither removed nor logged. Review of #1061: the kept URL of that test carries
   surrounding whitespace, so a drop that also stripped the values it keeps fails it.
+  Review of #1062: that test now runs for each of the three variables and passes
+  `default="sqlite"`, so a setting that decided nothing would fail it.
 - Installer and Setup (issue #704, reviews of #1052): the entry below said the rule of
   `shared/database_url.py` (`names_a_setting`, `named_setting`, `named_database_url`)
   held outside the store and the hooks; `scripts/install-plugin.sh` and
