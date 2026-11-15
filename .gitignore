@@ -28,6 +28,11 @@ mcp-server_old/
 benchmarks/longmemeval/longmemeval_s.json
 benchmarks/longmemeval/longmemeval_oracle.json
 benchmarks/spell_alteration/*.pdf
+# Raw stdout of the BEAM-10M variance runs, about 11.7 MB each (issue #705)
+benchmarks/beam/variance/*_10m*.txt
+# Frames and render of video/generate.py; the sdist already excludes them (ADR-0874)
+video/captures/
+video/output/
 *.pdf
 # Whitelist the thermodynamic memory paper PDF (compiled artefact for publication)
 !docs/arxiv-thermodynamic/main.pdf

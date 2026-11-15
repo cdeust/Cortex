@@ -32,6 +32,15 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Plugin tree (issue #705, packaging slice): the five BEAM-10M variance runs under
+  `benchmarks/beam/variance/` and the oracle log under
+  `benchmarks/results/beam10m_paired/` (about 11.7 MB each, 70 MB in all) and the
+  frames and render of `video/generate.py` (`video/captures/`, `video/output/`,
+  17 MB) leave the tracked tree, which every plugin install copies. They stay in the
+  history at `1bfbc459`; `benchmarks/beam/variance/README.md` and the documents that
+  cite them say how to read them. `.gitignore` refuses a new one, and
+  `tests_py/scripts/test_tree_ships_no_raw_runs_or_media.py` pins both.
+
 - Issues (ADR-1136, issue #1009): `docs/agent-guidance.md` gains the section "Issues: no issue
   waits for the owner", and `CLAUDE.md` points to it. An agent decides a question an issue
   asks from the repository's written decisions, the issue's own text and the standards,

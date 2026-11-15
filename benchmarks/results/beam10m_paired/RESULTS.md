@@ -2,7 +2,7 @@
 
 Purpose: test whether the April finding (label-free temporal stage detection
 outperforms oracle plan_id; artefacts benchmarks/beam/variance/
-assembler_10m_{stagefixed,temporal}.txt, 0.429 vs 0.471) survives the
+assembler_10m_{stagefixed,temporal}.txt, in the history at 1bfbc459, 0.429 vs 0.471) survives the
 bounded-I/O code revisions.
 
 ## Protocol
@@ -11,7 +11,8 @@ bounded-I/O code revisions.
   CORTEX_USE_ASSEMBLER=1, fresh dedicated DB per run.
 - Oracle run (this directory): CORTEX_STAGE_DETECTOR unset -> default "oracle"
   (plan_id ground truth). DB cortex_bench_10m_paired (created empty same day).
-  Raw stdout: 20260611-oracle-currentcode.log.
+  Raw stdout: 20260611-oracle-currentcode.log (11.7 MB, out of the tree since
+  issue #705: `git show 1bfbc459:benchmarks/results/beam10m_paired/20260611-oracle-currentcode.log`).
 - Temporal run: CORTEX_STAGE_DETECTOR=temporal, overnight chain 2026-06-11,
   clean bench DB. OVERALL MRR 0.523, R@10 59.3%.
 

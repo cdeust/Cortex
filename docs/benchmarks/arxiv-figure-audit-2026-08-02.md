@@ -11,7 +11,7 @@ This audit records the pre-submission check requested in issue #347. It covers t
 | LoCoMo | MRR 0.8278, R@10 0.942, n=1986 | `docs/benchmarks/e1-v3-locomo-results.md`; `benchmarks/results/ablation/locomo_v3/` (committed, verified present) | code SHA `ef178da7418a05bcf7aeb3e66f5b3179fdad2c4d`, dirty=false, 2026-05-03 — **before** the plasticity fix `5f737fe`, not after (correction, review round 2: see note below) |
 | BEAM-100K, flat WRRF | retrieval-proxy MRR 0.591, R@10 0.790, n=100 | `benchmarks/results/a3_beam_100k_post_refactor.md` and `benchmarks/beam/variance/baseline_limit5.txt` | code SHA `a071d89`, five-conversation A/B protocol; result committed by `544abe7` |
 | BEAM-100K, assembler | MRR 0.602, n=100 | `benchmarks/beam/variance/assembler_limit5.txt` | same five-conversation A/B protocol |
-| BEAM-10M, flat / oracle / temporal | MRR 0.353 / 0.429 / 0.471, n=196 | `benchmarks/beam/variance/baseline_10m_fixed.txt`, `assembler_10m_stagefixed.txt`, `assembler_10m_temporal.txt` | original paired protocol |
+| BEAM-10M, flat / oracle / temporal | MRR 0.353 / 0.429 / 0.471, n=196 | `benchmarks/beam/variance/baseline_10m_fixed.txt`, `assembler_10m_stagefixed.txt`, `assembler_10m_temporal.txt`, in the history at `1bfbc459` (out of the tree since issue #705, see `benchmarks/beam/variance/README.md`) | original paired protocol |
 | BEAM-10M reproduction, oracle / temporal | MRR 0.496 / 0.523, n=196 | `benchmarks/results/beam10m_paired/RESULTS.md` | later paired code revision; compare within this pair only |
 | BEAM-500K / 1M crossover | flat 0.500 / 0.466; assembler 0.570 / 0.535 | `benchmarks/results/beam_crossover/RESULTS.md` | clean DB, 35 conversations per split |
 
