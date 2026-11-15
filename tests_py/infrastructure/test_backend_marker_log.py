@@ -60,13 +60,15 @@ def test_every_dropped_variable_is_removed_and_logged(caplog, tmp_path):
 def test_a_valid_setting_is_kept_and_not_logged(caplog, tmp_path):
     # Review of #1059, note 3: with no valid setting in any test, a
     # _drop_unset that logged every present store variable would pass.
+    # Review of #1060: the full record list is compared, as in the two tests
+    # above (note 2), and a blank variable outside the three store settings
+    # (CORTEX_BACKEND) is neither removed nor logged (note 3).
     logger = "mcp_server.infrastructure.backend_marker"
     url = "postgresql://user@db.example/cortex"
-    env = {"DATABASE_URL": url, "CORTEX_MEMORY_STORE_BACKEND": ""}
+    env = {"DATABASE_URL": url, "CORTEX_MEMORY_STORE_BACKEND": "", "CORTEX_BACKEND": ""}
     with caplog.at_level("INFO", logger=logger):
         apply_backend_resolution(env, marker_path=tmp_path / "absent.json")
-    assert env["DATABASE_URL"] == url
-    assert "CORTEX_MEMORY_STORE_BACKEND" not in env
-    assert [r for r in caplog.record_tuples if r[0] == logger] == [
+    assert env == {"DATABASE_URL": url, "CORTEX_BACKEND": ""}
+    assert caplog.record_tuples == [
         (logger, 20, "CORTEX_MEMORY_STORE_BACKEND is blank: treated as not set")
     ]
