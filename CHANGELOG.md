@@ -123,8 +123,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 - Backend precedence (issue #704, note 4 of review 1 of #1052): when
   `apply_backend_resolution` drops a `DATABASE_URL`, `CORTEX_MEMORY_DATABASE_URL` or
   `CORTEX_MEMORY_STORE_BACKEND` that is blank or a whole unexpanded `${name}` token, it
-  now writes one INFO line on the `backend_marker` logger naming the variable and why,
-  never the value. Review of #1056: the comment of the installer test of that case says
+  now writes one INFO line on the `mcp_server.infrastructure.backend_marker` logger
+  naming the variable and why, never the value. No shipped process shows that line
+  today: the server, the hooks and the launcher settle the backend before anything
+  configures logging, so the line reaches only a caller that configured INFO first
+  (review 1 of #1057). Review of #1056: the comment of the installer test of that case says
   the marker staying and no managed provisioning hold on every OS, and that `setup.sh`
   is not passed the backend explicitly.
 - Installer and Setup (issue #704, reviews of #1052): the entry below said the rule of
