@@ -108,6 +108,25 @@ case "${CORTEX_BACKEND:-}" in
     postgres|postgresql) REQUESTED="postgresql" ;;
     sqlite)              REQUESTED="${REQUESTED:-sqlite}" ;;
 esac
+# A blank value or a whole unexpanded ``${name}`` token sets nothing: the
+# launch removes such a URL or backend before anything reads it
+# (apply_backend_resolution), and the option maps only a value that names a
+# database (map_database_option). The installer unsets them first, by the
+# same rule, so every test below sees what the launch sees: its `-n` and
+# `.strip()` tests alone took ${user_config.database_url} for a URL, and
+# setup.py read a blank DATABASE_URL as a URL instead of its default.
+# source: mcp_server/shared/database_url.py, names_a_setting (issue #704,
+# review 1 of #1052, note 2)
+UNSET_NAMES=$(PYTHONPATH="$PLUGIN_ROOT" "$PY" -c "
+import os
+from mcp_server.shared.database_url import names_a_setting
+for name in ('CLAUDE_PLUGIN_OPTION_DATABASE_URL', 'DATABASE_URL', 'CORTEX_MEMORY_DATABASE_URL', 'CORTEX_MEMORY_STORE_BACKEND'):
+    if name in os.environ and not names_a_setting(os.environ[name]):
+        print(name)
+" | tr -d '\r') || fail "could not read which storage settings are set (issue #704)"
+for name in $UNSET_NAMES; do
+    unset "$name"
+done
 # The host option and DATABASE_URL are one setting: the option fills an
 # empty URL, trimmed, before anything reads it, so setup.sh (which reads
 # DATABASE_URL, not CORTEX_MEMORY_DATABASE_URL) provisions the database

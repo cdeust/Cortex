@@ -55,12 +55,7 @@ def _get_database_url() -> str:
     by the rule the store and the hooks apply; a ``${`` inside a DSN (a
     literal password) is kept (issue #704, note 1 of the review of #1051).
     """
-    # Run directly (docs/deployment-scenarios.md), Python puts scripts/ on the
-    # path, not the checkout: append it, so an installed package still wins.
-    checkout = str(Path(__file__).resolve().parents[1])
-    if checkout not in sys.path:
-        sys.path.append(checkout)
-    from mcp_server.shared.database_url import named_database_url  # noqa: PLC0415 — the checkout is on sys.path only from here; stdlib-only module, so importing setup_db stays stdlib-only
+    from mcp_server.shared.database_url import named_database_url  # noqa: PLC0415 — run as a script, the guard below puts the checkout first on sys.path; stdlib-only module, so importing setup_db stays stdlib-only
 
     return named_database_url(os.environ.get("DATABASE_URL")) or (
         "postgresql://127.0.0.1:5432/cortex"
@@ -375,4 +370,11 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    # Run directly (docs/deployment-scenarios.md), Python puts scripts/ on the
+    # path, not the checkout. The checkout goes first: an installed mcp_server
+    # older than #1051 has no shared.database_url, and this script belongs to
+    # the checkout it ships in. Set before main(), so the later imports of
+    # mcp_server.infrastructure resolve from the same tree.
+    # source: issue #704 (review 2 of #1052)
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     main()

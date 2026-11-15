@@ -16,16 +16,18 @@ it provisioned in a small JSON marker::
 3. ``DATABASE_URL`` / ``CORTEX_MEMORY_DATABASE_URL`` names a database ->
    untouched (operator configured PostgreSQL; the engine's strict
    no-silent-fallback path in memory_store applies)
-
-"Set" and "names a database" exclude a blank value and a whole unexpanded
-``${name}`` token (``database_url.names_a_setting``): such a value is
-removed from the environment, so it reaches neither step 1 nor 3 nor the
-engine (issue #704).
 4. marker file backend -> applied
 5. nothing -> ``default`` when the caller names one (the Claude Code plugin
    launcher names ``sqlite``: an empty ``database_url`` means the local
    SQLite store, and nothing dials a PostgreSQL the user never configured),
    else untouched (engine default: ``auto``)
+
+"Set" and "names a database" exclude a blank value and a whole unexpanded
+``${name}`` token (``database_url.names_a_setting``): steps 1 and 3 do not
+count it. ``apply_backend_resolution`` also removes it from the environment,
+so it does not reach the engine; ``resolve_backend_env``,
+``environment_decides`` and ``effective_backend`` only ignore it and leave
+the mapping as it was (issue #704, review 1 of #1052, note 3).
 
 A ``managed`` marker is resolved the same way by every surface (the plugin
 launcher, ``python -m mcp_server``, the Codex hook entry, the doctor):

@@ -253,3 +253,40 @@ def test_a_blank_url_decides_nothing_and_setup_provisions_the_managed_server(
     assert _setup_env(tmp_path)["CORTEX_SETUP_MANAGED_PG"] == "1"
     assert _saved_marker(tmp_path) == _MANAGED_MARKER
     assert not calls.exists()
+
+
+def test_an_unexpanded_url_is_unset_and_the_host_option_reaches_setup(tmp_path):
+    # The launch removes a DATABASE_URL left as ${user_config.database_url}
+    # and maps the option onto it; the installer's `-n` test kept the token
+    # as a URL (review 1 of #1052, note 2).
+    result, _ = _run(
+        tmp_path,
+        earlier_state=True,
+        extra_env={
+            "CLAUDE_PLUGIN_OPTION_DATABASE_URL": "postgresql://db.example/cortex",
+            "DATABASE_URL": "${user_config.database_url}",
+        },
+        marker=_MANAGED_MARKER,
+    )
+
+    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+    assert _setup_env(tmp_path)["DATABASE_URL"] == "postgresql://db.example/cortex"
+    assert _saved_marker(tmp_path) == _MANAGED_MARKER
+
+
+def test_unexpanded_settings_decide_nothing_and_the_managed_marker_holds(tmp_path):
+    result, calls = _run(
+        tmp_path,
+        earlier_state=True,
+        extra_env={
+            "CLAUDE_PLUGIN_OPTION_DATABASE_URL": "${user_config.database_url}",
+            "CORTEX_MEMORY_STORE_BACKEND": "${user_config.store_backend}",
+        },
+        marker=_MANAGED_MARKER,
+    )
+
+    assert result.returncode == 0, f"{result.stdout}\n{result.stderr}"
+    assert "Existing managed PostgreSQL kept" in result.stdout + result.stderr
+    assert "DATABASE_URL" not in _setup_env(tmp_path)
+    assert _saved_marker(tmp_path) == _MANAGED_MARKER
+    assert not calls.exists()
