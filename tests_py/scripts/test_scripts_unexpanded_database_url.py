@@ -62,18 +62,42 @@ def test_an_option_that_names_no_database_maps_nothing(option):
 
 
 def test_setup_db_run_directly_without_pythonpath_still_answers_in_json(tmp_path):
-    # Codex review of #1052: run as `python scripts/setup_db.py` with no
-    # PYTHONPATH, the shared import raised ModuleNotFoundError before any JSON.
+    # Codex review of #1052: run as `python scripts/setup_db.py`, the shared
+    # import raised ModuleNotFoundError before any JSON. -S keeps an installed
+    # (editable) mcp_server out of the path, so the checkout must come from
+    # the script itself; -I already ignores PYTHONPATH (review 2 of #1052).
     import json
     import os
     import subprocess
 
     script = Path(__file__).resolve().parents[2] / "scripts" / "setup_db.py"
-    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
-    env["DATABASE_URL"] = "postgresql://127.0.0.1:1/cortex_unreachable"
+    env = dict(os.environ, DATABASE_URL="postgresql://127.0.0.1:1/cortex_unreachable")
     done = subprocess.run(
-        [sys.executable, "-I", str(script)],
+        [sys.executable, "-I", "-S", str(script)],
         capture_output=True, text=True, env=env, cwd=tmp_path, timeout=60,
     )  # fmt: skip
     assert "ModuleNotFoundError" not in done.stderr
     assert "status" in json.loads(done.stdout.strip().splitlines()[-1])
+
+
+def _load_setup_py(monkeypatch, database_url: str):
+    import importlib.util
+
+    monkeypatch.setenv("DATABASE_URL", database_url)
+    path = Path(__file__).resolve().parents[2] / "scripts" / "setup.py"
+    spec = importlib.util.spec_from_file_location("scripts.setup", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.parametrize("value", ["", "  ", _PLACEHOLDER])
+def test_setup_py_reads_no_url_from_a_blank_or_unexpanded_value(monkeypatch, value):
+    # setup.py kept a blank or unexpanded DATABASE_URL as its URL and handed
+    # it to setup_db and psycopg (review 1 of #1052, note 2).
+    module = _load_setup_py(monkeypatch, value)
+    assert module.DATABASE_URL == "postgresql://localhost:5432/cortex"
+
+
+def test_setup_py_keeps_a_configured_url_stripped(monkeypatch):
+    assert _load_setup_py(monkeypatch, f" {_REAL} ").DATABASE_URL == _REAL

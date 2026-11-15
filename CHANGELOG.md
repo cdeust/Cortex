@@ -120,6 +120,18 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Installer and Setup (issue #704, reviews of #1052): the entry below said the rule of
+  `shared/database_url.py` (`names_a_setting`, `named_setting`, `named_database_url`)
+  held outside the store and the hooks; `scripts/install-plugin.sh` and
+  `scripts/setup.py` still tested only blankness. The installer took a `DATABASE_URL`
+  left as `${user_config.database_url}` for a URL, so a real
+  `CLAUDE_PLUGIN_OPTION_DATABASE_URL` was not mapped and the managed marker was set
+  aside; `setup.py` kept a blank or unexpanded `DATABASE_URL` as its URL. The installer
+  now unsets such a URL, option or backend first, as the launch removes them, and
+  `setup.py` reads `DATABASE_URL` through `named_database_url`. `scripts/setup_db.py`,
+  run as a script, now puts its own checkout first on `sys.path`, so an installed
+  `mcp_server` older than #1051 no longer hides `shared.database_url`.
+
 - Setup, launcher and backend precedence (issue #704, review of #1051): the rule of
   `shared/database_url.py` now holds outside the store and the hooks too.
   `scripts/setup_db.py` replaced any `DATABASE_URL` containing `${` by the local default,

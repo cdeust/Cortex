@@ -42,7 +42,16 @@ PROJECT_DIR = SCRIPT_DIR.parent
 PLUGIN_DATA = os.environ.get("CLAUDE_PLUGIN_DATA", str(PROJECT_DIR))
 # The set directory the launcher uses for this plugin tree (source: ADR-1108).
 DEPS_DIR = launcher_layout.project_deps_dir(PLUGIN_DATA, PROJECT_DIR)
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://localhost:5432/cortex")
+if str(PROJECT_DIR) not in sys.path:
+    sys.path.insert(0, str(PROJECT_DIR))
+# A blank value or a whole unexpanded ``${name}`` token is unset, by the rule
+# the store, the hooks and setup_db apply (stdlib-only module, so importing it
+# before install_deps is safe). source: issue #704 (review 1 of #1052, note 2)
+from mcp_server.shared.database_url import named_database_url, named_setting  # noqa: E402 — resolvable only once PROJECT_DIR is on sys.path
+
+DATABASE_URL = named_database_url(os.environ.get("DATABASE_URL")) or (
+    "postgresql://localhost:5432/cortex"
+)
 
 # SQLite mode: see module docstring. Any other CORTEX_MEMORY_STORE_BACKEND
 # value (unset, "postgresql", "auto") keeps the normal PostgreSQL-required path.
@@ -52,7 +61,7 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://localhost:5432/corte
 # source: ADR-1114 (managed server, Setup provisions it)
 MANAGED_PG = os.environ.get("CORTEX_SETUP_MANAGED_PG", "") == "1"
 SKIP_POSTGRES = MANAGED_PG or (
-    os.environ.get("CORTEX_MEMORY_STORE_BACKEND", "").strip().lower() == "sqlite"
+    named_setting(os.environ.get("CORTEX_MEMORY_STORE_BACKEND")).lower() == "sqlite"
 )
 
 
