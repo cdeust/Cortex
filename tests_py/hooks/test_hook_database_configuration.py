@@ -80,3 +80,37 @@ def test_sqlite_selection_does_not_promote_database_alias(tmp_path):
     }
     prepare_environment(environ, tmp_path / "absent-marker.json")
     assert "DATABASE_URL" not in environ
+
+
+@pytest.mark.parametrize("blank", [" ", "\t\n"])
+def test_direct_briefing_reads_a_blank_canonical_url_as_absent(
+    monkeypatch, blank, postgres_connection_factory
+):
+    # A whitespace DATABASE_URL names nothing; the settings URL decides and is
+    # passed stripped, never the blank DSN libpq reads as its defaults (#704).
+    monkeypatch.setenv("CORTEX_MEMORY_STORE_BACKEND", "postgresql")
+    monkeypatch.setenv("CORTEX_MEMORY_DATABASE_URL", " postgresql:///settings_test ")
+    monkeypatch.setenv("DATABASE_URL", blank)
+    get_memory_settings.cache_clear()
+    try:
+        _connect()
+        assert postgres_connection_factory.call_args.args[0] == (
+            "postgresql:///settings_test"
+        )
+    finally:
+        get_memory_settings.cache_clear()
+
+
+@pytest.mark.parametrize("blank", [" ", "\t\n"])
+def test_direct_briefing_with_only_blank_urls_opens_no_connection(
+    monkeypatch, blank, postgres_connection_factory
+):
+    monkeypatch.setenv("CORTEX_MEMORY_STORE_BACKEND", "postgresql")
+    monkeypatch.setenv("CORTEX_MEMORY_DATABASE_URL", blank)
+    monkeypatch.setenv("DATABASE_URL", blank)
+    get_memory_settings.cache_clear()
+    try:
+        assert _connect() is None
+        postgres_connection_factory.assert_not_called()
+    finally:
+        get_memory_settings.cache_clear()

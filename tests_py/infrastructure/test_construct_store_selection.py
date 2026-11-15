@@ -238,8 +238,12 @@ def test_cache_key_url_precedence(world):
     ("param", "env", "expected"),
     [
         (None, {}, False),
-        ("", {}, True),
-        (None, {"DATABASE_URL": ""}, True),
+        ("", {}, False),
+        (" \t", {}, False),
+        ("postgresql://a/db", {}, True),
+        (None, {"DATABASE_URL": ""}, False),
+        (None, {"DATABASE_URL": "\n "}, False),
+        (None, {"DATABASE_URL": "postgresql://e/db"}, True),
         (None, {"CORTEX_MEMORY_DATABASE_URL": "  "}, False),
         (None, {"CORTEX_MEMORY_DATABASE_URL": "postgresql://p/db"}, True),
     ],
@@ -267,3 +271,13 @@ def test_a_blank_environment_url_falls_through_to_settings(world):
     world.env.setenv("DATABASE_URL", "  ")
     assert ms._construct_store(database_url=" ") is _PG_STORE
     assert world.calls == [("pg", "postgresql://settings/db")]
+
+
+def test_the_named_url_is_returned_without_its_whitespace(world):
+    # The installer and settle_backend strip the URL they hand on; the engine
+    # names the same URL, so the cache key and the DSN match theirs (#704).
+    _configure(world, "cowork", "auto", "  postgresql://settings/db\n")
+    assert ms._resolve_backend_url("", 384, None)[1] == "postgresql://settings/db"
+    assert ms._resolve_backend_url("", 384, " postgresql://arg/db ")[1] == (
+        "postgresql://arg/db"
+    )

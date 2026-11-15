@@ -112,6 +112,13 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Store and hooks (issue #704, reviews of #1048 and #1049): a database URL made only of
+  whitespace now names nothing in the store and the briefing hook. The hook read a blank
+  `DATABASE_URL` as a URL, hid the one named in the settings and handed libpq a blank
+  DSN, which it reads as its local defaults; the SQLite fallback guard counted a blank
+  argument or `DATABASE_URL` as explicit; and the engine returned the named URL with
+  its whitespace. `memory_config.named_database_url` is now the single rule: the first
+  non-blank candidate, stripped.
 - Installer (issue #704, review of #1045): a refused request named only the first
   variable that decides, so `--postgres` with `CORTEX_MEMORY_STORE_BACKEND=sqlite`
   and `CORTEX_BACKEND=sqlite` was refused a second time once the first was unset.
