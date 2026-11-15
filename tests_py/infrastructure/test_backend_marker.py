@@ -18,6 +18,7 @@ import pytest
 from mcp_server.infrastructure.backend_marker import (
     apply_backend_resolution,
     effective_backend,
+    environment_decides,
     BackendMarkerError,
     read_backend_marker,
     resolve_backend_env,
@@ -159,6 +160,28 @@ class TestApplyBackendResolution:
         apply_backend_resolution(env, marker_path=path)
         assert "DATABASE_URL" not in env
         assert env["CORTEX_MEMORY_STORE_BACKEND"] == "sqlite"
+
+    @pytest.mark.parametrize("name", ["DATABASE_URL", "CORTEX_MEMORY_DATABASE_URL"])
+    def test_a_placeholder_does_not_decide_the_first_launch(self, name):
+        # settle_backend asks environment_decides before any normalisation:
+        # a ${...} value must leave the first-launch decision to run, as an
+        # absent URL does (review 2 of #1051).
+        placeholder = {name: "${user_config.database_url}"}
+        assert not environment_decides(placeholder)
+        assert resolve_backend_env(placeholder, {"backend": "postgresql"}) == {
+            "CORTEX_MEMORY_STORE_BACKEND": "postgresql"
+        }
+
+    @pytest.mark.parametrize("name", ["DATABASE_URL", "CORTEX_MEMORY_DATABASE_URL"])
+    def test_an_unexpanded_placeholder_lets_the_marker_decide(self, tmp_path, name):
+        # A ${...} value names no database (issue #704): the store skips it,
+        # so the backend decision must too, or a postgresql marker is never
+        # read and the store falls back to SQLite silently.
+        path = _marker(tmp_path, {"backend": "postgresql"})
+        env = {name: "${user_config.database_url}"}
+        apply_backend_resolution(env, marker_path=path)
+        assert name not in env
+        assert env["CORTEX_MEMORY_STORE_BACKEND"] == "postgresql"
 
     def test_keeps_real_database_url_and_backend_untouched(self, tmp_path):
         path = _marker(tmp_path, {"backend": "sqlite"})

@@ -206,17 +206,3 @@ def root_agent_topic() -> str | None:
     source: ADR-0534"""
     val = os.environ.get("CORTEX_ROOT_AGENT_TOPIC", "").strip()
     return val or None
-
-
-def named_database_url(*candidates: str | None) -> str:
-    """The first candidate that names a database, stripped; ``""`` when none.
-
-    A value made only of whitespace names nothing, as in the installer and
-    ``backend_marker.environment_decides``: libpq reads a blank DSN as its
-    local defaults, the connection issue #704 removes.
-
-    source: issue #704"""
-    for candidate in candidates:
-        if candidate and candidate.strip():
-            return candidate.strip()
-    return ""

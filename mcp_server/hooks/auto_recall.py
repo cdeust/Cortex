@@ -54,6 +54,7 @@ from mcp_server.shared.injection_markers import (
 )
 from mcp_server.hooks._telemetry import observe_hook
 from mcp_server.shared.freshness import provenance_suffix
+from mcp_server.shared.database_url import named_database_url
 from mcp_server.shared.project_scope import project_ancestors, resolve_project_root
 from mcp_server.infrastructure.pg_scope_clause import pg_scope_predicate
 
@@ -62,7 +63,7 @@ _LOG_PREFIX = "[cortex-auto-recall]"
 # directory_context normalized as project_ancestors is (issue #692).
 _SCOPE = pg_scope_predicate("m.")
 # source: issues #703/#704 -- only shared resolution supplies a PostgreSQL URL.
-_DATABASE_URL = os.environ.get("DATABASE_URL", "")
+_DATABASE_URL = named_database_url(os.environ.get("DATABASE_URL"))
 _MAX_MEMORIES = 3
 _MIN_HEAT = 0.15
 _MIN_QUERY_LENGTH = 10

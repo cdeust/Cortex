@@ -8,10 +8,8 @@ import logging
 import os
 import threading
 from typing import TYPE_CHECKING
-from mcp_server.infrastructure.memory_config import (
-    get_memory_settings,
-    named_database_url,
-)
+from mcp_server.infrastructure.memory_config import get_memory_settings
+from mcp_server.shared.database_url import named_database_url
 from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 
 if TYPE_CHECKING:

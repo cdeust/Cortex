@@ -21,6 +21,7 @@ from psycopg.rows import DictRow
 from mcp_server.infrastructure.pg_schema import get_all_ddl
 from mcp_server.infrastructure.pg_store_host import MaterializedCursor, PgStoreHost
 from mcp_server.infrastructure.memory_config import get_memory_settings
+from mcp_server.shared.database_url import named_database_url
 
 if TYPE_CHECKING:
     from typing_extensions import LiteralString
@@ -59,9 +60,9 @@ def _get_database_url() -> str:
     would connect to whatever local server the defaults reach (issue #704).
 
     source: ADR-0545"""
-    url = os.environ.get("DATABASE_URL", "").strip()
-    if not url or "${" in url:
-        url = get_memory_settings().DATABASE_URL.strip()
+    url = named_database_url(
+        os.environ.get("DATABASE_URL"), get_memory_settings().DATABASE_URL
+    )
     if not url:
         raise ValueError(
             "no PostgreSQL URL configured: set DATABASE_URL "
