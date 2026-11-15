@@ -125,9 +125,11 @@ adheres to [Semantic Versioning](https://semver.org/).
   `CORTEX_MEMORY_STORE_BACKEND` that is blank or a whole unexpanded `${name}` token, it
   now writes one INFO line on the `mcp_server.infrastructure.backend_marker` logger
   naming the variable and why, never the value. No shipped process shows that line
-  today: the server, the hooks and the launcher settle the backend before anything
-  configures logging, so the line reaches only a caller that configured INFO first
-  (review 1 of #1057). Review of #1056: the comment of the installer test of that case says
+  today: the server, the hooks, the launcher, the doctor (`doctor_managed.managed_server`)
+  and the commands that call `settle_for_command` (`cortex-migrate`, `cortex
+  portability`, `wiki_migrate`) settle the backend before anything configures logging,
+  so the line reaches only a caller that configured INFO first (review 1 of #1057,
+  review of #1058). Review of #1056: the comment of the installer test of that case says
   the marker staying and no managed provisioning hold on every OS, and that `setup.sh`
   is not passed the backend explicitly.
 - Installer and Setup (issue #704, reviews of #1052): the entry below said the rule of
