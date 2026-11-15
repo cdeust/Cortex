@@ -134,8 +134,9 @@ adheres to [Semantic Versioning](https://semver.org/).
   comment of the installer test of that case says the marker staying and no managed
   provisioning hold on every OS, and that `setup.sh` is not passed the backend
   explicitly. Review of #1060: the test of a kept setting compares every log record
-  and pins that a blank `CORTEX_BACKEND`, which is not one of the three settings, is
-  neither removed nor logged.
+  and pins that a blank `CORTEX_BACKEND`, a backend setting the drop does not handle,
+  is neither removed nor logged. Review of #1061: the kept URL of that test carries
+  surrounding whitespace, so a drop that also stripped the values it keeps fails it.
 - Installer and Setup (issue #704, reviews of #1052): the entry below said the rule of
   `shared/database_url.py` (`names_a_setting`, `named_setting`, `named_database_url`)
   held outside the store and the hooks; `scripts/install-plugin.sh` and
