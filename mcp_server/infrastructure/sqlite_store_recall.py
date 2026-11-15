@@ -83,6 +83,9 @@ def _result(mid: int, row: Any, score: float) -> dict[str, Any]:
         "surprise_score": row["surprise_score"],
         # source: ADR-0616
         "capture_origin": row["capture_origin"],
+        # source: ADR-1140 -- the recall filter keys on the writer's source,
+        # which the PostgreSQL recall_memories projection already returns.
+        "source": row["source"],
     }
 
 
