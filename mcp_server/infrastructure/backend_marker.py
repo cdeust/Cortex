@@ -42,6 +42,7 @@ from typing import Mapping, MutableMapping
 from mcp_server.infrastructure import managed_pg
 from mcp_server.infrastructure.config import METHODOLOGY_DIR
 from mcp_server.shared import gated_files
+from mcp_server.shared.database_url import names_a_database
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +63,9 @@ _BACKEND_ALIASES = {
     "postgres": "postgresql",
     "postgresql": "postgresql",
 }
+# The variables that name the store's URL, read by environment_decides and
+# resolve_backend_env (source: issue #704, review of #1051).
+_URL_VARIABLES = ("DATABASE_URL", "CORTEX_MEMORY_DATABASE_URL")
 
 
 class BackendMarkerError(ValueError):
@@ -171,11 +175,12 @@ def apply_backend_resolution(
 ) -> dict[str, str]:
     """Apply the resolved backend to ``environ`` in place.
 
-    Also normalizes a *blank* ``DATABASE_URL`` to absent first: the
-    plugin manifest interpolates ``${user_config.database_url}`` whose
-    default is now empty, and an empty string must mean "not
-    configured" everywhere downstream (psycopg would otherwise read
-    libpq defaults from a blank DSN).
+    Also normalizes a ``DATABASE_URL`` or ``CORTEX_MEMORY_DATABASE_URL``
+    that names no database (blank, or an unexpanded ``${...}``) to absent
+    first: the plugin manifest interpolates ``${user_config.database_url}``
+    whose default is now empty, and such a value must mean "not configured"
+    everywhere downstream, in the backend decision as in the store (psycopg
+    would otherwise read libpq defaults from a blank DSN; issue #704).
 
     A ``managed`` marker (or an inherited URL of that server, for a child of
     an attached process) attaches this process to the plugin's managed
@@ -186,9 +191,9 @@ def apply_backend_resolution(
     Post: returns the additions applied (possibly ``{}``). Raises
           ``managed_pg.ManagedPgError`` when the managed server cannot run.
     """
-    url = environ.get("DATABASE_URL")
-    if url is not None and not url.strip():
-        del environ["DATABASE_URL"]
+    for name in _URL_VARIABLES:
+        if name in environ and not names_a_database(environ[name]):
+            del environ[name]
     inherited = managed_pg.serves(environ)
     if inherited is not None:
         return managed_pg.use(inherited, environ)
