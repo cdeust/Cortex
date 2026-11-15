@@ -120,6 +120,13 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Backend precedence (issue #704, note 4 of review 1 of #1052): when
+  `apply_backend_resolution` drops a `DATABASE_URL`, `CORTEX_MEMORY_DATABASE_URL` or
+  `CORTEX_MEMORY_STORE_BACKEND` that is blank or a whole unexpanded `${name}` token, it
+  now writes one INFO line on the `backend_marker` logger naming the variable and why,
+  never the value. Review of #1056: the comment of the installer test of that case says
+  the marker staying and no managed provisioning hold on every OS, and that `setup.sh`
+  is not passed the backend explicitly.
 - Installer and Setup (issue #704, reviews of #1052): the entry below said the rule of
   `shared/database_url.py` (`names_a_setting`, `named_setting`, `named_database_url`)
   held outside the store and the hooks; `scripts/install-plugin.sh` and

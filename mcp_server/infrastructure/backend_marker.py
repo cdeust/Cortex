@@ -185,6 +185,19 @@ def _marker_unless_decided(
     return None if environment_decides(environ) else read_backend_marker(marker_path)
 
 
+def _drop_unset(environ: MutableMapping[str, str]) -> None:
+    """Remove each store variable that names nothing, with one log line each.
+
+    The line names the variable, never its value (a DSN can hold a password),
+    so a process that configures logging can tell why its setting was not
+    used (issue #704, note 4 of review 1 of #1052)."""
+    for name in (*_URL_VARIABLES, _BACKEND_VARIABLE):
+        if name in environ and not names_a_setting(environ[name]):
+            reason = "blank" if not environ[name].strip() else "an unexpanded ${...}"
+            logger.info("%s is %s: treated as not set", name, reason)
+            del environ[name]
+
+
 def apply_backend_resolution(
     environ: MutableMapping[str, str],
     marker_path: Path | None = None,
@@ -210,9 +223,7 @@ def apply_backend_resolution(
     Post: returns the additions applied (possibly ``{}``). Raises
           ``managed_pg.ManagedPgError`` when the managed server cannot run.
     """
-    for name in (*_URL_VARIABLES, _BACKEND_VARIABLE):
-        if name in environ and not names_a_setting(environ[name]):
-            del environ[name]
+    _drop_unset(environ)
     inherited = managed_pg.serves(environ)
     if inherited is not None:
         return managed_pg.use(inherited, environ)
