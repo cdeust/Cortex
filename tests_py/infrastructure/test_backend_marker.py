@@ -173,16 +173,21 @@ class TestApplyBackendResolution:
         }
 
     @pytest.mark.parametrize(
-        ("value", "reason"),
-        [(" ", "blank"), ("${user_config.database_url}", "an unexpanded")],
+        "name",
+        ["DATABASE_URL", "CORTEX_MEMORY_DATABASE_URL", "CORTEX_MEMORY_STORE_BACKEND"],
     )
-    def test_a_dropped_value_is_logged_by_name_only(self, caplog, value, reason):
+    @pytest.mark.parametrize(
+        ("value", "reason"),
+        [(" ", "blank"), ("${user_config.database_url}", "an unexpanded ${...}")],
+    )
+    def test_a_dropped_value_is_logged_by_name_only(self, caplog, name, value, reason):
         # Note 4 of review 1 of #1052: a dropped value left no log line.
-        env = {"DATABASE_URL": value}
-        with caplog.at_level("INFO", logger="mcp_server.infrastructure.backend_marker"):
-            apply_backend_resolution(env, marker_path=Path("/nonexistent/b.json"))
-        assert "DATABASE_URL is " + reason in caplog.text
-        assert "user_config" not in caplog.text
+        logger = "mcp_server.infrastructure.backend_marker"
+        with caplog.at_level("INFO", logger=logger):
+            apply_backend_resolution({name: value}, marker_path=Path("/nonexistent"))
+        assert caplog.record_tuples == [
+            (logger, 20, f"{name} is {reason}: treated as not set")
+        ]
 
     @pytest.mark.parametrize("name", ["DATABASE_URL", "CORTEX_MEMORY_DATABASE_URL"])
     def test_an_unexpanded_placeholder_lets_the_marker_decide(self, tmp_path, name):
