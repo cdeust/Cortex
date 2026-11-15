@@ -20,11 +20,12 @@ from tests_py.scripts.test_install_plugin_no_implicit_postgres import (
 
 
 def test_an_unexpanded_url_is_unset_and_the_host_option_reaches_setup(tmp_path):
-    # The launch removes a DATABASE_URL left as ${user_config.database_url}
-    # and maps the option onto it; the installer's `-n` test kept the token
-    # as a URL (review 1 of #1052, note 2). The option's URL then decides:
-    # Setup is named postgresql and not asked to provision the managed
-    # server, whose marker stays (review of #1053, note 2).
+    # At launch, map_database_option writes the option over a DATABASE_URL
+    # left as ${user_config.database_url}, which names no database; the
+    # installer's `-n` test kept the token as a URL (review 1 of #1052,
+    # note 2). The option's URL then decides: Setup is named postgresql and
+    # not asked to provision the managed server, whose marker stays (review
+    # of #1053, note 2; review of #1054, notes 2 and 3).
     result, _ = _run(
         tmp_path,
         earlier_state=True,
@@ -39,6 +40,7 @@ def test_an_unexpanded_url_is_unset_and_the_host_option_reaches_setup(tmp_path):
     assert "Backend: postgresql" in result.stdout + result.stderr
     setup_env = _setup_env(tmp_path)
     assert setup_env["DATABASE_URL"] == "postgresql://db.example/cortex"
+    assert setup_env["CORTEX_MEMORY_STORE_BACKEND"] == "postgresql"
     assert "CORTEX_SETUP_MANAGED_PG" not in setup_env
     assert _saved_marker(tmp_path) == _MANAGED_MARKER
 
