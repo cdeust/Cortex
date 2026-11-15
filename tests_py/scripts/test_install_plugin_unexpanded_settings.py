@@ -24,12 +24,14 @@ def test_an_unexpanded_url_is_unset_and_the_host_option_reaches_setup(tmp_path):
     # left as ${user_config.database_url}, which names no database; the
     # installer's `-n` test kept the token as a URL (review 1 of #1052,
     # note 2). The installer now unsets that token first (install-plugin.sh,
-    # UNSET_NAMES), so the option fills the empty URL and decides. On the
-    # Windows branch the uname stub forces, Setup (scripts/setup.py) is then
-    # named postgresql and not asked to provision the managed server, whose
-    # marker stays; Linux and Darwin run setup.sh, which is not passed the
-    # decided backend (review of #1053, note 2; review of #1054, notes 2 and
-    # 3; review of #1055, notes 1 and 3).
+    # UNSET_NAMES), so the option fills the empty URL and decides. On every
+    # OS the managed marker stays (KEEP_MARKER) and Setup is not asked to
+    # provision the managed server. Only the backend name is Windows-only: on
+    # the branch the uname stub forces, Setup (scripts/setup.py) is named
+    # postgresql; Linux and Darwin run setup.sh, which is not passed the
+    # backend explicitly (an exported one that survived UNSET_NAMES is still
+    # inherited) (review of #1053, note 2; review of #1054, notes 2 and 3;
+    # review of #1055, notes 1 and 3; review of #1056, notes 1 and 2).
     result, _ = _run(
         tmp_path,
         earlier_state=True,
