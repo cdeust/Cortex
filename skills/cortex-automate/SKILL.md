@@ -60,7 +60,7 @@ cortex:create_trigger({
 })
 ```
 
-Triggers fire up to 5 times by default, then deactivate. They appear in the `query_methodology` response at session start.
+Triggers fire up to 5 times by default, then deactivate. They appear in the `query_methodology` response when that tool is called; no hook calls it.
 
 ### Rules — Filter and Boost During Recall
 

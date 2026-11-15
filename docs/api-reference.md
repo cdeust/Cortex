@@ -15,7 +15,7 @@ This document describes the input schemas, response formats, and error codes for
 
 ### `query_methodology`
 
-Returns the cognitive profile for the current domain, suitable for system prompt injection. Also surfaces hot memories and fired triggers.
+Returns the cognitive profile for the current domain. Also surfaces hot memories and fired triggers. No hook calls this tool: the profile reaches a session only when the model calls it (issue #710).
 
 **Input Schema:**
 

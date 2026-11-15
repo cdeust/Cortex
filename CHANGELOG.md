@@ -141,6 +141,15 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `query_methodology` no longer claims a session-start call that nothing makes
+  (issue #710): its description said the tool was "MANDATORY at session start so
+  subsequent reasoning is calibrated to the user's tendencies", but no hook calls it.
+  The description now says no hook calls it and the profile reaches a session only
+  when the model calls the tool; `docs/api-reference.md`, `docs/architecture.md`,
+  `skills/cortex-automate/SKILL.md` and the `create_trigger` docstring are aligned.
+  `tests_py/handlers/test_query_methodology_not_injected.py` fails when a hook starts
+  referencing the tool while the description still says none does.
+
 - Backend precedence (issue #704, note 4 of review 1 of #1052): when
   `apply_backend_resolution` drops a `DATABASE_URL`, `CORTEX_MEMORY_DATABASE_URL` or
   `CORTEX_MEMORY_STORE_BACKEND` that is blank or a whole unexpanded `${name}` token, it

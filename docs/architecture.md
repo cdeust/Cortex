@@ -190,7 +190,7 @@ for current file counts per layer.
 
 | Module | Purpose |
 |---|---|
-| `query_methodology.py` | Returns cognitive profile for system prompt injection |
+| `query_methodology.py` | Returns the cognitive profile when the model calls the tool (no hook calls it) |
 | `detect_domain.py` | Lightweight domain classification |
 | `rebuild_profiles.py` | Full rescan of session data with smart caching |
 | `list_domains.py` | Overview of all known domains |

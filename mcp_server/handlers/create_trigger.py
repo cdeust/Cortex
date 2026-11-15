@@ -1,8 +1,8 @@
 """Handler: create_trigger — create a prospective memory trigger.
 
 Prospective memory is future-oriented: "remind me when X happens".
-Triggers are stored in the prospective_memories table and checked at
-session start (query_methodology) and on demand.
+Triggers are stored in the prospective_memories table and checked when
+query_methodology is called and on demand; no hook checks them (issue #710).
 
 Trigger types:
   - keyword:  fires when the user's message contains the keyword
