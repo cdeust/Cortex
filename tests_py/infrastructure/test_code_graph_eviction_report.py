@@ -186,6 +186,26 @@ def test_measure_returns_the_first_error_that_left_a_file_unread(tmp_path, monke
     assert eviction._measure(graph_dir) == (0, first)
 
 
+def test_measure_returns_a_real_error_after_a_vanished_one(tmp_path, monkeypatch):
+    # A vanished entry first, then a real error: the real one is returned, so a
+    # _measure that kept the first error of any type, then dropped it as
+    # vanished, would fail (#711).
+    graph_dir = _graph(tmp_path, "g", 10, None, used=1.0)
+    real = PermissionError(13, "lstat denied")
+    real_walk = eviction.os.walk
+
+    def _walk(top, onerror=None):
+        onerror(FileNotFoundError(2, "gone", str(Path(top) / "sub")))
+        return real_walk(top, onerror=onerror)
+
+    def _deny(path):
+        raise real
+
+    monkeypatch.setattr(eviction.os, "walk", _walk)
+    monkeypatch.setattr(eviction.os, "lstat", _deny)
+    assert eviction._measure(graph_dir) == (0, real)
+
+
 def test_measure_stays_complete_when_an_entry_vanished(tmp_path, monkeypatch):
     graph_dir = _graph(tmp_path, "g", 10, None, used=1.0)
     real_walk = eviction.os.walk

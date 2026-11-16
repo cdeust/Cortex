@@ -189,8 +189,14 @@ adheres to [Semantic Versioning](https://semver.org/).
   while it used the first; its test now raises one error through `os.walk`'s
   `onerror` and a later one from `os.lstat`, so a `_measure` that returned the last
   error fails it. The comment of the unreadable-rest test now says the test calls
-  `onerror` itself and that only its `total_bytes` assertion separates a counted
-  rest from one counted as freed.
+  `onerror` itself and that only its `total_bytes` and `over_cap` line separates a
+  counted rest from one counted as freed.
+- Code-graph cache cap (issue #711, fifth refinement of slice 3b): a real error that
+  `_measure` meets after a vanished entry is now pinned by a test, so a `_measure`
+  that kept the first error of any type and then dropped it as vanished fails; its
+  docstring says only the first real error is returned. The unreadable-rest test
+  names its whole `total_bytes` and `over_cap` line as what catches a rest counted
+  as freed: both assertions fail under that mutation, not `total_bytes` alone.
 - `query_methodology` no longer claims a session-start call that nothing makes
   (issue #710): its description said the tool was "MANDATORY at session start so
   subsequent reasoning is calibrated to the user's tendencies", but no hook calls it.

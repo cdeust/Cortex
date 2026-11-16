@@ -225,7 +225,8 @@ def test_an_unreadable_rest_keeps_its_size_in_the_total(tmp_path, monkeypatch, c
     # rmtree frees part of each graph, then fails. The test calls os.walk's
     # onerror itself to stand for a subdirectory it cannot read (chmod blocks
     # nothing under root). newer is attempted in either behaviour; only the
-    # total_bytes assertion tells a counted rest from one counted as freed (#711).
+    # total_bytes and over_cap line tells a counted rest from one counted as
+    # freed: both of its assertions fail under that mutation (#711).
     base = tmp_path / "code-graphs"
     stuck = _graph(base, "stuck", 100, tmp_path / "stuck", used=1.0)
     newer = _graph(base, "newer", 100, tmp_path / "newer", used=2.0)
