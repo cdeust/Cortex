@@ -131,7 +131,8 @@ def _measure(path: Path) -> tuple[int, OSError | None]:
 
     An entry that vanished during the walk is gone, so it leaves the count
     complete; any other error (an unreadable subdirectory, which ``os.walk``
-    skips silently without ``onerror``) is returned: the count is incomplete."""
+    skips silently without ``onerror``) leaves it incomplete, and only the
+    first such error is returned, even after a vanished entry."""
     first: OSError | None = None
 
     def _note(exc: OSError) -> None:
