@@ -76,6 +76,12 @@ def test_live_window_without_root_makes_the_set_unknown(registry):
     assert roots.live_project_roots() is None
 
 
+@pytest.mark.parametrize("bad_root", ["", 42])
+def test_live_window_with_an_empty_or_non_text_root_is_unknown(registry, bad_root):
+    _entry(registry, 24, project_root=bad_root)
+    assert roots.live_project_roots() is None
+
+
 def test_tombstoned_live_window_is_unknown(registry):
     """A tombstone keeps the window alive but records no root."""
     sr.tombstone(23)

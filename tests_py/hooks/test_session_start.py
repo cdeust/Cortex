@@ -803,18 +803,19 @@ def test_refresh_session_registry_records_the_project_root(monkeypatch):
     """Issue #711: SessionStart records the window's project for eviction."""
     from mcp_server.infrastructure import session_registry
 
-    seen: list[object] = []
+    seen: list[tuple[object, object]] = []
     monkeypatch.delenv("CLAUDE_PROJECT_ROOT", raising=False)
     monkeypatch.setattr(
         session_registry,
         "write_session",
-        lambda sid, **k: seen.append(k.get("project_root")),
+        lambda sid, **k: seen.append((sid, k.get("project_root"))),
     )
     monkeypatch.setattr(session_registry, "purge_dead_entries", lambda: 0)
 
-    ss_background._refresh_session_registry({"cwd": "/work/proj"})
+    event = {"cwd": "/work/proj", "transcript_path": "/t/p/stem-7.jsonl"}
+    ss_background._refresh_session_registry(event)
 
-    assert seen == ["/work/proj"]
+    assert seen == [("stem-7", "/work/proj")]
 
 
 def test_refresh_session_registry_failure_is_logged_not_raised(capsys, monkeypatch):
