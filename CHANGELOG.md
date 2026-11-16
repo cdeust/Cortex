@@ -16,7 +16,8 @@ adheres to [Semantic Versioning](https://semver.org/).
   recorded root is exactly the project root of a live window (its marker is touched instead, so
   it reads as just used), nor a directory without a marker, and evicts nothing when
   the live roots are unknown. Unset or blank: no eviction, as before; a value that
-  is not a finite size of at least 0 is logged and sets no cap. No default cap is
+  is not a number, is negative (`-0` included), has a byte count that is not finite,
+  or is not 0 but below one byte is logged and sets no cap. No default cap is
   shipped: no value is sourced in the repository.
 - Project root of each live window in the session registry (issue #711, slice 3a):
   the SessionStart and UserPromptSubmit hooks pass `resolve_project_root` to
@@ -167,6 +168,12 @@ adheres to [Semantic Versioning](https://semver.org/).
   0 bytes; `0` stays a cap of 0 bytes. Known limit, written in the module: Codex
   sessions are not registered, so a graph used only by a live Codex session is not
   protected when a cap is set.
+- Code-graph cache cap (issue #711, second refinement of slice 3b): a removal that
+  fails partway is measured again, so what it freed leaves the total; a graph that a
+  concurrent pass already removed counts as removed, not failed; `1e-400`, which a
+  float reads as 0.0, is refused as below one byte instead of setting a cap of
+  0 bytes; a negative value and a non-finite one now log distinct warnings
+  (`is negative`, `is not a finite size`).
 - `query_methodology` no longer claims a session-start call that nothing makes
   (issue #710): its description said the tool was "MANDATORY at session start so
   subsequent reasoning is calibrated to the user's tendencies", but no hook calls it.

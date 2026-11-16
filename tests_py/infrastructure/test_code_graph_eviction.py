@@ -42,7 +42,7 @@ def test_cap_reads_decimal_gigabytes(monkeypatch, raw, expected):
     assert eviction.cache_cap_bytes() == expected
 
 
-@pytest.mark.parametrize("raw", ["ten", "-1", "-0", "nan", "inf", "1e-10"])
+@pytest.mark.parametrize("raw", ["ten", "-1", "-0", "nan", "inf", "1e-10", "1e-400"])
 def test_an_unusable_cap_is_logged_and_sets_none(monkeypatch, caplog, raw):
     monkeypatch.setenv(eviction.CAP_ENV, raw)
     assert eviction.cache_cap_bytes() is None
@@ -169,3 +169,40 @@ def test_a_graph_that_cannot_go_hands_its_turn_to_the_next(tmp_path, monkeypatch
     assert report.failed == ("stuck",) and report.removed == ("newer",)
     assert stuck.is_dir() and not newer.exists()
     assert report.total_bytes == cap and report.over_cap is False
+
+
+def test_a_partial_removal_counts_only_what_is_left(tmp_path, monkeypatch):
+    # rmtree frees part of the oldest graph, then fails: what it freed leaves
+    # the total, so the cache fits without evicting the newer graph (#711).
+    base = tmp_path / "code-graphs"
+    stuck = _graph(base, "stuck", 100, tmp_path / "stuck", used=1.0)
+    newer = _graph(base, "newer", 100, tmp_path / "newer", used=2.0)
+    left = eviction.directory_size(stuck) - 100
+
+    def _partial(path):
+        (Path(path) / "graph" / "data").unlink()
+        raise OSError("busy")
+
+    monkeypatch.setattr(eviction.shutil, "rmtree", _partial)
+    cap = eviction.directory_size(newer) + left
+    report = eviction.evict_to_cap(base, cap=cap, live_roots=frozenset())
+
+    assert report.failed == ("stuck",) and report.removed == ()
+    assert newer.is_dir() and report.total_bytes == cap
+    assert report.over_cap is False
+
+
+def test_a_graph_removed_by_another_pass_counts_as_removed(tmp_path, monkeypatch):
+    base = tmp_path / "code-graphs"
+    _graph(base, "idle", 100, tmp_path / "idle", used=1.0)
+    real_rmtree = eviction.shutil.rmtree
+
+    def _raced(path):
+        real_rmtree(path)
+        raise FileNotFoundError(path)
+
+    monkeypatch.setattr(eviction.shutil, "rmtree", _raced)
+    report = eviction.evict_to_cap(base, cap=0, live_roots=frozenset())
+
+    assert report.removed == ("idle",) and report.failed == ()
+    assert report.total_bytes == 0 and report.over_cap is False

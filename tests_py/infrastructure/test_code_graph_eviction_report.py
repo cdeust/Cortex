@@ -42,11 +42,12 @@ def test_an_unset_cap_is_none_and_logs_nothing(monkeypatch, caplog):
     ("raw", "message"),
     [
         ("ten", "='ten' is not a number; no code-graph eviction"),
-        ("-1", "='-1' is not a finite size >= 0; no eviction"),
-        ("inf", "='inf' is not a finite size >= 0; no eviction"),
-        ("1e300", "='1e300' is not a finite size >= 0; no eviction"),
-        ("-0", "='-0' is not a finite size >= 0; no eviction"),
+        ("-1", "='-1' is negative; no eviction"),
+        ("inf", "='inf' is not a finite size; no eviction"),
+        ("1e300", "='1e300' is not a finite size; no eviction"),
+        ("-0", "='-0' is negative; no eviction"),
         ("1e-10", "='1e-10' is below one byte; no eviction"),
+        ("1e-400", "='1e-400' is below one byte; no eviction"),
     ],
 )
 def test_an_unusable_cap_logs_the_value(monkeypatch, caplog, raw, message):
