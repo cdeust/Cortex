@@ -125,3 +125,44 @@ def test_a_failed_removal_exits_1(managed, tmp_path, monkeypatch, capsys):
 
     assert orphan.is_dir()
     assert "[bg-graph-prune] failed: ['gone-0000aaaa']" in capsys.readouterr().out
+
+
+def test_a_cap_starts_the_worker_without_orphans(
+    managed, tmp_path, monkeypatch, capsys
+):
+    _graph(managed, "live-1111bbbb", tmp_path / "live")
+    monkeypatch.setenv("CORTEX_CODE_GRAPH_CACHE_MAX_GB", "5")
+    calls = fake_spawn(monkeypatch, background)
+
+    background._maybe_background_prune_graphs()
+
+    assert len(calls) == 1
+    assert "code-graph prune spawned for the cache cap" in capsys.readouterr().err
+
+
+def test_the_worker_evicts_over_the_cap_but_not_a_live_graph(
+    managed, tmp_path, monkeypatch, capsys
+):
+    idle = _graph(managed, "idle-3333dddd", tmp_path / "idle")
+    live = _graph(managed, "live-1111bbbb", tmp_path / "live")
+    live_roots = frozenset({str((tmp_path / "live").resolve())})
+    monkeypatch.setattr(worker, "live_project_roots", lambda: live_roots)
+    monkeypatch.setenv("CORTEX_CODE_GRAPH_CACHE_MAX_GB", "0")
+
+    assert worker.main() == 0
+
+    assert not idle.exists()
+    assert live.is_dir()
+    out = capsys.readouterr().out
+    assert "[bg-graph-evict] removed: ['idle-3333dddd']" in out
+    assert "still over the cap" in out
+
+
+def test_no_cap_runs_no_eviction(managed, tmp_path, monkeypatch, capsys):
+    idle = _graph(managed, "idle-3333dddd", tmp_path / "idle")
+    monkeypatch.delenv("CORTEX_CODE_GRAPH_CACHE_MAX_GB", raising=False)
+
+    assert worker.main() == 0
+
+    assert idle.is_dir()
+    assert "bg-graph-evict" not in capsys.readouterr().out

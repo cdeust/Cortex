@@ -103,26 +103,30 @@ def _spawn_reanalysis(project_root: str) -> None:
 
 
 def _maybe_background_prune_graphs() -> None:
-    """Start the detached pruning worker when the code-graph cache holds an orphan.
+    """Start the detached pruning worker when the code-graph cache holds an
+    orphan, or when ``CORTEX_CODE_GRAPH_CACHE_MAX_GB`` sets a cap (slice 3b).
 
     Before this, orphans were pruned only after an ingest built a graph, so a
     session that ingested nothing left every deleted worktree's graph behind.
-    The hook only reads one marker per cache entry; the removal itself runs in
-    ``code_graph_prune_background``, outside the hook's time budget. Failures
-    are logged, never raised.
+    The hook only reads one marker per cache entry and never measures sizes;
+    the removal and the eviction run in ``code_graph_prune_background``,
+    outside the hook's time budget. Failures are logged, never raised.
 
     source: issue #711"""
     try:
-        from mcp_server.infrastructure import code_graph_cache  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
+        from mcp_server.infrastructure import code_graph_cache, code_graph_eviction  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
 
         orphans = code_graph_cache.orphan_graphs(code_graph_cache.managed_cache_dir())
-        if not orphans:
+        capped = code_graph_eviction.cache_cap_bytes() is not None
+        if not orphans and not capped:
             return
         cmd = child_command("mcp_server.hooks.code_graph_prune_background")
         log_path = methodology_log_path("code_graph_prune.log")
         # source: ADR-1110 — the child's output reaches the log only redacted
         spawn_logged(cmd, log_path, **detached_spawn.options())
-        _log(f"code-graph prune spawned for {len(orphans)} orphan(s) → {log_path}")
+        reasons = [f"{len(orphans)} orphan(s)"] if orphans else []
+        reasons += ["the cache cap"] if capped else []
+        _log(f"code-graph prune spawned for {' and '.join(reasons)} → {log_path}")
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"code-graph prune skipped: {exc}")
 
