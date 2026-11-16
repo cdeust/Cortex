@@ -201,13 +201,17 @@ adheres to [Semantic Versioning](https://semver.org/).
   test set its cap to the first graph's size, so whether `over_cap` caught a rest
   counted as freed depended on the length of the temporary path written in the root
   markers: past 100 bytes per marker it stayed True under that mutation. The cap now
-  sits 50 bytes above the two markers, and the `total_bytes` and `over_cap`
-  conditions are two asserts: each fails alone under that mutation. A marker is 20
-  bytes plus the length of its root path, so its size follows the machine: 86 bytes
-  on pytest's default temporary path under the user `root` where the mutation was
-  checked, 88 under the CI user `runner`, over 100 under macOS's
-  `/private/var/folders`. The mutation was also checked on a `--basetemp` long
-  enough for 258-byte markers. The previous entry's "both assertions" described one
+  sits half a data file (`data_size // 2`) above the two markers, a margin that
+  stays above zero and below one data file whatever `data_size` is, and the
+  `total_bytes` and `over_cap` conditions are two asserts: each fails alone under
+  that mutation. A marker is the JSON `{"project_root": "<path>"}`: 20 bytes plus
+  the JSON-encoded root path, which is the path's length only for an ASCII path
+  with no character JSON escapes. Its size therefore follows the machine. Measured:
+  86 bytes on pytest's default temporary path under the user `root`, where the
+  mutation was checked, and 258 bytes on a long `--basetemp`, where it was checked
+  again. Computed from that formula, not measured: 88 bytes under the CI user
+  `runner`. Not measured: macOS, whose `/private/var/folders` paths are expected to
+  exceed 100 bytes. The previous entry's "both assertions" described one
   `assert … and …`, whose second condition was not evaluated once the first failed.
 - `query_methodology` no longer claims a session-start call that nothing makes
   (issue #710): its description said the tool was "MANDATORY at session start so
