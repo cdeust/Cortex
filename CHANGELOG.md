@@ -8,14 +8,23 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- References touched by a forgotten source (issue #713, slice 4): `forget` returns
+  `cited_by_pages`, the wiki-relative paths of the pages whose citations named the
+  memory. A hard `forget` reads them before it erases the citation rows (pages it
+  removes as copies of the memory are left out), since the page's trace no longer
+  lists the memory afterwards; a soft `forget` keeps the citation. The `wiki_read`
+  trace marks a cited memory retired since (soft `forget`, a re-ingest under another
+  output) with `stale: true`, and one corrected by a newer memory with the
+  `superseded_by_id` the store recorded; the entry still names the cited memory,
+  never a guessed replacement.
 - Source trace on `wiki_read` (issue #713, slice 3): the response carries `sources`,
   one entry per memory the page cites through `wiki_write(memory_ids=...)`, in
   citation order. A cited document segment shows its `document_sources` (file,
   version, adapter kind), read from its `doc-ingest:` tag as recall does since slice 2;
   a cited id the store no longer resolves comes back as `{"memory_id", "missing": true}`.
   A memory deleted from the store loses its citation link in the database
-  (`ON DELETE SET NULL`, or the row a hard `forget` removes), so it is not listed:
-  reporting the references a deletion touched is slice 4. When no trace can be read
+  (`ON DELETE SET NULL`, or the row a hard `forget` removes), so it is not listed;
+  `forget` names the pages it touched since slice 4. When no trace can be read
   the response says so in `sources_unavailable` (`page_not_indexed`, or `store_error`
   without the error text, which can carry the database URL); the page content is
   returned either way. The content keeps priority in the response budget: trace

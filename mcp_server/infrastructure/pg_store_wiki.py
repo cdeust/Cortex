@@ -42,6 +42,7 @@ from mcp_server.infrastructure.pg_store_wiki_notes import (
     insert_citation,
     insert_memo,
     list_page_cited_memory_ids,
+    list_pages_citing_memory,
     list_uncited_deliberate_memories,
     wiki_stats,
 )
@@ -87,6 +88,7 @@ __all__ = [
     "list_concepts",
     "list_drafts",
     "list_page_cited_memory_ids",
+    "list_pages_citing_memory",
     "list_pages_for_decay",
     "list_uncited_deliberate_memories",
     "resolve_unresolved_links",

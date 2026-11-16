@@ -63,5 +63,6 @@ def _connected_rows(rows: list[dict], memory_id: int) -> list[dict]:
 def merge_erasure_report(target: ErasureReport, copy: ErasureReport) -> None:
     target.deleted = target.deleted or copy.deleted
     target.page_paths.extend(copy.page_paths)
+    target.cited_by_pages = sorted({*target.cited_by_pages, *copy.cited_by_pages})
     for key, count in copy.counts.items():
         target.counts[key] = target.counts.get(key, 0) + count

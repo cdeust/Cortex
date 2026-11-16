@@ -5,10 +5,11 @@ A page written with ``wiki_write(memory_ids=...)`` records one
 those rows for the page wiki_read returns and resolves each memory through
 ``cited_memory_sources``, so a caller challenging a synthesis gets the
 document segment and version behind it. A cited id the store no longer
-resolves comes back marked ``missing``. A memory deleted from the store loses
-its citation link in the database (``ON DELETE SET NULL``, or the row removed by
-a hard ``forget``), so it no longer appears here; reporting the references a
-deletion touched is issue #713 slice 4.
+resolves comes back marked ``missing``; one retired or corrected since is
+marked ``stale`` or carries ``superseded_by_id``. A memory deleted from the
+store loses its citation link in the database (``ON DELETE SET NULL``, or the
+row removed by a hard ``forget``), so it no longer appears here: ``forget``
+returns the pages it was cited by in ``cited_by_pages`` (issue #713 slice 4).
 
 The page content keeps priority over the trace in the response budget:
 ``fit_sources`` drops trace entries from the tail, and says so, before the
