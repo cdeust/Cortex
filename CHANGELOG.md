@@ -8,6 +8,14 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Source trace on `wiki_read` (issue #713, slice 3): the response carries `sources`,
+  one entry per memory the page cites through `wiki_write(memory_ids=...)`, in
+  citation order. A cited document segment shows its `document_sources` (file,
+  version, adapter kind), read from its `doc-ingest:` tag as recall does since slice 2;
+  a cited memory the store no longer holds is kept as `{"memory_id", "missing": true}`
+  instead of being dropped. When no trace can be read (page never indexed in
+  `wiki.pages`, store error) the response says so in `sources_unavailable`; the page
+  content is returned either way.
 - Size cap for the code-graph cache (issue #711, slice 3b): when
   `CORTEX_CODE_GRAPH_CACHE_MAX_GB` (decimal gigabytes) is set, the detached
   `code_graph_prune_background` worker, started at SessionStart, evicts the graphs of

@@ -22,6 +22,7 @@ from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
 from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.handlers import project_wiki_read
+from mcp_server.handlers.wiki_read_sources import attach_page_sources
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.pg_store_wiki import (
@@ -54,8 +55,13 @@ schema = {
         "succeeds, no citation'). Distinct from `wiki_list` which "
         "enumerates available pages, and from `wiki_export` which renders a "
         "page through Pandoc to PDF/DOCX/HTML. Latency <10ms. Returns "
-        "{path, content, content_length, offset, root, redirect_chain} or "
-        "{error}. Pages larger than the response budget come back with "
+        "{path, content, content_length, offset, root, redirect_chain, "
+        "sources} or {error}. ``sources`` lists, in citation order, each "
+        "memory the page cites (``wiki_write`` memory_ids) with its "
+        "``document_sources`` (file, version, kind) when it is a document "
+        "segment, or ``missing: true`` when the memory is gone; "
+        "``sources_unavailable`` replaces it when no trace can be read. "
+        "Pages larger than the response budget come back with "
         "``content_truncated: true`` — page via the ``offset`` argument."
     ),
     "inputSchema": {
@@ -123,6 +129,19 @@ def _bounded(resp: dict[str, Any], offset: int) -> dict[str, Any]:
     return bound_payload(
         resp, [TextTarget("content")], get_memory_settings().MAX_RESPONSE_CHARS
     )
+
+
+def _page_response(
+    rel_path: str, content: str, chain: list[str], offset: int
+) -> dict[str, Any]:
+    """The success payload for the page at rel_path, with its source trace."""
+    resp = {
+        "path": rel_path,
+        "content": content,
+        "root": str(WIKI_ROOT),
+        "redirect_chain": chain,
+    }
+    return _bounded(attach_page_sources(resp, rel_path, _get_store), offset)
 
 
 def _get_store() -> MemoryStore:
@@ -227,28 +246,12 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
 
     if not follow:
         _cite_page(rel_path)
-        return _bounded(
-            {
-                "path": rel_path,
-                "content": content,
-                "root": str(WIKI_ROOT),
-                "redirect_chain": [],
-            },
-            offset,
-        )
+        return _page_response(rel_path, content, [], offset)
 
     fm = parse_frontmatter(content)
     if parse_redirect(fm) is None:
         _cite_page(rel_path)
-        return _bounded(
-            {
-                "path": rel_path,
-                "content": content,
-                "root": str(WIKI_ROOT),
-                "redirect_chain": [],
-            },
-            offset,
-        )
+        return _page_response(rel_path, content, [], offset)
 
     resolved = resolve_chain(rel_path, _frontmatter_reader)
     if resolved is None:
@@ -275,14 +278,8 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
         }
 
     _cite_page(resolved.final_path)
-    return _bounded(
-        {
-            "path": resolved.final_path,
-            "content": target_content,
-            "root": str(WIKI_ROOT),
-            "redirect_chain": list(resolved.chain),
-        },
-        offset,
+    return _page_response(
+        resolved.final_path, target_content, list(resolved.chain), offset
     )
 
 
