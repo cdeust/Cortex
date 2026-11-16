@@ -202,8 +202,11 @@ adheres to [Semantic Versioning](https://semver.org/).
   counted as freed depended on the length of the temporary path written in the root
   markers: past 100 bytes per marker it stayed True under that mutation. The cap now
   sits 50 bytes above the two markers, and the `total_bytes` and `over_cap`
-  conditions are two asserts: each fails alone under that mutation, checked on
-  pytest's default temporary path (86-byte markers) and on a `--basetemp` long
+  conditions are two asserts: each fails alone under that mutation. A marker is 20
+  bytes plus the length of its root path, so its size follows the machine: 86 bytes
+  on pytest's default temporary path under the user `root` where the mutation was
+  checked, 88 under the CI user `runner`, over 100 under macOS's
+  `/private/var/folders`. The mutation was also checked on a `--basetemp` long
   enough for 258-byte markers. The previous entry's "both assertions" described one
   `assert … and …`, whose second condition was not evaluated once the first failed.
 - `query_methodology` no longer claims a session-start call that nothing makes
