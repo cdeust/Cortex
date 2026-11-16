@@ -55,6 +55,26 @@ def insert_citation(
         return _returning_id(row) if row is not None else None
 
 
+def list_page_cited_memory_ids(conn: StoreConnection, page_id: int) -> list[int]:
+    """Distinct memory ids the page's ``wiki.citations`` rows name, first cited first.
+
+    Precondition: page_id references a wiki.pages row. Postcondition: rows whose
+    memory_id is NULL (a session read with no memory, or a memory deleted under
+    ``ON DELETE SET NULL``) are left out: they name no memory to trace.
+
+    source: issue #713 (slice 3)"""
+    sql = """
+    SELECT memory_id
+    FROM wiki.citations
+    WHERE page_id = %s AND memory_id IS NOT NULL
+    GROUP BY memory_id
+    ORDER BY MIN(id);
+    """
+    with conn.cursor(row_factory=DICT_ROW) as cur:
+        cur.execute(sql, (page_id,))
+        return [int(row["memory_id"]) for row in cur.fetchall()]
+
+
 def insert_memo(
     conn: StoreConnection,
     subject_type: str,
