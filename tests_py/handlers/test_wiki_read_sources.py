@@ -10,9 +10,12 @@ from pathlib import Path
 
 from mcp_server.core.document_reference import cited_memory_sources
 from mcp_server.handlers import ingest_document, wiki_read, wiki_write
+from mcp_server.core.response_budget import serialized_length
 from mcp_server.handlers.wiki_read_sources import (
     PAGE_NOT_INDEXED,
+    STORE_ERROR,
     attach_page_sources,
+    fit_sources,
 )
 
 _DOC_TAG = "doc-ingest:docx:/a.docx@v1"
@@ -115,12 +118,31 @@ def test_page_with_no_index_row_says_so(monkeypatch, tmp_path):
     assert page["sources_unavailable"] == PAGE_NOT_INDEXED
 
 
-def test_store_error_is_named_not_turned_into_an_empty_trace():
+def test_store_error_is_named_without_its_text():
     def _down():
-        raise RuntimeError("store down")
+        raise RuntimeError("PostgreSQL connection failed (url=postgresql://u:pw@h/db)")
 
     resp = attach_page_sources({"path": "p.md"}, "p.md", _down)
-    assert resp == {"path": "p.md", "sources_unavailable": "RuntimeError: store down"}
+    assert resp == {"path": "p.md", "sources_unavailable": STORE_ERROR}
+
+
+def test_content_keeps_priority_over_the_trace():
+    sources = [{"memory_id": i} for i in range(50)]
+    resp = {"content": "x" * 200, "sources": sources}
+    fit_sources(resp, serialized_length({"content": "x" * 200}) + 100)
+    assert resp["content"] == "x" * 200
+    assert resp["sources_truncated"] is True
+    assert resp["sources_total"] == 50
+    assert 0 < len(resp["sources"]) < 50
+    assert serialized_length(resp) <= serialized_length({"content": "x" * 200}) + 100
+    kept = len(resp["sources"])
+    assert resp["sources"] == [{"memory_id": i} for i in range(kept)]
+
+
+def test_a_trace_that_fits_is_left_whole():
+    resp = {"content": "x", "sources": [{"memory_id": 1}]}
+    fit_sources(resp, 10_000)
+    assert resp == {"content": "x", "sources": [{"memory_id": 1}]}
 
 
 def test_store_error_is_logged_with_the_page_and_its_traceback(caplog):
@@ -133,3 +155,29 @@ def test_store_error_is_logged_with_the_page_and_its_traceback(caplog):
     assert record.levelname == "WARNING"
     assert record.getMessage() == "wiki_read source trace failed for notes/p.md"
     assert record.exc_info is not None and record.exc_info[0] is RuntimeError
+
+
+def test_a_trace_exactly_at_the_budget_is_left_whole():
+    resp = {"content": "x", "sources": [{"memory_id": 1}, {"memory_id": 2}]}
+    fit_sources(resp, serialized_length(resp))
+    assert resp == {"content": "x", "sources": [{"memory_id": 1}, {"memory_id": 2}]}
+
+
+def test_the_cut_stops_as_soon_as_the_payload_fits_exactly():
+    # each entry outweighs the two flags, so dropping one is enough to fit
+    sources = [{"memory_id": i, "pad": "y" * 100} for i in range(5)]
+    expected = {
+        "content": "x",
+        "sources": sources[:-1],
+        "sources_truncated": True,
+        "sources_total": 5,
+    }
+    resp = {"content": "x", "sources": list(sources)}
+    fit_sources(resp, serialized_length(expected))
+    assert resp == expected
+
+
+def test_an_empty_trace_is_never_flagged():
+    resp = {"content": "x" * 50, "sources": []}
+    fit_sources(resp, 1)
+    assert resp == {"content": "x" * 50, "sources": []}

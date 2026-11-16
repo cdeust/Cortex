@@ -22,7 +22,7 @@ from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
 from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.handlers import project_wiki_read
-from mcp_server.handlers.wiki_read_sources import attach_page_sources
+from mcp_server.handlers.wiki_read_sources import attach_page_sources, fit_sources
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.pg_store_wiki import (
@@ -59,8 +59,9 @@ schema = {
         "sources} or {error}. ``sources`` lists, in citation order, each "
         "memory the page cites (``wiki_write`` memory_ids) with its "
         "``document_sources`` (file, version, kind) when it is a document "
-        "segment, or ``missing: true`` when the memory is gone; "
-        "``sources_unavailable`` replaces it when no trace can be read. "
+        "segment, or ``missing: true`` when its id no longer resolves; "
+        "``sources_unavailable`` replaces it when no trace can be read; "
+        "``sources_truncated`` marks a trace cut to leave room for content. "
         "Pages larger than the response budget come back with "
         "``content_truncated: true`` — page via the ``offset`` argument."
     ),
@@ -126,9 +127,9 @@ def _bounded(resp: dict[str, Any], offset: int) -> dict[str, Any]:
     resp["offset"] = offset
     if offset > 0:
         resp["content"] = content[offset:]
-    return bound_payload(
-        resp, [TextTarget("content")], get_memory_settings().MAX_RESPONSE_CHARS
-    )
+    budget = get_memory_settings().MAX_RESPONSE_CHARS
+    fit_sources(resp, budget)
+    return bound_payload(resp, [TextTarget("content")], budget)
 
 
 def _page_response(
