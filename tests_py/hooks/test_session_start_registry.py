@@ -14,7 +14,8 @@ from mcp_server.hooks.session_start import _refresh_session_registry
 
 
 class TestRefreshSessionRegistry:
-    def test_writes_transcript_stem_and_purges(self):
+    def test_writes_transcript_stem_and_purges(self, monkeypatch):
+        monkeypatch.delenv("CLAUDE_PROJECT_ROOT", raising=False)
         event = {"transcript_path": "/home/u/.claude/projects/p/abc-123.jsonl"}
         with (
             patch(
@@ -26,12 +27,13 @@ class TestRefreshSessionRegistry:
         ):
             _refresh_session_registry(event)
 
-        mock_write.assert_called_once_with("abc-123")
+        mock_write.assert_called_once_with("abc-123", project_root=None)
         mock_purge.assert_called_once_with()
 
-    def test_missing_transcript_path_writes_none(self):
+    def test_missing_transcript_path_writes_none(self, monkeypatch):
         """No transcript_path (manual/tty run) → session_id=None is a
         legitimate tombstone-shaped write, never a raised exception."""
+        monkeypatch.delenv("CLAUDE_PROJECT_ROOT", raising=False)
         with (
             patch(
                 "mcp_server.infrastructure.session_registry.write_session"
@@ -40,7 +42,7 @@ class TestRefreshSessionRegistry:
         ):
             _refresh_session_registry({})
 
-        mock_write.assert_called_once_with(None)
+        mock_write.assert_called_once_with(None, project_root=None)
 
     def test_registry_failure_never_raises(self):
         """Etancheite: an exception inside write_session must not escape

@@ -4,12 +4,14 @@ source: ADR-0498"""
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 
 from mcp_server.hooks.launcher_command import child_command, launcher_child_command
 from mcp_server.hooks.session_start_common import _log
 from mcp_server.shared import detached_spawn
 from mcp_server.shared.injection_markers import session_id_from_transcript
+from mcp_server.shared.project_scope import resolve_project_root
 from mcp_server.infrastructure.log_relay import spawn_logged
 from mcp_server.shared.log_rotation import methodology_log_path
 
@@ -133,7 +135,8 @@ def _refresh_session_registry(event: dict) -> None:
         precondition: ``event`` is the tolerant ``_read_event()`` result —
         may be ``{}``. postcondition: on success, this window's registry
         entry (keyed by the ancestor ``claude`` pid) holds the transcript
-        stem computed by ``session_id_from_transcript`` and stale entries
+        stem computed by ``session_id_from_transcript`` and the project root
+        of ``resolve_project_root`` (issue #711), and stale entries
         for closed windows are removed. Any failure — resolution, I/O,
         import — degrades to a stderr log line and NEVER raises: the
         SessionStart banner is critical and must ship regardless of the
@@ -146,7 +149,10 @@ def _refresh_session_registry(event: dict) -> None:
             write_session,
         )
 
-        write_session(session_id_from_transcript(event.get("transcript_path")))
+        write_session(
+            session_id_from_transcript(event.get("transcript_path")),
+            project_root=resolve_project_root(event, os.environ),
+        )
         purge_dead_entries()
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"session registry refresh skipped (non-fatal): {exc}")
