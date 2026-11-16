@@ -222,9 +222,10 @@ def test_a_graph_removed_by_another_pass_counts_as_removed(tmp_path, monkeypatch
 
 
 def test_an_unreadable_rest_keeps_its_size_in_the_total(tmp_path, monkeypatch, caplog):
-    # rmtree frees part of each graph and fails on a subdirectory it cannot read;
-    # os.walk skips that subdirectory, so the rest cannot be measured. Its size
-    # stays counted, so the next graph is attempted too (#711).
+    # rmtree frees part of each graph, then fails. The test calls os.walk's
+    # onerror itself to stand for a subdirectory it cannot read (chmod blocks
+    # nothing under root). newer is attempted in either behaviour; only the
+    # total_bytes assertion tells a counted rest from one counted as freed (#711).
     base = tmp_path / "code-graphs"
     stuck = _graph(base, "stuck", 100, tmp_path / "stuck", used=1.0)
     newer = _graph(base, "newer", 100, tmp_path / "newer", used=2.0)

@@ -184,6 +184,13 @@ adheres to [Semantic Versioning](https://semver.org/).
   graph that failed to be removed cannot be read in full (an unreadable
   subdirectory), its size before the attempt stays in the total instead of counting
   the unread part as freed, and the warning names the first error.
+- Code-graph cache cap (issue #711, fourth refinement of slice 3b): `_measure` keeps
+  only the first error that left part of a graph unread, instead of every error
+  while it used the first; its test now raises one error through `os.walk`'s
+  `onerror` and a later one from `os.lstat`, so a `_measure` that returned the last
+  error fails it. The comment of the unreadable-rest test now says the test calls
+  `onerror` itself and that only its `total_bytes` assertion separates a counted
+  rest from one counted as freed.
 - `query_methodology` no longer claims a session-start call that nothing makes
   (issue #710): its description said the tool was "MANDATORY at session start so
   subsequent reasoning is calibrated to the user's tendencies", but no hook calls it.
