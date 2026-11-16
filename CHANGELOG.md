@@ -197,6 +197,15 @@ adheres to [Semantic Versioning](https://semver.org/).
   docstring says only the first real error is returned. The unreadable-rest test
   names its whole `total_bytes` and `over_cap` line as what catches a rest counted
   as freed: both assertions fail under that mutation, not `total_bytes` alone.
+- Code-graph cache cap (issue #711, sixth refinement of slice 3b): the unreadable-rest
+  test set its cap to the first graph's size, so whether `over_cap` caught a rest
+  counted as freed depended on the length of the temporary path written in the root
+  markers: past 100 bytes per marker it stayed True under that mutation. The cap now
+  sits 50 bytes above the two markers, and the `total_bytes` and `over_cap`
+  conditions are two asserts: each fails alone under that mutation, checked on
+  pytest's default temporary path (86-byte markers) and on a `--basetemp` long
+  enough for 258-byte markers. The previous entry's "both assertions" described one
+  `assert … and …`, whose second condition was not evaluated once the first failed.
 - `query_methodology` no longer claims a session-start call that nothing makes
   (issue #710): its description said the tool was "MANDATORY at session start so
   subsequent reasoning is calibrated to the user's tendencies", but no hook calls it.
