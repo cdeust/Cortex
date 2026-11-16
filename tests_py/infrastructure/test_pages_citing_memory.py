@@ -39,24 +39,31 @@ def _page(conn, rel: str) -> int:
     return page_id
 
 
-def _two_pages_citing(store, run: str) -> tuple[int, int, list[str]]:
-    """``cited`` is cited by two pages (one of them twice); ``other`` by a third."""
+def _two_pages_citing(store, run: str) -> tuple[int, int, list[str], int]:
+    """``cited`` is cited by two pages (one of them twice); ``other`` by a third.
+
+    PostgreSQL keeps one row per (page, memory) (``uq_wiki_citations_page_memory``)
+    and drops the repeat; SQLite stores it. The last value is the number of rows
+    that name ``cited`` on the backend at hand, counted from what was inserted.
+    """
     conn = store._conn
     cited = store.insert_memory({"content": f"cited {run}", "tags": [], "domain": "d"})
     other = store.insert_memory({"content": f"other {run}", "tags": [], "domain": "d"})
     paths = [f"notes/{run}-a.md", f"notes/{run}-b.md"]
     second, first = _page(conn, paths[1]), _page(conn, paths[0])
     elsewhere = _page(conn, f"notes/{run}-c.md")
-    insert_citation(conn, second, memory_id=cited)
-    insert_citation(conn, first, memory_id=cited)
-    insert_citation(conn, second, session_id=f"{run}-s", memory_id=cited)
+    rows = [
+        insert_citation(conn, second, memory_id=cited),
+        insert_citation(conn, first, memory_id=cited),
+        insert_citation(conn, second, session_id=f"{run}-s", memory_id=cited),
+    ]
     insert_citation(conn, elsewhere, memory_id=other)
     conn.commit()
-    return cited, other, paths
+    return cited, other, paths, sum(row is not None for row in rows)
 
 
 def test_each_citing_page_comes_back_once_sorted(store, tmp_path):
-    cited, other, paths = _two_pages_citing(store, tmp_path.name)
+    cited, other, paths, _ = _two_pages_citing(store, tmp_path.name)
     assert list_pages_citing_memory(store._conn, cited) == paths
     assert list_pages_citing_memory(store._conn, other) == [
         f"notes/{tmp_path.name}-c.md"
@@ -67,11 +74,12 @@ def test_each_citing_page_comes_back_once_sorted(store, tmp_path):
 def test_hard_erasure_reports_the_pages_before_it_drops_their_citations(
     store, tmp_path
 ):
-    cited, _, paths = _two_pages_citing(store, tmp_path.name)
+    cited, _, paths, stored = _two_pages_citing(store, tmp_path.name)
     report = store.erase_memory(cited)
     assert report.deleted is True
     assert report.cited_by_pages == paths
-    assert report.counts["citations"] == 3
+    assert stored >= 2  # both pages cite it on every backend
+    assert report.counts["citations"] == stored
     assert list_pages_citing_memory(store._conn, cited) == []
 
 
