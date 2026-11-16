@@ -40,7 +40,8 @@ def main() -> int:
     print(f"[bg-graph-prune] removed: {list(report.removed)}")
     print(f"[bg-graph-prune] unattributed (kept): {list(report.unattributed)}")
     print(f"[bg-graph-prune] failed: {list(report.failed)}")
-    return 1 if report.failed or not _evict(cache_dir) else 0
+    evicted_cleanly = _evict(cache_dir)  # runs even when a prune failed
+    return 1 if report.failed or not evicted_cleanly else 0
 
 
 def _evict(cache_dir: Path) -> bool:

@@ -166,3 +166,23 @@ def test_no_cap_runs_no_eviction(managed, tmp_path, monkeypatch, capsys):
 
     assert idle.is_dir()
     assert "bg-graph-evict" not in capsys.readouterr().out
+
+
+def test_a_failed_prune_still_runs_the_eviction(managed, tmp_path, monkeypatch, capsys):
+    _orphan(managed, tmp_path, "gone-0000aaaa")
+    idle = _graph(managed, "idle-3333dddd", tmp_path / "idle")
+    real_rmtree = cache.shutil.rmtree
+
+    def _refuse_the_orphan(path):
+        if Path(path).name == "gone-0000aaaa":
+            raise OSError("busy")
+        real_rmtree(path)
+
+    monkeypatch.setattr(cache.shutil, "rmtree", _refuse_the_orphan)
+    monkeypatch.setattr(worker, "live_project_roots", lambda: frozenset())
+    monkeypatch.setenv("CORTEX_CODE_GRAPH_CACHE_MAX_GB", "0")
+
+    assert worker.main() == 1
+
+    assert not idle.exists()
+    assert "[bg-graph-evict] removed: ['idle-3333dddd']" in capsys.readouterr().out
