@@ -226,12 +226,12 @@ def test_an_unreadable_rest_keeps_its_size_in_the_total(tmp_path, monkeypatch, c
     # onerror itself to stand for a subdirectory it cannot read (chmod blocks
     # nothing under root). The cap sits 50 bytes above the two root markers,
     # whose size follows the temporary path, so a rest counted as freed (the
-    # markers alone) fits it on any path, while newer's 100-byte data file
-    # keeps newer attempted in either behaviour. The total_bytes and over_cap
-    # asserts each fail alone under that mutation (#711).
+    # markers alone) fits it on any path; newer's data file keeps newer attempted
+    # either way. The total_bytes and over_cap asserts each fail alone under it.
     base = tmp_path / "code-graphs"
-    stuck = _graph(base, "stuck", 100, tmp_path / "stuck", used=1.0)
-    newer = _graph(base, "newer", 100, tmp_path / "newer", used=2.0)
+    data_size = 100
+    stuck = _graph(base, "stuck", data_size, tmp_path / "stuck", used=1.0)
+    newer = _graph(base, "newer", data_size, tmp_path / "newer", used=2.0)
     stuck_size = eviction.directory_size(stuck)
     newer_size = eviction.directory_size(newer)
     real_walk = eviction.os.walk
@@ -251,7 +251,7 @@ def test_an_unreadable_rest_keeps_its_size_in_the_total(tmp_path, monkeypatch, c
 
     monkeypatch.setattr(eviction.shutil, "rmtree", _partial)
     monkeypatch.setattr(eviction.os, "walk", _walk)
-    markers = stuck_size + newer_size - 200
+    markers = stuck_size + newer_size - 2 * data_size
     report = eviction.evict_to_cap(base, cap=markers + 50, live_roots=frozenset())
 
     assert report.failed == ("stuck", "newer") and report.removed == ()
