@@ -173,6 +173,14 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `wiki_read` trace cut is linear (issue #713, review notes of #1078): `fit_sources`
+  serialized the whole response again for each trace entry it dropped, so the cut was
+  quadratic in the number of citations (49 s measured for 6000 sources, in the async
+  handler). It now serializes the response once and subtracts the exact compact-JSON
+  length of each dropped entry. Its docstring no longer promises that paging by `offset`
+  always brings the whole trace back: a trace too large to fit beside the other fields
+  stays cut at every offset. The equivalent-mutant rationale for
+  `list_page_cited_memory_ids` names the real connection functions (`pg_connect`, `pg_pool`).
 - Code-graph cache cap (issue #711, refinement of slice 3b): a graph that cannot be
   removed no longer ends the eviction pass; the next candidate is tried until the
   cache fits (`code_graph_eviction.evict_to_cap`; `plan_eviction` is replaced by
