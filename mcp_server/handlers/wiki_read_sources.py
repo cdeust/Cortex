@@ -95,9 +95,9 @@ def fit_sources(resp: dict[str, Any], budget_chars: int) -> None:
     resp["sources_truncated"] = True
     resp["sources_total"] = len(sources)
     # one serialization of the whole response, then exact compact-JSON
-    # arithmetic per dropped entry: removing the last of n > 1 items removes
-    # the item and the comma before it, removing the only item removes the item
+    # arithmetic per dropped entry: while another entry remains, removing the
+    # last one removes it and the comma before it. The size left after the only
+    # remaining entry goes is never read: the loop ends on the empty list.
     size = serialized_length(resp)
     while sources and size > budget_chars:
-        dropped = sources.pop()
-        size -= serialized_length(dropped) + (1 if sources else 0)
+        size -= serialized_length(sources.pop()) + 1
