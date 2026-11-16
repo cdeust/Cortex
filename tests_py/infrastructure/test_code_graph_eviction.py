@@ -34,7 +34,8 @@ def test_no_cap_when_unset_or_blank(monkeypatch, raw):
 
 
 @pytest.mark.parametrize(
-    ("raw", "expected"), [("5", 5 * 10**9), ("0.5", 5 * 10**8), ("0", 0)]
+    ("raw", "expected"),
+    [("5", 5 * 10**9), ("0.5", 5 * 10**8), ("0", 0), ("1e-9", 1), ("1.5e-9", 1)],
 )
 def test_cap_reads_decimal_gigabytes(monkeypatch, raw, expected):
     monkeypatch.setenv(eviction.CAP_ENV, raw)

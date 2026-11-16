@@ -85,8 +85,9 @@ def cache_cap_bytes() -> int | None:
         return None
     size = gigabytes * _BYTES_PER_GB
     # The product, not the input, is checked: 1e300 is finite, its bytes are not.
-    # copysign, not >= 0: -0.0 >= 0.0 holds, and "-0" is not a size the user wrote.
-    if not (math.isfinite(size) and math.copysign(1.0, size) > 0):
+    # The sign is read on the text, not on the float: -0.0 >= 0.0 holds, and "-0"
+    # is not a size the user wrote. ``raw`` is stripped, so a negative starts with -.
+    if raw.startswith("-") or not math.isfinite(size):
         logger.warning("%s=%r is not a finite size >= 0; no eviction", CAP_ENV, raw)
         return None
     if 0 < size < 1:
