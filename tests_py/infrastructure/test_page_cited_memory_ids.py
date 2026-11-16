@@ -18,7 +18,7 @@ from tests_py.conftest import _USE_PG  # type: ignore  # noqa: E402
 
 @pytest.fixture(params=["sqlite", "postgresql"])
 def store(request, tmp_path):
-    """Both backends: SQLite's compat cursor ignores ``row_factory``, PG does not."""
+    """Both backends: the query must run as written on SQLite and PostgreSQL."""
     if request.param == "sqlite":
         s = SqliteMemoryStore(str(tmp_path / "memory.db"))
     else:
