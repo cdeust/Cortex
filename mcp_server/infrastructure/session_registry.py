@@ -133,16 +133,28 @@ def _atomic_write(path: Path, payload: dict) -> bool:
     return True
 
 
-def write_session(session_id: str | None, *, claude_pid: int | None = None) -> bool:
+def _resolved_root(project_root: str | None) -> str | None:
+    """The root as ``write_root_marker`` records it (resolved), or None."""
+    return str(Path(project_root).expanduser().resolve()) if project_root else None
+
+
+def write_session(
+    session_id: str | None,
+    *,
+    claude_pid: int | None = None,
+    project_root: str | None = None,
+) -> bool:
     """Write/refresh this window's registry entry (writer side, H2).
 
     precondition: ``session_id`` is the transcript-stem identity the caller
     already computed (``session_id_from_transcript`` in
     ``shared/injection_markers.py`` — this module does not derive it, T2-D1);
     ``claude_pid``, if given, is a pre-resolved ancestor pid, else resolved here
-    via ``find_claude_ancestor()``. postcondition: on success,
-    ``registry_path(claude_pid)`` exists, holds valid JSON ``{v, session_id,
-    claude_pid, claude_start_time, updated_at}``, replaced atomically. Returns
+    via ``find_claude_ancestor()``; ``project_root`` is the window's project
+    (``resolve_project_root``), stored resolved, or None when unknown (issue
+    #711). postcondition: on success, ``registry_path(claude_pid)`` exists,
+    holds valid JSON ``{v, session_id, claude_pid, claude_start_time,
+    project_root, updated_at}``, replaced atomically. Returns
     False without writing when the ancestor pid or its start signature cannot be
     resolved. ``session_id=None`` writes a TOMBSTONE: entry stays present, valid
     lineage, but reads as no-session.
@@ -159,6 +171,7 @@ def write_session(session_id: str | None, *, claude_pid: int | None = None) -> b
         "session_id": session_id,
         "claude_pid": pid,
         "claude_start_time": start_sig,
+        "project_root": _resolved_root(project_root),
         "updated_at": time.time(),
     }
     return _atomic_write(registry_path(pid), payload)

@@ -8,6 +8,14 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Project root of each live window in the session registry (issue #711, slice 3a):
+  the SessionStart and UserPromptSubmit hooks pass `resolve_project_root` to
+  `write_session`, which stores it resolved as `project_root`.
+  `session_registry_roots.live_project_roots()` returns the roots of the live
+  windows (pid alive, start signature unchanged), or None when a live window has
+  no recorded root, so the coming cache eviction (slice 3b) can tell which code
+  graphs are in use and evicts nothing when it cannot. Schema version unchanged:
+  readers ignore the added key.
 - First SessionStart timed against its hook timeout (issue #705):
   `tests_py/scripts/test_first_session_start_within_hook_timeout.py` runs the
   manifest's own SessionStart command on an empty plugin data directory in a

@@ -358,7 +358,8 @@ def _refresh_session_registry(event: dict[str, Any]) -> None:
 
     precondition: ``event`` is the parsed UserPromptSubmit JSON — may
     lack ``transcript_path``. postcondition: on success, this window's
-    registry entry is refreshed to the current transcript stem. Any
+    registry entry is refreshed to the current transcript stem and the
+    window's project root (issue #711: a prompt rewrite keeps it). Any
     failure degrades to a stderr log line and never raises or exits —
     a registry hiccup must never block the recall injection this hook
     exists for (same degradation contract as the emitted receipt).
@@ -370,7 +371,10 @@ def _refresh_session_registry(event: dict[str, Any]) -> None:
     try:
         from mcp_server.infrastructure.session_registry import write_session  # noqa: PLC0415 — hook latency boundary: the per-event hook process defers the handler/store stack (hook boot ~0.05 s vs ~0.6 s registry import, measured 2026-07-28)
 
-        write_session(session_id_from_transcript(event.get("transcript_path")))
+        write_session(
+            session_id_from_transcript(event.get("transcript_path")),
+            project_root=resolve_project_root(event, os.environ),
+        )
     except Exception as exc:  # noqa: BLE001 — hook boundary — failure is logged to the hook log; the hook stays non-fatal
         _log(f"session registry refresh skipped (non-fatal): {exc}")
 

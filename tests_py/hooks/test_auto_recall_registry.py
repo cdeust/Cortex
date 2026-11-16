@@ -14,20 +14,33 @@ from mcp_server.hooks.auto_recall import _refresh_session_registry, process_even
 
 
 class TestRefreshSessionRegistry:
-    def test_writes_transcript_stem_on_every_prompt(self):
+    def test_writes_transcript_stem_on_every_prompt(self, monkeypatch):
+        monkeypatch.delenv("CLAUDE_PROJECT_ROOT", raising=False)
         event = {"transcript_path": "/home/u/.claude/projects/p/xyz-9.jsonl"}
         with patch(
             "mcp_server.infrastructure.session_registry.write_session"
         ) as mock_write:
             _refresh_session_registry(event)
-        mock_write.assert_called_once_with("xyz-9")
+        mock_write.assert_called_once_with("xyz-9", project_root=None)
 
-    def test_missing_transcript_path_writes_none(self):
+    def test_missing_transcript_path_writes_none(self, monkeypatch):
+        monkeypatch.delenv("CLAUDE_PROJECT_ROOT", raising=False)
         with patch(
             "mcp_server.infrastructure.session_registry.write_session"
         ) as mock_write:
             _refresh_session_registry({})
-        mock_write.assert_called_once_with(None)
+        mock_write.assert_called_once_with(None, project_root=None)
+
+    def test_writes_the_event_project_root(self, monkeypatch):
+        """Issue #711: a prompt rewrite keeps the window's project, so the
+        cache eviction still sees the graph of this window as in use."""
+        monkeypatch.delenv("CLAUDE_PROJECT_ROOT", raising=False)
+        event = {"transcript_path": "/x/s-1.jsonl", "cwd": "/work/proj"}
+        with patch(
+            "mcp_server.infrastructure.session_registry.write_session"
+        ) as mock_write:
+            _refresh_session_registry(event)
+        mock_write.assert_called_once_with("s-1", project_root="/work/proj")
 
     def test_registry_failure_never_raises(self):
         """Etancheite: a registry hiccup must never block recall injection."""
