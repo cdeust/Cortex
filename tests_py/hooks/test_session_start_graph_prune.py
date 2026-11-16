@@ -14,6 +14,7 @@ import pytest
 from mcp_server.hooks import code_graph_prune_background as worker
 from mcp_server.hooks import session_start_background as background
 from mcp_server.infrastructure import code_graph_cache as cache
+from mcp_server.infrastructure import code_graph_eviction as eviction
 from mcp_server.shared import detached_spawn
 from tests_py.hooks._spawn_logged_fake import fake_spawn
 
@@ -137,7 +138,23 @@ def test_a_cap_starts_the_worker_without_orphans(
     background._maybe_background_prune_graphs()
 
     assert len(calls) == 1
-    assert "code-graph prune spawned for the cache cap" in capsys.readouterr().err
+    assert (
+        f"code-graph prune spawned for the cache cap → {calls[0]['log_path']}"
+        in capsys.readouterr().err
+    )
+
+
+def test_an_orphan_and_a_cap_name_both_reasons(managed, tmp_path, monkeypatch, capsys):
+    _orphan(managed, tmp_path, "gone-0000aaaa")
+    monkeypatch.setenv("CORTEX_CODE_GRAPH_CACHE_MAX_GB", "5")
+    calls = fake_spawn(monkeypatch, background)
+
+    background._maybe_background_prune_graphs()
+
+    assert (
+        f"code-graph prune spawned for 1 orphan(s) and the cache cap → "
+        f"{calls[0]['log_path']}" in capsys.readouterr().err
+    )
 
 
 def test_the_worker_evicts_over_the_cap_but_not_a_live_graph(
@@ -153,9 +170,13 @@ def test_the_worker_evicts_over_the_cap_but_not_a_live_graph(
 
     assert not idle.exists()
     assert live.is_dir()
-    out = capsys.readouterr().out
-    assert "[bg-graph-evict] removed: ['idle-3333dddd']" in out
-    assert "still over the cap" in out
+    total = eviction.directory_size(managed)
+    assert capsys.readouterr().out.splitlines()[3:] == [
+        f"[bg-graph-evict] cap: 0 bytes, total after: {total}",
+        "[bg-graph-evict] removed: ['idle-3333dddd']",
+        "[bg-graph-evict] failed: []",
+        "[bg-graph-evict] still over the cap: the rest is in use or unmarked",
+    ]
 
 
 def test_no_cap_runs_no_eviction(managed, tmp_path, monkeypatch, capsys):

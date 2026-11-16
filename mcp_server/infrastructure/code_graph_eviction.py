@@ -12,19 +12,24 @@ Rules (decision comment of 2026-11-15 on issue #711):
   10**9 bytes). Unset or blank: no eviction. No default cap is shipped: no value
   is sourced in this repository, and the measurement of the issue gives the size
   of one graph, not a user's disk budget.
-* A graph is in use when its recorded root (``cortex-root.json``) is the project
-  of a live window (``session_registry_roots.live_project_roots``). A graph in
-  use is never evicted, and its marker is touched so that it reads as just used.
-  When the set of live roots is unknown, nothing is evicted.
+* A graph is in use when its recorded root (``cortex-root.json``) is exactly the
+  project root of a live window (``session_registry_roots.live_project_roots``).
+  A graph in use is never evicted, and its marker is touched so that it reads as
+  just used. A window opened in a subdirectory, or one that reads another
+  project's graph, does not hold that graph. When the set of live roots is
+  unknown, nothing is evicted.
 * A directory without a readable marker cannot be tied to a root: it counts in
   the total but is never evicted (same rule as the orphan pruning).
-* The others are evicted oldest marker mtime first until the total fits.
+* The others are evicted oldest marker mtime first until the total fits. The
+  marker is written when the graph is built and touched while a window of its
+  project is live; reading a cached graph does not touch it.
 """
 
 from __future__ import annotations
 
 import dataclasses
 import logging
+import math
 import os
 import shutil
 from pathlib import Path
@@ -71,10 +76,12 @@ def cache_cap_bytes() -> int | None:
     except ValueError:
         logger.warning("%s=%r is not a number; no code-graph eviction", CAP_ENV, raw)
         return None
-    if not gigabytes >= 0.0 or gigabytes == float("inf"):
+    size = gigabytes * _BYTES_PER_GB
+    # The product, not the input, is checked: 1e300 is finite, its bytes are not.
+    if not (size >= 0.0 and math.isfinite(size)):
         logger.warning("%s=%r is not a finite size >= 0; no eviction", CAP_ENV, raw)
         return None
-    return int(gigabytes * _BYTES_PER_GB)
+    return int(size)
 
 
 def directory_size(path: Path) -> int:

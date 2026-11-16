@@ -13,7 +13,7 @@ adheres to [Semantic Versioning](https://semver.org/).
   `code_graph_prune_background` worker, started at SessionStart, evicts the graphs of
   `~/.cache/cortex/code-graphs/` oldest `cortex-root.json` mtime first until the
   cache fits (`code_graph_eviction.evict_to_cap`). It never evicts a graph whose
-  recorded root is the project of a live window (its marker is touched instead, so
+  recorded root is exactly the project root of a live window (its marker is touched instead, so
   it reads as just used), nor a directory without a marker, and evicts nothing when
   the live roots are unknown. Unset or blank: no eviction, as before; a value that
   is not a finite size of at least 0 is logged and sets no cap. No default cap is
