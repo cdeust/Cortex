@@ -224,7 +224,7 @@ def test_a_graph_removed_by_another_pass_counts_as_removed(tmp_path, monkeypatch
 def test_an_unreadable_rest_keeps_its_size_in_the_total(tmp_path, monkeypatch, caplog):
     # rmtree frees part of each graph, then fails. The test calls os.walk's
     # onerror itself to stand for a subdirectory it cannot read (chmod blocks
-    # nothing under root). The cap sits 50 bytes above the two root markers,
+    # nothing under root). The cap sits data_size // 2 above the two root markers,
     # whose size follows the temporary path, so a rest counted as freed (the
     # markers alone) fits it on any path; newer's data file keeps newer attempted
     # either way. The total_bytes and over_cap asserts each fail alone under it.
@@ -251,8 +251,8 @@ def test_an_unreadable_rest_keeps_its_size_in_the_total(tmp_path, monkeypatch, c
 
     monkeypatch.setattr(eviction.shutil, "rmtree", _partial)
     monkeypatch.setattr(eviction.os, "walk", _walk)
-    markers = stuck_size + newer_size - 2 * data_size
-    report = eviction.evict_to_cap(base, cap=markers + 50, live_roots=frozenset())
+    cap = (stuck_size + newer_size - 2 * data_size) + data_size // 2  # markers + margin
+    report = eviction.evict_to_cap(base, cap=cap, live_roots=frozenset())
 
     assert report.failed == ("stuck", "newer") and report.removed == ()
     assert stuck.is_dir() and not (newer / "graph" / "data").exists()
