@@ -20,9 +20,14 @@ Rules (decision comment of 2026-11-15 on issue #711):
   unknown, nothing is evicted.
 * A directory without a readable marker cannot be tied to a root: it counts in
   the total but is never evicted (same rule as the orphan pruning).
-* The others are evicted oldest marker mtime first until the total fits. The
-  marker is written when the graph is built and touched while a window of its
-  project is live; reading a cached graph does not touch it.
+* The others are evicted oldest marker mtime first until the total fits. A
+  removal that fails does not stop the pass: the next candidate is tried.
+  The marker is written when the graph is built, and touched only in a worker
+  pass that runs with a cap set and known live roots, for the graphs of the
+  live windows' projects; reading a cached graph does not touch it.
+* Codex sessions are not registered yet (``find_claude_ancestor`` recognises
+  ``claude`` only): with a cap set, a graph used only by a live Codex session
+  is not protected (refinement 1 of the 2026-11-16 comment on issue #711).
 """
 
 from __future__ import annotations
@@ -64,10 +69,12 @@ class EvictionReport:
 
 
 def cache_cap_bytes() -> int | None:
-    """The cap in bytes, or None when no cap is set or the value is not usable.
+    """The cap in bytes, or None when no cap is set or the value is refused.
 
-    A value that is not a non-negative number is logged and sets no cap: an
-    eviction never runs on a value the user did not write."""
+    Refused, logged, no cap: a value that is not a number; a negative one, -0
+    included; one whose byte count is not finite (nan, inf, 1e300); one that is
+    not 0 but below one byte (1e-10). 0 is a cap of 0 bytes. An eviction never
+    runs on a value the user did not write."""
     raw = os.environ.get(CAP_ENV, "").strip()
     if not raw:
         return None
@@ -78,8 +85,13 @@ def cache_cap_bytes() -> int | None:
         return None
     size = gigabytes * _BYTES_PER_GB
     # The product, not the input, is checked: 1e300 is finite, its bytes are not.
-    if not (size >= 0.0 and math.isfinite(size)):
+    # The sign is read on the text, not on the float: -0.0 >= 0.0 holds, and "-0"
+    # is not a size the user wrote. ``raw`` is stripped, so a negative starts with -.
+    if raw.startswith("-") or not math.isfinite(size):
         logger.warning("%s=%r is not a finite size >= 0; no eviction", CAP_ENV, raw)
+        return None
+    if 0 < size < 1:
+        logger.warning("%s=%r is below one byte; no eviction", CAP_ENV, raw)
         return None
     return int(size)
 
@@ -120,25 +132,17 @@ def scan_entries(cache_dir: Path) -> list[GraphEntry]:
     ]
 
 
-def plan_eviction(
-    entries: list[GraphEntry], live_roots: frozenset[str], cap: int
-) -> list[str]:
-    """Names to remove, oldest first, so the total fits under ``cap``.
+def eviction_candidates(
+    entries: list[GraphEntry], live_roots: frozenset[str]
+) -> list[GraphEntry]:
+    """The entries that may be evicted, oldest marker mtime first.
 
-    postcondition: never names an entry without a root or one whose root is in
-    ``live_roots``; returns fewer names than needed when the rest cannot go."""
-    total = sum(entry.size for entry in entries)
-    candidates = sorted(
+    postcondition: never an entry without a root or one whose root is in
+    ``live_roots``."""
+    return sorted(
         (e for e in entries if e.root is not None and e.root not in live_roots),
         key=lambda e: (e.last_used, e.name),
     )
-    planned: list[str] = []
-    for entry in candidates:
-        if total <= cap:
-            break
-        planned.append(entry.name)
-        total -= entry.size
-    return planned
 
 
 def _touch_live_markers(
@@ -163,18 +167,21 @@ def evict_to_cap(
         logger.warning("live project roots unknown; no code-graph eviction")
         return EvictionReport((), (), total, total > cap)
     _touch_live_markers(base, entries, live_roots)
-    sizes = {entry.name: entry.size for entry in entries}
     removed: list[str] = []
     failed: list[str] = []
-    for name in plan_eviction(entries, live_roots, cap):
+    # The stop test reads the total after the removals that succeeded, so a
+    # graph that cannot be removed hands its turn to the next candidate.
+    for entry in eviction_candidates(entries, live_roots):
+        if total <= cap:
+            break
         try:
-            shutil.rmtree(base / name)
+            shutil.rmtree(base / entry.name)
         except OSError as exc:
-            logger.warning("could not evict code graph %s: %s", base / name, exc)
-            failed.append(name)
+            logger.warning("could not evict code graph %s: %s", base / entry.name, exc)
+            failed.append(entry.name)
             continue
-        removed.append(name)
-        total -= sizes[name]
+        removed.append(entry.name)
+        total -= entry.size
     if removed:
         logger.info("evicted %d code graph(s) over the cap: %s", len(removed), removed)
     return EvictionReport(tuple(removed), tuple(failed), total, total > cap)

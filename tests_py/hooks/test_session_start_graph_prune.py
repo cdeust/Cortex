@@ -206,4 +206,7 @@ def test_a_failed_prune_still_runs_the_eviction(managed, tmp_path, monkeypatch, 
     assert worker.main() == 1
 
     assert not idle.exists()
-    assert "[bg-graph-evict] removed: ['idle-3333dddd']" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "[bg-graph-evict] removed: ['idle-3333dddd']" in out
+    # rmtree is one global: the eviction retries the orphan and fails on it too.
+    assert "[bg-graph-evict] failed: ['gone-0000aaaa']" in out

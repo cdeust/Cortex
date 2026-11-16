@@ -34,37 +34,39 @@ def test_no_cap_when_unset_or_blank(monkeypatch, raw):
 
 
 @pytest.mark.parametrize(
-    ("raw", "expected"), [("5", 5 * 10**9), ("0.5", 5 * 10**8), ("0", 0)]
+    ("raw", "expected"),
+    [("5", 5 * 10**9), ("0.5", 5 * 10**8), ("0", 0), ("1e-9", 1), ("1.5e-9", 1)],
 )
 def test_cap_reads_decimal_gigabytes(monkeypatch, raw, expected):
     monkeypatch.setenv(eviction.CAP_ENV, raw)
     assert eviction.cache_cap_bytes() == expected
 
 
-@pytest.mark.parametrize("raw", ["ten", "-1", "nan", "inf"])
+@pytest.mark.parametrize("raw", ["ten", "-1", "-0", "nan", "inf", "1e-10"])
 def test_an_unusable_cap_is_logged_and_sets_none(monkeypatch, caplog, raw):
     monkeypatch.setenv(eviction.CAP_ENV, raw)
     assert eviction.cache_cap_bytes() is None
     assert eviction.CAP_ENV in caplog.text
 
 
-def test_plan_evicts_oldest_first_until_the_total_fits():
+def test_candidates_are_ordered_oldest_first():
     entries = [
         GraphEntry("new", 40, last_used=300.0, root="/r/new"),
         GraphEntry("old", 40, last_used=100.0, root="/r/old"),
         GraphEntry("mid", 40, last_used=200.0, root="/r/mid"),
     ]
-    assert eviction.plan_eviction(entries, frozenset(), cap=50) == ["old", "mid"]
-    assert eviction.plan_eviction(entries, frozenset(), cap=120) == []
+    names = [e.name for e in eviction.eviction_candidates(entries, frozenset())]
+    assert names == ["old", "mid", "new"]
 
 
-def test_plan_never_names_a_graph_in_use_or_unmarked():
+def test_candidates_never_include_a_graph_in_use_or_unmarked():
     entries = [
         GraphEntry("live", 100, last_used=1.0, root="/r/live"),
         GraphEntry("legacy", 100, last_used=0.0, root=None),
         GraphEntry("idle", 100, last_used=2.0, root="/r/idle"),
     ]
-    assert eviction.plan_eviction(entries, frozenset({"/r/live"}), cap=0) == ["idle"]
+    candidates = eviction.eviction_candidates(entries, frozenset({"/r/live"}))
+    assert [e.name for e in candidates] == ["idle"]
 
 
 def test_evict_removes_lru_and_keeps_live_and_unmarked(tmp_path):
@@ -145,3 +147,25 @@ def test_directory_size_does_not_follow_symlinks(tmp_path):
         pytest.skip("symlinks unavailable on this platform")
 
     assert eviction.directory_size(graph) == 10
+
+
+def test_a_graph_that_cannot_go_hands_its_turn_to_the_next(tmp_path, monkeypatch):
+    # Two idle graphs and a cap that holds one: the oldest is refused, so the
+    # newer one goes and the cache fits (Codex P2 on PR #1069).
+    base = tmp_path / "code-graphs"
+    stuck = _graph(base, "stuck", 100, tmp_path / "stuck", used=1.0)
+    newer = _graph(base, "newer", 100, tmp_path / "newer", used=2.0)
+    real_rmtree = eviction.shutil.rmtree
+
+    def _refuse_stuck(path):
+        if Path(path).name == "stuck":
+            raise OSError("busy")
+        real_rmtree(path)
+
+    monkeypatch.setattr(eviction.shutil, "rmtree", _refuse_stuck)
+    cap = eviction.directory_size(stuck)
+    report = eviction.evict_to_cap(base, cap=cap, live_roots=frozenset())
+
+    assert report.failed == ("stuck",) and report.removed == ("newer",)
+    assert stuck.is_dir() and not newer.exists()
+    assert report.total_bytes == cap and report.over_cap is False

@@ -159,6 +159,14 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Code-graph cache cap (issue #711, refinement of slice 3b): a graph that cannot be
+  removed no longer ends the eviction pass; the next candidate is tried until the
+  cache fits (`code_graph_eviction.evict_to_cap`; `plan_eviction` is replaced by
+  `eviction_candidates`). `CORTEX_CODE_GRAPH_CACHE_MAX_GB=-0` and a non-zero value
+  below one byte (`1e-10`) are now refused and logged instead of setting a cap of
+  0 bytes; `0` stays a cap of 0 bytes. Known limit, written in the module: Codex
+  sessions are not registered, so a graph used only by a live Codex session is not
+  protected when a cap is set.
 - `query_methodology` no longer claims a session-start call that nothing makes
   (issue #710): its description said the tool was "MANDATORY at session start so
   subsequent reasoning is calibrated to the user's tendencies", but no hook calls it.
