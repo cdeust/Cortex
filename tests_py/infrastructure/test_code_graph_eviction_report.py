@@ -167,14 +167,23 @@ def test_a_marker_that_cannot_be_touched_is_logged(tmp_path, monkeypatch, caplog
 
 
 def test_measure_returns_the_first_error_that_left_a_file_unread(tmp_path, monkeypatch):
+    # Two errors: one through os.walk's onerror, then one from os.lstat. The
+    # first one is returned, so a _measure that kept the last would fail (#711).
     graph_dir = _graph(tmp_path, "g", 10, None, used=1.0)
-    denied = PermissionError(13, "denied")
+    first = PermissionError(13, "walk denied")
+    later = PermissionError(13, "lstat denied")
+    real_walk = eviction.os.walk
+
+    def _walk(top, onerror=None):
+        onerror(first)
+        return real_walk(top, onerror=onerror)
 
     def _deny(path):
-        raise denied
+        raise later
 
+    monkeypatch.setattr(eviction.os, "walk", _walk)
     monkeypatch.setattr(eviction.os, "lstat", _deny)
-    assert eviction._measure(graph_dir) == (0, denied)
+    assert eviction._measure(graph_dir) == (0, first)
 
 
 def test_measure_stays_complete_when_an_entry_vanished(tmp_path, monkeypatch):

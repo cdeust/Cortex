@@ -132,11 +132,12 @@ def _measure(path: Path) -> tuple[int, OSError | None]:
     An entry that vanished during the walk is gone, so it leaves the count
     complete; any other error (an unreadable subdirectory, which ``os.walk``
     skips silently without ``onerror``) is returned: the count is incomplete."""
-    unread: list[OSError] = []
+    first: OSError | None = None
 
     def _note(exc: OSError) -> None:
-        if not isinstance(exc, FileNotFoundError):
-            unread.append(exc)
+        nonlocal first
+        if first is None and not isinstance(exc, FileNotFoundError):
+            first = exc
 
     total = 0
     for dirpath, _dirnames, filenames in os.walk(path, onerror=_note):
@@ -147,7 +148,7 @@ def _measure(path: Path) -> tuple[int, OSError | None]:
                 _note(exc)
                 continue
             total += stat.st_size
-    return total, (unread[0] if unread else None)
+    return total, first
 
 
 def _marker_mtime(graph_dir: Path) -> float:
