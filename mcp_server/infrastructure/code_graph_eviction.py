@@ -102,13 +102,14 @@ def cache_cap_bytes() -> int | None:
 
 
 def _below_one_byte(raw: str) -> bool:
-    """True, logged, when ``raw`` is not 0 but below one byte, or not exact.
+    """True, logged, when ``raw`` is not 0 but below one byte, or when a
+    Decimal cannot hold its exponent.
 
     The text, read exactly, decides: float("1e-400") is 0.0, which the float
     product would take for a cap of 0 bytes. The comparison does not multiply:
     a Decimal product rounds in its context and underflows to 0 below
-    ``Emin`` (1e-1000100 * 10**9), a comparison is exact. A Decimal refuses an
-    exponent it cannot hold, which float() reads as 0.0."""
+    ``Etiny`` (1e-1000100 * 10**9), a comparison is exact. A Decimal refuses an
+    exponent it cannot hold (1e-99999999999999999999), which float() reads as 0.0."""
     try:
         exact = Decimal(raw)
     except ArithmeticError:
@@ -125,12 +126,12 @@ def directory_size(path: Path) -> int:
     return _measure(path)[0]
 
 
-def _measure(path: Path) -> tuple[int, bool]:
-    """Bytes under ``path`` and whether every entry was read.
+def _measure(path: Path) -> tuple[int, OSError | None]:
+    """Bytes under ``path``, and the first error that left part of it unread.
 
     An entry that vanished during the walk is gone, so it leaves the count
     complete; any other error (an unreadable subdirectory, which ``os.walk``
-    skips silently without ``onerror``) leaves it incomplete."""
+    skips silently without ``onerror``) is returned: the count is incomplete."""
     unread: list[OSError] = []
 
     def _note(exc: OSError) -> None:
@@ -146,7 +147,7 @@ def _measure(path: Path) -> tuple[int, bool]:
                 _note(exc)
                 continue
             total += stat.st_size
-    return total, not unread
+    return total, (unread[0] if unread else None)
 
 
 def _marker_mtime(graph_dir: Path) -> float:
@@ -209,11 +210,12 @@ def _remove(graph_dir: Path, size: int) -> int | None:
             return None
         logger.warning("could not evict code graph %s: %s", graph_dir, exc)
         # A partial removal freed part of the graph: measure what is left.
-        left, complete = _measure(graph_dir)
-        if not complete:
+        left, unread = _measure(graph_dir)
+        if unread is not None:
             logger.warning(
-                "could not read all that is left of %s; its size stays counted",
+                "could not read all that is left of %s (%s); its size stays counted",
                 graph_dir,
+                unread,
             )
             return size
         return left

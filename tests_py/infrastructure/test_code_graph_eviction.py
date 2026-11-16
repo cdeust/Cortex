@@ -222,9 +222,9 @@ def test_a_graph_removed_by_another_pass_counts_as_removed(tmp_path, monkeypatch
 
 
 def test_an_unreadable_rest_keeps_its_size_in_the_total(tmp_path, monkeypatch, caplog):
-    # rmtree frees part of the oldest graph and fails on a subdirectory it cannot
-    # read; os.walk skips that subdirectory, so the rest cannot be measured. Its
-    # size stays counted and the next graph is evicted (#711).
+    # rmtree frees part of each graph and fails on a subdirectory it cannot read;
+    # os.walk skips that subdirectory, so the rest cannot be measured. Its size
+    # stays counted, so the next graph is attempted too (#711).
     base = tmp_path / "code-graphs"
     stuck = _graph(base, "stuck", 100, tmp_path / "stuck", used=1.0)
     newer = _graph(base, "newer", 100, tmp_path / "newer", used=2.0)
@@ -243,6 +243,8 @@ def test_an_unreadable_rest_keeps_its_size_in_the_total(tmp_path, monkeypatch, c
             onerror(PermissionError(13, "denied", str(Path(top) / "graph")))
         return real_walk(top, onerror=onerror)
 
+    unread = f"[Errno 13] denied: '{stuck / 'graph'}'"
+
     monkeypatch.setattr(eviction.shutil, "rmtree", _partial)
     monkeypatch.setattr(eviction.os, "walk", _walk)
     report = eviction.evict_to_cap(base, cap=stuck_size, live_roots=frozenset())
@@ -250,4 +252,7 @@ def test_an_unreadable_rest_keeps_its_size_in_the_total(tmp_path, monkeypatch, c
     assert report.failed == ("stuck", "newer") and report.removed == ()
     assert stuck.is_dir() and not (newer / "graph" / "data").exists()
     assert report.total_bytes == stuck_size + newer_size and report.over_cap is True
-    assert "could not read all that is left of" in caplog.text
+    expected = (
+        f"could not read all that is left of {stuck} ({unread}); its size stays counted"
+    )
+    assert expected in [r.getMessage() for r in caplog.records]

@@ -178,10 +178,12 @@ adheres to [Semantic Versioning](https://semver.org/).
   `CORTEX_CODE_GRAPH_CACHE_MAX_GB=1e-1000100`, whose Decimal product with 10**9
   underflowed to 0, is refused as below one byte instead of setting a cap of 0 bytes
   (the text is compared, not multiplied); a value whose exponent a Decimal cannot
-  hold (`1e-99999999999999999999`) is logged and sets no cap instead of ending the
-  worker on an uncaught `InvalidOperation`; when the rest of a graph that failed to
-  be removed cannot be read in full (an unreadable subdirectory), its size before
-  the attempt stays in the total instead of counting the unread part as freed.
+  hold (`1e-99999999999999999999`) is logged and sets no cap instead of raising
+  `InvalidOperation` in the SessionStart hook, which logged it and started no prune
+  worker, so orphan pruning was skipped along with the eviction; when the rest of a
+  graph that failed to be removed cannot be read in full (an unreadable
+  subdirectory), its size before the attempt stays in the total instead of counting
+  the unread part as freed, and the warning names the first error.
 - `query_methodology` no longer claims a session-start call that nothing makes
   (issue #710): its description said the tool was "MANDATORY at session start so
   subsequent reasoning is calibrated to the user's tendencies", but no hook calls it.

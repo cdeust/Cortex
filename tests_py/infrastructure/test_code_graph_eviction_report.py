@@ -164,3 +164,30 @@ def test_a_marker_that_cannot_be_touched_is_logged(tmp_path, monkeypatch, caplog
 
     assert report.removed == ()
     assert _messages(caplog) == ["could not touch marker of live: denied"]
+
+
+def test_measure_returns_the_first_error_that_left_a_file_unread(tmp_path, monkeypatch):
+    graph_dir = _graph(tmp_path, "g", 10, None, used=1.0)
+    denied = PermissionError(13, "denied")
+
+    def _deny(path):
+        raise denied
+
+    monkeypatch.setattr(eviction.os, "lstat", _deny)
+    assert eviction._measure(graph_dir) == (0, denied)
+
+
+def test_measure_stays_complete_when_an_entry_vanished(tmp_path, monkeypatch):
+    graph_dir = _graph(tmp_path, "g", 10, None, used=1.0)
+    real_walk = eviction.os.walk
+
+    def _vanish(path):
+        raise FileNotFoundError(2, "gone", path)
+
+    def _walk(top, onerror=None):
+        onerror(FileNotFoundError(2, "gone", str(Path(top) / "sub")))
+        return real_walk(top, onerror=onerror)
+
+    monkeypatch.setattr(eviction.os, "lstat", _vanish)
+    monkeypatch.setattr(eviction.os, "walk", _walk)
+    assert eviction._measure(graph_dir) == (0, None)
