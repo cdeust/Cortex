@@ -74,9 +74,10 @@ def cache_cap_bytes() -> int | None:
 
     Refused, logged, no cap: a value that is not a number; a negative one, -0
     included; one whose byte count is not finite (nan, inf, 1e300); one that is
-    not 0 but below one byte (1e-10, and 1e-400, which reads as 0.0 as a float).
-    0 is a cap of 0 bytes. An eviction never runs on a value the user did not
-    write."""
+    not 0 but below one byte (1e-10, 1e-400, which reads as 0.0 as a float, and
+    1e-1000100, whose product with 10**9 underflows in a Decimal context); one
+    whose exponent a Decimal cannot hold (1e-99999999999999999999). 0 is a cap of
+    0 bytes. An eviction never runs on a value the user did not write."""
     raw = os.environ.get(CAP_ENV, "").strip()
     if not raw:
         return None
@@ -95,25 +96,57 @@ def cache_cap_bytes() -> int | None:
     if not math.isfinite(size):
         logger.warning("%s=%r is not a finite size; no eviction", CAP_ENV, raw)
         return None
-    # The text, read exactly, decides "below one byte": float("1e-400") is 0.0,
-    # which the float product would take for a cap of 0 bytes.
-    if 0 < Decimal(raw) * _BYTES_PER_GB < 1:
-        logger.warning("%s=%r is below one byte; no eviction", CAP_ENV, raw)
+    if _below_one_byte(raw):
         return None
     return int(size)
 
 
+def _below_one_byte(raw: str) -> bool:
+    """True, logged, when ``raw`` is not 0 but below one byte, or not exact.
+
+    The text, read exactly, decides: float("1e-400") is 0.0, which the float
+    product would take for a cap of 0 bytes. The comparison does not multiply:
+    a Decimal product rounds in its context and underflows to 0 below
+    ``Emin`` (1e-1000100 * 10**9), a comparison is exact. A Decimal refuses an
+    exponent it cannot hold, which float() reads as 0.0."""
+    try:
+        exact = Decimal(raw)
+    except ArithmeticError:
+        logger.warning("%s=%r has an exponent out of range; no eviction", CAP_ENV, raw)
+        return True
+    if 0 < exact < Decimal(1) / _BYTES_PER_GB:
+        logger.warning("%s=%r is below one byte; no eviction", CAP_ENV, raw)
+        return True
+    return False
+
+
 def directory_size(path: Path) -> int:
     """Bytes of the regular files under ``path``; symlinks are not followed."""
+    return _measure(path)[0]
+
+
+def _measure(path: Path) -> tuple[int, bool]:
+    """Bytes under ``path`` and whether every entry was read.
+
+    An entry that vanished during the walk is gone, so it leaves the count
+    complete; any other error (an unreadable subdirectory, which ``os.walk``
+    skips silently without ``onerror``) leaves it incomplete."""
+    unread: list[OSError] = []
+
+    def _note(exc: OSError) -> None:
+        if not isinstance(exc, FileNotFoundError):
+            unread.append(exc)
+
     total = 0
-    for dirpath, _dirnames, filenames in os.walk(path):
+    for dirpath, _dirnames, filenames in os.walk(path, onerror=_note):
         for filename in filenames:
             try:
                 stat = os.lstat(os.path.join(dirpath, filename))
-            except OSError:
+            except OSError as exc:
+                _note(exc)
                 continue
             total += stat.st_size
-    return total
+    return total, not unread
 
 
 def _marker_mtime(graph_dir: Path) -> float:
@@ -163,8 +196,11 @@ def _touch_live_markers(
                 logger.warning("could not touch marker of %s: %s", entry.name, exc)
 
 
-def _remove(graph_dir: Path) -> int | None:
-    """Remove ``graph_dir``: None once it is gone, else the bytes left under it."""
+def _remove(graph_dir: Path, size: int) -> int | None:
+    """Remove ``graph_dir``: None once it is gone, else the bytes left under it.
+
+    ``size`` is the graph's size before the attempt; it is what is left when the
+    rest cannot be read in full, so an unreadable part is never counted as freed."""
     try:
         shutil.rmtree(graph_dir)
     except OSError as exc:
@@ -173,7 +209,14 @@ def _remove(graph_dir: Path) -> int | None:
             return None
         logger.warning("could not evict code graph %s: %s", graph_dir, exc)
         # A partial removal freed part of the graph: measure what is left.
-        return directory_size(graph_dir)
+        left, complete = _measure(graph_dir)
+        if not complete:
+            logger.warning(
+                "could not read all that is left of %s; its size stays counted",
+                graph_dir,
+            )
+            return size
+        return left
     return None
 
 
@@ -195,7 +238,7 @@ def evict_to_cap(
     for entry in eviction_candidates(entries, live_roots):
         if total <= cap:
             break
-        left = _remove(base / entry.name)
+        left = _remove(base / entry.name, entry.size)
         (removed if left is None else failed).append(entry.name)
         total -= entry.size - (left or 0)
     if removed:

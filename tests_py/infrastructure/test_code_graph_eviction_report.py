@@ -48,6 +48,11 @@ def test_an_unset_cap_is_none_and_logs_nothing(monkeypatch, caplog):
         ("-0", "='-0' is negative; no eviction"),
         ("1e-10", "='1e-10' is below one byte; no eviction"),
         ("1e-400", "='1e-400' is below one byte; no eviction"),
+        ("1e-1000100", "='1e-1000100' is below one byte; no eviction"),
+        (
+            "1e-99999999999999999999",
+            "='1e-99999999999999999999' has an exponent out of range; no eviction",
+        ),
     ],
 )
 def test_an_unusable_cap_logs_the_value(monkeypatch, caplog, raw, message):

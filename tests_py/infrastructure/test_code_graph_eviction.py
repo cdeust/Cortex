@@ -42,7 +42,20 @@ def test_cap_reads_decimal_gigabytes(monkeypatch, raw, expected):
     assert eviction.cache_cap_bytes() == expected
 
 
-@pytest.mark.parametrize("raw", ["ten", "-1", "-0", "nan", "inf", "1e-10", "1e-400"])
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "ten",
+        "-1",
+        "-0",
+        "nan",
+        "inf",
+        "1e-10",
+        "1e-400",
+        "1e-1000100",
+        "1e-99999999999999999999",
+    ],
+)
 def test_an_unusable_cap_is_logged_and_sets_none(monkeypatch, caplog, raw):
     monkeypatch.setenv(eviction.CAP_ENV, raw)
     assert eviction.cache_cap_bytes() is None
@@ -206,3 +219,35 @@ def test_a_graph_removed_by_another_pass_counts_as_removed(tmp_path, monkeypatch
 
     assert report.removed == ("idle",) and report.failed == ()
     assert report.total_bytes == 0 and report.over_cap is False
+
+
+def test_an_unreadable_rest_keeps_its_size_in_the_total(tmp_path, monkeypatch, caplog):
+    # rmtree frees part of the oldest graph and fails on a subdirectory it cannot
+    # read; os.walk skips that subdirectory, so the rest cannot be measured. Its
+    # size stays counted and the next graph is evicted (#711).
+    base = tmp_path / "code-graphs"
+    stuck = _graph(base, "stuck", 100, tmp_path / "stuck", used=1.0)
+    newer = _graph(base, "newer", 100, tmp_path / "newer", used=2.0)
+    stuck_size = eviction.directory_size(stuck)
+    newer_size = eviction.directory_size(newer)
+    real_walk = eviction.os.walk
+    attempted = []
+
+    def _partial(path):
+        attempted.append(path)
+        (Path(path) / "graph" / "data").unlink()
+        raise PermissionError("denied")
+
+    def _walk(top, onerror=None):
+        if attempted and onerror is not None:
+            onerror(PermissionError(13, "denied", str(Path(top) / "graph")))
+        return real_walk(top, onerror=onerror)
+
+    monkeypatch.setattr(eviction.shutil, "rmtree", _partial)
+    monkeypatch.setattr(eviction.os, "walk", _walk)
+    report = eviction.evict_to_cap(base, cap=stuck_size, live_roots=frozenset())
+
+    assert report.failed == ("stuck", "newer") and report.removed == ()
+    assert stuck.is_dir() and not (newer / "graph" / "data").exists()
+    assert report.total_bytes == stuck_size + newer_size and report.over_cap is True
+    assert "could not read all that is left of" in caplog.text
