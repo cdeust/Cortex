@@ -77,9 +77,14 @@ def fit_sources(resp: dict[str, Any], budget_chars: int) -> None:
     """Drop ``sources`` entries from the tail until the content fits beside them.
 
     postcondition: the trace never takes space the content needs. When the
-    content alone exceeds the budget every entry is dropped (paging by
-    ``offset`` shrinks the content until the trace fits). On any drop,
-    ``sources_truncated`` is true and ``sources_total`` gives the full count.
+    content alone exceeds the budget every entry is dropped; paging by
+    ``offset`` shrinks the content and leaves the trace more room. A trace
+    that does not fit beside the response's other fields even with no
+    content stays cut at every offset. On any drop, ``sources_truncated`` is
+    true and ``sources_total`` gives the full count.
+
+    complexity: the response is serialized twice, then each dropped entry
+    alone, so the cut is linear in the size of the response.
     """
     sources = resp.get("sources")
     if not isinstance(sources, list) or not sources:
@@ -89,5 +94,10 @@ def fit_sources(resp: dict[str, Any], budget_chars: int) -> None:
     # the flags are set before the cut so their own length is counted in it
     resp["sources_truncated"] = True
     resp["sources_total"] = len(sources)
-    while sources and serialized_length(resp) > budget_chars:
-        sources.pop()
+    # one serialization of the whole response, then exact compact-JSON
+    # arithmetic per dropped entry: while another entry remains, removing the
+    # last one removes it and the comma before it. The size left after the only
+    # remaining entry goes is never read: the loop ends on the empty list.
+    size = serialized_length(resp)
+    while sources and size > budget_chars:
+        size -= serialized_length(sources.pop()) + 1

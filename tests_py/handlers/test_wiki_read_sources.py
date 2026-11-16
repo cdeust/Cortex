@@ -181,3 +181,43 @@ def test_an_empty_trace_is_never_flagged():
     resp = {"content": "x" * 50, "sources": []}
     fit_sources(resp, 1)
     assert resp == {"content": "x" * 50, "sources": []}
+
+
+def test_the_cut_serializes_the_whole_payload_twice_not_once_per_entry(monkeypatch):
+    from mcp_server.handlers import wiki_read_sources
+
+    sources = [{"memory_id": i, "pad": "y" * 20} for i in range(400)]
+    resp = {"content": "x" * 2000, "sources": sources}
+    whole: list[int] = []
+
+    def _counting(payload):
+        if payload is resp:
+            whole.append(1)
+        return serialized_length(payload)
+
+    monkeypatch.setattr(wiki_read_sources, "serialized_length", _counting)
+    fit_sources(resp, 4000)
+    assert len(whole) == 2  # the fit check, then the size before the cut
+    assert serialized_length(resp) <= 4000
+    assert serialized_length(resp) > 4000 - serialized_length(sources[0]) - 1
+
+
+def test_the_running_size_stays_exact_down_to_the_last_entry():
+    # a budget below the payload without any entry drops them all; the
+    # arithmetic for the last (comma-less) entry must land on the real size.
+    # Each entry outweighs the two flags and has a distinct non-ASCII length.
+    sources = [{"memory_id": i, "note": "é" * (60 + i)} for i in range(6)]
+    resp = {"content": "x" * 30, "sources": list(sources)}
+    fit_sources(resp, 1)
+    assert resp["sources"] == []
+    assert resp["sources_total"] == 6
+    for kept in range(1, 6):
+        expected = {
+            "content": "x",
+            "sources": sources[:kept],
+            "sources_truncated": True,
+            "sources_total": 6,
+        }
+        resp = {"content": "x", "sources": list(sources)}
+        fit_sources(resp, serialized_length(expected))
+        assert resp == expected
