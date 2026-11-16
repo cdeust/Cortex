@@ -75,6 +75,25 @@ def list_page_cited_memory_ids(conn: StoreConnection, page_id: int) -> list[int]
         return [int(row["memory_id"]) for row in cur.fetchall()]
 
 
+def list_pages_citing_memory(conn: StoreConnection, memory_id: int) -> list[str]:
+    """Wiki-relative paths of the pages whose ``wiki.citations`` name the memory.
+
+    Postcondition: distinct paths, sorted. Read before a hard forget erases the
+    citation rows, it names the pages whose source trace loses that memory.
+
+    source: issue #713 (slice 4)"""
+    sql = """
+    SELECT DISTINCT p.rel_path
+    FROM wiki.citations c
+    JOIN wiki.pages p ON p.id = c.page_id
+    WHERE c.memory_id = %s
+    ORDER BY p.rel_path;
+    """
+    with conn.cursor(row_factory=DICT_ROW) as cur:
+        cur.execute(sql, (memory_id,))
+        return [str(row["rel_path"]) for row in cur.fetchall()]
+
+
 def insert_memo(
     conn: StoreConnection,
     subject_type: str,

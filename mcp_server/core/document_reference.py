@@ -1,6 +1,6 @@
 """Recall-side document reference: which source and version a hit came from.
 
-source: issue #713 (slices 2 and 3); ADR-0161 (document provenance tags).
+source: issue #713 (slices 2, 3 and 4); ADR-0161 (document provenance tags).
 
 ingest_document tags every summary/section memory with
 ``doc-ingest:<kind>:<source>@<version>`` (``document_provenance_dedup_tag``).
@@ -62,6 +62,12 @@ def cited_memory_sources(
     recall hit). An id the store no longer holds yields ``{"memory_id",
     "missing": True}``: the reference is kept and marked, never dropped or
     replaced by a guessed location.
+
+    A memory retired since the page cited it (soft ``forget``, a document
+    re-ingested under another output) adds ``stale: True``; one corrected by a
+    newer memory adds ``superseded_by_id``, the successor the store recorded.
+    The reference itself still names the cited memory, not its successor
+    (issue #713 slice 4).
     """
     refs: list[dict[str, Any]] = []
     for mid in cited_ids:
@@ -69,9 +75,17 @@ def cited_memory_sources(
         if mem is None:
             refs.append({"memory_id": mid, "missing": True})
             continue
-        ref: dict[str, Any] = {"memory_id": mid}
-        sources = _source_refs(mem.get("tags") or [])
-        if sources:
-            ref["document_sources"] = sources
-        refs.append(ref)
+        refs.append(_cited_ref(mid, mem))
     return refs
+
+
+def _cited_ref(mid: int, mem: dict[str, Any]) -> dict[str, Any]:
+    ref: dict[str, Any] = {"memory_id": mid}
+    sources = _source_refs(mem.get("tags") or [])
+    if sources:
+        ref["document_sources"] = sources
+    if mem.get("is_stale"):
+        ref["stale"] = True
+    if mem.get("superseded_by_id") is not None:
+        ref["superseded_by_id"] = int(mem["superseded_by_id"])
+    return ref

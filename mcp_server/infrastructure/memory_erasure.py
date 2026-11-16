@@ -30,6 +30,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, TypeVar
 
+from mcp_server.infrastructure.pg_store_wiki_notes import list_pages_citing_memory
+
 T = TypeVar("T")
 
 # (report key, statement); every statement takes the memory id once.
@@ -61,6 +63,8 @@ class ErasureReport:
     deleted: bool = False
     counts: dict[str, int] = field(default_factory=dict)
     page_paths: list[str] = field(default_factory=list)
+    # wiki pages whose citations named an erased memory (issue #713 slice 4)
+    cited_by_pages: list[str] = field(default_factory=list)
     fts_method: str = ""
     # SQLite only: False when another connection's snapshot kept the WAL from
     # being truncated (its old frames go at the next checkpoint); None on PG
@@ -87,6 +91,8 @@ def _count(cursor: Any) -> int:
 
 
 def erase_derived_rows(conn: Any, memory_id: int, report: ErasureReport) -> None:
+    # read before the citation rows go: nothing else records which pages cited it
+    report.cited_by_pages = list_pages_citing_memory(conn, memory_id)
     for key, statement in DERIVED_ROWS:
         report.counts[key] = _count(conn.execute(statement, (memory_id,)))
 

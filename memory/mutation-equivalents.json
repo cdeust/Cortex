@@ -656,6 +656,14 @@
       "kind": "equivalent-by-construction",
       "rationale": "Both store connections already yield dict rows when a cursor names no row factory: PostgreSQL connections are opened with row_factory=dict_row (db_connect.py, pg_connect and pg_pool), and psycopg's cursor(row_factory=None) inherits the connection's factory; SQLite's compat cursor ignores the argument (sqlite_compat.py, cursor). The query and its dict access are pinned on both backends by tests_py/infrastructure/test_page_cited_memory_ids.py.",
       "issue": "#713"
+    },
+    {
+      "mutant": "mcp_server.infrastructure.pg_store_wiki_notes.x_list_pages_citing_memory__mutmut_2",
+      "removed": "with conn.cursor(row_factory=DICT_ROW) as cur:",
+      "added": "with conn.cursor(row_factory=None) as cur:",
+      "kind": "equivalent-by-construction",
+      "rationale": "Both store connections already yield dict rows when a cursor names no row factory: PostgreSQL connections are opened with row_factory=dict_row (db_connect.py, pg_connect and pg_pool), including the interactive connection the hard-forget transaction passes in, and psycopg's cursor(row_factory=None) inherits the connection's factory; SQLite's compat cursor ignores the argument (sqlite_compat.py, cursor). The query and its dict access are pinned on both backends by tests_py/infrastructure/test_pages_citing_memory.py.",
+      "issue": "#713"
     }
   ]
 }

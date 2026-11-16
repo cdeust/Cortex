@@ -15,6 +15,7 @@ from mcp_server.infrastructure.artifact_gc import delete_artifact_if_unreference
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
+from mcp_server.infrastructure.pg_store_wiki import list_pages_citing_memory
 from mcp_server.infrastructure.wiki_memory_pages import remove_derived_pages
 from mcp_server.handlers._tool_meta import DESTRUCTIVE
 from mcp_server.handlers._telemetry_wrap import instrument
@@ -36,7 +37,10 @@ schema = {
         "`anchor` (protect from deletion), and `validate_memory` (mark "
         "stale based on filesystem refs, not user verdict). Mutates the "
         "memories table; hard delete is irreversible. Latency ~10ms. "
-        "Returns {deleted, method, memory_id, content_preview, reason?}."
+        "Returns {deleted, method, memory_id, content_preview, "
+        "cited_by_pages, reason?}: cited_by_pages lists the wiki pages "
+        "(wiki-relative paths) whose citations named the memory, so a "
+        "synthesis that rested on it can be reviewed."
     ),
     "inputSchema": {
         "type": "object",
@@ -87,6 +91,24 @@ def _get_store() -> MemoryStore:
 # ── Handler ───────────────────────────────────────────────────────────────
 
 
+def _soft_forget(
+    store: MemoryStore, mem: dict[str, Any], memory_id: int
+) -> dict[str, Any]:
+    """Retire the memory in place; the pages citing it keep it, marked stale."""
+    store.mark_memory_stale(memory_id)
+    store.update_memory_heat(memory_id, 0.0)
+    return {
+        "deleted": True,
+        "method": "soft",
+        "memory_id": memory_id,
+        "content_preview": mem["content"][:80],
+        # source: ADR-0392
+        "artifact_deleted": False,
+        # source: issue #713 (slice 4)
+        "cited_by_pages": list_pages_citing_memory(store._conn, memory_id),
+    }
+
+
 async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
     """Delete or soft-delete a memory."""
     if not args or args.get("memory_id") is None:
@@ -110,16 +132,7 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
         }
 
     if soft:
-        store.mark_memory_stale(memory_id, stale=True)
-        store.update_memory_heat(memory_id, 0.0)
-        return {
-            "deleted": True,
-            "method": "soft",
-            "memory_id": memory_id,
-            "content_preview": mem["content"][:80],
-            # source: ADR-0392
-            "artifact_deleted": False,
-        }
+        return _soft_forget(store, mem, memory_id)
 
     # source: ADR-0392 — compression keeps the original in original_content
     artifact_paths = {
@@ -157,6 +170,10 @@ async def _handler_impl(args: dict[str, Any] | None = None) -> dict[str, Any]:
         "claims_deleted": report.counts.get("claims", 0),
         "erased": report.counts,
         "pages_removed": pages_removed,
+        # source: issue #713 (slice 4) — pages kept on disk whose trace lost it
+        "cited_by_pages": [
+            p for p in report.cited_by_pages if p not in report.page_paths
+        ],
         "fts_method": report.fts_method,
         "wal_truncated": report.wal_truncated,
         "complete": report.complete,
