@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any
 
 from mcp_server.core.prose_redaction import scan_prose, summarize_findings
+from mcp_server.core.wiki_citable import split_citable
 from mcp_server.shared.wiki_frontmatter_validation import UnclosedFrontmatterError
 from mcp_server.shared.wiki_layout import page_path
 from mcp_server.shared.wiki_pointer import (
@@ -75,9 +76,10 @@ schema = {
         "resolvable id immediately), and — when `memory_ids` is passed "
         "— wiki.citations (one deduplicated row per memory actually used "
         "to author the page; how a curate_wiki job's memory cluster "
-        "becomes durable, queryable provenance). Latency ~50ms. Returns "
-        "{path, mode, created, bytes_written, root, citations_written} "
-        "or {error}."
+        "becomes durable, queryable provenance; a wiki pointer memory is "
+        "never cited, it is listed in `citations_refused`). Latency ~50ms. "
+        "Returns {path, mode, created, bytes_written, root, "
+        "citations_written, citations_refused?} or {error}."
     ),
     "inputSchema": {
         "type": "object",
@@ -135,8 +137,12 @@ schema = {
                     "`supporting_memory_ids` (a job proposes candidates; "
                     "you may not have used all of them). Recorded as one "
                     "deduplicated wiki.citations row per id, best-effort — "
-                    "never blocks or fails the write. Omit if this page "
-                    "wasn't authored from a curate_wiki job."
+                    "never blocks or fails the write. An id that is a wiki "
+                    "page's pointer memory (source `wiki://...`) is not "
+                    "cited, so a page cannot rest on itself or on a page "
+                    "that cites it: it comes back in `citations_refused` "
+                    "as {memory_id, reason: 'wiki_pointer'}. Omit if this "
+                    "page wasn't authored from a curate_wiki job."
                 ),
                 "items": {"type": "integer"},
                 "default": [],
@@ -171,7 +177,39 @@ async def _store_pointer_memory(rel_path: str, content: str, tags: list[str]) ->
         return
 
 
-def _sync_page_and_cite(rel_path: str, content: str, memory_ids: list[int]) -> int:
+def _cite_memories(
+    store: Any, page_id: int, domain: str, memory_ids: list[int]
+) -> tuple[int, list[dict[str, Any]]]:
+    """Insert one wiki.citations row per citable memory; name the refused ones.
+
+    precondition: page_id is the wiki.pages row of the page just written.
+    postcondition: a wiki pointer memory is never inserted; it is returned
+    in the refused list (``split_citable``, issue #715). Returns (new rows
+    written, refused entries).
+    """
+    citable, refused = split_citable(memory_ids, store.get_memories_by_ids(memory_ids))
+    try:
+        session_id = current_window_session() or ""
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+        silent_failure.note("wiki_write.session_lookup", exc)
+        session_id = ""
+    written = 0
+    for mid in citable:
+        new_id = insert_citation(
+            store._conn,
+            page_id=page_id,
+            session_id=session_id,
+            domain=domain,
+            memory_id=mid,
+        )
+        if new_id is not None:
+            written += 1
+    return written, refused
+
+
+def _sync_page_and_cite(
+    rel_path: str, content: str, memory_ids: list[int]
+) -> tuple[int, list[dict[str, Any]]]:
     """Sync ``wiki.pages`` and record citations for the memories used, best-effort.
 
     precondition: rel_path/content are the page just written to disk by
@@ -179,10 +217,11 @@ def _sync_page_and_cite(rel_path: str, content: str, memory_ids: list[int]) -> i
     postcondition: on success, exactly one wiki.pages row exists for
     rel_path (inserted or refreshed by ``page_row_from_md`` +
     ``upsert_page`` — same shape ``wiki_migrate``'s batch sweep would
-    produce) and, for each id in ``memory_ids``, at most one new
+    produce) and, for each citable id in ``memory_ids``, at most one new
     wiki.citations row exists keyed on (page_id, memory_id) — a repeat
     id (this call or a prior one) is a silent DB-level no-op, never an
     error (``insert_citation``'s unqualified ON CONFLICT DO NOTHING).
+    A wiki pointer memory is not citable (``_cite_memories``).
     Unlike wiki_read's ``_cite_page``, a resolvable window session is
     NOT required: this citation records "memory used to author the
     page", not "page read in this session" — the two are orthogonal
@@ -192,43 +231,27 @@ def _sync_page_and_cite(rel_path: str, content: str, memory_ids: list[int]) -> i
     On ANY exception (PG down, store not PG-backed, etc.) this
     degrades to a no-op — the markdown write already succeeded and
     must never be affected by this observability side channel.
-    Returns the number of new citation rows written (0 on any failure
-    or when memory_ids is empty).
+    Returns (new citation rows written, refused entries); (0, []) on
+    any failure or when memory_ids is empty.
     """
     try:
         settings = get_memory_settings()
         store = get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
-        conn = store._conn
         page_row = page_row_from_md(rel_path, content)
-        page_id, _was_modified = upsert_page(conn, page_row)
-        if page_id is None or page_id < 0 or not memory_ids:
-            conn.commit()
-            return 0
-        try:
-            session_id = current_window_session() or ""
-        except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
-            silent_failure.note("wiki_write.session_lookup", exc)
-            session_id = ""
-        written = 0
-        for mid in memory_ids:
-            new_id = insert_citation(
-                conn,
-                page_id=page_id,
-                session_id=session_id,
-                domain=page_row.get("domain", ""),
-                memory_id=mid,
-            )
-            if new_id is not None:
-                written += 1
-        conn.commit()
-        return written
+        page_id, _was_modified = upsert_page(store._conn, page_row)
+        cited: tuple[int, list[dict[str, Any]]] = (0, [])
+        if page_id is not None and page_id >= 0 and memory_ids:
+            domain = page_row.get("domain", "")
+            cited = _cite_memories(store, page_id, domain, memory_ids)
+        store._conn.commit()
+        return cited
     except Exception:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
         logger.debug(
             "wiki_write page-sync/citation side-effect failed for %s",
             rel_path,
             exc_info=True,
         )
-        return 0
+        return 0, []
 
 
 async def write_governed_page(
@@ -256,19 +279,19 @@ async def write_governed_page(
         return {"error": f"write failed: {exc}"}
 
     await _store_pointer_memory(rel_path, content, tags or [])
-
-    citations_written = _sync_page_and_cite(rel_path, content, memory_ids or [])
-
-    # source: ADR-0475
-    findings = scan_prose(content)
+    written, refused = _sync_page_and_cite(rel_path, content, memory_ids or [])
     response: dict[str, Any] = {
         "path": result.path,
         "mode": result.mode,
         "created": result.created,
         "bytes_written": result.bytes_written,
         "root": str(root),
-        "citations_written": citations_written,
+        "citations_written": written,
     }
+    if refused:
+        response["citations_refused"] = refused
+    # source: ADR-0475
+    findings = scan_prose(content)
     if findings:
         response["redaction_findings"] = summarize_findings(findings)
     return response

@@ -182,6 +182,14 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- A wiki page can no longer cite itself or a page that cites it back (issue #715,
+  slice 1, acceptance criterion 4): `wiki_write(memory_ids=...)` records no citation
+  to a wiki pointer memory (source `wiki://<page>`, the one `wiki_write` and
+  `wiki_adr` register per page), since a pointer is a copy of a derived page, never
+  a source (ADR-0475). Such an id is listed in `citations_refused` as
+  `{"memory_id", "reason": "wiki_pointer"}`, the other ids are cited as before, and
+  the page's `wiki_read` trace names only the memories it was authored from.
+
 - `wiki_read` trace cut is linear (issue #713, review notes of #1078): `fit_sources`
   serialized the whole response again for each trace entry it dropped, so the cut was
   quadratic in the number of citations (49 s measured for 6000 sources, in the async
