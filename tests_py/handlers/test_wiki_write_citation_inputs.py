@@ -32,7 +32,7 @@ def test_the_store_is_opened_with_the_configured_path_and_dimension(
     settings = SimpleNamespace(DB_PATH="/data/cortex.db", EMBEDDING_DIM=384)
     pages, _ = wired_pg
     opened: list[tuple] = []
-    store = _FakeStore(_FakeConn(), pages.request_conn)
+    store = _FakeStore(_FakeConn(), pages.request_conn, pages.violations)
     monkeypatch.setattr(wiki_write, "get_memory_settings", lambda: settings)
 
     def _open(*args, **kwargs):
