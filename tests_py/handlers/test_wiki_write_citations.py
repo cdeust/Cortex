@@ -21,6 +21,7 @@ from pathlib import Path
 import pytest
 
 from mcp_server.handlers import wiki_write
+from mcp_server.observability import silent_failure
 
 
 def _run(coro):
@@ -204,6 +205,7 @@ def test_no_memory_ids_writes_page_zero_citations(tmp_wiki, wired_pg) -> None:
 
     assert "error" not in result
     assert result["citations_written"] == 0
+    assert "citations_interrupted" not in result
     assert "reference/a.md" in pages.by_path
     assert citations.rows == []
 
@@ -215,6 +217,7 @@ def test_no_memory_ids_writes_page_zero_citations(tmp_wiki, wired_pg) -> None:
 def test_page_sync_failure_degrades_gracefully(tmp_wiki, wired_pg) -> None:
     pages, citations = wired_pg
     pages.raise_on_upsert = True
+    silent_failure.reset()
 
     result = _run(
         wiki_write.handler(
@@ -224,7 +227,10 @@ def test_page_sync_failure_degrades_gracefully(tmp_wiki, wired_pg) -> None:
 
     assert "error" not in result
     assert result["citations_written"] == 0
+    assert result["citations_interrupted"] is True
     assert citations.rows == []
+    noted = silent_failure.status()["wiki_write.page_sync_citations"]
+    assert noted == {"last_error": "RuntimeError: PG unreachable", "count": 1}
 
 
 # ── 6. get_shared_store itself raising (PG fully unreachable) → same
