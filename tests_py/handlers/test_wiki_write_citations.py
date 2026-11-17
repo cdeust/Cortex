@@ -15,6 +15,7 @@ replace, so handler-level assertions are meaningful without a live PG.
 from __future__ import annotations
 
 import asyncio
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -38,6 +39,11 @@ class _FakeConn:
 
     def commit(self) -> None:
         self.committed = True
+
+    @contextmanager
+    def transaction(self):
+        """The page row and its citations commit as one unit (issue #715)."""
+        yield
 
 
 class _FakeStore:

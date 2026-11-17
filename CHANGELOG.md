@@ -191,6 +191,18 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- A wiki page's source frontier no longer runs ahead of what a write recorded (issue
+  #715, slice 3, acceptance criterion 2): `wiki_write` committed the `wiki.pages` row
+  and each `wiki.citations` row one statement at a time (PostgreSQL runs the shared
+  store in autocommit; SQLite left the partial rows pending for the next commit). A
+  write interrupted after its first citation left a page citing memory 3 while memory
+  2 of the same write was never recorded, so `wiki_read`'s `frontier.max_memory_id`
+  named a memory as processed past a missing one. The page row and its citations now
+  commit as one unit (`transaction()`, added to the SQLite adapter with psycopg's
+  semantics): an interruption records none of them, the response carries
+  `citations_interrupted: true`, and the same write run again with mode `replace`
+  records them all.
+
 - A wiki page can no longer cite itself or a page that cites it back (issue #715,
   slice 1, acceptance criterion 4): `wiki_write(memory_ids=...)` records no citation
   to a wiki pointer memory (source `wiki://<page>`, the one `wiki_write` and

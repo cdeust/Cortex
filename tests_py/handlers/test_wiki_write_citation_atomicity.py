@@ -1,0 +1,100 @@
+"""An interrupted citation write leaves no partial source frontier, and resumes.
+
+``wiki_write(memory_ids=...)`` records the memories a page rests on in
+``wiki.citations``; ``wiki_read`` derives the page's source frontier from
+those rows (``core.wiki_page_freshness``). Before this slice the page row and
+each citation were committed one statement at a time (PostgreSQL runs the
+shared store in autocommit; SQLite kept the partial rows pending on the shared
+connection for the next commit). A write interrupted after its first citation
+left a frontier that named memory 50 as processed while memory 10, cited by the
+same write, was never recorded. The page row and its citations now commit as
+one unit: an interruption records none of them, the response says so, and the
+same write run again records them all.
+
+source: issue #715 (slice 3, acceptance criterion 2)
+"""
+
+from __future__ import annotations
+
+import asyncio
+
+from mcp_server.handlers import wiki_read, wiki_write
+from tests_py.handlers.test_wiki_read_sources import (
+    _page_md,
+    _two_documents_and_a_page,
+)
+
+_DERIVED = "notes/derived.md"
+_real_insert_citation = wiki_write.insert_citation
+
+
+class _InterruptedError(RuntimeError):
+    pass
+
+
+def _interrupt_after_first_citation(monkeypatch) -> None:
+    real = wiki_write.insert_citation
+    calls = {"n": 0}
+
+    def flaky(conn, **kwargs):
+        calls["n"] += 1
+        if calls["n"] > 1:
+            raise _InterruptedError("connection lost mid-write")
+        return real(conn, **kwargs)
+
+    monkeypatch.setattr(wiki_write, "insert_citation", flaky)
+
+
+def _write(memory_ids: list[int], mode: str) -> dict:
+    out = asyncio.run(
+        wiki_write.handler(
+            {
+                "path": _DERIVED,
+                "content": _page_md("Derived"),
+                "mode": mode,
+                "memory_ids": memory_ids,
+            }
+        )
+    )
+    assert "error" not in out
+    return out
+
+
+def _recorded_citations(rel_path: str) -> list[int]:
+    settings = wiki_write.get_memory_settings()
+    store = wiki_write.get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
+    store._conn.commit()  # a pending partial row would be flushed here
+    with store._conn.cursor() as cur:
+        cur.execute(
+            "SELECT c.memory_id FROM wiki.citations c "
+            "JOIN wiki.pages p ON p.id = c.page_id "
+            "WHERE p.rel_path = %s AND c.memory_id IS NOT NULL ORDER BY c.id",
+            (rel_path,),
+        )
+        rows = cur.fetchall()
+    return [int(r["memory_id"] if isinstance(r, dict) else r[0]) for r in rows]
+
+
+def test_an_interrupted_write_records_no_citation_and_says_so(monkeypatch, tmp_path):
+    _, _, cited = _two_documents_and_a_page(monkeypatch, tmp_path)
+    _interrupt_after_first_citation(monkeypatch)
+    out = _write(list(reversed(cited)), mode="create")
+    assert out["citations_written"] == 0
+    assert out["citations_interrupted"] is True
+    assert _recorded_citations(_DERIVED) == []
+
+
+def test_a_resumed_write_completes_the_frontier(monkeypatch, tmp_path):
+    _, _, cited = _two_documents_and_a_page(monkeypatch, tmp_path)
+    _interrupt_after_first_citation(monkeypatch)
+    _write(list(reversed(cited)), mode="create")
+    monkeypatch.setattr(wiki_write, "insert_citation", _real_insert_citation)
+    resumed = _write(list(reversed(cited)), mode="replace")
+    assert resumed["citations_written"] == 2
+    assert "citations_interrupted" not in resumed
+    page = asyncio.run(wiki_read.handler({"path": _DERIVED}))
+    assert sorted(ref["memory_id"] for ref in page["sources"]) == sorted(cited)
+    assert page["freshness"]["frontier"] == {
+        "cited_memories": 2,
+        "max_memory_id": max(cited),
+    }
