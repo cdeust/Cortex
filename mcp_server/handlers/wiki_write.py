@@ -179,11 +179,12 @@ async def _store_pointer_memory(rel_path: str, content: str, tags: list[str]) ->
 
 
 def _cite_memories(
-    store: Any, page_id: int, domain: str, memory_ids: list[int]
+    store: Any, conn: Any, page_id: int, domain: str, memory_ids: list[int]
 ) -> tuple[int, list[dict[str, Any]]]:
     """Insert one wiki.citations row per citable memory; name the refused ones.
 
-    precondition: page_id is the wiki.pages row of the page just written.
+    precondition: page_id is the wiki.pages row of the page just written;
+    ``conn`` is the connection holding the caller's open transaction.
     postcondition: a wiki pointer memory is never inserted; it is returned
     in the refused list (``split_citable``, issue #715). Returns (new rows
     written, refused entries).
@@ -197,7 +198,7 @@ def _cite_memories(
     written = 0
     for mid in citable:
         new_id = insert_citation(
-            store._conn,
+            conn,
             page_id=page_id,
             session_id=session_id,
             domain=domain,
@@ -234,6 +235,13 @@ def _sync_page_and_cite(
     none of them, so the source frontier ``wiki_read`` derives from the
     citations never names a memory while another memory of the same
     write is missing, and the same write run again records them all.
+    The unit runs on a connection the request owns
+    (``acquire_interactive``: a pooled PostgreSQL connection, or the
+    SQLite store's per-thread connection), never on the PostgreSQL
+    ``store._conn`` that every worker thread shares, whose statements
+    from other threads would join, abort or nest inside it. With
+    ``POOL_DISABLED`` PostgreSQL yields that shared connection, so that
+    mode keeps the risk.
     On ANY exception (PG down, store not PG-backed, etc.) the markdown
     write, which already succeeded, stands; the failure is noted and
     None is returned so the response can say the citations were not
@@ -245,12 +253,14 @@ def _sync_page_and_cite(
         store = get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
         page_row = page_row_from_md(rel_path, content)
         cited: tuple[int, list[dict[str, Any]]] = (0, [])
-        with store._conn.transaction():  # source: issue #715 (slice 3)
-            page_id, _was_modified = upsert_page(store._conn, page_row)
-            if page_id is not None and page_id >= 0 and memory_ids:
-                domain = page_row.get("domain", "")
-                cited = _cite_memories(store, page_id, domain, memory_ids)
-        store._conn.commit()
+        # source: issue #715 (slice 3); PR #1083 review (request-owned connection)
+        with store.acquire_interactive() as conn:
+            with conn.transaction():
+                page_id, _was_modified = upsert_page(conn, page_row)
+                if page_id is not None and page_id >= 0 and memory_ids:
+                    domain = page_row.get("domain", "")
+                    cited = _cite_memories(store, conn, page_id, domain, memory_ids)
+            conn.commit()
         return cited
     except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure and citations_interrupted
         silent_failure.note("wiki_write.page_sync_citations", exc)

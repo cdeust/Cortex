@@ -51,6 +51,11 @@ class _FakeStore:
         self._conn = conn
         self.memories: dict[int, dict] = {}
 
+    @contextmanager
+    def acquire_interactive(self):
+        """The request-owned connection the citation unit runs on (PR #1083)."""
+        yield self._conn
+
     def get_memories_by_ids(self, memory_ids: list[int]) -> dict[int, dict]:
         return {m: self.memories[m] for m in memory_ids if m in self.memories}
 
