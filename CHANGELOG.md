@@ -198,9 +198,10 @@ adheres to [Semantic Versioning](https://semver.org/).
   the savepoint when its final `RELEASE` fails, so the per-thread connection is
   not left inside a transaction when that undo succeeds and no outer unit is open,
   and a rollback that fails no longer replaces the block's own exception: it is
-  attached to it as a note (the connection can then stay inside a transaction, with
-  the block's partial writes pending: a later commit on that connection can keep them,
-  a rollback or a close discards them).
+  attached to it as a note. A block that released the savepoint itself inside an
+  outer unit then leaves its writes pending in that unit (a later commit on that
+  connection can keep them, a rollback or a close discards them); with no outer unit
+  open, that release had already committed them.
 
 - A wiki page's source frontier no longer runs ahead of what a write recorded (issue
   #715, slice 3, acceptance criterion 2): `wiki_write` committed the `wiki.pages` row
