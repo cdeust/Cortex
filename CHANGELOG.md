@@ -14,9 +14,9 @@ adheres to [Semantic Versioning](https://semver.org/).
   (body hash) and citations were recorded with, as after a `wiki_write` that returned
   `citations_interrupted`. `failed` wins over `pending`; a page that cites nothing
   stays `current`. Writing the page again records it and the page reads `current`.
-  `wiki_write` now builds the `wiki.pages` row from the page re-read after the write,
-  not from the text passed in: an `append` recorded the fragment alone, so the row
-  did not describe the page. Limits: a page rewritten by a path that records no
+  `wiki_write` now builds the `wiki.pages` row from the whole page the write left on
+  disk (`WriteResult.text`), not from the text passed in: an `append` recorded the
+  fragment alone, so the row did not describe the page. Limits: a page rewritten by a path that records no
   citation (`wiki_link`, a hand edit) also reads `failed`, since its citations no
   longer describe its text; a `wiki_migrate` sweep re-records the row from disk and
   clears `failed` without new citations.
@@ -25,8 +25,7 @@ adheres to [Semantic Versioning](https://semver.org/).
   any cut. `state` is `pending` when a cited memory is missing, retired (`stale`) or
   corrected (`superseded_by_id`), and `pending_memory_ids` names them in citation
   order; otherwise `current`. `frontier` gives `cited_memories` and `max_memory_id`.
-  No `failed` state yet: it needs a recorded refresh outcome, which the persisted
-  frontier of criterion 2 brings. A memory erased by a hard `forget` leaves no
+  The `failed` state came in a later slice (entry above). A memory erased by a hard `forget` leaves no
   citation row, so it does not make the page pending (`forget` names the page in
   `cited_by_pages`); criterion 1 covers it.
 - References touched by a forgotten source (issue #713, slice 4): `forget` returns
@@ -203,6 +202,14 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `wiki_write` records the page it wrote (issue #715, Codex review of PR #1092): the
+  `wiki.pages` row was built from the page re-read after the pointer memory was
+  stored, so a writer that replaced the page in between had its text recorded with
+  this write's `memory_ids`, and the page read `current` on citations that never
+  described it. `write_page` and `append_section` now return the page they left on
+  disk in `WriteResult.text` (redacted, with `read_page`'s newlines), and
+  `wiki_write` records that text. The `wiki_write.page_reread` failure note is gone
+  with the re-read.
 - Test isolation of the wiki tables (issue #715): the between-test cleanup
   (`tests_py/_store_cleanup.py`) now clears `wiki.citations` and `wiki.pages`, so a
   page row one handler test wrote no longer survives into the next test that reads
