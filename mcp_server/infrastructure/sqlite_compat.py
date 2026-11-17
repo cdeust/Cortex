@@ -219,12 +219,18 @@ class PsycopgCompatConnection:
         not left inside a transaction; inside an outer unit, that unit stays
         open with its own pending writes. When the undo fails as well, the
         block's exception still propagates and carries the undo failure as a
-        note. A failed ``ROLLBACK TO`` is necessary for the block's writes to
-        stay pending, not sufficient: a block that released the savepoint
-        itself inside an outer unit merged its writes into that unit, so they
-        stay pending and a later commit can keep them; with no outer unit open,
-        that release already committed them (PR #1083, #1084, #1086, #1087 and
-        #1088 reviews).
+        note. A failed undo guarantees nothing about the block's writes: a
+        ``RELEASE``, ``commit()`` or ``rollback()`` issued inside the block, or
+        SQLite's own rollback after an I/O or disk-full error, already kept or
+        discarded them. Every block names its savepoint ``cortex_tx``, and
+        ``ROLLBACK TO`` undoes the most recent one of that name: nested blocks
+        each undo their own, but after a block released its savepoint itself
+        inside an enclosing ``transaction()``, the undo reaches the enclosing
+        block's savepoint and discards its writes too. Only an outer unit
+        opened outside ``transaction()`` keeps such a block's writes pending,
+        where a later commit can keep them (PR #1083, #1084, #1086 to #1089
+        reviews; https://sqlite.org/lang_transaction.html, "Response To Errors
+        Within A Transaction").
         """
         try:
             self._real.execute("ROLLBACK TO SAVEPOINT cortex_tx")
