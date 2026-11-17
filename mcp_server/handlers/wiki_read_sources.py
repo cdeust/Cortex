@@ -30,6 +30,7 @@ from typing import Any
 
 from mcp_server.core.document_reference import cited_memory_sources
 from mcp_server.core.response_budget import serialized_length
+from mcp_server.core.wiki_page_freshness import page_freshness
 from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.infrastructure.pg_store_wiki import (
     get_page_by_rel_path,
@@ -50,12 +51,13 @@ STORE_ERROR = "store_error"
 def attach_page_sources(
     resp: dict[str, Any], rel_path: str, get_store: Callable[[], MemoryStore]
 ) -> dict[str, Any]:
-    """Add ``sources`` (or ``sources_unavailable``) to a wiki_read response.
+    """Add ``sources`` and ``freshness`` (or ``sources_unavailable``) to a response.
 
     precondition: rel_path is the wiki-relative path of the page whose
     content ``resp`` carries (the terminal page after redirects).
     postcondition: exactly one of ``sources`` (a list, possibly empty, in
-    citation order) or ``sources_unavailable`` (a reason string) is set.
+    citation order) with ``freshness`` (``page_freshness`` of the whole
+    trace, issue #715) or ``sources_unavailable`` (a reason string) is set.
     Returns ``resp`` for chaining.
     """
     try:
@@ -71,6 +73,7 @@ def attach_page_sources(
         resp["sources_unavailable"] = STORE_ERROR
         return resp
     resp["sources"] = cited_memory_sources(cited, memories)
+    resp["freshness"] = page_freshness(resp["sources"])
     return resp
 
 
