@@ -15,13 +15,19 @@ replace, so handler-level assertions are meaningful without a live PG.
 from __future__ import annotations
 
 import asyncio
-from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
 
 from mcp_server.handlers import wiki_write
 from mcp_server.observability import silent_failure
+from tests_py.handlers._wiki_write_citation_fakes import (
+    _FakeCitations,
+    _FakeConn,
+    _FakePages,
+    _FakeStore,
+    _Violations,
+)
 
 
 def _run(coro):
@@ -42,107 +48,12 @@ def _clean_silent_failure():
     silent_failure.reset()
 
 
-class _FakeConn:
-    def __init__(self) -> None:
-        self.committed = False
-
-    def commit(self) -> None:
-        self.committed = True
-
-    @contextmanager
-    def transaction(self):
-        """The page row and its citations commit as one unit (issue #715)."""
-        yield
-
-
-class _FakeStore:
-    """``_conn`` is the shared connection; the unit must never run on it."""
-
-    def __init__(self, shared: _FakeConn, request: _FakeConn) -> None:
-        self._conn = shared
-        self.request_conn = request
-        self.held = False
-        self.memories: dict[int, dict] = {}
-
-    @contextmanager
-    def acquire_interactive(self):
-        """The request-owned connection the citation unit runs on (PR #1083)."""
-        self.held = True
-        try:
-            yield self.request_conn
-        finally:
-            self.held = False
-
-    def get_memories_by_ids(self, memory_ids: list[int]) -> dict[int, dict]:
-        # A lookup while the unit holds its connection borrows a second one.
-        assert not self.held, "memory lookup ran inside the citation unit"
-        return {m: self.memories[m] for m in memory_ids if m in self.memories}
-
-
-class _FakePages:
-    """rel_path -> page_id, auto-assigning ids like a real SERIAL PK."""
-
-    def __init__(self) -> None:
-        self.by_path: dict[str, int] = {}
-        self._next_id = 1
-        self.raise_on_upsert = False
-        self.request_conn: _FakeConn | None = None
-
-    def upsert(self, conn, page_row: dict) -> tuple[int, bool]:
-        assert conn is self.request_conn, "page row written off the request unit"
-        if self.raise_on_upsert:
-            raise RuntimeError("PG unreachable")
-        rel_path = page_row["rel_path"]
-        if rel_path in self.by_path:
-            return self.by_path[rel_path], False
-        pid = self._next_id
-        self._next_id += 1
-        self.by_path[rel_path] = pid
-        return pid, True
-
-
-class _FakeCitations:
-    """Reproduces the unqualified ON CONFLICT DO NOTHING dedup: a row is
-    rejected if it matches EITHER partial unique index."""
-
-    def __init__(self) -> None:
-        self.rows: list[tuple[int, str, str, int | None]] = []
-        self._next_id = 1
-        self.request_conn: _FakeConn | None = None
-
-    def insert(
-        self,
-        conn,
-        page_id: int,
-        session_id: str = "",
-        domain: str = "",
-        memory_id: int | None = None,
-    ) -> int | None:
-        assert conn is self.request_conn, "citation written off the request unit"
-        for existing in self.rows:
-            if (
-                session_id != ""
-                and existing[0] == page_id
-                and existing[1] == session_id
-            ):
-                return None
-            if (
-                memory_id is not None
-                and existing[0] == page_id
-                and existing[3] == memory_id
-            ):
-                return None
-        cid = self._next_id
-        self._next_id += 1
-        self.rows.append((page_id, session_id, domain, memory_id))
-        return cid
-
-
 @pytest.fixture
 def wired_pg(monkeypatch):
-    store = _FakeStore(_FakeConn(), _FakeConn())
-    pages = _FakePages()
-    citations = _FakeCitations()
+    violations = _Violations()
+    store = _FakeStore(_FakeConn(), _FakeConn(), violations)
+    pages = _FakePages(violations)
+    citations = _FakeCitations(violations)
     pages.request_conn = citations.request_conn = store.request_conn
 
     monkeypatch.setattr(wiki_write, "get_shared_store", lambda *a, **kw: store)
@@ -150,7 +61,8 @@ def wired_pg(monkeypatch):
     monkeypatch.setattr(wiki_write, "insert_citation", citations.insert)
     monkeypatch.setattr(wiki_write, "current_window_session", lambda: None)
     store.memories = {10: {"source": "session"}, 20: {"source": None}}
-    return pages, citations
+    yield pages, citations
+    assert violations == [], violations
 
 
 # ── 1. Job executed with memory_ids → N citation rows carrying memory_id ──

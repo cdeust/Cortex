@@ -194,8 +194,10 @@ class PsycopgCompatConnection:
         precondition: none; the connection may hold pending writes of an outer
         unit. postcondition: on a normal exit every statement of the block is
         kept (committed when no outer unit is open, else merged into it, as a
-        psycopg savepoint is); on an exception none of them is, the outer
-        unit's pending writes stay as they were, and the exception propagates.
+        psycopg savepoint is); on an exception the exception propagates and,
+        when the undo succeeds, none of them is kept and the outer unit's
+        pending writes stay as they were (``_undo_savepoint`` says what is
+        left when the undo fails too).
         A SQLite savepoint opened outside a transaction starts one and its
         release commits it, so one construct covers both cases.
 
@@ -213,9 +215,11 @@ class PsycopgCompatConnection:
 
         Covers a failed final ``RELEASE`` too (its commit refused, e.g.
         ``SQLITE_BUSY``): the savepoint is still open and is undone here,
-        so the connection is not left inside a transaction. When the undo
-        fails as well, the block's exception still propagates, and carries
-        the undo failure as a note (PR #1083 review).
+        so, when the undo succeeds, the connection is not left inside a
+        transaction. When the undo fails as well, the connection can stay
+        inside the transaction the savepoint opened; the block's exception
+        still propagates, and carries the undo failure as a note (PR #1083
+        and #1084 reviews).
         """
         try:
             self._real.execute("ROLLBACK TO SAVEPOINT cortex_tx")

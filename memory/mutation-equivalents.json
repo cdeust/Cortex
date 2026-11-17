@@ -670,7 +670,7 @@
       "removed": "self._real.execute(\"ROLLBACK TO SAVEPOINT cortex_tx\")",
       "added": "self._real.execute(\"rollback to savepoint cortex_tx\")",
       "kind": "equivalent-by-construction",
-      "rationale": "SQLite matches SQL keywords and savepoint names case-insensitively: measured 2026-11-17 on SQLite 3.45.1 (Python sqlite3), SAVEPOINT cortex_tx then 'rollback to savepoint CORTEX_TX' and 'release savepoint CORTEX_TX' undo the insert and leave in_transaction False (keywords: https://sqlite.org/lang_keywords.html). The mutated statement therefore undoes the same savepoint opened by transaction(); the undo is pinned by tests_py/infrastructure/test_sqlite_compat_transaction.py.",
+      "rationale": "SQLite matches SQL keywords case-insensitively (https://sqlite.org/lang_keywords.html) and finds a savepoint by name with sqlite3StrICmp, a case-insensitive comparison (OP_Savepoint, https://github.com/sqlite/sqlite/blob/master/src/vdbe.c). Measured 2026-11-17 on SQLite 3.53.1 (Python sqlite3): after SAVEPOINT cortex_tx and an insert, each of the four mutated statements, paired with the unmutated other one, leaves the table empty and in_transaction False, as the original pair does. The mutated ROLLBACK TO therefore undoes the same savepoint opened by transaction(); the undo is pinned by tests_py/infrastructure/test_sqlite_compat_transaction.py.",
       "issue": "#715"
     },
     {
@@ -678,7 +678,7 @@
       "removed": "self._real.execute(\"ROLLBACK TO SAVEPOINT cortex_tx\")",
       "added": "self._real.execute(\"ROLLBACK TO SAVEPOINT CORTEX_TX\")",
       "kind": "equivalent-by-construction",
-      "rationale": "SQLite matches SQL keywords and savepoint names case-insensitively: measured 2026-11-17 on SQLite 3.45.1 (Python sqlite3), SAVEPOINT cortex_tx then 'rollback to savepoint CORTEX_TX' and 'release savepoint CORTEX_TX' undo the insert and leave in_transaction False (keywords: https://sqlite.org/lang_keywords.html). The mutated statement therefore undoes the same savepoint opened by transaction(); the undo is pinned by tests_py/infrastructure/test_sqlite_compat_transaction.py.",
+      "rationale": "SQLite matches SQL keywords case-insensitively (https://sqlite.org/lang_keywords.html) and finds a savepoint by name with sqlite3StrICmp, a case-insensitive comparison (OP_Savepoint, https://github.com/sqlite/sqlite/blob/master/src/vdbe.c). Measured 2026-11-17 on SQLite 3.53.1 (Python sqlite3): after SAVEPOINT cortex_tx and an insert, each of the four mutated statements, paired with the unmutated other one, leaves the table empty and in_transaction False, as the original pair does. The mutated ROLLBACK TO therefore undoes the same savepoint opened by transaction(); the undo is pinned by tests_py/infrastructure/test_sqlite_compat_transaction.py.",
       "issue": "#715"
     },
     {
@@ -686,7 +686,7 @@
       "removed": "self._real.execute(\"RELEASE SAVEPOINT cortex_tx\")",
       "added": "self._real.execute(\"release savepoint cortex_tx\")",
       "kind": "equivalent-by-construction",
-      "rationale": "SQLite matches SQL keywords and savepoint names case-insensitively: measured 2026-11-17 on SQLite 3.45.1 (Python sqlite3), SAVEPOINT cortex_tx then 'rollback to savepoint CORTEX_TX' and 'release savepoint CORTEX_TX' undo the insert and leave in_transaction False (keywords: https://sqlite.org/lang_keywords.html). The mutated statement therefore undoes the same savepoint opened by transaction(); the undo is pinned by tests_py/infrastructure/test_sqlite_compat_transaction.py.",
+      "rationale": "SQLite matches SQL keywords case-insensitively (https://sqlite.org/lang_keywords.html) and finds a savepoint by name with sqlite3StrICmp, a case-insensitive comparison (OP_Savepoint, https://github.com/sqlite/sqlite/blob/master/src/vdbe.c). Measured 2026-11-17 on SQLite 3.53.1 (Python sqlite3): after SAVEPOINT cortex_tx and an insert, each of the four mutated statements, paired with the unmutated other one, leaves the table empty and in_transaction False, as the original pair does. The mutated RELEASE therefore releases the same savepoint after its rollback, ending the transaction it opened; the undo is pinned by tests_py/infrastructure/test_sqlite_compat_transaction.py.",
       "issue": "#715"
     },
     {
@@ -694,7 +694,7 @@
       "removed": "self._real.execute(\"RELEASE SAVEPOINT cortex_tx\")",
       "added": "self._real.execute(\"RELEASE SAVEPOINT CORTEX_TX\")",
       "kind": "equivalent-by-construction",
-      "rationale": "SQLite matches SQL keywords and savepoint names case-insensitively: measured 2026-11-17 on SQLite 3.45.1 (Python sqlite3), SAVEPOINT cortex_tx then 'rollback to savepoint CORTEX_TX' and 'release savepoint CORTEX_TX' undo the insert and leave in_transaction False (keywords: https://sqlite.org/lang_keywords.html). The mutated statement therefore undoes the same savepoint opened by transaction(); the undo is pinned by tests_py/infrastructure/test_sqlite_compat_transaction.py.",
+      "rationale": "SQLite matches SQL keywords case-insensitively (https://sqlite.org/lang_keywords.html) and finds a savepoint by name with sqlite3StrICmp, a case-insensitive comparison (OP_Savepoint, https://github.com/sqlite/sqlite/blob/master/src/vdbe.c). Measured 2026-11-17 on SQLite 3.53.1 (Python sqlite3): after SAVEPOINT cortex_tx and an insert, each of the four mutated statements, paired with the unmutated other one, leaves the table empty and in_transaction False, as the original pair does. The mutated RELEASE therefore releases the same savepoint after its rollback, ending the transaction it opened; the undo is pinned by tests_py/infrastructure/test_sqlite_compat_transaction.py.",
       "issue": "#715"
     }
   ]

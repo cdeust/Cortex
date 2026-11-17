@@ -25,7 +25,6 @@ from tests_py.handlers.test_wiki_read_sources import (
     _two_documents_and_a_page,
 )
 
-_DERIVED = "notes/derived.md"
 _real_insert_citation = wiki_write.insert_citation
 
 
@@ -33,20 +32,36 @@ class _InterruptedError(RuntimeError):
     pass
 
 
-def _interrupt_after_first_citation(monkeypatch) -> None:
+def _interrupt_after_first_citation(monkeypatch) -> list[int | None]:
+    """Let the first citation insert run, then interrupt the second.
+
+    Returns the ids the real inserts returned, so a test can show the first
+    row was written inside the unit before the interruption undid it.
+    """
     real = wiki_write.insert_citation
-    calls = {"n": 0}
+    inserted: list[int | None] = []
 
     def flaky(conn, **kwargs):
-        calls["n"] += 1
-        if calls["n"] > 1:
+        if inserted:
             raise _InterruptedError("connection lost mid-write")
-        return real(conn, **kwargs)
+        inserted.append(real(conn, **kwargs))
+        return inserted[-1]
 
     monkeypatch.setattr(wiki_write, "insert_citation", flaky)
+    return inserted
 
 
-def _write(memory_ids: list[int], mode: str, rel_path: str = _DERIVED) -> dict:
+def _own_path() -> str:
+    """A page path no other test used.
+
+    Neither backend clears wiki.pages or wiki.citations between tests
+    (``_TABLES_TO_CLEAN`` in tests_py/_store_cleanup.py names neither), so a
+    shared path could read a row another test left as a row written here.
+    """
+    return f"notes/derived-{uuid.uuid4().hex}.md"
+
+
+def _write(memory_ids: list[int], mode: str, rel_path: str) -> dict:
     out = asyncio.run(
         wiki_write.handler(
             {
@@ -86,11 +101,10 @@ def _recorded_pages(rel_path: str) -> list[int]:
 
 def test_an_interrupted_write_records_no_citation_and_says_so(monkeypatch, tmp_path):
     _, _, cited = _two_documents_and_a_page(monkeypatch, tmp_path)
-    _interrupt_after_first_citation(monkeypatch)
-    # wiki.pages is not cleared between tests on PostgreSQL: a path of its own
-    # keeps a page row left by another test from reading as a kept row here.
-    rel_path = f"notes/derived-{uuid.uuid4().hex}.md"
+    inserted = _interrupt_after_first_citation(monkeypatch)
+    rel_path = _own_path()
     out = _write(list(reversed(cited)), mode="create", rel_path=rel_path)
+    assert len(inserted) == 1 and inserted[0] is not None  # written, then undone
     assert out["citations_written"] == 0
     assert out["citations_interrupted"] is True
     assert _recorded_citations(rel_path) == []
@@ -100,12 +114,13 @@ def test_an_interrupted_write_records_no_citation_and_says_so(monkeypatch, tmp_p
 def test_a_resumed_write_completes_the_frontier(monkeypatch, tmp_path):
     _, _, cited = _two_documents_and_a_page(monkeypatch, tmp_path)
     _interrupt_after_first_citation(monkeypatch)
-    _write(list(reversed(cited)), mode="create")
+    rel_path = _own_path()
+    _write(list(reversed(cited)), mode="create", rel_path=rel_path)
     monkeypatch.setattr(wiki_write, "insert_citation", _real_insert_citation)
-    resumed = _write(list(reversed(cited)), mode="replace")
+    resumed = _write(list(reversed(cited)), mode="replace", rel_path=rel_path)
     assert resumed["citations_written"] == 2
     assert "citations_interrupted" not in resumed
-    page = asyncio.run(wiki_read.handler({"path": _DERIVED}))
+    page = asyncio.run(wiki_read.handler({"path": rel_path}))
     assert sorted(ref["memory_id"] for ref in page["sources"]) == sorted(cited)
     assert page["freshness"]["frontier"] == {
         "cited_memories": 2,

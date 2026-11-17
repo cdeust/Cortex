@@ -185,9 +185,12 @@ def _split_cited(
 ) -> tuple[list[int], list[dict[str, Any]]]:
     """Split ``memory_ids`` into the citable ids and the refused entries.
 
-    Runs before the citation unit opens its connection: the memory lookup
-    borrows a pooled connection of its own, and doing it while the unit
-    holds one would take two pool slots for one request (PR #1083 review).
+    Runs before the citation unit opens its connection. On PostgreSQL with
+    a pool, the memory lookup borrows a pooled connection of its own, and
+    doing it while the unit holds one would take two pool slots for one
+    request (PR #1083 review). With SQLite, or PostgreSQL under
+    ``POOL_DISABLED``, the lookup and the unit share one connection, and
+    the order changes nothing.
     postcondition: a wiki pointer memory is never citable; it is returned
     in the refused list (``split_citable``, issue #715).
     """
