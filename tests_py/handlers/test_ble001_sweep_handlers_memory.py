@@ -247,6 +247,6 @@ class TestWikiWriteSessionLookup:
 
         monkeypatch.setattr(wiki_write, "insert_citation", fake_citation)
         written = wiki_write._sync_page_and_cite("notes/x.md", "content", [42])
-        assert written == 1
+        assert written == (1, [])
         assert inserted[0]["session_id"] == ""
         _assert_noted("wiki_write.session_lookup", "registry broke")

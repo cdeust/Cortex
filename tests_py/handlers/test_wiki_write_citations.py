@@ -43,6 +43,10 @@ class _FakeConn:
 class _FakeStore:
     def __init__(self, conn: _FakeConn) -> None:
         self._conn = conn
+        self.memories: dict[int, dict] = {}
+
+    def get_memories_by_ids(self, memory_ids: list[int]) -> dict[int, dict]:
+        return {m: self.memories[m] for m in memory_ids if m in self.memories}
 
 
 class _FakePages:
@@ -111,6 +115,7 @@ def wired_pg(monkeypatch):
     monkeypatch.setattr(wiki_write, "upsert_page", pages.upsert)
     monkeypatch.setattr(wiki_write, "insert_citation", citations.insert)
     monkeypatch.setattr(wiki_write, "current_window_session", lambda: None)
+    store.memories = {10: {"source": "session"}, 20: {"source": None}}
     return pages, citations
 
 
