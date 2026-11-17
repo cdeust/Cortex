@@ -191,6 +191,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Test isolation of the wiki tables (issue #715): the between-test cleanup
+  (`tests_py/_store_cleanup.py`) now clears `wiki.citations` and `wiki.pages`, so a
+  page row one handler test wrote no longer survives into the next test that reads
+  the same path. The raw `sqlite3` fallback runs each statement through
+  `_translate_sql`, which maps `wiki.<table>` to the SQLite `wiki_<table>`.
 - `wiki_write` no longer holds two pooled connections for one write (issue #715,
   PR #1083 review): the memory lookup that refuses a wiki pointer as a citation
   ran while the citation unit held its connection, and borrowed a second one. It

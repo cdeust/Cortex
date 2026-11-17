@@ -53,6 +53,14 @@ _TABLES_TO_CLEAN = [
     # that would otherwise accumulate across runs.
     "injection_receipt_items",
     "injection_receipts",
+    # Wiki rows a handler test writes (wiki_write, curate_wiki): citations
+    # before pages, and both before memories, which citations reference.
+    # Without them a page row survives for the session, so a later test
+    # reading the same rel_path saw that row as its own (#715). Spelled in
+    # the PostgreSQL schema; SQLite runs them through _translate_sql, which
+    # maps wiki.<table> to wiki_<table>.
+    "wiki.citations",
+    "wiki.pages",
     "memories",
 ]
 
@@ -128,11 +136,14 @@ def _clean_sqlite_store() -> None:
         return
     import sqlite3
 
+    from mcp_server.infrastructure.sqlite_sql_translate import _translate_sql
+
     try:
         conn = sqlite3.connect(_SQLITE_DB_PATH, timeout=10)
         for table in _TABLES_TO_CLEAN:
             try:
-                conn.execute(f"DELETE FROM {table}")
+                # A raw connection does not translate, unlike the store's.
+                conn.execute(_translate_sql(f"DELETE FROM {table}"))
             except Exception:
                 pass
         try:
