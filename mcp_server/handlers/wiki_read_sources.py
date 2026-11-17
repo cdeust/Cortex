@@ -31,6 +31,7 @@ from typing import Any
 from mcp_server.core.document_reference import cited_memory_sources
 from mcp_server.core.response_budget import serialized_length
 from mcp_server.core.wiki_page_freshness import page_freshness
+from mcp_server.handlers.wiki_migrate import page_row_from_md
 from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.infrastructure.pg_store_wiki import (
     get_page_by_rel_path,
@@ -58,7 +59,10 @@ def attach_page_sources(
     postcondition: exactly one of ``sources`` (a list, possibly empty, in
     citation order) with ``freshness`` (``page_freshness`` of the whole
     trace, issue #715) or ``sources_unavailable`` (a reason string) is set.
-    Returns ``resp`` for chaining.
+    The page's recorded body hash is compared with the hash of
+    ``resp["content"]``, computed by the row builder ``wiki_write`` records
+    with (``page_row_from_md``), so ``freshness`` can say the record is not
+    the one of this text. Returns ``resp`` for chaining.
     """
     try:
         store = get_store()
@@ -68,12 +72,15 @@ def attach_page_sources(
             return resp
         cited = list_page_cited_memory_ids(store._conn, int(page["id"]))
         memories = store.get_memories_by_ids(cited)
+        on_disk = page_row_from_md(rel_path, resp["content"])["body_hash"]
     except Exception:  # noqa: BLE001 — mechanism boundary; failure is reported in the response and logged
         logger.warning("wiki_read source trace failed for %s", rel_path, exc_info=True)
         resp["sources_unavailable"] = STORE_ERROR
         return resp
     resp["sources"] = cited_memory_sources(cited, memories)
-    resp["freshness"] = page_freshness(resp["sources"])
+    resp["freshness"] = page_freshness(
+        resp["sources"], record_matches_text=page.get("body_hash") == on_disk
+    )
     return resp
 
 

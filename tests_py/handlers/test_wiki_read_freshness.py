@@ -9,6 +9,7 @@ import asyncio
 
 from mcp_server.core.wiki_page_freshness import (
     PAGE_CURRENT,
+    PAGE_FAILED,
     PAGE_PENDING,
     page_freshness,
 )
@@ -26,28 +27,40 @@ def test_each_changed_citation_makes_the_page_pending_in_citation_order():
         {"memory_id": 2, "superseded_by_id": 11},
         {"memory_id": 7, "missing": True},
     ]
-    assert page_freshness(sources) == {
+    assert page_freshness(sources, record_matches_text=True) == {
         "state": PAGE_PENDING,
+        "record_matches_text": True,
         "pending_memory_ids": [9, 2, 7],
         "frontier": {"cited_memories": 4, "max_memory_id": 9},
     }
 
 
 def test_live_citations_and_no_citation_are_current():
-    assert page_freshness([{"memory_id": 3}, {"memory_id": 5}])["state"] == (
-        PAGE_CURRENT
-    )
-    assert page_freshness([]) == {
+    live = [{"memory_id": 3}, {"memory_id": 5}]
+    assert page_freshness(live, record_matches_text=True)["state"] == PAGE_CURRENT
+    # a page that cites nothing rests on nothing, whatever its record says
+    assert page_freshness([], record_matches_text=False) == {
         "state": PAGE_CURRENT,
+        "record_matches_text": False,
         "pending_memory_ids": [],
         "frontier": {"cited_memories": 0, "max_memory_id": None},
+    }
+
+
+def test_a_record_of_another_text_fails_the_page_before_pending():
+    sources = [{"memory_id": 3}, {"memory_id": 5, "stale": True}]
+    assert page_freshness(sources, record_matches_text=False) == {
+        "state": PAGE_FAILED,
+        "record_matches_text": False,
+        "pending_memory_ids": [5],
+        "frontier": {"cited_memories": 2, "max_memory_id": 5},
     }
 
 
 def test_the_verdict_survives_the_cut_of_the_trace():
     sources = [{"memory_id": i} for i in range(40)] + [{"memory_id": 99, "stale": True}]
     resp = {"content": "x" * 200, "sources": sources}
-    resp["freshness"] = page_freshness(sources)
+    resp["freshness"] = page_freshness(sources, record_matches_text=True)
     fit_sources(resp, 600)
     assert resp["sources_truncated"] is True
     assert 99 not in [ref["memory_id"] for ref in resp["sources"]]
@@ -67,6 +80,7 @@ def test_a_written_page_is_current_until_a_cited_memory_is_retired(
     _, _, cited = _two_documents_and_a_page(monkeypatch, tmp_path)
     assert _read()["freshness"] == {
         "state": PAGE_CURRENT,
+        "record_matches_text": True,
         "pending_memory_ids": [],
         "frontier": {"cited_memories": 2, "max_memory_id": max(cited)},
     }
