@@ -214,12 +214,14 @@ class PsycopgCompatConnection:
         """Roll the block back without hiding why it failed.
 
         Covers a failed final ``RELEASE`` too (its commit refused, e.g.
-        ``SQLITE_BUSY``): the savepoint is still open and is undone here,
-        so, when the undo succeeds, the connection is not left inside a
-        transaction. When the undo fails as well, the connection can stay
-        inside a transaction; the block's exception
-        still propagates, and carries the undo failure as a note (PR #1083
-        and #1084 reviews).
+        ``SQLITE_BUSY``): the savepoint is still open and is undone here.
+        When the undo succeeds and no outer unit was open, the connection is
+        not left inside a transaction; inside an outer unit, that unit stays
+        open with its own pending writes. When the undo fails as well, the
+        connection can stay inside a transaction with the block's partial
+        writes still pending, and the connection's next commit would keep
+        them; the block's exception still propagates and carries the undo
+        failure as a note (PR #1083, #1084 and #1086 reviews).
         """
         try:
             self._real.execute("ROLLBACK TO SAVEPOINT cortex_tx")
