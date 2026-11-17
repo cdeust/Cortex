@@ -8,6 +8,18 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `failed` freshness state of a memory-derived wiki page (issue #715, acceptance
+  criterion 3): `wiki_read` reports `state: failed` and `record_matches_text: false`
+  when a page cites memories but the body on disk is not the one its `wiki.pages` row
+  (body hash) and citations were recorded with, as after a `wiki_write` that returned
+  `citations_interrupted`. `failed` wins over `pending`; a page that cites nothing
+  stays `current`. Writing the page again records it and the page reads `current`.
+  `wiki_write` now builds the `wiki.pages` row from the page re-read after the write,
+  not from the text passed in: an `append` recorded the fragment alone, so the row
+  did not describe the page. Limits: a page rewritten by a path that records no
+  citation (`wiki_link`, a hand edit) also reads `failed`, since its citations no
+  longer describe its text; a `wiki_migrate` sweep re-records the row from disk and
+  clears `failed` without new citations.
 - Freshness of a memory-derived wiki page (issue #715, slice 2, acceptance criterion 3):
   `wiki_read` returns `freshness` beside `sources`, computed on the whole trace before
   any cut. `state` is `pending` when a cited memory is missing, retired (`stale`) or

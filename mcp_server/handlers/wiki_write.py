@@ -46,6 +46,7 @@ from mcp_server.infrastructure.session_registry import current_window_session
 from mcp_server.infrastructure.wiki_store import (
     WikiExistsError,
     WikiMissingError,
+    read_page,
     write_page,
 )
 
@@ -286,6 +287,30 @@ def _sync_page_and_cite(
         return None
 
 
+def _record_page(
+    root: Path | str, rel_path: str, memory_ids: list[int]
+) -> tuple[int, list[dict[str, Any]]] | None:
+    """Record the page as it now stands on disk, with its citations.
+
+    An ``append`` writes a fragment below the page and ``create``/``replace``
+    write the normalized page, so the text passed in is not always the text
+    on disk. The ``wiki.pages`` row, its body hash included, is built from
+    the page re-read after the write: ``wiki_read`` compares that hash with
+    the page to report ``failed`` (issue #715), and a row built from the
+    fragment would make every appended page read as failed.
+    postcondition: the result of ``_sync_page_and_cite`` on the re-read
+    page; None, noted, when the page cannot be re-read.
+    """
+    try:
+        on_disk = read_page(root, rel_path)
+        if on_disk is None:
+            raise WikiMissingError(rel_path)
+    except (OSError, WikiMissingError) as exc:
+        silent_failure.note("wiki_write.page_reread", exc)
+        return None
+    return _sync_page_and_cite(rel_path, on_disk, memory_ids)
+
+
 def _citation_fields(
     synced: tuple[int, list[dict[str, Any]]] | None,
 ) -> dict[str, Any]:
@@ -329,7 +354,7 @@ async def write_governed_page(
         return {"error": f"write failed: {exc}"}
 
     await _store_pointer_memory(rel_path, content, tags or [])
-    synced = _sync_page_and_cite(rel_path, content, memory_ids or [])
+    synced = _record_page(root, rel_path, memory_ids or [])
     response: dict[str, Any] = {
         "path": result.path,
         "mode": result.mode,

@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 
+from mcp_server.core.wiki_page_freshness import PAGE_CURRENT, PAGE_FAILED
 from mcp_server.handlers import wiki_read, wiki_write
 from tests_py.handlers.test_wiki_read_sources import (
     _page_md,
@@ -61,12 +62,14 @@ def _own_path() -> str:
     return f"notes/derived-{uuid.uuid4().hex}.md"
 
 
-def _write(memory_ids: list[int], mode: str, rel_path: str) -> dict:
+def _write(
+    memory_ids: list[int], mode: str, rel_path: str, content: str | None = None
+) -> dict:
     out = asyncio.run(
         wiki_write.handler(
             {
                 "path": rel_path,
-                "content": _page_md("Derived"),
+                "content": content or _page_md("Derived"),
                 "mode": mode,
                 "memory_ids": memory_ids,
             }
@@ -126,3 +129,41 @@ def test_a_resumed_write_completes_the_frontier(monkeypatch, tmp_path):
         "cited_memories": 2,
         "max_memory_id": max(cited),
     }
+
+
+def _freshness(rel_path: str) -> dict:
+    page = asyncio.run(wiki_read.handler({"path": rel_path}))
+    assert "sources_unavailable" not in page
+    return page["freshness"]
+
+
+def test_an_interrupted_refresh_reads_failed_until_it_is_written_again(
+    monkeypatch, tmp_path
+):
+    _, _, cited = _two_documents_and_a_page(monkeypatch, tmp_path)
+    rel_path = _own_path()
+    _write(cited, mode="create", rel_path=rel_path)
+    assert _freshness(rel_path)["state"] == PAGE_CURRENT
+    _interrupt_after_first_citation(monkeypatch)
+    refreshed = _page_md("Derived, refreshed")
+    out = _write(list(reversed(cited)), "replace", rel_path, content=refreshed)
+    assert out["citations_interrupted"] is True
+    # the new text is on disk, the record is still the one of the old text
+    failed = _freshness(rel_path)
+    assert failed["state"] == PAGE_FAILED
+    assert failed["record_matches_text"] is False
+    monkeypatch.setattr(wiki_write, "insert_citation", _real_insert_citation)
+    _write(list(reversed(cited)), "replace", rel_path, content=refreshed)
+    assert _freshness(rel_path)["state"] == PAGE_CURRENT
+
+
+def test_an_appended_page_is_recorded_as_it_stands_on_disk(monkeypatch, tmp_path):
+    _, _, cited = _two_documents_and_a_page(monkeypatch, tmp_path)
+    rel_path = _own_path()
+    _write(cited, mode="create", rel_path=rel_path)
+    out = _write([], "append", rel_path, content="A later paragraph.\n")
+    assert "citations_interrupted" not in out
+    # a row built from the fragment alone would make this page read failed
+    freshness = _freshness(rel_path)
+    assert freshness["state"] == PAGE_CURRENT
+    assert freshness["record_matches_text"] is True
