@@ -8,6 +8,15 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Freshness of a memory-derived wiki page (issue #715, slice 2, acceptance criterion 3):
+  `wiki_read` returns `freshness` beside `sources`, computed on the whole trace before
+  any cut. `state` is `pending` when a cited memory is missing, retired (`stale`) or
+  corrected (`superseded_by_id`), and `pending_memory_ids` names them in citation
+  order; otherwise `current`. `frontier` gives `cited_memories` and `max_memory_id`.
+  No `failed` state yet: it needs a recorded refresh outcome, which the persisted
+  frontier of criterion 2 brings. A memory erased by a hard `forget` leaves no
+  citation row, so it does not make the page pending (`forget` names the page in
+  `cited_by_pages`); criterion 1 covers it.
 - References touched by a forgotten source (issue #713, slice 4): `forget` returns
   `cited_by_pages`, the wiki-relative paths of the pages whose citations named the
   memory. A hard `forget` reads them before it erases the citation rows (pages it
