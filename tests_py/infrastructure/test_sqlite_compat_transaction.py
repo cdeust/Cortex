@@ -53,3 +53,28 @@ def test_a_failed_block_leaves_the_outer_pending_writes_untouched():
         raise RuntimeError("interrupted")
     conn.commit()
     assert _values(conn) == [7]
+
+
+def test_a_refused_final_release_is_undone_and_leaves_no_open_transaction():
+    # source: PR #1083 review — the final RELEASE sat outside the undo path.
+    raw = sqlite3.connect(":memory:")
+    raw.execute("PRAGMA foreign_keys = ON")
+    raw.execute("CREATE TABLE p (id INTEGER PRIMARY KEY)")
+    raw.execute(
+        "CREATE TABLE c (pid INTEGER REFERENCES p(id) DEFERRABLE INITIALLY DEFERRED)"
+    )
+    conn = PsycopgCompatConnection(raw)
+    with pytest.raises(sqlite3.IntegrityError), conn.transaction():
+        conn.execute("INSERT INTO c VALUES (%s)", (99,))  # checked at RELEASE
+    assert raw.in_transaction is False
+    assert raw.execute("SELECT count(*) FROM c").fetchone()[0] == 0
+
+
+def test_a_failed_rollback_does_not_hide_the_block_exception():
+    # source: PR #1083 review — ROLLBACK TO failing replaced the real error.
+    conn = _conn()
+    with pytest.raises(RuntimeError, match="interrupted") as caught:
+        with conn.transaction():
+            conn.execute("RELEASE SAVEPOINT cortex_tx")  # the undo now fails
+            raise RuntimeError("interrupted")
+    assert any("savepoint rollback also failed" in n for n in caught.value.__notes__)

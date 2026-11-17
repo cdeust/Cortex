@@ -664,6 +664,38 @@
       "kind": "equivalent-by-construction",
       "rationale": "Both store connections already yield dict rows when a cursor names no row factory: PostgreSQL connections are opened with row_factory=dict_row (db_connect.py, pg_connect and pg_pool), including the interactive connection the hard-forget transaction passes in, and psycopg's cursor(row_factory=None) inherits the connection's factory; SQLite's compat cursor ignores the argument (sqlite_compat.py, cursor). The query and its dict access are pinned on both backends by tests_py/infrastructure/test_pages_citing_memory.py.",
       "issue": "#713"
+    },
+    {
+      "mutant": "mcp_server.infrastructure.sqlite_compat.xǁPsycopgCompatConnectionǁ_undo_savepoint__mutmut_3",
+      "removed": "self._real.execute(\"ROLLBACK TO SAVEPOINT cortex_tx\")",
+      "added": "self._real.execute(\"rollback to savepoint cortex_tx\")",
+      "kind": "equivalent-by-construction",
+      "rationale": "SQLite matches SQL keywords and savepoint names case-insensitively: measured 2026-11-17 on SQLite 3.45.1 (Python sqlite3), SAVEPOINT cortex_tx then 'rollback to savepoint CORTEX_TX' and 'release savepoint CORTEX_TX' undo the insert and leave in_transaction False (keywords: https://sqlite.org/lang_keywords.html). The mutated statement therefore undoes the same savepoint opened by transaction(); the undo is pinned by tests_py/infrastructure/test_sqlite_compat_transaction.py.",
+      "issue": "#715"
+    },
+    {
+      "mutant": "mcp_server.infrastructure.sqlite_compat.xǁPsycopgCompatConnectionǁ_undo_savepoint__mutmut_4",
+      "removed": "self._real.execute(\"ROLLBACK TO SAVEPOINT cortex_tx\")",
+      "added": "self._real.execute(\"ROLLBACK TO SAVEPOINT CORTEX_TX\")",
+      "kind": "equivalent-by-construction",
+      "rationale": "SQLite matches SQL keywords and savepoint names case-insensitively: measured 2026-11-17 on SQLite 3.45.1 (Python sqlite3), SAVEPOINT cortex_tx then 'rollback to savepoint CORTEX_TX' and 'release savepoint CORTEX_TX' undo the insert and leave in_transaction False (keywords: https://sqlite.org/lang_keywords.html). The mutated statement therefore undoes the same savepoint opened by transaction(); the undo is pinned by tests_py/infrastructure/test_sqlite_compat_transaction.py.",
+      "issue": "#715"
+    },
+    {
+      "mutant": "mcp_server.infrastructure.sqlite_compat.xǁPsycopgCompatConnectionǁ_undo_savepoint__mutmut_7",
+      "removed": "self._real.execute(\"RELEASE SAVEPOINT cortex_tx\")",
+      "added": "self._real.execute(\"release savepoint cortex_tx\")",
+      "kind": "equivalent-by-construction",
+      "rationale": "SQLite matches SQL keywords and savepoint names case-insensitively: measured 2026-11-17 on SQLite 3.45.1 (Python sqlite3), SAVEPOINT cortex_tx then 'rollback to savepoint CORTEX_TX' and 'release savepoint CORTEX_TX' undo the insert and leave in_transaction False (keywords: https://sqlite.org/lang_keywords.html). The mutated statement therefore undoes the same savepoint opened by transaction(); the undo is pinned by tests_py/infrastructure/test_sqlite_compat_transaction.py.",
+      "issue": "#715"
+    },
+    {
+      "mutant": "mcp_server.infrastructure.sqlite_compat.xǁPsycopgCompatConnectionǁ_undo_savepoint__mutmut_8",
+      "removed": "self._real.execute(\"RELEASE SAVEPOINT cortex_tx\")",
+      "added": "self._real.execute(\"RELEASE SAVEPOINT CORTEX_TX\")",
+      "kind": "equivalent-by-construction",
+      "rationale": "SQLite matches SQL keywords and savepoint names case-insensitively: measured 2026-11-17 on SQLite 3.45.1 (Python sqlite3), SAVEPOINT cortex_tx then 'rollback to savepoint CORTEX_TX' and 'release savepoint CORTEX_TX' undo the insert and leave in_transaction False (keywords: https://sqlite.org/lang_keywords.html). The mutated statement therefore undoes the same savepoint opened by transaction(); the undo is pinned by tests_py/infrastructure/test_sqlite_compat_transaction.py.",
+      "issue": "#715"
     }
   ]
 }
