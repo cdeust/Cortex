@@ -102,8 +102,9 @@ def test_a_failed_undo_can_leave_the_block_writes_pending():
     with pytest.raises(RuntimeError, match="interrupted") as caught:
         with conn.transaction():
             conn.execute("INSERT INTO t VALUES (%s)", (8,))
-            # The block's own RELEASE merges 8 into the outer unit holding 7,
-            # so the undo's ROLLBACK TO fails and 8 stays pending there.
+            # The block's own RELEASE ends the savepoint, so the undo's
+            # ROLLBACK TO fails; the same RELEASE merged 8 into the outer unit
+            # holding 7, where it stays pending.
             conn.execute("RELEASE SAVEPOINT cortex_tx")
             raise RuntimeError("interrupted")
     assert any("savepoint rollback also failed" in n for n in caught.value.__notes__)
@@ -127,3 +128,31 @@ def test_a_block_that_releases_itself_with_no_outer_unit_is_already_committed():
     assert raw.in_transaction is False
     conn.rollback()
     assert _values(conn) == [8]
+
+
+def test_an_inner_block_that_releases_itself_also_undoes_the_enclosing_block():
+    # source: PR #1089 review — every block names its savepoint cortex_tx, so
+    # the inner undo after its own RELEASE reaches the enclosing savepoint.
+    raw = sqlite3.connect(":memory:")
+    conn = _conn(raw)
+    with pytest.raises(RuntimeError, match="interrupted"), conn.transaction():
+        conn.execute("INSERT INTO t VALUES (%s)", (1,))
+        with conn.transaction():
+            conn.execute("INSERT INTO t VALUES (%s)", (2,))
+            conn.execute("RELEASE SAVEPOINT cortex_tx")
+            raise RuntimeError("interrupted")
+    assert raw.in_transaction is False
+    assert _values(conn) == []
+
+
+def test_nested_blocks_each_undo_their_own_savepoint():
+    # source: PR #1089 review — the shared name is safe when no block releases
+    # its savepoint itself: ROLLBACK TO undoes the most recent cortex_tx.
+    conn = _conn()
+    with conn.transaction():
+        conn.execute("INSERT INTO t VALUES (%s)", (1,))
+        with pytest.raises(RuntimeError), conn.transaction():
+            conn.execute("INSERT INTO t VALUES (%s)", (2,))
+            raise RuntimeError("interrupted")
+    conn.rollback()
+    assert _values(conn) == [1]

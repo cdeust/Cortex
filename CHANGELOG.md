@@ -198,10 +198,12 @@ adheres to [Semantic Versioning](https://semver.org/).
   the savepoint when its final `RELEASE` fails, so the per-thread connection is
   not left inside a transaction when that undo succeeds and no outer unit is open,
   and a rollback that fails no longer replaces the block's own exception: it is
-  attached to it as a note. A block that released the savepoint itself inside an
-  outer unit then leaves its writes pending in that unit (a later commit on that
-  connection can keep them, a rollback or a close discards them); with no outer unit
-  open, that release had already committed them.
+  attached to it as a note. A failed undo guarantees nothing about the block's
+  writes: a `RELEASE`, `commit()` or `rollback()` issued inside the block, or
+  SQLite's own rollback after an I/O or disk-full error, already kept or discarded
+  them. Nested `transaction()` blocks each undo their own savepoint, except after an
+  inner block released it itself: all blocks share the name `cortex_tx`, so that
+  undo also discards the enclosing block's writes.
 
 - A wiki page's source frontier no longer runs ahead of what a write recorded (issue
   #715, slice 3, acceptance criterion 2): `wiki_write` committed the `wiki.pages` row
