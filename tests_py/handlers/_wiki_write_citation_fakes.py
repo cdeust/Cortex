@@ -1,10 +1,13 @@
 """Fidelity fakes of wiki_write's citation collaborators (store, pages, citations).
 
-Split out of ``test_wiki_write_citations.py`` (300-line cap). Each fake
-reproduces the DB-level contract of what it replaces; a breach of the
-handler's own contract (lookup inside the unit, write off the request
-connection) is recorded on a shared ``_Violations`` list that the
-``wired_pg`` fixture asserts empty after each test.
+Split out of ``test_wiki_write_citations.py`` (300-line cap). The fakes
+record a breach of the handler's own contract (lookup inside the unit,
+write off the request connection) on a shared ``_Violations`` list that the
+``wired_pg`` fixture asserts empty after each test. They do not reproduce
+atomicity: ``_FakeConn.transaction()`` only yields, so a dropped
+``with conn.transaction()`` is caught by the atomicity tests on the real
+store (``test_wiki_write_citation_atomicity.py``), not here (PR #1085
+review).
 
 source: issue #715; PR #1083 and #1084 reviews
 """

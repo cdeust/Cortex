@@ -104,7 +104,7 @@ def test_an_interrupted_write_records_no_citation_and_says_so(monkeypatch, tmp_p
     inserted = _interrupt_after_first_citation(monkeypatch)
     rel_path = _own_path()
     out = _write(list(reversed(cited)), mode="create", rel_path=rel_path)
-    assert len(inserted) == 1 and inserted[0] is not None  # written, then undone
+    assert len(inserted) == 1 and inserted[0] is not None  # written; undone: below
     assert out["citations_written"] == 0
     assert out["citations_interrupted"] is True
     assert _recorded_citations(rel_path) == []
