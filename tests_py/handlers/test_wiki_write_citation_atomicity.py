@@ -52,11 +52,11 @@ def _interrupt_after_first_citation(monkeypatch) -> list[int | None]:
 
 
 def _own_path() -> str:
-    """A page path no other test used.
+    """A page path no other write in the same test used.
 
-    Neither backend clears wiki.pages or wiki.citations between tests
-    (``_TABLES_TO_CLEAN`` in tests_py/_store_cleanup.py names neither), so a
-    shared path could read a row another test left as a row written here.
+    The between-test cleanup clears wiki.pages and wiki.citations
+    (``_TABLES_TO_CLEAN`` in tests_py/_store_cleanup.py), so the path only
+    keeps this write apart from the page ``_two_documents_and_a_page`` wrote.
     """
     return f"notes/derived-{uuid.uuid4().hex}.md"
 
