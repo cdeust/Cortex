@@ -34,6 +34,14 @@ def tmp_wiki(tmp_path: Path, monkeypatch):
     return tmp_path
 
 
+@pytest.fixture(autouse=True)
+def _clean_silent_failure():
+    """The failure registry is process-wide: leave it as each test found it."""
+    silent_failure.reset()
+    yield
+    silent_failure.reset()
+
+
 class _FakeConn:
     def __init__(self) -> None:
         self.committed = False
@@ -48,16 +56,26 @@ class _FakeConn:
 
 
 class _FakeStore:
-    def __init__(self, conn: _FakeConn) -> None:
-        self._conn = conn
+    """``_conn`` is the shared connection; the unit must never run on it."""
+
+    def __init__(self, shared: _FakeConn, request: _FakeConn) -> None:
+        self._conn = shared
+        self.request_conn = request
+        self.held = False
         self.memories: dict[int, dict] = {}
 
     @contextmanager
     def acquire_interactive(self):
         """The request-owned connection the citation unit runs on (PR #1083)."""
-        yield self._conn
+        self.held = True
+        try:
+            yield self.request_conn
+        finally:
+            self.held = False
 
     def get_memories_by_ids(self, memory_ids: list[int]) -> dict[int, dict]:
+        # A lookup while the unit holds its connection borrows a second one.
+        assert not self.held, "memory lookup ran inside the citation unit"
         return {m: self.memories[m] for m in memory_ids if m in self.memories}
 
 
@@ -68,8 +86,10 @@ class _FakePages:
         self.by_path: dict[str, int] = {}
         self._next_id = 1
         self.raise_on_upsert = False
+        self.request_conn: _FakeConn | None = None
 
     def upsert(self, conn, page_row: dict) -> tuple[int, bool]:
+        assert conn is self.request_conn, "page row written off the request unit"
         if self.raise_on_upsert:
             raise RuntimeError("PG unreachable")
         rel_path = page_row["rel_path"]
@@ -88,6 +108,7 @@ class _FakeCitations:
     def __init__(self) -> None:
         self.rows: list[tuple[int, str, str, int | None]] = []
         self._next_id = 1
+        self.request_conn: _FakeConn | None = None
 
     def insert(
         self,
@@ -97,6 +118,7 @@ class _FakeCitations:
         domain: str = "",
         memory_id: int | None = None,
     ) -> int | None:
+        assert conn is self.request_conn, "citation written off the request unit"
         for existing in self.rows:
             if (
                 session_id != ""
@@ -118,10 +140,10 @@ class _FakeCitations:
 
 @pytest.fixture
 def wired_pg(monkeypatch):
-    conn = _FakeConn()
-    store = _FakeStore(conn)
+    store = _FakeStore(_FakeConn(), _FakeConn())
     pages = _FakePages()
     citations = _FakeCitations()
+    pages.request_conn = citations.request_conn = store.request_conn
 
     monkeypatch.setattr(wiki_write, "get_shared_store", lambda *a, **kw: store)
     monkeypatch.setattr(wiki_write, "upsert_page", pages.upsert)
@@ -217,7 +239,6 @@ def test_no_memory_ids_writes_page_zero_citations(tmp_wiki, wired_pg) -> None:
 def test_page_sync_failure_degrades_gracefully(tmp_wiki, wired_pg) -> None:
     pages, citations = wired_pg
     pages.raise_on_upsert = True
-    silent_failure.reset()
 
     result = _run(
         wiki_write.handler(
@@ -251,3 +272,6 @@ def test_store_unreachable_degrades_gracefully(tmp_wiki, monkeypatch) -> None:
 
     assert "error" not in result
     assert result["citations_written"] == 0
+    assert result["citations_interrupted"] is True
+    noted = silent_failure.status()["wiki_write.page_sync_citations"]
+    assert noted == {"last_error": "RuntimeError: PG unreachable", "count": 1}

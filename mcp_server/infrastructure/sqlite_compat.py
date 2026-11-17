@@ -203,11 +203,25 @@ class PsycopgCompatConnection:
         self._real.execute("SAVEPOINT cortex_tx")
         try:
             yield
-        except BaseException:
+            self._real.execute("RELEASE SAVEPOINT cortex_tx")
+        except BaseException as exc:
+            self._undo_savepoint(exc)
+            raise
+
+    def _undo_savepoint(self, exc: BaseException) -> None:
+        """Roll the block back without hiding why it failed.
+
+        Covers a failed final ``RELEASE`` too (its commit refused, e.g.
+        ``SQLITE_BUSY``): the savepoint is still open and is undone here,
+        so the connection is not left inside a transaction. When the undo
+        fails as well, the block's exception still propagates, and carries
+        the undo failure as a note (PR #1083 review).
+        """
+        try:
             self._real.execute("ROLLBACK TO SAVEPOINT cortex_tx")
             self._real.execute("RELEASE SAVEPOINT cortex_tx")
-            raise
-        self._real.execute("RELEASE SAVEPOINT cortex_tx")
+        except sqlite3.Error as undo_exc:
+            exc.add_note(f"savepoint rollback also failed: {undo_exc!r}")
 
     def close(self) -> None:
         self._real.close()

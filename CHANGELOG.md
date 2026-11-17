@@ -191,6 +191,14 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- `wiki_write` no longer holds two pooled connections for one write (issue #715,
+  PR #1083 review): the memory lookup that refuses a wiki pointer as a citation
+  ran while the citation unit held its connection, and borrowed a second one. It
+  now runs before the unit opens. The SQLite adapter's `transaction()` also undoes
+  the savepoint when its final `RELEASE` fails, so the per-thread connection is
+  not left inside a transaction, and a rollback that fails no longer replaces the
+  block's own exception: it is attached to it as a note.
+
 - A wiki page's source frontier no longer runs ahead of what a write recorded (issue
   #715, slice 3, acceptance criterion 2): `wiki_write` committed the `wiki.pages` row
   and each `wiki.citations` row one statement at a time (PostgreSQL runs the shared
@@ -200,8 +208,9 @@ adheres to [Semantic Versioning](https://semver.org/).
   named a memory as processed past a missing one. The page row and its citations now
   commit as one unit (`transaction()`, added to the SQLite adapter with psycopg's
   semantics): an interruption records none of them, the response carries
-  `citations_interrupted: true`, and the same write run again with mode `replace`
-  records them all.
+  `citations_interrupted: true`, and writing the whole page again, as it now stands
+  on disk, with mode `replace` records them all (after an interrupted `append`, a
+  `replace` with the appended part alone would erase the rest of the page).
 
 - A wiki page can no longer cite itself or a page that cites it back (issue #715,
   slice 1, acceptance criterion 4): `wiki_write(memory_ids=...)` records no citation

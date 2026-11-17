@@ -80,7 +80,9 @@ schema = {
         "citations_written, citations_refused?, citations_interrupted?} "
         "or {error}. `citations_interrupted: true` means the page row and "
         "its citations were not recorded (none of them, never a part): "
-        "run the same write again with mode 'replace' to record them."
+        "write the whole page again, as it now stands on disk, with mode "
+        "'replace' to record them (after an interrupted 'append', a "
+        "'replace' with the appended part alone would erase the rest)."
     ),
     "inputSchema": {
         "type": "object",
@@ -178,18 +180,29 @@ async def _store_pointer_memory(rel_path: str, content: str, tags: list[str]) ->
         return
 
 
-def _cite_memories(
-    store: Any, conn: Any, page_id: int, domain: str, memory_ids: list[int]
-) -> tuple[int, list[dict[str, Any]]]:
-    """Insert one wiki.citations row per citable memory; name the refused ones.
+def _split_cited(
+    store: Any, memory_ids: list[int]
+) -> tuple[list[int], list[dict[str, Any]]]:
+    """Split ``memory_ids`` into the citable ids and the refused entries.
+
+    Runs before the citation unit opens its connection: the memory lookup
+    borrows a pooled connection of its own, and doing it while the unit
+    holds one would take two pool slots for one request (PR #1083 review).
+    postcondition: a wiki pointer memory is never citable; it is returned
+    in the refused list (``split_citable``, issue #715).
+    """
+    if not memory_ids:
+        return [], []
+    return split_citable(memory_ids, store.get_memories_by_ids(memory_ids))
+
+
+def _cite_memories(conn: Any, page_id: int, domain: str, citable: list[int]) -> int:
+    """Insert one wiki.citations row per citable memory; return the new rows.
 
     precondition: page_id is the wiki.pages row of the page just written;
-    ``conn`` is the connection holding the caller's open transaction.
-    postcondition: a wiki pointer memory is never inserted; it is returned
-    in the refused list (``split_citable``, issue #715). Returns (new rows
-    written, refused entries).
+    ``conn`` is the connection holding the caller's open transaction;
+    ``citable`` holds no wiki pointer memory (``_split_cited``).
     """
-    citable, refused = split_citable(memory_ids, store.get_memories_by_ids(memory_ids))
     try:
         session_id = current_window_session() or ""
     except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
@@ -206,7 +219,7 @@ def _cite_memories(
         )
         if new_id is not None:
             written += 1
-    return written, refused
+    return written
 
 
 def _sync_page_and_cite(
@@ -223,7 +236,8 @@ def _sync_page_and_cite(
     wiki.citations row exists keyed on (page_id, memory_id) — a repeat
     id (this call or a prior one) is a silent DB-level no-op, never an
     error (``insert_citation``'s unqualified ON CONFLICT DO NOTHING).
-    A wiki pointer memory is not citable (``_cite_memories``).
+    A wiki pointer memory is not citable (``_split_cited``), and that
+    lookup runs before the unit takes its connection.
     Unlike wiki_read's ``_cite_page``, a resolvable window session is
     NOT required: this citation records "memory used to author the
     page", not "page read in this session" — the two are orthogonal
@@ -252,6 +266,7 @@ def _sync_page_and_cite(
         settings = get_memory_settings()
         store = get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
         page_row = page_row_from_md(rel_path, content)
+        citable, refused = _split_cited(store, memory_ids)
         cited: tuple[int, list[dict[str, Any]]] = (0, [])
         # source: issue #715 (slice 3); PR #1083 review (request-owned connection)
         with store.acquire_interactive() as conn:
@@ -259,7 +274,8 @@ def _sync_page_and_cite(
                 page_id, _was_modified = upsert_page(conn, page_row)
                 if page_id is not None and page_id >= 0 and memory_ids:
                     domain = page_row.get("domain", "")
-                    cited = _cite_memories(store, conn, page_id, domain, memory_ids)
+                    written = _cite_memories(conn, page_id, domain, citable)
+                    cited = (written, refused)
             conn.commit()
         return cited
     except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure and citations_interrupted
