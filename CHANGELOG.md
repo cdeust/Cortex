@@ -14,20 +14,20 @@ adheres to [Semantic Versioning](https://semver.org/).
   (body hash) and citations were recorded with, as after a `wiki_write` that returned
   `citations_interrupted`. `failed` wins over `pending`; a page that cites nothing
   stays `current`. Writing the page again records it and the page reads `current`.
-  `wiki_write` now builds the `wiki.pages` row from the whole page the write left on
-  disk (`WriteResult.text`), not from the text passed in: an `append` recorded the
-  fragment alone, so the row did not describe the page. Limits: a page rewritten by a path that records no
-  citation (`wiki_link`, a hand edit) also reads `failed`, since its citations no
-  longer describe its text; a `wiki_migrate` sweep re-records the row from disk and
-  clears `failed` without new citations.
+  `wiki_write` now records the whole page the write left on disk, not the text passed
+  in: an `append` recorded the fragment alone, so the row did not describe the page
+  (the mechanism is in the Fixed entry on `wiki_write`). Limits: a page rewritten by a
+  path that records no citation (`wiki_link`, a hand edit) also reads `failed`, since
+  its citations no longer describe its text; a `wiki_migrate` sweep re-records the row
+  from disk and clears `failed` without new citations.
 - Freshness of a memory-derived wiki page (issue #715, slice 2, acceptance criterion 3):
   `wiki_read` returns `freshness` beside `sources`, computed on the whole trace before
   any cut. `state` is `pending` when a cited memory is missing, retired (`stale`) or
   corrected (`superseded_by_id`), and `pending_memory_ids` names them in citation
   order; otherwise `current`. `frontier` gives `cited_memories` and `max_memory_id`.
-  The `failed` state came in a later slice (entry above). A memory erased by a hard `forget` leaves no
-  citation row, so it does not make the page pending (`forget` names the page in
-  `cited_by_pages`); criterion 1 covers it.
+  The `failed` state came in a later slice (entry above). A memory erased by a hard
+  `forget` leaves no citation row, so it does not make the page pending (`forget` names
+  the page in `cited_by_pages`); criterion 1 covers it.
 - References touched by a forgotten source (issue #713, slice 4): `forget` returns
   `cited_by_pages`, the wiki-relative paths of the pages whose citations named the
   memory. A hard `forget` reads them before it erases the citation rows (pages it
@@ -209,7 +209,10 @@ adheres to [Semantic Versioning](https://semver.org/).
   described it. `write_page` and `append_section` now return the page they left on
   disk in `WriteResult.text` (redacted, with `read_page`'s newlines), and
   `wiki_write` records that text. The `wiki_write.page_reread` failure note is gone
-  with the re-read.
+  with the re-read. Limit, already true before this fix: citations accumulate per
+  page, keyed on `(page_id, memory_id)`, so two overlapping writes (A writes, B
+  writes, A records, B records) still leave A's `memory_ids` cited on B's text, and
+  the page reads `current` on them.
 - Test isolation of the wiki tables (issue #715): the between-test cleanup
   (`tests_py/_store_cleanup.py`) now clears `wiki.citations` and `wiki.pages`, so a
   page row one handler test wrote no longer survives into the next test that reads

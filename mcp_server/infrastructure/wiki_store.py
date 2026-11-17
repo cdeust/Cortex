@@ -18,7 +18,7 @@ class WriteResult:
     mode: str
     created: bool
     bytes_written: int
-    # The page as it now stands on disk, as ``read_page`` returns it: what a
+    # The page as this write left it, as ``read_page`` returns it: what a
     # caller records must be the text this write left, never a re-read that
     # another writer may already have replaced (issue #715, Codex review of
     # PR #1092).
