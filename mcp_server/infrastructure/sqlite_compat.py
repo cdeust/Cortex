@@ -217,7 +217,7 @@ class PsycopgCompatConnection:
         ``SQLITE_BUSY``): the savepoint is still open and is undone here,
         so, when the undo succeeds, the connection is not left inside a
         transaction. When the undo fails as well, the connection can stay
-        inside the transaction the savepoint opened; the block's exception
+        inside a transaction; the block's exception
         still propagates, and carries the undo failure as a note (PR #1083
         and #1084 reviews).
         """

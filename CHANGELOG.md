@@ -198,7 +198,7 @@ adheres to [Semantic Versioning](https://semver.org/).
   the savepoint when its final `RELEASE` fails, so the per-thread connection is
   not left inside a transaction when that undo succeeds, and a rollback that fails
   no longer replaces the block's own exception: it is attached to it as a note (the
-  connection can then stay inside the transaction the savepoint opened).
+  connection can then stay inside a transaction).
 
 - A wiki page's source frontier no longer runs ahead of what a write recorded (issue
   #715, slice 3, acceptance criterion 2): `wiki_write` committed the `wiki.pages` row
