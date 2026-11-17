@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import datetime
 from typing import Any, Protocol
 
@@ -184,6 +186,28 @@ class PsycopgCompatConnection:
 
     def rollback(self) -> None:
         self._real.rollback()
+
+    @contextmanager
+    def transaction(self) -> Iterator[None]:
+        """psycopg ``Connection.transaction()`` parity: all of the block or none.
+
+        precondition: none; the connection may hold pending writes of an outer
+        unit. postcondition: on a normal exit every statement of the block is
+        kept (committed when no outer unit is open, else merged into it, as a
+        psycopg savepoint is); on an exception none of them is, the outer
+        unit's pending writes stay as they were, and the exception propagates.
+        A SQLite savepoint opened outside a transaction starts one and its
+        release commits it, so one construct covers both cases.
+
+        source: issue #715 (slice 3); https://sqlite.org/lang_savepoint.html"""
+        self._real.execute("SAVEPOINT cortex_tx")
+        try:
+            yield
+        except BaseException:
+            self._real.execute("ROLLBACK TO SAVEPOINT cortex_tx")
+            self._real.execute("RELEASE SAVEPOINT cortex_tx")
+            raise
+        self._real.execute("RELEASE SAVEPOINT cortex_tx")
 
     def close(self) -> None:
         self._real.close()

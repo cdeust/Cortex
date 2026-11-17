@@ -20,7 +20,6 @@ source: ADR-0475"""
 
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 from typing import Any
 
@@ -54,7 +53,6 @@ from mcp_server.handlers._tool_meta import IDEMPOTENT_WRITE
 from mcp_server.observability import silent_failure
 from mcp_server.handlers import remember, project_wiki
 
-logger = logging.getLogger(__name__)
 
 schema = {
     "title": "Wiki — write page",
@@ -79,7 +77,10 @@ schema = {
         "becomes durable, queryable provenance; a wiki pointer memory is "
         "never cited, it is listed in `citations_refused`). Latency ~50ms. "
         "Returns {path, mode, created, bytes_written, root, "
-        "citations_written, citations_refused?} or {error}."
+        "citations_written, citations_refused?, citations_interrupted?} "
+        "or {error}. `citations_interrupted: true` means the page row and "
+        "its citations were not recorded (none of them, never a part): "
+        "run the same write again with mode 'replace' to record them."
     ),
     "inputSchema": {
         "type": "object",
@@ -178,11 +179,12 @@ async def _store_pointer_memory(rel_path: str, content: str, tags: list[str]) ->
 
 
 def _cite_memories(
-    store: Any, page_id: int, domain: str, memory_ids: list[int]
+    store: Any, conn: Any, page_id: int, domain: str, memory_ids: list[int]
 ) -> tuple[int, list[dict[str, Any]]]:
     """Insert one wiki.citations row per citable memory; name the refused ones.
 
-    precondition: page_id is the wiki.pages row of the page just written.
+    precondition: page_id is the wiki.pages row of the page just written;
+    ``conn`` is the connection holding the caller's open transaction.
     postcondition: a wiki pointer memory is never inserted; it is returned
     in the refused list (``split_citable``, issue #715). Returns (new rows
     written, refused entries).
@@ -196,7 +198,7 @@ def _cite_memories(
     written = 0
     for mid in citable:
         new_id = insert_citation(
-            store._conn,
+            conn,
             page_id=page_id,
             session_id=session_id,
             domain=domain,
@@ -209,7 +211,7 @@ def _cite_memories(
 
 def _sync_page_and_cite(
     rel_path: str, content: str, memory_ids: list[int]
-) -> tuple[int, list[dict[str, Any]]]:
+) -> tuple[int, list[dict[str, Any]]] | None:
     """Sync ``wiki.pages`` and record citations for the memories used, best-effort.
 
     precondition: rel_path/content are the page just written to disk by
@@ -228,30 +230,59 @@ def _sync_page_and_cite(
     provenance signals sharing one table. session_id falls back to ''
     (the column's own NOT NULL DEFAULT) when no window session is
     resolvable, matching the schema rather than skipping the row.
-    On ANY exception (PG down, store not PG-backed, etc.) this
-    degrades to a no-op — the markdown write already succeeded and
-    must never be affected by this observability side channel.
-    Returns (new citation rows written, refused entries); (0, []) on
-    any failure or when memory_ids is empty.
+    The wiki.pages row and the citations commit as one unit
+    (``transaction()``, issue #715 slice 3): an interruption records
+    none of them, so the source frontier ``wiki_read`` derives from the
+    citations never names a memory while another memory of the same
+    write is missing, and the same write run again records them all.
+    The unit runs on a connection the request owns
+    (``acquire_interactive``: a pooled PostgreSQL connection, or the
+    SQLite store's per-thread connection), never on the PostgreSQL
+    ``store._conn`` that every worker thread shares, whose statements
+    from other threads would join, abort or nest inside it. With
+    ``POOL_DISABLED`` PostgreSQL yields that shared connection, so that
+    mode keeps the risk.
+    On ANY exception (PG down, store not PG-backed, etc.) the markdown
+    write, which already succeeded, stands; the failure is noted and
+    None is returned so the response can say the citations were not
+    recorded. Returns (new citation rows written, refused entries),
+    (0, []) when memory_ids is empty, None on failure.
     """
     try:
         settings = get_memory_settings()
         store = get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
         page_row = page_row_from_md(rel_path, content)
-        page_id, _was_modified = upsert_page(store._conn, page_row)
         cited: tuple[int, list[dict[str, Any]]] = (0, [])
-        if page_id is not None and page_id >= 0 and memory_ids:
-            domain = page_row.get("domain", "")
-            cited = _cite_memories(store, page_id, domain, memory_ids)
-        store._conn.commit()
+        # source: issue #715 (slice 3); PR #1083 review (request-owned connection)
+        with store.acquire_interactive() as conn:
+            with conn.transaction():
+                page_id, _was_modified = upsert_page(conn, page_row)
+                if page_id is not None and page_id >= 0 and memory_ids:
+                    domain = page_row.get("domain", "")
+                    cited = _cite_memories(store, conn, page_id, domain, memory_ids)
+            conn.commit()
         return cited
-    except Exception:  # noqa: BLE001 — last-resort boundary — failure is logged; degraded mode continues
-        logger.debug(
-            "wiki_write page-sync/citation side-effect failed for %s",
-            rel_path,
-            exc_info=True,
-        )
-        return 0, []
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure and citations_interrupted
+        silent_failure.note("wiki_write.page_sync_citations", exc)
+        return None
+
+
+def _citation_fields(
+    synced: tuple[int, list[dict[str, Any]]] | None,
+) -> dict[str, Any]:
+    """The response fields that report ``_sync_page_and_cite``'s outcome.
+
+    postcondition: ``citations_written`` is always present;
+    ``citations_refused`` only when a memory was refused;
+    ``citations_interrupted`` only when nothing was recorded (issue #715).
+    """
+    if synced is None:
+        return {"citations_written": 0, "citations_interrupted": True}
+    written, refused = synced
+    fields: dict[str, Any] = {"citations_written": written}
+    if refused:
+        fields["citations_refused"] = refused
+    return fields
 
 
 async def write_governed_page(
@@ -279,17 +310,15 @@ async def write_governed_page(
         return {"error": f"write failed: {exc}"}
 
     await _store_pointer_memory(rel_path, content, tags or [])
-    written, refused = _sync_page_and_cite(rel_path, content, memory_ids or [])
+    synced = _sync_page_and_cite(rel_path, content, memory_ids or [])
     response: dict[str, Any] = {
         "path": result.path,
         "mode": result.mode,
         "created": result.created,
         "bytes_written": result.bytes_written,
         "root": str(root),
-        "citations_written": written,
+        **_citation_fields(synced),
     }
-    if refused:
-        response["citations_refused"] = refused
     # source: ADR-0475
     findings = scan_prose(content)
     if findings:

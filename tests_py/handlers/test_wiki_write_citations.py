@@ -15,11 +15,13 @@ replace, so handler-level assertions are meaningful without a live PG.
 from __future__ import annotations
 
 import asyncio
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
 
 from mcp_server.handlers import wiki_write
+from mcp_server.observability import silent_failure
 
 
 def _run(coro):
@@ -39,11 +41,21 @@ class _FakeConn:
     def commit(self) -> None:
         self.committed = True
 
+    @contextmanager
+    def transaction(self):
+        """The page row and its citations commit as one unit (issue #715)."""
+        yield
+
 
 class _FakeStore:
     def __init__(self, conn: _FakeConn) -> None:
         self._conn = conn
         self.memories: dict[int, dict] = {}
+
+    @contextmanager
+    def acquire_interactive(self):
+        """The request-owned connection the citation unit runs on (PR #1083)."""
+        yield self._conn
 
     def get_memories_by_ids(self, memory_ids: list[int]) -> dict[int, dict]:
         return {m: self.memories[m] for m in memory_ids if m in self.memories}
@@ -193,6 +205,7 @@ def test_no_memory_ids_writes_page_zero_citations(tmp_wiki, wired_pg) -> None:
 
     assert "error" not in result
     assert result["citations_written"] == 0
+    assert "citations_interrupted" not in result
     assert "reference/a.md" in pages.by_path
     assert citations.rows == []
 
@@ -204,6 +217,7 @@ def test_no_memory_ids_writes_page_zero_citations(tmp_wiki, wired_pg) -> None:
 def test_page_sync_failure_degrades_gracefully(tmp_wiki, wired_pg) -> None:
     pages, citations = wired_pg
     pages.raise_on_upsert = True
+    silent_failure.reset()
 
     result = _run(
         wiki_write.handler(
@@ -213,7 +227,10 @@ def test_page_sync_failure_degrades_gracefully(tmp_wiki, wired_pg) -> None:
 
     assert "error" not in result
     assert result["citations_written"] == 0
+    assert result["citations_interrupted"] is True
     assert citations.rows == []
+    noted = silent_failure.status()["wiki_write.page_sync_citations"]
+    assert noted == {"last_error": "RuntimeError: PG unreachable", "count": 1}
 
 
 # ── 6. get_shared_store itself raising (PG fully unreachable) → same
