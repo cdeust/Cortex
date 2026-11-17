@@ -17,6 +17,7 @@ source: issue #715 (slice 3, acceptance criterion 2)
 from __future__ import annotations
 
 import asyncio
+import uuid
 
 from mcp_server.handlers import wiki_read, wiki_write
 from tests_py.handlers.test_wiki_read_sources import (
@@ -45,11 +46,11 @@ def _interrupt_after_first_citation(monkeypatch) -> None:
     monkeypatch.setattr(wiki_write, "insert_citation", flaky)
 
 
-def _write(memory_ids: list[int], mode: str) -> dict:
+def _write(memory_ids: list[int], mode: str, rel_path: str = _DERIVED) -> dict:
     out = asyncio.run(
         wiki_write.handler(
             {
-                "path": _DERIVED,
+                "path": rel_path,
                 "content": _page_md("Derived"),
                 "mode": mode,
                 "memory_ids": memory_ids,
@@ -86,11 +87,14 @@ def _recorded_pages(rel_path: str) -> list[int]:
 def test_an_interrupted_write_records_no_citation_and_says_so(monkeypatch, tmp_path):
     _, _, cited = _two_documents_and_a_page(monkeypatch, tmp_path)
     _interrupt_after_first_citation(monkeypatch)
-    out = _write(list(reversed(cited)), mode="create")
+    # wiki.pages is not cleared between tests on PostgreSQL: a path of its own
+    # keeps a page row left by another test from reading as a kept row here.
+    rel_path = f"notes/derived-{uuid.uuid4().hex}.md"
+    out = _write(list(reversed(cited)), mode="create", rel_path=rel_path)
     assert out["citations_written"] == 0
     assert out["citations_interrupted"] is True
-    assert _recorded_citations(_DERIVED) == []
-    assert _recorded_pages(_DERIVED) == []  # the page row rolled back with them
+    assert _recorded_citations(rel_path) == []
+    assert _recorded_pages(rel_path) == []  # the page row rolled back with them
 
 
 def test_a_resumed_write_completes_the_frontier(monkeypatch, tmp_path):
