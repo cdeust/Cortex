@@ -16,8 +16,8 @@ import pytest
 from mcp_server.infrastructure.sqlite_compat import PsycopgCompatConnection
 
 
-def _conn() -> PsycopgCompatConnection:
-    conn = PsycopgCompatConnection(sqlite3.connect(":memory:"))
+def _conn(raw: sqlite3.Connection | None = None) -> PsycopgCompatConnection:
+    conn = PsycopgCompatConnection(raw or sqlite3.connect(":memory:"))
     conn.execute("CREATE TABLE t (v INTEGER)")
     conn.commit()
     return conn
@@ -78,3 +78,30 @@ def test_a_failed_rollback_does_not_hide_the_block_exception():
             conn.execute("RELEASE SAVEPOINT cortex_tx")  # the undo now fails
             raise RuntimeError("interrupted")
     assert any("savepoint rollback also failed" in n for n in caught.value.__notes__)
+
+
+def test_a_failed_block_inside_an_outer_unit_leaves_that_unit_open():
+    # source: PR #1087 review — no test pinned the outer unit staying open.
+    raw = sqlite3.connect(":memory:")
+    conn = _conn(raw)
+    conn.execute("INSERT INTO t VALUES (%s)", (7,))
+    with pytest.raises(RuntimeError), conn.transaction():
+        conn.execute("INSERT INTO t VALUES (%s)", (8,))
+        raise RuntimeError("interrupted")
+    assert raw.in_transaction is True
+    assert _values(conn) == [7]
+
+
+def test_a_failed_undo_can_leave_the_block_writes_pending():
+    # source: PR #1087 review — the pending state after a failed undo was untested.
+    raw = sqlite3.connect(":memory:")
+    conn = _conn(raw)
+    conn.execute("INSERT INTO t VALUES (%s)", (7,))
+    with pytest.raises(RuntimeError, match="interrupted"), conn.transaction():
+        conn.execute("INSERT INTO t VALUES (%s)", (8,))
+        conn.execute("RELEASE SAVEPOINT cortex_tx")  # ROLLBACK TO now fails
+        raise RuntimeError("interrupted")
+    assert raw.in_transaction is True
+    assert _values(conn) == [7, 8]
+    conn.commit()
+    assert _values(conn) == [7, 8]
