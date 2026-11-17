@@ -90,6 +90,8 @@ def test_a_failed_block_inside_an_outer_unit_leaves_that_unit_open():
         raise RuntimeError("interrupted")
     assert raw.in_transaction is True
     assert _values(conn) == [7]
+    conn.rollback()  # 7 was pending in the outer unit, not committed
+    assert _values(conn) == []
 
 
 def test_a_failed_undo_can_leave_the_block_writes_pending():
@@ -97,11 +99,31 @@ def test_a_failed_undo_can_leave_the_block_writes_pending():
     raw = sqlite3.connect(":memory:")
     conn = _conn(raw)
     conn.execute("INSERT INTO t VALUES (%s)", (7,))
-    with pytest.raises(RuntimeError, match="interrupted"), conn.transaction():
-        conn.execute("INSERT INTO t VALUES (%s)", (8,))
-        conn.execute("RELEASE SAVEPOINT cortex_tx")  # ROLLBACK TO now fails
-        raise RuntimeError("interrupted")
+    with pytest.raises(RuntimeError, match="interrupted") as caught:
+        with conn.transaction():
+            conn.execute("INSERT INTO t VALUES (%s)", (8,))
+            # The block's own RELEASE merges 8 into the outer unit holding 7,
+            # so the undo's ROLLBACK TO fails and 8 stays pending there.
+            conn.execute("RELEASE SAVEPOINT cortex_tx")
+            raise RuntimeError("interrupted")
+    assert any("savepoint rollback also failed" in n for n in caught.value.__notes__)
     assert raw.in_transaction is True
     assert _values(conn) == [7, 8]
     conn.commit()
     assert _values(conn) == [7, 8]
+
+
+def test_a_block_that_releases_itself_with_no_outer_unit_is_already_committed():
+    # source: PR #1088 review — a failed ROLLBACK TO is necessary for pending
+    # writes, not sufficient: with no outer unit, the block's RELEASE commits.
+    raw = sqlite3.connect(":memory:")
+    conn = _conn(raw)
+    with pytest.raises(RuntimeError, match="interrupted") as caught:
+        with conn.transaction():
+            conn.execute("INSERT INTO t VALUES (%s)", (8,))
+            conn.execute("RELEASE SAVEPOINT cortex_tx")  # commits 8
+            raise RuntimeError("interrupted")
+    assert any("savepoint rollback also failed" in n for n in caught.value.__notes__)
+    assert raw.in_transaction is False
+    conn.rollback()
+    assert _values(conn) == [8]

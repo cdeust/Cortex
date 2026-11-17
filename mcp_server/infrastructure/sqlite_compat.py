@@ -218,11 +218,13 @@ class PsycopgCompatConnection:
         When the undo succeeds and no outer unit was open, the connection is
         not left inside a transaction; inside an outer unit, that unit stays
         open with its own pending writes. When the undo fails as well, the
-        connection can stay inside a transaction with the block's partial
-        writes still pending (when ``ROLLBACK TO`` is the step that failed),
-        and a later commit can keep them; the block's exception still
-        propagates and carries the undo failure as a note (PR #1083, #1084,
-        #1086 and #1087 reviews).
+        block's exception still propagates and carries the undo failure as a
+        note. A failed ``ROLLBACK TO`` is necessary for the block's writes to
+        stay pending, not sufficient: a block that released the savepoint
+        itself inside an outer unit merged its writes into that unit, so they
+        stay pending and a later commit can keep them; with no outer unit open,
+        that release already committed them (PR #1083, #1084, #1086, #1087 and
+        #1088 reviews).
         """
         try:
             self._real.execute("ROLLBACK TO SAVEPOINT cortex_tx")
