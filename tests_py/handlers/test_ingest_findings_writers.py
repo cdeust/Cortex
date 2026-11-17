@@ -8,6 +8,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 
+from mcp_server.infrastructure.wiki_store import WriteResult
 from mcp_server.handlers.ingest_findings_artifacts import FindingRecord, Receipt
 from mcp_server.handlers.ingest_findings_writers import (
     find_existing_memory,
@@ -186,7 +187,11 @@ class TestWriteFindingPageSourceAnchoring:
         import mcp_server.handlers.ingest_findings_writers as w
 
         calls = []
-        monkeypatch.setattr(w, "write_page", lambda *a, **k: None)
+        monkeypatch.setattr(
+            w,
+            "write_page",
+            lambda root, rel, text, mode: WriteResult(rel, mode, True, len(text), text),
+        )
         monkeypatch.setattr(w, "upsert_page", lambda conn, row: (page_id, True))
         monkeypatch.setattr(
             w,

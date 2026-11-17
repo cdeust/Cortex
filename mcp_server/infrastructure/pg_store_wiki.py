@@ -17,7 +17,7 @@ from mcp_server.infrastructure.pg_store_wiki_claims import (
     update_claim_entities,
     update_claim_supersedes,
 )
-from mcp_server.infrastructure.pg_store_wiki_common import body_hash
+from mcp_server.infrastructure.pg_store_wiki_common import body_hash, page_text_hash
 from mcp_server.infrastructure.pg_store_wiki_concepts import (
     get_concepts_by_entity_overlap,
     insert_concept,
@@ -91,6 +91,7 @@ __all__ = [
     "list_pages_citing_memory",
     "list_pages_for_decay",
     "list_uncited_deliberate_memories",
+    "page_text_hash",
     "resolve_unresolved_links",
     "update_claim_entities",
     "update_claim_supersedes",

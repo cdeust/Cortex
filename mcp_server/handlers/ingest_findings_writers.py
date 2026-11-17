@@ -20,7 +20,11 @@ from mcp_server.shared.wiki_layout import slugify
 from mcp_server.handlers.ingest_findings_artifacts import FindingRecord
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.memory_store import MemoryStore
-from mcp_server.infrastructure.pg_store_wiki import insert_memo, upsert_page
+from mcp_server.infrastructure.pg_store_wiki import (
+    insert_memo,
+    page_text_hash,
+    upsert_page,
+)
 from mcp_server.infrastructure.pg_store_wiki_sources import upsert_page_sources
 from mcp_server.infrastructure.wiki_store import write_page
 from mcp_server.observability import silent_failure
@@ -170,7 +174,7 @@ def write_finding_page(conn: Any, finding: FindingRecord, memory_id: int) -> int
     """
     rel_path = _page_rel_path(finding)
     markdown = _render_finding_page(finding)
-    write_page(WIKI_ROOT, rel_path, markdown, mode="replace")
+    written = write_page(WIKI_ROOT, rel_path, markdown, mode="replace")
 
     page_row = {
         "memory_id": memory_id,
@@ -185,6 +189,7 @@ def write_finding_page(conn: Any, finding: FindingRecord, memory_id: int) -> int
         "lifecycle_state": "active",
         "lead": (finding.description or "")[:280],
         "body": markdown,
+        "body_hash": page_text_hash(written.text),
     }
     page_id, _was_modified = upsert_page(conn, page_row)
     upsert_page_sources(

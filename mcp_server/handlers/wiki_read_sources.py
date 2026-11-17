@@ -31,11 +31,11 @@ from typing import Any
 from mcp_server.core.document_reference import cited_memory_sources
 from mcp_server.core.response_budget import serialized_length
 from mcp_server.core.wiki_page_freshness import page_freshness
-from mcp_server.handlers.wiki_migrate import page_row_from_md
 from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.infrastructure.pg_store_wiki import (
     get_page_by_rel_path,
     list_page_cited_memory_ids,
+    page_text_hash,
 )
 
 logger = logging.getLogger(__name__)
@@ -72,7 +72,7 @@ def attach_page_sources(
             return resp
         cited = list_page_cited_memory_ids(store._conn, int(page["id"]))
         memories = store.get_memories_by_ids(cited)
-        on_disk = page_row_from_md(rel_path, resp["content"])["body_hash"]
+        on_disk = page_text_hash(resp["content"])
     except Exception:  # noqa: BLE001 — mechanism boundary; failure is reported in the response and logged
         logger.warning("wiki_read source trace failed for %s", rel_path, exc_info=True)
         resp["sources_unavailable"] = STORE_ERROR
