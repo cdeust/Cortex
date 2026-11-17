@@ -39,7 +39,13 @@ class _FakeConn:
 
     @contextmanager
     def transaction(self):
-        """The page row and its citations commit as one unit (issue #715)."""
+        """Only yields: the unit is entered, nothing is rolled back.
+
+        Atomicity is proven on the real store
+        (``test_wiki_write_citation_atomicity.py``), not by this fake.
+
+        source: issue #715; PR #1085 and #1086 reviews
+        """
         yield
 
 

@@ -196,9 +196,10 @@ adheres to [Semantic Versioning](https://semver.org/).
   ran while the citation unit held its connection, and borrowed a second one. It
   now runs before the unit opens. The SQLite adapter's `transaction()` also undoes
   the savepoint when its final `RELEASE` fails, so the per-thread connection is
-  not left inside a transaction when that undo succeeds, and a rollback that fails
-  no longer replaces the block's own exception: it is attached to it as a note (the
-  connection can then stay inside a transaction).
+  not left inside a transaction when that undo succeeds and no outer unit is open,
+  and a rollback that fails no longer replaces the block's own exception: it is
+  attached to it as a note (the connection can then stay inside a transaction, with
+  the block's partial writes pending until its next commit keeps them).
 
 - A wiki page's source frontier no longer runs ahead of what a write recorded (issue
   #715, slice 3, acceptance criterion 2): `wiki_write` committed the `wiki.pages` row
