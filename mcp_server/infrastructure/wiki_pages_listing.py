@@ -22,13 +22,14 @@ from mcp_server.infrastructure.wiki_store import (
     WikiMissingError,
     WriteResult,
     safe_join,
+    text_as_read,
 )
 from mcp_server.shared import gated_files
 
 
-def _atomic_write_bytes(target: Path, content: str) -> int:
+def _atomic_write_bytes(target: Path, content: str) -> bytes:
     ensure_dir(target.parent)
-    return len(gated_files.write_text(target, content))
+    return gated_files.write_text(target, content)
 
 
 def append_section(
@@ -54,7 +55,11 @@ def append_section(
         merged = f"{current}\n{heading_line}\n\n{content}\n"
     written = _atomic_write_bytes(target, merged)
     return WriteResult(
-        path=rel_path, mode="append-section", created=False, bytes_written=written
+        path=rel_path,
+        mode="append-section",
+        created=False,
+        bytes_written=len(written),
+        text=text_as_read(written),
     )
 
 

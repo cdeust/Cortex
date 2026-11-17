@@ -18,6 +18,11 @@ class WriteResult:
     mode: str
     created: bool
     bytes_written: int
+    # The page as it now stands on disk, as ``read_page`` returns it: what a
+    # caller records must be the text this write left, never a re-read that
+    # another writer may already have replaced (issue #715, Codex review of
+    # PR #1092).
+    text: str
 
 
 class WikiExistsError(Exception):
@@ -124,9 +129,19 @@ def write_page(
     # source: ADR-0630
     existed = os.path.exists(fullpath)
     written = _write_by_mode(fullpath, rel_path, content, mode, existed)
-    return WriteResult(
-        path=rel_path, mode=mode, created=not existed, bytes_written=written
-    )
+    text = text_as_read(written)
+    return WriteResult(rel_path, mode, not existed, len(written), text)
+
+
+def text_as_read(data: bytes) -> str:
+    """The text ``read_page`` returns for a file holding ``data``.
+
+    The same decoding as ``read_page``'s ``open(..., encoding="utf-8")``:
+    UTF-8 (``bytes.decode``'s default, whatever the locale) and universal
+    newlines (``\r\n`` then a lone ``\r`` read as ``\n``), so the text a
+    write reports and the text a later read returns hash alike.
+    """
+    return data.decode().replace("\r\n", "\n").replace("\r", "\n")
 
 
 def _resolve_write_target(root: Path | str, rel_path: str) -> str:
@@ -150,11 +165,11 @@ def _resolve_write_target(root: Path | str, rel_path: str) -> str:
 
 def _write_by_mode(
     fullpath: str, rel_path: str, content: str, mode: WriteMode, existed: bool
-) -> int:
+) -> bytes:
     """Perform the create/replace/append write ``write_page`` decided on.
 
     ``fullpath`` is already sanitized by ``_resolve_write_target``.
-    Returns the number of bytes written.
+    Returns the bytes written, the whole page for every mode.
     """
     if mode == "create":
         if existed:
@@ -176,11 +191,11 @@ def _write_by_mode(
     raise ValueError(f"unknown write mode: {mode}")
 
 
-def _atomic_write_bytes_str(safe_path: str, content: str) -> int:
+def _atomic_write_bytes_str(safe_path: str, content: str) -> bytes:
     """Write ``content`` atomically to an ALREADY-SANITIZED path string.
 
     source: ADR-0630"""
 
     # source: ADR-0056 (atomic), ADR-1110 (redacted), ADR-1112 (0600 under
     # the data roots; a project wiki page keeps the repository's umask)
-    return len(gated_files.write_text(safe_path, content))
+    return gated_files.write_text(safe_path, content)
