@@ -37,6 +37,13 @@ the hook module and wires the configured backend. SessionEnd first persists
 its event using the bundled standard-library queue, then invokes this same
 runtime in a replayable worker. No repository module can shadow the wheel.
 
+On Windows, the dispatcher waits for the hook interpreter and returns its exit
+status with stdin, stdout, and stderr inherited. The two blocking
+`PreToolUse` hooks use Codex's `commandWindows` override to forward that status
+through PowerShell with `exit $LASTEXITCODE`. This preserves the exit code that
+[Codex uses to block the tool call](https://learn.chatgpt.com/docs/hooks#pretooluse)
+when [PowerShell would otherwise return 1](https://github.com/openai/codex/issues/54072).
+
 ## Event names and matchers
 
 Event names are Codex's own, verified against
