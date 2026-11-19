@@ -698,7 +698,7 @@
       "issue": "#715"
     },
     {
-      "mutant": "mcp_server.core.wiki_view_event_time.x_compile_event_time_window__mutmut_52",
+      "mutant": "mcp_server.core.wiki_view_event_time.x_compile_event_time_window__mutmut_45",
       "removed": "\" WHEN event_time->'end'->>'value' IS NULL THEN 'infinity'::timestamp\"",
       "added": "\" when event_time->'end'->>'value' is null then 'infinity'::timestamp\"",
       "kind": "equivalent-by-construction",
