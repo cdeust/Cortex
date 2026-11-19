@@ -17,6 +17,13 @@ SCRIPT = (
 )
 
 
+def _sandbox(tmp_path):
+    """The queue and the sibling its drain loads, as the package ships them."""
+    for name in ("session_queue.py", "rollout_version.py"):
+        (tmp_path / name).write_text((SCRIPT.parent / name).read_text())
+    return tmp_path / "session_queue.py"
+
+
 @pytest.fixture
 def queue(tmp_path, monkeypatch):
     monkeypatch.setenv("CORTEX_MEMORY_STORE_BACKEND", "sqlite")
@@ -98,8 +105,7 @@ def test_interrupted_worker_leaves_event_for_next_drain(queue, tmp_path, monkeyp
     key = queue.enqueue(root, {"session_id": "interrupted"})
     fifo = tmp_path / "ready"
     os.mkfifo(fifo)
-    sandbox_script = tmp_path / "session_queue.py"
-    sandbox_script.write_text(SCRIPT.read_text())
+    sandbox_script = _sandbox(tmp_path)
     runtime_script = tmp_path / "runtime.py"
     runtime_script.write_text(
         f"#!{sys.executable}\nimport os, signal\n"
@@ -127,8 +133,7 @@ def test_concurrent_drains_process_event_once(queue, tmp_path, monkeypatch):
     root = queue.queue_root()
     queue.enqueue(root, {"session_id": "concurrent"})
     count = tmp_path / "calls"
-    sandbox_script = tmp_path / "session_queue.py"
-    sandbox_script.write_text(SCRIPT.read_text())
+    sandbox_script = _sandbox(tmp_path)
     runtime_script = tmp_path / "runtime.py"
     runtime_script.write_text(
         f"#!{sys.executable}\nfrom pathlib import Path\n"

@@ -203,21 +203,21 @@ adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - A Codex rollout that ended, was resumed and ended again (issue #716) never reached the
-  lifecycle a second time: the intake named a job by session and rollout file and dropped
-  any SessionEnd whose job already had a receipt. A job is now named by that identity and
-  the SHA-256 of the rollout read at intake (ADR-1144): the same bytes are still a replay,
-  and a changed rollout is a new job, which the lifecycle replaces under ADR-1143. A
-  receipt written before the upgrade lets the next SessionEnd of its rollout through
-  once; the lifecycle and the profile dedup then find a replay.
+  lifecycle a second time: the intake dropped any SessionEnd whose session and rollout
+  file already had a receipt. The intake no longer drops such a SessionEnd and never
+  reads the rollout inside its three-second hook budget; the detached drain hashes it
+  and the receipt names the version last delivered (ADR-1144, ADR-1145). The same bytes
+  are a replay; changed bytes, a rollout restored to an earlier version included, reach
+  the lifecycle, which replaces its row under ADR-1143. A path the drain cannot open,
+  one with a NUL byte included, is delivered without a version. A 4.24.0 receipt is
+  keyed on the session alone and matches no job: see the ADR-1141 entry below.
 - A transcript that ended a second time with turns appended or an earlier turn
   rewritten (issue #716, acceptance item 3) kept its first session-log row: any later
   row under the same transcript stem was taken for a replay. A row now records the size
   and SHA-256 of its transcript; the same bytes are still a replay, and a later version
   replaces the row with `reconciliation` naming its kind (`appended` or `rewritten`)
   and the version it replaced (ADR-1143). The profile is still updated once per session
-  and file (ADR-1141), and a row written before the upgrade is kept as before. The
-  Codex intake still drops a second SessionEnd of the same rollout file after its
-  receipt.
+  and file (ADR-1141), and a row written before the upgrade is kept as before.
 - A capture the resident worker acknowledged and then died before storing (issue #716,
   acceptance item 2) was lost: the ack came once the payload sat in memory, and the hook
   never replays. The worker now writes each admitted payload to the capture spool before
