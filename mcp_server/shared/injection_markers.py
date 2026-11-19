@@ -8,6 +8,7 @@ source: ADR-0417"""
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 
@@ -45,3 +46,19 @@ def session_id_from_transcript(transcript_path: object) -> str | None:
     if not isinstance(transcript_path, str) or not transcript_path:
         return None
     return Path(transcript_path).stem or None
+
+
+def session_end_event_id(session_id: str, transcript_path: object) -> str:
+    """Identity of one SessionEnd delivery: the session and the file it closes.
+
+    Codex continues one logical session into a second rollout file (#716).
+    Keyed on ``session_id`` alone, the second file's SessionEnd was taken for
+    a replay of the first and dropped. A replay of the same file keeps its
+    identity; an event with no transcript is keyed on the session alone. The
+    Codex intake (``plugins/hypermnesia-mcp-codex/scripts/session_queue.py``
+    ``job_key``) computes the same value without importing ``mcp_server``.
+
+    source: ADR-1141"""
+    stem = session_id_from_transcript(transcript_path)
+    text = session_id if stem is None else f"{session_id}\0{stem}"
+    return hashlib.sha256(text.encode()).hexdigest()

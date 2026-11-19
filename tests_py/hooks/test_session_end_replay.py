@@ -124,3 +124,23 @@ def test_direct_cold_start_persists_methodology_directory(tmp_path, monkeypatch)
         with patch.object(hook, "_record_event"):
             hook.process_event({"session_id": "direct-cold"})
     assert observed == [tmp_path, tmp_path / "direct"]
+
+
+def test_a_session_over_two_rollout_files_records_both_once():
+    """#716 acceptance 1 at the lifecycle: both files reach the log and the
+    profile; a late replay of the first file drops neither. source: ADR-1141"""
+    save_profile("replay", {"projects": ["replay"], "sessionCount": 0})
+    first = {
+        "session_id": "s",
+        "project": "replay",
+        "turn_count": 2,
+        "tools_used": ["Read"],
+        "transcript_path": "/r/rollout-a.jsonl",
+    }
+    second = {**first, "transcript_path": "/r/rollout-b.jsonl"}
+    with patch.object(hook, "_spawn_consolidation"):
+        for event in (first, second, first, second):
+            hook.process_event(event)
+    rows = [row["sessionId"] for row in load_session_log()["sessions"]]
+    assert rows == ["rollout-a", "rollout-b"]
+    assert load_profile("replay")["sessionCount"] == 2

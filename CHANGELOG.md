@@ -202,6 +202,13 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- A Codex session continued into a second rollout file (issue #716, acceptance item 1):
+  the second file's SessionEnd was dropped as a replay of the first, at the Codex intake
+  (job keyed on `sha256(session_id)`, whose completed receipt already existed) and at
+  the profile dedup of the lifecycle. Both now key one delivery on the session and the
+  transcript stem (ADR-1141, amends ADR-1084), so each file reaches the session log and
+  the profile once. A SessionEnd delivered before the upgrade and again after it is
+  queued again and updates the profile a second time.
 - `wiki_write` records the page it wrote (issue #715, Codex review of PR #1092): the
   `wiki.pages` row was built from the page re-read after the pointer memory was
   stored, so a writer that replaced the page in between had its text recorded with
