@@ -58,9 +58,13 @@ def _upper(bound: str, zoned: bool) -> str:
     return f"({end} - ({_wall(bound)} - {_utc(bound)}))" if zoned else end
 
 
-def _parse_end(key: str, raw: Any) -> tuple[datetime | None, str | None]:
-    if raw is None:
+def _parse_end(key: str, where: dict[str, Any]) -> tuple[datetime | None, str | None]:
+    """The window end ``key`` names; a key present without a value is an error."""
+    if key not in where:
         return None, None
+    raw = where[key]
+    if raw is None:
+        return None, f"{key} needs a value"
     try:
         return datetime.fromisoformat(str(raw)), None
     except ValueError:
@@ -70,8 +74,8 @@ def _parse_end(key: str, raw: Any) -> tuple[datetime | None, str | None]:
 def _window(
     where: dict[str, Any],
 ) -> tuple[datetime | None, datetime | None, list[str]]:
-    start, start_err = _parse_end(WINDOW_KEYS[0], where.get(WINDOW_KEYS[0]))
-    end, end_err = _parse_end(WINDOW_KEYS[1], where.get(WINDOW_KEYS[1]))
+    start, start_err = _parse_end(WINDOW_KEYS[0], where)
+    end, end_err = _parse_end(WINDOW_KEYS[1], where)
     errors = [e for e in (start_err, end_err) if e]
     if not errors and start and end:
         if (start.utcoffset() is None) != (end.utcoffset() is None):
@@ -103,13 +107,8 @@ def compile_event_time_window(
     if not any(k in where for k in WINDOW_KEYS):
         return rest, [], [], []
     start, end, errors = _window(where)
-    if errors or (start is None and end is None):
-        return (
-            rest,
-            [],
-            [],
-            errors or [f"{WINDOW_KEYS[0]} or {WINDOW_KEYS[1]} needs a value"],
-        )
+    if errors:
+        return rest, [], [], errors
     stated = start if start is not None else end
     zoned = stated is not None and stated.utcoffset() is not None
     frags = [

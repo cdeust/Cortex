@@ -81,7 +81,14 @@ def test_a_value_that_is_not_iso_8601_is_refused():
 
 def test_a_window_key_without_a_value_is_refused():
     *_, errors = compile_event_time_window({"event_time_to": None})
-    assert errors == ["event_time_from or event_time_to needs a value"]
+    assert errors == ["event_time_to needs a value"]
+
+
+def test_an_empty_key_beside_a_filled_one_is_refused_not_opened():
+    compiled = compile_view(
+        "table: claim_events\nwhere:\n  event_time_from:\n  event_time_to: 2026-04-01"
+    )
+    assert compiled.errors == ["event_time_from needs a value"]
 
 
 def test_an_injection_attempt_is_a_refused_value_not_sql():
