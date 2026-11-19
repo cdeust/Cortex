@@ -15,7 +15,7 @@ from __future__ import annotations
 import pytest
 
 from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
-from tests_py.conftest import _TEST_DB_URL, _USE_PG
+from tests_py.conftest import _TEST_DB_URL, _USE_PG, requires_psycopg
 
 
 def _write(store, content: str, **flags) -> int:
@@ -89,3 +89,20 @@ def test_postgresql_stores_the_flag_and_defaults_it_to_shared():
         }
     finally:
         store.close()
+
+
+@requires_psycopg
+def test_postgresql_insert_binds_the_flag_and_defaults_it_to_shared():
+    """The PostgreSQL insert names the column and binds it, without a server."""
+    from mcp_server.infrastructure.pg_store_write import PgWriteMixin
+
+    mixin = object.__new__(PgWriteMixin)
+    sql = PgWriteMixin._INSERT_MEMORY_SQL
+    assert "capture_origin, agent_private" in sql
+    assert "%(agent_private)s" in sql
+    shared = mixin._insert_signal_fields({}, "2026-11-19T00:00:00+00:00")
+    private = mixin._insert_signal_fields(
+        {"agent_private": True}, "2026-11-19T00:00:00+00:00"
+    )
+    assert shared["agent_private"] is False
+    assert private["agent_private"] is True
