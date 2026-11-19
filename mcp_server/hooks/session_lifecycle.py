@@ -38,7 +38,6 @@ Invariants
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import sys
 from datetime import datetime, timezone
@@ -57,6 +56,7 @@ try:
     from mcp_server.core.profile_builder import apply_session_update
     from mcp_server.hooks.launcher_command import child_command
     from mcp_server.shared.injection_markers import (
+        session_end_event_id,
         session_id_from_transcript,
     )
     from mcp_server.infrastructure.profile_store import (
@@ -356,7 +356,8 @@ def _record_event(event: dict[str, Any]) -> None:
     _append_session(log, entry)
     save_session_log(log)
     dp = (profiles.get("domains") or {}).get(domain_id)
-    event_id = hashlib.sha256(event["session_id"].encode()).hexdigest()
+    # source: ADR-1141 (one id per session and rollout file, #716).
+    event_id = session_end_event_id(event["session_id"], event.get("transcript_path"))
     if dp:
         applied = dp.setdefault("sessionEndEvents", [])
         if event_id not in applied:

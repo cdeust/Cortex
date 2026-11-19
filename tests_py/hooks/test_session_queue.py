@@ -235,3 +235,29 @@ def test_first_use_syncs_each_new_directory_link(queue, tmp_path):
     with patch.object(queue, "sync_directory", side_effect=observed.append):
         queue.durable_directory(tmp_path / "a/b/c")
     assert observed == [tmp_path, tmp_path / "a", tmp_path / "a/b"]
+
+
+def test_a_session_continued_into_a_second_rollout_reaches_the_worker_twice(queue):
+    """#716 acceptance 1 at the Codex intake. source: ADR-1141"""
+    root = queue.queue_root()
+    first = {"session_id": "s", "transcript_path": "/r/rollout-a.jsonl"}
+    second = {"session_id": "s", "transcript_path": "/r/rollout-b.jsonl"}
+    with patch.object(queue.subprocess, "run") as run:
+        run.return_value.returncode = 0
+        queue.enqueue(root, first)
+        queue.drain(root)
+        queue.enqueue(root, second)
+        queue.enqueue(root, first)
+        queue.drain(root)
+    delivered = [json.loads(call.kwargs["input"]) for call in run.call_args_list]
+    assert delivered == [first, second]
+
+
+def test_job_key_is_the_lifecycle_event_id(queue):
+    """The receipt and the profile dedup name one delivery. source: ADR-1141"""
+    from mcp_server.shared.injection_markers import session_end_event_id
+
+    for path in (None, "", "/r/rollout-a.jsonl", "rollout-a.jsonl", 3):
+        event = {"session_id": "s", "transcript_path": path}
+        assert queue.job_key(event) == session_end_event_id("s", path)
+    assert queue.job_key({"session_id": "s"}) == session_end_event_id("s", None)

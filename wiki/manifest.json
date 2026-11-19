@@ -3731,6 +3731,10 @@
     "ADR-1140": {
       "mirror": "ADR-1140-the-low-signal-filter-keys-on-the-writers-source.md",
       "path": "adr/cortex/1140-the-low-signal-filter-keys-on-the-writers-source.md"
+    },
+    "ADR-1141": {
+      "mirror": "ADR-1141-a-sessionend-delivery-is-keyed-on-the-session-and-its-rollout-file.md",
+      "path": "adr/cortex/1141-a-sessionend-delivery-is-keyed-on-the-session-and-its-rollout-file.md"
     }
   },
   "project": "cortex",

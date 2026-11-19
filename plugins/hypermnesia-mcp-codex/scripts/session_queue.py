@@ -87,12 +87,25 @@ def receipt(path):
     return completed / path.name
 
 
+def job_key(event):
+    """One job per session and rollout file, so a continued session's second
+    file is not dropped as a replay of the first (#716). The same value as
+    ``mcp_server.shared.injection_markers.session_end_event_id``.
+
+    source: ADR-1141
+    """
+    path = event.get("transcript_path")
+    stem = Path(path).stem if isinstance(path, str) and path else ""
+    text = f"{event['session_id']}\0{stem}" if stem else event["session_id"]
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
 def enqueue(root, event):
     if not isinstance(event, dict) or not isinstance(event.get("session_id"), str):
         raise ValueError("SessionEnd requires a nonempty session_id")
     if not event["session_id"].strip():
         raise ValueError("SessionEnd requires a nonempty session_id")
-    key = hashlib.sha256(event["session_id"].encode()).hexdigest()
+    key = job_key(event)
     target = root / f"{key}.json"
     if receipt(target).exists():
         return key
