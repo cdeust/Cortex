@@ -202,6 +202,13 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- A Codex rollout that ended, was resumed and ended again (issue #716) never reached the
+  lifecycle a second time: the intake named a job by session and rollout file and dropped
+  any SessionEnd whose job already had a receipt. A job is now named by that identity and
+  the SHA-256 of the rollout read at intake (ADR-1144): the same bytes are still a replay,
+  and a changed rollout is a new job, which the lifecycle replaces under ADR-1143. A
+  receipt written before the upgrade lets the next SessionEnd of its rollout through
+  once; the lifecycle and the profile dedup then find a replay.
 - A transcript that ended a second time with turns appended or an earlier turn
   rewritten (issue #716, acceptance item 3) kept its first session-log row: any later
   row under the same transcript stem was taken for a replay. A row now records the size
