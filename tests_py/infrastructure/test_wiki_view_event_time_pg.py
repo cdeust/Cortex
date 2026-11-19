@@ -15,6 +15,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
+from mcp_server.core.wiki_view_event_time import WINDOW_KEYS
 from mcp_server.core.wiki_view_executor import compile_view
 from mcp_server.handlers.wiki_extract import _claim_to_dict
 from mcp_server.infrastructure.pg_store_wiki_claims import insert_claim_events
@@ -48,6 +49,15 @@ CLAIMS = {
         kind="interval", start=TimeBound(value=_naive(2026, 5, 1), precision="month")
     ),
     "zoned-noon": _point(datetime(2026, 3, 12, 12, 0, tzinfo=_PLUS_TWO), "minute"),
+    "zoned-shift": EventTime(
+        kind="interval",
+        start=TimeBound(
+            value=datetime(2026, 3, 1, 9, 30, tzinfo=_PLUS_TWO), precision="minute"
+        ),
+        end=TimeBound(
+            value=datetime(2026, 3, 1, 17, 0, tzinfo=_PLUS_TWO), precision="minute"
+        ),
+    ),
     "unknown": EventTime(),
 }
 
@@ -63,6 +73,8 @@ def store():
         for name, et in CLAIMS.items()
     ]
     insert_claim_events(s._conn, [_claim_to_dict(c) for c in claims])
+    # a session zone far from UTC: no value may be read through it
+    s._conn.execute("SET TIME ZONE 'Pacific/Chatham'")
     yield s, mid
     s._conn.rollback()
     s.close()
@@ -102,12 +114,22 @@ _NAIVE = {"march", "march-12", "april-1", "until-2025", "since-may"}
             {"from": "2026-03-12T10:01:00+00:00", "to": "2026-03-12T11:00:00+00:00"},
             set(),
         ),
+        # 09:30-17:00+02:00 is [07:30, 15:01) UTC: its end is read in its own zone
+        (
+            {"from": "2026-03-01T14:30:00+00:00", "to": "2026-03-01T15:00:00+00:00"},
+            {"zoned-shift"},
+        ),
+        (
+            {"from": "2026-03-01T16:00:00+00:00", "to": "2026-03-01T17:00:00+00:00"},
+            set(),
+        ),
     ],
 )
 def test_the_window_keeps_exactly_the_claims_whose_span_overlaps_it(
     store, window, kept
 ):
-    lines = "".join(f"  event_time_{end}: {value}\n" for end, value in window.items())
+    key = dict(zip(("from", "to"), WINDOW_KEYS, strict=True))
+    lines = "".join(f"  {key[end]}: {value}\n" for end, value in window.items())
     assert _kept(store, lines) == kept
 
 

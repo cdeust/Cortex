@@ -8,6 +8,7 @@ window states a zone. What the SQL keeps is proved against PostgreSQL in
 
 from __future__ import annotations
 
+import time
 from datetime import datetime
 
 from mcp_server.core.wiki_view_event_time import compile_event_time_window
@@ -106,3 +107,29 @@ def test_compile_view_appends_the_window_after_the_other_filters():
 def test_the_window_keys_are_unknown_columns_on_other_tables():
     compiled = compile_view("table: pages\nwhere:\n  event_time_from: 2026-03-01")
     assert compiled.errors == ["unknown column: 'event_time_from'"]
+
+
+def test_a_zoned_end_is_converted_to_utc_whatever_the_local_zone(monkeypatch):
+    monkeypatch.setenv("TZ", "Pacific/Chatham")
+    time.tzset()
+    try:
+        *_, params, _ = compile_event_time_window(
+            {"event_time_to": "2026-03-01T12:00:00+02:00"}
+        )
+    finally:
+        monkeypatch.undo()
+        time.tzset()
+    assert params == [_naive(2026, 3, 1, 10)]
+
+
+def test_a_window_with_only_a_zoned_end_compares_zoned_bounds():
+    _, frags, _, errors = compile_event_time_window(
+        {"event_time_to": "2026-03-01T12:00:00+00:00"}
+    )
+    assert errors == []
+    assert not frags[1].startswith("NOT")
+
+
+def test_an_end_that_is_not_iso_8601_is_refused_by_its_own_name():
+    *_, errors = compile_event_time_window({"event_time_to": "soon"})
+    assert errors == ["event_time_to must be an ISO 8601 date or date-time, got 'soon'"]

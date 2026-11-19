@@ -696,6 +696,14 @@
       "kind": "equivalent-by-construction",
       "rationale": "SQLite matches SQL keywords case-insensitively (https://sqlite.org/lang_keywords.html) and finds a savepoint by name with sqlite3StrICmp, a case-insensitive comparison (OP_Savepoint, https://github.com/sqlite/sqlite/blob/master/src/vdbe.c). Measured 2026-11-17 on SQLite 3.53.1 (Python sqlite3): after SAVEPOINT cortex_tx and an insert, each of the four mutated statements, paired with the unmutated other one, leaves the table empty and in_transaction False, as the original pair does. The mutated RELEASE therefore releases the same savepoint after its rollback, ending the transaction it opened; the undo is pinned by tests_py/infrastructure/test_sqlite_compat_transaction.py.",
       "issue": "#715"
+    },
+    {
+      "mutant": "mcp_server.core.wiki_view_event_time.x_compile_event_time_window__mutmut_52",
+      "removed": "\" WHEN event_time->'end'->>'value' IS NULL THEN 'infinity'::timestamp\"",
+      "added": "\" when event_time->'end'->>'value' is null then 'infinity'::timestamp\"",
+      "kind": "equivalent-by-construction",
+      "rationale": "SQL key words are case-insensitive (PostgreSQL 18 docs, 4.1.1 Identifiers and Key Words). Only the key words change case; the quoted literals 'end', 'value' and 'infinity' are untouched, so PostgreSQL parses the same CASE expression.",
+      "issue": "#717"
     }
   ]
 }
