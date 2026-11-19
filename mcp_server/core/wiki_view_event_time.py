@@ -13,8 +13,8 @@ left out (open window). A claim's span is ``[lo, hi)``: ``lo`` is its start
 value (unbounded when the interval has no start), ``hi`` its end value (the
 start for a point) plus one unit of that bound's precision (unbounded when the
 interval has no end). ``unknown`` event times are never kept. Zoned values
-are compared in UTC; their offsets are fixed, so a day or a month added in UTC
-is the one the stated offset names.
+are compared in UTC, the unit being added in the bound's stated offset first,
+so the session ``TimeZone`` changes nothing.
 
 Only SQL text built from fixed strings leaves this module; the window values
 travel as bound parameters (ADR-0318).
@@ -33,15 +33,29 @@ _ZONED = r"'(Z|[+-][0-9]{2}:[0-9]{2})$'"
 _ANY_VALUE = "COALESCE(event_time->'start'->>'value', event_time->'end'->>'value')"
 
 
+def _wall(bound: str) -> str:
+    """The bound's stated wall clock; PostgreSQL ignores an offset in this cast."""
+    return f"(event_time->'{bound}'->>'value')::timestamp"
+
+
+def _utc(bound: str) -> str:
+    return f"((event_time->'{bound}'->>'value')::timestamptz AT TIME ZONE 'UTC')"
+
+
 def _value(bound: str, zoned: bool) -> str:
-    raw = f"(event_time->'{bound}'->>'value')"
-    return f"({raw}::timestamptz AT TIME ZONE 'UTC')" if zoned else f"{raw}::timestamp"
+    return _utc(bound) if zoned else _wall(bound)
 
 
 def _upper(bound: str, zoned: bool) -> str:
-    """The exclusive end of the span the bound covers at its own precision."""
+    """The exclusive end of the span the bound covers at its own precision.
+
+    A zoned bound adds its unit in its stated offset, then moves to UTC: a month
+    added in UTC would take the length of the UTC month, which differs when the
+    offset crosses a month boundary ("2027-03-01T00:00+02:00" is February in UTC).
+    """
     step = f"('1 ' || (event_time->'{bound}'->>'precision'))::interval"
-    return f"({_value(bound, zoned)} + {step})"
+    end = f"({_wall(bound)} + {step})"
+    return f"({end} - ({_wall(bound)} - {_utc(bound)}))" if zoned else end
 
 
 def _parse_end(key: str, raw: Any) -> tuple[datetime | None, str | None]:

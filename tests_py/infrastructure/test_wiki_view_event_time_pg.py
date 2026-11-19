@@ -49,6 +49,8 @@ CLAIMS = {
         kind="interval", start=TimeBound(value=_naive(2026, 5, 1), precision="month")
     ),
     "zoned-noon": _point(datetime(2026, 3, 12, 12, 0, tzinfo=_PLUS_TWO), "minute"),
+    # a zoned month after a shorter one: [2027-02-28T22:00, 2027-03-31T22:00) UTC
+    "zoned-march": _point(datetime(2027, 3, 1, tzinfo=_PLUS_TWO), "month"),
     "zoned-shift": EventTime(
         kind="interval",
         start=TimeBound(
@@ -101,6 +103,8 @@ _NAIVE = {"march", "march-12", "april-1", "until-2025", "since-may"}
         ({"from": "2026-03-12", "to": "2026-03-13"}, {"march", "march-12"}),
         # half-open: a date on the window's end is outside it
         ({"from": "2026-03-01", "to": "2026-04-01"}, {"march", "march-12"}),
+        # a naive day ends at its own midnight, whatever the session zone
+        ({"from": "2026-03-12T20:00:00", "to": "2026-03-13"}, {"march", "march-12"}),
         # "until 2025" covers the whole of 2025; "since May" has no end
         ({"from": "2025-06-01"}, _NAIVE),
         ({"to": "2025-06-01"}, {"until-2025"}),
@@ -122,6 +126,11 @@ _NAIVE = {"march", "march-12", "april-1", "until-2025", "since-may"}
         (
             {"from": "2026-03-01T16:00:00+00:00", "to": "2026-03-01T17:00:00+00:00"},
             set(),
+        ),
+        # the month is added in the stated offset, then converted (not in UTC)
+        (
+            {"from": "2027-03-30T00:00:00+00:00", "to": "2027-03-31T00:00:00+00:00"},
+            {"zoned-march"},
         ),
     ],
 )
