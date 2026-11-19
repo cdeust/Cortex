@@ -1015,6 +1015,16 @@ adheres to [Semantic Versioning](https://semver.org/).
   registry entry. The window's `claude.exe` pid is now read from `CLAUDE_PID`
   first, used only when it names a `claude.exe` not younger than the hook,
   and the walk answers otherwise.
+- The `remember` schema describes the domain precedence the handler applies
+  (#721, slice 10). It called `domain` a "cognitive-domain override", while a
+  `directory` inside a known repository wins over it (`_resolve_domain`): the
+  memory is written under that repository's domain and the response's `domain`
+  names the scope written. The order is kept: `record_session_end` and
+  `backfill_memories` pass a profile id or a project slug as `domain` next to
+  the session's directory, `seed_project` defaults `domain` to the directory's
+  name, and its GHSA-7848 checks purge the scope the directory selects. `docs/api-reference.md` documents the
+  order, the exact-name aliases, and rows written before #877 under a collided
+  domain, which no tool re-scopes.
 - `query_methodology` lists the hot memories of the domain `remember` writes
   (#721, slice 9). It read them under the cognitive-profile id `detect_domain`
   returns, while `remember` without an explicit domain writes under the

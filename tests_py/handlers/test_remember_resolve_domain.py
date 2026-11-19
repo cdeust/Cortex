@@ -60,3 +60,10 @@ def test_no_detected_profile_gives_no_domain(fakes, detection):
 
 def test_no_directory_and_no_domain_gives_no_domain(fakes):
     assert remember._resolve_domain("", "") == ""
+
+
+def test_schema_states_that_a_known_repository_directory_wins():
+    """The tool schema describes the order above, not a `domain` override."""
+    text = remember.schema["inputSchema"]["properties"]["domain"]["description"]
+    assert "A directory inside a known repository wins over it" in text
+    assert "override" not in text

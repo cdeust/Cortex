@@ -198,9 +198,14 @@ schema = {
             "domain": {
                 "type": "string",
                 "description": (
-                    "Cognitive-domain override. Auto-detected from directory if "
-                    "omitted. Another project's domain or directory is refused "
-                    "unless CORTEX_CROSS_PROJECT_WRITES allows it locally."
+                    "Domain identity of the memory. A directory inside a known "
+                    "repository wins over it: the memory is written under that "
+                    "repository's domain, and the response's `domain` names the "
+                    "scope written. Otherwise it is kept as given, lowercased; "
+                    "only an exact repository name maps to its canonical. "
+                    "Auto-detected from directory if omitted. Another project's "
+                    "domain or directory is refused unless "
+                    "CORTEX_CROSS_PROJECT_WRITES allows it locally."
                 ),
                 "examples": ["cortex", "ai-architect"],
             },
