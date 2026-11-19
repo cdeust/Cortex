@@ -15,6 +15,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 
 if os.name == "nt":
     import msvcrt
@@ -82,9 +83,10 @@ def environment():
 
 
 def receipt(path):
+    """One receipt per ``job_key``, also for ``<key>-<ns>``. source: ADR-1145"""
     completed = path.parent / "completed"
     durable_directory(completed)
-    return completed / path.name
+    return completed / f"{path.stem.split('-')[0]}.json"
 
 
 def job_key(event):
@@ -100,28 +102,15 @@ def job_key(event):
     return hashlib.sha256(text.encode()).hexdigest()
 
 
-def job_name(event):
-    """``job_key`` and 32 hex digits (128 bits, short under MAX_PATH) of the
-    rollout's SHA-256: changed bytes are a new job (#716). source: ADR-1144"""
-    key, path, sha = job_key(event), event.get("transcript_path"), hashlib.sha256()
-    try:  # open("") raises FileNotFoundError: no transcript keeps ``key``
-        with open(path if isinstance(path, str) else "", "rb") as stream:
-            for chunk in iter(functools.partial(stream.read, 1 << 20), b""):  # 1 MiB
-                sha.update(chunk)
-    except OSError:
-        return key
-    return f"{key}-{sha.hexdigest()[:32]}"
-
-
 def enqueue(root, event):
     if not isinstance(event, dict) or not isinstance(event.get("session_id"), str):
         raise ValueError("SessionEnd requires a nonempty session_id")
     if not event["session_id"].strip():
         raise ValueError("SessionEnd requires a nonempty session_id")
-    name = job_name(event)
-    target = root / f"{name}.json"
-    if receipt(target).exists():
-        return name
+    key = job_key(event)
+    target, rollout = root / f"{key}.json", event.get("transcript_path")
+    if not isinstance(rollout, str) and receipt(target).exists():
+        return key
     fd, tmp = tempfile.mkstemp(dir=root)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as stream:
@@ -134,11 +123,15 @@ def enqueue(root, event):
         try:
             os.link(tmp, target)
         except FileExistsError:
-            pass
+            if not isinstance(rollout, str):
+                return key
+            # The pending job may already be reading older bytes (ADR-1145).
+            target = root / f"{key}-{time.time_ns()}.json"
+            os.link(tmp, target)
         sync_directory(root)
     finally:
         os.unlink(tmp)
-    return name
+    return target.stem
 
 
 # CPython ignores start_new_session on Windows; there the drain's flags are
@@ -148,10 +141,14 @@ def enqueue(root, event):
 _WINDOWS = os.name == "nt"
 
 
-@functools.lru_cache(maxsize=1)
 def _windows_job():
-    path = Path(__file__).with_name("windows_job.py")
-    spec = importlib.util.spec_from_file_location("cortex_codex_windows_job", path)
+    return _sibling("windows_job")
+
+
+@functools.lru_cache(maxsize=None)
+def _sibling(name):
+    path = Path(__file__).with_name(f"{name}.py")
+    spec = importlib.util.spec_from_file_location(f"cortex_codex_{name}", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -182,7 +179,7 @@ def spawn(root):
 def job_lock(path):
     locks = path.parent / "locks"
     durable_directory(locks)
-    fd = os.open(locks / path.stem, os.O_RDWR | os.O_CREAT, 0o600)
+    fd = os.open(locks / receipt(path).stem, os.O_RDWR | os.O_CREAT, 0o600)
     try:
         try:
             if os.name == "nt":
@@ -200,10 +197,12 @@ def job_lock(path):
 
 
 def run_job(path):
-    if receipt(path).exists():
+    job = json.loads(path.read_text(encoding="utf-8"))
+    rollout = _sibling("rollout_version")
+    current = rollout.version(job["event"])  # hashed here, never at intake
+    if rollout.is_replay(receipt(path), current):
         path.unlink()
         return
-    job = json.loads(path.read_text(encoding="utf-8"))
     env = {
         k: v
         for k, v in os.environ.items()
@@ -226,8 +225,9 @@ def run_job(path):
     )
     if result.returncode:
         raise RuntimeError(f"lifecycle exited {result.returncode}")
-    os.replace(path, receipt(path))
+    rollout.record(receipt(path), job, current)
     sync_directory(receipt(path).parent)
+    path.unlink()
     path.with_suffix(".error").unlink(missing_ok=True)
     sync_directory(path.parent)
 

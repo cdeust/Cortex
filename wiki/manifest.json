@@ -3747,6 +3747,10 @@
     "ADR-1144": {
       "mirror": "ADR-1144-a-later-version-of-a-received-rollout-is-a-new-codex-job.md",
       "path": "adr/cortex/1144-a-later-version-of-a-received-rollout-is-a-new-codex-job.md"
+    },
+    "ADR-1145": {
+      "mirror": "ADR-1145-the-codex-drain-hashes-the-rollout-and-the-receipt-names-the-last-version.md",
+      "path": "adr/cortex/1145-the-codex-drain-hashes-the-rollout-and-the-receipt-names-the-last-version.md"
     }
   },
   "project": "cortex",
