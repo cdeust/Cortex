@@ -3751,6 +3751,10 @@
     "ADR-1145": {
       "mirror": "ADR-1145-the-codex-drain-hashes-the-rollout-and-the-receipt-names-the-last-version.md",
       "path": "adr/cortex/1145-the-codex-drain-hashes-the-rollout-and-the-receipt-names-the-last-version.md"
+    },
+    "ADR-1146": {
+      "mirror": "ADR-1146-the-codex-drain-hashes-a-relative-rollout-in-the-job-directory-and-rescans.md",
+      "path": "adr/cortex/1146-the-codex-drain-hashes-a-relative-rollout-in-the-job-directory-and-rescans.md"
     }
   },
   "project": "cortex",

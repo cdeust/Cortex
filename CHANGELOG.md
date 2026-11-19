@@ -206,11 +206,14 @@ adheres to [Semantic Versioning](https://semver.org/).
   lifecycle a second time: the intake dropped any SessionEnd whose session and rollout
   file already had a receipt. The intake no longer drops such a SessionEnd and never
   reads the rollout inside its three-second hook budget; the detached drain hashes it
-  and the receipt names the version last delivered (ADR-1144, ADR-1145). The same bytes
+  and the receipt names the version last delivered (ADR-1144, ADR-1145, ADR-1146). The same bytes
   are a replay; changed bytes, a rollout restored to an earlier version included, reach
-  the lifecycle, which replaces its row under ADR-1143. A path the drain cannot open,
-  one with a NUL byte included, is delivered without a version. A 4.24.0 receipt is
-  keyed on the session alone and matches no job: see the ADR-1141 entry below.
+  the lifecycle, which replaces its row under ADR-1143. A relative rollout path is
+  hashed from the directory the lifecycle runs in, and a SessionEnd queued during a
+  delivery is drained by the drain that holds its lock. A path the drain cannot open,
+  one with a NUL byte included, has no version: delivered when no receipt exists, a
+  replay otherwise, as under ADR-1141. A 4.24.0 receipt is keyed on the session alone
+  and matches no job: see the ADR-1141 entry below.
 - A transcript that ended a second time with turns appended or an earlier turn
   rewritten (issue #716, acceptance item 3) kept its first session-log row: any later
   row under the same transcript stem was taken for a replay. A row now records the size
