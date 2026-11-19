@@ -49,13 +49,20 @@ GENERATED = {
 }
 
 
-def _tree(tmp_path: Path, generated=GENERATED, version=cml.SPANS_VERSION) -> Path:
+def _tree(
+    tmp_path: Path,
+    generated=GENERATED,
+    version=cml.SPANS_VERSION,
+    flush: frozenset[str] = frozenset(),
+) -> Path:
     (tmp_path / PATH).parent.mkdir(parents=True)
     (tmp_path / PATH).write_text(SOURCE, encoding="utf-8")
     lines, spans = ["import os", ""], {}
     for key, (header, body) in generated.items():
-        start = len(lines)
-        lines += ["", header, *(f"    {b}" for b in body)]
+        # mutmut's LineSpan: 1-based, inclusive, from the leading blank line if any
+        blank = [] if key in flush else [""]
+        start = len(lines) + 1
+        lines += [*blank, header, *(f"    {b}" for b in body)]
         spans[key] = [start, len(lines)]
     mutants = tmp_path / "mutants" / PATH
     mutants.parent.mkdir(parents=True)
@@ -76,6 +83,14 @@ def test_a_function_mutant_lands_on_its_source_line(tmp_path, mutant, lines):
 
 def test_a_method_mutant_lands_on_its_source_line(tmp_path):
     root = _tree(tmp_path)
+    assert cml.mutated_lines(root, PATH, "mcp_server.m.xǁKǁm__mutmut_1") == {8}
+
+
+def test_a_method_with_no_blank_line_before_it_is_placed(tmp_path):
+    # A method right under its `class` line: its span starts on the `def` line
+    # (PR #1098, capture_server `__init__`: "no def line in span [74, 84]").
+    flush = frozenset({"xǁKǁm__mutmut_orig", "xǁKǁm__mutmut_1"})
+    root = _tree(tmp_path, flush=flush)
     assert cml.mutated_lines(root, PATH, "mcp_server.m.xǁKǁm__mutmut_1") == {8}
 
 

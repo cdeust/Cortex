@@ -1,10 +1,13 @@
-"""Durable file spool for capture payloads on platforms without the resident worker.
+"""Durable file spool for capture payloads.
 
-The hook only writes a file here and starts a detached drainer; the drainer
-(``mcp_server.hooks.capture_drain``) stores the files. Nothing in this module
-needs ``AF_UNIX``, ``fcntl`` or ``geteuid``, so it runs on Windows. Its lock
-is the kernel's (``msvcrt.locking`` / ``fcntl.flock``): a crashed drainer
-releases it with its process, so no stale-lock recovery exists or is needed.
+On a platform without the resident worker the hook only writes a file here and
+starts a detached drainer; the drainer (``mcp_server.hooks.capture_drain``)
+stores the files. Where the worker runs, it is the worker's journal: an
+admitted payload is written here before its acknowledgement (ADR-1142).
+Nothing in this module needs ``AF_UNIX``, ``fcntl`` or ``geteuid``, so it runs
+on Windows. Its lock is the kernel's (``msvcrt.locking`` / ``fcntl.flock``): a
+crashed drainer releases it with its process, so no stale-lock recovery exists
+or is needed.
 
 source: ADR-1094
 """
@@ -40,6 +43,8 @@ PRIVATE_FILE = 0o600
 SPOOL_ROOT = ".capture-worker"
 REJECTED_SUFFIX = ".rejected"
 _PARTIAL_SUFFIX = ".partial"
+# source: ADR-1142 (a journal file under replay by the resident worker)
+REPLAY_SUFFIX = ".replay"
 # source: ADR-1094 (measured 2026-10-07: a cold capture takes 10.5 s; the bound is
 # about ten times that, so only a hang reaches it, and then the file is rejected
 # and reported instead of holding the lock for good)
@@ -153,6 +158,18 @@ def read(path: Path) -> dict[str, object]:
     if not isinstance(value, dict):
         raise ValueError(f"capture spool file is not a JSON object: {path.name}")
     return value
+
+
+def claim_replay(path: Path) -> Path:
+    """Mark a journal file as being replayed; it no longer matches ``pending``."""
+    target = path.with_name(path.name + REPLAY_SUFFIX)
+    os.replace(path, target)
+    return target
+
+
+def interrupted_replays(spool: Path) -> list[Path]:
+    """Journal files whose replay never finished: the worker died replaying them."""
+    return sorted(spool.glob(f"*{REPLAY_SUFFIX}"))
 
 
 def reject(path: Path) -> Path:

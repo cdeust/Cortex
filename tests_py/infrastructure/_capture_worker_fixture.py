@@ -18,12 +18,16 @@ import json, os, socket, sys, time
 from pathlib import Path
 from mcp_server.infrastructure.capture_server import CaptureServer, ServerPolicy
 from mcp_server.infrastructure.capture_socket import remove_socket
+from mcp_server.infrastructure.capture_spool import spool_directory
 from mcp_server.infrastructure.capture_transport import Limits
 root = Path(sys.argv[3])
 listener = socket.socket(fileno=int(sys.argv[1]))
 async def callback(payload):
     time.sleep(payload.get("delay", 0))  # Simulate synchronous cold model loading.
-    if payload.get("crash"):
+    # A crash payload kills the first worker that stores it; "always" kills each one.
+    first = not (root / "crashed").exists()
+    if payload.get("crash") and (payload.get("always") or first):
+        (root / "crashed").touch()
         os._exit(1)
     if payload.get("error"):
         raise ValueError("fixture callback failure")
@@ -33,7 +37,7 @@ def report(message, elapsed, operation):
     with (root / "errors.txt").open("a") as stream:
         stream.write(f"{operation} {elapsed}: {message}\n")
 limits = Limits(int(sys.argv[4]), float(sys.argv[5]), float(sys.argv[6]))
-policy = ServerPolicy(limits, report)
+policy = ServerPolicy(limits, report, spool_directory(root))
 try:
     CaptureServer(listener, callback, policy).run()
 finally:

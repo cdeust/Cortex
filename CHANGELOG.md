@@ -202,6 +202,13 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- A capture the resident worker acknowledged and then died before storing (issue #716,
+  acceptance item 2) was lost: the ack came once the payload sat in memory, and the hook
+  never replays. The worker now writes each admitted payload to the capture spool before
+  its ack, removes it once stored, and at its next start stores what a dead worker left,
+  each file at most once more: a file whose replay killed a worker too is kept as
+  `*.rejected` and reported (ADR-1142, amends ADR-0508 and ADR-0511). A store replayed
+  after it ran is absorbed by the exact-replay dedup of `remember`.
 - A Codex session continued into a second rollout file (issue #716, acceptance item 1):
   the second file's SessionEnd was dropped as a replay of the first, at the Codex intake
   (job keyed on `sha256(session_id)`, whose completed receipt already existed) and at
