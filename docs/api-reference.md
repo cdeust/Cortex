@@ -145,9 +145,29 @@ Store a memory through the predictive coding write gate.
 | `content` | string | **Yes** | — | Memory content to store |
 | `tags` | array | No | `[]` | Tags for classification |
 | `directory` | string | No | `""` | Project directory context |
-| `domain` | string | No | `""` | Domain override |
+| `domain` | string | No | `""` | Domain identity, used when `directory` is in no known repository |
 | `source` | string | No | `"user"` | Source identifier |
 | `force` | boolean | No | `false` | Bypass the write gate |
+
+**Domain written.** The response's `domain` names the scope the memory was
+written under. It is chosen in this order (issue #721):
+
+1. a `directory` inside a known repository: that repository's domain, whatever
+   `domain` says;
+2. an explicit `domain`: kept as given, stripped and lowercased; only an exact
+   repository name (remote or directory name, or the family it belongs to,
+   ADR-0647) maps to its canonical, so `cortex-cowork` is written under
+   `cortex` and `scifact-comparison` stays `scifact-comparison`;
+3. the profile `detect_domain` finds for `directory`, resolved as a hint (a
+   known repository fragment inside it can still select that repository);
+4. otherwise no domain.
+
+`recall`, `recall_hierarchical`, `drill_down`, `narrative`,
+`get_project_story`, `assess_coverage` and `validate_memory` resolve an explicit
+`domain` the same way, so a read names the scope a write used. Rows written
+before #877 under a domain remapped by a substring match (for example
+`harness-comparison` for `scifact-comparison`) keep that domain: no tool
+re-scopes them, read them with `recall(domain="<written domain>")`.
 
 **Target Latency:** <100ms
 
