@@ -196,3 +196,17 @@ def stated_event_time(sentence: str) -> EventTime:
     if len(distinct) != 1:
         return EventTime()
     return EventTime(kind="point", start=next(iter(distinct.values())))
+
+
+def stored_event_time(stored: str | dict | None) -> EventTime:
+    """The ``event_time`` a ``wiki.claim_events`` row stores, as an EventTime.
+
+    SQLite returns the JSON text, PostgreSQL's JSONB a dict; ``None`` (a row
+    read without the column) is unknown. A stored value that is not a valid
+    EventTime raises: it is a corrupt row, not a time to guess.
+    """
+    if stored is None:
+        return EventTime()
+    if isinstance(stored, str):
+        return EventTime.model_validate_json(stored)
+    return EventTime.model_validate(stored)

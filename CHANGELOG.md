@@ -754,6 +754,12 @@ adheres to [Semantic Versioning](https://semver.org/).
   stated it: the superseded claim keeps its older date, both contradictory
   dates survive with their precision under a `conflict_candidate` memo, and an
   undated claim stays `unknown`.
+- `wiki_synthesize` carries each claim's `event_time` into its draft (#717,
+  slice 6): every section of a `wiki.drafts` row names, under `event_times`,
+  the time each of its claims stored, keyed by claim id, `unknown` included.
+  The page itself carries no event date: none is aggregated from its claims
+  (decision of 19 November 2026 on #717). `wiki_refine` and `wiki_compile` do
+  not yet read the field, and retrieval by event time is a later slice.
 - `tests_py/server/test_mcp_protocol_cancellation.py` cancels a `tools/call`
   over JSON-RPC (SDK `Client(mode="legacy")` and server on the in-memory
   transport) while its handler runs, once by `notifications/cancelled` and once by the
