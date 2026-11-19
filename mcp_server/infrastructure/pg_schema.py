@@ -78,6 +78,7 @@ CREATE TABLE IF NOT EXISTS memories (
     agent_context TEXT DEFAULT '',
     is_global BOOLEAN DEFAULT FALSE,
     is_team_decision BOOLEAN NOT NULL DEFAULT FALSE,
+    agent_private BOOLEAN NOT NULL DEFAULT FALSE,
     supersedes_id   INTEGER REFERENCES memories(id) ON DELETE SET NULL,
     superseded_by_id INTEGER REFERENCES memories(id) ON DELETE SET NULL,
     -- source: ADR-0537
@@ -1401,6 +1402,9 @@ ALTER TABLE wiki.claim_events ADD COLUMN IF NOT EXISTS
 -- source: ADR-1083
 ALTER TABLE memories ADD COLUMN IF NOT EXISTS
     is_team_decision BOOLEAN NOT NULL DEFAULT FALSE;
+-- source: issue #718 (opt-in private agent scope, decided 2026-11-19)
+ALTER TABLE memories ADD COLUMN IF NOT EXISTS
+    agent_private BOOLEAN NOT NULL DEFAULT FALSE;
 -- source: ADR-0537
 DO $$
 BEGIN

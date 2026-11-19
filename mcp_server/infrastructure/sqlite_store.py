@@ -360,10 +360,10 @@ class SqliteMemoryStore(
                 hippocampal_dependency, is_benchmark, agent_context,
                 is_global, is_team_decision, supersedes_id, source_attribution,
                 stimulus_signature, extinction_strength, write_class,
-                capture_origin
+                capture_origin, agent_private
             ) VALUES (
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )""",
             (
                 content,
@@ -400,6 +400,7 @@ class SqliteMemoryStore(
                 data.get("write_class", "deliberate"),
                 # source: ADR-0605
                 data.get("capture_origin", "unknown"),
+                int(data.get("agent_private", False)),
             ),
         )
         memory_id = cur.lastrowid
@@ -965,6 +966,7 @@ class SqliteMemoryStore(
             "is_benchmark",
             "is_global",
             "is_team_decision",
+            "agent_private",
             "is_active",
             "is_causal",
             "archived",
