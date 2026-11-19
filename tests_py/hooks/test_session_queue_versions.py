@@ -108,7 +108,72 @@ def test_the_drain_hashes_the_bytes_the_lifecycle_fingerprints(queue, tmp_path):
     for content in (b"", b"x" * ((1 << 20) + 7)):
         rollout.write_bytes(content)
         event = {"session_id": "s", "transcript_path": str(rollout)}
-        assert version.version(event) == transcript_fingerprint(str(rollout))["sha256"]
+        assert (
+            version.version(event, str(tmp_path))
+            == transcript_fingerprint(str(rollout))["sha256"]
+        )
     unreadable = (None, "", 3, str(tmp_path / "missing.jsonl"), str(tmp_path))
     for path in (*unreadable, "/r/roll\0out.jsonl"):
-        assert version.version({"session_id": "s", "transcript_path": path}) is None
+        assert (
+            version.version({"session_id": "s", "transcript_path": path}, "/") is None
+        )
+
+
+def test_a_relative_rollout_is_hashed_from_the_lifecycle_directory(
+    queue, tmp_path, monkeypatch
+):
+    """The drain runs in the queue directory, the lifecycle in the job's
+    ``cwd``: a relative rollout is hashed where the lifecycle reads it.
+    source: ADR-1146 (decision 1)"""
+    root, project = queue.queue_root(), tmp_path / "project"
+    project.mkdir()
+    event = {"session_id": "s", "transcript_path": "rollout-a.jsonl"}
+    with patch.object(queue.subprocess, "run") as run:
+        run.return_value.returncode = 0
+        for content in (b"a\n", b"b\n", b"b\n"):
+            (project / "rollout-a.jsonl").write_bytes(content)
+            monkeypatch.chdir(project)
+            queue.enqueue(root, event)
+            monkeypatch.chdir(root)
+            queue.drain(root)
+    assert run.call_count == 2
+
+
+def test_a_job_queued_while_its_identity_is_held_is_drained(queue, tmp_path):
+    """The SessionEnd that lands during a delivery is queued beside it; its
+    own drain finds the lock busy, so the holding drain passes again.
+    source: ADR-1146 (decision 2)"""
+    root, rollout = queue.queue_root(), tmp_path / "rollout-a.jsonl"
+    event = {"session_id": "s", "transcript_path": str(rollout)}
+    rollout.write_bytes(b"a\n")
+    queue.enqueue(root, event)
+
+    def lifecycle(*args, **kwargs):
+        if run.call_count == 1:  # during the delivery of A
+            rollout.write_bytes(b"b\n")
+            queue.enqueue(root, event)
+            queue.drain(root)  # B's drain: the identity's lock is busy
+        return run.return_value
+
+    with patch.object(queue.subprocess, "run", side_effect=lifecycle) as run:
+        run.return_value.returncode = 0
+        queue.drain(root)
+    assert run.call_count == 2
+    assert not list(root.glob("*.json"))
+
+
+def test_a_replay_clears_the_error_of_its_job(queue, tmp_path):
+    """A job dropped as a replay leaves no ``.error`` for intake to print.
+    source: ADR-1146 (decision 3)"""
+    root, rollout = queue.queue_root(), tmp_path / "rollout-a.jsonl"
+    rollout.write_bytes(b"a\n")
+    event = {"session_id": "s", "transcript_path": str(rollout)}
+    with patch.object(queue.subprocess, "run") as run:
+        run.return_value.returncode = 0
+        queue.enqueue(root, event)
+        queue.drain(root)
+        key = queue.enqueue(root, event)
+        (root / f"{key}.error").write_text("earlier failure")
+        queue.drain(root)
+    assert run.call_count == 1
+    assert not list(root.glob("*.error"))

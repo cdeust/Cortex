@@ -24,16 +24,17 @@ CHUNK_BYTES = 1 << 20
 FIELD = "transcript_sha256"
 
 
-def version(event):
+def version(event, cwd):
     """SHA-256 of the rollout the SessionEnd closes, the ``sha256`` of
     ``transcript_fingerprint``; None when it names no readable file, a path
-    ``open`` refuses included."""
+    ``open`` refuses included. A relative path is read from ``cwd``, the
+    directory the lifecycle runs in, not the drain's (ADR-1146)."""
     path = event.get("transcript_path")
     if not isinstance(path, str) or not path:
         return None
     sha = hashlib.sha256()
     try:
-        with open(path, "rb") as stream:
+        with open(os.path.join(cwd, path), "rb") as stream:
             for chunk in iter(functools.partial(stream.read, CHUNK_BYTES), b""):
                 sha.update(chunk)
     except (OSError, ValueError):  # ValueError: a NUL byte in the path

@@ -103,9 +103,8 @@ def job_key(event):
 
 
 def enqueue(root, event):
-    if not isinstance(event, dict) or not isinstance(event.get("session_id"), str):
-        raise ValueError("SessionEnd requires a nonempty session_id")
-    if not event["session_id"].strip():
+    session = event.get("session_id") if isinstance(event, dict) else None
+    if not isinstance(session, str) or not session.strip():
         raise ValueError("SessionEnd requires a nonempty session_id")
     key = job_key(event)
     target, rollout = root / f"{key}.json", event.get("transcript_path")
@@ -141,10 +140,6 @@ def enqueue(root, event):
 _WINDOWS = os.name == "nt"
 
 
-def _windows_job():
-    return _sibling("windows_job")
-
-
 @functools.lru_cache(maxsize=None)
 def _sibling(name):
     path = Path(__file__).with_name(f"{name}.py")
@@ -152,6 +147,9 @@ def _sibling(name):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+_windows_job = functools.partial(_sibling, "windows_job")
 
 
 def detach_options():
@@ -199,10 +197,17 @@ def job_lock(path):
 def run_job(path):
     job = json.loads(path.read_text(encoding="utf-8"))
     rollout = _sibling("rollout_version")
-    current = rollout.version(job["event"])  # hashed here, never at intake
-    if rollout.is_replay(receipt(path), current):
-        path.unlink()
-        return
+    current = rollout.version(job["event"], job["cwd"])  # never at intake
+    if not rollout.is_replay(receipt(path), current):
+        deliver(job)
+        rollout.record(receipt(path), job, current)
+        sync_directory(receipt(path).parent)
+    path.unlink()  # a replay clears its error too (ADR-1146)
+    path.with_suffix(".error").unlink(missing_ok=True)
+    sync_directory(path.parent)
+
+
+def deliver(job):
     env = {
         k: v
         for k, v in os.environ.items()
@@ -210,12 +215,9 @@ def run_job(path):
         and k not in {"DATABASE_URL", "CLAUDE_PROJECT_ROOT"}
     }
     env.update(job["environment"])
+    runtime = str(Path(__file__).with_name("runtime.py"))
     result = subprocess.run(
-        [
-            sys.executable,
-            str(Path(__file__).with_name("runtime.py")),
-            "session_lifecycle",
-        ],
+        [sys.executable, runtime, "session_lifecycle"],
         input=json.dumps(job["event"]),
         text=True,
         encoding="utf-8",  # the hook reads its stdin as strict UTF-8 (#664)
@@ -225,30 +227,27 @@ def run_job(path):
     )
     if result.returncode:
         raise RuntimeError(f"lifecycle exited {result.returncode}")
-    rollout.record(receipt(path), job, current)
-    sync_directory(receipt(path).parent)
-    path.unlink()
-    path.with_suffix(".error").unlink(missing_ok=True)
-    sync_directory(path.parent)
 
 
 def drain(root):
-    for path in sorted(root.glob("*.json")):
-        with job_lock(path) as acquired:
-            if not acquired or not path.exists():
-                continue
-            try:
-                run_job(path)
-            except (OSError, ValueError, KeyError, RuntimeError) as exc:
-                message = f"[cortex SessionEnd] {path.name}: {exc}"
-                print(message, file=sys.stderr, flush=True)
-                fd = os.open(
-                    path.with_suffix(".error"),
-                    os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
-                    0o600,
-                )
-                with os.fdopen(fd, "w", encoding="utf-8") as stream:
-                    stream.write(message)
+    """Pass while a pass delivers: a job queued beside a held one (ADR-1146)."""
+    delivered = True
+    while delivered:
+        delivered = False
+        for path in sorted(root.glob("*.json")):
+            with job_lock(path) as acquired:
+                if not acquired or not path.exists():
+                    continue
+                try:
+                    run_job(path)
+                    delivered = True  # each delivery or replay removes a file
+                except (OSError, ValueError, KeyError, RuntimeError) as exc:
+                    message = f"[cortex SessionEnd] {path.name}: {exc}"
+                    print(message, file=sys.stderr, flush=True)
+                    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+                    fd = os.open(path.with_suffix(".error"), flags, 0o600)
+                    with os.fdopen(fd, "w", encoding="utf-8") as stream:
+                        stream.write(message)
 
 
 def read_event():
