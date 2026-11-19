@@ -3739,6 +3739,10 @@
     "ADR-1142": {
       "mirror": "ADR-1142-the-capture-worker-journals-an-admitted-payload-before-its-ack.md",
       "path": "adr/cortex/1142-the-capture-worker-journals-an-admitted-payload-before-its-ack.md"
+    },
+    "ADR-1143": {
+      "mirror": "ADR-1143-a-later-version-of-a-logged-transcript-replaces-its-session-row.md",
+      "path": "adr/cortex/1143-a-later-version-of-a-logged-transcript-replaces-its-session-row.md"
     }
   },
   "project": "cortex",

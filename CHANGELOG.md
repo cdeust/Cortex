@@ -202,6 +202,15 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- A transcript that ended a second time with turns appended or an earlier turn
+  rewritten (issue #716, acceptance item 3) kept its first session-log row: any later
+  row under the same transcript stem was taken for a replay. A row now records the size
+  and SHA-256 of its transcript; the same bytes are still a replay, and a later version
+  replaces the row with `reconciliation` naming its kind (`appended` or `rewritten`)
+  and the version it replaced (ADR-1143). The profile is still updated once per session
+  and file (ADR-1141), and a row written before the upgrade is kept as before. The
+  Codex intake still drops a second SessionEnd of the same rollout file after its
+  receipt.
 - A capture the resident worker acknowledged and then died before storing (issue #716,
   acceptance item 2) was lost: the ack came once the payload sat in memory, and the hook
   never replays. The worker now writes each admitted payload to the capture spool before

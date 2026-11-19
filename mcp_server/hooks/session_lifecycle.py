@@ -68,6 +68,11 @@ try:
         save_session_log,
     )
     from mcp_server.infrastructure.transcript_activity import transcript_activity
+    from mcp_server.infrastructure.transcript_fingerprint import (
+        REPLAY,
+        transcript_fingerprint,
+    )
+    from mcp_server.hooks.session_log_rows import append_session
     from mcp_server.shared.categorizer import categorize
     from mcp_server.shared import detached_spawn
     from mcp_server.infrastructure.log_relay import spawn_logged
@@ -248,18 +253,9 @@ def _build_session_entry(event: dict[str, Any], domain_id: str) -> dict[str, Any
         "toolsUsed": tools,
         "category": categorize(" ".join(keywords)) if keywords else "general",
         "entryKeywords": keywords,
+        # source: ADR-1143 (a later version replaces the row, and says how).
+        "transcript": transcript_fingerprint(event.get("transcript_path")),
     }
-
-
-def _append_session(session_log: dict, entry: dict[str, Any]) -> None:
-    """Append a session entry to the log, capping at MAX_SESSION_LOG_ENTRIES."""
-    sessions = session_log.get("sessions") or []
-    if any(row.get("sessionId") == entry["sessionId"] for row in sessions):
-        return
-    sessions.append(entry)
-    if len(sessions) > MAX_SESSION_LOG_ENTRIES:
-        sessions = sessions[-MAX_SESSION_LOG_ENTRIES:]
-    session_log["sessions"] = sessions
 
 
 def _tombstone_session_registry() -> None:
@@ -353,7 +349,11 @@ def _record_event(event: dict[str, Any]) -> None:
     log = load_session_log()
     domain_id = _resolve_domain(event, profiles)
     entry = _build_session_entry(event, domain_id)
-    _append_session(log, entry)
+    kind = append_session(
+        log, entry, event.get("transcript_path"), MAX_SESSION_LOG_ENTRIES
+    )
+    if kind not in (None, REPLAY):
+        _log(f'Session "{entry["sessionId"]}" replaced: transcript {kind}')
     save_session_log(log)
     dp = (profiles.get("domains") or {}).get(domain_id)
     # source: ADR-1141 (one id per session and rollout file, #716).
