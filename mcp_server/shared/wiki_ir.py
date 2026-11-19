@@ -191,6 +191,7 @@ class Section(BaseModel):
     heading: str
     body: str
     claim_ids: list[int] = Field(default_factory=list)
+    event_times: dict[int, EventTime] = Field(default_factory=dict)  # per claim (#717)
 
 
 class Provenance(BaseModel):

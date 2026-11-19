@@ -175,7 +175,7 @@ def _candidate_memories(conn, memory_id, force, limit) -> list[int]:
 def _claims_for_memory(conn, memory_id: int) -> list[dict]:
     sql = """
     SELECT id, memory_id, text, claim_type, entity_ids, evidence_refs,
-           confidence, supersedes
+           confidence, supersedes, event_time
       FROM wiki.claim_events
      WHERE memory_id = %s
      ORDER BY id
@@ -198,6 +198,7 @@ def _claims_for_memory(conn, memory_id: int) -> list[dict]:
                     "evidence_refs": r[5] or [],
                     "confidence": r[6],
                     "supersedes": r[7],
+                    "event_time": r[8],
                 }
             )
     return out
@@ -215,8 +216,7 @@ def _draft_to_payload(draft) -> dict:
         "kind": draft.kind,
         "lead": draft.lead,
         "sections": [
-            {"heading": s.heading, "body": s.body, "claim_ids": s.claim_ids}
-            for s in draft.sections
+            s.model_dump(mode="json", exclude_none=True) for s in draft.sections
         ],
         "frontmatter": draft.frontmatter,
         "provenance": {

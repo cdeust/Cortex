@@ -7,6 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
+from mcp_server.core.claim_event_time import stored_event_time
 from mcp_server.shared.wiki_schema_loader import KindDefinition
 from mcp_server.shared.wiki_ir import DraftPage, Provenance, Section
 
@@ -151,27 +152,29 @@ def _route_claims_to_sections(
     # Build Section list, preserving the required order then optional
     sections: list[Section] = []
     for heading in required_sections:
-        cs = by_section.get(heading, [])
-        sections.append(
-            Section(
-                heading=heading,
-                body=_format_claims_as_prose(cs),
-                claim_ids=[c["id"] for c in cs if "id" in c],
-            )
-        )
+        sections.append(_section(heading, by_section[heading]))
     for heading in optional_sections:
-        cs = by_section.get(heading, [])
-        if not cs:
-            continue
-        sections.append(
-            Section(
-                heading=heading,
-                body=_format_claims_as_prose(cs),
-                claim_ids=[c["id"] for c in cs if "id" in c],
-            )
-        )
+        if by_section.get(heading):
+            sections.append(_section(heading, by_section[heading]))
 
     return sections, len(seen_claim_ids)
+
+
+def _section(heading: str, claims: list[dict]) -> Section:
+    """One section, each claim keeping the event time its row stores (#717).
+
+    The page carries no date of its own: a section names, per claim, the
+    time that claim's sentence stated, ``unknown`` included, so nothing is
+    aggregated or invented across claims.
+    """
+    return Section(
+        heading=heading,
+        body=_format_claims_as_prose(claims),
+        claim_ids=[c["id"] for c in claims if "id" in c],
+        event_times={
+            c["id"]: stored_event_time(c.get("event_time")) for c in claims if "id" in c
+        },
+    )
 
 
 def _format_claims_as_prose(claims: list[dict]) -> str:
