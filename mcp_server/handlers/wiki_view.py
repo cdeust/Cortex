@@ -83,6 +83,8 @@ schema = {
                 "examples": [
                     "table: pages\nlimit: 5",
                     "table: claim_events\nfilter:\n  claim_type: decision\nlimit: 20",
+                    "table: claim_events\nwhere:\n  event_time_from: 2026-03-01\n"
+                    "  event_time_to: 2026-04-01",
                 ],
             },
             "list": {

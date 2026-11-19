@@ -8,6 +8,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from mcp_server.core.wiki_view_event_time import compile_event_time_window
 
 # ── Whitelists ────────────────────────────────────────────────────────
 
@@ -310,9 +311,14 @@ def compile_view(text: str) -> CompiledView:
     else:
         proj = "*"
 
-    where_frags, where_params, where_errs = _compile_where(
-        _normalise_where(parsed.get("where")), allowed_cols
-    )
+    where = _normalise_where(parsed.get("where"))
+    et_frags: list[str] = []
+    et_params: list[Any] = []
+    if table == "claim_events":  # the event-time window (#717)
+        where, et_frags, et_params, et_errs = compile_event_time_window(where)
+        errors.extend(et_errs)
+    where_frags, where_params, where_errs = _compile_where(where, allowed_cols)
+    where_frags, where_params = where_frags + et_frags, where_params + et_params
     errors.extend(where_errs)
 
     # ORDER BY — single column from the whitelist

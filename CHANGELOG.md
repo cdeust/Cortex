@@ -90,6 +90,13 @@ adheres to [Semantic Versioning](https://semver.org/).
   that records the reason, a quotation of the value in every source.
   `check_evidence` verifies every key against the pinned commit and refuses a
   snapshot that lacks it. The two-arm runner is the remaining slice.
+- `wiki_view` filters `claim_events` by the event time each claim states (#717,
+  slice 7): `event_time_from` and `event_time_to` under `where:` give a
+  half-open window `[from, to)`, either end optional, each an ISO 8601 date or
+  date-time. A bound covers the span its precision names ("March 2026" is the
+  whole month), and a claim is kept when that span overlaps the window. An
+  `unknown` event time is never kept, and a naive bound is not compared with a
+  zoned window, nor the reverse (decision of 19 November 2026 on #717).
 
 ### Changed
 

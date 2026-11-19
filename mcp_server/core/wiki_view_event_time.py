@@ -1,0 +1,121 @@
+"""A claim_events view filter on the event time a claim states (#717, slice 7).
+
+source: issue #717 (decision comment of 2026-11-19, "Recherche"): a bound
+covers the span its precision names ("March 2026" is [2026-03-01,
+2026-04-01)); a filter keeps a claim whose span overlaps the requested
+window; a bound without a zone is not comparable with a window that has one,
+nor the reverse, and is not kept (nothing is converted). Strict inclusion is
+set aside: it would drop a month-precise date from a day-wide window inside it.
+
+The window is half-open, ``[event_time_from, event_time_to)``, each end an ISO
+8601 date or date-time read by ``datetime.fromisoformat``; either end may be
+left out (open window). A claim's span is ``[lo, hi)``: ``lo`` is its start
+value (unbounded when the interval has no start), ``hi`` its end value (the
+start for a point) plus one unit of that bound's precision (unbounded when the
+interval has no end). ``unknown`` event times are never kept. Zoned values
+are compared in UTC; their offsets are fixed, so a day or a month added in UTC
+is the one the stated offset names.
+
+Only SQL text built from fixed strings leaves this module; the window values
+travel as bound parameters (ADR-0318).
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from typing import Any
+
+WINDOW_KEYS = ("event_time_from", "event_time_to")
+
+# source: pydantic's JSON form of an aware datetime ("Z" or "+HH:MM"), the form
+# wiki_extract._claim_to_dict stores (model_dump(mode="json")); #717
+_ZONED = r"'(Z|[+-][0-9]{2}:[0-9]{2})$'"
+_ANY_VALUE = "COALESCE(event_time->'start'->>'value', event_time->'end'->>'value')"
+
+
+def _value(bound: str, zoned: bool) -> str:
+    raw = f"(event_time->'{bound}'->>'value')"
+    return f"({raw}::timestamptz AT TIME ZONE 'UTC')" if zoned else f"{raw}::timestamp"
+
+
+def _upper(bound: str, zoned: bool) -> str:
+    """The exclusive end of the span the bound covers at its own precision."""
+    step = f"('1 ' || (event_time->'{bound}'->>'precision'))::interval"
+    return f"({_value(bound, zoned)} + {step})"
+
+
+def _parse_end(key: str, raw: Any) -> tuple[datetime | None, str | None]:
+    if raw is None:
+        return None, None
+    try:
+        return datetime.fromisoformat(str(raw)), None
+    except ValueError:
+        return None, f"{key} must be an ISO 8601 date or date-time, got {raw!r}"
+
+
+def _window(
+    where: dict[str, Any],
+) -> tuple[datetime | None, datetime | None, list[str]]:
+    start, start_err = _parse_end(WINDOW_KEYS[0], where.get(WINDOW_KEYS[0]))
+    end, end_err = _parse_end(WINDOW_KEYS[1], where.get(WINDOW_KEYS[1]))
+    errors = [e for e in (start_err, end_err) if e]
+    if not errors and start and end:
+        if (start.utcoffset() is None) != (end.utcoffset() is None):
+            errors.append(
+                "event_time_from and event_time_to must both state a zone, or neither"
+            )
+        elif start >= end:
+            errors.append("event_time_from must be before event_time_to")
+    return start, end, errors
+
+
+def _as_utc_naive(value: datetime) -> datetime:
+    if value.utcoffset() is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def compile_event_time_window(
+    where: dict[str, Any],
+) -> tuple[dict[str, Any], list[str], list[Any], list[str]]:
+    """Split the event-time window out of a claim_events ``where`` block.
+
+    precondition: ``where`` is the view's flat where dict.
+    postcondition: returns (the where dict without the window keys, SQL
+    fragments, their bound parameters in order, errors); no fragment when the
+    where block names no window key.
+    """
+    rest = {k: v for k, v in where.items() if k not in WINDOW_KEYS}
+    if not any(k in where for k in WINDOW_KEYS):
+        return rest, [], [], []
+    start, end, errors = _window(where)
+    if errors or (start is None and end is None):
+        return (
+            rest,
+            [],
+            [],
+            errors or [f"{WINDOW_KEYS[0]} or {WINDOW_KEYS[1]} needs a value"],
+        )
+    stated = start if start is not None else end
+    zoned = stated is not None and stated.utcoffset() is not None
+    frags = [
+        "event_time->>'kind' IN ('point', 'interval')",
+        f"{'' if zoned else 'NOT '}({_ANY_VALUE} ~ {_ZONED})",
+    ]
+    params: list[Any] = []
+    if end is not None:
+        frags.append(
+            f"(event_time->'start'->>'value' IS NULL OR {_value('start', zoned)} < %s)"
+        )
+        params.append(_as_utc_naive(end))
+    if start is not None:
+        frags.append(
+            f"(CASE WHEN event_time->>'kind' = 'point' THEN {_upper('start', zoned)}"
+            " WHEN event_time->'end'->>'value' IS NULL THEN 'infinity'::timestamp"
+            f" ELSE {_upper('end', zoned)} END) > %s"
+        )
+        params.append(_as_utc_naive(start))
+    return rest, frags, params, []
+
+
+__all__ = ["WINDOW_KEYS", "compile_event_time_window"]
