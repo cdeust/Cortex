@@ -68,8 +68,13 @@ def _function_node(tree: ast.Module, key: str) -> ast.AST:
 
 
 def _generated(lines: list[str], span: list[int]) -> list[str]:
-    """A generated function from its `def` line, its name made neutral."""
-    segment = lines[span[0] : span[1]]
+    """A generated function from its `def` line, its name made neutral.
+
+    `span` is mutmut's `LineSpan`: 1-based and inclusive on both ends (mutmut 3.8.1
+    mutation/data.py), and it starts on the function's leading blank lines when it
+    has any. A method right under its `class` line has none, so the span starts on
+    the `def` line itself."""
+    segment = lines[span[0] - 1 : span[1]]
     start = next((i for i, line in enumerate(segment) if _DEF.match(line)), None)
     if start is None:
         raise LineMapError(f"no def line in span {span}")

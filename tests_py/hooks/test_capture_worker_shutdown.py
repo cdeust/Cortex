@@ -12,6 +12,11 @@ from types import ModuleType
 from unittest import mock
 
 from mcp_server.hooks import capture_worker as worker
+from mcp_server.hooks.capture_dispatch import report_failure
+from mcp_server.hooks.capture_worker_policy import limits
+from mcp_server.infrastructure import config
+from mcp_server.infrastructure.capture_server import ServerPolicy
+from mcp_server.infrastructure.capture_spool import spool_path
 
 
 class TestCaptureWorkerShutdown(unittest.TestCase):
@@ -31,6 +36,8 @@ class TestCaptureWorkerShutdown(unittest.TestCase):
         )
         self.stack.enter_context(mock.patch.object(worker, "configure"))
         listener = self.stack.enter_context(mock.patch.object(worker.socket, "socket"))
+        self.listener = listener.return_value
+        self.stack.enter_context(mock.patch.object(config, "CLAUDE_DIR", self.root))
         listener.return_value.getsockname.return_value = str(self.runtime / "socket")
         self.server = self.stack.enter_context(
             mock.patch.object(worker, "CaptureServer")
@@ -92,3 +99,13 @@ class TestCaptureWorkerShutdown(unittest.TestCase):
             worker.main()
         self.assertNotIn("mcp_server.infrastructure.memory_store", sys.modules)
         self.assertEqual(self.events, ["socket-remove", "lease-close"])
+
+    def test_the_server_journals_admissions_in_the_configured_spool(self):
+        # source: ADR-1142 — the spool of the configured root is the journal
+        worker.main()
+        self.server.assert_called_once_with(
+            self.listener,
+            worker.remember,
+            ServerPolicy(limits(), report_failure, spool_path(self.root)),
+        )
+        self.server.return_value.run.assert_called_once_with()

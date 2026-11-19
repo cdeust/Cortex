@@ -69,7 +69,9 @@ def _consume_journaled(journal: Path, payloads) -> None:
             else:
                 server.stopping.set()
 
-    policy = ServerPolicy(Limits(4096, 1, 300), report_failure, journal)
+    # idle 1 s: never waited for here, but a consumer that skips the payloads
+    # (a mutant) ends on it instead of hanging the run.
+    policy = ServerPolicy(Limits(4096, 1, 1), report_failure, journal)
     server = CaptureServer(mock.Mock(), callback, policy)
     server.pending.put_nowait(remaining.pop(0))
     asyncio.run(server._consume([]))

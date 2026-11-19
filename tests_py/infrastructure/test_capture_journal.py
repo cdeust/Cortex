@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import queue
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -27,6 +28,27 @@ def _contents(records) -> list[str]:
     return [record["payload"]["content"] for record in records]
 
 
+def _bounded(call, seconds: float = 2.0) -> BaseException | None:
+    """What ``call`` raised, failing the test if it is still blocked after ``seconds``.
+
+    A ``put`` that lost its timeout blocks on a full mailbox: the test must fail on
+    that, not hang (a hang is a mutmut timeout, which the gate counts as not killed)."""
+    raised: list[BaseException] = []
+
+    def target():
+        try:
+            call()
+        except BaseException as exc:  # noqa: BLE001 — handed to the asserting thread
+            raised.append(exc)
+
+    worker = threading.Thread(target=target, daemon=True)
+    worker.start()
+    worker.join(seconds)
+    if worker.is_alive():
+        raise AssertionError(f"still blocked after {seconds}s")
+    return raised[0] if raised else None
+
+
 class TestJournalInProcess(unittest.TestCase):
     def setUp(self):
         directory = tempfile.TemporaryDirectory()
@@ -35,15 +57,18 @@ class TestJournalInProcess(unittest.TestCase):
         self.report = mock.Mock()
 
     def server(self, callback) -> CaptureServer:
-        policy = ServerPolicy(Limits(4096, 1, 300), self.report, self.journal)
+        # A short idle wait: a consumer that never stops ends the test in 1 s.
+        policy = ServerPolicy(Limits(4096, 1, 1), self.report, self.journal)
         return CaptureServer(mock.Mock(), callback, policy)
 
     def test_an_admitted_payload_is_journaled_until_it_is_stored(self):
         seen = []
 
         async def callback(payload):
-            seen.append(capture_spool.read(capture_spool.pending(self.journal)[0]))
-            server.stopping.set()
+            try:
+                seen.append(capture_spool.read(capture_spool.pending(self.journal)[0]))
+            finally:
+                server.stopping.set()
 
         server = self.server(callback)
         server._admit({"content": "kept"}, deadline=float("inf"))
@@ -54,10 +79,11 @@ class TestJournalInProcess(unittest.TestCase):
     def test_a_refused_admission_leaves_nothing_to_replay(self):
         server = self.server(mock.AsyncMock())
         server.pending.put_nowait(None)  # the one slot is taken
-        with self.assertRaises(TimeoutError):
-            server._admit({"content": "late"}, deadline=0.0)
-        with self.assertRaises(queue.Full):
-            server._admit({"content": "full"}, deadline=time.monotonic() + 0.05)
+        late = _bounded(lambda: server._admit({"content": "late"}, deadline=0.0))
+        self.assertIsInstance(late, TimeoutError)
+        soon = time.monotonic() + 0.05
+        full = _bounded(lambda: server._admit({"content": "full"}, deadline=soon))
+        self.assertIsInstance(full, queue.Full)
         self.assertEqual(list(self.journal.iterdir()), [])
 
     def test_a_failed_store_is_kept_as_rejected_and_reported(self):

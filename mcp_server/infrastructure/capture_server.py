@@ -91,7 +91,7 @@ class CaptureServer:
         try:
             self.pending.put((payload, path), timeout=timeout)
         except queue.Full:
-            path.unlink(missing_ok=True)
+            path.unlink()
             raise
 
     def _accept(self) -> None:
@@ -188,7 +188,7 @@ class CaptureServer:
             self._failed(path, exc, started)
             return
         try:
-            path.unlink(missing_ok=True)
+            path.unlink()
         except OSError as exc:
             self.policy.report(
                 f"capture journal entry not removed, it will be replayed: {exc}",
