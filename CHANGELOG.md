@@ -97,6 +97,13 @@ adheres to [Semantic Versioning](https://semver.org/).
   whole month), and a claim is kept when that span overlaps the window. An
   `unknown` event time is never kept, and a naive bound is not compared with a
   zoned window, nor the reverse (decision of 19 November 2026 on #717).
+- `wiki_refine_draft` keeps each claim's event time through a rewrite (#717,
+  slice 8): the refined sections replaced the draft's whole, and the caller's
+  prose names no time, so every `event_times` that `wiki_synthesize` wrote was
+  dropped. Each refined section now times exactly the claims it cites, with the
+  value the draft stored for that claim, wherever the caller moves it. A time the
+  caller sends is not written, and a cited claim the draft holds no time for gets
+  none (a draft written before slice 6: `wiki_synthesize` with `force` times it).
 
 ### Changed
 
