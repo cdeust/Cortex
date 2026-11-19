@@ -18,6 +18,7 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
+from mcp_server.core.draft_section_event_times import carry_event_times
 from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.handlers._tool_meta import NON_IDEMPOTENT_WRITE, READ_ONLY
 from mcp_server.shared.wiki_sections import (
@@ -349,6 +350,7 @@ async def _handler_refine_impl(args: dict[str, Any] | None = None) -> dict[str, 
                 "validation_errors": validation_errors,
                 "kind_contract": contract,
             }
+        sections = carry_event_times(sections, draft.get("sections") or [])
 
     synth_model = args.get("synth_model", "claude_refine_v1")
     synth_prompt = args.get("synth_prompt")
