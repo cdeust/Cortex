@@ -3743,6 +3743,10 @@
     "ADR-1143": {
       "mirror": "ADR-1143-a-later-version-of-a-logged-transcript-replaces-its-session-row.md",
       "path": "adr/cortex/1143-a-later-version-of-a-logged-transcript-replaces-its-session-row.md"
+    },
+    "ADR-1144": {
+      "mirror": "ADR-1144-a-later-version-of-a-received-rollout-is-a-new-codex-job.md",
+      "path": "adr/cortex/1144-a-later-version-of-a-received-rollout-is-a-new-codex-job.md"
     }
   },
   "project": "cortex",

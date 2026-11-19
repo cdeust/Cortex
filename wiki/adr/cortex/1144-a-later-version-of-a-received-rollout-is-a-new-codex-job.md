@@ -1,0 +1,29 @@
+---
+created: 2026-11-19T06:00:00Z
+kind: adr
+number: 1144
+status: accepted
+tags: [codex, lifecycle, durability, issue-716, amends-adr-1141]
+title: A later version of a received rollout is a new Codex job
+---
+# ADR-1144: A later version of a received rollout is a new Codex job
+
+## Status
+
+accepted. Amends ADR-1141 for the Codex intake only: a job is named by its delivery identity and the version of its transcript. The delivery identity itself (`job_key`, `session_end_event_id`) and the profile dedup are unchanged.
+
+## Context
+
+Issue #716. ADR-1143 lets the lifecycle replace the session-log row of a transcript that ended a second time with turns appended or an earlier turn rewritten. Its Consequences name the gap left at the Codex intake: `session_queue.py` named a job `job_key(event)` (session and rollout stem) and `enqueue` returned as soon as a receipt of that name existed. A second SessionEnd of the same rollout file, after the first was received, never reached the lifecycle, so the replacement of ADR-1143 could not happen for Codex.
+
+## Decision
+
+1. The Codex intake names a job `<job_key>-<v>`, where `v` is the first 32 hex digits of the SHA-256 of the transcript file read at intake (the `sha256` of `infrastructure/transcript_fingerprint.py`, computed with the standard library because the intake ships without `mcp_server`, ADR-1084). An event whose transcript is absent or unreadable keeps the name `<job_key>`, its name under ADR-1141.
+2. The receipt keeps the job's name. A SessionEnd whose transcript has the bytes of a received job is a replay and is not queued again; one whose transcript changed is a new job and reaches the lifecycle, which decides between replay, `appended` and `rewritten` under ADR-1143 from the bytes it reads.
+3. Each version has its own job file, so a version queued while an earlier job of the same rollout is being drained is not merged into it.
+
+## Consequences
+
+Positive: a Codex rollout that ended, was resumed and ended again reaches the lifecycle once per version, and a repeated delivery of the same bytes is still received once (`tests_py/hooks/test_session_queue.py`).
+
+Negative: intake reads the whole rollout once to hash it, before `uvx` starts. A receipt written before this change is named `<job_key>`, so the first SessionEnd of that rollout after the upgrade is queued once more; the lifecycle finds the same bytes and keeps its row (ADR-1143, decision 3), and the profile dedup keyed on `session_end_event_id` does not apply the update again. Not covered here, left on #716: native receipts per host (acceptance item 4). To go back, name a job `<job_key>` again.
