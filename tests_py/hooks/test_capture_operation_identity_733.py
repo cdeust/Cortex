@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import tempfile
 from pathlib import Path
 from unittest import mock
 
@@ -52,9 +53,14 @@ def _worker_consumes(*payloads) -> None:
     while a payload is processed) or, after the last, stops the server, so the
     idle timeout is never waited for. ``put_nowait`` fails, it cannot block.
     """
-    remaining = list(payloads)
+    with tempfile.TemporaryDirectory() as name:
+        _consume_journaled(Path(name), payloads)
 
-    async def callback(item) -> None:
+
+def _consume_journaled(journal: Path, payloads) -> None:
+    remaining = [(item, capture_spool.write(journal, item)) for item in payloads]
+
+    async def callback(item: dict) -> None:
         try:
             await capture_store.remember(item)
         finally:
@@ -63,10 +69,10 @@ def _worker_consumes(*payloads) -> None:
             else:
                 server.stopping.set()
 
-    policy = ServerPolicy(Limits(4096, 1, 300), report_failure)
+    policy = ServerPolicy(Limits(4096, 1, 300), report_failure, journal)
     server = CaptureServer(mock.Mock(), callback, policy)
     server.pending.put_nowait(remaining.pop(0))
-    asyncio.run(server._consume())
+    asyncio.run(server._consume([]))
 
 
 def _ids(recorded) -> list[tuple[str, str | None]]:

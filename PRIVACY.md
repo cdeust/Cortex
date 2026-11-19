@@ -50,9 +50,13 @@ To build and retrieve memory, Cortex reads and processes:
   capture that never leaves the hook removes the file it created. A capture
   handed to the capture worker or spool and then refused there can still leave
   that file on disk with no memory pointing to it; no sweep removes such files
-  yet. The only switch is `CORTEX_CAPTURE_MODE` (see *Your controls*), and it
-  applies to every project at once. The redaction gate below removes
-  credentials, not personal data, so names, e-mail addresses or health
+  yet. Until it is stored, an accepted capture also waits, redacted like the
+  memory row, in an owner-only file under `~/.claude/.capture-worker/spool/`;
+  the file is removed once the capture is stored, and one that could not be
+  stored is kept there as `*.rejected` and removed by the first worker or
+  drainer that starts a week later. The only switch is `CORTEX_CAPTURE_MODE`
+  (see *Your controls*), and it applies to every project at once. The
+  redaction gate below removes credentials, not personal data, so names, e-mail addresses or health
   information in a captured response are stored as they are.
 
 Cortex does **not** ask for, collect, or process passwords, payment data, or

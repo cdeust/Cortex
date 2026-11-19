@@ -19,6 +19,7 @@ from mcp_server.hooks.capture_worker_logging import configure
 from mcp_server.hooks._store_lifecycle import close_shared_store_on_exit
 from mcp_server.infrastructure.capture_server import CaptureServer, ServerPolicy
 from mcp_server.infrastructure.capture_socket import remove_socket, runtime_directory
+from mcp_server.infrastructure.capture_spool import spool_directory
 
 logger = logging.getLogger(__name__)
 
@@ -37,11 +38,11 @@ def main() -> None:
     path = Path(listener.getsockname())
     if path != runtime / "socket":
         raise ValueError("inherited capture listener does not match configured root")
+    # source: ADR-1142 — admitted payloads are journaled where the drainer spools
+    policy = ServerPolicy(limits(), report_failure, spool_directory(CLAUDE_DIR))
     try:
         with close_shared_store_on_exit():
-            CaptureServer(
-                listener, remember, ServerPolicy(limits(), report_failure)
-            ).run()
+            CaptureServer(listener, remember, policy).run()
     finally:
         _close_endpoint(path, args.lease_fd)
 
