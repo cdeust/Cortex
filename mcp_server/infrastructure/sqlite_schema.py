@@ -69,7 +69,8 @@ CREATE TABLE IF NOT EXISTS memories (
     is_benchmark            INTEGER DEFAULT 0,
     agent_context           TEXT DEFAULT '',
     is_global               INTEGER DEFAULT 0,
-    is_team_decision         INTEGER NOT NULL DEFAULT 0
+    is_team_decision         INTEGER NOT NULL DEFAULT 0,
+    agent_private           INTEGER NOT NULL DEFAULT 0
 );
 """
 
@@ -427,6 +428,8 @@ MIGRATIONS: list[tuple[str, str, str]] = [
     ("memories", "is_global", "INTEGER DEFAULT 0"),
     # source: ADR-1083 (project visibility).
     ("memories", "is_team_decision", "INTEGER NOT NULL DEFAULT 0"),
+    # source: issue #718 (opt-in private agent scope, decided 2026-11-19)
+    ("memories", "agent_private", "INTEGER NOT NULL DEFAULT 0"),
     ("memories", "stage_entered_at", "TEXT"),
     # source: ADR-0602
     ("prospective_memories", "created_by", "TEXT NOT NULL DEFAULT ''"),

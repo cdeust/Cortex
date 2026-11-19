@@ -32,7 +32,7 @@ class PgWriteMixin(PgStoreHost):
                 is_global, is_team_decision, stage_entered_at,
                 arousal, dominant_emotion, supersedes_id,
                 source_attribution, stimulus_signature, extinction_strength,
-                write_class, capture_origin
+                write_class, capture_origin, agent_private
             ) VALUES (
                 %(content)s, %(embedding)s, %(tags)s::jsonb, %(source)s, %(domain)s,
                 %(directory_context)s, %(created_at)s, %(last_accessed)s,
@@ -47,7 +47,7 @@ class PgWriteMixin(PgStoreHost):
                 %(is_global)s, %(is_team_decision)s, %(stage_entered_at)s,
                 %(arousal)s, %(dominant_emotion)s, %(supersedes_id)s,
                 %(source_attribution)s, %(stimulus_signature)s, %(extinction_strength)s,
-                %(write_class)s, %(capture_origin)s
+                %(write_class)s, %(capture_origin)s, %(agent_private)s
             ) RETURNING id"""
 
     def _resolve_insert_dates(self, data: dict[str, Any], now: str) -> tuple[str, str]:
@@ -107,6 +107,7 @@ class PgWriteMixin(PgStoreHost):
             "agent_context": data.get("agent_context", ""),
             "is_global": data.get("is_global", False),
             "is_team_decision": data.get("is_team_decision", False),
+            "agent_private": data.get("agent_private", False),
             "stage_entered_at": data.get("stage_entered_at") or created_at,
             "arousal": data.get("arousal", 0.0),
             "dominant_emotion": data.get("dominant_emotion", "neutral"),

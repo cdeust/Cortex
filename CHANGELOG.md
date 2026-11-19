@@ -8,6 +8,12 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `memories.agent_private` column on SQLite and PostgreSQL (issue #718, slice 2):
+  the stored flag that will mark a memory private to the agent that wrote it, decided
+  in the issue on 2026-11-19. It defaults to false, the migration leaves every existing
+  row shared, and the store writes it when a caller passes it. No writer sets it and no
+  reader filters on it yet, so behaviour is unchanged; the eligibility filter comes
+  surface by surface, and the `CORTEX_ROOT_AGENT_PRIVATE` opt-in last.
 - `failed` freshness state of a memory-derived wiki page (issue #715, acceptance
   criterion 3): `wiki_read` reports `state: failed` and `record_matches_text: false`
   when a page cites memories but the body on disk is not the one its `wiki.pages` row
