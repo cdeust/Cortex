@@ -90,6 +90,9 @@ class _FakePages:
         self.violations = violations
         # page ids whose retractions a full write cleared, in call order
         self.cleared: list[int] = []
+        # what page_retractions_frontier returns, and the frontier each clear got
+        self.last_retraction = 0
+        self.cleared_up_to: list[int] = []
 
     def upsert(self, conn, page_row: dict) -> tuple[int, bool]:
         self.violations.check(
@@ -108,11 +111,18 @@ class _FakePages:
         self.by_path[rel_path] = pid
         return pid, True
 
-    def clear_retractions(self, conn, page_id: int) -> None:
+    def retraction_frontier(self, conn) -> int:
+        self.violations.check(
+            conn is self.request_conn, "frontier read off a request connection"
+        )
+        return self.last_retraction
+
+    def clear_retractions(self, conn, page_id: int, frontier: int) -> None:
         self.violations.check(
             conn is self.request_conn, "retractions cleared off the request unit"
         )
         self.cleared.append(page_id)
+        self.cleared_up_to.append(frontier)
 
 
 class _FakeCitations:

@@ -11,6 +11,7 @@ from mcp_server.infrastructure.pg_store_wiki_pages import get_page_by_rel_path
 from mcp_server.infrastructure.pg_store_wiki_retractions import (
     clear_page_retractions,
     count_page_retractions,
+    page_retractions_frontier,
     record_page_retractions,
 )
 from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
@@ -55,6 +56,21 @@ def test_clearing_one_page_leaves_the_others(store, tmp_path):
     record_page_retractions(conn, cited)
     first, second = _page_ids(conn, paths)
     assert count_page_retractions(conn, first) == 2
-    clear_page_retractions(conn, first)
+    clear_page_retractions(conn, first, page_retractions_frontier(conn))
     assert count_page_retractions(conn, first) == 0
+    assert count_page_retractions(conn, second) == 2
+
+
+def test_a_clear_keeps_the_retractions_recorded_after_its_frontier(store, tmp_path):
+    """Codex review of PR #1109: a forget during the write is not refreshed by it."""
+    cited, _, paths, _ = _two_pages_citing(store, tmp_path.name)
+    conn = store._conn
+    assert page_retractions_frontier(conn) == 0
+    record_page_retractions(conn, cited)
+    frontier = page_retractions_frontier(conn)
+    record_page_retractions(conn, cited)  # after the frontier was read
+    assert page_retractions_frontier(conn) > frontier
+    first, second = _page_ids(conn, paths)
+    clear_page_retractions(conn, first, frontier)
+    assert count_page_retractions(conn, first) == 1
     assert count_page_retractions(conn, second) == 2

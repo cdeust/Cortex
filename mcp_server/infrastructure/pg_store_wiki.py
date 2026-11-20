@@ -57,6 +57,7 @@ from mcp_server.infrastructure.pg_store_wiki_pages import (
 from mcp_server.infrastructure.pg_store_wiki_retractions import (
     clear_page_retractions,
     count_page_retractions,
+    page_retractions_frontier,
 )
 from mcp_server.infrastructure.pg_store_wiki_sources import upsert_page_sources
 from mcp_server.infrastructure.pg_store_wiki_thermo import (
@@ -99,6 +100,7 @@ __all__ = [
     "list_pages_citing_memory",
     "list_pages_for_decay",
     "list_uncited_deliberate_memories",
+    "page_retractions_frontier",
     "page_text_hash",
     "resolve_unresolved_links",
     "update_claim_entities",

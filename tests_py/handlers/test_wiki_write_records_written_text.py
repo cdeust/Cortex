@@ -28,9 +28,10 @@ def recorded(tmp_path: Path, monkeypatch) -> list[tuple]:
     calls: list[tuple] = []
 
     def record(*args):
-        calls.append(args)
+        calls.append(args[:4])  # the fifth, the retraction frontier, is not text
         return (0, [])
 
+    monkeypatch.setattr(wiki_write, "_retraction_frontier", lambda: 0)
     monkeypatch.setattr(wiki_write, "_sync_page_and_cite", record)
     return calls
 

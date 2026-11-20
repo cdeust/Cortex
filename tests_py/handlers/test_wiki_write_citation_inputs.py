@@ -41,7 +41,8 @@ def test_the_store_is_opened_with_the_configured_path_and_dimension(
 
     monkeypatch.setattr(wiki_write, "get_shared_store", _open)
     _run(wiki_write.handler({"path": "reference/a.md", "content": "# A"}))
-    assert opened == [(("/data/cortex.db", 384), {})]
+    # once to read the retraction frontier, once for the citation unit
+    assert opened == [(("/data/cortex.db", 384), {})] * 2
 
 
 @pytest.mark.parametrize(("page_id", "expected"), [(0, 1), (-1, 0), (None, 0)])
@@ -56,6 +57,8 @@ def test_citations_need_a_real_page_row(
         )
     )
     assert result["citations_written"] == expected
+    # an unresolved page row records no citation; nothing was interrupted
+    assert "citations_interrupted" not in result
     assert [r[0] for r in citations.rows] == [page_id] * expected
 
 

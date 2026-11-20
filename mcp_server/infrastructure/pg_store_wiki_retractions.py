@@ -6,8 +6,10 @@ the page's source trace no longer names it and the page would read
 cited the erased memory keeps that fact without keeping the memory: the row
 holds the page id and the time, never the memory id or any of its text. A
 full write of the page (``create`` or ``replace``) that changes it is its
-refresh and clears the rows; an ``append`` keeps them, since it removes nothing
-the page said, and so does a full write that leaves the page as it was.
+refresh and clears the rows recorded before it began (its frontier, read
+before the file is written); an ``append`` keeps them, since it removes
+nothing the page said, and so does a full write that leaves the page as it
+was.
 
 Pure infrastructure — no core imports, no handler imports.
 
@@ -54,10 +56,38 @@ def count_page_retractions(conn: StoreConnection, page_id: int) -> int:
         return int(cur.fetchone()["n"])
 
 
-def clear_page_retractions(conn: StoreConnection, page_id: int) -> None:
-    """Drop the page's retractions: a full write refreshed its text."""
+def page_retractions_frontier(conn: StoreConnection) -> int:
+    """The id of the last retraction recorded so far, 0 when there is none.
+
+    A full write reads it before it writes the file: a retraction with a
+    higher id was recorded by a hard ``forget`` that ran while the write was
+    in progress, after its text was settled, so the write cannot be its
+    refresh (Codex review of PR #1109). Ids come from the table's own
+    sequence (``BIGSERIAL`` / ``AUTOINCREMENT``), never from a clock. Bound
+    on PostgreSQL: an id is taken at insert, so a retraction whose erasure
+    had not committed when the frontier was read, while a later one had,
+    sits below the frontier and is cleared; that takes two erasures
+    overlapping the read. SQLite writes one transaction at a time.
+    precondition: ``conn`` is a store connection read by column name.
+    """
     sql = """
-    DELETE FROM wiki.page_retractions WHERE page_id = %s;
+    SELECT COALESCE(MAX(id), 0) AS n FROM wiki.page_retractions;
     """
     with conn.cursor() as cur:
-        cur.execute(sql, (page_id,))
+        cur.execute(sql)
+        return int(cur.fetchone()["n"])
+
+
+def clear_page_retractions(conn: StoreConnection, page_id: int, frontier: int) -> None:
+    """Drop the page's retractions up to ``frontier``: a full write refreshed them.
+
+    precondition: ``frontier`` is ``page_retractions_frontier`` read before
+    the write's file was written. postcondition: every retraction of the
+    page with an id above ``frontier`` is kept, so a hard ``forget`` that
+    ran during the write still leaves the page ``pending``.
+    """
+    sql = """
+    DELETE FROM wiki.page_retractions WHERE page_id = %s AND id <= %s;
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (page_id, frontier))
