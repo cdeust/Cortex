@@ -39,6 +39,7 @@ from mcp_server.infrastructure.pg_store_wiki_links import (
     upsert_link,
 )
 from mcp_server.infrastructure.pg_store_wiki_notes import (
+    delete_page_memory_citations,
     insert_citation,
     insert_memo,
     list_page_cited_memory_ids,
@@ -73,6 +74,7 @@ __all__ = [
     "count_page_retractions",
     "delete_claims_for_memory",
     "delete_links_from",
+    "delete_page_memory_citations",
     "delete_pages_by_rel_path",
     "find_draft_for_source",
     "get_backlinks",

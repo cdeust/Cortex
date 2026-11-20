@@ -129,6 +129,35 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- A `create` or `replace` write that names its sources replaces the page's memory
+  citations (issue #715, acceptance criterion 1). `write_governed_page` added the
+  citations of each write to those of the earlier ones, so a page rewritten without
+  a corrected or retired memory still cited it and read `pending`, and a page
+  rewritten from other memories read `current` on memories its text no longer rests
+  on. In the unit that records the write, a full write whose `memory_ids` hold at
+  least one citable memory now deletes the page's `wiki.citations` rows that name a
+  memory (`delete_page_memory_citations`), then records its own. A session read of
+  the page (no memory id) is kept, and PostgreSQL's citation trigger fires on insert
+  only, so `citation_count` and heat are not lowered. An `append`, a full write with
+  no `memory_ids` (the headless gap-fill, `ingest_document`) and one whose every id
+  is refused keep the earlier citations: they do not say what the text rests on.
+  `citations_written` now counts the rows of the write, so re-running the same write
+  reports them again instead of 0.
+- An authoring citation (`wiki_write` with `memory_ids`) carries `session_id = ''`,
+  never the window session (review of PR #1109, note 3; Codex review of PR #1110).
+  PostgreSQL's `uq_wiki_citations_page_session` keeps one row per page and session,
+  so a write made in a window session kept only its first memory, and after a
+  `wiki_read` of the page in that session it kept none; with the replacement above,
+  that rewrite would have left the page citing nothing and reading `current`. The
+  session key now applies only to `wiki_read`'s rows ("page read in this session");
+  an authoring row is keyed on `(page_id, memory_id)`. The `wiki_write.session_lookup`
+  failure note is gone with the lookup. Rows written before this change keep their
+  session id.
+- A full write that leaves the recorded page as it was keeps the page's
+  retractions (review of PR #1109, note 2): its text still says what the erased
+  memory said. Retractions are cleared only when `upsert_page` reports the row
+  changed (`body_hash` or `documents_primary`).
+
 - Default recall and trigger injection hide a memory by the `source` its capture
   writer set, never by its tags (issue #706, ADR-1140). `post_tool_capture`,
   `import`, `session`, `backfill:<slug>` and `seed:<rel>` stay hidden as before;
@@ -286,7 +315,7 @@ adheres to [Semantic Versioning](https://semver.org/).
   again or a `wiki_migrate` sweep records it. The first `wiki_migrate` sweep that
   writes (`dry_run` false) after this change rebuilds from its file each row whose
   stored hash is not `page_text_hash` of that file (`upsert_page` updates only on
-  `body_hash <>`): every row recorded before it, except a page with no frontmatter
+  `body_hash <>` or `documents_primary IS DISTINCT FROM`): every row recorded before it, except a page with no frontmatter
   or one whose markdown was already normalised. A rebuilt row takes every column
   `page_row_from_md` builds from the file, `concept_id` included, which it does not
   read and so sets to NULL; `tended` is the sweep time and `lifecycle_state` comes
@@ -300,7 +329,9 @@ adheres to [Semantic Versioning](https://semver.org/).
   described it. `write_page` and `append_section` now return the page they left on
   disk in `WriteResult.text` (redacted, with `read_page`'s newlines), and
   `wiki_write` records that text. The `wiki_write.page_reread` failure note is gone
-  with the re-read. Limit, already true before this fix: citations accumulate per
+  with the re-read. Limit, already true before this fix (lifted for a full write that
+  names a citable source by the Changed entry "A `create` or `replace` write that
+  names its sources replaces the page's memory citations"): citations accumulate per
   page, never per write (PostgreSQL keeps one row per `(page_id, memory_id)`;
   SQLite, which has no unique index on `wiki_citations`, stores the repeats and
   `wiki_read` lists each memory once), so two overlapping writes (A writes, B

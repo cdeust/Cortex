@@ -221,34 +221,3 @@ class TestWikiPointerMemories:
         monkeypatch.setattr(remember, "handler", broken)
         asyncio.run(wiki_write._store_pointer_memory("notes/x.md", "content", ["t"]))
         _assert_noted("wiki_write.pointer_memory", "remember broke")
-
-
-class TestWikiWriteSessionLookup:
-    def test_session_lookup_failure_degrades_to_empty_and_is_logged(self, monkeypatch):
-        from mcp_server.handlers import wiki_write
-
-        store = MagicMock()
-        monkeypatch.setattr(wiki_write, "get_memory_settings", MagicMock())
-        monkeypatch.setattr(wiki_write, "get_shared_store", lambda *a, **k: store)
-        monkeypatch.setattr(
-            wiki_write, "page_row_from_md", lambda rel, content: {"slug": rel}
-        )
-        monkeypatch.setattr(wiki_write, "upsert_page", lambda conn, row: (1, False))
-
-        def broken():
-            raise RuntimeError("registry broke")
-
-        monkeypatch.setattr(wiki_write, "current_window_session", broken)
-        inserted = []
-
-        def fake_citation(conn, **kwargs):
-            inserted.append(kwargs)
-            return 1
-
-        monkeypatch.setattr(wiki_write, "insert_citation", fake_citation)
-        written = wiki_write._sync_page_and_cite(
-            "notes/x.md", "content", [42], "append"
-        )
-        assert written == (1, [])
-        assert inserted[0]["session_id"] == ""
-        _assert_noted("wiki_write.session_lookup", "registry broke")

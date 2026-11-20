@@ -107,41 +107,73 @@ def test_a_written_page_is_current_until_a_cited_memory_is_retired(
     assert freshness["pending_memory_ids"] == [cited[1]]
 
 
-def test_citations_accumulate_across_writes_of_the_same_page(monkeypatch, tmp_path):
-    """The limit the CHANGELOG documents (issue #715, review of PR #1094).
+def _rewrite_with(content: str, memory_ids: list[int]) -> dict:
+    args = {"path": _PAGE, "content": content, "mode": "replace"}
+    out = asyncio.run(wiki_write.handler({**args, "memory_ids": memory_ids}))
+    assert "citations_interrupted" not in out
+    return out
 
-    A later write of the page with other ``memory_ids`` keeps the citations of
-    the earlier one: they are recorded per page, never per write, so the page
-    reads ``current`` on memories its new text was not written from.
+
+def test_a_replace_cites_only_the_memories_its_text_was_written_from(
+    monkeypatch, tmp_path
+):
+    """issue #715 criterion 1: citations are per full write, not per page.
+
+    Until this change a later write kept the citations of the earlier one, so
+    the page read ``current`` on memories its new text was not written from
+    (the limit the CHANGELOG documented, review of PR #1094).
     """
-    from mcp_server.handlers import wiki_write
-    from tests_py.handlers.test_wiki_read_sources import _ingest, _page_md
+    from tests_py.handlers.test_wiki_read_sources import _ingest
 
     _, _, cited = _two_documents_and_a_page(monkeypatch, tmp_path)
     third = _ingest(
         tmp_path, "egret.xml", "<h1>Egret</h1><p>drain the quorin queue</p>"
     )
-    rewritten = asyncio.run(
-        wiki_write.handler(
-            {
-                "path": _PAGE,
-                "content": _page_md("Key rotation, rewritten"),
-                "mode": "replace",
-                "memory_ids": [third["summary_memory_id"]],
-            }
-        )
+    rewritten = _rewrite_with(
+        _page_md("Key rotation, rewritten"), [third["summary_memory_id"]]
     )
-    # a memory the first write did not cite: one new row on either backend
-    # while no window session is set; with one, PostgreSQL keeps one row per
-    # page and session (uq_wiki_citations_page_session, ADR-0579)
     assert rewritten["citations_written"] == 1
 
     page = _read()
     assert page["content"].endswith("# Key rotation, rewritten\n\nSynthesis.\n")
-    assert [ref["memory_id"] for ref in page["sources"]] == [
-        *cited,
-        third["summary_memory_id"],
-    ]
+    assert [ref["memory_id"] for ref in page["sources"]] == [third["summary_memory_id"]]
+    assert page["freshness"]["state"] == PAGE_CURRENT
+
+
+def test_a_page_rewritten_without_its_retired_source_is_current_again(
+    monkeypatch, tmp_path
+):
+    _, _, cited = _two_documents_and_a_page(monkeypatch, tmp_path)
+    monkeypatch.setattr(forget, "_store", None)
+    # ingest_document protects its summaries, so the test forces the forget
+    asyncio.run(forget.handler({"memory_id": cited[1], "force": True, "soft": True}))
+    assert _read()["freshness"]["pending_memory_ids"] == [cited[1]]
+
+    _rewrite_with(_page_md("Key rotation, without the retired source"), [cited[0]])
+    freshness = _read()["freshness"]
+    assert freshness["state"] == PAGE_CURRENT
+    assert freshness["frontier"] == {"cited_memories": 1, "max_memory_id": cited[0]}
+
+
+def test_a_page_read_in_the_session_keeps_every_source_of_its_rewrite(
+    monkeypatch, tmp_path
+):
+    """Codex review of PR #1110: on PostgreSQL the session key of the read
+    (``uq_wiki_citations_page_session``) refused every authoring row of the
+    same session, so the rewrite left the page citing nothing."""
+    _, _, cited = _two_documents_and_a_page(monkeypatch, tmp_path)
+    # A window session is resolvable for the whole request. wiki_write no
+    # longer reads one (raising=False): before the fix it did, and wrote it on
+    # each authoring row.
+    monkeypatch.setattr(wiki_read, "_resolve_session_id", lambda: "s-1110")
+    monkeypatch.setattr(
+        wiki_write, "current_window_session", lambda: "s-1110", raising=False
+    )
+    _read()  # records the session read of the page
+    rewritten = _rewrite_with(_page_md("Key rotation, read then rewritten"), cited)
+    assert rewritten["citations_written"] == 2
+    page = _read()
+    assert [ref["memory_id"] for ref in page["sources"]] == cited
     assert page["freshness"]["state"] == PAGE_CURRENT
 
 

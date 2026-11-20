@@ -247,7 +247,11 @@ memories over time; this is a local maintenance operation, not a transfer.
      summarised);
   3. the wiki claims, drafts and citations derived from it, and a wiki page
      compiled or promoted from it (row and file; the wiki index is rebuilt),
-     unless the memory is only a pointer at a page you wrote;
+     unless the memory is only a pointer at a page you wrote. In the same
+     transaction, each page that cited the memory gains a retraction row
+     (`wiki.page_retractions`: the page id and the time, no memory id and no
+     memory text), so `wiki_read` reports the page `pending` until it is
+     rewritten;
   4. the reminders and rules mined from it, and the entities extracted from
      its text that no other memory refers to;
   5. the raw-output **artifact** file the memory body pointed at, under
