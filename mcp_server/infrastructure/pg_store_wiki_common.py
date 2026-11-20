@@ -22,6 +22,20 @@ def body_hash(body: str) -> str:
     return hashlib.sha256(redact_text(body).encode("utf-8")).hexdigest()
 
 
+def page_text_hash(page_text: str) -> str:
+    """The fingerprint every writer records in ``wiki.pages.body_hash``.
+
+    Taken over the whole page as the write left it on disk (``WriteResult.text``,
+    frontmatter included), which is the text ``wiki_read`` hashes to say whether the
+    row and its citations were recorded with this page (issue #715). A writer that
+    hashed another text (its own markdown before ``write_page`` normalised it, or the
+    body without its frontmatter) made a cited page read ``failed`` with nothing
+    changed; and a hash that left the frontmatter out let ``upsert_page`` skip a
+    rewrite that changed only tags or status.
+    source: issue #715 (one fingerprint for every writer)"""
+    return body_hash(page_text)
+
+
 def _returning_id(row: dict[str, Any] | tuple[Any, ...] | None) -> int:
     """Extract the id from an ``INSERT ... RETURNING id`` fetchone() result.
 

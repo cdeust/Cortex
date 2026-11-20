@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from mcp_server.infrastructure.wiki_store import WriteResult
 from mcp_server.handlers import ingest_findings
 
 
@@ -111,7 +112,7 @@ def fake_store(monkeypatch):
 def no_wiki_page_write(monkeypatch):
     monkeypatch.setattr(
         "mcp_server.handlers.ingest_findings_writers.write_page",
-        lambda *a, **k: None,
+        lambda root, rel, text, mode: WriteResult(rel, mode, True, len(text), text),
     )
 
 

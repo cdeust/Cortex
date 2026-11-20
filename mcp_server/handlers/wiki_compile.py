@@ -27,7 +27,7 @@ from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import MemoryStore, get_shared_store
 from mcp_server.infrastructure.pg_store_wiki import (
-    body_hash,
+    page_text_hash,
     get_draft,
     insert_memo,
     list_drafts,
@@ -132,7 +132,7 @@ def _publish_one(conn, draft: dict, *, dry_run: bool) -> dict:
         }
 
     # 1. Atomic write to disk (source of truth)
-    write_page(WIKI_ROOT, rel_path, markdown, mode="replace")
+    written = write_page(WIKI_ROOT, rel_path, markdown, mode="replace")
 
     # 2. Build the wiki.pages mirror payload
     draft_frontmatter = draft.get("frontmatter") or {}
@@ -157,7 +157,7 @@ def _publish_one(conn, draft: dict, *, dry_run: bool) -> dict:
         # heading is not on the page (ADR-1071).
         "sections": dict(titled_sections(draft.get("sections"))),
         "body": markdown,
-        "body_hash": body_hash(markdown),
+        "body_hash": page_text_hash(written.text),
         "documents": documents,
         "documents_primary": documents[0] if documents else None,
     }

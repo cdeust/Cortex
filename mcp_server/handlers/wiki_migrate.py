@@ -18,7 +18,7 @@ from mcp_server.core.wiki_templates import STATUS_VALUES
 from mcp_server.handlers._tool_meta import DESTRUCTIVE
 from mcp_server.handlers._telemetry_wrap import instrument
 from mcp_server.infrastructure.pg_store_wiki import (
-    body_hash,
+    page_text_hash,
     delete_links_from,
     delete_pages_by_rel_path,
     list_all_rel_paths,
@@ -204,7 +204,7 @@ def page_row_from_md(
         "lead": lead,
         "sections": sections,
         "body": body,
-        "body_hash": body_hash(body),
+        "body_hash": page_text_hash(content),
         "documents": documents,
         "documents_primary": documents[0] if documents else None,
     }

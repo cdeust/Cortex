@@ -255,6 +255,19 @@ adheres to [Semantic Versioning](https://semver.org/).
   transcript stem (ADR-1141, amends ADR-1084), so each file reaches the session log and
   the profile once. A SessionEnd delivered before the upgrade and again after it is
   queued again and updates the profile a second time.
+- Every wiki writer records the fingerprint `wiki_read` checks (issue #715):
+  `wiki_compile` and `ingest_findings` recorded in `wiki.pages.body_hash` the hash
+  of the markdown they passed to `write_page`, before it normalised the
+  frontmatter, and `wiki_write` and `wiki_migrate` the hash of the body without
+  its frontmatter, while `wiki_read` hashed the parsed body of the page on disk.
+  A compiled page that a session had read (`wiki_read` then cites the page's
+  memory) read `failed` with nothing changed. All four now record
+  `page_text_hash` of the whole page the write left on disk (`WriteResult.text`,
+  frontmatter included), and `wiki_read` compares with the same hash; a rewrite
+  that changes only the frontmatter (tags, status) now updates the row, where
+  `upsert_page`'s no-op guard skipped it for `wiki_write` and `wiki_migrate`. A
+  cited page recorded before this change reads `failed` until it is written
+  again or a `wiki_migrate` sweep records it.
 - `wiki_write` records the page it wrote (issue #715, Codex review of PR #1092): the
   `wiki.pages` row was built from the page re-read after the pointer memory was
   stored, so a writer that replaced the page in between had its text recorded with
