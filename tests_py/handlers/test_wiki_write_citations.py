@@ -59,6 +59,9 @@ def wired_pg(monkeypatch):
     monkeypatch.setattr(wiki_write, "get_shared_store", lambda *a, **kw: store)
     monkeypatch.setattr(wiki_write, "upsert_page", pages.upsert)
     monkeypatch.setattr(wiki_write, "clear_page_retractions", pages.clear_retractions)
+    monkeypatch.setattr(
+        wiki_write, "page_retractions_frontier", pages.retraction_frontier
+    )
     monkeypatch.setattr(wiki_write, "insert_citation", citations.insert)
     monkeypatch.setattr(
         wiki_write, "delete_page_memory_citations", citations.delete_memory_rows
@@ -144,6 +147,43 @@ def test_a_full_write_that_leaves_the_page_as_it_was_keeps_its_retractions(
     assert "error" not in _run(wiki_write.handler(args))
     assert "error" not in _run(wiki_write.handler({**args, "mode": "replace"}))
     assert pages.cleared == [pages.by_path["reference/a.md"]]
+
+
+def test_a_full_write_clears_only_up_to_the_frontier_read_before_its_file(
+    tmp_wiki, wired_pg, monkeypatch
+) -> None:
+    """Codex review of PR #1109: a forget during the write keeps its retraction."""
+    pages, _ = wired_pg
+    pages.last_retraction = 7
+    real_write = wiki_write.write_page
+
+    def write_then_forget(*args, **kwargs):
+        result = real_write(*args, **kwargs)
+        pages.last_retraction = 8  # a hard forget ran after the file was written
+        return result
+
+    monkeypatch.setattr(wiki_write, "write_page", write_then_forget)
+    args = {"path": "reference/a.md", "content": "# A\n\nBody.", "mode": "create"}
+    assert "error" not in _run(wiki_write.handler(args))
+    assert pages.cleared_up_to == [7]
+
+
+def test_an_unread_frontier_clears_no_retraction(
+    tmp_wiki, wired_pg, monkeypatch
+) -> None:
+    """The page stays pending rather than read current on an unknown frontier."""
+    pages, _ = wired_pg
+
+    def unreachable(conn):
+        raise RuntimeError("PG unreachable")
+
+    monkeypatch.setattr(wiki_write, "page_retractions_frontier", unreachable)
+    args = {"path": "reference/a.md", "content": "# A\n\nBody.", "mode": "create"}
+    out = _run(wiki_write.handler(args))
+    assert "error" not in out and "citations_interrupted" not in out
+    assert pages.cleared == []
+    noted = silent_failure.status()["wiki_write.retraction_frontier"]
+    assert noted == {"last_error": "RuntimeError: PG unreachable", "count": 1}
 
 
 # ── 3. An authoring citation carries session_id '' (schema default) and is

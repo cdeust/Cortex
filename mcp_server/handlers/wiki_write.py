@@ -45,11 +45,13 @@ from mcp_server.infrastructure.pg_store_wiki import (
     clear_page_retractions,
     delete_page_memory_citations,
     insert_citation,
+    page_retractions_frontier,
     upsert_page,
 )
 from mcp_server.infrastructure.wiki_store import (
     WikiExistsError,
     WikiMissingError,
+    WriteResult,
     write_page,
 )
 
@@ -232,6 +234,7 @@ def _record_write(
     page_row: dict[str, Any],
     mode: str,
     citable: list[int],
+    frontier: int | None,
 ) -> int | None:
     """Record one write of the page in the caller's unit; return the new citations.
 
@@ -247,18 +250,19 @@ def _record_write(
     ``ingest_document`` do not say what the text rests on, a write whose
     every id is refused names nothing the page can cite, and dropping the
     trace would read the page ``current``. A full write that changed the
-    recorded page (``upsert_page``'s was_modified) clears its retractions:
-    it is the refresh a hard ``forget`` of a cited memory left the page
-    waiting for; one that left the page as it was keeps them, since the
-    text still says what the erased memory said. Returns None when the page
-    row cannot be resolved, else the number of new citation rows.
+    recorded page (``upsert_page``'s was_modified) clears its retractions
+    up to ``frontier`` (``_retraction_frontier``): it is the refresh a hard
+    ``forget`` of a cited memory left the page waiting for; one that left
+    the page as it was keeps them, since the text still says what the
+    erased memory said. Returns None when the page row cannot be resolved,
+    else the number of new citation rows.
     """
     page_id, modified = upsert_page(conn, page_row)
     if page_id is None or page_id < 0:
         return None
     full = mode != "append"
-    if full and modified:
-        clear_page_retractions(conn, page_id)
+    if full and modified and frontier is not None:
+        clear_page_retractions(conn, page_id, frontier)
     if full and citable:
         delete_page_memory_citations(conn, page_id)
     if not citable:
@@ -267,7 +271,11 @@ def _record_write(
 
 
 def _sync_page_and_cite(
-    rel_path: str, content: str, memory_ids: list[int], mode: str
+    rel_path: str,
+    content: str,
+    memory_ids: list[int],
+    mode: str,
+    frontier: int | None,
 ) -> tuple[int, list[dict[str, Any]]] | None:
     """Sync ``wiki.pages`` and record citations for the memories used, best-effort.
 
@@ -318,13 +326,33 @@ def _sync_page_and_cite(
         # source: issue #715 (slice 3); PR #1083 review (request-owned connection)
         with store.acquire_interactive() as conn:
             with conn.transaction():
-                written = _record_write(conn, page_row, mode, citable)
+                written = _record_write(conn, page_row, mode, citable, frontier)
                 if written is not None:
                     cited = (written, refused)
             conn.commit()
         return cited
     except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure and citations_interrupted
         silent_failure.note("wiki_write.page_sync_citations", exc)
+        return None
+
+
+def _retraction_frontier() -> int | None:
+    """The last retraction recorded before this write, best-effort.
+
+    Read before ``write_page``: a retraction a hard ``forget`` records
+    after it, while the write runs, sits above it, and ``_record_write``
+    keeps it, since the new text may still rest on the erased memory
+    (Codex review of PR #1109). On ANY exception the failure is noted and
+    None is returned: the write then clears no retraction, and the page
+    stays ``pending`` rather than read ``current``.
+    """
+    try:
+        settings = get_memory_settings()
+        store = get_shared_store(settings.DB_PATH, settings.EMBEDDING_DIM)
+        with store.acquire_interactive() as conn:
+            return page_retractions_frontier(conn)
+    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
+        silent_failure.note("wiki_write.retraction_frontier", exc)
         return None
 
 
@@ -346,6 +374,22 @@ def _citation_fields(
     return fields
 
 
+def _write_response(
+    root: Path | str,
+    result: WriteResult,
+    synced: tuple[int, list[dict[str, Any]]] | None,
+) -> dict[str, Any]:
+    """The response of a write that succeeded: the page and its citations."""
+    return {
+        "path": result.path,
+        "mode": result.mode,
+        "created": result.created,
+        "bytes_written": result.bytes_written,
+        "root": str(root),
+        **_citation_fields(synced),
+    }
+
+
 async def write_governed_page(
     root: Path | str,
     rel_path: str,
@@ -358,6 +402,8 @@ async def write_governed_page(
     """Write global wiki content and best-effort pointer/citation metadata.
 
     source: ADR-0475"""
+    # before the file is written: a forget during the write is not refreshed
+    frontier = _retraction_frontier()
     try:
         result = write_page(root, rel_path, content, mode=mode)
     except WikiExistsError:
@@ -372,15 +418,10 @@ async def write_governed_page(
 
     await _store_pointer_memory(rel_path, content, tags or [])
     # The page this write left, not a re-read another writer may change (#715)
-    synced = _sync_page_and_cite(rel_path, result.text, memory_ids or [], result.mode)
-    response: dict[str, Any] = {
-        "path": result.path,
-        "mode": result.mode,
-        "created": result.created,
-        "bytes_written": result.bytes_written,
-        "root": str(root),
-        **_citation_fields(synced),
-    }
+    synced = _sync_page_and_cite(
+        rel_path, result.text, memory_ids or [], result.mode, frontier
+    )
+    response = _write_response(root, result, synced)
     # source: ADR-0475
     findings = scan_prose(content)
     if findings:

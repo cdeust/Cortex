@@ -267,6 +267,17 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- A hard `forget` that ran while a `create` or `replace` of a page that cited the memory
+  was in progress lost its retraction (Codex review of PR #1109, issue #715 criterion 1).
+  `write_governed_page` writes the file, stores the pointer memory, and only then opens
+  the unit that clears the page's retractions; a retraction recorded in between was
+  cleared by a write whose text may still rest on the erased memory, and the page read
+  `current`. The write now reads the last `wiki.page_retractions` id before it writes the
+  file and clears only the page's retractions up to that id, so a later one keeps the
+  page `pending`. When that id cannot be read the write clears none (noted as
+  `wiki_write.retraction_frontier`). Limit, PostgreSQL only: the id is taken at insert, so
+  of two erasures that overlap the read, the one still open with the lower id is cleared.
+
 - A Codex rollout that ended, was resumed and ended again (issue #716) never reached the
   lifecycle a second time: the intake dropped any SessionEnd whose session and rollout
   file already had a receipt. The intake no longer drops such a SessionEnd and never

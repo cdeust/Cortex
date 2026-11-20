@@ -258,3 +258,20 @@ def test_a_replace_write_is_the_refresh_that_clears_it(monkeypatch, tmp_path):
     # a later erasure is a new retraction, not the cleared one coming back
     _hard_forget(cited[1])
     assert _freshness()["retracted_sources"] == 1
+
+
+def test_a_forget_during_the_replace_keeps_the_page_pending(monkeypatch, tmp_path):
+    """Codex review of PR #1109: the pointer memory is stored between the file
+    write and the citation unit; a hard forget there erased a source the new
+    text may rest on, and the replace cleared its retraction."""
+    _, _, cited = _two_documents_and_a_page(monkeypatch, tmp_path)
+    monkeypatch.setattr(forget, "_store", None)
+
+    async def forget_after_the_file(*_args) -> None:
+        await forget.handler({"memory_id": cited[0], "force": True})
+
+    monkeypatch.setattr(wiki_write, "_store_pointer_memory", forget_after_the_file)
+    _write("replace", _page_md("Key rotation, written while a source was erased"))
+    freshness = _freshness()
+    assert freshness["state"] == PAGE_PENDING
+    assert freshness["retracted_sources"] == 1
