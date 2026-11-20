@@ -100,25 +100,32 @@ def test_citations_accumulate_across_writes_of_the_same_page(monkeypatch, tmp_pa
 
     A later write of the page with other ``memory_ids`` keeps the citations of
     the earlier one: they are recorded per page, never per write, so the page
-    reads ``current`` on a memory its new text was not written from.
+    reads ``current`` on memories its new text was not written from.
     """
     from mcp_server.handlers import wiki_write
-    from tests_py.handlers.test_wiki_read_sources import _page_md
+    from tests_py.handlers.test_wiki_read_sources import _ingest, _page_md
 
     _, _, cited = _two_documents_and_a_page(monkeypatch, tmp_path)
+    third = _ingest(
+        tmp_path, "egret.xml", "<h1>Egret</h1><p>drain the quorin queue</p>"
+    )
     rewritten = asyncio.run(
         wiki_write.handler(
             {
                 "path": _PAGE,
                 "content": _page_md("Key rotation, rewritten"),
                 "mode": "replace",
-                "memory_ids": [cited[0]],
+                "memory_ids": [third["summary_memory_id"]],
             }
         )
     )
+    # a memory the first write did not cite: one new row on either backend
     assert rewritten["citations_written"] == 1
 
     page = _read()
     assert page["content"].endswith("# Key rotation, rewritten\n\nSynthesis.\n")
-    assert [ref["memory_id"] for ref in page["sources"]] == cited
+    assert [ref["memory_id"] for ref in page["sources"]] == [
+        *cited,
+        third["summary_memory_id"],
+    ]
     assert page["freshness"]["state"] == PAGE_CURRENT
