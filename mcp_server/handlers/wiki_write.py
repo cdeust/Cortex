@@ -219,10 +219,9 @@ def _cite_memories(conn: Any, page_id: int, domain: str, citable: list[int]) -> 
     """
     written = 0
     for mid in citable:
-        # source: issue #715; Codex review of PR #1110 (session-key conflict)
-        new_id = insert_citation(
-            conn, page_id=page_id, session_id="", domain=domain, memory_id=mid
-        )
+        # session_id is left at insert_citation's '' default (Codex review of
+        # PR #1110: session-key conflict); source: issue #715
+        new_id = insert_citation(conn, page_id=page_id, domain=domain, memory_id=mid)
         if new_id is not None:
             written += 1
     return written
