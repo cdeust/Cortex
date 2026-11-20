@@ -93,3 +93,32 @@ def test_a_written_page_is_current_until_a_cited_memory_is_retired(
     freshness = _read()["freshness"]
     assert freshness["state"] == PAGE_PENDING
     assert freshness["pending_memory_ids"] == [cited[1]]
+
+
+def test_citations_accumulate_across_writes_of_the_same_page(monkeypatch, tmp_path):
+    """The limit the CHANGELOG documents (issue #715, review of PR #1094).
+
+    A later write of the page with other ``memory_ids`` keeps the citations of
+    the earlier one: they are recorded per page, never per write, so the page
+    reads ``current`` on a memory its new text was not written from.
+    """
+    from mcp_server.handlers import wiki_write
+    from tests_py.handlers.test_wiki_read_sources import _page_md
+
+    _, _, cited = _two_documents_and_a_page(monkeypatch, tmp_path)
+    rewritten = asyncio.run(
+        wiki_write.handler(
+            {
+                "path": _PAGE,
+                "content": _page_md("Key rotation, rewritten"),
+                "mode": "replace",
+                "memory_ids": [cited[0]],
+            }
+        )
+    )
+    assert rewritten["citations_written"] == 1
+
+    page = _read()
+    assert page["content"].endswith("# Key rotation, rewritten\n\nSynthesis.\n")
+    assert [ref["memory_id"] for ref in page["sources"]] == cited
+    assert page["freshness"]["state"] == PAGE_CURRENT

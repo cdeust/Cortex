@@ -22,10 +22,11 @@ adheres to [Semantic Versioning](https://semver.org/).
   stays `current`. Writing the page again records it and the page reads `current`.
   `wiki_write` now records the whole page the write left on disk, not the text passed
   in: an `append` recorded the fragment alone, so the row did not describe the page
-  (the mechanism is in the Fixed entry on `wiki_write`). Limits: a page rewritten by a
-  path that records no citation (`wiki_link`, a hand edit) also reads `failed`, since
-  its citations no longer describe its text; a `wiki_migrate` sweep re-records the row
-  from disk and clears `failed` without new citations.
+  (the mechanism is in the Fixed entry "`wiki_write` records the page it wrote").
+  Limits: a page rewritten by a path that records no citation (`wiki_link`, a hand
+  edit) also reads `failed`, since its citations no longer describe its text; a
+  `wiki_migrate` sweep re-records the row from disk and clears `failed` without new
+  citations.
 - Freshness of a memory-derived wiki page (issue #715, slice 2, acceptance criterion 3):
   `wiki_read` returns `freshness` beside `sources`, computed on the whole trace before
   any cut. `state` is `pending` when a cited memory is missing, retired (`stale`) or
@@ -267,7 +268,10 @@ adheres to [Semantic Versioning](https://semver.org/).
   that changes only the frontmatter (tags, status) now updates the row, where
   `upsert_page`'s no-op guard skipped it for `wiki_write` and `wiki_migrate`. A
   cited page recorded before this change reads `failed` until it is written
-  again or a `wiki_migrate` sweep records it.
+  again or a `wiki_migrate` sweep records it. Since every stored hash changes, the
+  first `wiki_migrate` sweep that writes (`dry_run` false) after this change
+  rewrites every row recorded before it: each one gets `tended` set to the sweep
+  time and `lifecycle_state` from its frontmatter (`active` when it has none).
 - `wiki_write` records the page it wrote (issue #715, Codex review of PR #1092): the
   `wiki.pages` row was built from the page re-read after the pointer memory was
   stored, so a writer that replaced the page in between had its text recorded with
@@ -276,7 +280,9 @@ adheres to [Semantic Versioning](https://semver.org/).
   disk in `WriteResult.text` (redacted, with `read_page`'s newlines), and
   `wiki_write` records that text. The `wiki_write.page_reread` failure note is gone
   with the re-read. Limit, already true before this fix: citations accumulate per
-  page, keyed on `(page_id, memory_id)`, so two overlapping writes (A writes, B
+  page, never per write (PostgreSQL keeps one row per `(page_id, memory_id)`;
+  SQLite, which has no unique index on `wiki_citations`, stores the repeats and
+  `wiki_read` lists each memory once), so two overlapping writes (A writes, B
   writes, A records, B records) still leave A's `memory_ids` cited on B's text, and
   the page reads `current` on them.
 - Test isolation of the wiki tables (issue #715): the between-test cleanup
