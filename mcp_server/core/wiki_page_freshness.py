@@ -60,8 +60,8 @@ def page_freshness(
 
     precondition: ``sources`` is the full ``cited_memory_sources`` output for
     the page, before any cut to fit the response budget;
-    ``record_matches_text`` says whether the page's recorded body hash is the
-    hash of the body now on disk.
+    ``record_matches_text`` says whether the page's recorded hash is the
+    hash of the whole page now on disk, frontmatter included.
     postcondition: ``state`` is ``failed`` when the page cites at least one
     memory and its record does not match its text, else ``pending`` when at
     least one entry is missing, stale or superseded, else ``current``;

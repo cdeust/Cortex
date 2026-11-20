@@ -59,10 +59,10 @@ def attach_page_sources(
     postcondition: exactly one of ``sources`` (a list, possibly empty, in
     citation order) with ``freshness`` (``page_freshness`` of the whole
     trace, issue #715) or ``sources_unavailable`` (a reason string) is set.
-    The page's recorded body hash is compared with the hash of
-    ``resp["content"]``, computed by the row builder ``wiki_write`` records
-    with (``page_row_from_md``), so ``freshness`` can say the record is not
-    the one of this text. Returns ``resp`` for chaining.
+    The page's recorded hash is compared with ``page_text_hash`` of
+    ``resp["content"]``, the whole page frontmatter included, which is the
+    fingerprint every writer records, so ``freshness`` can say the record is
+    not the one of this text. Returns ``resp`` for chaining.
     """
     try:
         store = get_store()
