@@ -83,6 +83,7 @@ class _FakePages:
 
     def __init__(self, violations: _Violations) -> None:
         self.by_path: dict[str, int] = {}
+        self.hashes: dict[str, str | None] = {}
         self._next_id = 1
         self.raise_on_upsert = False
         self.request_conn: _FakeConn | None = None
@@ -97,8 +98,11 @@ class _FakePages:
         if self.raise_on_upsert:
             raise RuntimeError("PG unreachable")
         rel_path = page_row["rel_path"]
+        # was_modified is True when the recorded hash changes (ADR-0580)
+        modified = self.hashes.get(rel_path) != page_row.get("body_hash")
+        self.hashes[rel_path] = page_row.get("body_hash")
         if rel_path in self.by_path:
-            return self.by_path[rel_path], False
+            return self.by_path[rel_path], modified
         pid = self._next_id
         self._next_id += 1
         self.by_path[rel_path] = pid
@@ -149,3 +153,13 @@ class _FakeCitations:
         self._next_id += 1
         self.rows.append((page_id, session_id, domain, memory_id))
         return cid
+
+    def delete_memory_rows(self, conn, page_id: int) -> int:
+        """``delete_page_memory_citations``: session reads (memory_id NULL) stay."""
+        self.violations.check(
+            conn is self.request_conn, "citations deleted off the request unit"
+        )
+        kept = [r for r in self.rows if r[0] != page_id or r[3] is None]
+        removed = len(self.rows) - len(kept)
+        self.rows = kept
+        return removed

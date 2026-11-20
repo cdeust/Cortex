@@ -43,6 +43,7 @@ from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import get_shared_store
 from mcp_server.infrastructure.pg_store_wiki import (
     clear_page_retractions,
+    delete_page_memory_citations,
     insert_citation,
     upsert_page,
 )
@@ -229,6 +230,45 @@ def _cite_memories(conn: Any, page_id: int, domain: str, citable: list[int]) -> 
     return written
 
 
+def _record_write(
+    conn: Any,
+    page_row: dict[str, Any],
+    mode: str,
+    citable: list[int],
+) -> int | None:
+    """Record one write of the page in the caller's unit; return the new citations.
+
+    precondition: ``conn`` holds the unit ``_sync_page_and_cite`` opened;
+    ``citable`` is the citable part of the write's ``memory_ids``
+    (``_split_cited``).
+    postcondition: the page row is upserted. A full write (``mode`` create
+    or replace, not append) that names a citable source (``citable`` not
+    empty) first drops the page's memory citations, so the page cites the
+    memories of its last full write only and a corrected or retired source
+    no longer keeps the rewritten page ``pending`` (issue #715, criterion
+    1). A full write that names none keeps them: the headless gap-fill and
+    ``ingest_document`` do not say what the text rests on, a write whose
+    every id is refused names nothing the page can cite, and dropping the
+    trace would read the page ``current``. A full write that changed the
+    recorded page (``upsert_page``'s was_modified) clears its retractions:
+    it is the refresh a hard ``forget`` of a cited memory left the page
+    waiting for; one that left the page as it was keeps them, since the
+    text still says what the erased memory said. Returns None when the page
+    row cannot be resolved, else the number of new citation rows.
+    """
+    page_id, modified = upsert_page(conn, page_row)
+    if page_id is None or page_id < 0:
+        return None
+    full = mode != "append"
+    if full and modified:
+        clear_page_retractions(conn, page_id)
+    if full and citable:
+        delete_page_memory_citations(conn, page_id)
+    if not citable:
+        return 0
+    return _cite_memories(conn, page_id, page_row.get("domain", ""), citable)
+
+
 def _sync_page_and_cite(
     rel_path: str, content: str, memory_ids: list[int], mode: str
 ) -> tuple[int, list[dict[str, Any]]] | None:
@@ -242,14 +282,11 @@ def _sync_page_and_cite(
     rel_path (inserted or refreshed by ``page_row_from_md`` +
     ``upsert_page`` — same shape ``wiki_migrate``'s batch sweep would
     produce) and, for each citable id in ``memory_ids``, at most one new
-    wiki.citations row exists. A repeat id (this call or a prior one) is
-    never an error: PostgreSQL skips it on its unique index
-    ``(page_id, memory_id)`` (``insert_citation``'s unqualified ON
-    CONFLICT DO NOTHING); SQLite has no such index and stores the repeat,
-    which ``wiki_read`` lists once (``GROUP BY``).
-    A full write (``mode`` create or replace, not append) clears
-    the page's retractions in the same unit: it is the refresh a hard
-    ``forget`` of a cited memory left the page waiting for (issue #715).
+    wiki.citations row exists. A repeat id is never an error: PostgreSQL
+    skips it on its unique index ``(page_id, memory_id)``
+    (``insert_citation``'s unqualified ON CONFLICT DO NOTHING); SQLite has
+    no such index and stores the repeat, which ``wiki_read`` lists once
+    (``GROUP BY``). See ``_record_write`` for what a full write replaces.
     A wiki pointer memory is not citable (``_split_cited``), and that
     lookup runs before the unit takes its connection.
     Unlike wiki_read's ``_cite_page``, a resolvable window session is
@@ -285,12 +322,8 @@ def _sync_page_and_cite(
         # source: issue #715 (slice 3); PR #1083 review (request-owned connection)
         with store.acquire_interactive() as conn:
             with conn.transaction():
-                page_id, _was_modified = upsert_page(conn, page_row)
-                if mode != "append":
-                    clear_page_retractions(conn, page_id)
-                if page_id is not None and page_id >= 0 and memory_ids:
-                    domain = page_row.get("domain", "")
-                    written = _cite_memories(conn, page_id, domain, citable)
+                written = _record_write(conn, page_row, mode, citable)
+                if written is not None:
                     cited = (written, refused)
             conn.commit()
         return cited

@@ -5,8 +5,9 @@ the page's source trace no longer names it and the page would read
 ``current`` on a text still written from it. One retraction row per page that
 cited the erased memory keeps that fact without keeping the memory: the row
 holds the page id and the time, never the memory id or any of its text. A
-full write of the page (``create`` or ``replace``) is its refresh and clears
-the rows; an ``append`` keeps them, since it removes nothing the page said.
+full write of the page (``create`` or ``replace``) that changes it is its
+refresh and clears the rows; an ``append`` keeps them, since it removes nothing
+the page said, and so does a full write that leaves the page as it was.
 
 Pure infrastructure — no core imports, no handler imports.
 
@@ -41,7 +42,9 @@ def count_page_retractions(conn: StoreConnection, page_id: int) -> int:
     """Cited memories erased since the page's last full write.
 
     precondition: ``conn`` is a store connection, whose rows are read by
-    column name on both backends (``db_connect``: ``row_factory=dict_row``).
+    column name on both backends: PostgreSQL's ``db_connect`` sets
+    ``row_factory=dict_row``; SQLite's rows are ``sqlite3.Row`` through the
+    compat cursor.
     """
     sql = """
     SELECT COUNT(*) AS n FROM wiki.page_retractions WHERE page_id = %s;

@@ -55,6 +55,24 @@ def insert_citation(
         return _returning_id(row) if row is not None else None
 
 
+def delete_page_memory_citations(conn: StoreConnection, page_id: int) -> int:
+    """Drop the page's memory citations; return the number of rows removed.
+
+    Precondition: runs in the unit of a full write that names its sources
+    (``wiki_write._sync_page_and_cite``). Postcondition: no row of the page
+    names a memory any more; rows whose memory_id is NULL (a session read of
+    the page) are kept. PostgreSQL's citation trigger fires on INSERT only,
+    so the page's ``citation_count`` and heat are not lowered.
+
+    source: issue #715 (acceptance criterion 1)"""
+    sql = """
+    DELETE FROM wiki.citations WHERE page_id = %s AND memory_id IS NOT NULL;
+    """
+    with conn.cursor() as cur:
+        cur.execute(sql, (page_id,))
+        return int(cur.rowcount)
+
+
 def list_page_cited_memory_ids(conn: StoreConnection, page_id: int) -> list[int]:
     """Distinct memory ids the page's ``wiki.citations`` rows name, first cited first.
 

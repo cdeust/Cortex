@@ -60,6 +60,9 @@ def wired_pg(monkeypatch):
     monkeypatch.setattr(wiki_write, "upsert_page", pages.upsert)
     monkeypatch.setattr(wiki_write, "clear_page_retractions", pages.clear_retractions)
     monkeypatch.setattr(wiki_write, "insert_citation", citations.insert)
+    monkeypatch.setattr(
+        wiki_write, "delete_page_memory_citations", citations.delete_memory_rows
+    )
     monkeypatch.setattr(wiki_write, "current_window_session", lambda: None)
     store.memories = {10: {"source": "session"}, 20: {"source": None}}
     yield pages, citations
@@ -89,24 +92,36 @@ def test_write_with_memory_ids_records_one_citation_per_id(tmp_wiki, wired_pg) -
     assert all(r[0] == page_id for r in citations.rows)
 
 
-# ── 2. Dedup on re-run: same memory_ids again → 0 new rows ─────────────────
+# ── 2. A full write that names its sources replaces the page's citations ──
 
 
-def test_rerun_same_memory_ids_dedups(tmp_wiki, wired_pg) -> None:
-    pages, citations = wired_pg
-    args = {
-        "path": "reference/a.md",
-        "content": "# A\n\nBody.",
-        "mode": "replace",
-        "memory_ids": [10, 20],
-    }
-    # First write is 'create'; the re-curation is a 'replace'.
-    _run(wiki_write.handler({**args, "mode": "create"}))
-    result = _run(wiki_write.handler(args))
+def test_a_replace_cites_the_memories_of_the_last_write_only(
+    tmp_wiki, wired_pg
+) -> None:
+    """issue #715 criterion 1: a corrected source leaves the rewritten page."""
+    _, citations = wired_pg
+    args = {"path": "reference/a.md", "content": "# A\n\nBody.", "mode": "create"}
+    _run(wiki_write.handler({**args, "memory_ids": [10, 20]}))
+    citations.rows.append((1, "s-read", "", None))  # a session read of the page
+    result = _run(
+        wiki_write.handler({**args, "mode": "replace", "memory_ids": [20, 30]})
+    )
 
     assert "error" not in result
-    assert result["citations_written"] == 0
-    assert len(citations.rows) == 2
+    assert result["citations_written"] == 2
+    assert sorted(r[3] for r in citations.rows if r[3] is not None) == [20, 30]
+    assert (1, "s-read", "", None) in citations.rows
+
+
+def test_an_append_or_a_write_naming_no_source_keeps_the_citations(
+    tmp_wiki, wired_pg
+) -> None:
+    _, citations = wired_pg
+    args = {"path": "reference/a.md", "content": "# A\n\nBody.", "mode": "create"}
+    _run(wiki_write.handler({**args, "memory_ids": [10]}))
+    _run(wiki_write.handler({**args, "mode": "append", "memory_ids": [20]}))
+    _run(wiki_write.handler({**args, "mode": "replace", "content": "# A\n\nNew."}))
+    assert sorted(r[3] for r in citations.rows) == [10, 20]
 
 
 def test_a_full_write_clears_the_page_retractions_an_append_keeps_them(
@@ -119,6 +134,17 @@ def test_a_full_write_clears_the_page_retractions_an_append_keeps_them(
         assert "error" not in _run(wiki_write.handler(args))
     page_id = pages.by_path["reference/a.md"]
     assert pages.cleared == [page_id, page_id]
+
+
+def test_a_full_write_that_leaves_the_page_as_it_was_keeps_its_retractions(
+    tmp_wiki, wired_pg
+) -> None:
+    """Review of PR #1109, note 2: the text still says what the erased memory said."""
+    pages, _ = wired_pg
+    args = {"path": "reference/a.md", "content": "# A\n\nBody.", "mode": "create"}
+    assert "error" not in _run(wiki_write.handler(args))
+    assert "error" not in _run(wiki_write.handler({**args, "mode": "replace"}))
+    assert pages.cleared == [pages.by_path["reference/a.md"]]
 
 
 # ── 3. No resolvable session → session_id '' (schema default), citations
