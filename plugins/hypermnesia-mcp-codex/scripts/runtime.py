@@ -76,7 +76,11 @@ def main() -> None:
         os.execv(str(python), [str(python), "-I", "-m", "mcp_server", *arguments[1:]])
         return
     command = "from mcp_server.hooks.entry import main; main()"
-    os.execv(str(python), [str(python), "-I", "-c", command, module])
+    argv = [str(python), "-I", "-c", command, module]
+    if os.name == "nt":
+        # Windows execv splits the -c program and can mask the child failure.
+        raise SystemExit(subprocess.run(argv, check=False).returncode)
+    os.execv(str(python), argv)
 
 
 if __name__ == "__main__":

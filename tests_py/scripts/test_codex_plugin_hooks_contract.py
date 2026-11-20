@@ -70,6 +70,17 @@ def test_codex_hook_commands_run_the_published_wheel_not_this_repository() -> No
         assert "uvx" not in command
 
 
+def test_only_blocking_gates_relay_their_exit_codes_in_windows_powershell() -> None:
+    hooks = codex_hooks()
+    index = hook_index(hooks, CODEX_SUFFIX)
+    # source: https://github.com/openai/codex/issues/54072
+    gates = [index[module][2] for module in ("decision_gate", "no_deps_gate")]
+    for hook in gates:
+        assert hook["commandWindows"] == hook["command"] + "; exit $LASTEXITCODE"
+    windows_hooks = [h for _, _, h in every_hook(hooks) if "commandWindows" in h]
+    assert windows_hooks == gates
+
+
 def test_codex_hooks_use_only_codex_event_names() -> None:
     """Codex has no Notification event; PreCompact is where a checkpoint taken
     before compaction belongs, which is compaction_checkpoint's own contract.

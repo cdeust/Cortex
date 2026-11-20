@@ -592,6 +592,10 @@ adheres to [Semantic Versioning](https://semver.org/).
   longer reached the managed server. A failed backend switch now restores the earlier
   marker byte for byte instead of rebuilding it from its backend name, which wrote a
   `managed` marker without `root` that `read_backend_marker` rejects (review of #1029).
+- Windows Codex plugin hooks now preserve command arguments and the wheel's exit
+  status. The two blocking `PreToolUse` hooks preserve exit code 2 through
+  PowerShell so Codex stops the tool call. The SessionEnd worker can now distinguish
+  a failed handler from a recorded session.
 - Docker (issue #704): `docker/entrypoint.sh` no longer gives `CLAUDE_CODE_OAUTH_TOKEN`
   to `python3 -c` as `sys.argv[1]`, where every local user could read it; the step reads
   the token from the environment. A missing `DATABASE_URL` now fails the start at an
