@@ -155,6 +155,28 @@ def test_a_page_rewritten_without_its_retired_source_is_current_again(
     assert freshness["frontier"] == {"cited_memories": 1, "max_memory_id": cited[0]}
 
 
+def test_a_page_read_in_the_session_keeps_every_source_of_its_rewrite(
+    monkeypatch, tmp_path
+):
+    """Codex review of PR #1110: on PostgreSQL the session key of the read
+    (``uq_wiki_citations_page_session``) refused every authoring row of the
+    same session, so the rewrite left the page citing nothing."""
+    _, _, cited = _two_documents_and_a_page(monkeypatch, tmp_path)
+    # A window session is resolvable for the whole request. wiki_write no
+    # longer reads one (raising=False): before the fix it did, and wrote it on
+    # each authoring row.
+    monkeypatch.setattr(wiki_read, "_resolve_session_id", lambda: "s-1110")
+    monkeypatch.setattr(
+        wiki_write, "current_window_session", lambda: "s-1110", raising=False
+    )
+    _read()  # records the session read of the page
+    rewritten = _rewrite_with(_page_md("Key rotation, read then rewritten"), cited)
+    assert rewritten["citations_written"] == 2
+    page = _read()
+    assert [ref["memory_id"] for ref in page["sources"]] == cited
+    assert page["freshness"]["state"] == PAGE_CURRENT
+
+
 # ── issue #715 criterion 1: a hard forget leaves a retraction ─────────────
 
 

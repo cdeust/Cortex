@@ -143,6 +143,16 @@ adheres to [Semantic Versioning](https://semver.org/).
   is refused keep the earlier citations: they do not say what the text rests on.
   `citations_written` now counts the rows of the write, so re-running the same write
   reports them again instead of 0.
+- An authoring citation (`wiki_write` with `memory_ids`) carries `session_id = ''`,
+  never the window session (review of PR #1109, note 3; Codex review of PR #1110).
+  PostgreSQL's `uq_wiki_citations_page_session` keeps one row per page and session,
+  so a write made in a window session kept only its first memory, and after a
+  `wiki_read` of the page in that session it kept none; with the replacement above,
+  that rewrite would have left the page citing nothing and reading `current`. The
+  session key now applies only to `wiki_read`'s rows ("page read in this session");
+  an authoring row is keyed on `(page_id, memory_id)`. The `wiki_write.session_lookup`
+  failure note is gone with the lookup. Rows written before this change keep their
+  session id.
 - A full write that leaves the recorded page as it was keeps the page's
   retractions (review of PR #1109, note 2): its text still says what the erased
   memory said. Retractions are cleared only when `upsert_page` reports the row

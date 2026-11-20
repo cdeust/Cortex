@@ -47,7 +47,6 @@ from mcp_server.infrastructure.pg_store_wiki import (
     insert_citation,
     upsert_page,
 )
-from mcp_server.infrastructure.session_registry import current_window_session
 from mcp_server.infrastructure.wiki_store import (
     WikiExistsError,
     WikiMissingError,
@@ -210,20 +209,19 @@ def _cite_memories(conn: Any, page_id: int, domain: str, citable: list[int]) -> 
     precondition: page_id is the wiki.pages row of the page just written;
     ``conn`` is the connection holding the caller's open transaction;
     ``citable`` holds no wiki pointer memory (``_split_cited``).
+    postcondition: every row carries ``session_id = ''``. PostgreSQL's
+    ``uq_wiki_citations_page_session`` dedups every row with a session per
+    ``(page_id, session_id)``: a write made in a window session kept only
+    its first memory, and after a ``wiki_read`` of the page in that session
+    it kept none (review of PR #1109, note 3; Codex review of PR #1110).
+    The session key belongs to ``wiki_read``'s "page read in this session"
+    rows; an authoring row is keyed on ``(page_id, memory_id)`` only.
     """
-    try:
-        session_id = current_window_session() or ""
-    except Exception as exc:  # noqa: BLE001 — mechanism boundary; failure is observable via silent_failure
-        silent_failure.note("wiki_write.session_lookup", exc)
-        session_id = ""
     written = 0
     for mid in citable:
+        # source: issue #715; Codex review of PR #1110 (session-key conflict)
         new_id = insert_citation(
-            conn,
-            page_id=page_id,
-            session_id=session_id,
-            domain=domain,
-            memory_id=mid,
+            conn, page_id=page_id, session_id="", domain=domain, memory_id=mid
         )
         if new_id is not None:
             written += 1
@@ -289,12 +287,11 @@ def _sync_page_and_cite(
     (``GROUP BY``). See ``_record_write`` for what a full write replaces.
     A wiki pointer memory is not citable (``_split_cited``), and that
     lookup runs before the unit takes its connection.
-    Unlike wiki_read's ``_cite_page``, a resolvable window session is
-    NOT required: this citation records "memory used to author the
-    page", not "page read in this session" — the two are orthogonal
-    provenance signals sharing one table. session_id falls back to ''
-    (the column's own NOT NULL DEFAULT) when no window session is
-    resolvable, matching the schema rather than skipping the row.
+    Unlike wiki_read's ``_cite_page``, no window session is read: this
+    citation records "memory used to author the page", not "page read in
+    this session" — the two are orthogonal provenance signals sharing one
+    table, and the authoring row carries the column's default ''
+    (``_cite_memories``).
     The wiki.pages row and the citations commit as one unit
     (``transaction()``, issue #715 slice 3): an interruption records
     none of them, so the source frontier ``wiki_read`` derives from the

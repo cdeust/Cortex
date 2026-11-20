@@ -63,7 +63,6 @@ def wired_pg(monkeypatch):
     monkeypatch.setattr(
         wiki_write, "delete_page_memory_citations", citations.delete_memory_rows
     )
-    monkeypatch.setattr(wiki_write, "current_window_session", lambda: None)
     store.memories = {10: {"source": "session"}, 20: {"source": None}}
     yield pages, citations
     assert violations == [], violations
@@ -147,15 +146,13 @@ def test_a_full_write_that_leaves_the_page_as_it_was_keeps_its_retractions(
     assert pages.cleared == [pages.by_path["reference/a.md"]]
 
 
-# ── 3. No resolvable session → session_id '' (schema default), citations
-#      still written keyed on memory_id ────────────────────────────────────
+# ── 3. An authoring citation carries session_id '' (schema default) and is
+#      keyed on memory_id only, whatever the window session ──────────────
 
 
-def test_no_session_still_records_citations_with_empty_session_id(
-    tmp_wiki, wired_pg, monkeypatch
-) -> None:
+def test_an_authoring_citation_carries_no_session(tmp_wiki, wired_pg) -> None:
+    """Codex review of PR #1110: the session key belongs to wiki_read's rows."""
     pages, citations = wired_pg
-    monkeypatch.setattr(wiki_write, "current_window_session", lambda: None)
 
     result = _run(
         wiki_write.handler(
