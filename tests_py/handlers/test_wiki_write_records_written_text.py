@@ -23,7 +23,7 @@ from mcp_server.handlers import wiki_write
 
 @pytest.fixture
 def recorded(tmp_path: Path, monkeypatch) -> list[tuple]:
-    """The (rel_path, content, memory_ids) each write handed to the recorder."""
+    """The (rel_path, content, memory_ids, mode) each write handed to the recorder."""
     monkeypatch.setattr(wiki_write, "WIKI_ROOT", str(tmp_path))
     calls: list[tuple] = []
 
@@ -58,7 +58,7 @@ def test_another_writer_between_write_and_record_is_not_recorded(
 
     monkeypatch.setattr(wiki_write, "_store_pointer_memory", other_writer)
     result = _write("# A\n")
-    assert recorded == [("reference/a.md", "# A\n", [10])]
+    assert recorded == [("reference/a.md", "# A\n", [10], "create")]
     assert result["citations_written"] == 0
     assert "citations_interrupted" not in result
 
@@ -70,4 +70,4 @@ def test_an_append_records_the_whole_page(recorded, monkeypatch):
     monkeypatch.setattr(wiki_write, "_store_pointer_memory", no_pointer)
     _write("# A")
     _write("more", mode="append")
-    assert recorded[-1] == ("reference/a.md", "# A\n\nmore\n", [10])
+    assert recorded[-1] == ("reference/a.md", "# A\n\nmore\n", [10], "append")

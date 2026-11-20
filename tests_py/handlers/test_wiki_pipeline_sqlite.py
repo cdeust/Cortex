@@ -110,6 +110,7 @@ def test_wiki_tables_exist_on_sqlite(sqlite_store):
         "wiki_pages",
         "wiki_links",
         "wiki_citations",
+        "wiki_page_retractions",
         "wiki_page_sources",
         "wiki_memos",
     }

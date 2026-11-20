@@ -309,6 +309,14 @@ CREATE TABLE IF NOT EXISTS wiki.citations (
     cited_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- source: issue #715 (criterion 1) — a cited memory erased since the last
+-- full write of the page, with no memory id and no memory text (ADR-1111)
+CREATE TABLE IF NOT EXISTS wiki.page_retractions (
+    id              BIGSERIAL PRIMARY KEY,
+    page_id         INTEGER NOT NULL REFERENCES wiki.pages(id) ON DELETE CASCADE,
+    retracted_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- source: ADR-0537
 CREATE TABLE IF NOT EXISTS wiki.page_sources (
     page_id         INTEGER NOT NULL REFERENCES wiki.pages(id) ON DELETE CASCADE,
@@ -389,6 +397,8 @@ CREATE INDEX IF NOT EXISTS idx_wiki_citations_page_time
     ON wiki.citations (page_id, cited_at DESC);
 CREATE INDEX IF NOT EXISTS idx_wiki_citations_session
     ON wiki.citations (session_id);
+CREATE INDEX IF NOT EXISTS idx_wiki_page_retractions_page
+    ON wiki.page_retractions (page_id);
 
 CREATE INDEX IF NOT EXISTS idx_wiki_memos_subject
     ON wiki.memos (subject_type, subject_id);

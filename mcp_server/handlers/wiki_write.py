@@ -41,7 +41,11 @@ from mcp_server.handlers.wiki_migrate import page_row_from_md
 from mcp_server.infrastructure.config import WIKI_ROOT
 from mcp_server.infrastructure.memory_config import get_memory_settings
 from mcp_server.infrastructure.memory_store import get_shared_store
-from mcp_server.infrastructure.pg_store_wiki import insert_citation, upsert_page
+from mcp_server.infrastructure.pg_store_wiki import (
+    clear_page_retractions,
+    insert_citation,
+    upsert_page,
+)
 from mcp_server.infrastructure.session_registry import current_window_session
 from mcp_server.infrastructure.wiki_store import (
     WikiExistsError,
@@ -226,7 +230,7 @@ def _cite_memories(conn: Any, page_id: int, domain: str, citable: list[int]) -> 
 
 
 def _sync_page_and_cite(
-    rel_path: str, content: str, memory_ids: list[int]
+    rel_path: str, content: str, memory_ids: list[int], mode: str
 ) -> tuple[int, list[dict[str, Any]]] | None:
     """Sync ``wiki.pages`` and record citations for the memories used, best-effort.
 
@@ -238,9 +242,14 @@ def _sync_page_and_cite(
     rel_path (inserted or refreshed by ``page_row_from_md`` +
     ``upsert_page`` — same shape ``wiki_migrate``'s batch sweep would
     produce) and, for each citable id in ``memory_ids``, at most one new
-    wiki.citations row exists keyed on (page_id, memory_id) — a repeat
-    id (this call or a prior one) is a silent DB-level no-op, never an
-    error (``insert_citation``'s unqualified ON CONFLICT DO NOTHING).
+    wiki.citations row exists. A repeat id (this call or a prior one) is
+    never an error: PostgreSQL skips it on its unique index
+    ``(page_id, memory_id)`` (``insert_citation``'s unqualified ON
+    CONFLICT DO NOTHING); SQLite has no such index and stores the repeat,
+    which ``wiki_read`` lists once (``GROUP BY``).
+    A full write (``mode`` create or replace, not append) clears
+    the page's retractions in the same unit: it is the refresh a hard
+    ``forget`` of a cited memory left the page waiting for (issue #715).
     A wiki pointer memory is not citable (``_split_cited``), and that
     lookup runs before the unit takes its connection.
     Unlike wiki_read's ``_cite_page``, a resolvable window session is
@@ -277,6 +286,8 @@ def _sync_page_and_cite(
         with store.acquire_interactive() as conn:
             with conn.transaction():
                 page_id, _was_modified = upsert_page(conn, page_row)
+                if mode != "append":
+                    clear_page_retractions(conn, page_id)
                 if page_id is not None and page_id >= 0 and memory_ids:
                     domain = page_row.get("domain", "")
                     written = _cite_memories(conn, page_id, domain, citable)
@@ -332,7 +343,7 @@ async def write_governed_page(
 
     await _store_pointer_memory(rel_path, content, tags or [])
     # The page this write left, not a re-read another writer may change (#715)
-    synced = _sync_page_and_cite(rel_path, result.text, memory_ids or [])
+    synced = _sync_page_and_cite(rel_path, result.text, memory_ids or [], result.mode)
     response: dict[str, Any] = {
         "path": result.path,
         "mode": result.mode,
