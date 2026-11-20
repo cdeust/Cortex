@@ -87,6 +87,8 @@ class _FakePages:
         self.raise_on_upsert = False
         self.request_conn: _FakeConn | None = None
         self.violations = violations
+        # page ids whose retractions a full write cleared, in call order
+        self.cleared: list[int] = []
 
     def upsert(self, conn, page_row: dict) -> tuple[int, bool]:
         self.violations.check(
@@ -101,6 +103,12 @@ class _FakePages:
         self._next_id += 1
         self.by_path[rel_path] = pid
         return pid, True
+
+    def clear_retractions(self, conn, page_id: int) -> None:
+        self.violations.check(
+            conn is self.request_conn, "retractions cleared off the request unit"
+        )
+        self.cleared.append(page_id)
 
 
 class _FakeCitations:

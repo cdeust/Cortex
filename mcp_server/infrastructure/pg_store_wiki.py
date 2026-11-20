@@ -53,6 +53,10 @@ from mcp_server.infrastructure.pg_store_wiki_pages import (
     list_all_rel_paths,
     upsert_page,
 )
+from mcp_server.infrastructure.pg_store_wiki_retractions import (
+    clear_page_retractions,
+    count_page_retractions,
+)
 from mcp_server.infrastructure.pg_store_wiki_sources import upsert_page_sources
 from mcp_server.infrastructure.pg_store_wiki_thermo import (
     apply_staleness_decisions,
@@ -65,6 +69,8 @@ __all__ = [
     "apply_staleness_decisions",
     "apply_thermo_decisions",
     "body_hash",
+    "clear_page_retractions",
+    "count_page_retractions",
     "delete_claims_for_memory",
     "delete_links_from",
     "delete_pages_by_rel_path",

@@ -58,6 +58,7 @@ def wired_pg(monkeypatch):
 
     monkeypatch.setattr(wiki_write, "get_shared_store", lambda *a, **kw: store)
     monkeypatch.setattr(wiki_write, "upsert_page", pages.upsert)
+    monkeypatch.setattr(wiki_write, "clear_page_retractions", pages.clear_retractions)
     monkeypatch.setattr(wiki_write, "insert_citation", citations.insert)
     monkeypatch.setattr(wiki_write, "current_window_session", lambda: None)
     store.memories = {10: {"source": "session"}, 20: {"source": None}}
@@ -106,6 +107,18 @@ def test_rerun_same_memory_ids_dedups(tmp_wiki, wired_pg) -> None:
     assert "error" not in result
     assert result["citations_written"] == 0
     assert len(citations.rows) == 2
+
+
+def test_a_full_write_clears_the_page_retractions_an_append_keeps_them(
+    tmp_wiki, wired_pg
+) -> None:
+    """issue #715 criterion 1: the refresh a hard forget left the page waiting for."""
+    pages, _ = wired_pg
+    for mode in ("create", "append", "replace"):
+        args = {"path": "reference/a.md", "content": "# A\n\nBody.", "mode": mode}
+        assert "error" not in _run(wiki_write.handler(args))
+    page_id = pages.by_path["reference/a.md"]
+    assert pages.cleared == [page_id, page_id]
 
 
 # ── 3. No resolvable session → session_id '' (schema default), citations

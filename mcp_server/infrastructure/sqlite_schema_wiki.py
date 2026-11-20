@@ -154,6 +154,15 @@ CREATE TABLE IF NOT EXISTS wiki_citations (
 );
 """
 
+# source: issue #715 (criterion 1) — see pg_schema.py wiki.page_retractions
+WIKI_PAGE_RETRACTIONS_DDL = """
+CREATE TABLE IF NOT EXISTS wiki_page_retractions (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    page_id         INTEGER NOT NULL REFERENCES wiki_pages(id) ON DELETE CASCADE,
+    retracted_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+"""
+
 WIKI_PAGE_SOURCES_DDL = """
 CREATE TABLE IF NOT EXISTS wiki_page_sources (
     page_id         INTEGER NOT NULL REFERENCES wiki_pages(id) ON DELETE CASCADE,
@@ -215,6 +224,8 @@ WIKI_INDEXES_DDL = [
     "ON wiki_citations (page_id, cited_at DESC);",
     "CREATE INDEX IF NOT EXISTS idx_wiki_citations_session "
     "ON wiki_citations (session_id);",
+    "CREATE INDEX IF NOT EXISTS idx_wiki_page_retractions_page "
+    "ON wiki_page_retractions (page_id);",
     "CREATE INDEX IF NOT EXISTS idx_wiki_memos_subject "
     "ON wiki_memos (subject_type, subject_id);",
 ]
@@ -227,6 +238,7 @@ WIKI_TABLE_DDL = [
     WIKI_PAGES_DDL,
     WIKI_LINKS_DDL,
     WIKI_CITATIONS_DDL,
+    WIKI_PAGE_RETRACTIONS_DDL,
     WIKI_PAGE_SOURCES_DDL,
     WIKI_MEMOS_DDL,
 ]

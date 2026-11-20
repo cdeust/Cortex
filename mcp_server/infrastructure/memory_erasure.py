@@ -31,6 +31,9 @@ from dataclasses import dataclass, field
 from typing import Any, TypeVar
 
 from mcp_server.infrastructure.pg_store_wiki_notes import list_pages_citing_memory
+from mcp_server.infrastructure.pg_store_wiki_retractions import (
+    record_page_retractions,
+)
 
 T = TypeVar("T")
 
@@ -93,6 +96,8 @@ def _count(cursor: Any) -> int:
 def erase_derived_rows(conn: Any, memory_id: int, report: ErasureReport) -> None:
     # read before the citation rows go: nothing else records which pages cited it
     report.cited_by_pages = list_pages_citing_memory(conn, memory_id)
+    # the page keeps the fact that a source went, not the source (issue #715)
+    record_page_retractions(conn, memory_id)
     for key, statement in DERIVED_ROWS:
         report.counts[key] = _count(conn.execute(statement, (memory_id,)))
 

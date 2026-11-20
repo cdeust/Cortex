@@ -8,6 +8,21 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- A hard `forget` of a cited memory leaves each page that cited it `pending` until the
+  page is rewritten (issue #715, acceptance criterion 1). The erasure deletes the
+  memory's `wiki.citations` rows (ADR-1111), so the page's source trace no longer named
+  it: the page read `current`, and a page whose every cited memory was erased read
+  `current` on a text written from them. The erasure now adds, in its transaction, one
+  `wiki.page_retractions` row per page that cited the memory (the page id and the time;
+  no memory id, no memory text). `wiki_read`'s `freshness` reports their number in
+  `retracted_sources`, and any retraction makes the page `pending` (`failed` still wins
+  when the record is not the one of the page's text). A `create` or `replace` write of
+  the page through `write_governed_page` (`wiki_write`, `ingest_document` and the
+  consolidation writers) clears them in the unit that records its citations; an
+  `append` keeps them, since it removes nothing the page said. Limit: the other writers
+  (`wiki_compile`, `ingest_findings`, a `wiki_migrate` sweep) do not clear them, so the
+  page stays `pending` until such a write replaces it. A memory deleted by another
+  path than `forget` (its citation set to NULL by the foreign key) leaves no retraction.
 - `memories.agent_private` column on SQLite and PostgreSQL (issue #718, slice 2):
   the stored flag that will mark a memory private to the agent that wrote it, decided
   in the issue on 2026-11-19. It defaults to false, the migration leaves every existing
@@ -268,10 +283,16 @@ adheres to [Semantic Versioning](https://semver.org/).
   that changes only the frontmatter (tags, status) now updates the row, where
   `upsert_page`'s no-op guard skipped it for `wiki_write` and `wiki_migrate`. A
   cited page recorded before this change reads `failed` until it is written
-  again or a `wiki_migrate` sweep records it. Since every stored hash changes, the
-  first `wiki_migrate` sweep that writes (`dry_run` false) after this change
-  rewrites every row recorded before it: each one gets `tended` set to the sweep
-  time and `lifecycle_state` from its frontmatter (`active` when it has none).
+  again or a `wiki_migrate` sweep records it. The first `wiki_migrate` sweep that
+  writes (`dry_run` false) after this change rebuilds from its file each row whose
+  stored hash is not `page_text_hash` of that file (`upsert_page` updates only on
+  `body_hash <>`): every row recorded before it, except a page with no frontmatter
+  or one whose markdown was already normalised. A rebuilt row takes every column
+  `page_row_from_md` builds from the file, `concept_id` included, which it does not
+  read and so sets to NULL; `tended` is the sweep time and `lifecycle_state` comes
+  from the frontmatter key `lifecycle_state:`, not the canonical `lifecycle:`
+  (`active` when it is absent). A row whose file is gone is purged as a ghost, not
+  rebuilt.
 - `wiki_write` records the page it wrote (issue #715, Codex review of PR #1092): the
   `wiki.pages` row was built from the page re-read after the pointer memory was
   stored, so a writer that replaced the page in between had its text recorded with

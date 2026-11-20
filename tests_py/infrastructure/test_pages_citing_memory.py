@@ -13,7 +13,12 @@ from mcp_server.infrastructure.pg_store_wiki_notes import (
     insert_citation,
     list_pages_citing_memory,
 )
-from mcp_server.infrastructure.pg_store_wiki_pages import upsert_page
+from mcp_server.infrastructure.pg_store_wiki_pages import (
+    get_page_by_rel_path,
+    upsert_page,
+)
+from mcp_server.infrastructure.pg_store_wiki_retractions import count_page_retractions
+from mcp_server.infrastructure.row_factory import DICT_ROW
 from mcp_server.infrastructure.sqlite_store import SqliteMemoryStore
 from tests_py.conftest import _USE_PG  # type: ignore  # noqa: E402
 
@@ -87,3 +92,17 @@ def test_merged_reports_keep_each_citing_page_once_sorted():
     target = ErasureReport(cited_by_pages=["b.md", "c.md"])
     merge_erasure_report(target, ErasureReport(cited_by_pages=["c.md", "a.md"]))
     assert target.cited_by_pages == ["a.md", "b.md", "c.md"]
+
+
+def test_the_erasure_records_them_and_keeps_no_memory_id(store, tmp_path):
+    cited, _, paths, _ = _two_pages_citing(store, tmp_path.name)
+    assert store.erase_memory(cited).deleted is True
+    conn = store._conn
+    assert [
+        count_page_retractions(conn, i)
+        for i in [int(get_page_by_rel_path(conn, p)["id"]) for p in paths]
+    ] == [1, 1]
+    with conn.cursor(row_factory=DICT_ROW) as cur:
+        cur.execute("SELECT * FROM wiki.page_retractions")
+        columns = {name for row in cur.fetchall() for name in dict(row)}
+    assert columns == {"id", "page_id", "retracted_at"}

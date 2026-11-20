@@ -21,10 +21,12 @@ then describes another text, so ``failed`` wins over the two other states.
 the page waits for a refresh. ``current``: every recorded citation still
 resolves to a live, uncorrected memory.
 
-The verdict covers the citations the store still records. A hard ``forget``
-erases the citation row with the memory (``forget`` returns the pages in
-``cited_by_pages``), so that page is not marked pending by this module;
-criterion 1 of the issue covers it.
+A hard ``forget`` erases the citation row with the memory (ADR-1111), so the
+trace no longer names it; the page keeps a retraction instead, until its next
+full write (``wiki.page_retractions``, issue #715 criterion 1). Each
+retraction counts in ``retracted_sources`` and makes the page ``pending``,
+even when no citation is left: the text may still say what the erased memory
+said.
 
 Pure: no I/O.
 """
@@ -47,35 +49,46 @@ def _changed_since_cited(ref: dict[str, Any]) -> bool:
     )
 
 
-def _state(pending: list[int], cites: bool, record_matches_text: bool) -> str:
-    if cites and not record_matches_text:
+def _state(pending: bool, rests_on_sources: bool, record_matches_text: bool) -> str:
+    if rests_on_sources and not record_matches_text:
         return PAGE_FAILED
     return PAGE_PENDING if pending else PAGE_CURRENT
 
 
 def page_freshness(
-    sources: list[dict[str, Any]], *, record_matches_text: bool
+    sources: list[dict[str, Any]],
+    *,
+    record_matches_text: bool,
+    retracted_sources: int,
 ) -> dict[str, Any]:
     """The page's freshness verdict and source frontier.
 
     precondition: ``sources`` is the full ``cited_memory_sources`` output for
     the page, before any cut to fit the response budget;
     ``record_matches_text`` says whether the page's recorded hash is the
-    hash of the whole page now on disk, frontmatter included.
-    postcondition: ``state`` is ``failed`` when the page cites at least one
-    memory and its record does not match its text, else ``pending`` when at
-    least one entry is missing, stale or superseded, else ``current``;
-    ``record_matches_text`` is echoed; ``pending_memory_ids``
-    lists those entries in citation order; ``frontier`` gives the number of
-    cited memories and the highest cited memory id (None when the page cites
-    none). A page that cites nothing is ``current``: nothing it rests on has
-    changed, whatever its record says.
+    hash of the whole page now on disk, frontmatter included;
+    ``retracted_sources`` is the number of cited memories erased since the
+    page's last full write.
+    postcondition: ``state`` is ``failed`` when the page rests on sources
+    (it cites at least one memory or has a retraction) and its record does
+    not match its text, else ``pending`` when at least one entry is missing,
+    stale or superseded or a retraction exists, else ``current``;
+    ``record_matches_text`` and ``retracted_sources`` are echoed;
+    ``pending_memory_ids`` lists the changed entries in citation order;
+    ``frontier`` gives the number of cited memories and the highest cited
+    memory id (None when the page cites none). A page that cites nothing
+    and has no retraction is ``current``: nothing it rests on has changed,
+    whatever its record says.
     """
     pending = [int(ref["memory_id"]) for ref in sources if _changed_since_cited(ref)]
     ids = [int(ref["memory_id"]) for ref in sources]
+    retracted = retracted_sources > 0
     return {
-        "state": _state(pending, bool(ids), record_matches_text),
+        "state": _state(
+            bool(pending) or retracted, bool(ids) or retracted, record_matches_text
+        ),
         "record_matches_text": record_matches_text,
+        "retracted_sources": retracted_sources,
         "pending_memory_ids": pending,
         "frontier": {
             "cited_memories": len(ids),

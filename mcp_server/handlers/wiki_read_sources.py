@@ -9,7 +9,9 @@ resolves comes back marked ``missing``; one retired or corrected since is
 marked ``stale`` or carries ``superseded_by_id``. A memory deleted from the
 store loses its citation link in the database (``ON DELETE SET NULL``, or the
 row removed by a hard ``forget``), so it no longer appears here: ``forget``
-returns the pages it was cited by in ``cited_by_pages`` (issue #713 slice 4).
+returns the pages it was cited by in ``cited_by_pages`` (issue #713 slice 4),
+and the page's retractions say how many such memories it lost since its last
+full write (``freshness.retracted_sources``, issue #715 criterion 1).
 
 The page content keeps priority over the trace in the response budget:
 ``fit_sources`` drops trace entries from the tail, and says so, before the
@@ -33,6 +35,7 @@ from mcp_server.core.response_budget import serialized_length
 from mcp_server.core.wiki_page_freshness import page_freshness
 from mcp_server.infrastructure.memory_store import MemoryStore
 from mcp_server.infrastructure.pg_store_wiki import (
+    count_page_retractions,
     get_page_by_rel_path,
     list_page_cited_memory_ids,
     page_text_hash,
@@ -71,6 +74,7 @@ def attach_page_sources(
             resp["sources_unavailable"] = PAGE_NOT_INDEXED
             return resp
         cited = list_page_cited_memory_ids(store._conn, int(page["id"]))
+        retracted = count_page_retractions(store._conn, int(page["id"]))
         memories = store.get_memories_by_ids(cited)
         on_disk = page_text_hash(resp["content"])
     except Exception:  # noqa: BLE001 — mechanism boundary; failure is reported in the response and logged
@@ -79,7 +83,9 @@ def attach_page_sources(
         return resp
     resp["sources"] = cited_memory_sources(cited, memories)
     resp["freshness"] = page_freshness(
-        resp["sources"], record_matches_text=page.get("body_hash") == on_disk
+        resp["sources"],
+        record_matches_text=page.get("body_hash") == on_disk,
+        retracted_sources=retracted,
     )
     return resp
 
