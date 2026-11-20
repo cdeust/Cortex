@@ -16,8 +16,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from mcp_server.infrastructure.row_factory import DICT_ROW
-
 if TYPE_CHECKING:
     from mcp_server.infrastructure.db_types import StoreConnection
 
@@ -40,11 +38,15 @@ def record_page_retractions(conn: StoreConnection, memory_id: int) -> int:
 
 
 def count_page_retractions(conn: StoreConnection, page_id: int) -> int:
-    """Cited memories erased since the page's last full write."""
+    """Cited memories erased since the page's last full write.
+
+    precondition: ``conn`` is a store connection, whose rows are read by
+    column name on both backends (``db_connect``: ``row_factory=dict_row``).
+    """
     sql = """
     SELECT COUNT(*) AS n FROM wiki.page_retractions WHERE page_id = %s;
     """
-    with conn.cursor(row_factory=DICT_ROW) as cur:
+    with conn.cursor() as cur:
         cur.execute(sql, (page_id,))
         return int(cur.fetchone()["n"])
 
