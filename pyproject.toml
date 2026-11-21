@@ -665,7 +665,7 @@ dev = [
 #
 #
 lint = [
-    "ruff==0.17.4",
+    "ruff==0.17.5",
 ]
 typecheck = [
     "pyright==1.1.414",
