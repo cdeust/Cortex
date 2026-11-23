@@ -6,11 +6,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${PLUGIN_ROOT}/scripts/runtime.py\" decision_gate"
+            "command": "python3 \"${PLUGIN_ROOT}/scripts/runtime.py\" decision_gate",
+            "commandWindows": "python3 \"${PLUGIN_ROOT}/scripts/runtime.py\" decision_gate; exit $LASTEXITCODE"
           },
           {
             "type": "command",
-            "command": "python3 \"${PLUGIN_ROOT}/scripts/runtime.py\" no_deps_gate"
+            "command": "python3 \"${PLUGIN_ROOT}/scripts/runtime.py\" no_deps_gate",
+            "commandWindows": "python3 \"${PLUGIN_ROOT}/scripts/runtime.py\" no_deps_gate; exit $LASTEXITCODE"
           }
         ]
       },
