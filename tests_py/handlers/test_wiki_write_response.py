@@ -4,7 +4,7 @@
 recorded; ``write_page`` writes ``mode`` ``create`` when none is given. Pinned
 on the fidelity fakes of ``test_wiki_write_citations.py``.
 
-source: ADR-0475; issue #715 (mutation gate of the retraction-frontier change)
+source: ADR-0475 and issue #715 (mutation gate of the retraction-frontier change)
 """
 
 from __future__ import annotations

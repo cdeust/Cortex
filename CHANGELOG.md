@@ -18,8 +18,10 @@ adheres to [Semantic Versioning](https://semver.org/).
   `retracted_sources`, and any retraction makes the page `pending` (`failed` still wins
   when the record is not the one of the page's text). A `create` or `replace` write of
   the page through `write_governed_page` (`wiki_write`, `ingest_document` and the
-  consolidation writers) clears them in the unit that records its citations; an
-  `append` keeps them, since it removes nothing the page said. Limit: the other writers
+  consolidation writers) that changes the recorded page clears, in the unit that
+  records its citations, the retractions recorded before the write began; one that
+  leaves the page as it was, or a retraction recorded while the write runs, keeps the
+  page `pending`. An `append` keeps them, since it removes nothing the page said. Limit: the other writers
   (`wiki_compile`, `ingest_findings`, a `wiki_migrate` sweep) do not clear them, so the
   page stays `pending` until such a write replaces it. A memory deleted by another
   path than `forget` (its citation set to NULL by the foreign key) leaves no retraction.
