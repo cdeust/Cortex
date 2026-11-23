@@ -258,7 +258,7 @@ def _record_write(
     citable: list[int],
     frontier: int | None,
 ) -> int | None:
-    """Record one write of the page in the caller's unit; return the new citations.
+    """Record one write of the page in the caller's unit; return its citations.
 
     precondition: ``conn`` holds the unit ``_sync_page_and_cite`` opened;
     ``citable`` is the citable part of the write's ``memory_ids``
@@ -273,7 +273,10 @@ def _record_write(
     changed the recorded page (``upsert_page``'s was_modified) clears its
     retractions up to ``frontier`` (``_retraction_frontier``); one that left
     the page as it was keeps them, since the text still says what the
-    erased memory said. Returns None when the page row cannot be resolved.
+    erased memory said. Returns the rows an ``append`` inserted, the
+    distinct ids a full write cites (kept or new, ``_replace_citations``),
+    0 for a full write that names none, None when the page row cannot be
+    resolved.
     """
     page_id, modified = upsert_page(conn, page_row)
     if page_id is None or page_id < 0:
@@ -305,9 +308,11 @@ def _sync_page_and_cite(
     produce) and, for each citable id in ``memory_ids``, at most one new
     wiki.citations row exists. A repeat id is never an error: PostgreSQL
     skips it on its unique index ``(page_id, memory_id)``
-    (``insert_citation``'s unqualified ON CONFLICT DO NOTHING); SQLite has
-    no such index and stores the repeat, which ``wiki_read`` lists once
-    (``GROUP BY``). See ``_record_write`` for what a full write replaces.
+    (``insert_citation``'s unqualified ON CONFLICT DO NOTHING). On SQLite,
+    which has no such index, an ``append`` stores the repeat, which
+    ``wiki_read`` lists once (``GROUP BY``); a full write stores none
+    (``_replace_citations``). See ``_record_write`` for what a full write
+    replaces.
     A wiki pointer memory is not citable (``_split_cited``), and that
     lookup runs before the unit takes its connection.
     Unlike wiki_read's ``_cite_page``, no window session is read: this
@@ -330,7 +335,8 @@ def _sync_page_and_cite(
     On ANY exception (PG down, store not PG-backed, etc.) the markdown
     write, which already succeeded, stands; the failure is noted and
     None is returned so the response can say the citations were not
-    recorded. Returns (new citation rows written, refused entries),
+    recorded. Returns (the write's citations as ``_record_write`` counts
+    them, refused entries),
     (0, []) when memory_ids is empty, None on failure.
     """
     try:

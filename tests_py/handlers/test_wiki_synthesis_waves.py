@@ -81,9 +81,10 @@ def _erase_then_append(monkeypatch, cache: int) -> None:
     freshness = _read()["freshness"]
     assert freshness["state"] == PAGE_PENDING
     assert freshness["retracted_sources"] == 1
-    asyncio.run(
+    out = asyncio.run(
         wiki_write.handler({"path": _PAGE, "content": "More.\n", "mode": "append"})
     )
+    assert "error" not in out  # review of PR #1114, note 2
     assert _read()["freshness"]["state"] == PAGE_PENDING
 
 

@@ -95,3 +95,14 @@ def test_prose_findings_are_reported_beside_the_citations(tmp_wiki, wired_pg) ->
     assert result["citations_written"] == 1
     assert result["redaction_findings"]["count"] == 1
     assert result["redaction_findings"]["first"][0]["line"] == 3
+
+
+def test_a_full_write_inserts_each_new_memory_once(tmp_wiki, wired_pg) -> None:
+    """Review of PR #1113: the fake refuses a repeat as PostgreSQL does, so
+    count the inserts: SQLite has no unique index and would store it."""
+    _, citations = wired_pg
+    args = {"path": "reference/a.md", "content": "# A", "memory_ids": [10, 10, 20]}
+    assert _run(wiki_write.handler(args))["citations_written"] == 2
+    again = {**args, "mode": "replace", "memory_ids": [20, 10, 10]}
+    assert _run(wiki_write.handler(again))["citations_written"] == 2
+    assert citations.attempts == 2 and len(citations.rows) == 2

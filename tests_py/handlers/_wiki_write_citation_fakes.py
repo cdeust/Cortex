@@ -132,6 +132,8 @@ class _FakeCitations:
     def __init__(self, violations: _Violations) -> None:
         self.rows: list[tuple[int, str, str, int | None]] = []
         self._next_id = 1
+        # every insert_citation call, refused or not (review of PR #1113)
+        self.attempts = 0
         self.request_conn: _FakeConn | None = None
         self.violations = violations
 
@@ -146,6 +148,7 @@ class _FakeCitations:
         self.violations.check(
             conn is self.request_conn, "citation written off the request unit"
         )
+        self.attempts += 1
         for existing in self.rows:
             if (
                 session_id != ""
