@@ -21,7 +21,9 @@ adheres to [Semantic Versioning](https://semver.org/).
   consolidation writers) that changes the recorded page clears, in the unit that
   records its citations, the retractions recorded before the write began; one that
   leaves the page as it was, or a retraction recorded while the write runs, keeps the
-  page `pending`. An `append` keeps them, since it removes nothing the page said. Limit: the other writers
+  page `pending`. An `append` keeps them, since it removes nothing the page said. A
+  `forget` that lands after the caller composed the text but before the write began is
+  still cleared. Limit: the other writers
   (`wiki_compile`, `ingest_findings`, a `wiki_migrate` sweep) do not clear them, so the
   page stays `pending` until such a write replaces it. A memory deleted by another
   path than `forget` (its citation set to NULL by the foreign key) leaves no retraction.
@@ -138,9 +140,11 @@ adheres to [Semantic Versioning](https://semver.org/).
   rewritten from other memories read `current` on memories its text no longer rests
   on. In the unit that records the write, a full write whose `memory_ids` hold at
   least one citable memory now deletes the page's `wiki.citations` rows that name a
-  memory (`delete_page_memory_citations`), then records its own. A session read of
-  the page (no memory id) is kept, and PostgreSQL's citation trigger fires on insert
-  only, so `citation_count` and heat are not lowered. An `append`, a full write with
+  memory it does not name (`delete_page_memory_citations`), keeps those it names,
+  and inserts the others. A session read of the page (no memory id) is kept.
+  PostgreSQL's citation trigger fires on insert only, so `citation_count` and heat
+  are not lowered by the deletion, and an identical rewrite, which inserts no row,
+  no longer raises them (review of PR #1110, note 1); SQLite stores no repeat row. An `append`, a full write with
   no `memory_ids` (the headless gap-fill, `ingest_document`) and one whose every id
   is refused keep the earlier citations: they do not say what the text rests on.
   `citations_written` now counts the rows of the write, so re-running the same write

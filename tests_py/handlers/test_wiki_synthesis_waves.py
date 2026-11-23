@@ -70,6 +70,23 @@ def _first_wave(monkeypatch, tmp_path) -> list[int]:
     return cited
 
 
+def _erase_then_append(monkeypatch, cache: int) -> None:
+    """Wave 3, deletion: a hard forget erases the cache document's memory.
+
+    An append then adds to the page; it is not the refresh the erasure waits for.
+    """
+    monkeypatch.setattr(forget, "_store", None)
+    erased = asyncio.run(forget.handler({"memory_id": cache}))
+    assert erased["method"] == "hard" and erased["cited_by_pages"] == [_PAGE]
+    freshness = _read()["freshness"]
+    assert freshness["state"] == PAGE_PENDING
+    assert freshness["retracted_sources"] == 1
+    asyncio.run(
+        wiki_write.handler({"path": _PAGE, "content": "More.\n", "mode": "append"})
+    )
+    assert _read()["freshness"]["state"] == PAGE_PENDING
+
+
 def test_each_wave_is_pending_until_the_rewrite_drops_what_it_retracted(
     monkeypatch, tmp_path
 ):
@@ -87,22 +104,9 @@ def test_each_wave_is_pending_until_the_rewrite_drops_what_it_retracted(
     _write("replace", "Key rotation, corrected", [corrected, cache, queue])
     page = _read()
     assert page["freshness"]["state"] == PAGE_CURRENT
-    assert _cited(page) == [corrected, cache, queue]
+    assert _cited(page) == [cache, corrected, queue]  # cache's row is kept
 
-    # Wave 3, deletion: a hard forget erases the cache document's memory.
-    monkeypatch.setattr(forget, "_store", None)
-    erased = asyncio.run(forget.handler({"memory_id": cache}))
-    assert erased["method"] == "hard" and erased["cited_by_pages"] == [_PAGE]
-    freshness = _read()["freshness"]
-    assert freshness["state"] == PAGE_PENDING
-    assert freshness["retracted_sources"] == 1
-
-    # An append adds to the page; it is not the refresh the erasure waits for.
-    asyncio.run(
-        wiki_write.handler({"path": _PAGE, "content": "More.\n", "mode": "append"})
-    )
-    assert _read()["freshness"]["state"] == PAGE_PENDING
-
+    _erase_then_append(monkeypatch, cache)
     _write("replace", "Key rotation, without the erased source", [corrected, queue])
     page = _read()
     assert page["content"].endswith(

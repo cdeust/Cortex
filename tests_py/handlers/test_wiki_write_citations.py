@@ -66,6 +66,7 @@ def wired_pg(monkeypatch):
     monkeypatch.setattr(
         wiki_write, "delete_page_memory_citations", citations.delete_memory_rows
     )
+    monkeypatch.setattr(wiki_write, "list_page_cited_memory_ids", citations.memory_ids)
     store.memories = {10: {"source": "session"}, 20: {"source": None}}
     yield pages, citations
     assert violations == [], violations
@@ -115,15 +116,31 @@ def test_a_replace_cites_the_memories_of_the_last_write_only(
     assert (1, "s-read", "", None) in citations.rows
 
 
+def test_an_identical_rewrite_keeps_its_citation_rows(tmp_wiki, wired_pg) -> None:
+    """Review of PR #1110, note 1: no row inserted, so the trigger bumps nothing."""
+    _, citations = wired_pg
+    args = {"path": "reference/a.md", "content": "# A\n\nBody.", "memory_ids": [10]}
+    _run(wiki_write.handler({**args, "memory_ids": [10, 20]}))
+    first = list(citations.rows)
+    again = _run(
+        wiki_write.handler({**args, "mode": "replace", "memory_ids": [20, 10]})
+    )
+    assert again["citations_written"] == 2
+    assert citations.rows == first and citations._next_id == 3
+
+
 def test_an_append_or_a_write_naming_no_source_keeps_the_citations(
     tmp_wiki, wired_pg
 ) -> None:
-    _, citations = wired_pg
+    pages, citations = wired_pg
     args = {"path": "reference/a.md", "content": "# A\n\nBody.", "mode": "create"}
     _run(wiki_write.handler({**args, "memory_ids": [10]}))
-    _run(wiki_write.handler({**args, "mode": "append", "memory_ids": [20]}))
+    out = _run(wiki_write.handler({**args, "mode": "append", "memory_ids": [20]}))
+    assert out["citations_written"] == 1
     _run(wiki_write.handler({**args, "mode": "replace", "content": "# A\n\nNew."}))
+    page_id = pages.by_path["reference/a.md"]
     assert sorted(r[3] for r in citations.rows) == [10, 20]
+    assert (page_id, "", "_general", 20) in citations.rows
 
 
 def test_a_full_write_clears_the_page_retractions_an_append_keeps_them(

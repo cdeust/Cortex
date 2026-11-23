@@ -65,7 +65,7 @@ def _rows(conn, page_id: int) -> int:
         return int(cur.fetchone()["n"])
 
 
-def test_deleting_a_pages_memory_citations_keeps_its_reads_and_other_pages(
+def test_deleting_a_pages_memory_citations_keeps_reads_named_ids_and_other_pages(
     store, tmp_path
 ):
     conn = store._conn
@@ -80,9 +80,12 @@ def test_deleting_a_pages_memory_citations_keeps_its_reads_and_other_pages(
     insert_citation(conn, elsewhere, memory_id=high)
     conn.commit()
 
-    assert delete_page_memory_citations(conn, page) == 2
+    assert delete_page_memory_citations(conn, page, [low]) == 1
     conn.commit()
+    assert list_page_cited_memory_ids(conn, page) == [low]
+    assert _rows(conn, page) == 2
+    assert list_page_cited_memory_ids(conn, elsewhere) == [high]
+    assert delete_page_memory_citations(conn, page, [high]) == 1
     assert list_page_cited_memory_ids(conn, page) == []
     assert _rows(conn, page) == 1
-    assert list_page_cited_memory_ids(conn, elsewhere) == [high]
-    assert delete_page_memory_citations(conn, page) == 0
+    assert delete_page_memory_citations(conn, page, [low]) == 0

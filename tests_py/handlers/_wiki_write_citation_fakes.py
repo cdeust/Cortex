@@ -164,12 +164,20 @@ class _FakeCitations:
         self.rows.append((page_id, session_id, domain, memory_id))
         return cid
 
-    def delete_memory_rows(self, conn, page_id: int) -> int:
-        """``delete_page_memory_citations``: session reads (memory_id NULL) stay."""
+    def delete_memory_rows(self, conn, page_id: int, keep: list[int]) -> int:
+        """``delete_page_memory_citations``: reads and ``keep`` stay."""
         self.violations.check(
             conn is self.request_conn, "citations deleted off the request unit"
         )
-        kept = [r for r in self.rows if r[0] != page_id or r[3] is None]
+        kept = [r for r in self.rows if r[0] != page_id or r[3] is None or r[3] in keep]
         removed = len(self.rows) - len(kept)
         self.rows = kept
         return removed
+
+    def memory_ids(self, conn, page_id: int) -> list[int]:
+        """``list_page_cited_memory_ids``: distinct, first cited first."""
+        self.violations.check(
+            conn is self.request_conn, "citations read off the request unit"
+        )
+        named = [r[3] for r in self.rows if r[0] == page_id and r[3] is not None]
+        return list(dict.fromkeys(named))

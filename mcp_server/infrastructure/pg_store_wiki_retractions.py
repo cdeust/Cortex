@@ -62,7 +62,10 @@ def page_retractions_frontier(conn: StoreConnection) -> int:
     A full write reads it before it writes the file: a retraction with a
     higher id was recorded by a hard ``forget`` that ran while the write was
     in progress, after the write began, so the write cannot be its
-    refresh (Codex review of PR #1109). Ids come from the table's own
+    refresh (Codex review of PR #1109). A ``forget`` that lands after the
+    caller composed the text but before the write began sits below it and
+    is cleared, although the text may rest on the erased memory (review of
+    PR #1111, note 1). Ids come from the table's own
     sequence (``BIGSERIAL`` / ``AUTOINCREMENT``), never from a clock. Bound
     on PostgreSQL: an id is taken at insert, so a retraction whose erasure
     had not committed when the frontier was read, while a later one had,
