@@ -186,6 +186,22 @@ def test_an_unread_frontier_clears_no_retraction(
     assert noted == {"last_error": "RuntimeError: PG unreachable", "count": 1}
 
 
+def test_an_append_reads_no_frontier(tmp_wiki, wired_pg, monkeypatch) -> None:
+    """An append clears no retraction, so it spends no read on the frontier."""
+    pages, _ = wired_pg
+    args = {"path": "reference/a.md", "content": "# A\n\nBody.", "mode": "create"}
+    assert "error" not in _run(wiki_write.handler(args))
+
+    def unread(conn):
+        raise AssertionError("an append read the retraction frontier")
+
+    monkeypatch.setattr(wiki_write, "page_retractions_frontier", unread)
+    out = _run(wiki_write.handler({**args, "content": "More.\n", "mode": "append"}))
+    assert "error" not in out and "citations_interrupted" not in out
+    assert "wiki_write.retraction_frontier" not in silent_failure.status()
+    assert pages.cleared == [1]
+
+
 # ── 3. An authoring citation carries session_id '' (schema default) and is
 #      keyed on memory_id only, whatever the window session ──────────────
 

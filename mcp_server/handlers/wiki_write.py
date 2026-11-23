@@ -402,8 +402,9 @@ async def write_governed_page(
     """Write global wiki content and best-effort pointer/citation metadata.
 
     source: ADR-0475"""
-    # before the file is written: a forget during the write is not refreshed
-    frontier = _retraction_frontier()
+    # before the file is written: a forget during the write is not refreshed.
+    # An append clears no retraction (_record_write), so it reads no frontier.
+    frontier = None if mode == "append" else _retraction_frontier()
     try:
         result = write_page(root, rel_path, content, mode=mode)
     except WikiExistsError:
