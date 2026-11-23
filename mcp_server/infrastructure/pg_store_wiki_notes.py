@@ -55,21 +55,29 @@ def insert_citation(
         return _returning_id(row) if row is not None else None
 
 
-def delete_page_memory_citations(conn: StoreConnection, page_id: int) -> int:
-    """Drop the page's memory citations; return the number of rows removed.
+def delete_page_memory_citations(
+    conn: StoreConnection, page_id: int, keep: list[int]
+) -> int:
+    """Drop the page's memory citations outside ``keep``; return the rows removed.
 
     Precondition: runs in the unit of a full write that names its sources
-    (``wiki_write._sync_page_and_cite``). Postcondition: no row of the page
-    names a memory any more; rows whose memory_id is NULL (a session read of
-    the page) are kept. PostgreSQL's citation trigger fires on INSERT only,
-    so the page's ``citation_count`` and heat are not lowered.
+    (``wiki_write._sync_page_and_cite``); ``keep`` is that write's citable
+    ids, not empty. Postcondition: every row of the page that names a memory
+    outside ``keep`` is gone; rows naming a memory in ``keep`` and rows whose
+    memory_id is NULL (a session read of the page) are kept. A row is kept,
+    not deleted and inserted again, because PostgreSQL's citation trigger
+    (``trg_wiki_citation_bump``) fires on INSERT only: each identical
+    rewrite raised the page's ``citation_count`` and heat (review of PR
+    #1110, note 1), and a deletion never lowers them.
 
     source: issue #715 (acceptance criterion 1)"""
     sql = """
-    DELETE FROM wiki.citations WHERE page_id = %s AND memory_id IS NOT NULL;
+    DELETE FROM wiki.citations
+     WHERE page_id = %s AND memory_id IS NOT NULL
+       AND NOT (memory_id = ANY(%s));
     """
     with conn.cursor() as cur:
-        cur.execute(sql, (page_id,))
+        cur.execute(sql, (page_id, list(keep)))
         return int(cur.rowcount)
 
 

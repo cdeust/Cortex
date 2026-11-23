@@ -144,7 +144,14 @@ def test_an_interrupted_refresh_reads_failed_until_it_is_written_again(
     rel_path = _own_path()
     _write(cited, mode="create", rel_path=rel_path)
     assert _freshness(rel_path)["state"] == PAGE_CURRENT
-    _interrupt_after_first_citation(monkeypatch)
+    # the same sources insert no row again (review of PR #1110, note 1): the
+    # interruption lands after the page row was written, inside the unit
+    real_delete = wiki_write.delete_page_memory_citations
+
+    def lost(conn, page_id, keep):
+        raise _InterruptedError("connection lost mid-write")
+
+    monkeypatch.setattr(wiki_write, "delete_page_memory_citations", lost)
     refreshed = _page_md("Derived, refreshed")
     out = _write(list(reversed(cited)), "replace", rel_path, content=refreshed)
     assert out["citations_interrupted"] is True
@@ -152,7 +159,7 @@ def test_an_interrupted_refresh_reads_failed_until_it_is_written_again(
     failed = _freshness(rel_path)
     assert failed["state"] == PAGE_FAILED
     assert failed["record_matches_text"] is False
-    monkeypatch.setattr(wiki_write, "insert_citation", _real_insert_citation)
+    monkeypatch.setattr(wiki_write, "delete_page_memory_citations", real_delete)
     _write(list(reversed(cited)), "replace", rel_path, content=refreshed)
     assert _freshness(rel_path)["state"] == PAGE_CURRENT
 
@@ -167,3 +174,20 @@ def test_an_appended_page_is_recorded_as_it_stands_on_disk(monkeypatch, tmp_path
     freshness = _freshness(rel_path)
     assert freshness["state"] == PAGE_CURRENT
     assert freshness["record_matches_text"] is True
+
+
+def test_an_identical_rewrite_keeps_its_rows_and_citation_count(monkeypatch, tmp_path):
+    """Review of PR #1110, note 1: PostgreSQL's insert trigger bumped each rewrite."""
+    _, _, cited = _two_documents_and_a_page(monkeypatch, tmp_path)
+    rel_path = _own_path()
+    _write(cited, mode="create", rel_path=rel_path)
+    ids_sql = (
+        "SELECT c.id FROM wiki.citations c JOIN wiki.pages p ON p.id = c.page_id "
+        "WHERE p.rel_path = %s ORDER BY c.id"
+    )
+    count_sql = "SELECT citation_count FROM wiki.pages WHERE rel_path = %s"
+    before = (_first_column(ids_sql, rel_path), _first_column(count_sql, rel_path))
+    out = _write(list(reversed(cited)), mode="replace", rel_path=rel_path)
+    assert out["citations_written"] == 2
+    after = (_first_column(ids_sql, rel_path), _first_column(count_sql, rel_path))
+    assert after == before

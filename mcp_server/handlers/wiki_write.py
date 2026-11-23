@@ -45,6 +45,7 @@ from mcp_server.infrastructure.pg_store_wiki import (
     clear_page_retractions,
     delete_page_memory_citations,
     insert_citation,
+    list_page_cited_memory_ids,
     page_retractions_frontier,
     upsert_page,
 )
@@ -229,6 +230,27 @@ def _cite_memories(conn: Any, page_id: int, domain: str, citable: list[int]) -> 
     return written
 
 
+def _replace_citations(conn: Any, page_id: int, domain: str, citable: list[int]) -> int:
+    """Make the page cite exactly ``citable``; return the rows of the write.
+
+    precondition: ``conn`` holds the unit of a full write (create or
+    replace) whose citable ids ``citable`` are not empty.
+    postcondition: the page's memory citations outside ``citable`` are
+    deleted, those it names already are kept as they are, and the others
+    are inserted, so an identical rewrite inserts no row and PostgreSQL's
+    insert trigger no longer raises ``citation_count`` and heat on each one
+    (review of PR #1110, note 1); SQLite, with no unique index on
+    ``wiki_citations``, stores no repeat. Returns the number of distinct
+    ids the page now cites for this write, kept or new: re-running the
+    same write reports them again, not 0.
+    """
+    named = list(dict.fromkeys(citable))
+    delete_page_memory_citations(conn, page_id, named)
+    kept = set(list_page_cited_memory_ids(conn, page_id))
+    fresh = [mid for mid in named if mid not in kept]
+    return len(kept) + _cite_memories(conn, page_id, domain, fresh)
+
+
 def _record_write(
     conn: Any,
     page_row: dict[str, Any],
@@ -242,32 +264,26 @@ def _record_write(
     ``citable`` is the citable part of the write's ``memory_ids``
     (``_split_cited``).
     postcondition: the page row is upserted. A full write (``mode`` create
-    or replace, not append) that names a citable source (``citable`` not
-    empty) first drops the page's memory citations, so the page cites the
-    memories of its last full write only and a corrected or retired source
-    no longer keeps the rewritten page ``pending`` (issue #715, criterion
-    1). A full write that names none keeps them: the headless gap-fill and
-    ``ingest_document`` do not say what the text rests on, a write whose
-    every id is refused names nothing the page can cite, and dropping the
-    trace would read the page ``current``. A full write that changed the
-    recorded page (``upsert_page``'s was_modified) clears its retractions
-    up to ``frontier`` (``_retraction_frontier``): it is the refresh a hard
-    ``forget`` of a cited memory left the page waiting for; one that left
+    or replace, not append) that names a citable source makes the page cite
+    those memories only (``_replace_citations``), so a corrected or retired
+    source no longer keeps the rewritten page ``pending`` (issue #715,
+    criterion 1). A full write that names none keeps them: the headless
+    gap-fill and ``ingest_document`` do not say what the text rests on, and
+    dropping the trace would read the page ``current``. A full write that
+    changed the recorded page (``upsert_page``'s was_modified) clears its
+    retractions up to ``frontier`` (``_retraction_frontier``); one that left
     the page as it was keeps them, since the text still says what the
-    erased memory said. Returns None when the page row cannot be resolved,
-    else the number of new citation rows.
+    erased memory said. Returns None when the page row cannot be resolved.
     """
     page_id, modified = upsert_page(conn, page_row)
     if page_id is None or page_id < 0:
         return None
-    full = mode != "append"
-    if full and modified and frontier is not None:
+    domain = page_row.get("domain", "")
+    if mode == "append":
+        return _cite_memories(conn, page_id, domain, citable)
+    if modified and frontier is not None:
         clear_page_retractions(conn, page_id, frontier)
-    if full and citable:
-        delete_page_memory_citations(conn, page_id)
-    if not citable:
-        return 0
-    return _cite_memories(conn, page_id, page_row.get("domain", ""), citable)
+    return _replace_citations(conn, page_id, domain, citable) if citable else 0
 
 
 def _sync_page_and_cite(
