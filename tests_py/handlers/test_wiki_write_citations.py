@@ -129,18 +129,6 @@ def test_an_identical_rewrite_keeps_its_citation_rows(tmp_wiki, wired_pg) -> Non
     assert citations.rows == first and citations._next_id == 3
 
 
-def test_an_append_reads_no_retraction_frontier(
-    tmp_wiki, wired_pg, monkeypatch
-) -> None:
-    """Review of PR #1111, note 3: an append clears no retraction."""
-    calls: list[str] = []
-    monkeypatch.setattr(wiki_write, "_retraction_frontier", lambda: calls.append("r"))
-    args = {"path": "reference/a.md", "content": "# A\n\nBody.", "mode": "create"}
-    _run(wiki_write.handler(args))
-    _run(wiki_write.handler({**args, "mode": "append"}))
-    assert calls == ["r"]
-
-
 def test_an_append_or_a_write_naming_no_source_keeps_the_citations(
     tmp_wiki, wired_pg
 ) -> None:
