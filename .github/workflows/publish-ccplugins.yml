@@ -30,19 +30,14 @@ jobs:
       - name: Guard — skip cleanly when CCPLUGINS_PAT is missing
         id: guard
         env:
-          PAT: ${{ secrets.CCPLUGINS_PAT }}
-        run: |
-          if [ -z "$PAT" ]; then
-            echo "CCPLUGINS_PAT secret not configured — skipping."
-            echo "has_pat=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_pat=true" >> "$GITHUB_OUTPUT"
-          fi
+          HAS_PAT: ${{ secrets.CCPLUGINS_PAT != '' }}
+        run: echo "has_pat=$HAS_PAT" >> "$GITHUB_OUTPUT"
 
       - name: Checkout Cortex
         if: steps.guard.outputs.has_pat == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           path: cortex
           fetch-depth: 0
 
@@ -62,8 +57,8 @@ jobs:
         if: steps.guard.outputs.has_pat == 'true'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           repository: ${{ env.FORK }}
-          token: ${{ secrets.CCPLUGINS_PAT }}
           path: ccplugins
           fetch-depth: 0
 
@@ -81,7 +76,7 @@ jobs:
           git merge --ff-only upstream/main || {
             git reset --hard upstream/main
           }
-          git push origin main --force-with-lease
+          git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push origin main --force-with-lease
 
       - name: Write plugin bundle
         if: steps.guard.outputs.has_pat == 'true'
@@ -191,7 +186,7 @@ jobs:
           GH_TOKEN: ${{ secrets.CCPLUGINS_PAT }}
         run: |
           BRANCH="${{ steps.diff.outputs.branch }}"
-          git push -u origin "$BRANCH" --force-with-lease
+          git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push -u origin "$BRANCH" --force-with-lease
           EXISTING="$(gh pr list --repo "$UPSTREAM" --head "cdeust:$BRANCH" --state open --json number -q '.[0].number' || echo '')"
           BODY="Automated sync from cdeust/Cortex.
 
