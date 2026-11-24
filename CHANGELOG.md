@@ -144,11 +144,13 @@ adheres to [Semantic Versioning](https://semver.org/).
   and inserts the others. A session read of the page (no memory id) is kept.
   PostgreSQL's citation trigger fires on insert only, so `citation_count` and heat
   are not lowered by the deletion, and an identical rewrite, which inserts no row,
-  no longer raises them (review of PR #1110, note 1); SQLite stores no repeat row. An `append`, a full write with
+  no longer raises them (review of PR #1110, note 1); on SQLite a full write stores no
+  repeat row, while an `append` still stores one, listed once by `wiki_read`. An `append`, a full write with
   no `memory_ids` (the headless gap-fill, `ingest_document`) and one whose every id
   is refused keep the earlier citations: they do not say what the text rests on.
-  `citations_written` now counts the rows of the write, so re-running the same write
-  reports them again instead of 0.
+  For a full write, `citations_written` now counts the distinct memories the write
+  cites, kept or new, so re-running the same write reports them again instead of 0;
+  for an `append` it still counts the rows the append inserted.
 - An authoring citation (`wiki_write` with `memory_ids`) carries `session_id = ''`,
   never the window session (review of PR #1109, note 3; Codex review of PR #1110).
   PostgreSQL's `uq_wiki_citations_page_session` keeps one row per page and session,
