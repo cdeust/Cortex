@@ -529,7 +529,7 @@ jobs:
         run: |
           set -euo pipefail
           registry_home="$(mktemp -d "$RUNNER_TEMP/mcp-publisher.XXXXXX")"
-          trap 'rm -r -- "$registry_home"' EXIT
+          trap 'rm -rf -- "$registry_home"' EXIT
           HOME="$registry_home" ./mcp-publisher login github-oidc
           status=0
           HOME="$registry_home" ./mcp-publisher publish || status=$?

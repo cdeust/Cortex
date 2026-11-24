@@ -844,14 +844,24 @@ jobs:
           # mktemp directory keeps the relative socket short and exclusively ours.
           agent_dir="$(mktemp -d ./release-agent.XXXXXXXX)"
           trap 'rm -rf -- "$agent_dir"' EXIT
-          ssh-agent -a "$agent_dir/sock" bash -euo pipefail <<'PUBLISH'
-          trap 'ssh-add -D >/dev/null 2>&1; ssh-agent -k >/dev/null' EXIT
-          printf '%s\n' "$SSH_KEY" | ssh-add - >/dev/null
-          unset SSH_KEY
-          # The fresh agent is the only identity source; no host configuration or
-          # default key files participate. Only the GitHub host keys from fetch apply.
-          export GIT_SSH_COMMAND='ssh -F /dev/null -o IdentityFile=none -o IdentitiesOnly=no -o BatchMode=yes -o GlobalKnownHostsFile=/dev/null -o "UserKnownHostsFile=$RUNNER_TEMP/release-known-hosts" -o StrictHostKeyChecking=yes'
-          python3 - <<'PY'
+          publish_with_agent() {
+            trap 'trap "" INT TERM; ssh-add -D >/dev/null 2>&1 || :; ssh-agent -k >/dev/null 2>&1' EXIT
+            trap 'trap "" INT TERM; if [[ -n ${tagger_pid:-} ]]; then kill -TERM "$tagger_pid" 2>/dev/null || :; fi; exit 143' TERM
+            printf '%s\n' "$SSH_KEY" | ssh-add - >/dev/null
+            unset SSH_KEY
+            # The fresh agent is the only identity source; no host configuration or
+            # default key files participate. Only the GitHub host keys from fetch apply.
+            ssh_args=(ssh -F /dev/null -o IdentityFile=none -o IdentitiesOnly=no -o BatchMode=yes
+              -o GlobalKnownHostsFile=/dev/null -o "UserKnownHostsFile=\"$RUNNER_TEMP/release-known-hosts\""
+              -o StrictHostKeyChecking=yes)
+            printf -v GIT_SSH_COMMAND '%q ' "${ssh_args[@]}"
+            export GIT_SSH_COMMAND
+            python3 - <&0 &
+            tagger_pid=$!
+            wait "$tagger_pid"
+          }
+          export -f publish_with_agent
+          ssh-agent -a "$agent_dir/sock" bash -euo pipefail -c publish_with_agent <<'PY' &
           #!/usr/bin/env python3
           """Publish validated package versions without overwriting an existing tag.
 
@@ -966,7 +976,18 @@ jobs:
           if __name__ == "__main__":
               sys.exit(main())
           PY
-          PUBLISH
+          publisher_pid=$!
+          # A trapped signal interrupts the wait builtin even when delivered to
+          # this shell alone. Reap the publisher after it revokes the identity.
+          stop_publisher() {
+            trap '' INT TERM
+            kill -TERM "$publisher_pid" 2>/dev/null || :
+            wait "$publisher_pid" 2>/dev/null || :
+            exit "$1"
+          }
+          trap 'stop_publisher 143' TERM
+          trap 'stop_publisher 130' INT
+          wait "$publisher_pid"
 
       - name: Summarize missing release key
         if: steps.guard.outputs.has_deploy_key != 'true'

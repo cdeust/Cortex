@@ -48,6 +48,12 @@ class CommonSourceChecks:
             with self.subTest(job=job):
                 self.reject(job, "needs.contract.outputs.tested_sha", "github.sha")
 
+    def test_checkouts_must_explicitly_discard_credentials(self) -> None:
+        for job in ("contract", *gate.TEST_JOBS):
+            for replacement in ("persist-credentials: true", "fetch-depth: 0"):
+                with self.subTest(job=job, replacement=replacement):
+                    self.reject(job, "persist-credentials: false", replacement)
+
     def test_tag_fetch_requires_contract_sha(self) -> None:
         self.reject("tag", "needs.contract.outputs.tested_sha", "github.sha")
 

@@ -6,10 +6,31 @@ workflow_run resolver and Record tested commit step (2026-10-23).
 
 from __future__ import annotations
 
+import yaml
+
 # Source: contract checkout and downstream checkout refs in the shared template.
 SOURCE_REF = "${{ github.sha }}"
 POST_MERGE_REF = "${{ needs.resolve.outputs.tested_sha }}"
 TESTED_REF = "${{ needs.contract.outputs.tested_sha }}"
+
+
+def check_checkout_credentials(text: str) -> list[str]:
+    """Validate the effective inputs to every checkout, including YAML aliases."""
+    try:
+        workflow = yaml.safe_load(text)
+    except yaml.YAMLError as error:
+        return [f"invalid workflow YAML: {error}"]
+    if not isinstance(workflow, dict) or not isinstance(workflow.get("jobs"), dict):
+        return ["workflow must declare jobs"]
+    failures = []
+    for job, body in (workflow.get("jobs") or {}).items():
+        for step in body.get("steps", []):
+            if not step.get("uses", "").lower().startswith("actions/checkout@"):
+                continue
+            value = (step.get("with") or {}).get("persist-credentials")
+            if value is not False and value != "false":
+                failures.append(f"{job} checkout must set persist-credentials: false")
+    return failures
 
 
 def _steps(body: list[str]) -> list[list[str]]:

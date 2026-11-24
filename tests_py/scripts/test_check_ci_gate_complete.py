@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import io
 import re
+import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
@@ -221,6 +222,26 @@ class PipelineGateTests(unittest.TestCase):
         with redirect_stdout(output):
             self.assertEqual(gate.main(), 0)
         self.assertIn("Pipeline gate completeness: OK", output.getvalue())
+
+    def test_main_rejects_persisted_credentials_in_another_workflow(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            engine = Path(tmp) / gate.POST_MERGE_WORKFLOW.name
+            engine.write_bytes(gate.POST_MERGE_WORKFLOW.read_bytes())
+            extra = engine.with_name("consumer.yaml")
+            extra.write_text(
+                "jobs:\n  consumer:\n    steps:\n"
+                "      - uses: actions/checkout@v7\n"
+                "        env: {persist-credentials: false}\n"
+            )
+            errors = io.StringIO()
+            with (
+                patch.object(gate, "POST_MERGE_WORKFLOW", engine),
+                redirect_stderr(errors),
+            ):
+                self.assertEqual(gate.main(), 1)
+            self.assertIn(
+                "consumer.yaml: consumer checkout must set", errors.getvalue()
+            )
 
     def test_main_reports_missing_file_and_bad_gate(self) -> None:
         for workflow in (

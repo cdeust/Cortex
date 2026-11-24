@@ -43,6 +43,12 @@ set -eu
 if test "${1:-}" != -k; then
   echo start >> "$RUNNER_TEMP/agent-starts"
   test "$(wc -l < "$RUNNER_TEMP/agent-starts")" -eq 1 || exit 1
+else
+  # Explicit cleanup must remove every identity before stopping the agent.
+  # ssh-add -l returns 1 for a reachable agent with no identities.
+  status=0
+  ssh-add -l >/dev/null 2>&1 || status=$?
+  echo "$status" > "$RUNNER_TEMP/agent-stopped"
 fi
 exec "$REAL_AGENT" "$@"
 """
@@ -208,6 +214,8 @@ class ReleaseCredentialLifetime(unittest.TestCase):
     def check_cleanup(self, root, repo, env):
         self.assertEqual((root / "github-env").stat().st_size, 0, "GITHUB_ENV changed")
         self.assertEqual((root / "agent-starts").read_text().splitlines(), ["start"])
+        self.assertTrue((root / "agent-stopped").is_file(), "missing agent cleanup")
+        self.assertEqual((root / "agent-stopped").read_text().strip(), "1")
         socket = (root / "socket").read_text().strip()
         # Resolve relative paths from the actual publishing directory. Probing
         # them from the test runner's cwd would also fail for a live agent.
@@ -229,3 +237,25 @@ class ReleaseCredentialLifetime(unittest.TestCase):
                 if p.is_file()
             )
         )
+
+    @unittest.skipIf(os.name == "nt", "the tag job uses POSIX OpenSSH")
+    def test_invalid_key_stops_before_publication_and_cleans_agent(self):
+        for engine in ENGINES:
+            steps = yaml.safe_load((WORKFLOWS / engine).read_text())["jobs"]["tag"][
+                "steps"
+            ]
+            script = next(s["run"] for s in steps if s.get("id") == "publish")
+            with self.subTest(engine=engine), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                repo, env = prepare(root)
+                result = subprocess.run(
+                    ["bash", "-eo", "pipefail", "-c", script],
+                    cwd=repo,
+                    env={**env, "SSH_KEY": "invalid fixture"},
+                    capture_output=True,
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse((root / "verified").exists())
+                self.assertEqual((root / "github-env").stat().st_size, 0)
+                self.assertTrue((root / "agent-stopped").is_file())
+                self.assertFalse(list(repo.glob("release-agent.*")))

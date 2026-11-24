@@ -24,7 +24,7 @@ case "$1" in
     publish)
         test "$(cat "$token")" = fixture
         touch "$RUNNER_TEMP/publish-called"
-        exit "$PUBLISH_STATUS" ;;
+        exit "$FIXTURE_PUBLISH_STATUS" ;;
     *) exit 2 ;;
 esac
 """
@@ -58,18 +58,23 @@ class RegistryCredentialLifetime(unittest.TestCase):
         cli.write_text(PUBLISHER)
         cli.chmod(0o700)
         output = root / "output"
+        output.touch()
+        runner_env = root / "github-env"
+        runner_env.touch()
         env = {
             "PATH": os.environ["PATH"],
             "HOME": str(root / "runner-home"),
             "RUNNER_TEMP": str(root),
             "GITHUB_OUTPUT": str(output),
+            "GITHUB_ENV": str(runner_env),
             "LOGIN_STATUS": str(login),
-            "PUBLISH_STATUS": str(publish),
+            "FIXTURE_PUBLISH_STATUS": str(publish),
         }
         result = subprocess.run(
             ["bash", "-e", "-c", steps[0]["run"]], cwd=root, env=env
         )
         self.assertEqual(result.returncode, login)
+        self.assertEqual(runner_env.stat().st_size, 0, "GITHUB_ENV changed")
         private_home = Path((root / "where").read_text().strip())
         self.assertEqual(private_home.parent, root)
         self.assertNotEqual(private_home, Path(env["HOME"]))
@@ -77,10 +82,13 @@ class RegistryCredentialLifetime(unittest.TestCase):
         self.assertFalse(list(root.rglob("token.json")))
         self.assertEqual((root / "publish-called").exists(), login == 0)
         if login:
-            self.assertFalse(output.exists())
+            self.assertEqual(output.stat().st_size, 0)
         else:
-            self.assertEqual(output.read_text().strip(), f"status={publish}")
+            name, value = output.read_text().strip().split("=", 1)
+            self.assertEqual(name, "status")
             report = subprocess.run(
-                ["bash", "-e", "-c", steps[1]["run"]], cwd=root, env=env
+                ["bash", "-e", "-c", steps[1]["run"]],
+                cwd=root,
+                env={**env, "PUBLISH_STATUS": value},
             )
             self.assertEqual(report.returncode, publish)
