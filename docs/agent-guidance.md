@@ -177,15 +177,31 @@ the repository's own standards apply. They never widen what a prompt allows.
    the owner's `claude-rereview` label, it is not merged by hand.
 2. **No push while a review runs.** A push during a `PR Review` run moves the review to a
    commit that is no longer the head and still spends it.
-3. **No forced push,** `--force-with-lease` included. It does not reset the review budget
-   and it rewrites a branch another agent may hold. A refinement pull request (see
-   "Review rounds") goes on a new branch.
-4. **No comparison with the main branch.** Do not measure how far a branch is behind, do
-   not rebase a pull request branch onto the main branch, do not use the branch-update
-   button or its API, and do not write that a pull request is late: a late pull request
-   merges. The only exception is a real conflict (`mergeable_state` is `dirty`): merge the
-   main branch into the branch with a merge commit, resolve it, rerun the touched tests,
-   check that the merge did not change the meaning of either side, and push normally.
+3. **Only the PR's owning agent may rewrite its branch, with an explicit lease**
+   ([ADR-1147](adr/ADR-1147-the-pr-owner-rebases-conflicts-with-an-explicit-lease.md)).
+   This is allowed only for the rebase in rule 4. Read the PR branch directly from the
+   remote immediately before rebasing and save its current SHA. Confirm that SHA is
+   in the local PR history being rebased. If it is missing, fetch and incorporate
+   the remote commits and repeat the remote read before starting. Push only that
+   branch with `--force-with-lease=<branch>:<remote-sha>` using the saved SHA.
+   Never use bare `--force`, an implicit lease, or a forced refspec. No human
+   performs this rebase or push. An agent never rewrites another agent's branch or
+   `main`. Rule 2 applies to the push and to any retry.
+   A rejected lease means the remote ref changed. Read the branch and `origin/main`
+   again, confirm ownership and the conflict, preserve the new remote commits, and
+   restart the rebase and its checks once. If the ref is gone, ownership is unclear,
+   or the second lease fails, stop and report the blocker.
+   A force-push does not reset the three-review budget for the PR branch. When it is
+   exhausted, continue on a new branch under rules 5 and 7 and "Review rounds".
+   Only the owner may grant the existing one additional review.
+4. **Rebase only to resolve a real conflict.** When GitHub reports
+   `mergeable_state: dirty`, the PR's owning agent fetches and rebases onto
+   `origin/main`, resolves the conflict while preserving the changes from both sides,
+   verifies the rebased commit under rule 8 and publishes under rules 2 and 3.
+   Keep the PR in draft through the independent review in rule 10. Being behind
+   `main` alone is allowed. Do not measure the lag or report it as a blocker.
+   A merge commit, GitHub's branch-update button and its API may never be used to
+   integrate `main` into the PR branch.
 5. **One pull request in flight.** A pull request is in flight while a check runs on it, a
    review runs on it, or an approve waits for the merge. While one is in flight, open no
    other pull request (issue, relaunch or next slice) and push to no other branch. A pull
@@ -194,6 +210,7 @@ the repository's own standards apply. They never widen what a prompt allows.
    Notes marked "no action before merge" go to a follow-up pull request after the merge.
 7. **Owner decisions are left alone:** a pull request on the branch
    `ci/budget-counts-contract-reviews`, anything labelled `hold` or `do-not-merge`, a draft.
+   The owning agent may work on its own draft under rule 10, subject to owner holds.
 8. **The work is verified before the pull request exists** (ADR-1132). Before opening a
    pull request, and before each push to one, run the `unit` and `regression` commands of
    `ci.json` on a clean copy of the commit, plus what the change needs beyond them, and
@@ -203,9 +220,10 @@ the repository's own standards apply. They never widen what a prompt allows.
    fail on it. A command the
    session cannot run (a host its network refuses, `initdb` under the root user) is
    named there with the reason. The hosted Pipeline stays the gate; it is not the place
-   to find out whether a change works. After a conflict merge under rule 4, the touched
-   tests are enough. A journal, changelog or documentation entry is pushed with the
-   change it records; documentation is pushed alone only to fix a Blocker.
+   to find out whether a change works. A conflict rebase under rule 4, including a
+   retry, must pass that delivery gate on the rebased commit, including tests that
+   cover the conflict resolution. A journal, changelog or documentation entry is
+   pushed with the change it records; documentation is pushed alone only to fix a Blocker.
 9. **A pull request that changes the `ci.json` validator leaves a tree the earlier
    validator still passes** (ADR-1134). The Pipeline after merge runs the workflow of the
    commit before the merge: its `contract` job validates the merged tree, `ci.json` and
@@ -213,12 +231,21 @@ the repository's own standards apply. They never widen what a prompt allows.
    requests that added a key to `ci.json` together with the validator that accepts it
    (982, 996) each merged, then failed that job, and the test jobs of that run were skipped.
    Such a pull request replays the step before it is opened and before each push to it:
-   the validator of the main branch as the branch last took it (at its start, or at its
-   last merge of the main branch), on the tree after its commits. So a key enters
-   `ci.json` in a pull request after the one that taught the validator to accept it;
-   what fails without the key, a validator that requires it or a reader that refuses
+   the validator of the main branch as the branch last took it (at its start or its
+   latest integration of `main`, including a rule 4 rebase), on the tree after its
+   commits. So a key enters `ci.json` in a pull request after the one that taught
+   the validator to accept it. What fails without the key, a validator that requires
+   it or a reader that refuses
    its absence, comes with the key or after it; and a key leaves `ci.json` after the
    validator stopped requiring it and after every reader that refuses its absence is gone.
+10. **A rebased head is independently reviewed before it is ready.** The owning
+    agent publishes the tested head as a draft, returning its own ready PR to draft
+    before the push if needed. A separate reviewer session must approve the exact
+    published SHA after checking the conflict resolution and rule 8 evidence.
+    Record the approval in the PR and confirm the live head still matches the
+    approved SHA before marking it ready. A verdict for the pre-rebase SHA
+    cannot cover the rebased head. Rule 1 still requires hosted review and
+    checks on the current head for merge.
 
 ## Issues: no issue waits for the owner
 

@@ -3755,6 +3755,10 @@
     "ADR-1146": {
       "mirror": "ADR-1146-the-codex-drain-hashes-a-relative-rollout-in-the-job-directory-and-rescans.md",
       "path": "adr/cortex/1146-the-codex-drain-hashes-a-relative-rollout-in-the-job-directory-and-rescans.md"
+    },
+    "ADR-1147": {
+      "mirror": "ADR-1147-the-pr-owner-rebases-conflicts-with-an-explicit-lease.md",
+      "path": "adr/cortex/1147-the-pr-owner-rebases-conflicts-with-an-explicit-lease.md"
     }
   },
   "project": "cortex",

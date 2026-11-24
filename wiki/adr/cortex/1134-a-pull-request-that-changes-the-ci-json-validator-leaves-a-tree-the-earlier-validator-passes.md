@@ -12,6 +12,10 @@ title: A pull request that changes the ci.json validator leaves a tree the earli
 
 accepted. Adds rule 9 to the CI contract. Amends one sentence of ADR-1131: how another repository takes `low_risk_files`.
 
+ADR-1147 updates the integration point in decision 2 to include a conflict
+rebase. The validator still comes from the main commit last integrated into
+the PR branch.
+
 ## Context
 
 The Pipeline after merge is started by a `workflow_run` event and runs the workflow files of the default branch as they are when the event fires. Its first job, `resolve`, performs the merge. The jobs that follow therefore test the merge commit with the workflow of the commit before it. Read on the runs: run 43149580342 merged pull request 996 as `c84dfb5` and names `pipeline-post-merge.yml@f7a7690`, the tip of the main branch before that merge; run 42968565597 merged pull request 982 as `bbe537b` and names `pipeline-post-merge.yml@637f6aa`. GitHub's page on the event was not read in this session (its host is refused by the session's network); the two runs are the source.

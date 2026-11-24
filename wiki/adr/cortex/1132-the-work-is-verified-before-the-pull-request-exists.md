@@ -12,6 +12,9 @@ title: The work is verified before the pull request exists
 
 accepted. Adds rule 8 to the CI contract of `docs/agent-guidance.md` and a "Risk and rollback" section to the pull request template. It changes no workflow and no gate.
 
+ADR-1147 replaces the conflict-merge exception in decision 2. A conflict rebase
+now requires the full delivery gate on the rebased head.
+
 The number 1132 was first given, in the same session, to a decision that was withdrawn before it was pushed (a job that reverts a merge whose tests fail). Section 3 of the design journal of `cdeust/ci-autonome` cites "Cortex ADR-1132" with that earlier meaning.
 
 ## Context

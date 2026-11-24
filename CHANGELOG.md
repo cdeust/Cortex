@@ -133,6 +133,11 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- CI contract (ADR-1147): a real conflict with `main` is resolved by the PR's
+  owning agent with a rebase and an explicit lease pinned to the remote head
+  read before rebasing. The rebased head passes the delivery gate and an
+  independent review before it is marked ready. The review budget carries over.
+
 - A `create` or `replace` write that names its sources replaces the page's memory
   citations (issue #715, acceptance criterion 1). `write_governed_page` added the
   citations of each write to those of the earlier ones, so a page rewritten without
