@@ -85,6 +85,7 @@ def _erase_then_append(monkeypatch, cache: int) -> None:
         wiki_write.handler({"path": _PAGE, "content": "More.\n", "mode": "append"})
     )
     assert "error" not in out  # review of PR #1114, note 2
+    assert "citations_interrupted" not in out  # review of PR #1115, note 3
     assert _read()["freshness"]["state"] == PAGE_PENDING
 
 
