@@ -860,8 +860,9 @@ jobs:
             tagger_pid=$!
             wait "$tagger_pid"
           }
-          export -f publish_with_agent
-          ssh-agent -a "$agent_dir/sock" bash -euo pipefail -c publish_with_agent <<'PY' &
+          # Pass Bash the function body directly. A POSIX launcher may filter
+          # exported Bash functions from the environment before starting the agent.
+          ssh-agent -a "$agent_dir/sock" bash -euo pipefail -c "$(declare -f publish_with_agent); publish_with_agent" <<'PY' &
           #!/usr/bin/env python3
           """Publish validated package versions without overwriting an existing tag.
 
