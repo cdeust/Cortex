@@ -240,7 +240,8 @@ def _replace_citations(conn: Any, page_id: int, domain: str, citable: list[int])
     are inserted, so an identical rewrite inserts no row and PostgreSQL's
     insert trigger no longer raises ``citation_count`` and heat on each one
     (review of PR #1110, note 1); SQLite, with no unique index on
-    ``wiki_citations``, stores no repeat. Returns the number of distinct
+    ``wiki_citations``, inserts no repeat: a repeat an earlier ``append``
+    stored stays (review of PR #1115, note 1). Returns the number of distinct
     ids the page now cites for this write, kept or new: re-running the
     same write reports them again, not 0.
     """
@@ -310,9 +311,9 @@ def _sync_page_and_cite(
     skips it on its unique index ``(page_id, memory_id)``
     (``insert_citation``'s unqualified ON CONFLICT DO NOTHING). On SQLite,
     which has no such index, an ``append`` stores the repeat, which
-    ``wiki_read`` lists once (``GROUP BY``); a full write stores none
-    (``_replace_citations``). See ``_record_write`` for what a full write
-    replaces.
+    ``wiki_read`` lists once (``GROUP BY``); a full write inserts none and
+    keeps a repeat an earlier ``append`` stored (``_replace_citations``).
+    See ``_record_write`` for what a full write replaces.
     A wiki pointer memory is not citable (``_split_cited``), and that
     lookup runs before the unit takes its connection.
     Unlike wiki_read's ``_cite_page``, no window session is read: this
@@ -337,7 +338,10 @@ def _sync_page_and_cite(
     None is returned so the response can say the citations were not
     recorded. Returns (the write's citations as ``_record_write`` counts
     them, refused entries),
-    (0, []) when memory_ids is empty, None on failure.
+    (0, []) when memory_ids is empty or when the page row cannot be
+    resolved (``_record_write`` returns None): nothing is recorded, and the
+    refused entries are not reported (review of PR #1115, note 2), None on
+    failure.
     """
     try:
         settings = get_memory_settings()

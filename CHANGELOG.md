@@ -144,8 +144,9 @@ adheres to [Semantic Versioning](https://semver.org/).
   and inserts the others. A session read of the page (no memory id) is kept.
   PostgreSQL's citation trigger fires on insert only, so `citation_count` and heat
   are not lowered by the deletion, and an identical rewrite, which inserts no row,
-  no longer raises them (review of PR #1110, note 1); on SQLite a full write stores no
-  repeat row, while an `append` still stores one, listed once by `wiki_read`. An `append`, a full write with
+  no longer raises them (review of PR #1110, note 1); on SQLite a full write inserts no
+  repeat row and keeps one an earlier `append` stored, while an `append` still stores
+  one, listed once by `wiki_read`. An `append`, a full write with
   no `memory_ids` (the headless gap-fill, `ingest_document`) and one whose every id
   is refused keep the earlier citations: they do not say what the text rests on.
   For a full write, `citations_written` now counts the distinct memories the write
