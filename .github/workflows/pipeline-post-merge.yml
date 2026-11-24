@@ -1467,14 +1467,17 @@ jobs:
           RELEASE_TAGS: ${{ needs.contract.outputs.release_tags }}
           TESTED_SHA: ${{ needs.contract.outputs.tested_sha }}
         run: |
-          # OpenSSH ties the agent to the command. Remove the relative socket
-          # from its creating directory after the agent exits.
-          trap 'rm -f -- ./release-agent.sock' EXIT
-          ssh-agent -a ./release-agent.sock bash -euo pipefail <<'PUBLISH'
+          # The bare repo stays the working directory for Git and SSH. A private
+          # mktemp directory keeps the relative socket short and exclusively ours.
+          agent_dir="$(mktemp -d ./release-agent.XXXXXXXX)"
+          trap 'rm -rf -- "$agent_dir"' EXIT
+          ssh-agent -a "$agent_dir/sock" bash -euo pipefail <<'PUBLISH'
           trap 'ssh-add -D >/dev/null 2>&1; ssh-agent -k >/dev/null' EXIT
           printf '%s\n' "$SSH_KEY" | ssh-add - >/dev/null
           unset SSH_KEY
-          export GIT_SSH_COMMAND='ssh -o IdentityFile=none -o "UserKnownHostsFile=$RUNNER_TEMP/release-known-hosts" -o StrictHostKeyChecking=yes'
+          # The fresh agent is the only identity source; no host configuration or
+          # default key files participate. Only the GitHub host keys from fetch apply.
+          export GIT_SSH_COMMAND='ssh -F /dev/null -o IdentityFile=none -o IdentitiesOnly=no -o BatchMode=yes -o GlobalKnownHostsFile=/dev/null -o "UserKnownHostsFile=$RUNNER_TEMP/release-known-hosts" -o StrictHostKeyChecking=yes'
           python3 - <<'PY'
           #!/usr/bin/env python3
           """Publish validated package versions without overwriting an existing tag.
