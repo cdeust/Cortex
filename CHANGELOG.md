@@ -133,6 +133,18 @@ adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- The Claude review workflow is ready for a PR whose branch was rebased onto main
+  (ADR-1147, first of two pull requests). Its prompt told the review to read only the
+  commits pushed after the last reviewed one, and after a rebase that commit is no
+  longer in the PR's history: the review then had no instruction to read the whole
+  diff or the conflict resolution. The budget job now hands the review a `rewritten`
+  output, and on `"true"` the prompt asks for the full diff (`gh pr diff`) and for how
+  each conflict with main was resolved; any other value, including the empty one it
+  has until `scripts/ci_review_budget.py` produces it in the next pull request, keeps
+  today's incremental review. The budget job also gets `pull-requests: read`, which
+  that script needs to read the PR's commits and the `claude[bot]` comments that tie
+  a review run to the PR whatever its branch was called.
+
 - A `create` or `replace` write that names its sources replaces the page's memory
   citations (issue #715, acceptance criterion 1). `write_governed_page` added the
   citations of each write to those of the earlier ones, so a page rewritten without
