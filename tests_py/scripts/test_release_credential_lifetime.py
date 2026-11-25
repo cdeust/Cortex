@@ -253,19 +253,19 @@ class ReleaseCredentialLifetime(unittest.TestCase):
             status, output = fixture.finish(timeout=rs.RUNNER_SIGINT_WINDOW_S)
         except subprocess.TimeoutExpired:
             self.fail("the publisher held the step past the runner's window")
-        self.assertEqual(status, expected, output)
-        if expected == 1:
-            self.assertIn("::error::the publisher did not stop on SIGTERM", output)
+        self.assertIn(status, expected, output)
+        forced = "::error::the publisher did not stop on SIGTERM" in output
+        self.assertEqual(forced, status == 1, output)
         self.assert_released(fixture)
 
     def test_publisher_that_ignores_sigterm_is_killed_with_git_and_ssh(self):
         """A publisher deaf to SIGTERM must not hold the release nor leave Git."""
-        self.each_workflow(lambda p: self.stop_publisher(p, None, 1))
+        self.each_workflow(lambda p: self.stop_publisher(p, None, (1,)))
 
     def test_stopped_publisher_is_released_with_git_and_ssh(self):
-        self.each_workflow(
-            lambda p: self.stop_publisher(p, signal.SIGSTOP, 128 + signal.SIGINT)
-        )
+        """bash 5.3 resumes a stopped job it signals (130); 5.2 does not, so SIGKILL."""
+        codes = (128 + signal.SIGINT, 1)
+        self.each_workflow(lambda p: self.stop_publisher(p, signal.SIGSTOP, codes))
 
     def test_killed_step_leaves_an_agent_that_stops_by_itself(self):
         """No step code runs after SIGKILL: the agent is bound to the step command."""
