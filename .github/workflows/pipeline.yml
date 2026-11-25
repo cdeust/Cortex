@@ -840,29 +840,51 @@ jobs:
           RELEASE_TAGS: ${{ needs.contract.outputs.release_tags }}
           TESTED_SHA: ${{ needs.contract.outputs.tested_sha }}
         run: |
-          # The bare repo stays the working directory for Git and SSH. A private
-          # mktemp directory keeps the relative socket short and exclusively ours.
-          agent_dir="$(mktemp -d ./release-agent.XXXXXXXX)"
-          trap 'rm -rf -- "$agent_dir"' EXIT
-          publish_with_agent() {
-            trap 'trap "" INT TERM; ssh-add -D >/dev/null 2>&1 || :; ssh-agent -k >/dev/null 2>&1' EXIT
-            trap 'trap "" INT TERM; if [[ -n ${tagger_pid:-} ]]; then kill -TERM "$tagger_pid" 2>/dev/null || :; fi; exit 143' TERM
-            printf '%s\n' "$SSH_KEY" | ssh-add - >/dev/null
-            unset SSH_KEY
-            # The fresh agent is the only identity source; no host configuration or
-            # default key files participate. Only the GitHub host keys from fetch apply.
-            ssh_args=(ssh -F /dev/null -o IdentityFile=none -o IdentitiesOnly=no -o BatchMode=yes
-              -o GlobalKnownHostsFile=/dev/null -o "UserKnownHostsFile=\"$RUNNER_TEMP/release-known-hosts\""
-              -o StrictHostKeyChecking=yes)
-            printf -v GIT_SSH_COMMAND '%q ' "${ssh_args[@]}"
-            export GIT_SSH_COMMAND
-            python3 - <&0 &
-            tagger_pid=$!
-            wait "$tagger_pid"
+          # The write key lives only in an agent scoped to this step's command. exec
+          # makes this shell that command: the runner's SIGINT and SIGTERM, sent to
+          # this PID alone (actions/runner@1060fd3, src/Runner.Sdk/ProcessInvoker.cs),
+          # reach the traps below, and after a SIGKILL the agent stops by itself once
+          # its command is gone (OpenSSH ssh-agent.c checks its parent every 10 s).
+          # The socket gets a private directory under TMPDIR or /tmp: RUNNER_TEMP can
+          # be too deep for sun_path (104 bytes on macOS, 108 on Linux).
+          agent_dir="$(mktemp -d "${TMPDIR:-/tmp}/release-agent.XXXXXX")"
+          export AGENT_DIR="$agent_dir"
+          exec ssh-agent -a "$agent_dir/agent" bash -euo pipefail <<'PUBLISH'
+          publisher=
+          # TERM, then KILL after 3 s, so both stops fit in the runner's 7.5 s window.
+          stop() {
+            kill -TERM -- "$1" 2>/dev/null || return 0
+            for _ in $(seq 30); do kill -0 -- "$1" 2>/dev/null || return 0; sleep 0.1; done
+            kill -KILL -- "$1" 2>/dev/null || :
+            echo "::error::$2 did not stop on SIGTERM"
+            return 1
           }
-          # Pass Bash the function body directly. A POSIX launcher may filter
-          # exported Bash functions from the environment before starting the agent.
-          ssh-agent -a "$agent_dir/sock" bash -euo pipefail -c "$(declare -f publish_with_agent); publish_with_agent" <<'PY' &
+          # The agent holds the key, so it goes first; then the publisher's whole
+          # process group: Python, Git and the ssh client.
+          release() {
+            status=$?
+            trap '' INT TERM
+            stop "$SSH_AGENT_PID" "the signing agent" || status=1
+            if [[ -n $publisher ]]; then stop "-$publisher" "the publisher" || status=1; fi
+            rm -f -- "$SSH_AUTH_SOCK"
+            rmdir -- "$AGENT_DIR"
+            exit "$status"
+          }
+          trap release EXIT
+          trap 'exit 130' INT
+          trap 'exit 143' TERM
+          printf '%s\n' "$SSH_KEY" | ssh-add - >/dev/null
+          unset SSH_KEY
+          # Only the agent's identity and GitHub's fetched host keys take part: no
+          # configuration, key or known-hosts file of the runner does.
+          ssh_args=(ssh -F /dev/null -o IdentityFile=none -o IdentitiesOnly=no -o BatchMode=yes
+            -o GlobalKnownHostsFile=/dev/null -o "UserKnownHostsFile=\"$RUNNER_TEMP/release-known-hosts\""
+            -o StrictHostKeyChecking=yes)
+          printf -v GIT_SSH_COMMAND '%q ' "${ssh_args[@]}"
+          export GIT_SSH_COMMAND
+          # Job control puts the publisher in a process group of its own.
+          set -m
+          python3 - <<'PY' &
           #!/usr/bin/env python3
           """Publish validated package versions without overwriting an existing tag.
 
@@ -977,19 +999,10 @@ jobs:
           if __name__ == "__main__":
               sys.exit(main())
           PY
-          publisher_pid=$!
-          # A trapped signal interrupts the wait builtin even when delivered to
-          # this shell alone. Reap the publisher after it revokes the identity.
-          stop_publisher() {
-            trap '' INT TERM
-            kill -TERM "$publisher_pid" 2>/dev/null || :
-            wait "$publisher_pid" 2>/dev/null || :
-            exit "$1"
-          }
-          trap 'stop_publisher 143' TERM
-          trap 'stop_publisher 130' INT
-          wait "$publisher_pid"
-
+          publisher=$!
+          set +m
+          wait "$publisher"
+          PUBLISH
       - name: Summarize missing release key
         if: steps.guard.outputs.has_deploy_key != 'true'
         run: echo "## Release gate skipped, RELEASE_TAG_SSH_KEY not configured" >> "$GITHUB_STEP_SUMMARY"

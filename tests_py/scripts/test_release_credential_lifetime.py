@@ -1,261 +1,289 @@
-"""Exercise the release step with Git, a disposable identity and no network."""
+"""Native proof that the release write key lives only inside its publish step.
+
+A probe that reports "agent gone" proves nothing unless the same probe first reached
+the live agent: ssh-add -l also answers 2 when the socket path exceeds sun_path. Every
+lifetime assertion is therefore paired with a positive control the transport took, on
+the same socket path and from the same directory, while the agent was alive.
+
+The bounds are the runner's (see _release_step_fixture): success, rejection, an
+unusable key, SIGINT, SIGTERM, a second signal, an agent or a publisher that no longer
+reacts to SIGTERM, and SIGKILL of the step shell.
+"""
 
 from __future__ import annotations
 
 import os
 import shutil
+import signal
 import subprocess
 import tempfile
+import time
 import unittest
-from itertools import pairwise
 from pathlib import Path
 
-import yaml
+from tests_py.scripts import _release_step_fixture as rs
 
 
-WORKFLOWS = Path(__file__).resolve().parents[2] / ".github" / "workflows"
-ENGINES = ("pipeline.yml", "pipeline-post-merge.yml")
-KEY = "${{ secrets.RELEASE_TAG_SSH_KEY }}"
-# Git invokes this fixture in place of an SSH connection. The real agent must
-# sign with the matching private key before the local bare remote accepts Git.
-SSH_TRANSPORT = """#!/bin/sh
-set -eu
-printf '%s\\n' "$SSH_AUTH_SOCK" > "$RUNNER_TEMP/socket"
-test -z "${SSH_KEY+x}"
-ssh-add -T "$RUNNER_TEMP/identity.pub"
-case "$*" in
-  *git-upload-pack*) service=git-upload-pack ;;
-  *git-receive-pack*) service=git-receive-pack ;;
-  *) exit 1 ;;
-esac
-printf '%s\\n' "$@" > "$RUNNER_TEMP/$service.args"
-"$REAL_SSH" -G "$@" > "$RUNNER_TEMP/$service.config"
-if test "$service" = git-receive-pack; then
-  echo "authenticated push" > "$RUNNER_TEMP/verified"
-  test "$PUBLISH_STATUS" = 0 || exit "$PUBLISH_STATUS"
-fi
-exec "$service" "$RUNNER_TEMP/remote"
-"""
-# Count attempted agent launches. Refuse an additional daemon before it can
-# outlive this fixture, even when a mutated step ignores its exit status.
-SSH_AGENT = """#!/bin/sh
-set -eu
-if test "${1:-}" != -k; then
-  echo start >> "$RUNNER_TEMP/agent-starts"
-  test "$(wc -l < "$RUNNER_TEMP/agent-starts")" -eq 1 || exit 1
-else
-  # Explicit cleanup must remove every identity before stopping the agent.
-  # ssh-add -l returns 1 for a reachable agent with no identities.
-  status=0
-  ssh-add -l >/dev/null 2>&1 || status=$?
-  echo "$status" > "$RUNNER_TEMP/agent-stopped"
-fi
-exec "$REAL_AGENT" "$@"
-"""
-
-
-def git(repo, *args, input_text=None):
-    return subprocess.run(
-        ["git", "-C", repo, *args],
-        input=input_text,
-        text=True,
-        check=True,
-        capture_output=True,
-    ).stdout.strip()
-
-
-def bare_repository(root):
-    repo = root / "release-repo"
-    git(root, "init", "--bare", str(repo))
-    git(root, "init", "--bare", str(root / "remote"))
-    git(repo, "remote", "add", "origin", "ssh://git@github.com/fixture/repo.git")
-    tree = git(repo, "mktree", input_text="")
-    sha = git(
-        repo,
-        "-c",
-        "user.name=test",
-        "-c",
-        "user.email=test@example.org",
-        "commit-tree",
-        tree,
-        "-m",
-        "release fixture",
-    )
-    return repo, sha
-
-
-def prepare(root):
-    repo, sha = bare_repository(root)
-    identity = root / "identity"
-    subprocess.run(
-        ["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", identity], check=True
-    )
-    key = identity.read_text()
-    identity.unlink()
-    for name, contents in (("ssh", SSH_TRANSPORT), ("ssh-agent", SSH_AGENT)):
-        transport = root / name
-        transport.write_text(contents)
-        transport.chmod(0o700)
-    (root / "github-env").touch()
-    env = {
-        "HOME": str(root),
-        "TMPDIR": str(root),
-        "GIT_CONFIG_NOSYSTEM": "1",
-        "REAL_SSH": shutil.which("ssh"),
-        "REAL_AGENT": shutil.which("ssh-agent"),
-        "RUNNER_TEMP": str(root),
-        "SSH_KEY": key,
-        "TESTED_SHA": sha,
-        "RELEASE_TAGS": '["v1.0.0"]',
-        "GITHUB_STEP_SUMMARY": str(root / "summary"),
-        "GITHUB_ENV": str(root / "github-env"),
-        "GIT_SSH_VARIANT": "ssh",
-        "PATH": str(root) + os.pathsep + os.environ["PATH"],
-    }
-    return repo, env
-
-
+@unittest.skipIf(os.name == "nt", "the tag job runs on Ubuntu with POSIX OpenSSH")
 class ReleaseCredentialLifetime(unittest.TestCase):
-    def test_release_key_is_scoped_to_publication(self):
-        for name in ENGINES:
-            tag = yaml.safe_load((WORKFLOWS / name).read_text())["jobs"]["tag"]
-            with self.subTest(engine=name):
-                recipients = [
-                    step.get("id") for step in tag["steps"] if KEY in str(step)
-                ]
-                self.assertEqual(recipients, ["publish"])
-                self.assertEqual(tag["permissions"], {"contents": "read"})
+    def fixture(self, path, key=None):
+        temp = Path(tempfile.mkdtemp(prefix="rc"))
+        self.addCleanup(shutil.rmtree, temp, True)
+        fixture = rs.Fixture(temp, rs.publish_body(path), key)
+        self.addCleanup(shutil.rmtree, fixture.socket_base, True)
+        self.addCleanup(fixture.cleanup)
+        return fixture
 
-    def test_repository_checkouts_discard_credentials(self):
-        for path in WORKFLOWS.glob("*.yml"):
-            jobs = yaml.safe_load(path.read_text())["jobs"]
-            for job, body in jobs.items():
-                for step in body.get("steps", []):
-                    if step.get("uses", "").startswith("actions/checkout@"):
-                        with self.subTest(workflow=path.name, job=job):
-                            self.assertIs(
-                                step.get("with", {}).get("persist-credentials"), False
-                            )
+    def each_workflow(self, check):
+        for path in rs.WORKFLOWS:
+            with self.subTest(workflow=str(path)):
+                check(path)
 
-    def test_catalog_pushes_authenticate_only_for_their_git_command(self):
-        workflow = yaml.safe_load((WORKFLOWS / "publish-ccplugins.yml").read_text())
-        steps = workflow["jobs"]["sync"]["steps"]
-        pushes = [s for s in steps if "${{ secrets.CCPLUGINS_PAT }}" in str(s)]
+    def assert_released(self, fixture):
+        """Nothing that could still use the key outlives the step."""
+        starts = (fixture.log / "agent-starts").read_text().splitlines()
+        starts = [
+            first for first in starts if first != "-k"
+        ]  # ssh-agent -k starts none
         self.assertEqual(
-            [s["name"] for s in pushes],
-            ["Sync fork with upstream", "Push + open (or update) PR"],
+            len(starts), 1, "exactly one signing agent is started: %r" % starts
         )
-        for step in pushes:
-            self.assertEqual(step["env"]["GH_TOKEN"], "${{ secrets.CCPLUGINS_PAT }}")
-            self.assertIn(
-                "git -c credential.helper= "
-                "-c 'credential.helper=!gh auth git-credential' push",
-                step["run"],
-            )
-
-    @unittest.skipIf(os.name == "nt", "the tag job runs on Ubuntu with POSIX OpenSSH")
-    def test_identity_lifetime(self):
-        for name in ENGINES:
-            tag = yaml.safe_load((WORKFLOWS / name).read_text())["jobs"]["tag"]
-            publish = next(step for step in tag["steps"] if step.get("id") == "publish")
-            for status in (0, 1):
-                with (
-                    self.subTest(engine=name, status=status),
-                    tempfile.TemporaryDirectory() as tmp,
-                ):
-                    # Linux sockaddr_un.sun_path holds 108 bytes. Even the
-                    # parent of this fixture cannot be an absolute socket path.
-                    root = Path(tmp) / ("r" * 108)
-                    root.mkdir()
-                    self.exercise(root, publish["run"], status)
-
-    def exercise(self, root, script, status):
-        repo, env = prepare(root)
-        (repo / "release-agent.sock").write_text("pre-existing file")
-        result = subprocess.run(
-            ["bash", "-eo", "pipefail", "-c", script],
-            cwd=repo,
-            env={**env, "PUBLISH_STATUS": str(status)},
-            capture_output=True,
-            text=True,
+        for record in fixture.transports():
+            self.assert_agent_gone(fixture, record)
+            self.assert_transport_gone(record)
+        leftovers = [
+            r for r in rs.processes() if not r[2].startswith("Z") and fixture.owns(r[3])
+        ]
+        self.assertEqual(leftovers, [], "a process of the step outlived it")
+        self.assertEqual(set(os.listdir(fixture.runner_temp)), fixture.runner_entries)
+        self.assertEqual(
+            os.listdir(fixture.socket_base), [], "the step left files in TMPDIR"
         )
-        self.assertEqual(result.returncode, status, result.stderr)
-        self.assertTrue(
-            (root / "verified").is_file(),
-            "push did not authenticate with the test identity",
-        )
-        self.check_transport(root)
-        self.check_cleanup(root, repo, env)
-        refs = git(root / "remote", "tag", "--list")
-        self.assertEqual(refs, "" if status else "v1.0.0")
-        if not status:
+        for name, path in fixture.commands.items():
             self.assertEqual(
-                git(root / "remote", "rev-parse", "v1.0.0^{}"), env["TESTED_SHA"]
+                path.read_text(), "", name + " must not carry anything from this step"
             )
-
-    def check_transport(self, root):
-        for service in ("git-upload-pack", "git-receive-pack"):
-            args = (root / f"{service}.args").read_text().splitlines()
-            self.assertIn(("-F", "/dev/null"), pairwise(args))
-            config = (root / f"{service}.config").read_text().splitlines()
-            identities = [opt for opt in config if opt.startswith("identityfile ")]
-            self.assertEqual(identities, ["identityfile none"])
-            for setting in (
-                "hostname github.com",
-                "user git",
-                "identitiesonly no",
-                "batchmode yes",
-                "stricthostkeychecking true",
-                "globalknownhostsfile /dev/null",
-                f"userknownhostsfile {root}/release-known-hosts",
-            ):
-                self.assertIn(setting, config)
-
-    def check_cleanup(self, root, repo, env):
-        self.assertEqual((root / "github-env").stat().st_size, 0, "GITHUB_ENV changed")
-        self.assertEqual((root / "agent-starts").read_text().splitlines(), ["start"])
-        self.assertTrue((root / "agent-stopped").is_file(), "missing agent cleanup")
-        self.assertEqual((root / "agent-stopped").read_text().strip(), "1")
-        socket = (root / "socket").read_text().strip()
-        # Resolve relative paths from the actual publishing directory. Probing
-        # them from the test runner's cwd would also fail for a live agent.
-        followup = subprocess.run(
-            ["ssh-add", "-l"],
-            cwd=repo,
-            capture_output=True,
-            env={"PATH": os.environ["PATH"], "SSH_AUTH_SOCK": socket},
-        )
-        self.assertEqual(followup.returncode, 2, followup.stdout)
-        self.assertFalse(os.path.lexists(repo / socket))
-        self.assertFalse((repo / socket).parent.exists())
-        self.assertEqual([p for p in root.rglob("*") if p.is_socket()], [])
-        self.assertEqual((repo / "release-agent.sock").read_text(), "pre-existing file")
-        self.assertFalse(
-            any(
-                env["SSH_KEY"].encode() in p.read_bytes()
-                for p in root.rglob("*")
-                if p.is_file()
-            )
-        )
-
-    @unittest.skipIf(os.name == "nt", "the tag job uses POSIX OpenSSH")
-    def test_invalid_key_stops_before_publication_and_cleans_agent(self):
-        for engine in ENGINES:
-            steps = yaml.safe_load((WORKFLOWS / engine).read_text())["jobs"]["tag"][
-                "steps"
-            ]
-            script = next(s["run"] for s in steps if s.get("id") == "publish")
-            with self.subTest(engine=engine), tempfile.TemporaryDirectory() as tmp:
-                root = Path(tmp)
-                repo, env = prepare(root)
-                result = subprocess.run(
-                    ["bash", "-eo", "pipefail", "-c", script],
-                    cwd=repo,
-                    env={**env, "SSH_KEY": "invalid fixture"},
-                    capture_output=True,
+        for path in fixture.root.rglob("*"):
+            if path.is_file() and not path.is_symlink():
+                self.assertNotIn(
+                    fixture.secret_body.encode(), path.read_bytes(), str(path)
                 )
-                self.assertNotEqual(result.returncode, 0)
-                self.assertFalse((root / "verified").exists())
-                self.assertEqual((root / "github-env").stat().st_size, 0)
-                self.assertTrue((root / "agent-stopped").is_file())
-                self.assertFalse(list(repo.glob("release-agent.*")))
+
+    def assert_agent_gone(self, fixture, record):
+        self.assertEqual(
+            record["list"], "0", "positive control: the transport reached the agent"
+        )
+        socket = (
+            fixture.repo / record["socket"]
+        )  # a relative path resolves from the step
+        self.assertLess(len(record["socket"].encode()), rs.SUN_PATH_BYTES)
+        self.assertNotIn(
+            socket.parent,
+            (fixture.repo, fixture.runner_temp),
+            "the socket lives in a directory created for it alone",
+        )
+        self.assertFalse(
+            rs.alive(record["agent"]), "the signing agent outlived the step"
+        )
+        self.assertFalse(socket.exists(), "the agent socket outlived the step")
+        self.assertFalse(
+            socket.parent.exists(), "the socket directory outlived the step"
+        )
+        probe = subprocess.run(
+            ["ssh-add", "-l"],
+            cwd=fixture.repo,
+            capture_output=True,
+            env=dict(fixture.env, SSH_AUTH_SOCK=record["socket"]),
+        )
+        self.assertEqual(
+            probe.returncode, 2, "the probe that reached the agent no longer does"
+        )
+
+    def assert_transport_gone(self, record):
+        deadline = time.monotonic() + rs.TRANSPORT_EXIT_S
+        for pid in (record["pid"], record["parent"]):
+            while rs.alive(pid) and time.monotonic() < deadline:
+                time.sleep(0.02)
+            self.assertFalse(rs.alive(pid), "git or its ssh client outlived the step")
+
+    def assert_transport_isolated(self, record, fixture):
+        config = record["config"]
+        self.assertEqual(
+            record["key_in_environment"], "", "the raw key reached the transport"
+        )
+        self.assertEqual(
+            record["signed"], "0", "the agent signs with the release identity"
+        )
+        self.assertEqual(config.get("identityfile"), "none")
+        self.assertEqual(config.get("identitiesonly"), "no")
+        self.assertEqual(config.get("batchmode"), "yes")
+        self.assertEqual(config.get("stricthostkeychecking"), "true")
+        self.assertEqual(config.get("globalknownhostsfile"), "/dev/null")
+        known = str(fixture.runner_temp / "release-known-hosts")
+        self.assertEqual(config.get("userknownhostsfile"), known)
+        self.assertNotIn("proxycommand", config, "the host's ssh configuration applied")
+
+    def test_success_publishes_through_git_ssh_and_releases_the_key(self):
+        def check(path):
+            fixture = self.fixture(path)
+            fixture.start()
+            status, output = fixture.finish()
+            self.assertEqual(status, 0, output)
+            self.assertEqual(fixture.remote_tag(), fixture.sha, output)
+            self.assertTrue(
+                fixture.transports(), "Git never ran the configured transport"
+            )
+            for record in fixture.transports():
+                self.assert_transport_isolated(record, fixture)
+            self.assert_released(fixture)
+
+        self.each_workflow(check)
+
+    def test_rejected_push_fails_and_releases_the_key(self):
+        def check(path):
+            fixture = self.fixture(path)
+            hook = fixture.remote / "hooks" / "pre-receive"
+            hook.write_text("#!/bin/sh\necho refused by fixture >&2\nexit 1\n")
+            hook.chmod(0o700)
+            fixture.start()
+            status, output = fixture.finish()
+            self.assertEqual(status, 1, output)
+            self.assertIsNone(fixture.remote_tag())
+            self.assertTrue(fixture.transports(), output)
+            self.assert_released(fixture)
+
+        self.each_workflow(check)
+
+    def test_unusable_key_fails_before_any_transport(self):
+        def check(path):
+            fixture = self.fixture(path, key="not a private key\n")
+            fixture.start()
+            status, output = fixture.finish()
+            self.assertNotEqual(status, 0, output)
+            self.assertEqual(fixture.transports(), [], output)
+            self.assert_released(fixture)
+            self.assertEqual(os.listdir(fixture.socket_base), [])
+
+        self.each_workflow(check)
+
+    def cancel(self, path, signals, window, expected):
+        fixture = self.fixture(path)
+        fixture.start(block=True)
+        fixture.wait_ready()
+        for sig in signals:  # the runner signals the step PID, not its group
+            os.kill(fixture.process.pid, sig)
+            time.sleep(0.05)
+        try:
+            status, output = fixture.finish(timeout=window)
+        except subprocess.TimeoutExpired:
+            self.fail(
+                "the step did not stop within the runner's %.1f s window" % window
+            )
+        self.assertEqual(status, expected, output)
+        self.assertIsNone(fixture.remote_tag())
+        self.assert_released(fixture)
+
+    def test_runner_sigint_releases_the_key_within_its_window(self):
+        self.each_workflow(
+            lambda p: self.cancel(
+                p, [signal.SIGINT], rs.RUNNER_SIGINT_WINDOW_S, 128 + signal.SIGINT
+            )
+        )
+
+    def test_sigterm_releases_the_key_within_the_runner_window(self):
+        self.each_workflow(
+            lambda p: self.cancel(
+                p, [signal.SIGTERM], rs.RUNNER_SIGTERM_WINDOW_S, 128 + signal.SIGTERM
+            )
+        )
+
+    def test_second_signal_during_release_does_not_cut_it_short(self):
+        """The runner follows SIGINT with SIGTERM; a terminal may send two SIGINTs."""
+        self.each_workflow(
+            lambda p: self.cancel(
+                p,
+                [signal.SIGINT, signal.SIGTERM],
+                rs.RUNNER_SIGINT_WINDOW_S,
+                128 + signal.SIGINT,
+            )
+        )
+
+    def test_agent_that_ignores_sigterm_is_killed_and_fails_the_step(self):
+        def check(path):
+            fixture = self.fixture(path)
+            hook = fixture.remote / "hooks" / "pre-receive"
+            # A stopped agent cannot act on SIGTERM; SIGKILL still ends it.
+            hook.write_text(
+                '#!/bin/sh\nkill -STOP "$(cat "$FIXTURE_LOG/agent-pid")"\nexit 0\n'
+            )
+            hook.chmod(0o700)
+            fixture.env["FIXTURE_RECORD_AGENT"] = "1"
+            started = time.monotonic()
+            fixture.start()
+            status, output = fixture.finish()
+            self.assertLess(time.monotonic() - started, rs.RUNNER_SIGINT_WINDOW_S)
+            self.assertEqual(status, 1, output)
+            self.assertIn("::error::the signing agent did not stop on SIGTERM", output)
+            self.assert_released(fixture)
+
+        self.each_workflow(check)
+
+    def stop_publisher(self, path, disable, expected):
+        fixture = self.fixture(path)
+        if disable is None:
+            fixture.publisher_ignores_sigterm()
+        fixture.start(block=True)
+        record = fixture.wait_ready()
+        self.assertEqual(record["list"], "0")
+        if disable is not None:
+            os.kill(fixture.publisher(record["agent"]), disable)
+        os.kill(fixture.process.pid, signal.SIGINT)
+        try:
+            status, output = fixture.finish(timeout=rs.RUNNER_SIGINT_WINDOW_S)
+        except subprocess.TimeoutExpired:
+            self.fail("the publisher held the step past the runner's window")
+        self.assertEqual(status, expected, output)
+        if expected == 1:
+            self.assertIn("::error::the publisher did not stop on SIGTERM", output)
+        self.assert_released(fixture)
+
+    def test_publisher_that_ignores_sigterm_is_killed_with_git_and_ssh(self):
+        """A publisher deaf to SIGTERM must not hold the release nor leave Git."""
+        self.each_workflow(lambda p: self.stop_publisher(p, None, 1))
+
+    def test_stopped_publisher_is_released_with_git_and_ssh(self):
+        self.each_workflow(
+            lambda p: self.stop_publisher(p, signal.SIGSTOP, 128 + signal.SIGINT)
+        )
+
+    def test_killed_step_leaves_an_agent_that_stops_by_itself(self):
+        """No step code runs after SIGKILL: the agent is bound to the step command."""
+
+        def check(path):
+            fixture = self.fixture(path)
+            fixture.start(block=True)
+            record = fixture.wait_ready()
+            self.assertEqual(record["list"], "0")
+            os.kill(fixture.process.pid, signal.SIGKILL)
+            # The runner kills the remaining tree afterwards (fixture.cleanup plays
+            # that part); only the agent, which holds the key, must not wait for it.
+            fixture.process.wait(timeout=5)
+            deadline = time.monotonic() + rs.OPENSSH_PARENT_CHECK_S + 2
+            while rs.alive(record["agent"]) and time.monotonic() < deadline:
+                time.sleep(0.1)
+            self.assertFalse(
+                rs.alive(record["agent"]), "the agent kept the key after SIGKILL"
+            )
+            probe = subprocess.run(
+                ["ssh-add", "-l"],
+                cwd=fixture.repo,
+                capture_output=True,
+                env=dict(fixture.env, SSH_AUTH_SOCK=record["socket"]),
+            )
+            self.assertEqual(probe.returncode, 2)
+
+        self.each_workflow(check)
+
+
+if __name__ == "__main__":
+    unittest.main()
