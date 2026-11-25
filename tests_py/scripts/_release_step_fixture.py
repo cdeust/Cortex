@@ -43,6 +43,7 @@ SUN_PATH_BYTES = 104
 # source: actions/runner@1060fd3 src/Runner.Sdk/ProcessInvoker.cs lines 32-33, 443-464:
 # SIGINT to the step PID, SIGTERM 7.5 s later, process tree killed 2.5 s after that.
 RUNNER_SIGINT_WINDOW_S = 7.5
+# source: same ProcessInvoker.cs lines: the tree kill follows SIGTERM by 2.5 s.
 RUNNER_SIGTERM_WINDOW_S = 2.5
 # source: a real ssh client ends on EOF once Git is gone; one second covers scheduling.
 TRANSPORT_EXIT_S = 1.0
