@@ -14,7 +14,7 @@ from pathlib import Path
 _SCRIPTS = str(Path(__file__).resolve().parent)
 if _SCRIPTS not in sys.path:
     sys.path.insert(0, _SCRIPTS)
-from ci_pipeline_source_contract import check_sources  # noqa: E402
+from ci_pipeline_source_contract import check_checkout_credentials, check_sources  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "pipeline.yml"
@@ -180,11 +180,10 @@ def check_runtime_contract(text: str, *, post_merge: bool = False) -> list[str]:
                 bodies.get(job, []), "continue-on-error"
             ) not in ("", "false"):
                 failures.append(f"{job} must not ignore failures")
-        return (
-            failures
-            + ([] if post_merge else _check_merge_results(bodies.get("merge", [])))
-            + check_sources(bodies, _field, TEST_JOBS, post_merge=post_merge)
-        )
+        if not post_merge:
+            failures += _check_merge_results(bodies.get("merge", []))
+        failures += check_sources(bodies, _field, TEST_JOBS, post_merge=post_merge)
+        return failures or check_checkout_credentials(text)
     except ValueError as error:
         return [str(error)]
 
@@ -200,6 +199,14 @@ def main() -> int:
     for text, post_merge in ((direct, False), (engine, True)):
         failures += check(text, post_merge=post_merge)
         failures += check_runtime_contract(text, post_merge=post_merge)
+    for path in sorted(POST_MERGE_WORKFLOW.parent.iterdir()):
+        if path not in paths[:2] and path.suffix in {".yml", ".yaml"}:
+            failures.extend(
+                f"{path.name}: {failure}"
+                for failure in check_checkout_credentials(
+                    path.read_text(encoding="utf-8")
+                )
+            )
     if failures:
         print("Pipeline gate completeness: FAIL", file=sys.stderr)
         for failure in failures:

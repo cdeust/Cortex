@@ -51,6 +51,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
+          persist-credentials: false
       - name: Record tested commit
         id: source
         env:
@@ -473,6 +474,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.contract.outputs.tested_sha }}
+          persist-credentials: false
 
       - name: Restore Cargo build cache
         id: cargo_cache
@@ -602,6 +604,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.contract.outputs.tested_sha }}
+          persist-credentials: false
 
       - name: Cache Cargo build
         if: hashFiles('Cargo.lock') != ''
@@ -632,6 +635,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.contract.outputs.tested_sha }}
+          persist-credentials: false
 
       - name: Cache Cargo build
         if: hashFiles('Cargo.lock') != ''
@@ -669,6 +673,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.contract.outputs.tested_sha }}
+          persist-credentials: false
 
       - name: Install the Claude Code CLI
         # source: https://docs.npmjs.com/cli/v11/commands/npm-ci
@@ -705,6 +710,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.contract.outputs.tested_sha }}
+          persist-credentials: false
 
       - name: Install the Claude Code CLI
         # source: https://docs.npmjs.com/cli/v11/commands/npm-ci
@@ -781,7 +787,7 @@ jobs:
       && needs.install.result == 'success'
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     concurrency:
       group: release-tag-${{ needs.contract.outputs.release_group }}
       cancel-in-progress: false
@@ -789,30 +795,18 @@ jobs:
       - name: Guard, skip cleanly when RELEASE_TAG_SSH_KEY is missing
         id: guard
         env:
-          SSH_KEY: ${{ secrets.RELEASE_TAG_SSH_KEY }}
-        run: |
-          if [ -z "$SSH_KEY" ]; then
-            echo "RELEASE_TAG_SSH_KEY secret not configured, skipping."
-            echo "Add the private half of a write-enabled repository deploy"
-            echo "key at Settings -> Secrets and variables -> Actions."
-            echo "has_deploy_key=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_deploy_key=true" >> "$GITHUB_OUTPUT"
-          fi
+          HAS_DEPLOY_KEY: ${{ secrets.RELEASE_TAG_SSH_KEY != '' }}
+        run: echo "has_deploy_key=$HAS_DEPLOY_KEY" >> "$GITHUB_OUTPUT"
 
-      # No working tree of the tested commit is checked out here. This job holds
-      # a write-enabled deploy key and runs after a workflow_run event, so a
-      # checkout is the CodeQL finding actions/untrusted-checkout (Cortex PR839,
-      # ai-architect-mcp-codebase PR471, high). The publish step needs only the
-      # commit object and an authenticated origin: a bare repository with the
-      # commit fetched by SHA gives both and executes nothing from the commit.
+      # Fetch only the tested commit object, over HTTPS with the read token.
+      # A bare repository executes nothing from the tested tree (Cortex PR839).
+      # Only the publish step receives the deploy key for its SSH push.
       # GitHub's SSH host keys are read from api.github.com/meta over TLS at run
       # time (source: docs.github.com, "GitHub's SSH key fingerprints"), the
       # same keys actions/checkout installs, without a hard-coded copy to age.
       - name: Fetch the tested commit into a bare repository
         if: steps.guard.outputs.has_deploy_key == 'true'
         env:
-          SSH_KEY: ${{ secrets.RELEASE_TAG_SSH_KEY }}
           TESTED_SHA: ${{ needs.contract.outputs.tested_sha }}
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -821,17 +815,14 @@ jobs:
             *[!0-9a-f]* | '') echo "::error::tested_sha is not a lowercase hex SHA"; exit 1 ;;
           esac
           [ "${#TESTED_SHA}" -eq 40 ] || { echo "::error::tested_sha is not 40 hex chars"; exit 1; }
-          key_dir="$RUNNER_TEMP/release-key"
-          (umask 077 && mkdir -p "$key_dir" && printf '%s\n' "$SSH_KEY" > "$key_dir/id")
-          gh api meta --jq '.ssh_keys[] | "github.com " + .' > "$key_dir/known_hosts"
-          [ -s "$key_dir/known_hosts" ] || { echo "::error::api.github.com/meta returned no SSH host keys"; exit 1; }
-          ssh_command="ssh -i $key_dir/id -o IdentitiesOnly=yes -o UserKnownHostsFile=$key_dir/known_hosts -o StrictHostKeyChecking=yes"
-          echo "GIT_SSH_COMMAND=$ssh_command" >> "$GITHUB_ENV"
-          export GIT_SSH_COMMAND="$ssh_command"
+          known_hosts="$RUNNER_TEMP/release-known-hosts"
+          gh api meta --jq '.ssh_keys[] | "github.com " + .' > "$known_hosts"
+          [ -s "$known_hosts" ] || { echo "::error::api.github.com/meta returned no SSH host keys"; exit 1; }
           repo="$RUNNER_TEMP/release-repo"
           git init --quiet --bare "$repo"
-          git -C "$repo" remote add origin "git@github.com:${GITHUB_REPOSITORY}.git"
-          git -C "$repo" fetch --quiet --depth=1 origin "$TESTED_SHA"
+          git -C "$repo" remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git -C "$repo" -c credential.helper= -c 'credential.helper=!gh auth git-credential' fetch --quiet --depth=1 origin "$TESTED_SHA"
+          git -C "$repo" remote set-url origin "git@github.com:${GITHUB_REPOSITORY}.git"
           [ "$(git -C "$repo" cat-file -t "$TESTED_SHA")" = commit ] || { echo "::error::fetched object is not a commit"; exit 1; }
 
       - name: Set up Python
@@ -845,10 +836,55 @@ jobs:
         if: steps.guard.outputs.has_deploy_key == 'true'
         working-directory: ${{ runner.temp }}/release-repo
         env:
+          SSH_KEY: ${{ secrets.RELEASE_TAG_SSH_KEY }}
           RELEASE_TAGS: ${{ needs.contract.outputs.release_tags }}
           TESTED_SHA: ${{ needs.contract.outputs.tested_sha }}
         run: |
-          python3 - <<'PY'
+          # The write key lives only in an agent scoped to this step's command. exec
+          # makes this shell that command: the runner's SIGINT and SIGTERM, sent to
+          # this PID alone (actions/runner@1060fd3, src/Runner.Sdk/ProcessInvoker.cs),
+          # reach the traps below, and after a SIGKILL the agent stops by itself once
+          # its command is gone (OpenSSH ssh-agent.c checks its parent every 10 s).
+          # The socket gets a private directory under TMPDIR or /tmp: RUNNER_TEMP can
+          # be too deep for sun_path (104 bytes on macOS, 108 on Linux).
+          agent_dir="$(mktemp -d "${TMPDIR:-/tmp}/release-agent.XXXXXX")"
+          export AGENT_DIR="$agent_dir"
+          exec ssh-agent -a "$agent_dir/agent" bash -euo pipefail <<'PUBLISH'
+          publisher=
+          # TERM, then KILL after 3 s, so both stops fit in the runner's 7.5 s window.
+          stop() {
+            kill -TERM -- "$1" 2>/dev/null || return 0
+            for _ in $(seq 30); do kill -0 -- "$1" 2>/dev/null || return 0; sleep 0.1; done
+            kill -KILL -- "$1" 2>/dev/null || :
+            echo "::error::$2 did not stop on SIGTERM"
+            return 1
+          }
+          # The agent holds the key, so it goes first; then the publisher's whole
+          # process group: Python, Git and the ssh client.
+          release() {
+            status=$?
+            trap '' INT TERM
+            stop "$SSH_AGENT_PID" "the signing agent" || status=1
+            if [[ -n $publisher ]]; then stop "-$publisher" "the publisher" || status=1; fi
+            rm -f -- "$SSH_AUTH_SOCK"
+            rmdir -- "$AGENT_DIR"
+            exit "$status"
+          }
+          trap release EXIT
+          trap 'exit 130' INT
+          trap 'exit 143' TERM
+          printf '%s\n' "$SSH_KEY" | ssh-add - >/dev/null
+          unset SSH_KEY
+          # Only the agent's identity and GitHub's fetched host keys take part: no
+          # configuration, key or known-hosts file of the runner does.
+          ssh_args=(ssh -F /dev/null -o IdentityFile=none -o IdentitiesOnly=no -o BatchMode=yes
+            -o GlobalKnownHostsFile=/dev/null -o "UserKnownHostsFile=\"$RUNNER_TEMP/release-known-hosts\""
+            -o StrictHostKeyChecking=yes)
+          printf -v GIT_SSH_COMMAND '%q ' "${ssh_args[@]}"
+          export GIT_SSH_COMMAND
+          # Job control puts the publisher in a process group of its own.
+          set -m
+          python3 - <<'PY' &
           #!/usr/bin/env python3
           """Publish validated package versions without overwriting an existing tag.
 
@@ -963,7 +999,10 @@ jobs:
           if __name__ == "__main__":
               sys.exit(main())
           PY
-
+          publisher=$!
+          set +m
+          wait "$publisher"
+          PUBLISH
       - name: Summarize missing release key
         if: steps.guard.outputs.has_deploy_key != 'true'
         run: echo "## Release gate skipped, RELEASE_TAG_SSH_KEY not configured" >> "$GITHUB_STEP_SUMMARY"
