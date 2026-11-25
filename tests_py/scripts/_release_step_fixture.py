@@ -178,6 +178,7 @@ class Fixture:
         return {
             "PATH": str(bin_dir) + os.pathsep + os.environ["PATH"],
             "HOME": str(home),
+            "FIXTURE_HOSTILE_CONFIG": str(home / ".ssh" / "config"),
             "TMPDIR": str(self.socket_base),
             "LANG": "C",
             "GIT_CONFIG_NOSYSTEM": "1",

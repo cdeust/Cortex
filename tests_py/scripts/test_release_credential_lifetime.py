@@ -5,9 +5,8 @@ the live agent: ssh-add -l also answers 2 when the socket path exceeds sun_path.
 lifetime assertion is therefore paired with a positive control the transport took, on
 the same socket path and from the same directory, while the agent was alive.
 
-The bounds are the runner's (see _release_step_fixture): success, rejection, an
-unusable key, SIGINT, SIGTERM, a second signal, an agent or a publisher that no longer
-reacts to SIGTERM, and SIGKILL of the step shell.
+Cases: success, rejection, unusable key, SIGINT, SIGTERM, two signals, a slow or deaf
+agent, a stopped or deaf publisher, SIGKILL; the bounds are the runner's.
 """
 
 from __future__ import annotations
@@ -208,25 +207,37 @@ class ReleaseCredentialLifetime(unittest.TestCase):
             )
         )
 
-    def test_agent_that_ignores_sigterm_is_killed_and_fails_the_step(self):
-        def check(path):
-            fixture = self.fixture(path)
-            hook = fixture.remote / "hooks" / "pre-receive"
-            # A stopped agent cannot act on SIGTERM; SIGKILL still ends it.
-            hook.write_text(
-                '#!/bin/sh\nkill -STOP "$(cat "$FIXTURE_LOG/agent-pid")"\nexit 0\n'
-            )
-            hook.chmod(0o700)
-            fixture.env["FIXTURE_RECORD_AGENT"] = "1"
-            started = time.monotonic()
-            fixture.start()
-            status, output = fixture.finish()
-            self.assertLess(time.monotonic() - started, rs.RUNNER_SIGINT_WINDOW_S)
-            self.assertEqual(status, 1, output)
-            self.assertIn("::error::the signing agent did not stop on SIGTERM", output)
-            self.assert_released(fixture)
+    def stop_agent(self, path, resume):
+        """The push hook stops the agent: SIGTERM then waits, SIGKILL still ends it."""
+        fixture = self.fixture(path)
+        pid = '"$(cat "$FIXTURE_LOG/agent-pid")"'
+        # Resume one second after the publisher's last write, so after SIGTERM. The
+        # watcher closes Git's capture pipes (fd 3-9) and gives up after 10 s.
+        wait = (
+            "exec 3>&- 4>&- 5>&- 6>&- 7>&- 8>&- 9>&-; for _ in $(seq 200); do"
+            ' [ -s "$GITHUB_STEP_SUMMARY" ] && break; sleep 0.05; done; sleep 1'
+        )
+        later = f"({wait}; kill -CONT {pid}) </dev/null >/dev/null 2>&1 &\n"
+        later = later if resume else ""
+        hook = fixture.remote / "hooks" / "pre-receive"
+        hook.write_text(f"#!/bin/sh\nkill -STOP {pid}\n{later}exit 0\n")
+        hook.chmod(0o700)
+        fixture.env["FIXTURE_RECORD_AGENT"] = "1"
+        started = time.monotonic()
+        fixture.start()
+        status, output = fixture.finish()
+        self.assertLess(time.monotonic() - started, rs.RUNNER_SIGINT_WINDOW_S)
+        self.assertEqual(status, 0 if resume else 1, output)
+        error = "::error::the signing agent did not stop on SIGTERM"
+        self.assertEqual(error in output, not resume, output)
+        self.assert_released(fixture)
 
-        self.each_workflow(check)
+    def test_agent_that_ignores_sigterm_is_killed_and_fails_the_step(self):
+        self.each_workflow(lambda p: self.stop_agent(p, resume=False))
+
+    def test_slow_agent_is_awaited_not_killed(self):
+        """An agent that ends one second after SIGTERM proves the wait is real."""
+        self.each_workflow(lambda p: self.stop_agent(p, resume=True))
 
     def stop_publisher(self, path, disable, expected):
         fixture = self.fixture(path)

@@ -20,7 +20,9 @@ HOSTILE_SSH_CONFIG = """Host *
 SSH_WRAPPER = """#!/bin/sh
 set -u
 log="$FIXTURE_LOG/ssh.$$"
-"$FIXTURE_REAL_SSH" -G "$@" > "$log.config" 2>&1
+# ssh reads ~/.ssh/config from the passwd entry, not $HOME: the hostile file is
+# given with -F, and only a later -F from the step (ssh keeps the last) replaces it.
+"$FIXTURE_REAL_SSH" -F "$FIXTURE_HOSTILE_CONFIG" -G "$@" > "$log.config" 2>&1
 {
   echo "pid=$$"
   echo "parent=$PPID"

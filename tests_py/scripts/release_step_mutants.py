@@ -88,6 +88,7 @@ MUTANTS = [
     ("no-term-before-kill", IN + 'kill -TERM -- "$1" 2>/dev/null || return 0\n', ""),
     ("no-bounded-wait", WAIT, ""),
     ("grace-ten-seconds", "$(seq 30)", "$(seq 100)"),
+    ("grace-one-tick", "$(seq 30)", "$(seq 1)"),
     ("never-killed", IN + 'kill -KILL -- "$1" 2>/dev/null || :\n', ""),
     ("kill-silent", IN + 'echo "::error::$2 did not stop on SIGTERM"\n', ""),
     (
