@@ -105,7 +105,7 @@ sqlite = [
     "sqlite-vec>=0.1.1",
 ]
 codebase = [
-    "tree-sitter>=0.24.0,<0.27",
+    "tree-sitter>=0.24.0,<0.28",
     # source: ADR-0874
     #
     #
@@ -665,7 +665,7 @@ dev = [
 #
 #
 lint = [
-    "ruff==0.17.5",
+    "ruff==0.17.6",
 ]
 typecheck = [
     "pyright==1.1.414",
